@@ -38,6 +38,7 @@ import {
 } from '../lib/jobs';
 import {
   paneEdges,
+  paneFills,
   radius,
   spacing,
   themedStyles,
@@ -83,7 +84,14 @@ const SHEET_EDGE = 'top' as const;
  * own mockup draws a chosen pill as an emerald tint under an emerald rim, in
  * both themes, and approved it that way; docs/DECISIONS.md 2026-09-19
  * records it as this sheet's exception to emerald D6. Only colours fork
- * between the themes; every number is shared.
+ * between the themes; every number is shared. 2026-09-21: the chosen green
+ * is `emeraldBright` — the mockup's #84dfaa in dark, the emerald in light —
+ * where `emerald` (#5FAE81 in dark) read "very dim" at the same alphas.
+ *
+ * THE SHEET'S TINT IS THE MOCKUP'S GRADIENT (2026-09-21): `paneFills.filters`,
+ * drawn by Surface as the tint itself in place of the pane's flat ink and
+ * its near-white sheen — the sheen is what lifted the sheet grey-olive on
+ * the phone. This sheet alone; the map's panes keep recipe D.
  */
 
 export type JobFilterSheetProps = {
@@ -127,6 +135,10 @@ export const JOB_SORT_LABELS: Record<JobSort, { label: string; hint: string }> =
 /** The sort popup: wider, and taller rows for the two-line entries. */
 const SORT_POPOVER_WIDTH = 262;
 const SORT_ROW_HEIGHT = 52;
+/** The date popup: 192 (the others 168) so "Wed, Sep 23" and its calendar
+ *  sit ≥ 10pt clear of the tick when centred — measured in the reference
+ *  (docs/mockups/html/map-explore-filters-*.html), 2026-09-21. */
+const DATE_POPOVER_WIDTH = 192;
 
 type PopoverKind = 'distance' | 'budget' | 'date' | 'sort';
 
@@ -293,7 +305,7 @@ export function JobFilterSheet({
                 setDraft((prev) => ({ ...prev, scheduledOn: v as string, scheduledUntil: null })),
               direction: 'up' as const,
               align: 'right' as const,
-              width: POPOVER_WIDTH,
+              width: DATE_POPOVER_WIDTH,
               rowHeight: POPOVER_ROW_HEIGHT,
               visibleRows: POPOVER_VISIBLE_ROWS - 1,
               accessibilityLabel: 'Custom date',
@@ -307,6 +319,8 @@ export function JobFilterSheet({
               width: SORT_POPOVER_WIDTH,
               rowHeight: SORT_ROW_HEIGHT,
               visibleRows: JOB_SORTS.length,
+              // The two-line rows keep the left layout (operator, 2026-09-20 sitting 3).
+              contentAlign: 'start' as const,
               accessibilityLabel: 'Sort by',
             };
 
@@ -345,6 +359,7 @@ export function JobFilterSheet({
       topRadius={SHEET_TOP_RADIUS}
       edge={SHEET_EDGE}
       rim={paneEdges.filters.rim}
+      fill={paneFills.filters}
       hairline={isDark ? withAlpha(paneRim, SHEET_HAIRLINE_ALPHA) : undefined}
       footer={actions}
       overlay={
@@ -444,7 +459,7 @@ export function JobFilterSheet({
             <Pill
               label="Best Match"
               on={bestMatchOn}
-              lead={<Ionicons name="checkmark" size={15} color={colors.emerald} />}
+              lead={<Ionicons name="checkmark" size={15} color={colors.emeraldBright} />}
               onPress={() =>
                 setDraft((prev) => ({
                   ...prev,
@@ -470,7 +485,7 @@ export function JobFilterSheet({
               label={sortNow.label}
               on
               dimLead="Sort by"
-              trailing={<Ionicons name="chevron-down" size={14} color={colors.emerald} />}
+              trailing={<Ionicons name="chevron-down" size={14} color={colors.emeraldBright} />}
               onPress={() => openPopover('sort', sortRef)}
               accessibilityLabel={`Sort by ${sortNow.label}`}
             />
@@ -670,8 +685,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       borderColor: colors.secondaryBorder,
     },
     pillOnDark: {
-      backgroundColor: withAlpha(colors.emerald, 0.16),
-      borderColor: withAlpha(colors.emerald, 0.48),
+      backgroundColor: withAlpha(colors.emeraldBright, 0.16),
+      borderColor: withAlpha(colors.emeraldBright, 0.48),
     },
     pillText: {
       fontSize: 13,
@@ -684,7 +699,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     pillTextOn: {
       fontWeight: '600',
-      color: colors.emerald,
+      color: colors.emeraldBright,
     },
     pillDim: {
       fontSize: 13,

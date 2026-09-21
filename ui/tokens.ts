@@ -125,6 +125,18 @@ export const colors = {
   pinTop: '#F9FDF4',
   pinBottom: '#E4F2DF',
   pinGlyph: '#426D48',
+  /**
+   * 2026-09-21 — THE CHOSEN GREEN on the Filters sheet and its popups: the
+   * chosen pill's fill (.16), rim (.48) and ink, the Best Match tick, the
+   * Sort caret, the popup's chosen row and tick. The approved sheet
+   * (docs/mockups/html/map-explore-filters-dark.html) draws them in #84dfaa
+   * where the app drew `dark.emerald` #5FAE81 at the same alphas, which the
+   * operator read as "very dim" — DECISIONS 2026-09-20 sitting 3, (2). Light
+   * is the emerald restated (an object literal cannot read its own keys), so
+   * light is unchanged by value. NOT a change to `emerald`: D0 and the nav
+   * pin that green.
+   */
+  emeraldBright: '#0D6B52',
 } as const;
 
 export type ColorToken = keyof typeof colors;
@@ -192,6 +204,9 @@ export const dark = {
   pinTop: '#224634',
   pinBottom: '#06180F',
   pinGlyph: '#EEE4C4',
+  // 2026-09-21 — the Filters sheet's chosen green, the approved mockup's own
+  // (--emerald there); see the `colors` block above for the roles.
+  emeraldBright: '#84DFAA',
 } as const satisfies Record<ColorToken, string>;
 
 export { withAlpha } from './colorAlpha';
@@ -689,6 +704,37 @@ export const paneEdges = {
   filters: {
     rim: { color: brand.mint, alpha: 0.46, width: 'hairline' } as PaneRim,
   },
+} as const;
+
+/**
+ * 2026-09-21 — A PANE'S OWN FILL: the tint drawn as the reference's gradient
+ * itself, in place of the material's flat scrim and its sheen. The Filters
+ * sheet wears the approved mockup's `linear-gradient(125deg, rgba(3,24,16,.95),
+ * rgba(10,48,32,.91))` (docs/mockups/html/map-explore.build.mjs `fPane`). The
+ * pane material's flat ink is that gradient's MEAN under a near-white mint
+ * sheen, and the sheen is what lifted the sheet into the grey-olive the
+ * operator sent beside the mockup ("warmer"): the reference's ground measures
+ * rgb(5,27,19) at the sheet's top-left where the app's numbers drew
+ * rgb(30,57,46). The phone can draw the gradient — `experimental_
+ * backgroundImage`, the sheen's own mechanism — so it draws the gradient.
+ * FILTERS SHEET ONLY (asked): the map's panes keep recipe D on `pane`. Dark
+ * glass only; light stays flat by ruling. DECISIONS 2026-09-20 sitting 3, (1).
+ */
+const FILTERS_INK_TOP = '#031810';
+const FILTERS_INK_BOTTOM = '#0A3020';
+export type PaneFill = {
+  /** The CSS angle, degrees. */
+  angle: number;
+  from: { color: string; alpha: number };
+  to: { color: string; alpha: number };
+};
+
+export const paneFills = {
+  filters: {
+    angle: 125,
+    from: { color: FILTERS_INK_TOP, alpha: 0.95 },
+    to: { color: FILTERS_INK_BOTTOM, alpha: 0.91 },
+  } as PaneFill,
 } as const;
 
 export type MaterialName = 'chrome' | 'sheet' | 'menu' | 'clear' | 'pane';

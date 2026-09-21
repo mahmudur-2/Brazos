@@ -14,7 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { MENU_MOTION_MS, MENU_MOTION_OUT_MS } from '../lib/motion120';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
-import { useMaterials } from '../lib/designOverrides';
 import { PANEL_SCALE_FROM, panelTravelFor } from './DropMenu.shared';
 import { Surface } from '../ui/primitives/Surface';
 import {
@@ -37,9 +36,12 @@ import {
  * pills, above it for the When pill and the Sort pill (which sit at the foot
  * of the sheet). Six rows show; the list opens on the current value, which
  * carries the tick. A date row draws a small calendar with its day number; a
- * sort row carries its rule as a second line. The panel wears the SHEET'S
- * OWN GLASS (the `pane` material) under the menu's thinner rim, so the popup
- * and the sheet read as one material — the mockup draws them from one ink.
+ * sort row carries its rule as a second line. The panel wears the MENU
+ * material — flat: the glass ink at .82 under the mint hairline, no sheen,
+ * no gradient — which is the recipe the approved mockup names for its popup
+ * ("the app's menu material"); the operator ruled the sheet's gradient off
+ * the popups ("don't add the gradients to the popups", DECISIONS 2026-09-20
+ * sitting 3, (3)). It wore the sheet's `pane` glass until then.
  *
  * WHERE IT RENDERS, and why that changed on 2026-09-20. The pills live inside
  * the Filters sheet's ScrollView, which clips, so the popup has to render
@@ -56,6 +58,19 @@ import {
  * its anchor's parent; this is a scrolling row of VALUES with a current one.
  * Its constants are reused (the travel, the scale, the two durations) so the
  * two panels move alike.
+ *
+ * 2026-09-21 — THE VALUES SIT IN THE MIDDLE OF THE ROW (the operator's
+ * "center the numbers", DECISIONS 2026-09-20 sitting 3, (4)): the row centres
+ * its content — a date row's calendar and text as one group — and the tick
+ * is pinned at the left edge, so nothing shifts when it appears; the padding
+ * is the tick's zone on BOTH sides, which keeps the centre honest. The Sort
+ * popup keeps its left layout (`contentAlign="start"`), the operator's call.
+ * THE SCROLL BAR IS THE iPHONE'S OWN — white on the dark glass, black in
+ * light, shown while scrolling, flashed once when the list opens so it is
+ * seen "just enough to realize it's there" (asked: the built-in one over a
+ * custom bar). The dividers are light grey — white at .10 in dark, the ink
+ * at .07 in light — never the warm gold hairline `border` (the operator's
+ * red box, (7) of the same date).
  */
 
 export type PickerOption<V> = {
@@ -87,6 +102,9 @@ export type PickerPopoverProps<V> = {
   rowHeight?: number;
   /** How many rows show before the list scrolls. */
   visibleRows?: number;
+  /** Where a row's content sits: centred (default) or at the left, after the
+   *  tick's zone — the Sort popup's two-line rows keep the left. */
+  contentAlign?: 'center' | 'start';
   accessibilityLabel: string;
 };
 
@@ -94,6 +112,16 @@ export type PickerPopoverProps<V> = {
 export const POPOVER_WIDTH = 168;
 export const POPOVER_ROW_HEIGHT = 44;
 export const POPOVER_VISIBLE_ROWS = 6;
+/** The tick's zone at the row's left edge: its inset plus its box. A centred
+ *  row pads BOTH sides by it, so the content's centre is the row's. */
+const TICK_INSET = 10;
+const TICK_SIZE = 18;
+const TICK_ZONE = TICK_INSET + TICK_SIZE;
+/** The row dividers: white on the dark glass, the ink on the light panel,
+ *  each at the strength that reads as a light-grey hairline (the reference's
+ *  rgba(255,255,255,.10) and #EEF1EC). */
+const DIVIDER_ALPHA_DARK = 0.1;
+const DIVIDER_ALPHA_LIGHT = 0.07;
 /** Between the pill and the panel. */
 const ANCHOR_GAP = 6;
 /** The panel never comes closer than this to the window's edge. */
@@ -111,11 +139,14 @@ export function PickerPopover<V>({
   width = POPOVER_WIDTH,
   rowHeight = POPOVER_ROW_HEIGHT,
   visibleRows = POPOVER_VISIBLE_ROWS,
+  contentAlign = 'center',
   accessibilityLabel,
 }: PickerPopoverProps<V>) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
+  const centred = contentAlign === 'center';
+  // The dividers: light grey at the same subtlety in both themes.
+  const divider = withAlpha(isDark ? colors.white : colors.ink, isDark ? DIVIDER_ALPHA_DARK : DIVIDER_ALPHA_LIGHT);
   const styles = stylesFor(colors);
-  const menu = useMaterials().menu;
   const window = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -187,12 +218,7 @@ export function PickerPopover<V>({
         accessibilityViewIsModal
         accessibilityLabel={accessibilityLabel}
       >
-        <Surface
-          material="pane"
-          radius={radius.lg}
-          corners="all"
-          style={[styles.material, { borderColor: withAlpha(menu.borderColor, menu.borderAlpha) }]}
-        >
+        <Surface material="menu" radius={radius.lg} corners="all" style={styles.material}>
           <FlatList
             ref={listRef}
             data={options}
@@ -201,8 +227,13 @@ export function PickerPopover<V>({
             initialScrollIndex={initialIndex}
             initialNumToRender={rows + 4}
             contentOffset={{ x: 0, y: initialOffset }}
-            onLayout={() => listRef.current?.scrollToOffset({ offset: initialOffset, animated: false })}
-            showsVerticalScrollIndicator={false}
+            onLayout={() => {
+              listRef.current?.scrollToOffset({ offset: initialOffset, animated: false });
+              // iOS's bar, once, so a list that scrolls says so on opening.
+              listRef.current?.flashScrollIndicators();
+            }}
+            indicatorStyle={isDark ? 'white' : 'black'}
+            scrollIndicatorInsets={{ top: spacing.xs, bottom: spacing.xs, right: 2 }}
             contentContainerStyle={styles.list}
             renderItem={({ item, index }) => {
               const on = Object.is(item.value, value);
@@ -215,8 +246,9 @@ export function PickerPopover<V>({
                   disabled={item.disabled}
                   style={({ pressed }) => [
                     styles.row,
+                    centred ? styles.rowCentred : styles.rowStart,
                     { height: rowHeight },
-                    index > 0 && styles.rowDivided,
+                    index > 0 && [styles.rowDivided, { borderTopColor: divider }],
                     pressed && styles.rowPressed,
                     item.disabled && styles.rowDisabled,
                   ]}
@@ -225,7 +257,7 @@ export function PickerPopover<V>({
                   accessibilityLabel={item.hint ? `${item.label}, ${item.hint}` : item.label}
                 >
                   <View style={styles.tick}>
-                    {on ? <Ionicons name="checkmark" size={16} color={colors.emerald} /> : null}
+                    {on ? <Ionicons name="checkmark" size={16} color={colors.emeraldBright} /> : null}
                   </View>
                   {item.dayNumber != null ? (
                     <View style={styles.calendar}>
@@ -233,12 +265,12 @@ export function PickerPopover<V>({
                       <Text style={styles.calendarDay}>{item.dayNumber}</Text>
                     </View>
                   ) : null}
-                  <View style={styles.text}>
-                    <Text style={[styles.label, on && styles.labelOn]} numberOfLines={1}>
+                  <View style={centred ? styles.textCentred : styles.text}>
+                    <Text style={[styles.label, centred && styles.centredType, on && styles.labelOn]} numberOfLines={1}>
                       {item.label}
                     </Text>
                     {item.hint ? (
-                      <Text style={styles.hint} numberOfLines={1}>
+                      <Text style={[styles.hint, centred && styles.centredType]} numberOfLines={1}>
                         {item.hint}
                       </Text>
                     ) : null}
@@ -270,24 +302,48 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
-      paddingLeft: spacing.sm + 2,
+    },
+    // Centred: the tick's zone on both sides, the content in the middle.
+    rowCentred: {
+      justifyContent: 'center',
+      paddingHorizontal: TICK_ZONE,
+    },
+    // At the left: after the tick's zone and the row's gap (the tick is out
+    // of the flow now), today's right padding — the Sort rows as they were.
+    rowStart: {
+      justifyContent: 'flex-start',
+      paddingLeft: TICK_ZONE + spacing.sm,
       paddingRight: spacing.md + 2,
     },
+    // Light grey at the same subtlety, never the warm `border` hairline —
+    // the colour is set at the row, per theme (DIVIDER_ALPHA).
     rowDivided: {
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
     },
     rowPressed: { backgroundColor: colors.primarySoft },
     rowDisabled: { opacity: 0.4 },
+    // Pinned at the left edge, the row's full height, so the content's
+    // centre never moves when the tick appears.
     tick: {
-      width: 18,
-      height: 18,
+      position: 'absolute',
+      left: TICK_INSET,
+      top: 0,
+      bottom: 0,
+      width: TICK_SIZE,
       alignItems: 'center',
       justifyContent: 'center',
     },
     text: {
       flex: 1,
       minWidth: 0,
+    },
+    textCentred: {
+      flexShrink: 1,
+      minWidth: 0,
+      alignItems: 'center',
+    },
+    centredType: {
+      textAlign: 'center',
     },
     label: {
       fontSize: 15,
@@ -296,7 +352,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     labelOn: {
       fontWeight: '600',
-      color: colors.emerald,
+      color: colors.emeraldBright,
     },
     hint: {
       fontSize: 12,

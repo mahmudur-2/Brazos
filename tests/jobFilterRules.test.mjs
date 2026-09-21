@@ -355,6 +355,11 @@ test('the Filters sheet draws the five rows from the ruled lists, and every clos
   // EVERY CLOSE APPLIES: Done and the backdrop go through the same function
   // the button does, and the distance writes only when it changed.
   assert.match(sheet, /<Sheet\s+visible=\{visible\}\s+onClose=\{applyAndClose\}\s+title="Filters"\s+material="pane"/);
+  // 2026-09-21 — THE SHEET'S TINT IS THE MOCKUP'S GRADIENT: paneFills.filters,
+  // drawn by Surface as the tint itself (no scrim, no sheen) — this sheet
+  // alone; the values live in ui/tokens.ts, never here.
+  assert.match(sheet, /rim=\{paneEdges\.filters\.rim\}\s*fill=\{paneFills\.filters\}/);
+  assert.doesNotMatch(sheet, /linear-gradient|#0[0-9A-F]{5}/i, 'no gradient or hex at the call site');
   assert.match(sheet, /<Button title=\{showTitle\} onPress=\{applyAndClose\}/);
   assert.match(sheet, /if \(distance && draftDistance !== distance\.value\) distance\.onChange\(draftDistance\);/);
   // The count is asked of the caller, and "Show jobs" stands in when unknown.
@@ -363,17 +368,42 @@ test('the Filters sheet draws the five rows from the ruled lists, and every clos
   // THE SELECTED PILL is the emerald tint in both themes (the operator's
   // exception to D6), and only colours fork between them.
   assert.match(sheet, /pillOn: \{\s*backgroundColor: colors\.mint,\s*borderColor: colors\.secondaryBorder,\s*\}/);
-  assert.match(sheet, /pillOnDark: \{\s*backgroundColor: withAlpha\(colors\.emerald, 0\.16\),\s*borderColor: withAlpha\(colors\.emerald, 0\.48\),\s*\}/);
-  assert.match(sheet, /pillTextOn: \{\s*fontWeight: '600',\s*color: colors\.emerald,\s*\}/);
+  // 2026-09-21: the chosen green is emeraldBright — the mockup's #84dfaa in
+  // dark, the emerald in light — at the mockup's own alphas; the tick and
+  // the caret wear it too, and `emerald` itself is untouched.
+  assert.match(sheet, /pillOnDark: \{\s*backgroundColor: withAlpha\(colors\.emeraldBright, 0\.16\),\s*borderColor: withAlpha\(colors\.emeraldBright, 0\.48\),\s*\}/);
+  assert.match(sheet, /pillTextOn: \{\s*fontWeight: '600',\s*color: colors\.emeraldBright,\s*\}/);
+  assert.match(sheet, /name="checkmark" size=\{15\} color=\{colors\.emeraldBright\}/);
+  assert.match(sheet, /name="chevron-down" size=\{14\} color=\{colors\.emeraldBright\}/);
+  const tokens = await read('ui/tokens.ts');
+  assert.match(tokens, /emeraldBright: '#84DFAA',/);
+  assert.match(tokens, /emeraldBright: '#0D6B52',/);
+  assert.match(tokens, /filters: \{\s*angle: 125,\s*from: \{ color: FILTERS_INK_TOP, alpha: 0\.95 \},\s*to: \{ color: FILTERS_INK_BOTTOM, alpha: 0\.91 \},\s*\} as PaneFill,/);
+  assert.match(tokens, /const FILTERS_INK_TOP = '#031810';\s*const FILTERS_INK_BOTTOM = '#0A3020';/);
 
   // THE POPUP renders in the Sheet's overlay — NO Modal of its own, since
-  // 2026-09-20 — anchored in window coordinates, on the sheet's own pane
-  // glass under the menu's rim, opened on the current value three ways,
-  // moved by the native driver on DropMenu's own constants.
+  // 2026-09-20 — anchored in window coordinates, opened on the current value
+  // three ways, moved by the native driver on DropMenu's own constants.
+  // 2026-09-21: FLAT, on the menu material (no sheen, no fill — the operator's
+  // "don't add the gradients to the popups"); the rows centred with the tick
+  // pinned at the left edge (Sort keeps the left through contentAlign); iOS's
+  // own bar, flashed once on open; light-grey dividers; the date popup 192.
   assert.match(sheet, /ref\.current\?\.measureInWindow\(\(x, y, width, height\) => \{/);
   assert.doesNotMatch(popover, /<Modal/, 'a nested Modal is what broke the popups on the phone');
-  assert.match(popover, /<Surface\s+material="pane"\s+radius=\{radius\.lg\}/);
-  assert.match(popover, /borderColor: withAlpha\(menu\.borderColor, menu\.borderAlpha\)/);
+  assert.match(popover, /<Surface material="menu" radius=\{radius\.lg\} corners="all" style=\{styles\.material\}>/);
+  assert.doesNotMatch(popover, /material="pane"|fill=\{/, 'the popup never wears the sheet\'s glass or its gradient');
+  assert.match(popover, /const TICK_ZONE = TICK_INSET \+ TICK_SIZE;/);
+  assert.match(popover, /rowCentred: \{\s*justifyContent: 'center',\s*paddingHorizontal: TICK_ZONE,\s*\}/);
+  assert.match(popover, /tick: \{\s*position: 'absolute',\s*left: TICK_INSET,\s*top: 0,\s*bottom: 0,\s*width: TICK_SIZE,/);
+  assert.match(popover, /centred \? styles\.textCentred : styles\.text/);
+  assert.match(popover, /listRef\.current\?\.flashScrollIndicators\(\);/);
+  assert.match(popover, /indicatorStyle=\{isDark \? 'white' : 'black'\}/);
+  assert.doesNotMatch(popover, /showsVerticalScrollIndicator=\{false\}/, 'the bar is iOS\'s own, shown');
+  assert.match(popover, /const divider = withAlpha\(isDark \? colors\.white : colors\.ink, isDark \? DIVIDER_ALPHA_DARK : DIVIDER_ALPHA_LIGHT\);/);
+  assert.doesNotMatch(popover, /borderTopColor: colors\.border/, 'never the warm gold hairline');
+  assert.match(sheet, /const DATE_POPOVER_WIDTH = 192;/);
+  assert.match(sheet, /width: DATE_POPOVER_WIDTH,\s*rowHeight: POPOVER_ROW_HEIGHT,\s*visibleRows: POPOVER_VISIBLE_ROWS - 1,/);
+  assert.match(sheet, /visibleRows: JOB_SORTS\.length,\s*(\/\/[^\n]*\n\s*)?contentAlign: 'start' as const,/);
   assert.match(popover, /initialScrollIndex=\{initialIndex\}/);
   assert.match(popover, /contentOffset=\{\{ x: 0, y: initialOffset \}\}/);
   assert.match(popover, /scrollToOffset\(\{ offset: initialOffset, animated: false \}\)/);

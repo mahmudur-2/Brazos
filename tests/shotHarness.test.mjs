@@ -147,8 +147,9 @@ test('the registry photographs where a category chip lands, in both schemes', ()
   }
   // 60 through RUN SHOTS1, plus the two RUN JOBS1 populated-Home targets,
   // plus RUN n2's twelve signed-out and not-yet-set-up targets, plus RUN n5's
-  // two Submit Bid targets, plus RUN figma-extract's six state variants.
-  assert.equal(names.length, 82, `registry is ${names.length} targets, expected 82`);
+  // two Submit Bid targets, plus RUN figma-extract's six state variants,
+  // plus the 2026-09-21 Filters sheet and its budget popup, both schemes.
+  assert.equal(names.length, 86, `registry is ${names.length} targets, expected 86`);
 });
 
 test('that target is reached by tapping a chip, never by naming the route', async () => {
@@ -306,6 +307,7 @@ test('the populated Home targets exist, and are the only ones seeded with jobs',
     'session',
     'setup',
     'accepting',
+    'landmarks',
   ]) {
     assert.ok(
       documented.includes(field),

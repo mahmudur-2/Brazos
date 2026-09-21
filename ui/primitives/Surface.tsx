@@ -7,7 +7,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { glow, withAlpha, PANE_HALO_RING, type MaterialName, type PaneHalo, type PaneRim } from '../tokens';
+import { glow, withAlpha, PANE_HALO_RING, type MaterialName, type PaneFill, type PaneHalo, type PaneRim } from '../tokens';
 import { useDesignOverrides, useMaterials } from '../../lib/designOverrides';
 import { metricStyles, useThemeColors } from '../../lib/theme';
 import { BlurLayer, canBlur } from '../../lib/blur';
@@ -82,6 +82,15 @@ export type SurfaceProps = PropsWithChildren<{
    */
   halo?: PaneHalo;
   /**
+   * 2026-09-21 — THIS pane's own fill (ui/tokens.ts `paneFills`): the tint
+   * drawn as the reference's gradient itself, in place of the material's
+   * flat scrim AND its sheen — one layer where those two were. Dark glass
+   * only, and only where the glass draws: the flat fallback (Reduce
+   * Transparency, no blur) keeps the material's own scrim, as the sheen
+   * does. The values live in ui/tokens.ts, never at a call site.
+   */
+  fill?: PaneFill;
+  /**
    * Layer 4: an outer glow in this colour, dark theme only. The alpha is the
    * shared surface-glow strength so the studio's glow dial moves every
    * glowing surface at once.
@@ -132,6 +141,7 @@ export function Surface({
   border = 'all',
   rim,
   halo: haloSpec,
+  fill: fillSpec,
   glowColor,
   children,
 }: SurfaceProps) {
@@ -159,10 +169,14 @@ export function Surface({
   // set of numbers whichever theme is on.
   const glass = isDark ? spec : spec.light ?? null;
   const scrimAlpha = glass ? (flat ? glass.fallbackScrimAlpha : glass.scrimAlpha) : 1;
+  // The pane's own gradient replaces the scrim where the glass draws; the
+  // scrim is transparent under it so the blurred page shows through the
+  // gradient's own alpha, as it does through the reference's.
+  const gradient = fillSpec && glass && isDark && !flat ? fillSpec : null;
 
   const fill = glass
     ? {
-        backgroundColor: withAlpha(glass.scrimColor, scrimAlpha),
+        backgroundColor: gradient ? 'transparent' : withAlpha(glass.scrimColor, scrimAlpha),
         // This pane's own rim when it names one (dark glass only), else the material's.
         borderColor:
           rim && isDark ? withAlpha(rim.color, rim.alpha) : withAlpha(glass.borderColor, glass.borderAlpha),
@@ -173,7 +187,7 @@ export function Surface({
   // and it draws only where the glass does — never over a fallback scrim.
   // Its light is the spec's own colour — white unless the material says
   // otherwise (the pane's is the brand mint since recipe "D", 2026-09-20).
-  const sheen = isDark && !flat && spec.sheen ? spec.sheen : null;
+  const sheen = isDark && !flat && !gradient && spec.sheen ? spec.sheen : null;
   const sheenColor = sheen?.color ?? colors.white;
 
   const halo =
@@ -218,6 +232,18 @@ export function Surface({
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, corner, styles.clip]}>
           <BlurLayer intensity={glass.blur} />
         </View>
+      ) : null}
+      {gradient ? (
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            corner,
+            backgroundImageStyle(
+              `linear-gradient(${gradient.angle}deg, ${withAlpha(gradient.from.color, gradient.from.alpha)} 0%, ${withAlpha(gradient.to.color, gradient.to.alpha)} 100%)`
+            ),
+          ]}
+        />
       ) : null}
       {sheen ? (
         <View

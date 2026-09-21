@@ -59,7 +59,7 @@
 // -------------------------------------------------------------------------
 
 import { spawnSync } from 'node:child_process';
-import { createReadStream, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -342,6 +342,13 @@ function projectColumns(row, select) {
 //                the toggle writes through update_my_profile, whose empty
 //                stubbed answer would replace the whole profile (name
 //                included) instead of flipping one field. RUN figma-extract.
+//   landmarks    optional. Texts whose bounding boxes are written beside the
+//                PNG as `<name>.landmarks.json` (the LAST exact match of
+//                each — a sheet over a screen renders later in the DOM than
+//                the screen's own chips — in CSS px of the 393x852 frame), AFTER the shutter so
+//                nothing photographed is perturbed. The colour loop
+//                (docs/dispatch/NEXT-RUN-2026-09-21.md item 9) samples the
+//                app render and the reference beside the same texts. 2026-09-21.
 //
 // A target with no recipe is photographed exactly where the app lands. The
 // four original Home targets do that, and their capture path is the one
@@ -689,6 +696,37 @@ const TARGETS = [
       colorScheme,
       recipe: [{ expect: 'Get hired.' }, { press: 'View all open jobs' }],
       wait: '10 mi',
+    },
+    {
+      // 2026-09-21 — THE FILTERS SHEET over the open-jobs list (the map has
+      // no target: tile hosts fail the escape assertion). The sheet's tint,
+      // its chosen and unchosen pills and its popup are what the colour loop
+      // measures against docs/mockups/html/map-explore-filters-*.html; the
+      // landmarks are the texts the loop samples beside. The wait is the
+      // Minimum budget eyebrow, which only the sheet renders (uppercased by
+      // the Section, matched case-insensitively).
+      name: `worker-results-filters-${colorScheme}`,
+      mode: 'worker',
+      colorScheme,
+      recipe: [{ expect: 'Get hired.' }, { press: 'View all open jobs' }, { press: 'Filters' }],
+      wait: 'Minimum budget',
+      landmarks: ['Filters', 'Done', 'DISTANCE', 'Any', '2 mi', 'MINIMUM BUDGET', '$25', 'Reset'],
+    },
+    {
+      // The same sheet with the Minimum budget popup open, on its first six
+      // values (nothing chosen, so the list opens at the top); the wait is
+      // the sixth row, which only the open popup renders.
+      name: `worker-results-filters-budget-${colorScheme}`,
+      mode: 'worker',
+      colorScheme,
+      recipe: [
+        { expect: 'Get hired.' },
+        { press: 'View all open jobs' },
+        { press: 'Filters' },
+        { press: 'Custom minimum budget' },
+      ],
+      wait: '$30',
+      landmarks: ['$10', '$15', '$20', '$25', '$30'],
     },
     {
       // The worker's job-hub tab root. EMPTY state, worker wording.
@@ -1387,6 +1425,14 @@ async function main() {
 
       const file = join(shotsDir, `${shot.name}.png`);
       await page.screenshot({ path: file, animations: 'disabled' });
+      if (shot.landmarks) {
+        // After the shutter: the boxes of the named texts, for the loop.
+        const boxes = {};
+        for (const text of shot.landmarks) {
+          boxes[text] = await page.getByText(text, { exact: true }).last().boundingBox();
+        }
+        writeFileSync(join(shotsDir, `${shot.name}.landmarks.json`), JSON.stringify(boxes, null, 2));
+      }
       await assertGuarantees(page, shot.name);
       console.log(
         `[shots] ${shot.name} -> ${file}${failures.length ? ` (${failures.length} page errors)` : ''}`,
