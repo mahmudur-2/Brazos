@@ -81,10 +81,6 @@ export const authRadius = {
   iconButton: 14,
   /** .otp span 14 -> 16, to stay proportional to the taller cell below. */
   otpCell: 16,
-  /** 2026-09-21 — the picked Welcome page's actions (welcome-motion.html):
-   *  58 tall at radius 22, on that screen alone until the rest of the auth
-   *  flow's Lux pages are approved. */
-  heroButton: 22,
 } as const;
 
 export const authSpacing = {
@@ -105,8 +101,6 @@ export const authSpacing = {
 export const authSizes = {
   /** .btn height 38 -> 54. */
   button: 54,
-  /** The Welcome actions, as the picked page draws them (see authRadius.heroButton). */
-  heroButton: 58,
   /** .field-value min-height 42 -> 54. */
   field: 54,
   /** .icon-btn 38 -> 44. */
@@ -170,7 +164,7 @@ export const authType = {
 } as const;
 
 /** --shadow: 0 10px 28px rgba(16,38,29,.08), plus the softer .art-card lift. */
-export const authShadows: Record<'card' | 'logo' | 'hero', ViewStyle> = {
+export const authShadows: Record<'card' | 'logo', ViewStyle> = {
   card: Platform.select({
     web: { boxShadow: '0 10px 28px rgba(16,38,29,0.08)' },
     default: {
@@ -190,19 +184,6 @@ export const authShadows: Record<'card' | 'logo' | 'hero', ViewStyle> = {
       shadowRadius: 20,
       shadowOffset: { width: 0, height: 12 },
       elevation: 10,
-    },
-  }) as ViewStyle,
-  // 2026-09-21 — the Welcome hero button's depth, the picked page's
-  // `0 12px 30px rgba(0,0,0,.35)`. One shadow: the page's faint gold
-  // under-glow is a second shadow the native props cannot carry, and is left.
-  hero: Platform.select({
-    web: { boxShadow: '0 12px 30px rgba(0,0,0,0.35)' },
-    default: {
-      shadowColor: '#000000',
-      shadowOpacity: 0.35,
-      shadowRadius: 15,
-      shadowOffset: { width: 0, height: 12 },
-      elevation: 8,
     },
   }) as ViewStyle,
 };

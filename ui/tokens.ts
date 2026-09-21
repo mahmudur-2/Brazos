@@ -137,24 +137,6 @@ export const colors = {
    * pin that green.
    */
   emeraldBright: '#0D6B52',
-  /**
-   * 2026-09-21 — THE WELCOME PAGE the operator picked (docs/mockups/html/lux/
-   * welcome-motion.html; version 1 of welcome-ideas.html, polished): the auth
-   * ground as one diagonal gradient, the three lit discs of its art, and the
-   * hero button's fill. Each is a ROLE in both palettes and only the gradient
-   * is gated on the theme (`flat: !isDark`, the task card's pattern). Light
-   * draws every one flat: the ivory `bg` three times, the discs in the
-   * mint/sand family the Welcome ring already wore, the forest CTA twice —
-   * so the light Welcome keeps its colours while sharing the structure.
-   */
-  authGroundTop: '#F6F3EA',
-  authGroundMid: '#F6F3EA',
-  authGroundBottom: '#F6F3EA',
-  heroDiscTop: '#E9F2EA',
-  heroDiscMid: '#D3E8DF',
-  heroDiscBottom: '#C3DACF',
-  authCtaTop: '#064C3B',
-  authCtaBottom: '#064C3B',
 } as const;
 
 export type ColorToken = keyof typeof colors;
@@ -225,18 +207,6 @@ export const dark = {
   // 2026-09-21 — the Filters sheet's chosen green, the approved mockup's own
   // (--emerald there); see the `colors` block above for the roles.
   emeraldBright: '#84DFAA',
-  // 2026-09-21 — the picked Welcome page's own numbers (welcome-motion.html):
-  // the Emerald Lux Glass ground (#062421 → #0A1A17 → #07110F, the one ground
-  // docs/mockups/html/lux/README.md names), the lit disc's three stops, and
-  // the hero button's fill. See the `colors` block above for the roles.
-  authGroundTop: '#062421',
-  authGroundMid: '#0A1A17',
-  authGroundBottom: '#07110F',
-  heroDiscTop: '#19553F',
-  heroDiscMid: '#0F3B30',
-  heroDiscBottom: '#0A2A23',
-  authCtaTop: '#1C503F',
-  authCtaBottom: '#0E3229',
 } as const satisfies Record<ColorToken, string>;
 
 export { withAlpha } from './colorAlpha';
