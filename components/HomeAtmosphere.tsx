@@ -7,7 +7,9 @@ import { metricStyles, useThemeColors } from '../lib/theme';
 // and no tRNS chunk, re-measured 2026-08-25), so mounting it under the light
 // palette would drop a rectangle of the dark room onto the ivory ground —
 // which is exactly what the roster in tests/themeResolution.test.mjs gates.
-const HOME_ATMOSPHERE = require('../assets/prestige/home-atmosphere-dark.png');
+// 2026-09-21 — mounted as WebP (q90) encoded from that PNG master, which stays
+// on disk as the measured file: 3,729 KB → 94 KB, the same opaque dark room.
+const HOME_ATMOSPHERE = require('../assets/prestige/home-atmosphere-dark.webp');
 
 /**
  * home(4) — the fixed atmosphere behind Customer Home and Worker Home.

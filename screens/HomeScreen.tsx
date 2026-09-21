@@ -127,7 +127,10 @@ const CTA_EDGE_ALPHA = 0.38;
 // composition of the same scene, so the slot is per-theme again and both files
 // are `gate: true` on the BAKED_ART roster once more. The gate moved back with
 // the fact, exactly as it moved off with it.
-const PRESTIGE_HERO_ART = require('../assets/prestige/hero_armchair_customer.png');
+// 2026-09-21 — WebP (q90, alpha kept), encoded from the PNG master beside it;
+// the roster in tests/themeResolution.test.mjs measures the master's bake and
+// checks the WebP is that master's size. 165 KB → 21 KB.
+const PRESTIGE_HERO_ART = require('../assets/prestige/hero_armchair_customer.webp');
 // The LIGHT half of that pair, measured rather than assumed to mirror the dark
 // one (RUN H2): 400x351 RGBA like its counterpart, but a different BAKE. The
 // dark file is 97.93% fully opaque with a hard 2.05% strip trimmed off its
@@ -137,7 +140,7 @@ const PRESTIGE_HERO_ART = require('../assets/prestige/hero_armchair_customer.png
 // inside a 42px inset. That is a FEATHERED EDGE on a solid scene, which is
 // neither of the two bakes the roster knew, so it carries its own word there
 // ('baked-feathered') rather than being rounded to the nearer one.
-const PRESTIGE_HERO_ART_LIGHT = require('../assets/prestige/hero_armchair_customer_light.png');
+const PRESTIGE_HERO_ART_LIGHT = require('../assets/prestige/hero_armchair_customer_light.webp');
 /**
  * 2026-09-17 — how many of the customer's own postings "Your jobs" draws.
  *

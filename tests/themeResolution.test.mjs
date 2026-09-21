@@ -451,7 +451,13 @@ const BAKED_ART = {
   // is solid: the same word its light counterpart earned below, for the same
   // measured reason, so the two files are one bake at last. Still gated —
   // still the dark half of the pair.
-  'assets/prestige/hero_armchair_customer.png': { bake: 'baked-feathered', gate: true },
+  //
+  // 2026-09-21 — THE MOUNT IS WEBP. The app requires hero_armchair_customer.webp,
+  // encoded at q90 (alpha kept) from the PNG beside it, which stays on disk as
+  // the MASTER: the bake below is still measured on the master's bytes, and
+  // rosterBytes() first proves the WebP is a real WebP of the master's size.
+  // 165 KB → 21 KB; the same for the three entries below that carry a master.
+  'assets/prestige/hero_armchair_customer.webp': { bake: 'baked-feathered', gate: true, master: 'assets/prestige/hero_armchair_customer.png' },
   // The LIGHT half of that pair, installed by the operator and MEASURED here
   // rather than assumed to mirror the dark one — it is not the same bake.
   //
@@ -475,7 +481,7 @@ const BAKED_ART = {
   // Gated, and for the same reason its counterpart is: it is one half of a
   // per-theme pair. Mounting a light composition under the dark palette is the
   // mirror of the fault that put the gate back on.
-  'assets/prestige/hero_armchair_customer_light.png': { bake: 'baked-feathered', gate: true },
+  'assets/prestige/hero_armchair_customer_light.webp': { bake: 'baked-feathered', gate: true, master: 'assets/prestige/hero_armchair_customer_light.png' },
   // GONE 2026-09-18 — assets/prestige/brazos_b_drape.png, the dark B mark
   // (transparent, gated). It drew the customer Home promo card's mark, and the
   // promo card became the task card, which carries no mark; screens/
@@ -483,7 +489,7 @@ const BAKED_ART = {
   // added-or-removed assertion below demands exactly that of a raster the app
   // stops mounting. The file stays on disk, byte for byte, required by
   // nothing — the change is one `git revert` away.
-  'assets/prestige/hero_toolbox_worker.png': { bake: 'transparent', gate: true },
+  'assets/prestige/hero_toolbox_worker.webp': { bake: 'transparent', gate: true, master: 'assets/prestige/hero_toolbox_worker.png' },
   // home(4)'s fixed atmosphere behind both homes. GATE DECISION: gated, and it
   // is the strongest case on the roster — this one is genuinely still baked
   // (RGB, no alpha channel at all, 1290x2796 of dark room), it is full-bleed
@@ -498,7 +504,7 @@ const BAKED_ART = {
   // region in the lower right gutter — and scripts/atmosphere-tune.mjs is the
   // record of it. The 1080x2335 this comment used to name was never this
   // file's size; it is corrected here rather than carried forward.
-  'assets/prestige/home-atmosphere-dark.png': { bake: 'opaque-dark', gate: true },
+  'assets/prestige/home-atmosphere-dark.webp': { bake: 'opaque-dark', gate: true, master: 'assets/prestige/home-atmosphere-dark.png' },
   // GONE 2026-08-23 — the Heritage armchair. It was the LIGHT-only hero (RGBA,
   // 62.81% fully transparent, a stem-less rosette and a whole chair on
   // nothing) opposite the baked prestige scene, and the operator unified both
@@ -571,6 +577,53 @@ test('[static] every raster the app mounts is on the roster', async () => {
     'a raster was added or removed — put it on the BAKED_ART roster with its measured bake',
   );
 });
+
+/**
+ * A WebP's canvas size and alpha flag, from its RIFF header — VP8X (extended),
+ * VP8L (lossless) or VP8 (simple lossy). Enough to prove a mount is a real WebP
+ * of its master's size; the pixels themselves are measured on the master.
+ */
+function webpDims(bytes, asset) {
+  assert.equal(bytes.toString('ascii', 0, 4), 'RIFF', `${asset} is not a RIFF container`);
+  assert.equal(bytes.toString('ascii', 8, 12), 'WEBP', `${asset} is not a WebP`);
+  const chunk = bytes.toString('ascii', 12, 16);
+  if (chunk === 'VP8X') {
+    return { width: 1 + bytes.readUIntLE(24, 3), height: 1 + bytes.readUIntLE(27, 3), alphaFlag: (bytes[20] & 0x10) !== 0 };
+  }
+  if (chunk === 'VP8L') {
+    const b = bytes.readUInt32LE(21);
+    return { width: 1 + (b & 0x3fff), height: 1 + ((b >>> 14) & 0x3fff), alphaFlag: ((b >>> 28) & 1) === 1 };
+  }
+  if (chunk === 'VP8 ') {
+    return { width: bytes.readUInt16LE(26) & 0x3fff, height: bytes.readUInt16LE(28) & 0x3fff, alphaFlag: false };
+  }
+  return assert.fail(`${asset}: unknown WebP chunk ${chunk}`);
+}
+
+/**
+ * The bytes a roster entry's bake is measured on: the file itself, or — for a
+ * WebP mount that names a PNG `master` — the master, once the WebP is proven
+ * to exist, to be a WebP, and to be the master's exact size. The master stays
+ * on disk precisely so the bake keeps being measured from real alpha samples;
+ * a WebP with no master is refused rather than measured as nothing.
+ */
+async function rosterBytes(asset, master) {
+  const own = await readFile(new URL(`../${asset}`, import.meta.url));
+  if (!master) {
+    assert.doesNotMatch(asset, /\.webp$/, `${asset} is a WebP mount with no PNG master to measure`);
+    return own;
+  }
+  assert.match(asset, /\.webp$/, `${asset}: only a WebP mount carries a master`);
+  const masterBytes = await readFile(new URL(`../${master}`, import.meta.url));
+  assert.equal(masterBytes.toString('ascii', 12, 16), 'IHDR', `${master} is not a PNG`);
+  const dims = webpDims(own, asset);
+  assert.deepEqual(
+    [dims.width, dims.height],
+    [masterBytes.readUInt32BE(16), masterBytes.readUInt32BE(20)],
+    `${asset} is not the size of its master ${master}`,
+  );
+  return masterBytes;
+}
 
 /**
  * Decode a PNG far enough to answer ONE question: does this file carry alpha
@@ -668,11 +721,11 @@ function alphaProfile(bytes, asset) {
 test('[static] every roster bake claim is re-derived from the file, both ways', async () => {
   let opaqueChecked = 0;
   let transparentChecked = 0;
-  for (const [asset, { bake }] of Object.entries(BAKED_ART)) {
+  for (const [asset, { bake, master }] of Object.entries(BAKED_ART)) {
     // Every rostered asset must be ON DISK. Metro resolves an asset `require`
     // at bundle time, so a roster entry with no file is not a cosmetic gap —
     // it is a build that does not start. home(1) hit exactly that.
-    const bytes = await readFile(new URL(`../${asset}`, import.meta.url));
+    const bytes = await rosterBytes(asset, master);
     const alpha = alphaProfile(bytes, asset);
     if (bake.startsWith('opaque-')) {
       opaqueChecked += 1;
@@ -754,13 +807,13 @@ test('[static] each hero raster is the bake the roster records', async () => {
   // card's mark went with the promo card). Three heroes stay measured.
   let checked = 0;
   for (const asset of [
-    'assets/prestige/hero_armchair_customer.png',
-    'assets/prestige/hero_armchair_customer_light.png',
-    'assets/prestige/hero_toolbox_worker.png',
+    'assets/prestige/hero_armchair_customer.webp',
+    'assets/prestige/hero_armchair_customer_light.webp',
+    'assets/prestige/hero_toolbox_worker.webp',
   ]) {
     const recorded = BAKED_ART[asset]?.bake;
     assert.ok(recorded, `${asset} must stay on the roster`);
-    const bytes = await readFile(new URL(`../${asset}`, import.meta.url));
+    const bytes = await rosterBytes(asset, BAKED_ART[asset]?.master);
     const alpha = alphaProfile(bytes, asset);
     checked += 1;
 

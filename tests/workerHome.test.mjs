@@ -244,7 +244,7 @@ test('the hero headline and subtitle render, second sentence on the GREEN accent
   // for the operator's light device pass, not re-gated here.
   const assets = [...code.matchAll(/require\('([^']*\.(?:png|jpe?g|webp|gif))'\)/g)]
     .map((m) => m[1]);
-  assert.deepEqual(assets, ['../assets/prestige/hero_toolbox_worker.png']);
+  assert.deepEqual(assets, ['../assets/prestige/hero_toolbox_worker.webp']);
   assert.match(code, /<Image\s+source=\{PRESTIGE_TOOLBOX_ART\}/);
   assert.doesNotMatch(code, /\{isDark \? \(\s*<Image/, 'the art is one composition, both themes');
   assert.match(code, /heroCopy: \{ gap: spacing\.sm, maxWidth: '58%' \}/);

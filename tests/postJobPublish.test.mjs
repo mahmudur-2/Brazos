@@ -1226,7 +1226,7 @@ test('gate · the staged light hero has landed: one mount, gated, on customer Ho
   assert.deepEqual(
     referencing.map((p) => p.replace(/\\/g, '/')),
     ['screens/HomeScreen.tsx'],
-    `${staged}.png is light's customer-Home hero and belongs to that screen alone`
+    `${staged}.webp is light's customer-Home hero and belongs to that screen alone`
   );
 
   // Mounted behind a palette test, and mounted ONCE. It is a light composition:
@@ -1234,7 +1234,7 @@ test('gate · the staged light hero has landed: one mount, gated, on customer Ho
   // dark hero's own gate back on.
   const home = readFileSync(join(root, 'screens/HomeScreen.tsx'), 'utf8');
   assert.equal(
-    home.split(`${staged}.png`).length - 1,
+    home.split(`${staged}.webp`).length - 1,
     1,
     'the light hero must be required exactly once'
   );

@@ -53,7 +53,8 @@ import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 // Master 43's hero crop, mounted in BOTH themes since the 2026-08-22 parity
 // pass (light previously omitted it and kept a full-width copy block). It is
 // the only toolbox asset; its baked dark halo disc renders as drawn on light.
-const PRESTIGE_TOOLBOX_ART = require('../assets/prestige/hero_toolbox_worker.png');
+// 2026-09-21 — WebP (q90, alpha kept) from the PNG master beside it: 1,448 KB → 234 KB.
+const PRESTIGE_TOOLBOX_ART = require('../assets/prestige/hero_toolbox_worker.webp');
 
 const PREVIEW_COUNT = 3;
 

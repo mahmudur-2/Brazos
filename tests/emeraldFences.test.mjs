@@ -678,7 +678,7 @@ test('home(4) fence: the atmosphere sits behind both homes and never scrolls', (
   const layer = stripComments(read('components/HomeAtmosphere.tsx'));
 
   // It is the one mount of the raster, and it is gated.
-  assert.match(layer, /require\('\.\.\/assets\/prestige\/home-atmosphere-dark\.png'\)/);
+  assert.match(layer, /require\('\.\.\/assets\/prestige\/home-atmosphere-dark\.webp'\)/);
   assert.match(
     layer,
     /if \(!isDark\) return null;/,
