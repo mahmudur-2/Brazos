@@ -60,8 +60,11 @@ boxes by Playwright + its 2x shot, sampled beside the same texts):**
   header row); the harness has no status inset, so its hero sits 59 higher than the
   phone's — the seam is compared with that offset.
 
-**NOT YET SEEN ON THE PHONE:** all of it. The OTA is published at the end of this run
-(asked: "yes, publish"); the operator opens the Beta twice and walks the list below.
+**NOT YET SEEN ON THE PHONE:** all of it. **THE OTA IS LIVE** on the preview channel
+(asked: "yes, publish"): update group `b6a3d686-a879-4d5c-9d74-8550e0bb2901`, iOS update
+`01a0c177-4906-7e06-a5c2-a0bebe2498be`, commit `4bb4f2d`; dashboard
+`https://expo.dev/accounts/mah_r2/projects/BRAZOS/updates/b6a3d686-a879-4d5c-9d74-8550e0bb2901`.
+The operator opens the Beta twice and walks the list below.
 
 ### Earlier this sitting and the sitting before (unchanged record)
 
