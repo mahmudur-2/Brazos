@@ -49,6 +49,13 @@ import { isValidEmail } from '../lib/validation';
  * `fonts.displayHero`); the two actions are the Welcome's controls — Continue
  * lit with the chevron, the phone route outlined with its glyph. The bar, the
  * soft contour, the copy and the fields did not move.
+ *
+ * 2026-09-21, from the phone (DECISIONS 21): "Brazos", not "BRAZOS", in the
+ * headline; Continue is the scaffold's FOOTER — pinned, riding the keyboard
+ * frame for frame and stopping 12 above it — while the column LIFTS 24 (the
+ * air between the bar and the eyebrow) so the button clears the password
+ * field on every phone; the back control is the iOS circle with its press.
+ * The phone route stays in the scroll, 12 above the footer at rest.
  */
 export function EmailSignInScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
@@ -93,12 +100,25 @@ export function EmailSignInScreen() {
     if (error) setFormError(error.message);
   }
 
+  // The ship page's lead control, pinned by the scaffold: lit, the gold
+  // chevron; it rides the keyboard (see AuthScaffold's `footer`).
+  const footer = (
+    <AuthButton title="Continue" themed hero lit chevron onPress={handleContinue} loading={loading} />
+  );
+
   return (
-    <AuthScaffold title="Sign in" onBack={() => navigation.goBack()} backdrop="soft" themed>
+    <AuthScaffold
+      title="Sign in"
+      onBack={() => navigation.goBack()}
+      backdrop="soft"
+      lift={authSpacing.xl}
+      footer={footer}
+      themed
+    >
       <View style={styles.body}>
         <Text style={[styles.eyebrow, { color: surface.accent }]}>WELCOME BACK</Text>
         <Text style={styles.title} maxFontSizeMultiplier={1.5}>
-          Sign in to BRAZOS
+          Sign in to Brazos
         </Text>
         <Text style={styles.subtitle}>
           Use the email and password connected to your account.
@@ -163,20 +183,12 @@ export function EmailSignInScreen() {
           ) : null}
         </View>
 
-        {/* The ship page's controls: Continue is the lead (lit, the gold
-            chevron); the phone route is the outlined second with its glyph —
-            `hero` without `lit`, not `ghost`, because a ghost hero is the
-            Welcome's text link and the page draws a box. */}
+        {/* The ship page's second control: the phone route, outlined with its
+            glyph — `hero` without `lit`, not `ghost`, because a ghost hero is
+            the Welcome's text link and the page draws a box. It stays in the
+            scroll, 12 above the pinned Continue at rest, and the keyboard
+            covers it while a field is being typed in. */}
         <View style={styles.actions}>
-          <AuthButton
-            title="Continue"
-            themed
-            hero
-            lit
-            chevron
-            onPress={handleContinue}
-            loading={loading}
-          />
           <AuthButton
             title="Use Phone Number Instead"
             themed
@@ -199,10 +211,12 @@ export function EmailSignInScreen() {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // The bottom padding is the 12 between the phone route and the pinned
+  // Continue, which the scaffold's footer draws just below this column.
   body: {
     flexGrow: 1,
     paddingTop: authSpacing.sm,
-    paddingBottom: authSpacing.xl,
+    paddingBottom: authSpacing.md,
   },
   // Colour comes from surface.accent at render — emerald in light, gold in
   // dark, exactly as master 4's sibling does it. The measure is the Welcome's

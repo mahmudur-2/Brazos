@@ -255,11 +255,18 @@ const HERO_FONT_FAMILY = /^fonts\.displayHero\b/;
  * page (docs/mockups/html/lux/signin-ship-light.html) in the Welcome's serif
  * at the form size, Georgia 34/38 — chosen from the ideas page that day
  * ("make it d"). Same role, same face, same file-less rule.
+ *
+ * 2026-09-21, later still — THE FOURTH, the phone Sign-in's headline, by the
+ * same operator's word (DECISIONS 21: "make the changes we talked about to
+ * sign in screen for With phone, not just email") — its ship page
+ * docs/mockups/html/lux/signin-phone-ship-light.html draws the same
+ * "Sign in to Brazos" in the same Georgia 34/38.
  */
 const HERO_SITES = new Map([
   ['screens/HomeScreen.tsx', 1],
   ['screens/WelcomeScreen.tsx', 1],
   ['screens/EmailSignInScreen.tsx', 1],
+  ['screens/SignInScreen.tsx', 1],
 ]);
 
 /** Family names that are serifs. Applied to font-family positions only — the

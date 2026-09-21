@@ -1,5 +1,6 @@
-import type { PropsWithChildren } from 'react';
+import { useRef, type PropsWithChildren, type ReactNode } from 'react';
 import {
+  Animated,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,11 +11,109 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { authSurface, fonts, useThemeColors, withAlpha } from '../lib/theme';
 import { backgroundImageStyle } from '../ui/primitives/LitSurface';
 import { AuthBackdrop, type AuthBackdropVariant } from './AuthBackdrop';
+import { KeyboardRisingColumn } from './KeyboardRisingColumn';
+
+/**
+ * 2026-09-21 — THE KEYBOARD, on the sign-in pages (DECISIONS 21).
+ *
+ * `lift` is spent over the keyboard's first LIFT_OVER points of travel, so the
+ * column has finished moving before the keyboard has — the keyboard's own
+ * curve eases out, and a lift that tracked it to the end would still be
+ * creeping while the keys were already still. Every real keyboard rises past
+ * this (the shortest, a number pad on a small phone, about 260 clear of the
+ * inset), so the lift always completes.
+ *
+ * The footer rests FOOTER_REST_GAP above the safe inset plus the column's own
+ * COLUMN_BOTTOM_PADDING — 12 + 12, the 24 the body's padding gives the scroll
+ * content — and rises by the keyboard's height less both the inset and this
+ * gap, which lands its padded edge exactly on the keyboard.
+ */
+const LIFT_OVER = 200;
+const FOOTER_REST_GAP = authSpacing.md;
+
+/**
+ * The back control's press: the iOS circular button's dip — a quick scale in,
+ * a springy return, on the native driver. The fill's darkening is the
+ * Pressable's own pressed state (a colour, so not animated).
+ */
+const BACK_PRESS_SCALE = 0.88;
+const BACK_PRESS_IN_MS = 90;
+const BACK_FILL_ALPHA = 0.08;
+const BACK_FILL_PRESSED_ALPHA = 0.16;
+
+function BackButton({
+  onPress,
+  themed,
+  color,
+  fill,
+}: {
+  onPress: () => void;
+  themed: boolean;
+  color: string;
+  fill: string;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+  // Untouched screens (not themed) keep the plain 22 chevron on a bare 44
+  // hit box, byte for byte; the themed sign-in pages get the ship page's
+  // circle — a 36 disc at the ink's own faint alpha — with the chevron a size
+  // down, inside the same 44 target.
+  if (!themed) {
+    return (
+      <Pressable
+        onPress={onPress}
+        hitSlop={8}
+        style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
+        <Ionicons name="chevron-back" size={22} color={color} />
+      </Pressable>
+    );
+  }
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() =>
+        Animated.timing(scale, {
+          toValue: BACK_PRESS_SCALE,
+          duration: BACK_PRESS_IN_MS,
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }).start()
+      }
+      onPressOut={() =>
+        Animated.spring(scale, {
+          toValue: 1,
+          speed: 40,
+          bounciness: 8,
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }).start()
+      }
+      hitSlop={8}
+      style={styles.iconButton}
+      accessibilityRole="button"
+      accessibilityLabel="Go back"
+    >
+      {({ pressed }) => (
+        <Animated.View
+          style={[
+            styles.backCircle,
+            { backgroundColor: pressed ? withAlpha(fill, BACK_FILL_PRESSED_ALPHA) : withAlpha(fill, BACK_FILL_ALPHA) },
+            { transform: [{ scale }] },
+          ]}
+        >
+          <Ionicons name="chevron-back" size={authSizes.backChevron} color={color} />
+        </Animated.View>
+      )}
+    </Pressable>
+  );
+}
 
 /**
  * 2026-09-21 — THE GROUND OF THE SHIPPED WELCOME PAGE (docs/mockups/html/lux/
@@ -68,6 +167,27 @@ type AuthScaffoldProps = PropsWithChildren<{
    * are approved. Requires `themed`.
    */
   ground?: boolean;
+  /**
+   * 2026-09-21 — the sign-in pages' pinned action (DECISIONS 21). Rendered
+   * OUTSIDE the scroll as the column's last sibling, resting where the body's
+   * own bottom padding would put it (24 above the safe inset), and it RIDES
+   * THE KEYBOARD through KeyboardRisingColumn — the seam Chat's composer
+   * uses: the keyboard's live frame on the UI thread where the binary can
+   * track it, the native-driver imitation with the system's own duration
+   * otherwise — landing 12 above the keyboard. The scroll content is left
+   * alone: no KeyboardAvoidingView padding runs while a footer is present, so
+   * nothing re-lays out per frame; the scroll keeps iOS's own keyboard inset
+   * so a field can still be reached on a phone too short for all of it.
+   */
+  footer?: ReactNode;
+  /**
+   * How far the scroll column lifts (points) while the keyboard is up, so the
+   * footer keeps clear of the last field — spent from the air above the
+   * column's first line. Proportional to the keyboard's rise over its first
+   * LIFT_OVER points, on the native driver at the system's own duration
+   * (useKeyboardOffset). Absent, nothing lifts.
+   */
+  lift?: number;
 }>;
 
 /**
@@ -89,11 +209,33 @@ export function AuthScaffold({
   backdrop,
   themed = false,
   ground = false,
+  footer,
+  lift = 0,
   children,
 }: AuthScaffoldProps) {
   const showTopBar = Boolean(title || onBack);
   const { palette, isDark } = useThemeColors();
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  // The keyboard's rise past the safe inset, on the native driver at the
+  // system's duration — the lift below is a fraction of it. Subscribed on
+  // every auth screen (a hook cannot be conditional); it moves nothing unless
+  // `lift` is set, and a screen without a field never sees a keyboard.
+  const keyboardRise = useKeyboardOffset(insets.bottom);
+  const liftStyle =
+    lift > 0
+      ? {
+          transform: [
+            {
+              translateY: keyboardRise.interpolate({
+                inputRange: [0, LIFT_OVER],
+                outputRange: [0, -lift],
+                extrapolate: 'clamp',
+              }),
+            },
+          ],
+        }
+      : null;
   const surface = authSurface(palette, isDark);
   const lit = ground && themed;
   const groundBase =
@@ -164,24 +306,20 @@ export function AuthScaffold({
       <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          // A footer handles the keyboard itself (see the prop); the padding
+          // path stays for the screens without one.
+          behavior={Platform.OS === 'ios' && !footer ? 'padding' : undefined}
         >
           {showTopBar ? (
             <View style={styles.topBarOuter}>
               <View style={styles.topBar}>
                 {onBack ? (
-                  <Pressable
+                  <BackButton
                     onPress={onBack}
-                    hitSlop={8}
-                    style={({ pressed }) => [
-                      styles.iconButton,
-                      pressed && styles.iconButtonPressed,
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Go back"
-                  >
-                    <Ionicons name="chevron-back" size={22} color={chevronColor} />
-                  </Pressable>
+                    themed={themed}
+                    color={chevronColor}
+                    fill={surface.ink}
+                  />
                 ) : (
                   <View style={styles.iconButton} />
                 )}
@@ -212,9 +350,20 @@ export function AuthScaffold({
             // fallback, so it shouldn't rubber-band when there's nothing to see.
             bounces={false}
             overScrollMode="never"
+            automaticallyAdjustKeyboardInsets={Boolean(footer)}
           >
-            <View style={styles.content}>{children}</View>
+            <Animated.View style={[styles.content, liftStyle]}>{children}</Animated.View>
           </ScrollView>
+          {footer ? (
+            <View style={styles.footerOuter}>
+              <KeyboardRisingColumn
+                insetBelow={insets.bottom + FOOTER_REST_GAP}
+                style={styles.footer}
+              >
+                {footer}
+              </KeyboardRisingColumn>
+            </View>
+          ) : null}
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
@@ -258,6 +407,26 @@ const styles = StyleSheet.create({
   },
   iconButtonPressed: {
     backgroundColor: authColors.mint,
+  },
+  // The ship page's back control: a disc inside the 44 target.
+  backCircle: {
+    width: authSizes.backCircle,
+    height: authSizes.backCircle,
+    borderRadius: authSizes.backCircle / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // The pinned footer: the column's last sibling, the same width and gutters
+  // as the content, resting FOOTER_REST_GAP above the safe inset (its own
+  // COLUMN_BOTTOM_PADDING makes up the body's 24).
+  footerOuter: {
+    alignItems: 'center',
+    marginBottom: FOOTER_REST_GAP,
+  },
+  footer: {
+    width: '100%',
+    maxWidth: authSizes.maxContentWidth,
+    paddingHorizontal: authSpacing.gutter,
   },
   topTitle: {
     ...authType.navTitle,

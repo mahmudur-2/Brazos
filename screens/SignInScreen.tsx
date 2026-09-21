@@ -4,10 +4,9 @@ import { useNavigation } from '@react-navigation/native';
 import { AuthButton } from '../components/AuthButton';
 import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
-import { BrandLogo } from '../components/BrandLogo';
 import { PhoneNumberInput } from '../components/PhoneNumberInput';
 import { useAuth } from '../hooks/useAuth';
-import { authSizes, authSpacing, authType } from '../lib/authTheme';
+import { authSpacing, authType } from '../lib/authTheme';
 import {
   authSurface,
   fonts,
@@ -50,9 +49,21 @@ import { phoneAuth } from '../lib/phoneAuth';
  * converting these two screens cannot move a single light pixel anywhere else,
  * CountryPicker included.
  *
- * The brand mark stays. Masters 3 and 4 draw no logo, but this screen has
- * carried one since it was built and it is not a mockup's job to delete
- * working composition (D11).
+ * The brand mark stayed through emerald(5) — masters 3 and 4 draw no logo, but
+ * this screen had carried one since it was built and it was not a mockup's
+ * job to delete working composition (D11). It went on 2026-09-21 by the
+ * operator's own word, with the email sibling's.
+ *
+ * 2026-09-21 — MATCHED TO ITS SHIP PAGE (docs/mockups/html/lux/
+ * signin-phone-ship-light.html; DECISIONS 21 — "make the changes we talked
+ * about to sign in screen for With phone, not just email"): the B gone; the
+ * eyebrow and the headline the Welcome's (`heroEyebrow`, the serif
+ * `heroTitle` in `fonts.displayHero`), "Brazos" in the headline; Continue the
+ * scaffold's pinned FOOTER, riding the keyboard and stopping 12 above it,
+ * the column lifting 24 while the keyboard is up; the email route the
+ * outlined second with its glyph, in the scroll, 12 above the footer at
+ * rest; the back control the iOS circle with its press. The bar, the soft
+ * contour, the copy and the phone field did not move.
  */
 export function SignInScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
@@ -116,14 +127,34 @@ export function SignInScreen() {
     setNotice(result.message);
   }
 
-  return (
-    <AuthScaffold title="Sign in" onBack={() => navigation.goBack()} backdrop="soft" themed>
-      <View style={styles.body}>
-        <BrandLogo size={authSizes.logoAuth} />
+  // The ship page's lead control, pinned by the scaffold: lit, the gold
+  // chevron; it rides the keyboard (see AuthScaffold's `footer`).
+  const footer = (
+    <AuthButton
+      title="Continue"
+      themed
+      hero
+      lit
+      chevron
+      onPress={handleContinue}
+      loading={loading}
+      accessibilityHint="Send a verification code to this phone number"
+    />
+  );
 
+  return (
+    <AuthScaffold
+      title="Sign in"
+      onBack={() => navigation.goBack()}
+      backdrop="soft"
+      lift={authSpacing.xl}
+      footer={footer}
+      themed
+    >
+      <View style={styles.body}>
         <Text style={[styles.eyebrow, { color: surface.accent }]}>WELCOME BACK</Text>
         <Text style={styles.title} maxFontSizeMultiplier={1.5}>
-          Sign in to BRAZOS
+          Sign in to Brazos
         </Text>
         <Text style={styles.subtitle}>
           Use the phone number connected to your account.
@@ -158,18 +189,18 @@ export function SignInScreen() {
           {notice ? <AuthNotice tone="info">{notice}</AuthNotice> : null}
         </View>
 
+        {/* The ship page's second control: the email route, outlined with
+            its glyph — `hero` without `lit`, not `ghost`, because a ghost
+            hero is the Welcome's text link and the page draws a box. It stays
+            in the scroll, 12 above the pinned Continue at rest, and the
+            keyboard covers it while the number is being typed. */}
         <View style={styles.actions}>
           <AuthButton
-            title="Continue"
-            themed
-            onPress={handleContinue}
-            loading={loading}
-            accessibilityHint="Send a verification code to this phone number"
-          />
-          <AuthButton
             title="Use Email Instead"
-            variant="ghost"
             themed
+            hero
+            icon="mail-outline"
+            chevron
             onPress={() => navigation.navigate('EmailSignIn')}
             disabled={loading}
             accessibilityHint="Sign in with your email address and password"
@@ -182,21 +213,26 @@ export function SignInScreen() {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // The bottom padding is the 12 between the email route and the pinned
+  // Continue, which the scaffold's footer draws just below this column.
   body: {
     flexGrow: 1,
     paddingTop: authSpacing.sm,
-    paddingBottom: authSpacing.xl,
+    paddingBottom: authSpacing.md,
   },
   // Colour comes from surface.accent at render — emerald in light, gold in
-  // dark, exactly as master 3's sibling does it.
+  // dark, exactly as master 3's sibling does it. The measure is the Welcome's
+  // (13/700 tracked 2 on a 17 line), from the ship page.
   eyebrow: {
-    ...authType.eyebrow,
+    ...authType.heroEyebrow,
     marginTop: authSpacing.xl,
   },
-  // Sibling 3's display headline is the serif.
+  // The ship page's headline: the Welcome's serif at the form size (34/38),
+  // the ONE serif role — the fence in tests/themeTokens.test.mjs names this
+  // screen as a site.
   title: {
-    ...authType.title,
-    fontFamily: fonts.display,
+    ...authType.heroTitle,
+    fontFamily: fonts.displayHero,
     color: colors.ink,
     marginTop: authSpacing.sm,
   },

@@ -114,6 +114,13 @@ export const authSizes = {
   field: 54,
   /** .icon-btn 38 -> 44. */
   iconButton: 44,
+  /**
+   * 2026-09-21 — the sign-in ship pages' back control (DECISIONS 21): the iOS
+   * circular button's disc inside the 44 target, and its chevron one size
+   * down from the bare 22 the untouched screens keep.
+   */
+  backCircle: 36,
+  backChevron: 20,
   /** .auth-logo 52 -> 56. */
   logoAuth: 56,
   /**
