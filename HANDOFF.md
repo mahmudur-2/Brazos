@@ -1,15 +1,69 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-20, sitting 3 (the chat after `c59d2aa`: the operator listed the
-issues for one big run — the Filters sheet's colours and its popups, from phone
-screenshots beside the mockup — and approved the fixes as HTML; docs only, no app
-code moved — docs/DECISIONS.md 2026-09-20 (sitting 3), (1)–(6)). Sitting 2's record
-follows it below, unchanged.
+WRITTEN: 2026-09-21 (the run that applied the eighteen-item list — Available Jobs,
+the Filters sheet and its popups, the Sort popup, the customer Home, the ground +
+hero — from this chat, opus at max; docs/DECISIONS.md 2026-09-20 (sitting 3), (13)).
+The two sitting-3 docs rounds and sitting 2's record follow below, unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
 
 ## What this session landed
+
+**THE EIGHTEEN-ITEM RUN — four code commits over `1cdacc9`**, each revertible alone,
+`npm run verify` green before each (1381 pass, 0 fail after the last); then this docs
+commit. The specification is `docs/dispatch/NEXT-RUN-2026-09-21.md` (now marked
+LANDED); the record is DECISIONS (13).
+
+- `7370b9c` — **feat(jobs)**: one card size (the tile a constant 120 — the reference's
+  118 fill inside its rim — every card 146, pitch 158, measured in the harness), the pay
+  block's clearance MEASURED + 8, the chip's full label unless it would not fit (decided
+  from the chip's own layout at the full label, unseen until decided; `Chip` forwards
+  `onLayout`), and **`useScrollClearance()`** beside `useFloatingNavClearance()`: by
+  route — the bar's footprint on the two atmosphere homes, `spacing.lg` everywhere else,
+  where the bar is in the layout flow and the footprint was a ~104pt double count.
+  Twenty-one scrolling surfaces swapped; Chat and the studio panel keep the footprint.
+- `c5545c0` — **feat(filters)**: `paneFills.filters` (ui/tokens.ts, beside `paneEdges`)
+  drawn by `Surface fill` as the tint itself — no scrim, no sheen — on the Filters sheet
+  alone (the map's panes keep recipe D); `emeraldBright` (dark #84DFAA, light the
+  emerald) on the chosen pills, ticks, caret and the popup's chosen row; the popover on
+  the **menu** material, values centred with the tick pinned left (Sort keeps its left
+  layout via `contentAlign`), iOS's own bar flashed once on open, light-grey dividers,
+  the date popup 192. Harness: `worker-results-filters-{dark,light}` and the budget
+  popup, with the new `landmarks` field (the boxes of named texts beside the PNG).
+- `2b20f0d` — **feat(home, sort)**: the sixth sort `'reset'` (latest added first,
+  nothing else; grey, last; the pill "Sort by Latest added"); "Earliest jobs first"; the
+  sheet's footer centred (22 above the button, only the safe inset below it — a footer
+  brings its own air). Home: one rhythm of 24 (headline margin 16, the hero's padding
+  gone, `sectionGap` 24, the section margin −9); the field 56 r20 with ONE trailing
+  control (`SearchBar.micBecomesSearch`); the tile measured from the row, the gap the
+  gutter itself, four whole and none peeking; the copy (no period, three-line sub-copy,
+  "You haven't posted any jobs yet"). Harness: the customer-home targets carry landmarks.
+- `d9bbb0e` — **feat(home)**: `scripts/home-ground-blend.mjs --apply`, once — the hero
+  feathered in its file, the ground pooled to the photo's night; the marker
+  `assets/prestige/home-ground-blend.json` refuses a second pass; the roster says
+  'baked-feathered'; the atmosphere docblock re-measured.
+
+**THE LOOPS (measured, not eyeballed; the scripts are the gitignored
+`.shots/harness-blur/loop-filters.mjs` and `loop-home.mjs` — re-create from the
+pattern if the folder is gone: the app's landmark boxes + PNG against the reference's
+boxes by Playwright + its 2x shot, sampled beside the same texts):**
+- Filters, light: 0/channel everywhere. Dark: the chosen pill within 2, the popup within
+  1, the ground and the unchosen pill 3–5 darker than the reference — the harness
+  backdrop (the jobs list, not the mockup's brighter blurred map) through the tint's own
+  5–9%. The numbers are the reference's exactly and were NOT tuned against that
+  harness-only artifact; the phone, whose backdrop is the map, decides.
+- Home, both themes: greeting → headline 24 / 24, sub-copy → card 42 / 42, card → Popular
+  services 24 / 24, tile labels → Your jobs 39.5 / 40; tiles 73 at 20 / 113 / 207 / 300
+  in both, none peeking; the field 56 (fenced). NOT in the list, left alone: "Your jobs"
+  → the empty row (app 36.5, reference 11 — the app's row has no subtitle and a 44pt
+  header row); the harness has no status inset, so its hero sits 59 higher than the
+  phone's — the seam is compared with that offset.
+
+**NOT YET SEEN ON THE PHONE:** all of it. The OTA is published at the end of this run
+(asked: "yes, publish"); the operator opens the Beta twice and walks the list below.
+
+### Earlier this sitting and the sitting before (unchanged record)
 
 **SITTING 3 — THE FILTERS SHEET'S COLOURS AND ITS POPUPS, RULED AND REFERENCED (docs
 only).** The operator sent the live dark Filters sheet beside the mockup ("warmer",
@@ -121,12 +175,42 @@ its rim (dark), at the mockup's padding.
 
 ## What a following run must know
 
-- **The next run is ONE big run: Available Jobs 1–3 then the Filters 4–9**, both in
+- **`useScrollClearance()` is what a scrolling surface pads its end with**; the old
+  `useFloatingNavClearance()` is the bar's real footprint and is right for Chat's
+  keyboard rise and the studio panel only. `tests/layout` names the one exception.
+- **The Filters sheet's tint is `paneFills.filters`**, drawn by `Surface fill` in place
+  of the scrim and the sheen where the glass draws; the fallback keeps the material's
+  scrim. The map's panes still wear `pane` (recipe D) with no fill. A new pane names
+  its fill from the table, never at a call site.
+- **The popover wears `menu`** and centres its values; `contentAlign="start"` is the
+  Sort popup's left layout. `emeraldBright` is the chosen green on this sheet and its
+  popups only; `dark.emerald` is untouched (D0 pins it).
+- **A `Sheet` with a footer keeps only the safe inset below it** — the footer's own
+  22 above its button is the air. The Filters sheet is the only footer caller.
+- **The Home field's one control is `SearchBar.micBecomesSearch`** — the mic while empty,
+  the magnifier once text is typed and no dictation is listening; Home only (asked).
+- **The tile is measured**: `tileSizeFor(rowWidth, gap)` with `gap = inset` (the
+  gutter); `TILE_FLOOR` only until the row lays out. Nothing may re-introduce a
+  constant tile.
+- **The ground and the hero are transformed files now.** `scripts/home-ground-blend.mjs`
+  is the record; the marker refuses `--apply` twice; the originals are
+  `git show c59d2aa:<path>`. The roster records the dark hero as 'baked-feathered'.
+- **The harness's `landmarks` field** writes the LAST exact match's box per text (a sheet
+  over a screen renders later in the DOM than the screen's own chips) after the shutter;
+  the loops read them. `tests/shotHarness` counts 86 targets.
+- **The references' NOW pages record the app at `c59d2aa`**
+  (`docs/mockups/html/filters-fix-dark.html`, `worker-results-screen.html`) — historical
+  by their own headers now that the app moved.
+- **Stale comments still owed** (unchanged): `scripts/shots.mjs` lines 387-390.
+
+### The earlier notes (unchanged)
+
+- **(DONE 2026-09-21, the run above.) The next run is ONE big run: Available Jobs 1–3 then the Filters 4–9**, both in
   `docs/dispatch/NEXT-RUN-2026-09-21.md`, each with its approved HTML reference. The
   operator's rule from sitting 3: the HTML IS the reference the loop measures against —
   build the harness target, sample beside named texts, compare to the numbers in that
   file, iterate on alphas only. Nothing is judged by eye.
-- **`scripts/home-ground-blend.mjs --apply` rewrites two assets and is guarded by a marker** —
+- **(DONE 2026-09-21 — `d9bbb0e`.) `scripts/home-ground-blend.mjs --apply` rewrites two assets and is guarded by a marker** —
   run it exactly once in the run, then re-measure the raster fences (item 17). The reference
   already shows its result; the app does not yet.
 - **`filters-fix.build.mjs` depends on the gallery**: run `map-explore.build.mjs --filters`
@@ -206,24 +290,26 @@ its rim (dark), at the mockup's padding.
 
 ## Waiting on the operator
 
-- **Nothing new to walk from sitting 3** (docs only). The big run comes next, on the
-  operator's dispatch — model opus, effort max, "careful surgical implementation".
-- **The phone.** Open the Beta twice. Then, item by item: (1) light "Any" pill cream /
-  no rim / black; (2) dark Filters sheet — one line on the top edge only, no shine
-  line, no side or bottom lines; (3) Distance / Minimum budget / When pills reaching
-  the right edge; (4) the Categories note — does Best Match appear now, and if not,
-  which of the three sentences shows; (5) the jobs sheet resting on the tab bar, the
-  swipe-down MINI stop, the pull back, the peek on every fresh open, the Legal link
-  above the sheet; (7)/(8) the richer green on all four panes with no doubled top
-  line; (9) the brighter light "$50"; (10) the 62pt search pill; (11) the "Any
-  distance" chip's outline whole; (12) the Available Jobs and Home cards in layout a1
-  with the square picture.
-- **Staging**: the Actions tab for this push — verify only (no migration, no
-  function).
-- **Revert lines:** `git revert 1f057dd` (the card + gold), `git revert 062d5a9`
-  (the map), `git revert 5dfb096` (the glass, Filters, skills); the docs commit
-  reverts with them. After any revert: `npm run verify`, then an OTA on the
-  operator's word.
+- **The phone — open the Beta twice, then walk, item by item:** (1) Available Jobs —
+  every card the same height with the same square picture; long titles no longer
+  losing room to the price; "Packing/Unpacking" whole; the list ending 16pt above the
+  bar (and every other screen's list end — no dead space); (4) the dark Filters sheet's
+  green — deep, the mockup's, not grey-olive; (5) the chosen pills bright; (6)–(8) the
+  popups flat, values centred, the tick at the left edge, the bar shown on open and while
+  scrolling; (10) the Sort popup's Reset row (grey, last) and the pill reading "Sort by
+  Latest added" after it; "Earliest jobs first"; light-grey dividers; (12) the Show
+  button centred in the footer; (13)–(16) Home — the even rhythm, the taller rounder
+  field with the mic that becomes a magnifier when typing, four whole tiles, the copy;
+  (17) the chair, the lamp and the plant sitting in the room, no rectangle around them.
+  Also still unwalked from sitting 2: the map's sheet stops, item 13's edges, the light
+  "Any" pill and gold, the search pill 62.
+- **The Filters ground on the phone**: if it still reads greyer than the reference, send
+  a PNG screenshot; the loop reads it (pngjs) and the two stops' ALPHAS are the only
+  dials.
+- **Staging**: the Actions tab for this push — verify only (no migration, no function).
+- **Revert lines, latest first:** `git revert d9bbb0e` (the assets), `2b20f0d`,
+  `c5545c0`, `7370b9c`; the docs commit reverts with them. After any revert:
+  `npm run verify`, then an OTA on the operator's word.
 
 ## Open gates
 
