@@ -91,8 +91,13 @@ card; a job detail's photo bleeds full width under a glass facts panel.
 - The app's copy, verbatim (read the screen's source). The harness's four seeded
   jobs (`scripts/shots.mjs` SEEDED_JOBS), the mockup's sample detail job and — for
   the one screen that is somebody else's profile — the mockup's sample worker
-  (`lux.build.mjs` WORKER: a name, a bio, categories, listed services) are the only
-  invented rows; no ratings, no reviews, no completed-job counts, no fake balances.
+  (`lux.build.mjs` WORKER: a name, a bio, categories, listed services), plus the
+  sample job's two bids and its one funded payment (BIDS, PAY: the second bidder is
+  a name and a pitch; the money is what the fee schedule quotes at the 7.5%
+  customer fee the device walk paid) are the only invented rows; no ratings, no
+  reviews, no completed-job counts, no fake balances. The customer map's tiles are
+  the approved worker-map stand-in (Esri's dark canvas, cached under
+  `.shots/map-tiles/`), because Apple's cannot be embedded.
 - Every control the live screen has is on the page; "cleaner" means laid out
   better, never fewer features.
 - One screen per page, `.phone[data-shot="lux-<screen>"]`; labels inside the frame

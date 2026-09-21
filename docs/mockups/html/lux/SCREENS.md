@@ -24,22 +24,22 @@ photograph the LIVE screen, for the side-by-side.
 | create | The [+] Create sheet | components/CreateSheet.tsx | customer-create-sheet | done |
 | services | The All services sheet | components/ServicePickerSheet.tsx | customer-services-sheet | done |
 
-## Batch 2 — customer jobs
+## Batch 2 — customer jobs (approved 2026-09-21, "Yes, all of them"; scrolled frames: `lux-myjobs-2`, `lux-cjob-2` and `-3`, `lux-track-2`, `lux-review-tip-2`)
 
 | key | screen | source | harness target | status |
 |-|-|-|-|-|
-| myjobs | My Jobs hub (customer) | screens/MyJobsHubScreen.tsx | customer-myjobs | todo |
-| cjob | The client's job detail | screens/ClientJobDetailScreen.tsx | — | todo |
-| compare | Compare bids | screens/CompareBidsScreen.tsx | — | todo |
-| bid | Bid detail | screens/BidDetailScreen.tsx | — | todo |
-| counter | Counteroffer | screens/CounterofferScreen.tsx, components/OfferComposer.tsx | — | todo |
-| checkout | Checkout (accept = fund) | screens/CheckoutScreen.tsx | — | todo |
-| confirmed | Job confirmed | screens/JobConfirmedScreen.tsx | — | todo |
-| track | Track worker | screens/TrackWorkerScreen.tsx | — | todo |
-| approve | Approve or dispute | screens/ApproveOrDisputeScreen.tsx | — | todo |
-| review-tip | Review and tip | screens/ReviewAndTipScreen.tsx | — | todo |
-| cell | Cell jobs (map drill-down) | screens/CellJobsScreen.tsx | — | todo |
-| cmap | Map (customer) | screens/MapScreen.tsx | — (no target: tile hosts) | todo |
+| myjobs | My Jobs hub (customer) | screens/MyJobsHubScreen.tsx | customer-myjobs | done |
+| cjob | The client's job detail | screens/ClientJobDetailScreen.tsx | — | done |
+| compare | Compare bids | screens/CompareBidsScreen.tsx | — | done |
+| bid | Bid detail | screens/BidDetailScreen.tsx | — | done |
+| counter | Counteroffer | screens/CounterofferScreen.tsx, components/OfferComposer.tsx | — | done |
+| checkout | Checkout (accept = fund) | screens/CheckoutScreen.tsx | — | done |
+| confirmed | Job confirmed | screens/JobConfirmedScreen.tsx | — | done |
+| track | Track worker | screens/TrackWorkerScreen.tsx | — | done |
+| approve | Approve or dispute | screens/ApproveOrDisputeScreen.tsx | — | done |
+| review-tip | Review and tip | screens/ReviewAndTipScreen.tsx | — | done |
+| cell | Cell jobs (map drill-down) | screens/CellJobsScreen.tsx | — | done |
+| cmap | Map (customer) | screens/MapScreen.tsx | — (no target: tile hosts) | done |
 
 ## Batch 3 — worker
 

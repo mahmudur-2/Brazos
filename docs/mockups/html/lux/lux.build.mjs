@@ -15,7 +15,7 @@
 // where the app has a material, the app's own art as the only photo, no
 // invented marketplace data beyond the harness's seeded jobs. Nothing here
 // is applied to the app until the operator says so.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decode } from '../../../../tests/pngGeometry.mjs';
@@ -37,6 +37,53 @@ const toolboxSrc = () => {
     toolboxUri = `data:image/png;base64,${encodePng({ width: small.width, height: small.height, pixels: small.pixels, bpp: small.bpp }).toString('base64')}`;
   }
   return toolboxUri;
+};
+
+// The map's tiles, exactly as the approved map mockup carries them
+// (docs/mockups/html/map-explore.build.mjs): Esri's dark canvas over Flatbush
+// at zoom 14, cached once under .shots/map-tiles/ and inlined. The app draws
+// Apple's tiles, which cannot be embedded; this is the honest stand-in the
+// operator already approved for the worker map.
+const MAP = { center: { lat: 40.664, lng: -73.950 }, zoom: 14, tileCss: 256 * 0.78, midY: 400 };
+const tileXY = (lat, lng, z) => {
+  const n = 2 ** z;
+  const rad = (lat * Math.PI) / 180;
+  return { x: ((lng + 180) / 360) * n, y: ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n };
+};
+async function tileDataUri(z, x, y) {
+  const dir = join(root, '.shots', 'map-tiles', 'esri-dark-base');
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `${z}-${x}-${y}.bin`);
+  if (!existsSync(file)) {
+    const res = await fetch(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/${z}/${y}/${x}`, { headers: { 'User-Agent': 'brazos-mockup/1 (design mockup, ~20 tiles)' } });
+    if (!res.ok) throw new Error(`tile ${z}/${x}/${y}: HTTP ${res.status}`);
+    writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+  }
+  const bytes = readFileSync(file);
+  return `data:${bytes[0] === 0x89 ? 'image/png' : 'image/jpeg'};base64,${bytes.toString('base64')}`;
+}
+/** The tile grid covering the phone, the centre landing at MAP.midY; returns the tiles' CSS and divs. */
+async function mapLayer() {
+  const c = tileXY(MAP.center.lat, MAP.center.lng, MAP.zoom);
+  const css = [], html = [];
+  let i = 0;
+  for (let ty = Math.floor(c.y) - 2; ty <= Math.floor(c.y) + 3; ty++) {
+    for (let tx = Math.floor(c.x) - 2; tx <= Math.floor(c.x) + 2; tx++) {
+      const left = 393 / 2 + (tx - c.x) * MAP.tileCss;
+      const top = MAP.midY + (ty - c.y) * MAP.tileCss;
+      if (left + MAP.tileCss < -1 || top + MAP.tileCss < -1 || left > 394 || top > 853) continue;
+      css.push(`.t${i}{background-image:url("${await tileDataUri(MAP.zoom, tx, ty)}")}`);
+      html.push(`<div class="tile t${i}" style="left:${left.toFixed(2)}px;top:${top.toFixed(2)}px"></div>`);
+      i++;
+    }
+  }
+  return { css: css.join('\n'), html: html.join('') };
+}
+/** A cell's centre on the phone, from its coordinates. */
+const mapPoint = (lat, lng) => {
+  const c = tileXY(MAP.center.lat, MAP.center.lng, MAP.zoom);
+  const p = tileXY(lat, lng, MAP.zoom);
+  return { x: 393 / 2 + (p.x - c.x) * MAP.tileCss, y: MAP.midY + (p.y - c.y) * MAP.tileCss };
 };
 
 // ---------------------------------------------------------------------------
@@ -72,6 +119,16 @@ const POST = { day: 'Sat, Sep 26', timing: 'Sat, Sep 26 · 8 AM–11 AM', pay: '
 const WORKER = { name: 'Sam Okafor', first: 'Sam', initials: 'SO', bio: 'Flat-pack and wall-mounting work most evenings and weekends. I bring my own tools and clear the packaging away.',
   cats: ['Furniture Assembly', 'TV/Furniture Mounting', 'Handyman'], note: 'Evenings and weekends.',
   services: [{ title: 'Flat-pack furniture assembly', desc: 'Beds, wardrobes, desks and shelving, any brand.', price: '$60 flat' }, { title: 'TV mounting', desc: 'Bracket supplied on request; cables tidied.', price: '$45/hr' }] };
+// Batch 2 — the sample job through its lifecycle: two bids on it (the sample
+// worker's and a second sample bidder's, both "No reviews yet"), Sam's accepted
+// and funded. The money figures are what the fee schedule quotes for $110 at
+// the 7.5% customer fee the device walk paid (GATES Gate 1, $53.75 on $50).
+const WORKER2 = { name: 'Priya Natarajan', first: 'Priya', initials: 'PN' };
+const BIDS = [
+  { w: WORKER, amount: '$110', pitch: 'I can do both pieces in one visit and take the boxes down with me — I have a van. Happy to start Saturday morning.', age: '2h ago' },
+  { w: WORKER2, amount: '$120', pitch: 'Assembled dozens of these; I bring a second Allen set and a rubber mallet so nothing gets scratched.', age: '4h ago' },
+];
+const PAY = { agreed: '$110', fee: '$8.25', total: '$118.25', window: '47h' };
 
 
 const sprite = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -139,6 +196,8 @@ const sprite = `<svg width="0" height="0" style="position:absolute" aria-hidden=
 const ic = (id, cls = '') => `<svg class="${cls}"><use href="#${id}"/></svg>`;
 /** A glyph sized and coloured inline, for the places no primitive sizes it. */
 const icS = (id, size, color) => `<svg style="width:${size}px;height:${size}px;color:${color};flex:0 0 auto"><use href="#${id}"/></svg>`;
+/** The armchair photo as a fill, so a page with several frames carries its bytes ONCE (the page adds the class's url). */
+const photo = () => '<div class="pimg"></div>';
 
 // ---------------------------------------------------------------------------
 // THE SYSTEM — README.md is the prose; these are the numbers
@@ -171,6 +230,7 @@ const SYSTEM_CSS = `
 .thumb{width:96px;height:96px;border-radius:16px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;color:var(--acc);flex:0 0 auto;overflow:hidden}
 .thumb svg{width:34px;height:34px}
 .thumb img{width:100%;height:100%;object-fit:cover}
+.pimg{width:100%;height:100%;background-size:cover;background-position:center}
 .seg{display:flex;gap:8px}
 .seg .p{height:36px;padding:0 14px;border-radius:18px;display:flex;align-items:center;font-size:14px;font-weight:600;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid rgba(200,255,230,.12)}
 .seg .p.on{background:var(--acc);color:var(--accInk);border-color:transparent}
@@ -257,6 +317,37 @@ const SYSTEM_CSS = `
 .pricepill{height:56px;border-radius:28px;background:rgba(255,255,255,.06);border:1px solid rgba(200,255,230,.10);display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 20px}
 .pricepill .pen{width:40px;height:40px;border-radius:20px;background:rgba(126,226,180,.14);display:flex;align-items:center;justify-content:center;color:var(--acc)}
 .pricepill .pen svg{width:18px;height:18px}
+/* --- batch 2 additions: the hub card, offers, the timeline, key-value rows, the map --- */
+.hdr .sub{font-size:13px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sect{font-size:17px;font-weight:700;color:var(--ink)}
+.seg3{display:flex;padding:4px;border-radius:24px;background:rgba(255,255,255,.06);border:1px solid rgba(200,255,230,.12)}
+.seg3 .o{flex:1;height:36px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--muted)}
+.seg3 .o.on{background:var(--acc);color:var(--accInk)}
+.badge{min-width:22px;height:22px;padding:0 7px;border-radius:11px;background:rgba(126,226,180,.14);color:var(--acc);font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.kv{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:8px 0;font-size:15px}
+.kv + .kv{border-top:1px solid rgba(200,255,230,.10)}
+.kv .k{color:var(--muted)}
+.kv .v{color:var(--ink);font-weight:600;text-align:right}
+.kv.total .k,.kv.total .v{font-weight:800;color:var(--ink)}
+.tl{display:flex;flex-direction:column}
+.tl .row{display:flex;gap:14px;min-height:56px}
+.tl .rail{width:28px;display:flex;flex-direction:column;align-items:center;flex:0 0 auto}
+.tl .dot{width:26px;height:26px;border-radius:13px;border:1.5px solid rgba(200,255,230,.22);background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.tl .dot svg{width:14px;height:14px;color:var(--accInk)}
+.tl .dot.done{background:var(--acc);border-color:transparent}
+.tl .dot.now{box-shadow:0 0 0 5px rgba(126,226,180,.18)}
+.tl .line{flex:1;width:2px;background:rgba(200,255,230,.12);margin:4px 0}
+.tl .line.done{background:var(--acc)}
+.tl .lbl{font-size:16px;font-weight:700;color:var(--muted);line-height:20px}
+.tl .lbl.done{color:var(--ink)}
+.tl .cap{margin-top:2px;padding-bottom:12px}
+.stars{display:flex;gap:6px}
+.stars svg{width:34px;height:34px;color:rgba(200,255,230,.25)}
+.stars svg.on{color:var(--gold)}
+.map{position:absolute;inset:0;overflow:hidden;background:#101816}
+.map .tile{position:absolute;width:${256 * 0.78}px;height:${256 * 0.78}px;background-size:100% 100%;filter:brightness(2.15) contrast(1.85) brightness(0.62)}
+.heat{position:absolute;width:120px;height:120px;border-radius:60px;background:radial-gradient(circle,rgba(79,168,232,.55) 0%,rgba(79,168,232,.22) 42%,rgba(79,168,232,0) 70%);transform:translate(-50%,-50%);pointer-events:none}
+.legal{position:absolute;left:12px;font-size:10px;color:rgba(255,255,255,.55)}
 `;
 
 const base = `
@@ -576,6 +667,165 @@ const services = () => `${home()}<div class="scrim"></div>
     <div class="between" style="align-items:flex-start;margin-bottom:6px"><div class="stack" style="gap:3px"><div class="h2 serif" style="font-size:24px;line-height:28px">All services</div><span class="muted" style="font-size:14px">Pick what you need help with</span></div><div class="circle" style="width:36px;height:36px">${ic('i-close')}</div></div>
     <div class="list" style="flex:1;overflow:hidden">${MORE.map(([l, i]) => `<div class="row" style="padding:12px 4px">${ic(i, 'lead')}<span style="flex:1;font-size:16px;color:var(--ink)">${l}</span>${ic('i-chev', 'chev')}</div>`).join('')}</div></div><div class="home-bar"></div>`;
 
+// ---------------------------------------------------------------------------
+// BATCH 2 — customer jobs (SCREENS.md). The sample job through its lifecycle.
+// ---------------------------------------------------------------------------
+/** A header with the screen's subtitle under its title (components/ScreenHeader.tsx `subtitle`). */
+const header2 = (title, sub) => `<div class="hdr"><div class="circle">${ic('i-back')}</div><div class="stack" style="gap:0;flex:1;min-width:0"><div class="t serif" style="font-size:24px;line-height:28px">${title}</div><span class="sub">${sub}</span></div></div>`;
+/** A hub card (components/HubCard.tsx): status and age, the thumb and the three lines, the money and the next action. */
+const hubCard = (j, i, subtitle, next) => `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+      <div class="between"><span class="chip">Open</span><span class="muted" style="font-size:12px">${j.age}</span></div>
+      <div style="display:flex;gap:12px;align-items:center"><div class="thumb" style="width:56px;height:56px">${i === 2 ? `${photo()}` : ic(j.icon)}</div><div class="stack" style="gap:3px;flex:1;min-width:0"><span class="title lines2">${j.title}</span><span class="muted" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${j.cat} · ${j.hood}, Brooklyn, NY</span><span class="muted" style="font-size:13px">${subtitle}</span></div></div>
+      <div class="between" style="align-items:flex-end"><span class="money" style="font-size:20px">${j.pay}</span><div class="stack" style="gap:2px;align-items:flex-end"><span class="link" style="font-size:13px;display:flex;align-items:center;gap:4px">${icS('i-arrow', 14, 'var(--acc)')}${next}</span><span class="muted" style="font-size:12px">View details</span></div></div></div>`;
+/** An offer card (components/OfferCard.tsx, list variant): the bidder, OFFER pinned right in gold, the pitch, the two actions, the full-bid link. */
+const offerCard = (b) => `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;gap:12px;align-items:center"><div class="avatar" style="width:52px;height:52px;border-radius:26px;font-size:18px;border-width:1.5px">${b.w.initials}</div><div class="stack" style="gap:3px;flex:1;min-width:0"><span class="title" style="display:flex;align-items:center;gap:4px">${b.w.name}${icS('i-chev', 14, 'var(--muted)')}</span><span class="meta">${icS('i-star', 13, 'var(--gold)')}No reviews yet</span></div><div class="stack" style="gap:0;align-items:flex-end"><span class="eyebrow" style="font-size:9.5px">Offer</span><span class="money" style="font-size:22px;line-height:24px">${b.amount}</span></div></div>
+      <p class="lines2" style="font-size:14px;line-height:20px;color:var(--ink);-webkit-line-clamp:3">“${b.pitch}”</p>
+      <div style="display:flex;gap:10px"><div class="btn2" style="flex:1;height:46px;font-size:15px">View profile</div><div class="cta" style="flex:1;height:46px;font-size:15px;box-shadow:none">Accept offer</div></div>
+      <span class="link" style="font-size:14px;display:flex;align-items:center;gap:2px">Full bid · counter or decline${icS('i-chev', 14, 'var(--acc)')}</span></div>`;
+/** A key-value summary row (Checkout, Job confirmed). */
+const kv = (k, v, cls = '') => `<div class="kv${cls ? ' ' + cls : ''}"><span class="k">${k}</span><span class="v${cls === 'money' ? ' money' : ''}">${v}</span></div>`;
+/** The payment card the money screens share: eyebrow, the amount in gold, the machine's caption, a note. */
+const payCard = (eyebrow, amount, note, extra = '') => `<div class="card" style="padding:18px;display:flex;flex-direction:column;gap:6px"><span class="eyebrow">${eyebrow}</span><span class="money" style="font-size:30px;line-height:34px">${amount}</span><span class="muted" style="font-size:13px">Funds held in protection</span>${extra}<p class="muted" style="font-size:14px;line-height:20px;margin-top:6px">${note}</p></div>`;
+
+/** My Jobs (screens/MyJobsHubScreen.tsx), the customer's Active tab: the four seeded jobs as "You posted", Post another job. Scrolls: two frames. */
+const myjobs = (scroll = 0) => `
+  <div class="body" style="gap:0"><div style="display:flex;gap:14px;align-items:center"><div class="well" style="width:48px;height:48px;border-radius:16px">${ic('i-briefcase')}</div><div class="stack" style="gap:2px;flex:1;min-width:0"><span class="eyebrow">Your work</span><div class="h2 serif" style="font-size:26px;line-height:30px">My jobs</div><span class="muted" style="font-size:13px;line-height:17px">Jobs you posted, from first bid to final review.</span></div></div></div>
+  ${scroller(150, 84, scroll, `
+    <div class="seg3"><div class="o on">Active</div><div class="o">Review</div><div class="o">Closed</div></div>
+    <div class="stack" style="gap:12px"><div style="display:flex;align-items:center;gap:8px"><span class="sect">You posted</span><span class="badge">4</span></div>
+      ${JOBS.map((j, i) => hubCard(j, i, i === 0 ? 'Awaiting bids' : `${j.bids} received`, i === 0 ? 'Awaiting bids' : `${j.bids} to review`)).join('')}</div>
+    <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:12px"><div class="well sm">${ic('i-plus')}</div><span class="title" style="flex:1;font-size:16px">Post another job</span>${icS('i-arrow', 18, 'var(--acc)')}</div>
+  `, 16)}${nav('')}`;
+
+/** The client's job detail (screens/ClientJobDetailScreen.tsx) with bids to compare: hero, scope, timing & address, media, the offers. Scrolls: two frames. */
+const cjob = (scroll = 0) => `
+  <div class="body" style="gap:0">${header('Job &amp; bids')}</div>
+  ${scroller(116, 84, scroll, `
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px">
+      <div class="between"><span class="chip">Bids Pending (2)</span><span class="muted" style="font-size:12px">Posted 2h ago</span></div>
+      <div class="h2 serif" style="font-size:24px;line-height:28px">${DETAIL.title}</div>
+      <span class="meta">${ic('i-wrench')}${POST.cat} · ${DETAIL.hood}</span>
+      <div class="divider"></div>
+      <div class="between"><div class="stack" style="gap:2px"><span class="eyebrow">Budget</span><span class="money" style="font-size:26px;line-height:28px">${DETAIL.pay}</span></div><span class="muted" style="font-size:14px">2 bids pending</span></div>
+      <div style="display:flex;gap:10px"><div class="btn2" style="flex:1;height:44px;font-size:15px">Edit job</div><div class="btn2" style="flex:1;height:44px;font-size:15px;color:#F0A0A0;border-color:rgba(240,160,160,.35)">Delete job</div></div>
+    </div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px"><span class="eyebrow">Job scope</span><p style="font-size:15px;line-height:22px;color:var(--ink)">${DETAIL.body}</p><div><span class="chip f">${ic('i-wrench')}${POST.cat}</span></div></div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px"><span class="eyebrow">Timing &amp; address</span>
+      <div style="display:flex;gap:12px;align-items:center"><div class="well sm">${ic('i-clock')}</div><span style="font-size:15px;color:var(--ink)">${POST.timing}</span></div>
+      <div style="display:flex;gap:12px;align-items:flex-start"><div class="well sm">${ic('i-lock')}</div><div class="stack" style="gap:2px"><span style="font-size:15px;color:var(--ink)">2410 Emmons Ave, Apt 3B</span><span class="muted" style="font-size:12px;line-height:16px">Private — only you and the worker you hire can see this address.</span></div></div></div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:6px"><span class="sect">Posting media</span><span class="muted" style="font-size:13px">What workers can review before bidding.</span><div style="display:flex;gap:10px;margin-top:6px"><div class="thumb" style="width:96px;height:96px">${photo()}</div></div></div>
+    <div class="between"><div class="stack" style="gap:2px"><span class="eyebrow">Worker offers</span><span class="sect">2 bids to compare</span></div><div class="btn2" style="height:40px;padding:0 16px;font-size:14px">Compare</div></div>
+    <div class="seg2"><div class="o on">Lowest price</div><div class="o">Highest rated</div></div>
+    ${BIDS.map(offerCard).join('')}
+  `, 16)}${nav('')}`;
+
+/** Compare bids (screens/CompareBidsScreen.tsx): the framing card, the stated order, one row per bid, BRAZOS PROTECTS. */
+const compare = () => `
+  <div class="body" style="gap:0">${header('Compare bids')}</div>
+  ${scroller(116, 84, 0, `
+    <div class="stack" style="gap:8px"><div class="card" style="padding:18px;display:flex;flex-direction:column;gap:6px"><div class="between"><span class="eyebrow" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">2 bids · ${DETAIL.title}</span><span class="chip" style="flex:0 0 auto">Protected job</span></div><div class="h2 serif" style="font-size:24px;line-height:28px">Compare the full offer.</div><span class="muted" style="font-size:14px;line-height:19px">Price matters, but fit, reliability and included work determine value.</span></div>
+      <span class="muted" style="font-size:12px;padding:0 4px">Sorted by rating, then lowest price, then earliest bid.</span></div>
+    ${BIDS.map((b) => `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;gap:12px;align-items:center"><div class="avatar" style="width:44px;height:44px;border-radius:22px;font-size:16px;border-width:1.5px">${b.w.initials}</div><div class="stack" style="gap:2px;flex:1;min-width:0"><span class="title">${b.w.name}</span><span class="meta" style="color:var(--acc)">${ic('i-leaf')}New worker</span></div><span class="money" style="font-size:22px">${b.amount}</span></div><span class="muted" style="font-size:12px;display:flex;align-items:center;gap:2px">Bid ${b.age} · full terms${icS('i-chev', 12, 'var(--acc)')}</span></div>`).join('')}
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:8px;position:relative"><div style="position:absolute;right:16px;top:16px" class="well sm">${ic('i-shield')}</div><span class="eyebrow">Brazos protects</span><div class="h2 serif" style="font-size:22px;line-height:26px;padding-right:48px">One job. One clear record.</div>
+      <div style="display:flex;gap:8px;margin-top:6px">${[['i-images', 'Scope', 'Agreed work'], ['i-shield', 'Payment', 'Held safely'], ['i-image', 'Evidence', 'Before release']].map(([i, t, s]) => `<div class="card2" style="flex:1;padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;border-radius:16px"><div class="well sm">${ic(i)}</div><span style="font-size:13px;font-weight:700;color:var(--ink)">${t}</span><span class="muted" style="font-size:11px">${s}</span></div>`).join('')}</div></div>
+  `, 14)}${nav('')}`;
+
+/** Bid detail (screens/BidDetailScreen.tsx): the terms, who you'd be hiring, their pitch, the three consequences, Decline · Counter · Accept pinned. */
+const bid = (scroll = 0) => `
+  <div class="body" style="gap:0">${header2('Bid detail', DETAIL.title)}</div>
+  ${scroller(116, 214, scroll, `
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:8px"><div class="between"><span class="chip">Pending</span><span class="muted" style="font-size:12px">Bid ${BIDS[0].age}</span></div><span class="money" style="font-size:32px;line-height:36px">${BIDS[0].amount}</span><span class="muted" style="font-size:13px">Open until Sep 28 — then it expires on its own.</span></div>
+    <div class="stack" style="gap:10px"><span class="sect">Who you’d be hiring</span><div class="card" style="padding:14px 16px;display:flex;gap:12px;align-items:center"><div class="avatar" style="width:52px;height:52px;border-radius:26px;font-size:18px;border-width:1.5px">${WORKER.initials}</div><div class="stack" style="gap:2px;flex:1"><span class="title">${WORKER.name}</span><span class="muted" style="font-size:13px">No reviews yet</span></div>${icS('i-chev', 18, 'var(--muted)')}</div></div>
+    <div class="stack" style="gap:8px"><span class="sect">Their pitch</span><p style="font-size:15px;line-height:22px;color:var(--ink)">“${BIDS[0].pitch}”</p></div>
+    <div class="card2" style="padding:12px 16px;display:flex;flex-direction:column;gap:6px;border-radius:16px"><p class="muted" style="font-size:13px;line-height:18px"><b style="color:var(--ink)">Accept</b> — selects ${WORKER.first} for the job; the other active bids close. You’ll protect the payment in checkout next.</p><p class="muted" style="font-size:13px;line-height:18px"><b style="color:var(--ink)">Counter</b> — proposes your price instead (3 left).</p><p class="muted" style="font-size:13px;line-height:18px"><b style="color:var(--ink)">Decline</b> — closes this bid; it can’t be accepted afterwards.</p></div>
+  `, 14)}
+  <div class="sticky abovenav" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;gap:10px"><div class="btn2" style="flex:1;height:46px;font-size:15px;color:#F0A0A0;border-color:rgba(240,160,160,.35)">Decline</div><div class="btn2" style="flex:1;height:46px;font-size:15px">Counter</div></div><div class="cta">Accept for ${BIDS[0].amount}</div></div>${nav('')}`;
+
+/** Counter-offer (screens/CounterofferScreen.tsx over components/OfferComposer.tsx): their terms, your price, the exact consequence, Send. */
+const counter = () => `
+  <div class="body" style="gap:0">${header('Counter-offer')}</div>
+  ${scroller(116, 84, 0, `
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px"><span class="eyebrow">Countering</span><div class="h2 serif" style="font-size:22px;line-height:26px">${DETAIL.title}</div><div class="card2" style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center;border-radius:16px"><span class="muted" style="font-size:14px">${WORKER.first}’s current terms</span><span class="money" style="font-size:20px">${BIDS[0].amount}</span></div><span class="muted" style="font-size:13px;line-height:19px">Your counter replaces those terms with your price below. Nothing is agreed until one side accepts.</span></div>
+    <div class="card" style="padding:16px">${fld('Your counter-offer (USD)', 'e.g. 45', { ph: true })}</div>
+    <div style="display:flex;gap:10px;align-items:flex-start">${icS('i-alert', 18, 'var(--muted)')}<span class="muted" style="font-size:13px;line-height:19px">Replaces their offer with yours — it’s then their turn. You have 3 counter-offers left; each expires after 7 days.</span></div>
+    <div class="cta">Send counter-offer</div>
+  `, 18)}${nav('')}`;
+
+/** Protected checkout (screens/CheckoutScreen.tsx, the card path): what you're protecting, how protection works, the all-in CTA pinned. */
+const checkout = (scroll = 0) => `
+  <div class="body" style="gap:0">${header2('Protected checkout', DETAIL.title)}</div>
+  ${scroller(116, 160, scroll, `
+    <div class="stack" style="gap:10px"><span class="sect">What you’re protecting</span><div class="card" style="padding:6px 18px">${kv('Accepted offer', WORKER.name)}${kv('Agreed price', PAY.agreed)}${kv('Scheduled', POST.timing)}${kv('Protection fee', PAY.fee)}${kv('Total charged to your card', PAY.total, 'total money')}${kv('Funding window', `closes in ${PAY.window}`)}</div></div>
+    <div class="stack" style="gap:10px"><span class="sect">How protection works</span><div class="card" style="padding:14px 18px;display:flex;flex-direction:column;gap:12px">
+      ${[['i-card', 'Pay by card', 'charges the all-in total shown above through the secure payment sheet. Nothing is charged until you confirm in the sheet.'], ['i-lock', 'Hold in protection', `keeps the funds set aside while ${WORKER.name} does the job. They can see the funds are protected, and can’t be paid early.`], ['i-checkcircle', 'Release', 'happens only after you approve the completed work — or automatically 72 hours after completion if you don’t respond. Reporting an issue holds the funds instead.']].map(([i, s, t]) => `<div style="display:flex;gap:12px;align-items:flex-start">${icS(i, 20, 'var(--acc)')}<p class="muted" style="font-size:13px;line-height:18px"><b style="color:var(--ink)">${s}</b> ${t}</p></div>`).join('')}</div></div>
+  `, 16)}
+  <div class="sticky abovenav"><div class="cta">Protect ${PAY.total} by card</div></div>${nav('')}`;
+
+/** Job confirmed (screens/JobConfirmedScreen.tsx on the SuccessScreen template): the mark, the hired worker, the schedule, the held payment, the two actions. */
+const confirmed = () => `
+  <div class="body" style="gap:16px;align-items:center;text-align:center;top:72px">
+    <div class="mark">${ic('i-shield')}</div>
+    <div class="stack" style="gap:8px;align-items:center"><div class="h1 serif" style="font-size:30px;line-height:34px">Job confirmed</div><p class="muted" style="font-size:15px;line-height:21px;max-width:330px">${WORKER.name} is hired and your payment is protected. Funds stay held until the work is done and approved — nothing has been released.</p></div>
+    <div class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:12px;text-align:left;align-self:stretch">
+      <div style="display:flex;gap:12px;align-items:center"><div class="avatar" style="width:48px;height:48px;border-radius:24px;font-size:17px;border-width:1.5px">${WORKER.initials}</div><div class="stack" style="gap:2px;flex:1;min-width:0"><span class="title">${WORKER.name}</span><span class="muted lines2" style="font-size:13px;line-height:17px">${DETAIL.title}</span></div></div>
+      <div class="kv" style="padding:10px 0 4px;border-top:1px solid rgba(200,255,230,.10)"><span class="k">Scheduled</span><span class="v">${POST.timing}</span></div>
+      <div class="card2" style="padding:14px;display:flex;flex-direction:column;gap:4px;border-radius:16px"><div class="between"><span class="money" style="font-size:26px;line-height:30px">${PAY.total}</span><span class="chip">Held</span></div><span class="muted" style="font-size:13px">Funds held in protection</span><p class="muted" style="font-size:13px;line-height:18px;margin-top:4px">Your card was charged and the funds are held in protection until you approve the finished work.</p></div>
+    </div>
+    <div class="stack" style="gap:10px;align-self:stretch"><div class="cta">View job</div><div class="btn2">Message ${WORKER.name}</div></div>
+  </div>${nav('')}`;
+
+/** Track worker (screens/TrackWorkerScreen.tsx): the honesty notice, the five-step timeline, the window, the payment, Message pinned. */
+const track = (scroll = 0) => `
+  <div class="body" style="gap:0">${header2('Track worker', DETAIL.title)}</div>
+  ${scroller(116, 160, scroll, `
+    <div class="card" style="padding:14px 16px;display:flex;gap:12px;align-items:flex-start"><div class="well sm">${ic('i-send')}</div><span class="muted" style="font-size:13px;line-height:18px">Status comes from ${WORKER.name}’s own updates — this build has no live location tracking, so what you see here is exactly what they declared.</span></div>
+    <div class="stack" style="gap:10px"><span class="sect">Where things stand</span><div class="card tl" style="padding:18px 18px 6px">
+      ${[['Hired', 'You accepted their offer', 'done', ''], ['On the way', 'Declared by the worker', 'done', '1h ago'], ['Arrived', 'Declared by the worker', 'now', '20m ago'], ['Working', 'Not yet', '', ''], ['Done', 'Not yet', '', '']].map(([l, c, s, t], i, a) => `<div class="row"><div class="rail"><div class="dot${s ? ' done' : ''}${s === 'now' ? ' now' : ''}">${s ? ic('i-check') : ''}</div>${i < a.length - 1 ? `<div class="line${s === 'done' ? ' done' : ''}"></div>` : ''}</div><div class="stack" style="gap:0;flex:1"><span class="lbl${s ? ' done' : ''}">${l}${t ? `<span class="muted" style="font-weight:500;font-size:13px">  ·  ${t}</span>` : ''}</span><span class="cap">${c}</span></div></div>`).join('')}</div></div>
+    <div class="stack" style="gap:10px"><span class="sect">Scheduled window</span><div class="card" style="padding:14px 16px;display:flex;gap:12px;align-items:center"><div class="well sm">${ic('i-clock')}</div><span style="font-size:15px;color:var(--ink)">${POST.timing}</span></div></div>
+    <div class="stack" style="gap:10px"><span class="sect">Payment</span><div class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Protected payment</span><span class="money" style="font-size:24px;line-height:28px">${PAY.agreed}</span><span class="muted" style="font-size:13px">Funds held in protection</span></div></div>
+  `, 16)}
+  <div class="sticky abovenav"><div class="btn2">Message ${WORKER.name}</div></div>${nav('')}`;
+
+/** Finished work (screens/ApproveOrDisputeScreen.tsx on the FormScreen template): the held payment, what the worker submitted, Approve & release with Report an issue beside it. */
+const approve = () => `
+  <div class="body" style="gap:0">${header2('Finished work', DETAIL.title)}</div>
+  ${scroller(116, 214, 0, `
+    ${payCard('Held payment', PAY.total, 'Approving sends this payment on its way to the worker. If something isn’t right, report the issue instead — release waits while a report is open.')}
+    <div class="stack" style="gap:10px"><span class="sect">What the worker submitted</span><div style="display:flex;gap:10px"><div class="thumb" style="width:118px;height:118px">${photo()}</div></div></div>
+  `, 18)}
+  <div class="sticky abovenav" style="display:flex;flex-direction:column;gap:10px"><div class="cta">Approve &amp; release ${PAY.total}</div><div class="btn2" style="height:46px;font-size:15px">Report an issue</div></div>${nav('')}`;
+
+/** Review & tip (screens/ReviewAndTipScreen.tsx): the released payment, the review form (components/ReviewSection.tsx), the tip presets. Scrolls: two frames. */
+const reviewTip = (scroll = 0) => `
+  <div class="body" style="gap:0">${header2('Review &amp; tip', DETAIL.title)}</div>
+  ${scroller(116, 84, scroll, `
+    <div class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:4px"><span class="eyebrow">Payment released</span><span class="money" style="font-size:26px;line-height:30px">${PAY.agreed}</span><span class="muted" style="font-size:13px">Released to the worker</span><p class="muted" style="font-size:13px;line-height:18px;margin-top:4px">Released on your approval.</p></div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:14px"><div class="h2 serif" style="font-size:22px;line-height:26px">How was ${WORKER.first}’s work?</div>
+      <div class="stars">${[1, 2, 3, 4, 5].map(() => ic('i-star')).join('')}</div>
+      <span class="lbl" style="font-size:15px">Would you hire ${WORKER.first} again?</span><div style="display:flex;gap:8px"><span class="chip f" style="height:38px;border-radius:19px;padding:0 22px;font-size:14px">Yes</span><span class="chip f" style="height:38px;border-radius:19px;padding:0 22px;font-size:14px">No</span></div>
+      ${fld('Comment (optional)', `Share how it went with ${WORKER.name}…`, { hint: '0/500', ph: true, multi: true })}
+      <div class="btn2" style="height:46px;font-size:15px">${ic('i-images')}Add photos</div><div class="cta">Submit review</div></div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px"><span class="sect">Add a tip?</span><span class="muted" style="font-size:14px;line-height:20px">Entirely optional — every cent of the tip goes to ${WORKER.name}.</span><div style="display:flex;gap:8px">${['$5', '$10', '$20', 'Other'].map((t) => `<span class="chip f" style="flex:1;justify-content:center;height:40px;border-radius:20px;font-size:15px">${t}</span>`).join('')}</div></div>
+  `, 16)}${nav('')}`;
+
+/** Jobs in this zone (screens/CellJobsScreen.tsx): the cell's open jobs as the browse card (components/BrowseJobCard.tsx). Scrolls: two frames. */
+const cell = (scroll = 0) => `
+  <div class="body" style="gap:0">${header2('Jobs in this zone', '4 open jobs nearby')}</div>
+  ${scroller(116, 84, scroll, JOBS.map((j, i) => `<div class="card jobrow"><div class="thumb">${i === 2 ? `${photo()}` : ic(j.icon)}</div><div class="stack" style="flex:1;gap:6px;min-width:0"><div class="between" style="align-items:flex-start"><span class="chip">${j.cat}</span><div class="stack" style="gap:0;align-items:flex-end"><span class="eyebrow" style="font-size:9.5px">Est. pay</span><span class="money" style="font-size:22px;line-height:24px">${j.pay}</span></div></div><span class="title lines2">${j.title}</span><span class="meta">${ic('i-pin')}${j.hood} · ${j.when} · ${j.bids}</span></div></div>`).join(''), 14)}${nav('')}`;
+
+/** The customer's map (screens/MapScreen.tsx, customer mode): the tiles, the search pill, the locate control, the hotspot glows, the tapped cell's card. */
+const cmap = async () => {
+  const tiles = await mapLayer();
+  const cells = [[40.6415, -73.9330, 'East Flatbush'], [40.6860, -73.9440, 'Bed-Stuy'], [40.6690, -73.9440, 'Crown Heights'], [40.6770, -73.9670, 'Prospect Heights']].map(([lat, lng]) => mapPoint(lat, lng));
+  return `<style>${tiles.css}</style><div class="map">${tiles.html}${cells.map((p) => `<div class="heat" style="left:${p.x.toFixed(1)}px;top:${p.y.toFixed(1)}px"></div>`).join('')}<div style="position:absolute;left:0;right:0;top:0;height:120px;background:linear-gradient(180deg,rgba(6,36,33,.75),rgba(6,36,33,0))"></div></div>
+  <div style="position:absolute;left:20px;right:20px;top:64px" class="field">${ic('i-search')}<span style="flex:1;color:var(--ink)">Explore nearby jobs</span>${ic('i-mic')}</div>
+  <div class="circle" style="position:absolute;right:20px;top:134px">${ic('i-send')}</div>
+  <span class="legal" style="bottom:${84 + 20 + 150 + 8}px">Legal</span>
+  <div class="card" style="position:absolute;left:20px;right:20px;bottom:${84 + 20}px;padding:18px;display:flex;flex-direction:column;gap:8px"><div class="between"><span class="title" style="display:flex;align-items:center;gap:8px"><i style="width:10px;height:10px;border-radius:5px;background:#4FA8E8;display:inline-block"></i>1 open job</span>${icS('i-close', 20, 'var(--muted)')}</div><span class="muted" style="font-size:14px">Dog walking</span><div class="cta" style="margin-top:4px">View 1 job</div></div>
+  ${nav('')}`;
+};
+
 const SCREENS = {
   home: { label: 'Customer Home', render: home },
   whome: { label: 'Worker Home', render: whome },
@@ -594,6 +844,19 @@ const SCREENS = {
   'post-live': { label: 'Your job is live', render: postLive },
   create: { label: 'The [+] Create sheet', render: create },
   services: { label: 'The All services sheet', render: services },
+  // batch 2 — customer jobs
+  myjobs: { label: 'My Jobs (customer)', render: myjobs, frames: [0, 348] },
+  cjob: { label: 'The client’s job detail', render: cjob, frames: [0, 437, 874] },
+  compare: { label: 'Compare bids', render: compare },
+  bid: { label: 'Bid detail', render: bid },
+  counter: { label: 'Counter-offer', render: counter },
+  checkout: { label: 'Protected checkout', render: checkout },
+  confirmed: { label: 'Job confirmed', render: confirmed },
+  track: { label: 'Track worker', render: track, frames: [0, 144] },
+  approve: { label: 'Finished work (approve or dispute)', render: approve },
+  'review-tip': { label: 'Review & tip', render: reviewTip, frames: [0, 135] },
+  cell: { label: 'Jobs in this zone', render: cell },
+  cmap: { label: 'Map (customer)', render: cmap },
 };
 
 // ---------------------------------------------------------------------------
@@ -606,10 +869,15 @@ for (const key of wanted) {
   const s = SCREENS[key];
   if (!s) throw new Error(`no screen "${key}" — see SCREENS.md`);
   const frames = s.frames ?? [0];
-  const slots = frames.map((scroll, i) => `<div class="slot"><div class="slot-label">Emerald Lux Glass — ${s.label}${i ? ' (scrolled)' : ''}</div><div class="phone" data-shot="lux-${key}${i ? `-${i + 1}` : ''}">${status()}${s.render(scroll)}</div></div>`).join('');
+  const slots = [];
+  for (const [i, scroll] of frames.entries()) {
+    slots.push(`<div class="slot"><div class="slot-label">Emerald Lux Glass — ${s.label}${i ? ' (scrolled)' : ''}</div><div class="phone" data-shot="lux-${key}${i ? `-${i + 1}` : ''}">${status()}${await s.render(scroll)}</div></div>`);
+  }
+  const body = slots.join('');
+  const photoCss = body.includes('class="pimg"') ? `.pimg{background-image:url("${photoSrc()}")}` : '';
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>BRAZOS — Emerald Lux Glass — ${s.label}</title>
 <!-- Generated by docs/mockups/html/lux/lux.build.mjs. The system is README.md beside it. -->
-<style>${base}${SYSTEM_CSS}</style></head><body>${sprite}<div class="stage">${slots}</div></body></html>`;
+<style>${base}${SYSTEM_CSS}${photoCss}</style></head><body>${sprite}<div class="stage">${body}</div></body></html>`;
   const file = join(here, `lux-${key}.html`);
   writeFileSync(file, html);
   console.log(`wrote lux-${key}.html (${Math.round(html.length / 1024)} KB)`);
