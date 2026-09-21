@@ -1,14 +1,98 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-21 (the sign-in chat, latest: THE EMAIL SIGN-IN FROM THE PHONE — the B
-removed, the Welcome's type and controls, "Sign in" kept on top; code `9085cc5`, verify
-1393/0, pushed and published by OTA — the ids in its section, the first below. The WebP
-run's record, the Welcome-from-the-phone record, the shipped build's, the restored build's,
-the mode switch's, the Lux drawing run's, the eighteen-item run's and the two sittings before
-it follow, unchanged.
+WRITTEN: 2026-09-21 (the sign-in chat, latest: BOTH SIGN-IN SCREENS FROM THE PHONE —
+"Brazos", Continue riding the keyboard, the iOS back circle, the phone screen given the
+email pick; code `2993ee0`, verify 1393/0, pushed and published by OTA — the ids in its
+section, the first below. The email sign-in's first ship (`9085cc5`), the WebP run's record,
+the Welcome-from-the-phone record, the shipped build's, the restored build's, the mode
+switch's, the Lux drawing run's, the eighteen-item run's and the two sittings before it
+follow, unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
+
+## BOTH SIGN-IN SCREENS, FROM THE PHONE — "Brazos", Continue rides the keyboard, the back circle, the phone screen matched (2026-09-21, the sign-in chat, latest); `2993ee0`, OTA `971f0ac0` live on preview
+
+**What just happened.** The operator, holding the shipped email screen with the keyboard up
+(Continue cut off under the keyboard's autofill bar — the KeyboardAvoidingView's padding path,
+whose shrunken scroll no longer fit the column) and the untouched phone screen: "Make BRAZOS
+to Brazos … the continue button should slide up smoothly with the keyboard and stay on top of
+it … the back button < on top should have a iphone style circle around it and iphone
+animations if pressed … make the changes we talked about to sign in screen for With phone,
+not just email … if the continue button overlaps the password box please move the whole
+thing higher (there's a lot of space on top)". DECISIONS 21. All four done, both screens,
+pushed and published under the standing "push / ota / auto".
+
+**The mechanism (`components/AuthScaffold.tsx`).** `footer`: a pinned action rendered as the
+column's LAST SIBLING (not an overlay — the scroll ends where it begins), resting 24 above
+the safe inset (a 12 margin + the shared COLUMN_BOTTOM_PADDING 12) and riding the keyboard
+through `KeyboardRisingColumn` — the seam Chat's composer has used since 2026-08-23: the
+keyboard's live frame on the UI thread (`react-native-keyboard-controller` + reanimated)
+where the binary can track it, `useKeyboardOffset`'s native-driver imitation at the system's
+own duration otherwise — with `insetBelow = insets.bottom + 12`, so its padded edge lands on
+the keyboard and Continue stops 12 above it. The KeyboardAvoidingView's `padding` behaviour is
+OFF while a footer is present (nothing re-lays out per frame); the ScrollView keeps
+`automaticallyAdjustKeyboardInsets` so a field can still be reached on a phone too short for
+all of it. `lift`: the scroll column translates up by this much — the sign-in pages pass 24,
+the air between the bar and the eyebrow — as a fraction of the keyboard's rise over its
+first 200 points (`useKeyboardOffset(insets.bottom).interpolate`, native driver), so the
+last field clears the button on every phone (852: the password field ends 17 above Continue;
+taller phones more). The back control on a THEMED screen is the iOS circle: a 36 disc at the
+ink's .08 (.16 pressed) inside the 44 target, the chevron 20 (`authSizes.backCircle` /
+`backChevron`), a 90 ms dip to .88 and a spring back on the native driver; untouched screens
+(VerifyPhone, Setup, LegalGate) keep the bare 22 chevron byte for byte.
+
+**The screens.** `EmailSignInScreen` and `SignInScreen`: "Sign in to Brazos" (title case —
+the C5 chrome rule is about mid-sentence BRAZOS; both files still sit on its chrome list);
+Continue is the footer (`themed hero lit chevron`); the alternate route stays in the scroll
+12 above it (`body.paddingBottom` 24 → 12), `lift={authSpacing.xl}`. The phone screen took the
+whole of (20): the B gone, `heroEyebrow`, the serif `heroTitle` in `fonts.displayHero` (the
+ONE serif role's fourth site — `tests/themeTokens.test.mjs` HERO_SITES, constants only),
+"Use Email Instead" outlined with `mail-outline` and the chevron. The `themed` prop is kept
+LAST on `<AuthScaffold …>` on both — `tests/themeResolution.test.mjs` matches
+`<AuthScaffold[\s\S]{0,200}?themed\s*>`, so the footer is a `const` above the return.
+
+**The references.** `docs/mockups/html/lux/signin-ship-light.html` regenerated — "Brazos",
+the circle, and a second frame `lux-signin-ship-light-keyboard` (the email field focused on
+an 852 phone: a 336 keyboard drawn as a labelled slab, Continue 446–504, the column at 118,
+the password field 375–429, the phone action under the keyboard) — and
+`docs/mockups/html/lux/signin-phone-ship-light.html`, new, the same two frames for the phone
+screen (a 291 number pad; Continue 491–549). The ideas page `signin-ideas.html` is the record
+of the options and stays as sent.
+
+**Proven by the loop** (`.shots/lux/signin-compare.mjs`, both screens, light, the export's
+missing 54 / 34 insets accounted for): eyebrow 142–159, headline 167–205, body 213–261, the
+fields (307–361 and 399–453; the number field 307–361 from x 114), the back disc 20..56 ×
+62..98, Continue 736–794, the second control 666–724 — `=` the pages' boxes; the bar title's
+box 66–94 against the page's 67–93 (native line height, same centre); copy 0.4 % / 0.6 %
+differing, fields 0.7 % / 0.2 %, actions 2.1 % / 1.5 % (text anti-aliasing and Ionicons
+against SVG), the gap 0.0 %. Stills `.shots/signin-app-{email,phone}-light.png` beside
+`.shots/signin-page-{email,phone}-light.png`; the harness's own
+`.shots/auth-{signin,email-signin}-{light,dark}.png` (both themes render, no page errors).
+NOT PROVABLE HERE: the keyboard ride, the lift and the back press — the web harness has no
+keyboard and no touch; every number above is a resting-state number. The evidence guard
+blocked image reads in this run: every check is a script's.
+
+**Verify, push, OTA.** `npm run verify` lint clean, 1393 pass / 0 fail
+(`.shots/lux/verify-signin2.txt`). Pushed `354d23a..8711b6d` (`2993ee0` code, `8711b6d`
+DECISIONS 21). `npm run update:preview` → branch `preview`, runtime `1.0.0`, update group
+`971f0ac0-43ff-417c-9406-e810b9abd870`, iOS update `01a0c61a-5b97-7960-882a-80277e7b6cf4`;
+dashboard `https://expo.dev/accounts/mah_r2/projects/BRAZOS/updates/971f0ac0-43ff-417c-9406-e810b9abd870`.
+Open the Beta twice to pull it.
+
+**The operator's walk, both screens, both appearances:** tap a field — Continue should
+travel with the keyboard and stop just above it while the copy and fields move up a touch,
+never overlapping; dismiss — everything returns; the back circle should dip on press and
+spring back; "Sign in to Brazos" in the serif; the phone screen without the B, with the
+outlined "Use Email Instead". If Continue still overlaps a field on the operator's phone, the
+lift is one number (`lift={authSpacing.xl}` on both screens; the scaffold spends it from the
+bar-to-eyebrow air, 32 at most before the eyebrow touches the bar's padding).
+
+**Left standing, on purpose.** The B on both Create-account screens (their turn is a
+separate pick); no "Forgot password?" (the app has none — a feature for BACKLOG if asked).
+The tree's unrelated dirt untouched: `lux.build.mjs`, `index.html`, the nine
+`lux-*-fable.html` pages (the Fable chat's, uncommitted by its instruction) and the Lux chat's
+own ideas pages.
 
 ## THE EMAIL SIGN-IN, FROM THE PHONE — the B removed, the Welcome's type and controls (2026-09-21, the sign-in chat, latest); `9085cc5`, OTA `68b2388f` live on preview
 
