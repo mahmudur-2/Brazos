@@ -249,9 +249,6 @@ const LITERAL_FILE_ALLOWLIST = {
   'screens/VerifyPhoneScreen.tsx': 'LOCKED screen',
   'screens/SetupScreen.tsx': 'LOCKED screen',
   'screens/LegalGateScreen.tsx': 'LOCKED screen',
-  // The mode-transition shimmer core pairs with the baked LIGHT transition
-  // PNGs — the 4D-3.5 allowance, unchanged; migrates when the assets do.
-  'components/ModeTransitionOverlay.tsx': 'shimmer tint paired with baked light PNGs',
   // Auth surface (stays light this run; lib/authTheme.ts is never-modified,
   // so these cannot move into tokens yet — logged as the authTheme follow-up).
   'components/AuthNotice.tsx': 'auth surface; token home is frozen authTheme',
@@ -542,13 +539,11 @@ const BAKED_ART = {
   // nothing, so the previous icon stays revertible. 'brand-mark' leaves the
   // bake vocabulary with it — it was that one asset's word.
   'assets/brand/app-icon-b-leaf.png': { bake: 'opaque-brand', gate: false },
-  // The mode-transition sheets are opaque, but their bake is the BRAND deep
-  // green with a gold mark — not either palette's ground. They read correctly
-  // over a light app and a dark one, and the whole sheet (mark, label, handle,
-  // gold line) is the image, so there is nothing to fall back to. Deliberately
-  // ungated; see components/ModeTransitionOverlay.tsx.
-  'assets/brand/transition-customer.png': { bake: 'opaque-brand', gate: false },
-  'assets/brand/transition-worker.png': { bake: 'opaque-brand', gate: false },
+  // 2026-09-21 — the two mode-transition sheets (transition-customer.png,
+  // transition-worker.png) left this roster with the artwork switch they
+  // belonged to: the glass wipe (components/ModeTransitionOverlay.shared.tsx)
+  // draws the app's own ground and mounts no raster. The files stay on disk,
+  // unmodified and required by nothing, so the artwork switch stays revertible.
 };
 
 /** How far back from a mount the palette test may sit and still be its guard. */

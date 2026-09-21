@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BRAZOS — Emerald Lux Glass — the mode switch: glass wipe + capsule</title>
+<!-- Hand-written (not from lux.build.mjs): ONE candidate transition — the glass wipe (b)
+     carrying a's capsule — looping both ways on Lux phones. Ideas only; nothing is applied. -->
+<style>
+  :root{--ink:#F3F1E8;--muted:#A9B8B1;--acc:#7EE2B4;--accInk:#062018;--gold:#E9C170;--r:22px;--glass:rgba(12,44,38,.52);--rim:rgba(200,255,230,.20);--spec:rgba(255,255,255,.16);--cycle:4s;--ease:cubic-bezier(.2,.8,.2,1)}
+  html,body{margin:0;background:#0d0d0d;color:#ddd;font-family:-apple-system,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  h1{font-size:22px;margin:24px 24px 4px;color:#eee}
+  .lead{margin:0 24px 14px;color:#9aa39e;font-size:14px;max-width:900px;line-height:20px}
+  .bar{display:flex;gap:10px;align-items:center;margin:0 24px 18px;flex-wrap:wrap}
+  .bar button{height:34px;padding:0 14px;border-radius:17px;border:1px solid rgba(200,255,230,.25);background:rgba(12,44,38,.6);color:#F3F1E8;font-size:13px;font-weight:700;cursor:pointer}
+  .bar button.on{background:var(--acc);color:var(--accInk);border-color:transparent}
+  .grid{display:flex;flex-wrap:wrap;gap:28px;padding:0 24px 30px}
+  .cell{width:314px;display:flex;flex-direction:column;gap:10px}
+  .cap{font-size:14px;line-height:19px;color:#cfd6d2}.cap b{color:#fff}
+  .tl{margin:0 24px 48px;max-width:760px;color:#cfd6d2;font-size:14px;line-height:21px}
+  .tl h2{font-size:15px;color:var(--gold);letter-spacing:1.2px;text-transform:uppercase;margin:8px 0 8px}
+  .tl table{border-collapse:collapse;margin:6px 0 14px}.tl td{padding:5px 14px 5px 0;vertical-align:top;border-top:1px solid rgba(255,255,255,.08)}.tl td:first-child{color:var(--acc);font-weight:700;white-space:nowrap}
+  .tl code{background:rgba(255,255,255,.08);padding:1px 5px;border-radius:5px;font-size:12.5px}
+
+  .phone{position:relative;width:393px;height:852px;overflow:hidden;border-radius:44px;color:var(--ink);box-shadow:0 0 0 1px rgba(255,255,255,.08);zoom:.8;background:linear-gradient(165deg,#062421 0%,#0A1A17 55%,#07110F 100%)}
+  .scr{position:absolute;inset:0}
+  .status{position:absolute;left:0;right:0;top:0;height:54px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 28px 8px 34px;font-weight:600;font-size:17px;z-index:3}
+  .status .r{display:flex;gap:6px;align-items:center;font-size:12px}
+  .status .r i{display:inline-block;width:22px;height:11px;border:1.5px solid currentColor;border-radius:3px}
+  .body{position:absolute;left:20px;right:20px;top:64px;display:flex;flex-direction:column;gap:18px}
+  .muted{color:var(--muted)}
+  .serif{font-family:Georgia,"Times New Roman",serif;letter-spacing:-.4px}
+  .h1{font-size:34px;line-height:38px;font-weight:700}
+  .eyebrow{font-size:11.5px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--gold)}
+  .card{background:var(--glass);border:1px solid var(--rim);border-radius:var(--r);box-shadow:inset 0 1px 0 var(--spec),0 10px 30px rgba(0,0,0,.35);backdrop-filter:blur(18px)}
+  .field{height:54px;border-radius:27px;background:rgba(3,20,16,.55);border:1px solid rgba(200,255,230,.14);display:flex;align-items:center;padding:0 18px;color:var(--muted);font-size:16px}
+  .cta{height:52px;border-radius:26px;background:linear-gradient(135deg,#8DF0C0,#4FC58C);color:var(--accInk);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;box-shadow:0 10px 24px rgba(79,197,140,.30)}
+  .tiles{display:flex;gap:12px}.tile{flex:1;aspect-ratio:1;border-radius:18px;background:var(--glass);border:1px solid var(--rim);display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px;font-size:12px;font-weight:600}
+  .row{padding:14px 16px;display:flex;gap:14px;align-items:center}
+  .title{font-size:17px;font-weight:700;line-height:22px}
+  .money{color:var(--gold);font-weight:800}
+  .switch{width:52px;height:30px;border-radius:15px;background:rgba(255,255,255,.08);position:relative;border:1px solid rgba(200,255,230,.14);flex:0 0 auto}
+  .switch i{position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:11px;background:var(--muted)}
+  .nav{position:absolute;left:0;right:0;bottom:0;height:84px;background:rgba(5,24,20,.72);border-top:1px solid rgba(200,255,230,.16);backdrop-filter:blur(24px);display:flex;align-items:flex-start;justify-content:space-around;padding:12px 6px 0;z-index:2}
+  .nav .it{width:64px;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--muted);font-size:11px;font-weight:600}
+  .nav .it i{width:46px;height:30px;border-radius:15px;display:block}
+  .nav .it.on{color:var(--acc)}.nav .it.on i{background:rgba(126,226,180,.16);box-shadow:0 0 18px rgba(126,226,180,.35)}
+  .nav .plus i{width:52px;height:36px;border-radius:18px;background:var(--acc)}
+  .homebar{position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:rgba(255,255,255,.9);z-index:4}
+  .paused *{animation-play-state:paused!important}
+
+  /* ---- the transition: a bare glass pane wipes across; the capsule drops in and names where you landed ---- */
+  .scr.cust,.scr.work{animation:var(--cycle) linear infinite}
+  .pane{position:absolute;top:0;bottom:0;left:0;width:110%;background:linear-gradient(165deg,rgba(6,36,33,.985),rgba(8,26,23,.985));z-index:6;animation:var(--cycle) var(--ease) infinite}
+  .pane.ltr{border-left:1px solid rgba(200,255,230,.5);box-shadow:inset 2px 0 0 rgba(255,255,255,.14),-30px 0 60px rgba(0,0,0,.5);transform:translateX(112%)}
+  .pane.rtl{border-right:1px solid rgba(200,255,230,.5);box-shadow:inset -2px 0 0 rgba(255,255,255,.14),30px 0 60px rgba(0,0,0,.5);transform:translateX(-118%)}
+  .capsule{position:absolute;left:50%;top:62px;transform:translate(-50%,-140px);height:40px;padding:0 18px 0 14px;border-radius:20px;background:rgba(9,36,31,.94);border:1px solid var(--rim);box-shadow:inset 0 1px 0 var(--spec),0 12px 30px rgba(0,0,0,.45);display:flex;align-items:center;gap:10px;font-size:15px;font-weight:700;z-index:7;animation:cap var(--cycle) var(--ease) infinite;white-space:nowrap}
+  .capsule i{width:10px;height:10px;border-radius:5px;background:var(--acc);box-shadow:0 0 12px var(--acc)}
+
+  /* → Worker: the pane comes from the right, the swap under full cover at 32.5 % (1300 ms), it leaves to the left */
+  .fwd .scr.cust{animation-name:fwd-cust}.fwd .scr.work{animation-name:fwd-work}.fwd .pane{animation-name:pane-ltr}
+  @keyframes fwd-cust{0%,32.4%{opacity:1}32.5%,89.9%{opacity:0}90%,100%{opacity:1}}
+  @keyframes fwd-work{0%,32.4%{opacity:0}32.5%,89.9%{opacity:1}90%,100%{opacity:0}}
+  @keyframes pane-ltr{0%,25%{transform:translateX(112%)}31.5%,34%{transform:translateX(-5%)}41%,88%{transform:translateX(-118%)}88.1%,100%{transform:translateX(112%)}}
+  /* ← Customer: mirrored */
+  .back .scr.cust{animation-name:back-cust}.back .scr.work{animation-name:back-work}.back .pane{animation-name:pane-rtl}
+  @keyframes back-cust{0%,32.4%{opacity:0}32.5%,89.9%{opacity:1}90%,100%{opacity:0}}
+  @keyframes back-work{0%,32.4%{opacity:1}32.5%,89.9%{opacity:0}90%,100%{opacity:1}}
+  @keyframes pane-rtl{0%,25%{transform:translateX(-118%)}31.5%,34%{transform:translateX(5%)}41%,88%{transform:translateX(112%)}88.1%,100%{transform:translateX(-118%)}}
+  /* the capsule: drops at 1180 ms, holds while the pane leaves, retracts at 2100 ms */
+  @keyframes cap{0%,29.5%{transform:translate(-50%,-140px)}35%,52.5%{transform:translate(-50%,0)}57.5%,100%{transform:translate(-50%,-140px)}}
+</style>
+</head>
+<body>
+<h1>The mode switch — the glass wipe, carrying the capsule</h1>
+<p class="lead">One idea, both ways. A bare pane of the system's glass sweeps across the screen, rim leading, and never rests; the tree swaps while it fully covers; the capsule drops from the top to say where you landed and retracts on its own. Every motion is one transform on one layer.</p>
+<div class="bar"><button id="slow" onclick="toggleSlow()">Slow motion ×4</button><button onclick="replay()">Replay</button></div>
+<div class="grid" id="grid"></div>
+
+<template id="cust">
+  <div class="body">
+    <div><span class="muted" style="font-size:17px">Good evening,</span><br><span style="font-size:17px;color:var(--gold);font-weight:600">Mahmudur</span></div>
+    <div class="h1 serif" style="max-width:220px">Take a task<br>off your plate</div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:14px"><div class="title" style="font-size:24px">What do you need done?</div><div class="field">Describe your task…</div><div class="cta">Post a job ›</div></div>
+    <span class="eyebrow">Popular services</span>
+    <div class="tiles"><div class="tile">Assembly</div><div class="tile">Moving</div><div class="tile">Cleaning</div><div class="tile">TV mounting</div></div>
+  </div>
+  <div class="nav"><div class="it on"><i></i>Home</div><div class="it"><i></i>Discover</div><div class="it plus"><i></i></div><div class="it"><i></i>Inbox</div><div class="it"><i></i>Profile</div></div>
+</template>
+<template id="work">
+  <div class="body">
+    <div><span class="muted" style="font-size:17px">Good evening,</span><br><span style="font-size:17px;color:var(--gold);font-weight:600">Mahmudur</span></div>
+    <div class="h1 serif">Get hired.<br><span style="color:var(--acc)">Get paid.</span></div>
+    <div class="card row" style="justify-content:space-between"><div><div class="title">Offline</div><span class="muted" style="font-size:13px">Not visible to customers</span></div><div class="switch"><i></i></div></div>
+    <div class="field">Find jobs near you</div>
+    <span class="eyebrow">Jobs near you</span>
+    <div class="card row"><div style="flex:1"><div class="title">Dog walking — twice this week</div><span class="muted" style="font-size:13px">East Flatbush · Tue, Sep 23</span></div><span class="money" style="font-size:20px">$75</span></div>
+  </div>
+  <div class="nav"><div class="it on"><i></i>Home</div><div class="it"><i></i>Map</div><div class="it"><i></i>My Jobs</div><div class="it"><i></i>Inbox</div><div class="it"><i></i>Profile</div></div>
+</template>
+
+<div class="tl">
+  <h2>The timeline (→ Worker; ← Customer is the mirror)</h2>
+  <table>
+    <tr><td>0 ms</td><td>Tap "Switch" (the confirm is answered). The pane starts from just off the right edge — rim, specular edge, a soft shadow ahead of it.</td></tr>
+    <tr><td>0 – 260</td><td>The pane sweeps left and covers the screen (ease-out). Nothing else moves yet.</td></tr>
+    <tr><td>180</td><td>The capsule starts dropping from under the status bar — it lands at 400.</td></tr>
+    <tr><td>260 – 360</td><td>Full cover. <b>The tree swaps at 300</b>; the incoming home mounts under the pane and reports its first paint.</td></tr>
+    <tr><td>360 – 640</td><td>The pane continues off the left edge, revealing the new home. If the paint signal has not come by 360, the pane waits (never past 400 + the failsafe) — it leaves the moment the home is there.</td></tr>
+    <tr><td>400 – 1100</td><td>The capsule holds: a mint dot and the word — "Worker" / "Customer".</td></tr>
+    <tr><td>1100 – 1300</td><td>The capsule retracts. Total visible motion 640 ms; the screen is interactive from 640.</td></tr>
+  </table>
+  <h2>Smoothness</h2>
+  <p>Two layers, two properties: the pane's <code>translateX</code> and the capsule's <code>translateY</code>, both Reanimated 4 shared values on the UI thread; the pane rasterized for its 640 ms; the swap a single <code>runOnJS</code> at 300; the reveal gated on the incoming tree's first <code>onLayout</code> (400 ms failsafe); reduced motion → a 240 ms crossfade through the ground with the same capsule. No artwork, no blur animated, no timer the eye can catch.</p>
+</div>
+
+<script>
+  const status = '<div class="status"><span>9:41</span><span class="r">●●● <i></i></span></div>';
+  const cust = document.getElementById('cust').innerHTML, work = document.getElementById('work').innerHTML;
+  const grid = document.getElementById('grid');
+  for (const [cls, dir, word, cap] of [['fwd', 'ltr', 'Worker', '→ Worker: the pane comes from the right and leaves to the left.'], ['back', 'rtl', 'Customer', '← Customer: the mirror — from the left, off to the right.']]) {
+    const cell = document.createElement('div'); cell.className = 'cell';
+    cell.innerHTML = '<div class="phone ' + cls + '">' + status + '<div class="scr cust">' + cust + '</div><div class="scr work">' + work + '</div><div class="pane ' + dir + '"></div><div class="capsule"><i></i>' + word + '</div><div class="homebar"></div></div><div class="cap"><b>' + word + '</b> — ' + cap + '</div>';
+    grid.appendChild(cell);
+  }
+  let slow = false;
+  function toggleSlow() { slow = !slow; document.documentElement.style.setProperty('--cycle', slow ? '16s' : '4s'); document.getElementById('slow').classList.toggle('on', slow); replay(); }
+  function replay() { for (const p of document.querySelectorAll('.phone')) { p.classList.add('paused'); void p.offsetWidth; for (const el of p.querySelectorAll('*')) { const a = el.style.animation; el.style.animation = 'none'; void el.offsetWidth; el.style.animation = a; } p.classList.remove('paused'); } }
+</script>
+</body>
+</html>

@@ -1018,6 +1018,17 @@ const SIBLINGS = [
     needs: 'reanimated',
   },
   {
+    // 2026-09-21 — the Customer <-> Worker mode switch: the glass wipe
+    // carrying the capsule. Worklets alone, like the mark: there is no
+    // gesture, only a timed sweep and a drop, and the fallback runs the same
+    // two motions on the native driver from the same shared choreography.
+    name: 'ModeTransitionOverlay',
+    fallback: 'components/ModeTransitionOverlay.tsx',
+    fast: 'components/ModeTransitionOverlay.motion120.tsx',
+    shared: 'components/ModeTransitionOverlay.shared.tsx',
+    needs: 'reanimated',
+  },
+  {
     // 2026-09-19 — the map's floating jobs pane, pulled up by a finger. A
     // pull is a swipe by another name, so it asks the swipe row's question:
     // a recogniser AND worklets, and either absent takes the tap-to-open
@@ -2135,6 +2146,10 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
     [
       'components/DropMenu.motion120.tsx',
       'components/KeyboardRisingColumn.motion120.tsx',
+      // 2026-09-21 — the mode switch's glass wipe, the operator's pick from
+      // six rendered ideas; two shared values (the pane's translateX, the
+      // capsule's translateY), each ending in a runOnJS hop to the sequence.
+      'components/ModeTransitionOverlay.motion120.tsx',
       'components/PeekSheet.motion120.tsx',
       'components/SuccessMark.motion120.tsx',
       'components/SwipeableRow.motion120.tsx',

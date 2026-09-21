@@ -41,10 +41,10 @@ const sourceFiles = SOURCE_DIRS.flatMap((dir) =>
     .map((entry) => relative(root, join(entry.parentPath, entry.name)).replace(/\\/g, '/'))
 );
 
-// Decorative shimmer bars over the baked LIGHT transition PNGs — translucent
-// glow, not a control fill; migrates with those assets (standing decision,
-// HANDOFF "Deliberately left light").
-const GOLD_FILL_ALLOWLIST = new Set(['components/ModeTransitionOverlay.tsx']);
+// 2026-09-21 — empty since the mode-transition shimmer (gold glow bars over
+// the baked transition PNGs, the one file this set ever named) left with the
+// glass wipe; kept as the place a future allowance would have to be argued.
+const GOLD_FILL_ALLOWLIST = new Set([]);
 
 /**
  * home(8) — the ONE control decision 3 was reversed for, on operator

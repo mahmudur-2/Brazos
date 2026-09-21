@@ -4,6 +4,7 @@ import { useMode } from '../modes';
 import { ShellGroundProvider, useShellGroundState } from '../lib/shellGround';
 import { useThemeColors } from '../lib/theme';
 import { DesignStudioPanel } from '../components/DesignStudioPanel';
+import { ModeTreeLayoutSignal } from '../components/ModeTransitionOverlay';
 import { designStudioAvailable } from '../lib/designStudioGate';
 import { CustomerRoot } from './CustomerRoot';
 import { WorkerRoot } from './WorkerRoot';
@@ -129,6 +130,11 @@ export function ModeShell() {
     <ShellGroundProvider value={setGround}>
       <View style={[styles.tree, { backgroundColor: treeGround }]}>
         {treeMode === 'worker' ? <WorkerRoot /> : <CustomerRoot />}
+        {/* 2026-09-21 — THE PAINT SIGNAL the mode switch's reveal waits for:
+            keyed by the tree, so it lays out in the same pass as the incoming
+            tree's first layout and reports it (components/ModeTransitionOverlay.tsx).
+            Draws nothing, takes no touch, changes no layout. */}
+        <ModeTreeLayoutSignal key={treeMode} />
       </View>
       {/* FENCE: DESIGN STUDIO (RUN S2 C1) — PERMANENT and CHANNEL-GATED: the panel mounts only where lib/designStudioGate.ts says the studio may exist (Metro __DEV__, or update channel internal/development; FAIL CLOSED on preview, production and unknown). tests/designStudio.test.mjs pins this gate — no future run may loosen it. Renders null until toggled on the Appearance screen. */}
       {designStudioAvailable ? <DesignStudioPanel /> : null}

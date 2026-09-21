@@ -6,87 +6,83 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentType,
   type PropsWithChildren,
 } from 'react';
-import { Animated, Easing, Image, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { colors, metricStyles } from '../lib/theme';
-import type { ModeDestination } from './modeTransitionAssets';
-import { LINE_GEOMETRY, SOURCE_ASPECT_RATIO, TRANSITION_IMAGES } from './modeTransitionAssets';
+import { motionCapability, resolveMotion120 } from '../lib/motion120';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
+import { metricStyles, useThemeColors } from '../lib/theme';
+import { Surface } from '../ui/primitives/Surface';
+import {
+  CAPSULE_HIDDEN_Y,
+  CAPSULE_IN_MS,
+  CAPSULE_OUT_MS,
+  PANE_IN_MS,
+  PANE_OUT_MS,
+  PANE_OVERHANG,
+  PANE_SHADOW_WIDTH,
+  REDUCED_IN_MS,
+  REDUCED_OUT_MS,
+  capsuleLabel,
+  leadingEdge,
+  paneShadowStyle,
+  paneTravel,
+  runSequence,
+  transitionStylesFor,
+  type ModeDestination,
+  type ModeTransitionRunProps,
+} from './ModeTransitionOverlay.shared';
+
+export type { ModeDestination };
 
 /**
  * The Customer <-> Worker mode switch, as one animated layer above the whole
  * navigation tree.
  *
- * design-reference/transition-worker.png and transition-customer.png are the
- * final artwork — the whole sheet (emerald background, B+leaf mark,
- * "Switching to ___" label, handle, gold baseline, rounded top corners) is
- * baked into those two images. Nothing here recreates any of that: the panel
- * is just `<Image source={...} />`, sized by the source's own aspect ratio.
- * The ONLY thing built programmatically is a small gold highlight that
- * sweeps across the line already printed in the image (see LINE_GEOMETRY in
- * ./modeTransitionAssets, measured directly from the source pixels).
+ * THE MOTION is the glass wipe carrying the capsule — what it is, what it
+ * replaces and why it is smooth are the shared module's header
+ * (./ModeTransitionOverlay.shared.tsx). This file owns the three things that
+ * are not motion: the provider every switch goes through, the paint signal the
+ * reveal waits for, and the choice of driver.
  *
  * WHY AN OVERLAY AND NOT A ROUTE: the destination Home has to already be
  * mounted and painted before the user sees it, which a pushed "loading" route
- * cannot promise. The real navigation runs while the sheet is at rest —
- * the sheet then retreats off a destination that has had time to settle
- * underneath. Nothing waits on data; the duration is fixed and deterministic.
+ * cannot promise. The real navigation runs while the pane fully covers the
+ * screen — and the pane then retreats off a destination that has REPORTED its
+ * first layout underneath (`ModeTreeLayoutSignal`, mounted by
+ * navigation/ModeShell.tsx beside the tree), with a fail-safe so nothing
+ * waits forever.
  *
- * ANIMATION BACKEND: the built-in Animated API, driven natively. Reanimated is
- * not installed in this project and CLAUDE.md forbids adding an animation
- * library, so every animated property here is one the native driver supports
- * (transform + opacity only) — the whole sequence runs on the UI thread.
+ * THREE DRIVERS, ONE CHOREOGRAPHY. Reanimated worklets where the binary has
+ * them (./ModeTransitionOverlay.motion120.tsx, through the motion boundary's
+ * own resolver), the native-driver `Animated` sibling below everywhere else,
+ * and the reduced-motion crossfade below for anyone who has asked for it —
+ * all three over `runSequence`, so the swap, the paint-gated reveal and the
+ * fail-safes are written once.
  */
-
-// --- Choreography ------------------------------------------------------
-// 1000ms total. Rise 0-280ms, shimmer sweeps 300-700ms, the real mode switch
-// happens at 500ms (sheet at rest, fully covering the switch), fall starts at
-// 700ms and takes 300ms.
-const RISE_MS = 280;
-const PANEL_FADE_DELAY_MS = 120;
-const PANEL_FADE_MS = 200;
-const SHIMMER_START_MS = 300;
-const SHIMMER_MS = 400;
-const SWITCH_AT_MS = 500;
-const FALL_START_MS = 700;
-const FALL_MS = 300;
-const TOTAL_MS = FALL_START_MS + FALL_MS; // 1000
-
-// Reduced motion: a short cross-fade in place of any travel or shimmer.
-// ~290ms total, inside the requested 250-300ms range.
-const REDUCED_IN_MS = 110;
-const REDUCED_HOLD_MS = 70;
-const REDUCED_OUT_MS = 110;
-const REDUCED_SWITCH_AT_MS = REDUCED_IN_MS + REDUCED_HOLD_MS / 2;
-const REDUCED_TOTAL_MS = REDUCED_IN_MS + REDUCED_HOLD_MS + REDUCED_OUT_MS;
-
-/** Peak dim over the outgoing screen — substantial, never opaque. */
-const DIM_PEAK = 0.52;
-
-/** Width of the animated gold highlight, in the 25-45px range asked for. */
-const SHIMMER_WIDTH = 34;
-/** Tall enough to read as a soft glow without needing a real blur/gradient. */
-const SHIMMER_BAND_HEIGHT = 16;
-
-export type { ModeDestination };
 
 type StartArgs = {
   destination: ModeDestination;
   /**
-   * The real navigation, run once while the sheet is at rest covering the
-   * screen. Kept as a caller-supplied callback so this component owns no
-   * routes and both directions share one implementation.
+   * The real navigation, run once while the pane covers the screen. Kept as a
+   * caller-supplied callback so this component owns no routes and both
+   * directions share one implementation.
    */
   onSwitch: () => void;
 };
 
 type ModeTransitionValue = {
   start: (args: StartArgs) => void;
-  /** True from the tap until cleanup — switch controls disable on it, which is
-   *  what makes rapid double-taps a no-op rather than a second transition. */
+  /** True from the tap until the pane has left — switch controls disable on
+   *  it, which is what makes rapid double-taps a no-op rather than a second
+   *  transition. The capsule's own exit is not part of it. */
   busy: boolean;
+  /** The incoming navigation tree has laid out. Called by `ModeTreeLayoutSignal`;
+   *  a no-op unless a run is waiting for it. */
+  markTreeLaidOut: () => void;
 };
 
 const ModeTransitionContext = createContext<ModeTransitionValue | null>(null);
@@ -94,7 +90,7 @@ const ModeTransitionContext = createContext<ModeTransitionValue | null>(null);
 export function useModeTransition(): ModeTransitionValue {
   const value = useContext(ModeTransitionContext);
   if (!value) {
-    throw new Error('useModeTransition must be used inside <ModeTransitionProvider>');
+    throw new Error('useModeTransition must be inside <ModeTransitionProvider>');
   }
   return value;
 }
@@ -106,24 +102,49 @@ export function useModeTransition(): ModeTransitionValue {
 export function ModeTransitionProvider({ children }: PropsWithChildren) {
   const styles = stylesFor();
   const [request, setRequest] = useState<StartArgs | null>(null);
+  const [busy, setBusy] = useState(false);
   // The ref is the actual double-tap guard: two taps in the same frame both
-  // read the old state, but only the first sees a null ref.
+  // read the old state, but only the first sees a false ref.
   const runningRef = useRef(false);
+  // The paint signal's one waiter. Armed by a run at the moment it swaps the
+  // tree, resolved by the tree's own layout event, dropped by the fail-safe.
+  const laidOutResolverRef = useRef<(() => void) | null>(null);
 
   const start = useCallback((args: StartArgs) => {
     if (runningRef.current) return;
     runningRef.current = true;
+    setBusy(true);
     setRequest(args);
   }, []);
 
-  const finish = useCallback(() => {
+  const onRevealed = useCallback(() => {
     runningRef.current = false;
+    setBusy(false);
+  }, []);
+
+  const onFinished = useCallback(() => {
+    laidOutResolverRef.current = null;
     setRequest(null);
   }, []);
 
+  const waitForTreeLaidOut = useCallback(
+    () =>
+      new Promise<void>((resolve) => {
+        laidOutResolverRef.current = resolve;
+      }),
+    []
+  );
+
+  const markTreeLaidOut = useCallback(() => {
+    const resolve = laidOutResolverRef.current;
+    if (!resolve) return;
+    laidOutResolverRef.current = null;
+    resolve();
+  }, []);
+
   const value = useMemo<ModeTransitionValue>(
-    () => ({ start, busy: request !== null }),
-    [start, request]
+    () => ({ start, busy, markTreeLaidOut }),
+    [start, busy, markTreeLaidOut]
   );
 
   return (
@@ -131,10 +152,12 @@ export function ModeTransitionProvider({ children }: PropsWithChildren) {
       <View style={styles.root}>
         {children}
         {request ? (
-          <ModeTransitionOverlay
+          <ModeTransitionRun
             destination={request.destination}
             onSwitch={request.onSwitch}
-            onComplete={finish}
+            waitForTreeLaidOut={waitForTreeLaidOut}
+            onRevealed={onRevealed}
+            onFinished={onFinished}
           />
         ) : null}
       </View>
@@ -142,245 +165,192 @@ export function ModeTransitionProvider({ children }: PropsWithChildren) {
   );
 }
 
-type OverlayProps = {
-  destination: ModeDestination;
-  onSwitch: () => void;
-  onComplete: () => void;
-};
+/**
+ * The paint signal. navigation/ModeShell.tsx mounts one of these INSIDE the
+ * painted tree View, keyed by the tree, so it lays out in the same pass as
+ * the incoming tree's first layout and reports that pass to the provider. It
+ * draws nothing and takes no touch.
+ */
+export function ModeTreeLayoutSignal() {
+  const styles = stylesFor();
+  const { markTreeLaidOut } = useModeTransition();
+  return <View style={styles.signal} pointerEvents="none" onLayout={markTreeLaidOut} />;
+}
+
+type RunOwnerProps = Omit<ModeTransitionRunProps, 'width' | 'topInset'>;
 
 /**
- * One run of the transition. Mounted when a switch starts and unmounted when it
- * ends, so every animated value starts from a known state and nothing survives
+ * One run of the transition, on whichever driver this binary and this person
+ * get. Mounted when a switch starts and unmounted when the capsule has gone,
+ * so every animated value starts from a known state and nothing survives
  * between runs.
+ *
+ * REDUCED MOTION IS DECIDED HERE, above the driver boundary, so the moving
+ * sibling is never even mounted for it. `useReducedMotion` returns `null`
+ * until the setting has been read, and its contract is that a run must not
+ * start on an unknown answer — the first frames would play with motion and
+ * then snap — so nothing mounts until it is known.
  */
-function ModeTransitionOverlay({ destination, onSwitch, onComplete }: OverlayProps) {
-  const styles = stylesFor();
-  const { width } = useWindowDimensions();
+function ModeTransitionRun(props: RunOwnerProps) {
   const reducedMotion = useReducedMotion();
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  if (reducedMotion === null) return null;
+  const runProps: ModeTransitionRunProps = { ...props, width, topInset: insets.top };
+  if (reducedMotion) return <ReducedRun {...runProps} />;
+  return <Impl {...runProps} />;
+}
 
-  // The panel is exactly as tall as the image's own aspect ratio makes it at
-  // full device width — never a guessed ratio, never stretched.
-  const panelHeight = width * SOURCE_ASPECT_RATIO;
-  const geometry = LINE_GEOMETRY[destination];
+/**
+ * Chosen ONCE, at module load: the Reanimated wipe where the capability probe
+ * found worklets, the native-driver wipe below otherwise. The require is a
+ * literal so the bundler resolves the file on every binary.
+ */
+const Impl = resolveMotion120<ComponentType<ModeTransitionRunProps>>(
+  motionCapability,
+  'reanimated',
+  () => require('./ModeTransitionOverlay.motion120').ModeTransitionRun as ComponentType<ModeTransitionRunProps>,
+  NativeDriverRun,
+);
 
-  const panelY = useRef(new Animated.Value(panelHeight)).current;
-  const panelOpacity = useRef(new Animated.Value(0.97)).current;
-  const dim = useRef(new Animated.Value(0)).current;
-  const shimmerT = useRef(new Animated.Value(0)).current;
+/**
+ * THE WIPE ON THE NATIVE DRIVER — the same two motions as the Reanimated
+ * sibling (the pane's translateX, the capsule's translateY), each a native-
+ * driven `Animated.timing`, each ending in the sequence's callback. Smooth for
+ * transform and opacity on every binary; what it lacks against the worklet
+ * path is only the 120 Hz frame budget.
+ */
+function NativeDriverRun(props: ModeTransitionRunProps) {
+  const { destination, width, topInset } = props;
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = transitionStylesFor(colors);
+  const travel = paneTravel(destination, width);
+  const edge = leadingEdge(destination);
+  const paneX = useRef(new Animated.Value(travel.from)).current;
+  const capsuleY = useRef(new Animated.Value(CAPSULE_HIDDEN_Y)).current;
 
-  // Callbacks change identity on every parent render; the animation must read
-  // the latest without being a dependency of the effect that runs it once.
-  const onSwitchRef = useRef(onSwitch);
-  const onCompleteRef = useRef(onComplete);
   useEffect(() => {
-    onSwitchRef.current = onSwitch;
-    onCompleteRef.current = onComplete;
-  });
-
-  useEffect(() => {
-    // Held until the accessibility preference has actually been read, so the
-    // first frames can't play with motion and then snap (see useReducedMotion).
-    if (reducedMotion === null) return;
-
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    let settled = false;
-
-    /** Runs the navigation exactly once, whatever path gets here. */
-    const runSwitch = () => {
-      if (settled) return;
-      settled = true;
-      onSwitchRef.current();
+    const done = (fn: () => void) => ({ finished }: { finished: boolean }) => {
+      if (finished) fn();
     };
-
-    const at = (ms: number, fn: () => void) => {
-      timers.push(setTimeout(fn, ms));
-    };
-
-    if (reducedMotion) {
-      panelY.setValue(0);
-      panelOpacity.setValue(0);
-
-      Animated.parallel([
-        Animated.timing(dim, {
-          toValue: DIM_PEAK,
-          duration: REDUCED_IN_MS,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: USE_NATIVE_DRIVER,
-        }),
-        Animated.timing(panelOpacity, {
-          toValue: 1,
-          duration: REDUCED_IN_MS,
-          useNativeDriver: USE_NATIVE_DRIVER,
-        }),
-      ]).start();
-
-      at(REDUCED_SWITCH_AT_MS, runSwitch);
-      at(REDUCED_IN_MS + REDUCED_HOLD_MS, () => {
-        Animated.parallel([
-          Animated.timing(dim, {
-            toValue: 0,
-            duration: REDUCED_OUT_MS,
-            useNativeDriver: USE_NATIVE_DRIVER,
-          }),
-          Animated.timing(panelOpacity, {
-            toValue: 0,
-            duration: REDUCED_OUT_MS,
-            useNativeDriver: USE_NATIVE_DRIVER,
-          }),
-        ]).start();
-      });
-    } else {
-      // Dim the current Home and raise the sheet. Eased, not sprung — no
-      // bounce, controlled deceleration.
-      Animated.parallel([
-        Animated.timing(dim, {
-          toValue: DIM_PEAK,
-          duration: RISE_MS,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: USE_NATIVE_DRIVER,
-        }),
-        Animated.timing(panelY, {
-          toValue: 0,
-          duration: RISE_MS,
+    const stop = runSequence(props, {
+      paneIn: (covered) =>
+        Animated.timing(paneX, {
+          toValue: travel.cover,
+          duration: PANE_IN_MS,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: USE_NATIVE_DRIVER,
-        }),
-        // An extremely subtle settle, not a fade-in — the artwork is already
-        // fully opaque, this just takes the last 3% off a slightly "soft"
-        // starting point.
-        Animated.timing(panelOpacity, {
-          toValue: 1,
-          delay: PANEL_FADE_DELAY_MS,
-          duration: PANEL_FADE_MS,
-          easing: Easing.out(Easing.quad),
+        }).start(done(covered)),
+      paneOut: (revealed) =>
+        Animated.timing(paneX, {
+          toValue: travel.to,
+          duration: PANE_OUT_MS,
+          easing: Easing.inOut(Easing.cubic),
           useNativeDriver: USE_NATIVE_DRIVER,
-        }),
-        // The one programmatic effect: a gold highlight sweeping once across
-        // the line already baked into the artwork. Not a progress bar — no
-        // fill, no percentage.
-        Animated.timing(shimmerT, {
-          toValue: 1,
-          delay: SHIMMER_START_MS,
-          duration: SHIMMER_MS,
-          easing: Easing.inOut(Easing.quad),
+        }).start(done(revealed)),
+      capsuleIn: () =>
+        Animated.timing(capsuleY, {
+          toValue: 0,
+          duration: CAPSULE_IN_MS,
+          easing: Easing.out(Easing.back(1.2)),
           useNativeDriver: USE_NATIVE_DRIVER,
-        }),
-      ]).start();
-
-      // The real switch, while the sheet is at rest over the content.
-      at(SWITCH_AT_MS, runSwitch);
-
-      // Retreat off the destination, which is already mounted underneath.
-      at(FALL_START_MS, () => {
-        Animated.parallel([
-          Animated.timing(panelY, {
-            toValue: panelHeight,
-            duration: FALL_MS,
-            easing: Easing.in(Easing.cubic),
-            useNativeDriver: USE_NATIVE_DRIVER,
-          }),
-          Animated.timing(dim, {
-            toValue: 0,
-            duration: FALL_MS,
-            easing: Easing.in(Easing.quad),
-            useNativeDriver: USE_NATIVE_DRIVER,
-          }),
-        ]).start();
-      });
-    }
-
-    const total = reducedMotion ? REDUCED_TOTAL_MS : TOTAL_MS;
-    // A frame of slack past the end of the travel. Unmounting on the exact
-    // final frame risks tearing the panel away a frame early under jitter,
-    // which would read as a pop; by now the layer is already off-screen.
-    at(total + 40, () => onCompleteRef.current());
-    // Fail-safe: nothing above may leave the overlay on screen. Even if an
-    // animation never calls back (backgrounded mid-run, driver hiccup), this
-    // tears the layer down and releases the switch controls.
-    at(total + 500, () => {
-      runSwitch();
-      onCompleteRef.current();
+        }).start(),
+      capsuleOut: (gone) =>
+        Animated.timing(capsuleY, {
+          toValue: CAPSULE_HIDDEN_Y,
+          duration: CAPSULE_OUT_MS,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        }).start(done(gone)),
     });
-
     return () => {
-      for (const timer of timers) clearTimeout(timer);
-      panelY.stopAnimation();
-      panelOpacity.stopAnimation();
-      dim.stopAnimation();
-      shimmerT.stopAnimation();
+      stop();
+      paneX.stopAnimation();
+      capsuleY.stopAnimation();
     };
-    // One run per mount. The overlay is remounted for every transition, so
-    // re-running on prop identity changes would restart the animation.
+    // One run per mount: the overlay is remounted for every transition.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reducedMotion]);
-
-  const label = destination === 'worker' ? 'Switching to Worker' : 'Switching to Customer';
-
-  // The line's measured left/right edges (see LINE_GEOMETRY), in on-screen
-  // pixels at this device's width. The highlight travels edge to edge.
-  const lineLeftPx = ((geometry.centerPct - geometry.widthPct / 2) / 100) * width;
-  const lineRightPx = ((geometry.centerPct + geometry.widthPct / 2) / 100) * width;
-  const shimmerLeft = shimmerT.interpolate({
-    inputRange: [0, 1],
-    outputRange: [lineLeftPx - SHIMMER_WIDTH / 2, lineRightPx - SHIMMER_WIDTH / 2],
-  });
-  const shimmerOpacity = shimmerT.interpolate({
-    inputRange: [0, 0.15, 0.85, 1],
-    outputRange: [0, 1, 1, 0],
-  });
+  }, []);
 
   return (
-    <View style={StyleSheet.absoluteFill} accessibilityViewIsModal>
-      {/* The outgoing screen stays visible above the sheet — substantial dim,
-          never opaque. The real device status bar is left untouched. */}
-      <Animated.View style={[styles.dim, { opacity: dim }]} pointerEvents="none" />
-
+    <View style={styles.layer} accessibilityViewIsModal>
       <Animated.View
-        style={[
-          styles.panel,
-          {
-            height: panelHeight,
-            // Proportional to width (~7.7%, measured from the source PNGs'
-            // own corner arcs), not a fixed px radius, so it holds up across
-            // device sizes the same way the image's own corners do.
-            borderTopLeftRadius: width * 0.077,
-            borderTopRightRadius: width * 0.077,
-            opacity: panelOpacity,
-            transform: [{ translateY: panelY }],
-          },
-        ]}
+        style={[styles.pane, { width: width + 2 * PANE_OVERHANG, transform: [{ translateX: paneX }] }]}
         accessible
         accessibilityRole="progressbar"
-        accessibilityLabel={label}
+        accessibilityLabel={`Switching to ${capsuleLabel(destination)}`}
       >
-        {/* The final artwork, full stop — background, mark, label, handle,
-            and the static gold line are all baked into this one image. */}
-        <Image
-          source={TRANSITION_IMAGES[destination]}
-          style={styles.image}
-          resizeMode="cover"
+        <View style={[styles.rim, edge === 'left' ? { left: 0 } : { right: 0 }]} />
+        {isDark ? <View style={[styles.specular, edge === 'left' ? { left: 1 } : { right: 1 }]} /> : null}
+        <View
+          style={[
+            styles.shadow,
+            paneShadowStyle(edge, colors),
+            edge === 'left' ? { left: -PANE_SHADOW_WIDTH } : { right: -PANE_SHADOW_WIDTH },
+          ]}
         />
+      </Animated.View>
 
-        {!reducedMotion && (
-          <View
-            style={[
-              styles.shimmerBand,
-              { top: (geometry.topPct / 100) * panelHeight - SHIMMER_BAND_HEIGHT / 2 },
-            ]}
-            pointerEvents="none"
-          >
-            <Animated.View
-              style={[
-                styles.shimmerGroup,
-                { opacity: shimmerOpacity, transform: [{ translateX: shimmerLeft }] },
-              ]}
-            >
-              <View style={styles.shimmerGlowOuter} />
-              <View style={styles.shimmerGlowMid} />
-              <View style={styles.shimmerGlowCore} />
-            </Animated.View>
-          </View>
-        )}
+      <Animated.View
+        style={[styles.capsuleWrap, { top: topInset + 8, transform: [{ translateY: capsuleY }] }]}
+        pointerEvents="none"
+      >
+        <Surface material="menu" radius={20} corners="all" style={styles.capsule}>
+          <View style={styles.capsuleDot} />
+          <Text style={styles.capsuleText}>{capsuleLabel(destination)}</Text>
+        </Surface>
+      </Animated.View>
+    </View>
+  );
+}
+
+/**
+ * REDUCED MOTION — the same sequence with no travel: the ground fades up
+ * over the outgoing screen, the tree swaps, the ground fades away once the
+ * incoming tree has painted; the capsule fades in and out in place. Two
+ * opacities, nothing moves. Both drivers share this one because there is no
+ * frame budget to win on a fade.
+ */
+function ReducedRun(props: ModeTransitionRunProps) {
+  const { destination, topInset } = props;
+  const { palette: colors } = useThemeColors();
+  const styles = transitionStylesFor(colors);
+  const ground = useRef(new Animated.Value(0)).current;
+  const capsule = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const done = (fn: () => void) => ({ finished }: { finished: boolean }) => {
+      if (finished) fn();
+    };
+    const fade = (value: Animated.Value, toValue: number, duration: number, then?: () => void) =>
+      Animated.timing(value, { toValue, duration, useNativeDriver: USE_NATIVE_DRIVER }).start(then ? done(then) : undefined);
+    const stop = runSequence(props, {
+      paneIn: (covered) => fade(ground, 1, REDUCED_IN_MS, covered),
+      paneOut: (revealed) => fade(ground, 0, REDUCED_OUT_MS, revealed),
+      capsuleIn: () => fade(capsule, 1, REDUCED_IN_MS),
+      capsuleOut: (gone) => fade(capsule, 0, REDUCED_OUT_MS, gone),
+    });
+    return () => {
+      stop();
+      ground.stopAnimation();
+      capsule.stopAnimation();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <View style={styles.layer} accessibilityViewIsModal>
+      <Animated.View
+        style={[styles.ground, { opacity: ground }]}
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel={`Switching to ${capsuleLabel(destination)}`}
+      />
+      <Animated.View style={[styles.capsuleWrap, { top: topInset + 8, opacity: capsule }]} pointerEvents="none">
+        <Surface material="menu" radius={20} corners="all" style={styles.capsule}>
+          <View style={styles.capsuleDot} />
+          <Text style={styles.capsuleText}>{capsuleLabel(destination)}</Text>
+        </Surface>
       </Animated.View>
     </View>
   );
@@ -390,64 +360,10 @@ const stylesFor = metricStyles(() => StyleSheet.create({
   root: {
     flex: 1,
   },
-  dim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.black,
-  },
-  panel: {
+  signal: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    // The source PNGs bake their rounded top corners in as opaque black
-    // (not real alpha) — clipping here is what turns that black into the
-    // dimmed Home showing through, matching every other corner of the sheet.
-    overflow: 'hidden',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  shimmerBand: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: SHIMMER_BAND_HEIGHT,
-  },
-  shimmerGroup: {
-    position: 'absolute',
-    top: 0,
-    width: SHIMMER_WIDTH,
-    height: SHIMMER_BAND_HEIGHT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Three stacked, decreasingly-wide translucent bars fake a soft radial
-  // glow (brightest core, fading edges) without expo-linear-gradient, which
-  // isn't installed — the lightest approach that still reads as a highlight
-  // rather than a hard-edged bar.
-  shimmerGlowOuter: {
-    position: 'absolute',
-    width: SHIMMER_WIDTH,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: colors.gold,
-    opacity: 0.18,
-  },
-  shimmerGlowMid: {
-    position: 'absolute',
-    width: SHIMMER_WIDTH * 0.62,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.gold,
-    opacity: 0.42,
-  },
-  shimmerGlowCore: {
-    position: 'absolute',
-    width: SHIMMER_WIDTH * 0.32,
-    height: 2.4,
-    borderRadius: 1.2,
-    backgroundColor: '#FFF3D6',
-    opacity: 0.95,
+    width: 1,
+    height: 1,
+    opacity: 0,
   },
 }));

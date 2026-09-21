@@ -1046,10 +1046,9 @@ const MIGRATED_FILES = [
  *  (final report, 4D-3.5). An entry here is an allowance for THAT string
  *  only — anything else in the file still fails. */
 const ALLOWED_LITERALS = {
-  // The mode-transition shimmer's highlight core: a brand-asset tint paired
-  // with the baked transition-* PNGs (STAGE4D_PLAN.md T3 makes dark variants
-  // of those assets design work, not code). Migrates when the assets do.
-  'components/ModeTransitionOverlay.tsx': ["'#FFF3D6'"],
+  // 2026-09-21 — the one allowance this map ever held (the mode-transition
+  // shimmer's '#FFF3D6', paired with the baked transition-* PNGs) left with
+  // the shimmer: the glass wipe draws from the palette alone.
 };
 
 test('[static] migrated files carry no raw hex or rgba() colour literals', async () => {

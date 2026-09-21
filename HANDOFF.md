@@ -1,12 +1,68 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-21 (the Lux drawing run — every remaining screen drawn as an Emerald
-Lux Glass page, docs only, from a new chat on Opus 5 at max). The record of the run
-that applied the eighteen-item list (the same date, earlier) and the two sittings
-before it follow below, unchanged.
+WRITTEN: 2026-09-21 (the Lux chat, later the same day: the mode switch rebuilt as the
+glass wipe carrying the capsule — the one APP change of this chat, after the 67 Lux
+pages below were drawn as docs). The Lux drawing run's record, the eighteen-item
+run's and the two sittings before it follow, unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
+
+## THE MODE SWITCH — the glass wipe carrying the capsule (2026-09-21, app code)
+
+**What changed and why.** The operator, on the 1000 ms artwork sheet: "get rid of this
+annoying switching mode transition … consistent with the emerald lux glass theme … show
+me diff versions … optimized for smoothness." Six ideas were drawn live (no app run:
+`docs/mockups/html/lux/mode-switch-ideas.html`, CSS on Lux phones with a slow-motion
+toggle); they picked **the glass wipe carrying the capsule** (shown alone both ways in
+`mode-switch-wipe-capsule.html`), then "implement this right now". Asked and answered:
+the confirm dialog stays as it is; the capsule holds ~700 ms then retracts; publish the
+OTA. DECISIONS (15).
+
+**What landed (one code commit, `npm run verify` 1387 pass / 0 fail — six new tests):**
+- `components/ModeTransitionOverlay.shared.tsx` — NEW: every number (pane in 260 ms,
+  swap under full cover, hold ≥ 60 ms, reveal fail-safe 400 ms after the swap, pane out
+  280 ms; capsule in at 180 ms over 220, holds until 1100, out over 200; reduced motion
+  110/130), `runSequence` (THE one clock: the swap fires once from the cover callback
+  with the layout waiter armed first, the reveal waits for the tree's layout or the
+  fail-safe then one frame), the themed styles (the pane is `palette.background`, the
+  leading edge the mint `emeraldBright` rim at .55 + a specular line, the shadow a
+  gradient strip from the palette's black — no literal colour).
+- `components/ModeTransitionOverlay.motion120.tsx` — NEW: the Reanimated path (two
+  shared values — the pane's translateX, the capsule's translateY — each `withTiming`
+  ending in one `runOnJS` hop), chosen through `resolveMotion120` like the other
+  siblings.
+- `components/ModeTransitionOverlay.tsx` — rewritten: the provider (`start`, `busy`,
+  and the new `markTreeLaidOut`), `ModeTreeLayoutSignal` (the paint signal), the
+  native-driver sibling and the reduced-motion crossfade (opacity only, the same
+  capsule), all over `runSequence`. `busy` ends when the pane has left; the layer
+  unmounts when the capsule has gone.
+- `navigation/ModeShell.tsx` — mounts `<ModeTreeLayoutSignal key={treeMode} />` inside
+  the painted tree View (its fences untouched: the View's opening tag and the ground
+  paint are byte-identical).
+- RETIRED: `components/modeTransitionAssets.ts` (deleted); `assets/brand/transition-
+  customer.png` and `transition-worker.png` stay on disk, required by nothing.
+- Fences moved as constants with dated reasons: `tests/motion120.test.mjs` (the fast-path
+  roster and the SIBLINGS table gain the new sibling), `tests/themeResolution.test.mjs`
+  (the two sheets leave the raster roster; the shimmer allowance goes; the D6 lazy-sheet
+  count holds at 23 because the base file keeps `metricStyles`), `tests/themeTokens.test.mjs`
+  (the `'#FFF3D6'` allowance goes — the map is empty), `tests/goldOnForest.test.mjs` (the
+  gold-fill allowlist is empty). NEW `tests/modeTransition.test.mjs`: the one clock, the
+  swap once under cover with the waiter armed first, the paint signal keyed by the tree,
+  the one owner, transform/opacity only, reduced motion never travels, the sheets
+  required by nothing.
+
+**Not walked on the phone.** The OTA is published on the operator's word (below); they
+open the Beta twice and switch modes both ways: the pane should never rest, the new
+home should already be there when it clears, the capsule should drop, hold and leave on
+its own, and the customer's [+] sheet / the worker's Profile row must stay disabled only
+until the pane has left. If the incoming home ever shows blank under the leaving pane, the
+layout signal did not fire — the fail-safe (400 ms) is the floor to check first.
+
+**A working-tree note.** While this landed, the operator's OTHER chat (Fable 5.1, the
+seven comparison pages) was editing `docs/mockups/html/lux/lux.build.mjs` and adding
+`lux-*-fable.html` pages in the same tree; those files were left exactly as found and
+are not in this commit.
 
 ## THE LUX DRAWING RUN (2026-09-21) — all 67 screens are pages; NOTHING is applied
 
