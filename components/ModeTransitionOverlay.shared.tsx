@@ -52,8 +52,8 @@ export const PANE_OUT_MS = 280;
 export const CAPSULE_DELAY_MS = 180;
 /** … lands after this … */
 export const CAPSULE_IN_MS = 220;
-/** … holds until this moment from the tap … */
-export const CAPSULE_HOLD_UNTIL_MS = 1100;
+/** … holds until this moment from the tap (1100 at first; +250 on the phone, 2026-09-21: "exits too fast, I can’t read it") … */
+export const CAPSULE_HOLD_UNTIL_MS = 1350;
 /** … and retracts over this. */
 export const CAPSULE_OUT_MS = 200;
 /** The capsule's parked position, above the screen's top edge. */

@@ -106,8 +106,8 @@
     <tr><td>180</td><td>The capsule starts dropping from under the status bar — it lands at 400.</td></tr>
     <tr><td>260 – 360</td><td>Full cover. <b>The tree swaps at 300</b>; the incoming home mounts under the pane and reports its first paint.</td></tr>
     <tr><td>360 – 640</td><td>The pane continues off the left edge, revealing the new home. If the paint signal has not come by 360, the pane waits (never past 400 + the failsafe) — it leaves the moment the home is there.</td></tr>
-    <tr><td>400 – 1100</td><td>The capsule holds: a mint dot and the word — "Worker" / "Customer".</td></tr>
-    <tr><td>1100 – 1300</td><td>The capsule retracts. Total visible motion 640 ms; the screen is interactive from 640.</td></tr>
+    <tr><td>400 – 1350</td><td>The capsule holds: a mint dot and the word — "Worker" / "Customer" (1100 at first; +250 after the phone: "exits too fast, I can’t read it").</td></tr>
+    <tr><td>1350 – 1550</td><td>The capsule retracts. Total visible motion 640 ms; the screen is interactive from 640.</td></tr>
   </table>
   <h2>Smoothness</h2>
   <p>Two layers, two properties: the pane's <code>translateX</code> and the capsule's <code>translateY</code>, both Reanimated 4 shared values on the UI thread; the pane rasterized for its 640 ms; the swap a single <code>runOnJS</code> at 300; the reveal gated on the incoming tree's first <code>onLayout</code> (400 ms failsafe); reduced motion → a 240 ms crossfade through the ground with the same capsule. No artwork, no blur animated, no timer the eye can catch.</p>
