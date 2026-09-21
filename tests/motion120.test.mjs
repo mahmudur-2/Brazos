@@ -1039,6 +1039,18 @@ const SIBLINGS = [
     shared: 'components/PeekSheet.shared.tsx',
     needs: 'gestures',
   },
+  {
+    // 2026-09-21 — the Welcome hero button's rim light: one point of the
+    // hairline travelling lit, one slow lap every six seconds. Worklets
+    // alone, like the mark: there is no gesture, only a repeated linear
+    // timing, and the fallback runs the same lap on the native driver from
+    // the same shared path, sampled.
+    name: 'RimLight',
+    fallback: 'components/RimLight.tsx',
+    fast: 'components/RimLight.motion120.tsx',
+    shared: 'components/RimLight.shared.tsx',
+    needs: 'reanimated',
+  },
 ];
 
 test('[executed] every sibling is taken when its native is present and skipped when it is absent', () => {
@@ -2151,6 +2163,11 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       // capsule's translateY), each ending in a runOnJS hop to the sequence.
       'components/ModeTransitionOverlay.motion120.tsx',
       'components/PeekSheet.motion120.tsx',
+      // 2026-09-21 — the Welcome hero button's rim light, the operator's pick
+      // (f) from six rendered motions; one shared value, the lap's progress,
+      // and `rimPoint` — a 'worklet' in RimLight.shared.tsx — computing the
+      // light's translate and rotate on the UI thread.
+      'components/RimLight.motion120.tsx',
       'components/SuccessMark.motion120.tsx',
       'components/SwipeableRow.motion120.tsx',
     ],

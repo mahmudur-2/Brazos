@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
 import { authSurface, fonts, useThemeColors } from '../lib/theme';
+import { backgroundImageStyle } from '../ui/primitives/LitSurface';
 import { AuthBackdrop, type AuthBackdropVariant } from './AuthBackdrop';
 
 type AuthScaffoldProps = PropsWithChildren<{
@@ -36,6 +37,15 @@ type AuthScaffoldProps = PropsWithChildren<{
    * other auth screen still gets.
    */
   themed?: boolean;
+  /**
+   * 2026-09-21 — the ground the picked Welcome page stands on: in dark, ONE
+   * diagonal gradient through the palette's three `authGround*` stops (the
+   * Emerald Lux Glass ground, docs/mockups/html/lux/README.md); in light the
+   * three stops are the ivory `bg` and nothing is added, so light is
+   * byte-identical. Welcome alone passes it; the form screens keep the flat
+   * surface until their own Lux pages are approved.
+   */
+  ground?: boolean;
 }>;
 
 /**
@@ -56,11 +66,20 @@ export function AuthScaffold({
   onBack,
   backdrop,
   themed = false,
+  ground = false,
   children,
 }: AuthScaffoldProps) {
   const showTopBar = Boolean(title || onBack);
   const { palette, isDark } = useThemeColors();
   const surface = authSurface(palette, isDark);
+  // The gradient is gated on the theme the way every lit surface is
+  // (`flat: !isDark` in LitSurface): light gets no style key at all.
+  const groundStyle =
+    ground && themed && isDark
+      ? backgroundImageStyle(
+          `linear-gradient(165deg, ${palette.authGroundTop} 0%, ${palette.authGroundMid} 55%, ${palette.authGroundBottom} 100%)`
+        )
+      : undefined;
   // Masters 3 and 4 draw the back chevron gold and the bar title in the serif;
   // untouched screens keep the ink chevron and the sans title.
   const chevronColor = themed ? surface.accent : authColors.ink;
@@ -69,7 +88,7 @@ export function AuthScaffold({
     // The ivory fill and the artwork live outside the safe area, so the art
     // runs to the physical edges of the screen rather than stopping at the
     // status bar inset.
-    <View style={[styles.root, themed && { backgroundColor: surface.bg }]}>
+    <View style={[styles.root, themed && { backgroundColor: surface.bg }, groundStyle]}>
       {backdrop ? <AuthBackdrop variant={backdrop} themed={themed} /> : null}
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>

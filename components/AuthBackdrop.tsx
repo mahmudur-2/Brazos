@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { authColors } from '../lib/authTheme';
 import { useThemeColors, withAlpha } from '../lib/theme';
+import { backgroundImageStyle } from '../ui/primitives/LitSurface';
 
 /**
  * The decorative contour art behind the ivory auth screens.
@@ -35,7 +36,9 @@ type Ring = {
 /**
  * `count` concentric circles about one centre. The inner two carry the
  * strongest stroke and the rest fade out, so a cluster reads as one shape
- * dissolving rather than as a stack of identical rings.
+ * dissolving rather than as a stack of identical rings — or, where the
+ * strokes carry a `fade`, each ring one step fainter than the one inside it
+ * (the picked Welcome page's corner, dark only).
  */
 function contour(
   cx: number,
@@ -49,7 +52,7 @@ function contour(
     size: base + step * i,
     cx,
     cy,
-    color: i < 2 ? strokes.line : strokes.faint,
+    color: strokes.fade ? strokes.fade[Math.min(i, strokes.fade.length - 1)] : i < 2 ? strokes.line : strokes.faint,
   }));
 }
 
@@ -58,7 +61,17 @@ function sweep(cx: number, top: number, size: number, strokes: Strokes): Ring {
   return { size, cx, cy: top + size / 2, color: strokes.gold };
 }
 
-type Strokes = { line: string; faint: string; gold: string; wash: string };
+type Strokes = {
+  line: string;
+  faint: string;
+  /** The two long mid-band sweeps. Dark draws them in no colour at all. */
+  gold: string;
+  wash: string;
+  /** The corner cluster ring by ring, outward, when the theme fades it. */
+  fade?: string[];
+  /** The wash as a soft radial haze rather than a flat disc (dark only). */
+  washGradient?: string;
+};
 
 /**
  * Masters 2/3/4 draw these arcs as gold hairlines over near-black. `themed`
@@ -83,8 +96,16 @@ export function AuthBackdrop({
         ? {
             line: withAlpha(palette.gold, 0.3),
             faint: withAlpha(palette.gold, 0.14),
-            gold: withAlpha(palette.gold, 0.18),
+            // 2026-09-21 — Welcome's `full` art is the picked page's: no
+            // sweeps cross its headline, the five arcs fade outward from
+            // .36 to .12, and the wash is the warm haze the arcs come from.
+            // The `soft` corner the form screens draw is unchanged.
+            gold: full ? withAlpha(palette.gold, 0) : withAlpha(palette.gold, 0.18),
             wash: withAlpha(palette.forest, 0.34),
+            fade: full ? [0.36, 0.3, 0.24, 0.18, 0.12].map((a) => withAlpha(palette.gold, a)) : undefined,
+            washGradient: full
+              ? `radial-gradient(circle, ${withAlpha(palette.gold, 0.13)} 0%, ${withAlpha(palette.gold, 0)} 70%)`
+              : undefined,
           }
         : {
             line: authColors.artLine,
@@ -92,15 +113,20 @@ export function AuthBackdrop({
             gold: authColors.artLineGold,
             wash: authColors.artWash,
           },
-    [isDark, palette.forest, palette.gold, themed]
+    [full, isDark, palette.forest, palette.gold, themed]
   );
 
   // The corner cluster, anchored just past the top-right so only each circle's
   // lower-left quadrant is on screen. `soft` is pulled tighter and further out
   // than `full`: the form screens put their eyebrow and heading where Welcome
   // has decorative artwork, so its arcs have to stop above that block.
+  // `full` is the picked Welcome page's corner (docs/mockups/html/lux/
+  // welcome-motion.html, 2026-09-21): five rings about a centre 1.22 widths
+  // across and 0.047 heights above the frame, radii from a third of the width
+  // in steps of 0.076 — so the arcs sweep from the top edge to the right edge
+  // and none reaches the art.
   const anchor = full
-    ? { cx: width, cy: -height * 0.02, base: width * 0.7, step: width * 0.26, count: 4, wash: width * 1.05 }
+    ? { cx: width * 1.221, cy: -height * 0.047, base: width * 0.662, step: width * 0.153, count: 5, wash: width * 1.05 }
     : { cx: width * 1.04, cy: -height * 0.05, base: width * 0.42, step: width * 0.16, count: 3, wash: width * 0.75 };
 
   const rings = useMemo<Ring[]>(() => {
@@ -139,15 +165,18 @@ export function AuthBackdrop({
       {/* One soft fill under the corner cluster. Depth, not another line —
           without it the corner reads as wireframe rather than as artwork. */}
       <View
-        style={{
-          position: 'absolute',
-          left: anchor.cx - anchor.wash / 2,
-          top: anchor.cy - anchor.wash / 2,
-          width: anchor.wash,
-          height: anchor.wash,
-          borderRadius: anchor.wash / 2,
-          backgroundColor: strokes.wash,
-        }}
+        style={[
+          {
+            position: 'absolute',
+            left: anchor.cx - anchor.wash / 2,
+            top: anchor.cy - anchor.wash / 2,
+            width: anchor.wash,
+            height: anchor.wash,
+            borderRadius: anchor.wash / 2,
+            backgroundColor: strokes.washGradient ? 'transparent' : strokes.wash,
+          },
+          strokes.washGradient ? backgroundImageStyle(strokes.washGradient) : undefined,
+        ]}
       />
 
       {rings.map((ring, i) => (
