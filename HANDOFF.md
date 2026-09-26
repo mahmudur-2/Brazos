@@ -1,15 +1,64 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-21 (the sign-in chat, latest: SIGN-IN FROM THE PHONE AGAIN — Continue on
-top and flush on the keyboard, the "Instead" pill under it, no "Go"; code `b0e54d4`, verify
-1393/0, pushed and published by OTA — the ids in its section, the first below. The two
-sign-in ships before it (`2993ee0`, `9085cc5`), the WebP run's record, the
-Welcome-from-the-phone record, the shipped build's, the restored build's, the mode switch's,
-the Lux drawing run's, the eighteen-item run's and the two sittings before it follow,
-unchanged.
+WRITTEN: 2026-09-26 (the refresh chat, latest: THE REFRESH — the whole app, Before beside After,
+from the real code; the After is one patch, NOT applied; docs `b5554da`, verify 1393/0, pushed —
+its section, the first below. The sign-in records, the WebP run's, the Welcome records, the
+mode switch's, the Lux drawing run's, the eighteen-item run's and the sittings before them
+follow, unchanged.
 
-Rewritten as the last act of every run. Read it before naming what is blocked or
-what just happened.
+Rewritten as the last act of every run. Read it before naming what is blocked or what just
+happened.
+
+## THE REFRESH — the whole app, Before beside After, from the real code; the After is a patch awaiting "build it" (2026-09-26, the refresh chat, latest); docs `b5554da`, nothing in the app changed
+
+**What just happened.** The operator asked to see every screen "exactly how it is on my screen"
+beside how it would look with Emerald Lux and the UX audit's simplifications, both phones
+clickable with real animations and one pill switching both between dark and light — "All i have
+to do is reference this html exactly and have entire UI/UX refreshed without any bugs". Their
+answers: base "Your real app", hard screens "Sample data on my PC", text "Like my iPhone", scope
+"The whole app, clickable", After "real screen + lux colors" plus "All screen fixes". Rulings:
+one system font (no serif), the B on Launch only, the bottom nav bar untouched, phone first,
+"Send a bid" the main button, Forgot password added. DECISIONS 2026-09-26.
+
+**Open it:** `.shots/refresh/index.html` (a file — no server). Rebuild and details:
+`docs/mockups/refresh/README.md`. 68 screens; every one reached in BOTH apps in BOTH schemes —
+Before 68/68 dark, 68/68 light, After 68/68 dark, 68/68 light (`validate.mjs`). The evidence guard blocked image reads
+this run, so layout was checked by the rendered page's own boxes, colours and labels
+(`.shots/refresh/shot.mjs` writes a text dump beside each screenshot).
+
+**The After, where it lives.** Every change was made in the practice copy
+(`.shots/refresh/practice`, scratch), never in the working tree — `git status` shows no app file
+touched. It is `docs/mockups/refresh/after.patch`: 82 files (76 changed, 6 new — Forgot
+password's three, `ModeSwitchRow`, `NotificationBell`, the reset test), `git apply --check
+--ignore-whitespace` clean on `ec9ec36`; in the copy, the lint-level `tsc` is clean and the suite
+is 1269 / 0 (`safety` and `governance` need `.claude/` and `.git/`, which the copy lacks — the
+real `npm run verify` runs them). What it changes, screen by screen, and what it leaves out with
+reasons: `docs/dispatch/SCREEN-BY-SCREEN.md`.
+
+**Fences moved with rulings, never weakened.** Where the After reverses a pinned decision (D2/D4's
+last-step-only footer, a4's in-dialog price question, 4D-6's "Online / Visible to customers", the
+Home field's magnifier, the Other sheet, the Messages title) the fence now pins the new rule as
+tightly; honesty fences were met by changing code. `scripts/shots.mjs`'s Worker Home waits
+follow the new copy in the patch.
+
+**To build it (the operator's word only):** `git apply --ignore-whitespace
+docs/mockups/refresh/after.patch`, then `npm run verify`, then the usual OTA. Build it screen by
+screen by cutting the patch, or whole.
+
+**Operator items:**
+- Forgot password needs `brazos://reset-password` on Supabase Auth → URL Configuration for
+  staging and production (the patch adds it for the local stack only).
+- `components/BrazosMonogram.tsx` is imported by nothing once the patch lands (the B stays on
+  Launch through `BrandLogo`); delete it then, or keep it for later.
+- Superseded and uncommitted, safe to delete: `docs/mockups/html/lux/lux-modes.mjs`,
+  `lux-modes.build.mjs` and `modes/` (the Lux pages in light — replaced by the viewer).
+- Not built, needing server work or their own runs: arrival / start / payment-protected pushes
+  (M-26, M-27), the payouts nudge (M-14), the Setup + legal collapse (M-19), one bid/offer
+  vocabulary (M-17), one filter memory (M-25).
+
+**Left standing.** The tree's unrelated dirt untouched and uncommitted: the Fable pages,
+`docs/mockups/html/lux/lux.build.mjs`, `docs/mockups/html/lux/index.html`. No OTA, no device
+walk: nothing reached the phone.
 
 ## SIGN-IN, FROM THE PHONE AGAIN — Continue on top and on the keyboard, the "Instead" pill under it, no "Go" (2026-09-21, the sign-in chat, latest); `b0e54d4`, OTA `f4a996f5` live on preview
 
