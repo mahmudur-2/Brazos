@@ -1,15 +1,64 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-27 (the Lux remake run, latest: THE LUX REMAKE DONE in the practice copy —
-the After remade against the Emerald Lux pages under `docs/dispatch/LUX-REMAKE.md`, exported,
-validated 68/68 in both schemes, `after.patch` regenerated, NOTHING in the app changed — its
-section, the first below. The brief's own section, THE REFRESH (2026-09-26, the After as one
-patch, NOT applied), the sign-in records, the WebP run's, the Welcome records, the mode
+WRITTEN: 2026-09-27 (the review sitting, latest: THE OPERATOR'S REVIEW OF THE LUX AFTER —
+twelve pictures, fixed in the practice copy, the After re-exported and validated 68/68 in both
+schemes, `after.patch` regenerated, NOTHING in the app changed — its section, the first below.
+THE LUX REMAKE DONE (the same day), the brief's own section, THE REFRESH (2026-09-26, the After
+as one patch, NOT applied), the sign-in records, the WebP run's, the Welcome records, the mode
 switch's, the Lux drawing run's, the eighteen-item run's and the sittings before them follow,
 unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
+
+## THE OPERATOR'S REVIEW OF THE LUX AFTER — twelve pictures, fixed in the practice copy; the After is `docs/mockups/refresh/after.patch`, NOT applied (2026-09-27, the review sitting); docs `5f4aaf4`, nothing in the app changed
+
+**What just happened.** The operator opened the viewer after the remake and sent twelve
+pictures with one sentence over them — "the biggest difference is literally just making it
+more 3d tab popping out and visually more appealing / cleaner" — and stepped out ("full
+autonomous fix"). Every fix was read against the Lux SYSTEM_CSS in
+`docs/mockups/html/lux/lux.build.mjs` and `.shots/ux-audit/sim.html` (whose `:root` and
+`.card` are the Lux page's, number for number) and made in `.shots/refresh/practice` only.
+The dated record is `docs/DECISIONS.md` 2026-09-27 "THE OPERATOR'S REVIEW OF THE LUX AFTER",
+(1)–(9):
+- THE FIELD WELL: the search field's dark fill is the Lux `.field` (`ui/tokens.ts`
+  `wells.field`), the magnifier and the idle mic mint; Home's own override of the fill gone;
+  the map's ink pill untouched.
+- THE CARD, ONE NOTCH PAST THE LUX: fill .58, rim .24, specular .22 (inset half the radius),
+  shadow `0 12px 34px` .42 — `shadows.cardDark` the same — because the reference's numbers
+  read flat on the lighter top of the ground (the operator's pic 3 against pic 4).
+- THE CTA GLOW: `shadows.ctaDark`, the Lux `.cta` shadow, under every primary Button and the
+  Home pill in dark; the fill stays flat (ruling 5, today's — the gradient is the one question
+  left, DECISIONS (9)).
+- THE SEGMENT: `components/SegmentedControl.tsx` is the Lux `.seg2` — a glass track and the
+  chosen pill FILLED `#4FC58C` with the CTA ink — 52 tall for the 44pt floor; My jobs'
+  Active / Review / Closed bar is this control (its dials kept at 52 and 26; the header-mark
+  dial retired), and the bid sort, the alert radius, Services and Profile follow. Chips keep
+  their glass (ruling 11).
+- THE NEXT-ACTION LINES: `HubCard` breaks a label at its em dash — "Approval needed" over
+  "releases in 66h", "Worker on the way" over "track progress" — never "66h" alone.
+- MY JOBS: the header is the title and its line (no YOUR WORK, no briefcase) at the safe area;
+  the count beside YOU POSTED as the Lux `.badge`; "Post another job" a compact pill; the
+  bell on Home shows the unread COUNT in a mint pill ("9+" past nine), not a red dot.
+- POST A JOB, THE BOXES, per the Lux post pages: step 1's Title and Description in one pop-out
+  card with the chips under it; step 2's notice a card row; step 3's area, locate disc and
+  private address in one card, the day and window under; step 4's summary the card material.
+  No layout moved.
+
+**Verification.** Practice copy: `tsc --noUnusedLocals --noUnusedParameters` clean;
+`node --test` 1269 / 1269, the fences moved with dated reasons (themeTokens, customerCore,
+screenDials, goldOnForest, postJobPublish, voiceSearch). The After: exported, validated `68/68 arrived in after (dark)` and `(light)` on the final export (the shortened placeholders included). The
+review's sixteen screens re-shot into `.shots/refresh/shots/after-dark-*.png` and read by
+eye against the pictures; `docs/mockups/refresh/screens.js` carries the fixes as after-notes
+on twelve entries. `after.patch`: 131 files, 13,253 lines — the Maestro flow now rides it too (`docs/mockups/refresh/make-patch.mjs` ROOTS gained `.maestro/`, because the After shortened the two placeholders the flow taps: "e.g. Walk my dog on weekdays", "e.g. Sheepshead Bay", which clipped inside the new cards). `git apply --check --ignore-whitespace`
+clean against this tree. Real tree: `npm run verify` exit 0 — 1393 / 1393 — this sitting, before the docs commit `5f4aaf4`; pushed as the run's last act with `git push origin mainexpo`.
+
+**Open for the operator.** The CTA gradient (DECISIONS (9)): say "the Lux gradient" and it is
+one token change. The viewer is `.shots/refresh/index.html`; "build it" applies the patch.
+
+**Next.** As before — the operator reviews; on "build it" the patch lands in the real tree
+(`git apply --ignore-whitespace docs/mockups/refresh/after.patch`), then `npm run verify`,
+the commit, the OTA to the Beta.
 
 ## THE LUX REMAKE — DONE in the practice copy; the After is `docs/mockups/refresh/after.patch`, NOT applied (2026-09-27, the Lux remake run); docs `ef087db`, nothing in the app changed
 
