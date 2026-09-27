@@ -1,15 +1,43 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-26 (the refresh chat, latest: THE REFRESH — the whole app, Before beside After,
-from the real code; the After is one patch, NOT applied; docs `b5554da`, verify 1393/0, pushed —
-its section, the first below. The sign-in records, the WebP run's, the Welcome records, the
-mode switch's, the Lux drawing run's, the eighteen-item run's and the sittings before them
-follow, unchanged.
+WRITTEN: 2026-09-27 (the refresh chat, latest: THE LUX REMAKE — the operator reviewed the
+viewer and ruled the After remade against the Emerald Lux pages; the brief is
+`docs/dispatch/LUX-REMAKE.md`; the run awaits its launch — its section, the first below. THE
+REFRESH (2026-09-26, the After as one patch, NOT applied), the sign-in records, the WebP run's,
+the Welcome records, the mode switch's, the Lux drawing run's, the eighteen-item run's and the
+sittings before them follow, unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
 
-## THE REFRESH — the whole app, Before beside After, from the real code; the After is a patch awaiting "build it" (2026-09-26, the refresh chat, latest); docs `b5554da`, nothing in the app changed
+## THE LUX REMAKE — brief written, run not started (2026-09-27, the refresh chat, latest); nothing in the app changed
+
+**What just happened.** The operator opened the viewer and ruled the After wrong — "These do
+not look like the emerald references screens": keep Before exactly, remake After against
+`docs/mockups/html/lux/`. Nineteen pictures and eight answered questions became
+`docs/dispatch/LUX-REMAKE.md`: gold `#D4A24C` (never the Lux `#E9C170`) on every field label
+and section eyebrow in dark; mint `#4FC58C` everywhere; one system font, no serif; the corner
+rings gone; "3D pop-out" cards everywhere (white + soft shadow in light); one-line copy; chips
+light their rim and icon; no pinned Continue on Post a job (the top-right link greys out, the
+reason under the field); no "Browse workers" line on Home; Discover's back circle back, gold;
+Setup and the legal gate in dark too, today's layouts; the last After's other flow changes
+kept "but smart guess my taste"; the nav bar untouched; Map / Filters untouched AND pinned to
+today's colours. A motion inventory is required; the live-job check draws itself in under a
+second. Nothing in the app moved; the working tree's app files are as at `e9b2efc`.
+
+**Blocked on the operator, this sitting.** The evidence guard blocked image reads again (the
+session was launched without `BRAZOS_EVIDENCE` carrying `images`), so the pictures were read
+from the chat only; and the memory directory outside the repo is write-blocked by the guard
+(GUARD-PATH-ESCAPE), so the rulings live in the brief, not in memory. The operator chooses:
+relaunch with image authorization so the run can see its own renders beside the Lux pages, or
+run blind on the text / box / colour dumps.
+
+**Next.** The run in the brief, in `.shots/refresh/practice`: tokens, the card primitive, the
+pinned Map / Filters palette, the auth ground, the hero bake, the copy pass, the motion
+inventory; the After re-exported, validated 68/68 in both schemes, `after.patch` regenerated;
+nothing in the app until "build it".
+
+## THE REFRESH — the whole app, Before beside After, from the real code; the After is a patch awaiting "build it" (2026-09-26, the refresh chat); docs `b5554da`, nothing in the app changed
 
 **What just happened.** The operator asked to see every screen "exactly how it is on my screen"
 beside how it would look with Emerald Lux and the UX audit's simplifications, both phones
