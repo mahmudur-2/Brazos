@@ -22,7 +22,9 @@ const out = join(repo, 'docs/mockups/refresh/after.patch');
 
 // What the refresh may change: the app, its fences and the harness that photographs it — never the
 // frozen web surface, never docs, never .claude.
-const ROOTS = ['App.tsx', 'components/', 'screens/', 'lib/', 'ui/', 'navigation/', 'modes/', 'hooks/', 'tests/', 'scripts/', 'supabase/config.toml'];
+// 2026-09-27 (the operator's review): `.maestro/` rides the patch too — the E2E
+// flow taps a field by its placeholder, and the After shortened two of them.
+const ROOTS = ['App.tsx', 'components/', 'screens/', 'lib/', 'ui/', 'navigation/', 'modes/', 'hooks/', 'tests/', 'scripts/', 'supabase/config.toml', '.maestro/'];
 const inScope = (p) => ROOTS.some((r) => (r.endsWith('/') ? p.startsWith(r) : p === r)) && !/\.web\.tsx?$/.test(p);
 const norm = (s) => s.replace(/\r\n/g, '\n');
 

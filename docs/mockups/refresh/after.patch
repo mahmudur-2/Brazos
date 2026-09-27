@@ -1,3 +1,24 @@
+diff --git a/.maestro/money-walk.yml b/.maestro/money-walk.yml
+--- a/.maestro/money-walk.yml
++++ b/.maestro/money-walk.yml
+@@ -35,7 +35,7 @@ appId: app.brazos.mobile.preview
+ # centre, which the multiline description swallows; the eyebrow is static text
+ # in the step's own ScrollView (keyboardShouldPersistTaps="handled"), and React
+ # Native blurs the focused input on a tap that no child handles.
+-- tapOn: "e.g. Walk my dog on weekday mornings"
++- tapOn: "e.g. Walk my dog on weekdays"
+ - inputText: ${output.title}
+ - tapOn: "Describe what you need done…"
+ - inputText: "Cleaning of a two bedroom apartment for the end to end money walk."
+@@ -57,7 +57,7 @@ appId: app.brazos.mobile.preview
+ - extendedWaitUntil:
+     visible: "STEP 3 OF 4"
+     timeout: 30000
+-- tapOn: "e.g. Sheepshead Bay, Brooklyn"
++- tapOn: "e.g. Sheepshead Bay"
+ - inputText: "Sheepshead Bay, Brooklyn"
+ - hideKeyboard:
+     optional: true
 diff --git a/App.tsx b/App.tsx
 --- a/App.tsx
 +++ b/App.tsx
@@ -154,6 +175,15 @@ diff --git a/components/BrowseJobCard.tsx b/components/BrowseJobCard.tsx
 diff --git a/components/Button.tsx b/components/Button.tsx
 --- a/components/Button.tsx
 +++ b/components/Button.tsx
+@@ -8,7 +8,7 @@ import {
+ } from 'react-native';
+ import { Ionicons } from '@expo/vector-icons';
+ import type { ComponentProps } from 'react';
+-import { fonts, metricStyles, radius, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
++import { fonts, metricStyles, radius, shadows, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+ import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
+ 
+ type IoniconName = ComponentProps<typeof Ionicons>['name'];
 @@ -133,7 +133,17 @@ export function Button({
          // manifest's measured hairline tier (gold @ 25–55%), the same
          // expression the segmented control's active cell already uses.
@@ -210,6 +240,20 @@ diff --git a/components/Button.tsx b/components/Button.tsx
            paddingHorizontal: padXDial ?? sizeStyle.paddingHorizontal,
          },
          fillStyle,
+@@ -203,7 +216,12 @@ export function Button({
+               shadowOffset: { width: 0, height: heroShadowY ?? 4 },
+               elevation: Math.round((heroShadowRadius ?? 12) / 2),
+             }
+-          : null,
++          : // 2026-09-27 (the operator's review): the Lux `.cta` glow under
++            // every primary button in dark (ui/tokens.ts `shadows.ctaDark`),
++            // unless the studio's hero-shadow dials are set, which win as before.
++            variant === 'primary' && !isDisabled && isDark && heroShadowOpacity == null
++            ? shadows.ctaDark
++            : null,
+         state.pressed &&
+           !isDisabled &&
+           (pressedOpacityDial != null || pressedScaleDial != null
 diff --git a/components/Card.tsx b/components/Card.tsx
 --- a/components/Card.tsx
 +++ b/components/Card.tsx
@@ -770,7 +814,27 @@ diff --git a/components/HubCard.tsx b/components/HubCard.tsx
  import { categoryAccent, formatBudget, type JobCategory } from '../lib/jobs';
  
  type IoniconName = ComponentProps<typeof Ionicons>['name'];
-@@ -68,9 +70,9 @@ export function HubCard({
+@@ -52,6 +54,19 @@ type HubCardProps = {
+   onPress: () => void;
+ };
+ 
++/**
++ * 2026-09-27 (the operator's review): a next-action label that carries a
++ * detail after an em dash — "Approval needed — releases in 66h", "Worker on
++ * the way — track progress" — breaks THERE, the action on the first line and
++ * the detail under it, instead of wherever the column happens to run out
++ * ("66h" alone on a second line). A label without a dash is untouched.
++ */
++export function splitNextAction(label: string): [string, string | null] {
++  const at = label.indexOf(' — ');
++  if (at < 0) return [label, null];
++  return [label.slice(0, at), label.slice(at + 3)];
++}
++
+ export function HubCard({
+   icon,
+   category,
+@@ -68,15 +83,16 @@ export function HubCard({
    onPress,
  }: HubCardProps) {
    const { palette: colors, isDark } = useThemeColors();
@@ -783,7 +847,14 @@ diff --git a/components/HubCard.tsx b/components/HubCard.tsx
    const styles = stylesFor(colors);
    const accent = categoryAccent(category);
    // A stored URL can still be dead (deleted object, expired host); falling back
-@@ -103,7 +105,8 @@ export function HubCard({
+   // on error keeps a broken image from rendering as a grey hole in the list.
+   const [imageFailed, setImageFailed] = useState(false);
+   const showImage = !!thumbnailUrl && !imageFailed;
++  const [actionHead, actionTail] = splitNextAction(nextAction ?? '');
+ 
+   return (
+     <Card onPress={onPress} style={styles.card}>
+@@ -103,7 +119,8 @@ export function HubCard({
                isDark ? styles.iconCircleDark : { backgroundColor: accent.bg },
              ]}
            >
@@ -793,7 +864,36 @@ diff --git a/components/HubCard.tsx b/components/HubCard.tsx
            </View>
          )}
          <View style={styles.headerText}>
-@@ -156,10 +159,10 @@ export function HubCard({
+@@ -132,12 +149,22 @@ export function HubCard({
+           <View style={styles.nextActionWrap}>
+             <View style={styles.nextActionRow}>
+               <Ionicons name="arrow-forward-circle" size={16} color={chrome} />
+-              <Text
+-                style={[styles.nextActionText, isDark && styles.chromeTextDark]}
+-                numberOfLines={2}
+-              >
+-                {nextAction}
+-              </Text>
++              <View style={styles.nextActionLines}>
++                <Text
++                  style={[styles.nextActionText, isDark && styles.chromeTextDark]}
++                  numberOfLines={actionTail ? 1 : 2}
++                >
++                  {actionHead}
++                </Text>
++                {actionTail ? (
++                  <Text
++                    style={[styles.nextActionTail, isDark && styles.chromeTextDark]}
++                    numberOfLines={1}
++                  >
++                    {actionTail}
++                  </Text>
++                ) : null}
++              </View>
+             </View>
+             <Text style={styles.detailsSecondary}>View details</Text>
+           </View>
+@@ -156,10 +183,10 @@ export function HubCard({
  
  const stylesFor = themedStyles((colors: ColorPalette) =>
    StyleSheet.create({
@@ -806,7 +906,7 @@ diff --git a/components/HubCard.tsx b/components/HubCard.tsx
      padding: spacing.lg,
    },
    statusRow: {
-@@ -234,9 +237,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+@@ -234,9 +261,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
      fontWeight: '800',
      color: colors.forest,
    },
@@ -819,7 +919,7 @@ diff --git a/components/HubCard.tsx b/components/HubCard.tsx
    detailsAffordance: {
      minHeight: 44,
      flexDirection: 'row',
-@@ -251,9 +254,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+@@ -251,9 +278,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
    },
    detailsAffordanceDark: {
      backgroundColor: 'transparent',
@@ -831,6 +931,35 @@ diff --git a/components/HubCard.tsx b/components/HubCard.tsx
    // The next-action is the card's primary action label; "View details" sits
    // under it as the demoted secondary line.
    nextActionWrap: {
+@@ -266,6 +293,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+     alignItems: 'center',
+     gap: spacing.xs,
+   },
++  nextActionLines: {
++    flexShrink: 1,
++    alignItems: 'flex-end',
++    gap: 1,
++  },
+   nextActionText: {
+     flexShrink: 1,
+     fontSize: 14,
+@@ -274,6 +306,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+     color: colors.forest,
+     textAlign: 'right',
+   },
++  // The detail after the dash: one weight lighter, one point smaller, under
++  // the action it belongs to.
++  nextActionTail: {
++    flexShrink: 1,
++    fontSize: 13,
++    lineHeight: 17,
++    fontWeight: '600',
++    color: colors.forest,
++    textAlign: 'right',
++  },
+   detailsSecondary: {
+     fontSize: 11,
+     fontWeight: '600',
 diff --git a/components/JobFilterSheet.tsx b/components/JobFilterSheet.tsx
 --- a/components/JobFilterSheet.tsx
 +++ b/components/JobFilterSheet.tsx
@@ -1256,6 +1385,163 @@ diff --git a/components/ScreenHeader.tsx b/components/ScreenHeader.tsx
      marginLeft: -spacing.xs,
    },
    // Both edge links. >= 44pt tall because they are the ONLY way through the
+diff --git a/components/SegmentedControl.tsx b/components/SegmentedControl.tsx
+--- a/components/SegmentedControl.tsx
++++ b/components/SegmentedControl.tsx
+@@ -1,9 +1,7 @@
+ import { Pressable, StyleSheet, Text, View } from 'react-native';
+ import {
+-  fonts,
+   metricStyles,
+   radius,
+-  selectedInDark,
+   spacing,
+   useThemeColors,
+   withAlpha,
+@@ -20,31 +18,52 @@ type SegmentedControlProps<T extends string> = {
+   value: T | null;
+   onChange: (value: T) => void;
+   palette?: ColorPalette;
++  /** The track's outer height; the cells fill it inside the 4pt padding. */
++  height?: number;
++  /** The track's corner; the cells round to half their own height. */
++  radius?: number;
+ };
+ 
++/** The Lux `.seg2` at the app's 44pt touch floor: 44pt cells inside a 4pt-padded track — 52 tall. */
++export const TRACK_PADDING = 4;
++export const TRACK_HEIGHT = 52;
++
++/**
++ * 2026-09-27 (the operator's review — "pills shape and sizes like the
++ * reference, anywhere on the app, the highlighted colour #4FC58C") — THE LUX
++ * SEGMENT (`.seg2`): a low glass track (the ink at .06 under the rim, 4pt of
++ * padding, pill corners) and the chosen cell FILLED with the one mint, its
++ * label in the CTA ink; the other cells bare and muted at the same weight.
++ * It replaces the gold-lined chosen cell of decision 5 / emerald D6 for
++ * segmented tabs only — a chosen CHIP keeps its glass (ruling 11). Dark and
++ * light share the geometry; light fills the chosen cell with its own
++ * primary green and floats the track on the mint tint.
++ */
+ export function SegmentedControl<T extends string>({
+   options,
+   value,
+   onChange,
+   palette: paletteProp,
++  height = TRACK_HEIGHT,
++  radius: trackRadius = radius.pill,
+ }: SegmentedControlProps<T>) {
+   const styles = stylesFor();
+   const { palette: colors, isDark } = useThemeColors();
+   const palette = paletteProp ?? colors;
+-  // Prestige decision 5 — separated cells instead of a filled well; the
+-  // active cell wears the surface fill under a gold hairline (dark; light
+-  // keeps its Heritage hairline) and speaks the serif; inactive cells stay
+-  // bare muted sans. Structure is the same in both themes.
+-  const activeBorder = isDark ? withAlpha(palette.gold, 0.55) : palette.border;
+-  // emerald D6: the chosen segment's LABEL is gold too, not just its hairline.
+-  // Master 23 draws the flat/ask pill — this exact control — that way, and it
+-  // is the same treatment every other chosen chip, pill and radio now carries.
+-  // The active cell keeps its surface fill: unlike a chip, a segment's fill is
+-  // what separates it from the bare cells beside it, so removing it would
+-  // erase the control rather than restyle it.
+-  const activeLabel = isDark ? selectedInDark(palette).line : palette.text;
++  const cellHeight = Math.max(0, height - TRACK_PADDING * 2);
+   return (
+-    <View style={styles.container} accessibilityRole="tablist">
++    <View
++      style={[
++        styles.track,
++        {
++          minHeight: height,
++          borderRadius: trackRadius,
++          backgroundColor: isDark ? withAlpha(palette.text, 0.06) : palette.mint,
++          borderColor: palette.border,
++        },
++      ]}
++      accessibilityRole="tablist"
++    >
+       {options.map((option) => {
+         const selected = option.value === value;
+         return (
+@@ -52,26 +71,19 @@ export function SegmentedControl<T extends string>({
+             key={option.value}
+             onPress={() => onChange(option.value)}
+             style={({ pressed }) => [
+-              styles.segment,
+-              selected && [
+-                styles.segmentSelected,
+-                {
+-                  backgroundColor: palette.surface,
+-                  borderColor: activeBorder,
+-                  shadowColor: palette.text,
+-                },
+-              ],
++              styles.cell,
++              // The cell is the touch target: never under the 44pt floor,
++              // taller only when the track is dialled taller.
++              cellHeight > 44 && { minHeight: cellHeight },
++              { borderRadius: Math.round(Math.max(cellHeight, 44) / 2) },
++              selected && { backgroundColor: palette.primary },
+               pressed && styles.pressed,
+             ]}
+             accessibilityRole="tab"
+             accessibilityState={{ selected }}
+           >
+             <Text
+-              style={[
+-                styles.label,
+-                { color: palette.textMuted },
+-                selected && [styles.labelSelected, { color: activeLabel }],
+-              ]}
++              style={[styles.label, { color: selected ? palette.onPrimary : palette.textMuted }]}
+               numberOfLines={1}
+             >
+               {option.label}
+@@ -84,37 +96,20 @@ export function SegmentedControl<T extends string>({
+ }
+ 
+ const stylesFor = metricStyles(() => StyleSheet.create({
+-  container: {
++  track: {
+     flexDirection: 'row',
+-    gap: 6,
++    padding: TRACK_PADDING,
++    borderWidth: 1,
+   },
+-  segment: {
++  cell: {
+     flex: 1,
+     minHeight: 44,
+-    paddingVertical: spacing.sm,
+-    paddingHorizontal: spacing.xs,
+-    borderRadius: radius.md,
+-    // Every cell carries the border WIDTH so selection never shifts layout;
+-    // only the active cell colours it in.
+-    borderWidth: 1,
+-    borderColor: 'transparent',
+     alignItems: 'center',
+     justifyContent: 'center',
+-  },
+-  segmentSelected: {
+-    shadowOpacity: 0.08,
+-    shadowRadius: 4,
+-    shadowOffset: { width: 0, height: 1 },
+-    elevation: 1,
++    paddingHorizontal: spacing.xs,
+   },
+   label: {
+-    fontSize: 13,
+-    fontWeight: '600',
+-  },
+-  labelSelected: {
+-    // Decision 9: segmented labels join the serif voice when active.
+-    fontFamily: fonts.display,
+-    fontSize: 14,
++    fontSize: 15,
+     fontWeight: '700',
+   },
+   pressed: {
 diff --git a/components/ServiceTileRow.tsx b/components/ServiceTileRow.tsx
 --- a/components/ServiceTileRow.tsx
 +++ b/components/ServiceTileRow.tsx
@@ -2588,7 +2874,25 @@ diff --git a/lib/theme.ts b/lib/theme.ts
  export const typography = {
    // Prestige decision 9: the heading roles carry the display voice in BOTH
    // themes (structure and type are theme-independent; only colours resolve
-@@ -466,8 +633,10 @@ export function authSurface(palette: ColorPalette, isDark: boolean) {
+@@ -392,7 +559,7 @@ export const typography = {
+ } as const;
+ 
+ /** Soft, grounded shadows. Uses boxShadow on web to avoid deprecation warnings. */
+-export const shadows: Record<'card' | 'raised' | 'cardDark', ViewStyle> = {
++export const shadows: Record<'card' | 'raised' | 'cardDark' | 'ctaDark', ViewStyle> = {
+   /**
+    * RUN GROUND1 (C4) — SURFACED HERE, DEFINED ONCE, IN ui/tokens.ts.
+    *
+@@ -406,6 +573,8 @@ export const shadows: Record<'card' | 'raised' | 'cardDark', ViewStyle> = {
+    * Its docblock in ui/tokens.ts carries the measurement and the reasoning.
+    */
+   cardDark: tokenShadows.cardDark,
++  // 2026-09-27 (the operator's review): the Lux CTA glow, surfaced the same way.
++  ctaDark: tokenShadows.ctaDark,
+   card: Platform.select({
+     web: { boxShadow: '0 1px 3px rgba(31,46,34,0.07), 0 1px 2px rgba(31,46,34,0.05)' },
+     default: {
+@@ -466,8 +635,10 @@ export function authSurface(palette: ColorPalette, isDark: boolean) {
      surface: palette.surface,
      ink: palette.ink,
      muted: palette.textMuted,
@@ -2601,7 +2905,7 @@ diff --git a/lib/theme.ts b/lib/theme.ts
      accent: isDark ? palette.gold : palette.emerald,
      danger: palette.danger,
      placeholder: palette.textSubtle,
-@@ -525,14 +694,18 @@ export function starColors(palette: ColorPalette, isDark: boolean) {
+@@ -525,14 +696,18 @@ export function starColors(palette: ColorPalette, isDark: boolean) {
   * palette rather than a new token surface.
   */
  export function selectedInDark(palette: ColorPalette) {
@@ -2625,7 +2929,7 @@ diff --git a/lib/theme.ts b/lib/theme.ts
    } as const;
  }
  
-@@ -590,6 +763,49 @@ export function disabledControl(palette: ColorPalette) {
+@@ -590,6 +765,49 @@ export function disabledControl(palette: ColorPalette) {
   * are the same six entries and deliberately stay in one place — this function
   * reads them from `typography` so the two can never drift.
   */
@@ -4304,7 +4608,7 @@ diff --git a/screens/HomeScreen.tsx b/screens/HomeScreen.tsx
                cardEntrance,
              ]}
            >
-@@ -616,15 +642,18 @@ export function HomeScreen() {
+@@ -616,18 +642,22 @@ export function HomeScreen() {
                  and the second button are gone (DECISIONS 2026-09-20 sitting
                  3, (8)). The leading glyph is omitted here and only here, so
                  the field never draws two magnifiers. */}
@@ -4323,10 +4627,24 @@ diff --git a/screens/HomeScreen.tsx b/screens/HomeScreen.tsx
 -              micBecomesSearch
 +              // 2026-09-27 (the Lux remake, the operator's Home picture): the
 +              // magnifier leads the field again, the mic trails it as today.
++              // 2026-09-27 (the operator's review): the field's dark fill is
++              // SearchBar's own Lux well now, so nothing here overrides it.
                style={[
                  styles.searchField,
-                 isDark && styles.searchFieldDark,
-@@ -654,8 +683,12 @@ export function HomeScreen() {
+-                isDark && styles.searchFieldDark,
+                 { minHeight: design.searchHeight, borderRadius: design.searchRadius },
+               ]}
+             />
+@@ -644,6 +674,8 @@ export function HomeScreen() {
+               style={({ pressed }) => [
+                 styles.heroButton,
+                 isDark && styles.heroButtonDark,
++                // 2026-09-27 (the operator's review): the Lux `.cta` glow.
++                isDark && shadows.ctaDark,
+                 {
+                   minHeight: design.ctaHeight,
+                   borderRadius: design.ctaRadius,
+@@ -654,8 +686,12 @@ export function HomeScreen() {
                  // `flat` returns undefined, which React Native drops from a
                  // style array: no key, no node, no pixel, which is what keeps
                  // the light render byte-identical.
@@ -4340,7 +4658,7 @@ diff --git a/screens/HomeScreen.tsx b/screens/HomeScreen.tsx
                    lift: colors.emerald,
                    liftAlpha: CTA_LIFT_ALPHA,
                    highlight: true,
-@@ -671,6 +704,10 @@ export function HomeScreen() {
+@@ -671,6 +707,10 @@ export function HomeScreen() {
                  Post a job ›
                </Text>
              </Pressable>
@@ -4351,7 +4669,7 @@ diff --git a/screens/HomeScreen.tsx b/screens/HomeScreen.tsx
            </Animated.View>
  
            {/* 2026-09-17 — THE SERVICE ROW: one sliding row of every service,
-@@ -686,7 +723,7 @@ export function HomeScreen() {
+@@ -686,7 +726,7 @@ export function HomeScreen() {
              <ServiceTileRow
                heading="Popular services"
                inset={design.screenPadding}
@@ -4360,7 +4678,7 @@ diff --git a/screens/HomeScreen.tsx b/screens/HomeScreen.tsx
                onOther={() => setMoreOpen(true)}
              />
            </Animated.View>
-@@ -855,7 +892,7 @@ export function HomeScreen() {
+@@ -855,7 +895,7 @@ export function HomeScreen() {
          services={MORE_SERVICES}
          onSelect={(categoryKey) => {
            setMoreOpen(false);
@@ -4369,7 +4687,15 @@ diff --git a/screens/HomeScreen.tsx b/screens/HomeScreen.tsx
          }}
          onClose={() => setMoreOpen(false)}
        />
-@@ -1092,6 +1129,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+@@ -1052,7 +1092,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+     borderColor: colors.secondaryBorder,
+     backgroundColor: colors.surface,
+   },
+-  searchFieldDark: { backgroundColor: colors.mint },
+   // 2026-09-17: serviceRows / serviceRow / serviceChip / compactServiceChip /
+   // goldOutlineChip / otherChip — home(24)'s two-row chip geometry, held
+   // byte-identical to worker Home's — were removed with the chips they laid
+@@ -1092,6 +1131,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
    // fence), and no ladder rung: this is the reference's own number, not a cap
    // measured off master 44.
    taskCardTitle: { fontSize: 20, lineHeight: 24, fontWeight: '700', color: colors.ink },
@@ -4377,7 +4703,7 @@ diff --git a/screens/HomeScreen.tsx b/screens/HomeScreen.tsx
    // The 1pt ring is part of the box in both themes (parity 2026-08-22), and
    // since 2026-08-23 it is DRAWN in both.
    //
-@@ -1143,10 +1181,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+@@ -1143,10 +1183,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
      justifyContent: 'center',
      paddingHorizontal: spacing.lg,
    },
@@ -4391,7 +4717,7 @@ diff --git a/screens/HomeScreen.tsx b/screens/HomeScreen.tsx
    // home(26) — the NEGATIVE margin is honest, and both themes carry it since
    // the parity pass.
    //
-@@ -1177,11 +1216,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+@@ -1177,11 +1218,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
    liveNearbyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
    // home(16)/home(26)'s ladder rung (serifSize(30) = 20), in BOTH themes since
    // the parity pass — light's 22 is retired.
@@ -5411,7 +5737,15 @@ diff --git a/screens/MessagesInboxScreen.tsx b/screens/MessagesInboxScreen.tsx
 diff --git a/screens/MyJobsHubScreen.tsx b/screens/MyJobsHubScreen.tsx
 --- a/screens/MyJobsHubScreen.tsx
 +++ b/screens/MyJobsHubScreen.tsx
-@@ -29,9 +29,17 @@ import {
+@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
+ import { useFocusEffect, useNavigation } from '@react-navigation/native';
+ import { Ionicons } from '@expo/vector-icons';
+ import { HubCard } from '../components/HubCard';
++import { SegmentedControl } from '../components/SegmentedControl';
+ import { useAuth } from '../hooks/useAuth';
+ import { useMyJobsHub } from '../hooks/useMyJobsHub';
+ import {
+@@ -29,9 +30,17 @@ import {
    type MyJobsTab,
  } from '../lib/jobLifecycle';
  import { effectiveOfferStatus, type PendingOffer } from '../lib/offers';
@@ -5430,15 +5764,100 @@ diff --git a/screens/MyJobsHubScreen.tsx b/screens/MyJobsHubScreen.tsx
  import { useDialNumber } from '../lib/designOverrides';
  import {
    fonts,
-@@ -41,6 +49,7 @@ import {
+@@ -40,7 +49,8 @@ import {
+   themedStyles,
    useThemeColors,
    type ColorPalette,
-   selectedInDark,
+-  selectedInDark,
++  withAlpha,
 +  screenGround,
  } from '../lib/theme';
  import { formatTimeAgo } from '../lib/time';
  
-@@ -174,6 +183,22 @@ export function MyJobsHubScreen() {
+@@ -73,56 +83,35 @@ function FilterTabs({
+   value: Filter;
+   onChange: (filter: Filter) => void;
+ }) {
+-  const { palette: colors, isDark } = useThemeColors();
+-  const styles = stylesFor(colors);
+   // RUN T2 (C4) — the segmented bar is this screen's signature control, and
+   // both of its numbers were unreachable. They fall back to what this file
+-  // drew, spelled here and nowhere else.
+-  const tabsHeight = useDialNumber('myJobs.tabs.height') ?? 50;
+-  const tabsRadius = useDialNumber('myJobs.tabs.radius') ?? radius.lg;
++  // drew, spelled here and nowhere else. 2026-09-27 (the operator's review):
++  // the bar is the shared Lux segment (components/SegmentedControl.tsx) — the
++  // mint-filled pill in the glass track — at its 48pt, pill-cornered; the two
++  // dials still reach it.
++  const tabsHeight = useDialNumber('myJobs.tabs.height') ?? 52;
++  // 26 is half the 52pt track: the pill. A dial in 0..40 cannot say "pill".
++  const tabsRadius = useDialNumber('myJobs.tabs.radius') ?? 26;
+   return (
+-    <View
+-      style={[styles.tabs, { minHeight: tabsHeight, borderRadius: tabsRadius }]}
+-      accessibilityRole="tablist"
+-    >
+-      {FILTERS.map((option) => {
+-        const selected = option.value === value;
+-        return (
+-          <Pressable
+-            key={option.value}
+-            onPress={() => onChange(option.value)}
+-            style={({ pressed }) => [
+-              styles.tab,
+-              selected && styles.tabSelected,
+-              selected && isDark && styles.tabSelectedDark,
+-              pressed && styles.pressed,
+-            ]}
+-            accessibilityRole="tab"
+-            accessibilityState={{ selected }}
+-          >
+-            <Text
+-              style={[
+-                styles.tabLabel,
+-                selected && styles.tabLabelSelected,
+-                selected && isDark && styles.tabLabelSelectedDark,
+-              ]}
+-            >
+-              {option.label}
+-            </Text>
+-          </Pressable>
+-        );
+-      })}
+-    </View>
++    <SegmentedControl
++      options={FILTERS}
++      value={value}
++      onChange={onChange}
++      height={tabsHeight}
++      radius={tabsRadius}
++    />
+   );
+ }
+ 
+ function SectionHeading({ title, count }: { title: string; count: number }) {
+-  const { palette: colors } = useThemeColors();
++  const { palette: colors, isDark } = useThemeColors();
+   const styles = stylesFor(colors);
++  // 2026-09-27 (the operator's review, the Lux `.sect` + `.badge`): the count
++  // sits right beside its label, not across the row.
+   return (
+     <View style={styles.sectionHeaderRow}>
+       <Text style={styles.sectionTitle}>{title}</Text>
+-      <View style={styles.countBadge}>
++      <View style={[styles.countBadge, isDark && styles.countBadgeDark]}>
+         <Text style={styles.countBadgeText}>{count}</Text>
+       </View>
+     </View>
+@@ -147,7 +136,6 @@ export function MyJobsHubScreen() {
+   // file imports spacing/radius from lib/theme.
+   const contentGap = useDialNumber('myJobs.content.gap') ?? spacing.xl;
+   const emptyPaddingY = useDialNumber('myJobs.empty.paddingY') ?? spacing.xxl;
+-  const headerMarkSize = useDialNumber('myJobs.headerMark.size') ?? 48;
+   const navigation = useNavigation<MyJobsStackNavigation>();
+   const { user } = useAuth();
+   // Perspective comes from ModeContext — never a hand-passed prop (CLAUDE.md).
+@@ -174,6 +162,22 @@ export function MyJobsHubScreen() {
    // under Active — and this device's draft is real work worth resuming, even
    // though it has no jobs row yet. Empty autosaves don't count as a draft.
    const [draft, setDraft] = useState<PostJobDraft | null>(null);
@@ -5461,7 +5880,7 @@ diff --git a/screens/MyJobsHubScreen.tsx b/screens/MyJobsHubScreen.tsx
  
    useFocusEffect(
      useCallback(() => {
-@@ -260,11 +285,15 @@ export function MyJobsHubScreen() {
+@@ -260,11 +264,15 @@ export function MyJobsHubScreen() {
      navigation.navigate('PostJob');
    }
  
@@ -5479,13 +5898,28 @@ diff --git a/screens/MyJobsHubScreen.tsx b/screens/MyJobsHubScreen.tsx
          : 'Finished and cancelled jobs land here.'
      : filter === 'active'
        ? 'Accepted work and the bids you’ve placed show up here.'
-@@ -273,8 +302,23 @@ export function MyJobsHubScreen() {
+@@ -273,30 +281,32 @@ export function MyJobsHubScreen() {
          : 'Finished work and settled bids land here.';
  
    return (
 -    <SafeAreaView style={styles.safe} edges={['top']}>
 +    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
        <View style={styles.header}>
+-        {/* Masters 35/36/37 ring the header's briefcase squircle in gold
+-            rather than filling it; light keeps the Heritage forest fill. */}
+-        <View
+-          style={[
+-            styles.headerMark,
+-            { width: headerMarkSize, height: headerMarkSize },
+-            isDark && styles.headerMarkDark,
+-          ]}
+-        >
+-          <Ionicons
+-            name="briefcase-outline"
+-            size={22}
+-            color={isDark ? colors.gold : colors.onForest}
+-          />
+-        </View>
 +        {/* M-9 — the customer's My jobs is a hidden tab reached from Home and
 +            the [+] sheet, so it had no way back. It has one now — the same
 +            chevron every pushed screen draws. The worker's My Jobs is a real
@@ -5501,10 +5935,11 @@ diff --git a/screens/MyJobsHubScreen.tsx b/screens/MyJobsHubScreen.tsx
 +            <Ionicons name="chevron-back" size={26} color={isDark ? colors.gold : colors.text} />
 +          </Pressable>
 +        ) : null}
-         {/* Masters 35/36/37 ring the header's briefcase squircle in gold
-             rather than filling it; light keeps the Heritage forest fill. */}
-         <View
-@@ -295,8 +339,8 @@ export function MyJobsHubScreen() {
++        {/* 2026-09-27 (the operator's review): no eyebrow, no briefcase —
++            the title and its line, as high as the safe area allows, so the
++            fixed header takes as little of the screen as it can. */}
+         <View style={styles.headerCopy}>
+-          <Text style={styles.eyebrow}>YOUR WORK</Text>
            <Text style={styles.headerTitle}>My jobs</Text>
            <Text style={styles.headerSubtitle} numberOfLines={2}>
              {isCustomer
@@ -5515,7 +5950,7 @@ diff --git a/screens/MyJobsHubScreen.tsx b/screens/MyJobsHubScreen.tsx
            </Text>
          </View>
        </View>
-@@ -390,6 +434,15 @@ export function MyJobsHubScreen() {
+@@ -390,6 +400,15 @@ export function MyJobsHubScreen() {
                      </View>
                      <Ionicons name="arrow-forward" size={18} color={accent} />
                    </Pressable>
@@ -5531,7 +5966,19 @@ diff --git a/screens/MyJobsHubScreen.tsx b/screens/MyJobsHubScreen.tsx
                  </View>
                ) : null}
  
-@@ -563,6 +616,17 @@ export function MyJobsHubScreen() {
+@@ -553,16 +572,27 @@ export function MyJobsHubScreen() {
+                   accessibilityLabel="Post another job"
+                 >
+                   <View style={styles.postAnotherIcon}>
+-                    <Ionicons name="add" size={20} color={accent} />
++                    <Ionicons name="add" size={18} color={isDark ? colors.emerald : colors.forest} />
+                   </View>
+                   <Text style={styles.postAnotherText}>Post another job</Text>
+-                  <Ionicons name="arrow-forward" size={18} color={accent} />
++                  <Ionicons name="arrow-forward" size={16} color={isDark ? colors.emerald : colors.forest} />
+                 </Pressable>
+               ) : null}
+             </>
            )}
          </ScrollView>
        )}
@@ -5549,22 +5996,151 @@ diff --git a/screens/MyJobsHubScreen.tsx b/screens/MyJobsHubScreen.tsx
      </SafeAreaView>
    );
  }
-@@ -581,6 +645,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
-     paddingTop: spacing.md,
-     paddingBottom: spacing.lg,
+@@ -573,41 +603,32 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+     flex: 1,
+     backgroundColor: colors.background,
    },
++  // 2026-09-27 (the operator's review): the fixed header is minimal — the
++  // safe area, then the title — so the list underneath shows more.
+   header: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     gap: spacing.md,
+     paddingHorizontal: spacing.lg,
+-    paddingTop: spacing.md,
+-    paddingBottom: spacing.lg,
++    paddingTop: spacing.xs,
++    paddingBottom: spacing.sm,
+   },
+-  headerMark: {
+-    borderRadius: radius.lg,
+-    backgroundColor: colors.forest,
 +  headerBack: {
 +    width: 32,
 +    height: 44,
 +    marginLeft: -spacing.sm,
 +    marginRight: -spacing.xs,
-+    alignItems: 'center',
-+    justifyContent: 'center',
+     alignItems: 'center',
+     justifyContent: 'center',
+-    borderWidth: 1,
+-    borderColor: colors.border,
+-  },
+-  headerMarkDark: {
+-    backgroundColor: 'transparent',
+-    borderColor: colors.gold,
+   },
+   headerCopy: {
+     flex: 1,
+     gap: 2,
+   },
+-  // Masters 35/36/37 set YOUR WORK gold over a display-serif title.
+-  eyebrow: {
+-    fontSize: 11,
+-    fontWeight: '800',
+-    letterSpacing: 1.4,
+-    color: colors.gold,
+-  },
+   headerTitle: {
+     fontFamily: fonts.display,
+-    fontSize: 30,
+-    lineHeight: 36,
++    fontSize: 26,
++    lineHeight: 30,
+     fontWeight: '800',
+     color: colors.ink,
+   },
+@@ -618,54 +639,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+   },
+   filterBar: {
+     paddingHorizontal: spacing.lg,
+-    paddingBottom: spacing.md,
+-  },
+-  // Masters 36/37: the segmented bar is a hairlined track, and the ACTIVE
+-  // cell is a dark fill inside a gold border with a serif cream label.
+-  // Master 35 fills its active cell green instead (B-3); decision 5 names
+-  // the gold-bordered form as the rule, so that is what all three tabs use.
+-  tabs: {
+-    flexDirection: 'row',
+-    gap: 3,
+-    padding: 3,
+-    backgroundColor: colors.mint,
+-  },
+-  tab: {
+-    minHeight: 44,
+-    flex: 1,
+-    borderRadius: radius.md,
+-    alignItems: 'center',
+-    justifyContent: 'center',
+-    paddingHorizontal: spacing.xs,
+-  },
+-  tabSelected: {
+-    backgroundColor: colors.surface,
+-    shadowColor: colors.ink,
+-    shadowOpacity: 0.08,
+-    shadowRadius: 4,
+-    shadowOffset: { width: 0, height: 1 },
+-    elevation: 1,
+-    borderWidth: 1,
+-    borderColor: colors.border,
+-  },
+-  tabSelectedDark: {
+-    borderColor: colors.gold,
+-  },
+-  tabLabel: {
+-    fontSize: 12,
+-    fontWeight: '700',
+-    color: colors.textMuted,
+-    textAlign: 'center',
+-  },
+-  tabLabelSelected: {
+-    color: colors.forest,
+-    fontSize: 16,
+-  },
+-  tabLabelSelectedDark: {
+-    // emerald D6: the chosen segment's LABEL is gold, not just its hairline —
+-    // the same treatment every chip, pill and radio now carries.
+-    color: selectedInDark(colors).line,
++    paddingBottom: spacing.sm,
+   },
++  // 2026-09-27 (the operator's review): the segmented bar's own styles are
++  // gone — it is the shared Lux segment (components/SegmentedControl.tsx).
+   center: {
+     flex: 1,
+     alignItems: 'center',
+@@ -689,7 +666,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+   sectionHeaderRow: {
+     flexDirection: 'row',
+     alignItems: 'center',
+-    justifyContent: 'space-between',
++    gap: spacing.sm,
+   },
+   // Masters 35/36: each section is a gold small-caps eyebrow beside a sage
+   // pill whose count reads green.
+@@ -700,15 +677,19 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+     textTransform: 'uppercase',
+     letterSpacing: 1.4,
+   },
++  // The Lux `.badge`: 22 tall, the mint at .14 in dark, the count in mint.
+   countBadge: {
+-    minWidth: 30,
+-    height: 30,
++    minWidth: 22,
++    height: 22,
+     backgroundColor: colors.mint,
+-    paddingHorizontal: spacing.sm,
+-    borderRadius: radius.pill,
++    paddingHorizontal: 7,
++    borderRadius: 11,
+     alignItems: 'center',
+     justifyContent: 'center',
+   },
++  countBadgeDark: {
++    backgroundColor: withAlpha(colors.emerald, 0.14),
 +  },
-   headerMark: {
-     borderRadius: radius.lg,
-     backgroundColor: colors.forest,
-@@ -800,6 +872,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+   countBadgeText: {
+     fontSize: 12,
+     fontWeight: '800',
+@@ -800,27 +781,42 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
      fontSize: 12,
      color: colors.textMuted,
    },
@@ -5579,9 +6155,42 @@ diff --git a/screens/MyJobsHubScreen.tsx b/screens/MyJobsHubScreen.tsx
 +    fontWeight: '700',
 +    color: colors.danger,
 +  },
++  // 2026-09-27 (the operator's review): a compact pill that hugs its label —
++  // about half the width — not a full-width bar: the plus disc, the label,
++  // the mint arrow.
    postAnother: {
-     minHeight: 56,
+-    minHeight: 56,
++    alignSelf: 'flex-start',
++    minHeight: 44,
      flexDirection: 'row',
+     alignItems: 'center',
+-    gap: spacing.md,
+-    paddingHorizontal: spacing.md,
++    gap: spacing.sm,
++    paddingLeft: spacing.sm,
++    paddingRight: spacing.md,
+     borderWidth: 1,
+     borderColor: colors.mint2,
+-    borderRadius: radius.lg,
++    borderRadius: radius.pill,
+     backgroundColor: colors.surface,
+   },
+   postAnotherIcon: {
+-    width: 36,
+-    height: 36,
+-    borderRadius: radius.md,
++    width: 30,
++    height: 30,
++    borderRadius: 15,
+     backgroundColor: colors.mint,
+     alignItems: 'center',
+     justifyContent: 'center',
+   },
+   postAnotherText: {
+-    flex: 1,
+     fontSize: 15,
+     fontWeight: '800',
+     color: colors.forest,
 diff --git a/screens/NotificationSettingsScreen.tsx b/screens/NotificationSettingsScreen.tsx
 --- a/screens/NotificationSettingsScreen.tsx
 +++ b/screens/NotificationSettingsScreen.tsx
@@ -5645,7 +6254,15 @@ diff --git a/screens/PaymentMethodsScreen.tsx b/screens/PaymentMethodsScreen.tsx
 diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
 --- a/screens/PostJobScreen.tsx
 +++ b/screens/PostJobScreen.tsx
-@@ -30,8 +30,7 @@ import { EyeOffIcon } from '../components/EyeOffIcon';
+@@ -23,6 +23,7 @@ import {
+ import { Ionicons } from '@expo/vector-icons';
+ import type { ImagePickerAsset } from 'expo-image-picker';
+ import { Button } from '../components/Button';
++import { Card } from '../components/Card';
+ import { Chip } from '../components/Chip';
+ import { ConfirmDialog } from '../components/ConfirmDialog';
+ import { EditBudgetDialog } from '../components/EditBudgetDialog';
+@@ -30,8 +31,7 @@ import { EyeOffIcon } from '../components/EyeOffIcon';
  import { OfferAmountField, validateOfferAmount } from '../components/OfferComposer';
  import { PhotoViewer } from '../components/PhotoViewer';
  import { ScreenHeader } from '../components/ScreenHeader';
@@ -5655,7 +6272,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
  import { SuccessMark } from '../components/SuccessMark';
  import { FieldLabel, TextField } from '../components/TextField';
  import { useAuth } from '../hooks/useAuth';
-@@ -58,13 +57,16 @@ import {
+@@ -58,13 +58,16 @@ import {
  } from '../lib/jobs';
  import {
    clearPostJobDraft,
@@ -5672,7 +6289,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
    pricingModeFrom,
    type PricingMode,
  } from '../lib/pricingMode';
-@@ -94,6 +96,7 @@ import {
+@@ -94,6 +97,7 @@ import {
    themedStyles,
    useThemeColors,
    type ColorPalette,
@@ -5680,7 +6297,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
  } from '../lib/theme';
  import {
    LitSurface,
-@@ -141,6 +144,8 @@ const ARRIVAL_WINDOWS = [
+@@ -141,6 +145,8 @@ const ARRIVAL_WINDOWS = [
  
  /** How many upcoming days the date picker row offers (Today first). */
  const SCHEDULE_DAYS = 14;
@@ -5689,7 +6306,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
  
  function toLocalIsoDate(d: Date): string {
    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-@@ -185,23 +190,24 @@ const POST_STEPS = [
+@@ -185,23 +191,24 @@ const POST_STEPS = [
    {
      label: 'Describe',
      title: 'What needs doing?',
@@ -5719,7 +6336,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
    },
  ] as const;
  
-@@ -215,34 +221,21 @@ const POST_STEPS = [
+@@ -215,34 +222,21 @@ const POST_STEPS = [
   */
  const PUBLISH_CARD_LIFT_ALPHA = 0.04;
  
@@ -5762,7 +6379,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
  /**
   * RUN PJ1 (C2b) — FIRST-FIT-DECREASING PACKING OF THE CATEGORY PILLS.
   *
-@@ -251,7 +244,7 @@ const OTHER_SHEET_SERVICES: SkillCategory[] = POSTABLE_CATEGORIES.map((c) => ({
+@@ -251,7 +245,7 @@ const OTHER_SHEET_SERVICES: SkillCategory[] = POSTABLE_CATEGORIES.map((c) => ({
   * first-fit-decreasing gets it instead of leaving large dead ends. Computed
   * once from real measured widths, deterministic (widths sort descending with
   * the source order as the tiebreak). "Other" never participates — it renders
@@ -5771,7 +6388,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
   *
   * Flattening the packed rows re-wraps identically under flexWrap: every
   * row's prefix fits by construction, and a row's first item was placed there
-@@ -446,8 +439,6 @@ export function PostJobScreen() {
+@@ -446,8 +440,6 @@ export function PostJobScreen() {
    const [chipMeasureCount, setChipMeasureCount] = useState(0);
    const [chipsWidth, setChipsWidth] = useState(0);
    const [chipOrder, setChipOrder] = useState<readonly JobCategory[] | null>(null);
@@ -5780,7 +6397,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
  
    useEffect(() => {
      if (chipOrder != null || chipsWidth <= 0) return;
-@@ -457,6 +448,26 @@ export function PostJobScreen() {
+@@ -457,6 +449,26 @@ export function PostJobScreen() {
  
    const successScale = useRef(new Animated.Value(0.4)).current;
    const reducedMotion = useReducedMotion();
@@ -5807,7 +6424,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
    // Render-state disabling is useful feedback, but the ref is the actual
    // guard against two fast taps entering an async write before React paints.
    const submittingRef = useRef(false);
-@@ -465,6 +476,10 @@ export function PostJobScreen() {
+@@ -465,6 +477,10 @@ export function PostJobScreen() {
    const sessionUploadsRef = useRef<Set<string>>(new Set());
    const uploadsCommittedRef = useRef(false);
    const screenMountedRef = useRef(true);
@@ -5818,7 +6435,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
  
    function cleanupSessionUploads() {
      for (const url of sessionUploadsRef.current) {
-@@ -485,15 +500,22 @@ export function PostJobScreen() {
+@@ -485,15 +501,22 @@ export function PostJobScreen() {
        // commit. The async write paths clean these up after a failed result if
        // the screen was removed while the request was in flight.
        if (!uploadsCommittedRef.current && !submittingRef.current) {
@@ -5850,7 +6467,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
        }
        successScale.stopAnimation();
      };
-@@ -624,7 +646,7 @@ export function PostJobScreen() {
+@@ -624,7 +647,7 @@ export function PostJobScreen() {
    // only; edit/hire never read or write this key.
    useEffect(() => {
      if (!isFreshPost || !draftReady || !draftUserId) return;
@@ -5859,7 +6476,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
        title,
        description,
        category,
-@@ -641,7 +663,9 @@ export function PostJobScreen() {
+@@ -641,7 +664,9 @@ export function PostJobScreen() {
        videos,
        step,
        photoNudgeDismissed,
@@ -5870,7 +6487,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
    }, [isFreshPost, draftReady, draftUserId, title, description, category, location, coords, budgetMin, budgetMax, pricingMode, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, step, photoNudgeDismissed]);
  
    // Header Back, Android Back, and the iOS edge gesture all mean the same
-@@ -1138,9 +1162,9 @@ export function PostJobScreen() {
+@@ -1138,9 +1163,9 @@ export function PostJobScreen() {
        : currentStep.title;
    const currentStepSubtitle =
      step === 1 && isHiring
@@ -5882,7 +6499,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
          : currentStep.subtitle;
    const reviewBudgetCents = dollarsToCents(budget);
    const reviewMaxCents = dollarsToCents(budgetMax);
-@@ -1201,7 +1225,10 @@ export function PostJobScreen() {
+@@ -1201,7 +1226,10 @@ export function PostJobScreen() {
    // step has no right link at all — its forward action is Publish, which is a
    // commitment and belongs on a pinned button, not on a chevron.
    const isLastStep = step === POST_STEPS.length - 1;
@@ -5894,7 +6511,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
    const advanceLabel = isLastStep ? undefined : POST_STEPS[step + 1].label;
    // D3 — THE FLOOR'S RULE, WRITTEN ONCE. This is the expression the Continue
    // button carried before the footers came off steps 1-3: the description
-@@ -1210,16 +1237,58 @@ export function PostJobScreen() {
+@@ -1210,16 +1238,58 @@ export function PostJobScreen() {
    // controls cannot drift into two rules (P3-31).
    const advanceDisabled =
      uploadingPhoto || uploadingVideo || (step === 0 && descNeeded > 0);
@@ -5955,7 +6572,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
          centerTitle
          palette={emeraldColors}
        />
-@@ -1237,6 +1306,8 @@ export function PostJobScreen() {
+@@ -1237,6 +1307,8 @@ export function PostJobScreen() {
            contentContainerStyle={[
              styles.content,
              { paddingHorizontal: contentPaddingX, gap: contentGap },
@@ -5964,7 +6581,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
              isLastStep && styles.contentWithFooter,
            ]}
            keyboardShouldPersistTaps="handled"
-@@ -1263,13 +1334,11 @@ export function PostJobScreen() {
+@@ -1263,13 +1335,11 @@ export function PostJobScreen() {
              >
                {POST_STEPS.map((item, index) => (
                  <View key={item.label} style={styles.progressItem}>
@@ -5983,7 +6600,17 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                    {/* D6 — the active step must be the BRIGHTEST label in the
                        row. It was `forest`, which under Prestige is a fill
                        colour, so the step you are on read dimmer than the ones
-@@ -1311,18 +1380,21 @@ export function PostJobScreen() {
+@@ -1306,23 +1376,31 @@ export function PostJobScreen() {
+ 
+           {step === 0 && (
+             <View style={[styles.stepFields, { gap: stepFieldsGap }]}>
++              {/* 2026-09-27 (the operator's review, the Lux post pages): the
++                  title and the description sit in ONE pop-out card, and the
++                  category chips under it on the ground — the reference's
++                  grouping, nothing else moved. */}
++              <Card style={[styles.fieldCard, { gap: stepFieldsGap }]}>
+               <TextField
+                 palette={emeraldColors}
                  label="Title"
                  value={title}
                  onChangeText={setTitle}
@@ -5992,7 +6619,8 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
 +                // already sits in.
 +                hint={`Required · ${title.length}/${MAX_TITLE_LENGTH}`}
                  maxLength={MAX_TITLE_LENGTH}
-                 placeholder="e.g. Walk my dog on weekday mornings"
+-                placeholder="e.g. Walk my dog on weekday mornings"
++                placeholder="e.g. Walk my dog on weekdays"
                  autoCapitalize="sentences"
                />
 +              {reasonUnder('title')}
@@ -6007,7 +6635,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                  maxLength={MAX_DESCRIPTION_LENGTH}
                  placeholder="Describe what you need done…"
                  autoCapitalize="sentences"
-@@ -1330,20 +1402,21 @@ export function PostJobScreen() {
+@@ -1330,20 +1408,22 @@ export function PostJobScreen() {
                  numberOfLines={4}
                  style={[styles.multiline, { height: descriptionHeight }]}
                />
@@ -6023,6 +6651,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
 +                  count, never a raw error and never a silently dead control.
 +                  2026-09-27: the count sits under the description it counts. */}
 +              {reasonUnder('description')}
++              </Card>
              </View>
            )}
  
@@ -6038,7 +6667,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                <View
                  style={[styles.chips, chipOrder == null && styles.chipsMeasuring]}
                  onLayout={(event) => setChipsWidth(event.nativeEvent.layout.width)}
-@@ -1351,12 +1424,11 @@ export function PostJobScreen() {
+@@ -1351,12 +1431,11 @@ export function PostJobScreen() {
                  {/* D2: the saturated per-category palette is retired in dark
                      wherever a category is drawn. Light keeps it. */}
                  {/* C2a — tapping the selected pill again deselects it, back to
@@ -6056,7 +6685,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                  {(chipOrder ?? POSTABLE_CATEGORIES).map((c) => (
                    <Chip
                      key={c}
-@@ -1365,17 +1437,11 @@ export function PostJobScreen() {
+@@ -1365,17 +1444,11 @@ export function PostJobScreen() {
                      accentColor={isDark ? colors.gold : categoryAccent(c).bg}
                      variant="filter"
                      selected={category === c}
@@ -6076,16 +6705,28 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                {chipOrder == null && (
                  /* C2b — the measurement pass: absolute, invisible, inert, one
                     column of naturally-sized copies. Unmounts the moment the
-@@ -1425,7 +1491,7 @@ export function PostJobScreen() {
+@@ -1417,7 +1490,7 @@ export function PostJobScreen() {
+                   padding (measured: the text column is ~259pt and the
+                   sentence needs ≥246 before it takes a third line), so no
+                   padding moved. */}
+-              <View style={[styles.infoCard, isDark && styles.infoCardDark]}>
++              <Card style={styles.infoCard}>
+                 <View style={styles.infoIcon}>
+                   {/* C6 — the "not visible" eye, replacing the shield: this
+                       notice is about what must not be SEEN. Defaults match
+@@ -1425,9 +1498,9 @@ export function PostJobScreen() {
                    <EyeOffIcon />
                  </View>
                  <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
 -                  Avoid faces, documents, license plates, addresses, or any other personal information
 +                  Avoid faces, documents, plates, addresses and other personal details.
                  </Text>
-               </View>
+-              </View>
++              </Card>
  
-@@ -1485,7 +1551,7 @@ export function PostJobScreen() {
+               {/* The one canonical MediaUploader primitive (§O never-duplicate
+                   list; §N risk 9). It owns the pick + append-only-on-success
+@@ -1485,7 +1558,7 @@ export function PostJobScreen() {
                      tightened (measured 351), so the caption stops at 13pt
                      with -0.3 tracking (330 of 345). */}
                  <Text style={styles.videoHint}>
@@ -6094,7 +6735,16 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                  </Text>
                </View>
              </View>
-@@ -1498,6 +1564,7 @@ export function PostJobScreen() {
+@@ -1493,18 +1566,23 @@ export function PostJobScreen() {
+ 
+           {step === 2 && (
+             <View style={[styles.stepFields, { gap: stepFieldsGap }]}>
++              {/* 2026-09-27 (the operator's review, the Lux "Where and when"
++                  page): the area, the locate disc and the private address in
++                  ONE pop-out card; the day and the arrival window under it. */}
++              <Card style={[styles.fieldCard, { gap: stepFieldsGap }]}>
+               <View style={styles.locationRow}>
+                 <View style={styles.locationField}>
                    <TextField
                      palette={emeraldColors}
                      label="Area or neighborhood"
@@ -6102,7 +6752,15 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                      value={location}
                      onChangeText={(text) => {
                        setLocation(text);
-@@ -1525,6 +1592,7 @@ export function PostJobScreen() {
+                       // Typing over a resolved place invalidates its coordinates.
+                       if (coords) setCoords(null);
+                     }}
+-                    placeholder="e.g. Sheepshead Bay, Brooklyn"
++                    placeholder="e.g. Sheepshead Bay"
+                     autoCapitalize="words"
+                   />
+                 </View>
+@@ -1525,6 +1603,7 @@ export function PostJobScreen() {
                    )}
                  </Pressable>
                </View>
@@ -6110,7 +6768,42 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
  
                {/* PJ1 (C7) — the approximate-area info card is deleted. The
                    privacy fact still reads twice on this same step: the step
-@@ -1618,72 +1686,37 @@ export function PostJobScreen() {
+@@ -1536,15 +1615,14 @@ export function PostJobScreen() {
+               {/* The exact address and timing are meaningless for a direct
+                   offer (the negotiation carries its own terms — Phase 5's
+                   surface), so hire mode keeps the plain location step. */}
++              {/* D12 — THE CAPTION CAME OUT OF THE LABEL ROW. TextField
++                  lays a `hint` beside the label, which works for a two-
++                  word character count and not for a sentence: this label
++                  is the longest in the app and the sentence ran off the
++                  right edge on top of it. Below the field it is a plain
++                  caption with the whole width, and the label owns its
++                  row alone. */}
+               {!isHiring && (
+-                <>
+-                  {/* D12 — THE CAPTION CAME OUT OF THE LABEL ROW. TextField
+-                      lays a `hint` beside the label, which works for a two-
+-                      word character count and not for a sentence: this label
+-                      is the longest in the app and the sentence ran off the
+-                      right edge on top of it. Below the field it is a plain
+-                      caption with the whole width, and the label owns its
+-                      row alone. */}
+                   <View style={styles.field}>
+                     <TextField
+                       palette={emeraldColors}
+@@ -1558,7 +1636,11 @@ export function PostJobScreen() {
+                       Never shown until you hire — can see after job is accepted.
+                     </Text>
+                   </View>
++              )}
++              </Card>
+ 
++              {!isHiring && (
++                <>
+                   <View style={styles.field}>
+                     <Text style={styles.fieldLabel}>Which day?</Text>
+                     <ScrollView
+@@ -1618,72 +1700,40 @@ export function PostJobScreen() {
  
            {step === 3 && (
              <View style={[styles.stepFields, { gap: stepFieldsGap }]}>
@@ -6150,34 +6843,13 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
 -                  <View style={styles.budgetPill}>
 -                    <Text style={styles.budgetPillValue} numberOfLines={1}>
 -                      {maxBudgetDisplay}
--                    </Text>
--                    <Pressable
--                      onPress={() => setEditingBudget(true)}
--                      hitSlop={12}
--                      style={styles.budgetPencil}
--                      accessibilityRole="button"
--                      accessibilityLabel="Edit budget"
--                    >
--                      <Ionicons name="pencil" size={18} color={colors.emerald} />
--                    </Pressable>
--                  </View>
--                  {/* D15a — the sentence about ranges was true of two fields
--                      and is false of one, so it is deleted rather than
--                      reworded. */}
--                  <Text style={styles.fieldHint}>
--                    Optional — leave blank if you want workers to propose a price.
--                  </Text>
--                </View>
--              )}
--
 +              {/* M-7 — "Review" opens with the review: the summary card
 +                  first, the price block second, the publish notice last. */}
-               <View style={[styles.reviewCard, { borderRadius: reviewCardRadius }, isDark && shadows.cardDark]}>
-                 <Text style={styles.reviewEyebrow}>JOB SUMMARY</Text>
--                <Text style={styles.reviewTitle}>{title.trim()}</Text>
--                <Text style={styles.reviewDescription} numberOfLines={4}>
--                  {description.trim()}
--                </Text>
++              {/* 2026-09-27 (the operator's review): the summary is the
++                  pop-out card itself (components/Card.tsx), at its dialled
++                  corner. */}
++              <Card style={[styles.reviewCardPop, { borderRadius: reviewCardRadius }]}>
++                <Text style={styles.reviewEyebrow}>JOB SUMMARY</Text>
 +                {/* M-7 — every summary row opens the step that owns it, so a
 +                    fix is one tap back rather than a walk through the header
 +                    links; the price row is the block right below and stays
@@ -6192,8 +6864,32 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
 +                    <Text style={styles.reviewTitle}>{title.trim()}</Text>
 +                    <Text style={styles.reviewDescription} numberOfLines={4}>
 +                      {description.trim()}
-+                    </Text>
-+                  </View>
+                     </Text>
+-                    <Pressable
+-                      onPress={() => setEditingBudget(true)}
+-                      hitSlop={12}
+-                      style={styles.budgetPencil}
+-                      accessibilityRole="button"
+-                      accessibilityLabel="Edit budget"
+-                    >
+-                      <Ionicons name="pencil" size={18} color={colors.emerald} />
+-                    </Pressable>
+                   </View>
+-                  {/* D15a — the sentence about ranges was true of two fields
+-                      and is false of one, so it is deleted rather than
+-                      reworded. */}
+-                  <Text style={styles.fieldHint}>
+-                    Optional — leave blank if you want workers to propose a price.
+-                  </Text>
+-                </View>
+-              )}
+-
+-              <View style={[styles.reviewCard, { borderRadius: reviewCardRadius }, isDark && shadows.cardDark]}>
+-                <Text style={styles.reviewEyebrow}>JOB SUMMARY</Text>
+-                <Text style={styles.reviewTitle}>{title.trim()}</Text>
+-                <Text style={styles.reviewDescription} numberOfLines={4}>
+-                  {description.trim()}
+-                </Text>
 +                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
 +                </Pressable>
  
@@ -6209,7 +6905,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                    <View style={styles.reviewIcon}>
                      <Ionicons name="grid-outline" size={18} color={colors.emerald} />
                    </View>
-@@ -1693,9 +1726,15 @@ export function PostJobScreen() {
+@@ -1693,9 +1743,15 @@ export function PostJobScreen() {
                        {category ? JOB_CATEGORY_LABELS[category] : 'Not selected'}
                      </Text>
                    </View>
@@ -6227,7 +6923,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                    <View style={styles.reviewIcon}>
                      <Ionicons name="location-outline" size={19} color={colors.emerald} />
                    </View>
-@@ -1705,9 +1744,15 @@ export function PostJobScreen() {
+@@ -1705,9 +1761,15 @@ export function PostJobScreen() {
                        {location.trim()}
                      </Text>
                    </View>
@@ -6245,7 +6941,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                    <View style={styles.reviewIcon}>
                      <Ionicons name="images-outline" size={18} color={colors.emerald} />
                    </View>
-@@ -1717,10 +1762,16 @@ export function PostJobScreen() {
+@@ -1717,10 +1779,16 @@ export function PostJobScreen() {
                        {mediaSummary(photos.length, videos.length)}
                      </Text>
                    </View>
@@ -6264,7 +6960,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                      <View style={styles.reviewIcon}>
                        <Ionicons name="time-outline" size={18} color={colors.emerald} />
                      </View>
-@@ -1730,7 +1781,8 @@ export function PostJobScreen() {
+@@ -1730,7 +1798,8 @@ export function PostJobScreen() {
                          {reviewTiming}
                        </Text>
                      </View>
@@ -6274,7 +6970,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                  )}
  
                  {/* D17 — the row stays whether or not an address was given.
-@@ -1738,7 +1790,12 @@ export function PostJobScreen() {
+@@ -1738,7 +1807,12 @@ export function PostJobScreen() {
                      worth reading, and a row that appears and disappears
                      reshuffles the card between visits. */}
                  {!isHiring && (
@@ -6288,7 +6984,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                      <View style={styles.reviewIcon}>
                        <Ionicons name="lock-closed-outline" size={18} color={colors.emerald} />
                      </View>
-@@ -1748,7 +1805,8 @@ export function PostJobScreen() {
+@@ -1748,7 +1822,8 @@ export function PostJobScreen() {
                          {address.trim() || 'Not added'}
                        </Text>
                      </View>
@@ -6298,10 +6994,13 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
                  )}
  
                  <View style={styles.reviewRow}>
-@@ -1762,6 +1820,79 @@ export function PostJobScreen() {
+@@ -1760,7 +1835,80 @@ export function PostJobScreen() {
+                     <Text style={styles.reviewValue}>{reviewBudget}</Text>
+                   </View>
                  </View>
-               </View>
- 
+-              </View>
++              </Card>
++
 +              {isHiring ? (
 +                // The direct-offer terms field is OfferComposer's shared one
 +                // (Phase 5): bids, counters and this hire request present and
@@ -6374,11 +7073,10 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
 +                  </Text>
 +                </View>
 +              )}
-+
+ 
                <View style={styles.publishNotice}>
                  <Ionicons name="checkmark-circle-outline" size={20} color={colors.emerald} />
-                 <Text style={styles.publishNoticeText}>
-@@ -1798,28 +1929,35 @@ export function PostJobScreen() {
+@@ -1798,28 +1946,35 @@ export function PostJobScreen() {
            </View>
          ) : null}
  
@@ -6436,7 +7134,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
        </KeyboardAvoidingView>
        )}
  
-@@ -2036,22 +2174,6 @@ export function PostJobScreen() {
+@@ -2036,22 +2191,6 @@ export function PostJobScreen() {
          onClose={() => setViewerUri(null)}
        />
  
@@ -6459,7 +7157,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
        {/* D15 — the one budget editor, and since a4 the one place the posting
            choice is made. Cancel discards both the amount and the mode, Save
            writes both and closes, and an empty field saves as "no maximum"
-@@ -2163,8 +2285,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+@@ -2163,8 +2302,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
      borderRadius: radius.pill,
      backgroundColor: colors.mint2,
    },
@@ -6474,7 +7172,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
    },
    progressLabel: {
      fontSize: 11,
-@@ -2210,6 +2337,26 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+@@ -2210,6 +2354,26 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
      fontWeight: '700',
      color: colors.ink,
    },
@@ -6501,7 +7199,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
    fieldHint: {
      fontSize: 12,
      color: colors.textMuted,
-@@ -2225,12 +2372,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+@@ -2225,12 +2389,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
      color: colors.textMuted,
      marginTop: -spacing.xs,
    },
@@ -6514,7 +7212,37 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
    guidanceCard: {
      gap: spacing.xs,
      padding: spacing.md,
-@@ -2417,6 +2558,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+@@ -2357,17 +2515,23 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+   locationBtnPressed: {
+     opacity: 0.82,
+   },
++  // 2026-09-27 (the operator's review): the notice is a pop-out card row
++  // (components/Card.tsx) — the material draws the fill, the rim and the
++  // shadow; this only lays out the row.
+   infoCard: {
+     flexDirection: 'row',
+-    alignItems: 'flex-start',
++    alignItems: 'center',
++    gap: spacing.md,
++    padding: spacing.md,
++  },
++  // The Lux step cards: the field group in one pop-out, 14pt of padding.
++  fieldCard: {
++    padding: 14,
++  },
++  reviewCardPop: {
+     gap: spacing.md,
+     padding: spacing.lg,
+-    borderRadius: radius.lg,
+-    borderWidth: 1,
+-    borderColor: colors.mint2,
+-    backgroundColor: colors.mint,
+   },
+-  infoCardDark: { borderColor: colors.border },
+   infoIcon: {
+     width: 40,
+     height: 40,
+@@ -2417,6 +2581,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
      alignItems: 'center',
      gap: spacing.md,
    },
@@ -6531,7 +7259,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
    reviewIcon: {
      width: 38,
      height: 38,
-@@ -2521,9 +2672,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+@@ -2521,9 +2695,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
      lineHeight: 19,
      color: colors.textMuted,
    },
@@ -6544,7 +7272,7 @@ diff --git a/screens/PostJobScreen.tsx b/screens/PostJobScreen.tsx
      paddingHorizontal: spacing.xl,
      paddingTop: spacing.md,
      // home(7): the pinned footer's own breathing room, shared with
-@@ -2535,11 +2687,20 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
+@@ -2535,11 +2710,20 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
      backgroundColor: colors.surface,
    },
    // D4 — one full-width pill. There is no second footer control any more, so
@@ -9891,18 +10619,28 @@ diff --git a/tests/goldOnForest.test.mjs b/tests/goldOnForest.test.mjs
    assert.notEqual(value('forest'), value('gold'), 'v1 merged these; v2 must never re-merge them');
  });
  
-@@ -290,7 +294,9 @@ function functionBody(source, declaration) {
+@@ -290,28 +294,34 @@ function functionBody(source, declaration) {
   *  operator's own mockup and ruling — docs/DECISIONS.md 2026-09-19 records
   *  it as that sheet's exception, and the sheet's own fence pins the tint. */
  const D6_SURFACES = [
 -  ['components/Chip.tsx', ['chosen.line', 'chosen.fill']],
+-  ['components/SegmentedControl.tsx', ['activeLabel']],
 +  // 2026-09-27 (the Lux remake, ruling 11): a chosen chip KEEPS its glass, so
 +  // Chip reads the helper's line and not its fill.
 +  ['components/Chip.tsx', ['chosen.line']],
-   ['components/SegmentedControl.tsx', ['activeLabel']],
++  // 2026-09-27 (the operator's review): a segmented control's chosen cell is
++  // FILLED with the one mint (the Lux `.seg2`), not gold-lined — so
++  // components/SegmentedControl.tsx and MyJobsHub's tabs, which are that
++  // control now, no longer resolve through selectedInDark.
    ['components/PortfolioPicker.tsx', ['categoryChipSelectedDark']],
    ['components/PastWork.tsx', ['tabActiveDark', 'tabTextActiveDark']],
-@@ -304,14 +310,16 @@ const D6_SURFACES = [
+   ['components/ReportDialog.tsx', ['reasonSelectedDark', 'reasonTextSelectedDark']],
+   ['screens/ServicesPricingScreen.tsx', ['categoryChipActiveDark']],
+   ['screens/ApproveOrDisputeScreen.tsx', ['reasonRowActiveDark', 'radioActiveDark']],
+   ['screens/ReviewAndTipScreen.tsx', ['presetActiveDark', 'presetTextActiveDark']],
+-  ['screens/MyJobsHubScreen.tsx', ['tabLabelSelectedDark']],
+ ];
+ 
  test('[static] selection in dark resolves through ONE helper, everywhere', () => {
    const theme = stripComments(read('lib/theme.ts'));
  
@@ -10439,7 +11177,28 @@ diff --git a/tests/postJobPublish.test.mjs b/tests/postJobPublish.test.mjs
      'the Location step subtitle still states the privacy rule'
    );
    assert.match(
-@@ -584,9 +616,11 @@ test('D11/PJ1-C7 · the area card is deleted, and the privacy fact still reads t
+@@ -560,14 +592,15 @@ test('D11/PJ1-C7 · the area card is deleted, and the privacy fact still reads t
+     'the address caption still states the privacy rule'
+   );
+ 
+-  // Exactly ONE info card remains — the media advisory — and it keeps the
+-  // dark overrides D11 established (deep-green text on a near-black-green
+-  // card is the fault they exist for).
++  // Exactly ONE info card remains — the media advisory. 2026-09-27 (the
++  // operator's review): it is the pop-out card material (components/Card.tsx),
++  // whose dark recipe is the treatment D11's overrides used to hand-apply.
+   assert.equal(
+-    (flat.match(/\[styles\.infoCard, isDark && styles\.infoCardDark\]/g) ?? []).length,
++    (flat.match(/<Card style=\{styles\.infoCard\}>/g) ?? []).length,
+     1,
+-    'one info card remains and it takes the dark card treatment'
++    'one info card remains, on the card material'
+   );
++  assert.doesNotMatch(flat, /infoCardDark/, 'the hand-applied dark override went with the material');
+   assert.equal(
+     (flat.match(/\[styles\.infoText, isDark && styles\.infoTextDark\]/g) ?? []).length,
+     1,
+@@ -584,9 +617,11 @@ test('D11/PJ1-C7 · the area card is deleted, and the privacy fact still reads t
      const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
    };
@@ -10453,7 +11212,7 @@ diff --git a/tests/postJobPublish.test.mjs b/tests/postJobPublish.test.mjs
    );
    assert.ok(
      luminance(ink) - luminance(mint) > 150,
-@@ -736,7 +770,7 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
+@@ -736,7 +771,7 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
    const modes = read('lib/pricingMode.ts');
    assert.match(modes, /title: 'Edit Budget',/);
    assert.match(modes, /message: 'Set the maximum amount workers can bid up to\.',/);
@@ -10462,7 +11221,7 @@ diff --git a/tests/postJobPublish.test.mjs b/tests/postJobPublish.test.mjs
    assert.match(flat, /<Text style=\{\[styles\.title, \{ color: palette\.onForest \}\]\}>\{copy\.title\}<\/Text>/);
    assert.match(flat, /\{copy\.message\}<\/Text>/);
    assert.match(flat, /accessibilityLabel=\{copy\.fieldLabel\}/);
-@@ -790,11 +824,11 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
+@@ -790,11 +825,11 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
    assert.ok(!flat.includes('supabase'), 'the dialog contacts nothing');
    assert.ok(!flat.includes('createJob'), 'the dialog writes nothing');
  
@@ -10477,7 +11236,7 @@ diff --git a/tests/postJobPublish.test.mjs b/tests/postJobPublish.test.mjs
    );
  
    // The screen wires it: Save writes and closes, Cancel only closes. RUN a4:
-@@ -972,9 +1006,14 @@ test('D23 · the mark is a bigger check on a filled disc, ringed, haloed and spa
+@@ -972,9 +1007,14 @@ test('D23 · the mark is a bigger check on a filled disc, ringed, haloed and spa
    assert.ok(check > templateGlyph, `the check grew: ${check} > ${templateGlyph}`);
    assert.ok(disc > templateDisc, `the disc grew: ${disc} > ${templateDisc}`);
  
@@ -10494,7 +11253,7 @@ diff --git a/tests/postJobPublish.test.mjs b/tests/postJobPublish.test.mjs
  
    // CONCENTRIC RING BORDERS behind it — borders, not fills, and two of them
    // stepping outward.
-@@ -1084,12 +1123,18 @@ test('D25/D26 · the boundary holds, and reduced motion gets the still artwork',
+@@ -1084,12 +1124,18 @@ test('D25/D26 · the boundary holds, and reduced motion gets the still artwork',
  
    // D26 — REDUCED MOTION NEVER GETS A DEGRADED ANIMATION, it gets the same
    // artwork standing still. And `null` — the hook's "not read yet" — does not
@@ -10606,6 +11365,26 @@ diff --git a/tests/rimLight.test.mjs b/tests/rimLight.test.mjs
      light: { authInk: '#13201B', authMuted: '#6E7771', authAccent: '#0D6B52', authGold: '#C8A15B', authGlintCore: '#FFF6DE', authGlintHalo: '#E8C98C', authBadgeFill: '#FFFFFF', authShade: '#10261D', authGroundTop: '#F6F3EA', authGroundMid: '#F6F3EA', authGroundBottom: '#F6F3EA', heroDiscTop: '#F6F9F4', heroDiscMid: '#DEEBE1', heroDiscBottom: '#CDDCCF', authCtaTop: '#064C3B', authCtaBottom: '#064C3B' },
    };
    for (const [theme, block] of [['dark', dark], ['light', light]]) {
+diff --git a/tests/screenDials.test.mjs b/tests/screenDials.test.mjs
+--- a/tests/screenDials.test.mjs
++++ b/tests/screenDials.test.mjs
+@@ -115,11 +115,13 @@ const SCREENS = [
+     prefix: 'myJobs',
+     scale: 'theme',
+     dials: [
+-      { key: 'myJobs.tabs.height', drew: 50, parent: null, fallback: '50' },
+-      { key: 'myJobs.tabs.radius', drew: 16, parent: 'theme.radius.lg', fallback: 'radius.lg' },
++      // 2026-09-27 (the operator's review): the bar is the shared Lux segment
++      // — 48 tall (components/SegmentedControl.tsx TRACK_HEIGHT), pill
++      // corners; the header mark is gone, and its dial with it.
++      { key: 'myJobs.tabs.height', drew: 52, parent: null, fallback: '52' },
++      { key: 'myJobs.tabs.radius', drew: 26, parent: null, fallback: '26' },
+       { key: 'myJobs.content.gap', drew: 24, parent: 'theme.spacing.xl', fallback: 'spacing.xl' },
+       { key: 'myJobs.empty.paddingY', drew: 32, parent: 'theme.spacing.xxl', fallback: 'spacing.xxl' },
+-      { key: 'myJobs.headerMark.size', drew: 48, parent: null, fallback: '48' },
+     ],
+   },
+   {
 diff --git a/tests/setupOnboarding.test.mjs b/tests/setupOnboarding.test.mjs
 --- a/tests/setupOnboarding.test.mjs
 +++ b/tests/setupOnboarding.test.mjs
@@ -10932,7 +11711,7 @@ diff --git a/tests/themeTokens.test.mjs b/tests/themeTokens.test.mjs
    assert.deepEqual(paneEdges.sheet, {
      rim: { color: '#7DE7A4', alpha: 0.6 },
      halo: { color: '#7DE7A4', alphas: [0.12, 0.06, 0.03] },
-@@ -704,6 +711,33 @@ test('G1 materials: the table is as dispatched, worn from one scrim ink and the
+@@ -704,6 +711,36 @@ test('G1 materials: the table is as dispatched, worn from one scrim ink and the
    for (const name of ['chrome', 'sheet', 'menu', 'pane']) {
      assert.equal(materials[name].light, undefined, `${name} must stay flat in light — no light recipe`);
    }
@@ -10945,13 +11724,16 @@ diff --git a/tests/themeTokens.test.mjs b/tests/themeTokens.test.mjs
 +  // surface's soft card shadow — the one other material with a light block.
 +  assert.equal(materials.card.blur, 0, 'flat: a blur adds nothing on a static ground');
 +  assert.equal(materials.card.scrimColor, '#0C2C26');
-+  assert.equal(materials.card.scrimAlpha, 0.52);
++  // 2026-09-27 (the operator's review, "more 3D popping out"): one notch past
++  // the Lux numbers — .58 / .24 / .22 and `0 12px 34px .42` (native radius
++  // 17) — so the card lifts on the lighter top of the ground too.
++  assert.equal(materials.card.scrimAlpha, 0.58);
 +  assert.equal(materials.card.borderColor, '#C8FFE6');
-+  assert.equal(materials.card.borderAlpha, 0.2);
-+  assert.equal(materials.card.highlightAlpha, 0.16);
++  assert.equal(materials.card.borderAlpha, 0.24);
++  assert.equal(materials.card.highlightAlpha, 0.22);
 +  assert.equal(materials.card.highlightColor, lightPalette.surface, 'the specular edge is white');
 +  assert.equal(materials.card.fallbackScrimAlpha, 0.94);
-+  assert.deepEqual(materials.card.shadow, { color: '#000000', alpha: 0.35, radius: 15, y: 10 });
++  assert.deepEqual(materials.card.shadow, { color: '#000000', alpha: 0.42, radius: 17, y: 12 });
 +  assert.deepEqual([materials.card.radius, materials.card.radiusTopOnly], [22, false]);
 +  assert.deepEqual(materials.card.light, {
 +    blur: 0,
@@ -10969,7 +11751,20 @@ diff --git a/tests/themeTokens.test.mjs b/tests/themeTokens.test.mjs
 diff --git a/tests/voiceSearch.test.mjs b/tests/voiceSearch.test.mjs
 --- a/tests/voiceSearch.test.mjs
 +++ b/tests/voiceSearch.test.mjs
-@@ -902,8 +902,9 @@ test('[static] the mic is on for every converted surface — no opt-out, no side
+@@ -833,9 +833,11 @@ test('[static] the mic is palette-fed and holds the 44pt touch floor', () => {
+   // separately guarantees no raw literal anywhere in ui/).
+   // 2026-09-20: the 'ink' emphasis (the map's field) lifts the idle mic to
+   // the ink at 0.85 and 22pt; the default keeps navInactive at 20.
++  // 2026-09-27 (the operator's review, the Lux `.field svg`): the idle mic is
++  // the mint in dark; the map's ink pill and light are as they were.
+   assert.match(
+     searchBarCode,
+-    /color=\{listening \? colors\.emerald : ink \? withAlpha\(colors\.ink, 0\.85\) : colors\.navInactive\}/
++    /color=\{\s*listening \|\| \(isDark && !ink\)\s*\? colors\.emerald\s*: ink\s*\? withAlpha\(colors\.ink, 0\.85\)\s*: colors\.navInactive\s*\}/
+   );
+   assert.match(searchBarCode, /withAlpha\(colors\.emerald, 0\.15\)/);
+   // 20pt glyph + spacing.xs (4pt) padding + 8pt hitSlop = 44pt effective.
+@@ -902,8 +904,9 @@ test('[static] the mic is on for every converted surface — no opt-out, no side
  test('[static] WorkerSearch keeps its exact search behaviour behind the conversion', () => {
    const source = read('screens/WorkerSearchScreen.tsx');
    const code = stripCommentsForScan(source);
@@ -10981,7 +11776,7 @@ diff --git a/tests/voiceSearch.test.mjs b/tests/voiceSearch.test.mjs
    assert.match(source, /accessibilityLabel="Describe the help you need"/);
    // Sentence-typing posture preserved through the new additive props.
    assert.match(code, /autoCapitalize="sentences"/);
-@@ -968,9 +969,15 @@ test("[static] customer Home's trailing magnifier submits — same contract as t
+@@ -968,20 +971,29 @@ test("[static] customer Home's trailing magnifier submits — same contract as t
    // magnifier lives in SearchBar under `micBecomesSearch`. The CLAIM holds:
    // the magnifier is a Pressable firing the same submitSearch the keyboard
    // return fires (SearchBar's onSubmit), with the same role and label.
@@ -10999,8 +11794,12 @@ diff --git a/tests/voiceSearch.test.mjs b/tests/voiceSearch.test.mjs
    assert.doesNotMatch(code, /trailing=\{/, 'the divider and the second button are gone from the field');
    assert.doesNotMatch(code, /searchDivider|searchGoPressed/);
    const magnifier = /\{micBecomesSearch && value\.length > 0 && !listening \? \(([\s\S]*?)\) : voiceReady/.exec(searchBarCode);
-@@ -980,8 +987,10 @@ test("[static] customer Home's trailing magnifier submits — same contract as t
-   assert.match(magnifier[1], /name="search" size=\{20\} color=\{colors\.navInactive\}/);
+   assert.ok(magnifier, 'SearchBar draws the magnifier in the mic\'s slot');
+   assert.match(magnifier[1], /<Pressable/, 'the magnifier must be pressable, not decoration');
+   assert.match(magnifier[1], /onPress=\{onSubmit\}/);
+-  assert.match(magnifier[1], /name="search" size=\{20\} color=\{colors\.navInactive\}/);
++  // 2026-09-27 (the operator's review): the magnifier is the mint in dark too.
++  assert.match(magnifier[1], /name="search" size=\{20\} color=\{isDark \? colors\.emerald : colors\.navInactive\}/);
    assert.match(magnifier[1], /accessibilityRole="button"/);
    assert.match(magnifier[1], /accessibilityLabel="Search"/);
 -  // The guard that makes empty a no-op lives in submitSearch itself.
@@ -11170,6 +11969,54 @@ diff --git a/ui/designStudioSchema.ts b/ui/designStudioSchema.ts
  };
  
  function materialDial(
+@@ -1871,6 +1874,8 @@ function screenDialEntries(): StudioEntry[] {
+     // job cards themselves (JobCard's own dials reach every one of them), the
+     // status pills (StatusPill's), and the selected tab's 44pt minimum, which
+     // is CLAUDE.md's touch floor rather than a styling choice.
++    // 2026-09-27 (the operator's review): the bar is the shared Lux segment —
++    // 52 tall, and the pill corner is 26, half of it.
+     ...dialEntries('screens', 'My Jobs', [
+       {
+         key: 'myJobs.tabs.height',
+@@ -1881,7 +1886,7 @@ function screenDialEntries(): StudioEntry[] {
+         min: 44,
+         max: 72,
+         step: 1,
+-        defaultValue: 50,
++        defaultValue: 52,
+       },
+       {
+         key: 'myJobs.tabs.radius',
+@@ -1892,8 +1897,7 @@ function screenDialEntries(): StudioEntry[] {
+         min: 0,
+         max: 40,
+         step: 1,
+-        inheritsFrom: 'theme.radius.lg',
+-        defaultValue: THEME_RADIUS_DEFAULTS.lg,
++        defaultValue: 26,
+       },
+       {
+         key: 'myJobs.content.gap',
+@@ -1919,17 +1923,8 @@ function screenDialEntries(): StudioEntry[] {
+         inheritsFrom: 'theme.spacing.xxl',
+         defaultValue: THEME_SPACING_DEFAULTS.xxl,
+       },
+-      {
+-        key: 'myJobs.headerMark.size',
+-        label: 'Header mark — size',
+-        description: 'The square glyph tile beside the screen title, width and height together.',
+-        tier: 'advanced',
+-        scope: 'local',
+-        min: 32,
+-        max: 80,
+-        step: 2,
+-        defaultValue: 48,
+-      },
++      // 2026-09-27 (the operator's review): the header mark is gone from
++      // My jobs, and its dial with it.
+     ]),
+     // C5 — screens/ProfileScreen.tsx. `theme.*` scale: `radius`/`spacing` come
+     // from lib/theme here, and `emeraldRadius` — the one name in this file that
 diff --git a/ui/primitives/BottomNav.tsx b/ui/primitives/BottomNav.tsx
 --- a/ui/primitives/BottomNav.tsx
 +++ b/ui/primitives/BottomNav.tsx
@@ -11268,6 +12115,86 @@ diff --git a/ui/primitives/MoneyText.tsx b/ui/primitives/MoneyText.tsx
    const caption = state ? CAPTIONS[state] : null;
  
    return (
+diff --git a/ui/primitives/SearchBar.tsx b/ui/primitives/SearchBar.tsx
+--- a/ui/primitives/SearchBar.tsx
++++ b/ui/primitives/SearchBar.tsx
+@@ -17,6 +17,7 @@ import {
+   controls,
+   radius,
+   spacing,
++  wells,
+   withAlpha,
+   type EmeraldPalette,
+   type as typeScale,
+@@ -179,7 +180,12 @@ export function SearchBar({
+   // The ink emphasis (the map's pill) draws its glyphs one point larger
+   // since the pill grew to 62 (2026-09-20, sitting 2, (6)): 25 and 23.
+   const iconGlyphSize = iconSizeDial ?? (ink ? 25 : 18);
+-  const leadingInk = ink ? withAlpha(colors.ink, 0.92) : isDark ? colors.ink : colors.emerald;
++  // 2026-09-27 (the operator's review, the Lux `.field svg{color:var(--acc)}`):
++  // the magnifier is the mint in both themes; only the map's ink pill differs.
++  const leadingInk = ink ? withAlpha(colors.ink, 0.92) : colors.emerald;
++  // The Lux well under the field in dark (ui/tokens.ts `wells.field`); the
++  // map's ink pill and light keep their own fill.
++  const well = isDark && !ink ? styles.fieldDark : null;
+   const iconDialStyle =
+     iconOffsetX || iconOffsetY
+       ? { transform: [{ translateX: iconOffsetX }, { translateY: iconOffsetY }] }
+@@ -267,7 +273,7 @@ export function SearchBar({
+         onPress={onPress}
+         onPressIn={press.onPressIn}
+         onPressOut={press.onPressOut}
+-        style={({ pressed }) => [styles.field, fieldDial, pressed && styles.pressed, style]}
++        style={({ pressed }) => [styles.field, well, fieldDial, pressed && styles.pressed, style]}
+         accessibilityRole="search"
+         accessibilityLabel={accessibilityLabel ?? placeholder}
+       >
+@@ -297,7 +303,7 @@ export function SearchBar({
+   }
+ 
+   return (
+-    <View style={[styles.field, fieldDial, focusDial, style]}>
++    <View style={[styles.field, well, fieldDial, focusDial, style]}>
+       {disableLeadingIcon ? null : (
+         <Ionicons
+           name="search"
+@@ -347,7 +353,7 @@ export function SearchBar({
+           accessibilityLabel="Search"
+           style={styles.mic}
+         >
+-          <Ionicons name="search" size={20} color={colors.navInactive} />
++          <Ionicons name="search" size={20} color={isDark ? colors.emerald : colors.navInactive} />
+         </Pressable>
+       ) : voiceReady && !disableVoiceSearch ? (
+         <Animated.View style={micPress.style}>
+@@ -368,7 +374,13 @@ export function SearchBar({
+             <Ionicons
+               name={listening ? 'mic' : 'mic-outline'}
+               size={ink ? 23 : 20}
+-              color={listening ? colors.emerald : ink ? withAlpha(colors.ink, 0.85) : colors.navInactive}
++              color={
++                listening || (isDark && !ink)
++                  ? colors.emerald
++                  : ink
++                    ? withAlpha(colors.ink, 0.85)
++                    : colors.navInactive
++              }
+             />
+           </Pressable>
+         </Animated.View>
+@@ -394,6 +406,12 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
+   pressed: {
+     opacity: 0.9,
+   },
++  // 2026-09-27 (the operator's review): the Lux `.field` well in dark — the
++  // deep ink under the light rim (ui/tokens.ts `wells.field`).
++  fieldDark: {
++    backgroundColor: withAlpha(wells.field.ink, wells.field.inkAlpha),
++    borderColor: withAlpha(wells.field.rim, wells.field.rimAlpha),
++  },
+   input: {
+     flex: 1,
+     ...typeScale.body,
 diff --git a/ui/primitives/Surface.tsx b/ui/primitives/Surface.tsx
 --- a/ui/primitives/Surface.tsx
 +++ b/ui/primitives/Surface.tsx
@@ -11305,11 +12232,18 @@ diff --git a/ui/primitives/Surface.tsx b/ui/primitives/Surface.tsx
        {rings}
        {/* RUN S3 (D11) — THE BLUR MOUNTS ONLY WHERE IT CAN BE SEEN. A material
            with no blur, or with an opaque scrim over it, renders an expo-blur
-@@ -265,7 +283,8 @@ export function Surface({
+@@ -263,9 +281,13 @@ export function Surface({
+           style={[
+             styles.highlight,
              {
-               left: cornerRadius,
-               right: cornerRadius,
+-              left: cornerRadius,
+-              right: cornerRadius,
 -              backgroundColor: withAlpha(glass.borderColor, highlightAlpha),
++              // 2026-09-27 (the operator's review): inset by HALF the radius
++              // — the CSS `inset 0 1px 0` lights the edge into the arcs, and
++              // a line stopping a full radius short read as a short dash.
++              left: Math.round(cornerRadius / 2),
++              right: Math.round(cornerRadius / 2),
 +              // The card's specular edge is white; every other material's is its rim.
 +              backgroundColor: withAlpha(glass.highlightColor ?? glass.borderColor, highlightAlpha),
              },
@@ -11587,30 +12521,53 @@ diff --git a/ui/tokens.ts b/ui/tokens.ts
    authBadgeFill: '#0A2822',
    authShade: '#000000',
    authGroundTop: '#062421',
-@@ -653,14 +688,17 @@ export const shadows: Record<'card' | 'cardDark', ViewStyle> = {
+@@ -605,7 +640,7 @@ export const type = {
+ // Shadow (§I: color #10261D, opacity 0.08, radius ~14, offset (0,5), elev ~3)
+ // ---------------------------------------------------------------------------
+ 
+-export const shadows: Record<'card' | 'cardDark', ViewStyle> = {
++export const shadows: Record<'card' | 'cardDark' | 'ctaDark', ViewStyle> = {
+   card: Platform.select({
+     // boxShadow on web avoids RN-web's shadow* deprecation warnings, the same
+     // way lib/theme.ts already handles it.
+@@ -653,13 +688,32 @@ export const shadows: Record<'card' | 'cardDark', ViewStyle> = {
     * applied the same way, gated on isDark at its call sites. Light is
     * untouched: every site keeps `card` and only ADDS this one in dark.
     */
 +  // 2026-09-27 (the Lux remake, ruling 8): the Lux glass card's drop shadow,
 +  // `0 10px 30px rgba(0,0,0,.35)` — the "3D pop-out" every dark card wears.
 +  // A CSS blur of 30 is a native shadowRadius of 15.
++  // 2026-09-27 (the operator's review, "more 3D popping out"): one notch past
++  // the Lux `0 10px 30px .35` — `0 12px 34px .42`, the same shadow the `card`
++  // material carries — so a hand-styled card and a material card lift alike.
    cardDark: Platform.select({
 -    web: { boxShadow: '0 6px 16px rgba(0,0,0,0.5)' },
-+    web: { boxShadow: '0 10px 30px rgba(0,0,0,0.35)' },
++    web: { boxShadow: '0 12px 34px rgba(0,0,0,0.42)' },
      default: {
        shadowColor: '#000000',
 -      shadowOpacity: 0.5,
 -      shadowRadius: 16,
 -      shadowOffset: { width: 0, height: 6 },
--      elevation: 6,
-+      shadowOpacity: 0.35,
-+      shadowRadius: 15,
++      shadowOpacity: 0.42,
++      shadowRadius: 17,
++      shadowOffset: { width: 0, height: 12 },
++      elevation: 9,
++    },
++  }) as ViewStyle,
++  // The Lux `.cta` glow, `0 10px 24px rgba(79,197,140,.30)`: the mint CTA's
++  // lift in dark. The fill stays the one flat mint (ruling 5); only the
++  // shadow under it is the reference's.
++  ctaDark: Platform.select({
++    web: { boxShadow: '0 10px 24px rgba(79,197,140,0.30)' },
++    default: {
++      shadowColor: '#4FC58C',
++      shadowOpacity: 0.3,
++      shadowRadius: 12,
 +      shadowOffset: { width: 0, height: 10 },
-+      elevation: 8,
+       elevation: 6,
      },
    }) as ViewStyle,
- };
-@@ -735,6 +773,8 @@ const PANE_SCRIM = '#062418';
+@@ -735,6 +789,8 @@ const PANE_SCRIM = '#062418';
   * only — light panes are flat by ruling and ignore these.
   */
  const PANE_RIM_BRIGHT = '#7DE7A4';
@@ -11619,7 +12576,7 @@ diff --git a/ui/tokens.ts b/ui/tokens.ts
  /** Each glow ring is this many points, outside the rim, fading outward. */
  export const PANE_HALO_RING = 2;
  
-@@ -743,9 +783,12 @@ export type PaneHalo = { color: string; alphas: readonly number[] };
+@@ -743,9 +799,12 @@ export type PaneHalo = { color: string; alphas: readonly number[] };
  
  export const paneEdges = {
    /** The search pill and the Today chip — option C. */
@@ -11634,7 +12591,7 @@ diff --git a/ui/tokens.ts b/ui/tokens.ts
    },
    /** The jobs sheet — option B. */
    sheet: {
-@@ -789,7 +832,20 @@ export const paneFills = {
+@@ -789,7 +848,31 @@ export const paneFills = {
    } as PaneFill,
  } as const;
  
@@ -11651,12 +12608,23 @@ diff --git a/ui/tokens.ts b/ui/tokens.ts
 + */
 +const CARD_INK = '#0C2C26';
 +const CARD_RIM = '#C8FFE6';
++
++/**
++ * 2026-09-27 (the operator's review) — THE LUX FIELD WELL: the search field's
++ * fill and rim in dark, the reference's `.field` — `rgba(3,20,16,.55)` under a
++ * `rgba(200,255,230,.14)` rim — so the field sits INTO its card instead of
++ * floating lighter than it. Read by ui/primitives/SearchBar.tsx and never
++ * spelled at a call site; light keeps its flat surface, the map its ink pill.
++ */
++export const wells = {
++  field: { ink: '#031410', inkAlpha: 0.55, rim: CARD_RIM, rimAlpha: 0.14 },
++} as const;
 +/** A material's drop shadow: `radius` is the native shadowRadius (half the CSS blur). */
 +export type MaterialShadow = { color: string; alpha: number; radius: number; y: number };
  
  /**
   * 2026-09-18 — A LIGHT-THEME GLASS RECIPE. Surface's light path has always
-@@ -809,6 +865,10 @@ export type LightGlassSpec = {
+@@ -809,6 +892,10 @@ export type LightGlassSpec = {
    fallbackScrimAlpha: number;
    /** The 1pt bright inner top edge, `borderColor` at this alpha. */
    highlightAlpha: number;
@@ -11667,7 +12635,7 @@ diff --git a/ui/tokens.ts b/ui/tokens.ts
  };
  
  export type MaterialSpec = {
-@@ -850,6 +910,13 @@ export type MaterialSpec = {
+@@ -850,6 +937,13 @@ export type MaterialSpec = {
     * asked for lives on a phone whose blur cannot saturate.
     */
    sheen?: { fromAlpha: number; toAlpha: number; color?: string };
@@ -11681,7 +12649,7 @@ diff --git a/ui/tokens.ts b/ui/tokens.ts
  };
  
  /**
-@@ -970,6 +1037,36 @@ export const materials: Record<MaterialName, MaterialSpec> = {
+@@ -970,6 +1064,39 @@ export const materials: Record<MaterialName, MaterialSpec> = {
      highlightAlpha: 0,
      sheen: { fromAlpha: 0.1, toAlpha: 0.04, color: brand.mint },
    },
@@ -11695,15 +12663,18 @@ diff --git a/ui/tokens.ts b/ui/tokens.ts
 +  card: {
 +    blur: 0,
 +    scrimColor: CARD_INK,
-+    scrimAlpha: 0.52,
++    // 2026-09-27 (the operator's review, "more 3D popping out"): one notch
++    // past the Lux .52 / .20 / .16 / `0 10px 30px .35`, so the card lifts on
++    // the lighter top of the ground too, where the reference's numbers read flat.
++    scrimAlpha: 0.58,
 +    borderColor: CARD_RIM,
-+    borderAlpha: 0.2,
++    borderAlpha: 0.24,
 +    fallbackScrimAlpha: 0.94,
 +    radius: 22,
 +    radiusTopOnly: false,
-+    highlightAlpha: 0.16,
++    highlightAlpha: 0.22,
 +    highlightColor: colors.surface,
-+    shadow: { color: '#000000', alpha: 0.35, radius: 15, y: 10 },
++    shadow: { color: '#000000', alpha: 0.42, radius: 17, y: 12 },
 +    light: {
 +      blur: 0,
 +      scrimColor: colors.surface,
@@ -11815,9 +12786,9 @@ diff --git a/components/NotificationBell.tsx b/components/NotificationBell.tsx
 new file mode 100644
 --- /dev/null
 +++ b/components/NotificationBell.tsx
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,96 @@
 +import { useCallback, useState } from 'react';
-+import { Pressable, StyleSheet, View } from 'react-native';
++import { Pressable, StyleSheet, Text, View } from 'react-native';
 +import { useFocusEffect } from '@react-navigation/native';
 +import { Ionicons } from '@expo/vector-icons';
 +import { useAuth } from '../hooks/useAuth';
@@ -11831,7 +12802,9 @@ new file mode 100644
 + * that anything was waiting. Both Homes carry this bell in their greeting row;
 + * the dot is the same unread fact the feed's own "Mark all read" counts (rows
 + * without read_at), re-read whenever Home regains focus. A failed read shows
-+ * no dot rather than a guessed one.
++ * no dot rather than a guessed one. 2026-09-27 (the operator's review): the
++ * signal is the unread COUNT in a small mint pill at the ring's corner, "9+"
++ * past nine so it never outgrows the corner — not a dot.
 + */
 +export function NotificationBell({ onPress }: { onPress: () => void }) {
 +  const { palette: colors, isDark } = useThemeColors();
@@ -11861,7 +12834,13 @@ new file mode 100644
 +      accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
 +    >
 +      <Ionicons name="notifications-outline" size={22} color={isDark ? colors.gold : colors.text} />
-+      {unread > 0 ? <View style={styles.dot} /> : null}
++      {unread > 0 ? (
++        <View style={styles.badge}>
++          <Text style={styles.badgeText} numberOfLines={1}>
++            {unread > 9 ? '9+' : String(unread)}
++          </Text>
++        </View>
++      ) : null}
 +    </Pressable>
 +  );
 +}
@@ -11882,16 +12861,25 @@ new file mode 100644
 +      borderColor: colors.homeHairline,
 +    },
 +    pressed: { opacity: 0.8 },
-+    dot: {
++    badge: {
 +      position: 'absolute',
-+      top: spacing.sm + 1,
-+      right: spacing.sm + 2,
-+      width: 9,
-+      height: 9,
-+      borderRadius: 5,
++      top: 1,
++      right: 1,
++      minWidth: 18,
++      height: 18,
++      paddingHorizontal: spacing.xs,
++      borderRadius: 9,
 +      borderWidth: 1.5,
-+      borderColor: colors.surface,
-+      backgroundColor: colors.danger,
++      borderColor: colors.background,
++      backgroundColor: colors.primary,
++      alignItems: 'center',
++      justifyContent: 'center',
++    },
++    badgeText: {
++      fontSize: 10,
++      lineHeight: 12,
++      fontWeight: '800',
++      color: colors.onPrimary,
 +    },
 +  })
 +);
