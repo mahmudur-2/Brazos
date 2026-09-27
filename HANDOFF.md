@@ -1,15 +1,290 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-27 (the review sitting, latest: THE OPERATOR'S REVIEW OF THE LUX AFTER —
-twelve pictures, fixed in the practice copy, the After re-exported and validated 68/68 in both
-schemes, `after.patch` regenerated, NOTHING in the app changed — its section, the first below.
-THE LUX REMAKE DONE (the same day), the brief's own section, THE REFRESH (2026-09-26, the After
-as one patch, NOT applied), the sign-in records, the WebP run's, the Welcome records, the mode
-switch's, the Lux drawing run's, the eighteen-item run's and the sittings before them follow,
-unchanged.
+WRITTEN: 2026-09-27 (the handoff sitting, latest: NEXT SESSION — START HERE, the primer for
+the operator's next remake of the After, which they will brief more specifically — its section,
+the first below. THE OPERATOR'S REVIEW OF THE LUX AFTER, THE LUX REMAKE DONE, the brief's own
+section, THE REFRESH (2026-09-26, the After as one patch, NOT applied), the sign-in records, the
+WebP run's, the Welcome records, the mode switch's, the Lux drawing run's, the eighteen-item
+run's and the sittings before them follow, unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
+
+## NEXT SESSION — START HERE: the operator's next remake of the After, which they will brief more specifically; everything the Lux chat established (2026-09-27, the handoff sitting)
+
+**Read this section first, then the operator's brief. Do not start remaking from this section
+alone.** It is the context; the remake is theirs to specify ("another remake... but I'll be more
+specific"). This sitting changed nothing but this file: not the app, not the practice copy.
+
+### 1. What the operator wants, and how they want it run
+
+- **Another remake of the After**, briefed in the next session's first message. If the brief
+  arrives as chat text or pictures, write it first into `docs/dispatch/<NAME>.md` in the shape
+  of `docs/dispatch/LUX-REMAKE.md` (rulings, screen by screen, mechanics, verification, end), so
+  it outlives the session.
+- **The same boundaries unless the brief moves them.** The Before stays exactly as it is. Every
+  change is made in the practice copy `.shots/refresh/practice`. Nothing in the real app
+  changes. The After reaches the repo only as `docs/mockups/refresh/after.patch`, applied only
+  when the operator says "build it". The operator, this chat: "as always do not change live /
+  real apps code... just the `.shots/refresh/index.html`".
+- **Run shape.** Fully autonomous; the operator steps out. Questions only for big, taste-level
+  decisions, and then as rendered options (memory `brazos-options-first`: a–f options as PNGs,
+  they pick, the pick becomes the reference). Small things are decided, recorded in DECISIONS
+  and reported. Economical with usage: narrow reads, scripted edits, renders in the background,
+  no redundant screenshots. One mobile push at the end.
+- **They number their pictures and complaints.** Answer each by its number in the final report.
+- **The references outrank pictures.** The Lux HTML pages in `docs/mockups/html/lux/`, the
+  SYSTEM_CSS inside `docs/mockups/html/lux/lux.build.mjs` (about lines 217–460), and
+  `.shots/ux-audit/sim.html`, whose `:root` and `.card` match the Lux page number for number.
+  Read the CSS numbers; screenshots are the check. The operator: "there htmls for references i
+  know thats more accurate so reading pics is not always necessary".
+- **The model.** A session cannot switch its own model or effort; the operator does it with
+  `/model` (this sitting moved to Opus 5.5).
+
+### 2. Where the After stands (history by commit; git owns the live state)
+
+- The last commit that touched app code is `b0e54d4` (2026-09-21, the sign-in fix). Every
+  commit since is docs.
+- `ef087db`: the Lux remake, from `docs/dispatch/LUX-REMAKE.md` (15 rulings, 12 screen notes).
+  It carried `after.patch`, the viewer's after-notes, DECISIONS 2026-09-27 "THE LUX REMAKE"
+  (1)–(11), `docs/dispatch/MOTION-INVENTORY.md`, and the baked hero
+  `assets/prestige/hero_armchair_customer_lux.png` + `.webp`. Its HANDOFF is `2061688`.
+- `5f4aaf4`: the operator's review, twelve pictures. It carried DECISIONS "THE OPERATOR'S REVIEW
+  OF THE LUX AFTER" (1)–(9), `after.patch` at 131 files and 13,253 lines, after-notes on twelve
+  entries, and `.maestro/` added to `make-patch.mjs` ROOTS. Its HANDOFF is `ab4aacc`.
+- Verified for `5f4aaf4`: practice `tsc` clean and `node --test` 1269/1269; the After 68/68 in
+  dark and in light; the real `npm run verify` 1393/1393; `git apply --check --ignore-whitespace
+  docs/mockups/refresh/after.patch` clean.
+- **The first check next session.** Run `node docs/mockups/refresh/make-patch.mjs`, then
+  `git status --short docs/mockups/refresh/after.patch`. No output means the practice copy is
+  exactly the committed After.
+- **`.shots/` is gitignored** (`.gitignore:77`). The practice copy, the exports, the renders,
+  the viewer page, `.shots/ux-audit/` and every scratch script exist on this machine only. If
+  the practice copy is ever lost: copy every tracked file into `.shots/refresh/practice`, join
+  `node_modules` to the real one by a junction (the shape `export.mjs`'s header describes), then
+  run `git apply --ignore-whitespace docs/mockups/refresh/after.patch` inside it.
+
+### 3. The pipeline (every command ran green in this chat)
+
+```
+# practice copy — cwd .shots/refresh/practice
+npx tsc --noEmit --pretty false --noUnusedLocals --noUnusedParameters
+node --test $(ls tests/*.test.mjs | grep -v -e tests/safety.test.mjs -e tests/governance.test.mjs)
+
+# render — cwd the real repo
+node docs/mockups/refresh/export.mjs after          # practice → .shots/refresh/after-export (~12 s)
+node docs/mockups/refresh/prepare.mjs after         # relative assets, Inter, iOS safe-area edges
+node docs/mockups/refresh/validate.mjs after dark   # expect: 68/68 arrived in after (dark)
+node docs/mockups/refresh/validate.mjs after light
+node .shots/refresh/shot.mjs after dark <id,id,…>   # → .shots/refresh/shots/after-dark-<id>.png + .txt
+node .shots/refresh/copy-lines.mjs                  # every string that wraps at 393 wide, from the .txt dumps
+
+# land — cwd the real repo
+node docs/mockups/refresh/make-patch.mjs
+git apply --check --ignore-whitespace docs/mockups/refresh/after.patch
+npm run verify
+git push origin mainexpo                            # its own Bash call, nothing chained
+```
+
+- Safety and governance are left out in the practice copy because they read the real tree's
+  guard state; the real `npm run verify` runs them.
+- All 68 shots: two background jobs of 34 ids each. Only one job at a time should drive the
+  browser.
+- The viewer: `file:///C:/Users/mdmah/BRAZOS/.shots/refresh/index.html#<id>`, Before beside
+  After, dark and light. The notes under the phones are the `before` / `after` arrays in
+  `docs/mockups/refresh/screens.js`. Add notes with a script like
+  `.shots/refresh/registry-review-notes.mjs`; a note may not contain a straight quote.
+- Scratch helpers already in `.shots/refresh/`: `shot.mjs`, `copy-lines.mjs`, `icons-check.mjs`
+  (every Ionicons name used has an `-outline` twin), `ground-sweep.mjs`,
+  `auth-theme-codemod.mjs`, `motion-census.mjs`, `hero-lux-bake.mjs` and `hero-lux-webp.mjs`
+  (feathered-alpha bake; WebP through Playwright's canvas, no new dependency),
+  `registry-*-notes.mjs`, `append-decisions*.mjs`, `handoff-*.mjs`.
+
+### 4. What the After wears now (the rulings as built, in the practice copy)
+
+- **Colour.** One mint `#4FC58C` in dark: the action colour, the selection fill and the flat
+  CTA (`ui/tokens.ts` `forest` / `emerald`; `lib/theme.ts` `primary`, `ctaTop` / `ctaBottom`,
+  `success`; `primaryDark` `#3FB07A`). Gold `#D4A24C` only for field labels, section eyebrows,
+  money and the person's name. Hairlines `#325047`. Roles `eyebrow` (light `#0D6B52`, dark
+  `#D4A24C`) and `wizardProgress` (light `#0D6B52`, dark `#5FAE81`). `EYEBROW_TYPE` is
+  12 / 700 / 1.5 / uppercase. Light keeps emerald eyebrows and its own greens.
+- **Ground.** `lib/theme.ts` `screenGround()`, `linear-gradient(165deg, #062421 0%, #0A1A17
+  55%, #07110F 100%)`, on every dark screen: the shell (`navigation/ModeShell.tsx`), the three
+  templates, `HomeAtmosphere`, 27 hand-rolled roots, and the auth scaffold with its rings gone.
+- **The card.** `components/Card.tsx` is `Surface` wearing the `card` material. Dark: fill
+  `#0C2C26` at .58, rim `#C8FFE6` at .24, a white specular edge at .22 inset half the radius,
+  shadow black .42 / radius 17 / y 12 (web `0 12px 34px`), corner 22, a press spring. Light:
+  white under `#102A1D` .1 / 14 / 6. `shadows.cardDark` carries the same shadow for hand-styled
+  cards. This is one notch PAST the Lux numbers (.52 / .20 / .16 / `0 10px 30px .35`), because
+  the operator saw those flat on the lighter top of the ground.
+- **The CTA.** Flat mint, with the Lux `.cta` glow `shadows.ctaDark`
+  (`0 10px 24px rgba(79,197,140,.30)`) under every primary `Button` and the Home pill. OPEN: the
+  Lux gradient `#8DF0C0 → #4FC58C` (DECISIONS review (9)); if the operator says "the Lux
+  gradient", it is one token, `ctaTop`.
+- **Fields.** `ui/primitives/SearchBar.tsx` wears `wells.field` in dark (`#031410` at .55 under
+  `#C8FFE6` at .14, the Lux `.field`), with the magnifier and the idle mic in mint. The Map's
+  `emphasis="ink"` pill is untouched. `TextField` / `AuthField` wells are white at .06 in dark,
+  with gold labels.
+- **Segments.** `components/SegmentedControl.tsx` is the Lux `.seg2`: a 52 track (4 padding, the
+  rim, text at .06), the chosen cell FILLED with `primary` and `onPrimary` ink, labels 15 / 700,
+  cells never under 44. Its callers: My jobs (dials `myJobs.tabs.height` 52 and `.radius` 26),
+  the client's bid sort, the alert radius, Post-a-job's pricing choice, Profile, Services.
+- **Chips.** A chosen chip KEEPS its glass and lights its rim and glyph mint (ruling 11). The
+  Lux CSS itself fills a chosen chip (`.chip.f.on{background:var(--acc)}`); see §6.
+- **Icons.** `outlineIcon()` in `components/ServiceTileRow.tsx`: the Lux line icons, mint in
+  dark, on the service tiles and every category glyph on a card.
+- **Pinned.** Map and the Filters sheet keep today's exact colours through
+  `PalettePinContext` (`hooks/useThemeColors.ts`, `mapPalette()` / `mapEmerald()`). The nav bar
+  is untouched (`navBarPalette()`).
+- **Motion.** The published-job check draws itself (`components/SuccessMark.*`: two strokes
+  through `lib/motion120`, Reanimated where present, a native-driver fallback, still under
+  Reduce Motion). Cards spring under the finger. The Post-a-job progress bar and the worker's
+  stepper crossfade in 220 ms. The census and the later pass: `docs/dispatch/MOTION-INVENTORY.md`.
+- **Screens.** Home: no "Browse workers" line, the Lux-baked hero
+  `hero_armchair_customer_lux.webp`, the tagline on three lines, the task card lifted. Post a
+  job: no pinned Continue on steps 1–3 (the reason sits under the blocking field and the header
+  link greys), Publish on step 4, fields grouped in pop-out cards per the Lux post pages, the
+  placeholders "e.g. Walk my dog on weekdays" and "e.g. Sheepshead Bay" (the Maestro flow
+  follows them). My jobs: the title and its line only, the count beside the section label (the
+  Lux `.badge`), "Post another job" a compact pill. Hub cards break a next-action at its em
+  dash. The bell shows the unread count. Setup and the legal gate follow the scheme. The auth
+  flow sits on the Lux ground with gold eyebrows and the "US +1 ›" pill.
+- **Copy.** One line per subtitle, hint and helper (37 cut). What stayed long, and why, is the
+  Lux remake entry's (10) in DECISIONS.
+
+### 5. The operator's taste: the pattern across every complaint in this chat
+
+1. **Lift above all.** "The biggest difference is literally just making it more 3d tab popping
+   out and visually more appealing / cleaner." Cards, tabs and pills visibly stand off the
+   ground: shadow, specular edge, rim. When in doubt, more lift.
+2. **One accent.** Mint `#4FC58C` for anything chosen, active or tappable: filled pills, CTAs,
+   icons, links. Gold is type only (labels, eyebrows, money, the name), never a hairline, ring,
+   border or decorative glyph. They removed the gold summary-card rim and the gold briefcase.
+3. **No chrome that eats space.** Eyebrows that repeat the title ("YOUR WORK"), decorative marks
+   (the briefcase), rings and duplicate links ("Browse workers") go. Fixed headers sit as high
+   and tight as the safe area allows, so more content shows.
+4. **Compact, round pills** over full-width bars ("smaller and rounder", about half the width).
+   Segmented pills shaped like the Lux `.seg2`, "anywhere on app".
+5. **Numbers beside their labels** ("next to YOU POSTED"). Counts, not dots, on badges.
+6. **One line of copy.** Two lines only "in a nice way": broken at a meaningful point such as
+   the em dash, never an orphan word ("66h" alone).
+7. **Fields are wells:** darker than the card they sit in, with mint icons.
+8. **Style fixes never move layouts** ("do not change the layouts etc").
+9. **Fidelity to the references' numbers**, read from the CSS, not approximated ("look at the
+   html references carefully").
+10. **Smart guessing is welcome.** "Use your common sense... look at the pattern of my
+    complaints." Small things are decided and recorded; big things are asked, as options.
+11. **Everything feels 120 Hz** (memory `brazos-120hz-smoothness`).
+12. **Plans and questions in the most concise plain English, key questions first** (memory
+    `brazos-plan-style`).
+
+### 6. Seen in this chat's renders, not fixed (none was on the operator's lists): candidates
+
+- **Step 1's back link** is the bare gold circle, but `docs/dispatch/LUX-REMAKE.md` screen 8
+  says "< Home" on step 1. `screens/PostJobScreen.tsx` passes no `backLabel` on step 0.
+- **Gold lines still drawn.** On the client's job detail (`job-open`): the "Bids Pending (2)"
+  pill's rim, the "Furniture Assembly" chip's rim and glyph, the category well's glyph, and the
+  timing clock's ring. On Notification settings (`notif`): the gold ring round every row glyph
+  and the gold toggle thumbs. Taste rule 2 says these become mint or neutral.
+- **Mixed label styles on one step.** Post-a-job step 3's "Which day?" and "Arrival window" are
+  white bold labels, while TITLE, AREA and SERVICE ADDRESS above them are gold eyebrows.
+- **The address caption** "Never shown until you hire — can see after job is accepted." wraps
+  to two lines inside its card. `tests/postJobPublish.test.mjs` (D11/PJ1-C7) pins the sentence,
+  so shortening it needs a ruling.
+- **The worker's Available Jobs cards** (`w-jobs`): the "Your job" chip collides with the price,
+  and titles truncate hard ("Assemble a …", "Mount a 55-i…") because the EST. PAY block takes
+  the width.
+- **Worker Home's greeting** truncates to "Good morni…" beside the bell and the Switch to
+  Customer pill.
+- **"TV mounting"** wraps to two lines under its tile on both Homes.
+- **Chips against the reference.** Ruling 11 keeps chosen chips glass; the Lux CSS fills them
+  mint. If "pills anywhere" was meant to include chips (distance, day, arrival window,
+  category), it is a change in `components/Chip.tsx`. Ask, or take the brief's word.
+- **Light was validated, not looked at.** Every light screen arrived 68/68, but this chat
+  reviewed the dark renders only.
+
+### 7. Fences that pin the After's look (move expected constants only, each with the date and the ruling; never the logic)
+
+- `tests/themeTokens.test.mjs`: the material table (the card's numbers), light/dark key parity,
+  hex only in the three token surfaces, the one-serif fence.
+- `tests/themeResolution.test.mjs`: the BAKED_ART roster ('baked-feathered': RGBA, minimum alpha
+  0, transparent under 30 %, partial over 5 %), the gated mounts
+  (`hero_armchair_customer_lux.webp`), no raw colour literal in screens, components, ui, hooks,
+  navigation or modes.
+- `tests/goldOnForest.test.mjs`: `D6_SURFACES`. The SegmentedControl and the My jobs tabs left
+  the list; chips stay on it.
+- `tests/customerCore.test.mjs`: SegmentedControl must keep `minHeight: 44`,
+  `accessibilityRole="tab"` and `accessibilityState={{ selected }}`.
+- `tests/screenDials.test.mjs`: every dial's `drew`, `parent` and `fallback`. It parses
+  `ui/designStudioSchema.ts` with a strict regex, so **no comment may sit inside a dial
+  object**. A screen reads `useDialNumber('<key>') ?? <fallback>` exactly, and an UPPER_CASE
+  fallback must be a `const NAME = value;` in the same file.
+- `tests/workerHome.test.mjs`: needs the exact line
+  `import { ServiceTileRow } from '../components/ServiceTileRow';`, so other names go on a
+  separate import line; also the summary card's rim.
+- `tests/voiceSearch.test.mjs`: the mic and magnifier colour expressions, verbatim.
+- `tests/postJobPublish.test.mjs`: the privacy sentences, the one info card on
+  `<Card style={styles.infoCard}>`, `reasonUnder`, the footer on the last step only.
+- Copy fences that keep sentences long: `jobCompletions`, `accountDeletion`, `paymentsMode`,
+  `platformFee`, `stripePayments`, `pricingMode`, `chatComposer`, `shotHarness`, `copyTruth`.
+- Also moved in this chat, with dated reasons: `emeraldFences`, `layout`, `mode`, `rimLight`,
+  `setupOnboarding`, `legalGate`, `conversion`.
+- In `ui/tokens.ts`, a new group that reads `CARD_INK` or `CARD_RIM` must be declared after
+  them; a constant read too early throws at load and fails whole test files.
+
+### 8. Guards and traps (each cost a retry in this chat)
+
+- `node -e` is refused (GUARD-DYNEXEC). Write a script under `.shots/refresh/` and run it.
+- Writing outside the project is refused (GUARD-PATH-ESCAPE), the session scratchpad and the
+  memory directory included. Scratch lives in `.shots/refresh/`; preferences live in this file.
+- A shell command containing the co-author trailer's words is refused as a nested session
+  (GUARD-NESTED-CLAUDE). Write commit messages with the Write tool and `git commit -F <file>`.
+- The push must be its own Bash call, exactly `git push origin mainexpo`. Chained after anything,
+  it is refused (GUARD-GIT).
+- Image reads need the session launched with image authorization, and a command that names the
+  evidence variable is refused. Subagents are refused.
+- Two shell calls in flight with different working directories raced once and wrote into the
+  real tree. Use absolute paths, never `cd` in parallel calls, and check `git status` for app
+  files before every commit.
+- The Grep tool returns nothing for a brace glob combined with a `path`; search per directory.
+  ESM imports with absolute `C:/` paths fail; use relative ones.
+- The working copy is CRLF, so git warns on every add. `make-patch.mjs` and `git apply` use
+  `--ignore-whitespace`.
+
+### 9. The operator's own uncommitted work: never stage it; it may be the next reference
+
+- Modified: `docs/mockups/html/lux/index.html` (1 line) and `docs/mockups/html/lux/lux.build.mjs`
+  (+471 lines).
+- Untracked: nine "(Fable)" Lux pages, `lux-{welcome,signin,home,post-review,cjob,compare,
+  checkout,chat,review-tip}-fable.html`, titled "BRAZOS — Emerald Lux Glass — <screen>
+  (Fable)"; `lux-modes.mjs` and `lux-modes.build.mjs`, a text transform that writes any Lux page
+  in dark or light (one system font, every icon sized); and `modes/` (137 files:
+  `lux-<key>.dark.html` / `.light.html`, `index.html`, `img/`).
+- They came from another chat. Ask before treating them as the brief's reference, and never
+  `git add` them.
+
+### 10. The 68 viewer ids (the recipes are in `docs/mockups/refresh/screens.js`)
+
+- Sign-up & sign-in: welcome signin-phone signin-email create-phone create-email verify legal
+  setup
+- Customer: home create-sheet discover discover-results worker-profile post-what post-media
+  post-where post-review post-price myjobs myjobs-draft job-open job-bids bid-detail counter
+  accept job-assigned job-assigned-pay track job-done approve job-paid
+- Worker: w-home w-jobs w-filters w-map w-detail w-detail-bid w-submit w-myjobs w-home-summary
+  w-job-hired w-route w-job w-job-end w-checklist w-earnings w-services
+- Messages: inbox inbox-manage chat chat-menu chat-block report feed
+- Profile & settings: profile profile-more profile-worker details edit safety safety-more notif
+  appearance payment terms saved delete mode-switch
+
+### 11. How the run ends (the contract, as this chat ran it)
+
+1. The practice copy green (tsc and tests); the After exported, prepared and validated 68/68 in
+   both schemes; the changed screens shot and looked at.
+2. `after.patch` regenerated and `git apply --check` clean; a dated DECISIONS entry; after-notes
+   in `screens.js`.
+3. `npm run verify` exit 0 in the real tree; commits by explicit path, never the operator's Lux
+   files; HANDOFF rewritten as the last commit; `git push origin mainexpo` on its own; one mobile
+   push naming what finished and whether verification passed.
 
 ## THE OPERATOR'S REVIEW OF THE LUX AFTER — twelve pictures, fixed in the practice copy; the After is `docs/mockups/refresh/after.patch`, NOT applied (2026-09-27, the review sitting); docs `5f4aaf4`, nothing in the app changed
 
