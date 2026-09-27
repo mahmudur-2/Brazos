@@ -1,14 +1,90 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-27 (the refresh chat, latest: THE LUX REMAKE — the operator reviewed the
-viewer and ruled the After remade against the Emerald Lux pages; the brief is
-`docs/dispatch/LUX-REMAKE.md`; the run awaits its launch — its section, the first below. THE
-REFRESH (2026-09-26, the After as one patch, NOT applied), the sign-in records, the WebP run's,
-the Welcome records, the mode switch's, the Lux drawing run's, the eighteen-item run's and the
-sittings before them follow, unchanged.
+WRITTEN: 2026-09-27 (the Lux remake run, latest: THE LUX REMAKE DONE in the practice copy —
+the After remade against the Emerald Lux pages under `docs/dispatch/LUX-REMAKE.md`, exported,
+validated 68/68 in both schemes, `after.patch` regenerated, NOTHING in the app changed — its
+section, the first below. The brief's own section, THE REFRESH (2026-09-26, the After as one
+patch, NOT applied), the sign-in records, the WebP run's, the Welcome records, the mode
+switch's, the Lux drawing run's, the eighteen-item run's and the sittings before them follow,
+unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
+
+## THE LUX REMAKE — DONE in the practice copy; the After is `docs/mockups/refresh/after.patch`, NOT applied (2026-09-27, the Lux remake run); docs `ef087db`, nothing in the app changed
+
+**What just happened.** The run in `docs/dispatch/LUX-REMAKE.md` ran end to end in
+`.shots/refresh/practice` (the practice copy; the real tree's app files never moved — proven at
+the end by `git status`, which lists docs and the two new art files only). The rulings, as
+built (the dated record is `docs/DECISIONS.md` 2026-09-27 "THE LUX REMAKE", sub-entries
+(1)–(11)):
+- THE TOKENS: one mint `#4FC58C` as the action colour and the flat CTA fill in dark; gold
+  `#D4A24C` kept for field labels, section eyebrows, money and the name; two new roles,
+  `eyebrow` and `wizardProgress`; the `card` material — the Lux glass card flat (fill
+  rgba(12,44,38,.52), rim rgba(200,255,230,.20), specular .16, shadow 0 10 30 .35, r22; light:
+  white on a soft shadow); `screenGround()` — the Lux 165° gradient — on every dark screen,
+  the shell and the auth flow included; Map and the Filters sheet PINNED to today's colours by
+  `PalettePinContext` (one context, no per-file edits).
+- THE COMPONENTS: `Card` on the material with the press spring; chips keep the glass and light
+  the rim and glyph mint; `outlineIcon()` for the Lux line icons on tiles and every category
+  glyph on a card; the bare back control a circle (gold on Discover); the phone pill "US +1 ›";
+  Setup and the legal gate themed (today's layouts); Post a job with no pinned Continue on
+  steps 1–3 (the reason under the blocking field, the header link greys), the progress bar
+  crossfading; the worker's stepper crossfading; the published-job check DRAWS ITSELF through
+  the motion boundary (Reanimated where present, a native-driver fallback where not); Home
+  without the "Browse workers" line, the hero re-baked with the Lux radial mask
+  (`assets/prestige/hero_armchair_customer_lux.png` + `.webp`, 'baked-feathered' on the
+  roster), the tagline THREE lines by the brief's Home note.
+- THE COPY PASS: 103 wrapped strings on the dark dumps at 393 wide; 37 subtitles, hints and
+  helpers cut to one line; every sentence left long is listed with its reason in DECISIONS (10)
+  — the sandbox and paused-payments sentences, the money and no-tracking honesty, the fenced
+  completion-media and posted-price lines, the deletion list, the legal statement, the Media
+  privacy note at two lines by the ruling.
+- THE FENCES moved with the rulings, never weakened — expected constants with this date and the
+  ruling in themeTokens, themeResolution, emeraldFences, goldOnForest, layout, mode, workerHome,
+  rimLight, setupOnboarding, legalGate, postJobPublish, conversion, voiceSearch, shotHarness.
+  Practice copy at the end: `tsc --noUnusedLocals --noUnusedParameters` clean; `node --test`
+  1269 / 1269 (every file but safety and governance, which read the real tree's guard state).
+- THE AFTER: exported, prepared, validated `68/68 arrived in after (dark)` and `(light)`; 68
+  dark renders with text dumps in `.shots/refresh/shots/after-dark-*.png|txt`; the viewer at
+  `.shots/refresh/index.html`, its registry `docs/mockups/refresh/screens.js` carrying the
+  copy changes as after-notes (24 entries); `after.patch` regenerated — 127 files, 12,265
+  lines, `git apply --check --ignore-whitespace docs/mockups/refresh/after.patch` clean against
+  the real tree. `docs/dispatch/MOTION-INVENTORY.md` is the motion census the brief asked for.
+
+**Left as it is, with the reason.** The worker's toolbox was NOT re-baked: on the roster it is
+`transparent` — a cut-out with no painted ground — so it already sits on the Lux gradient
+with no edge (the `w-home` render), and the radial bake exists for the armchair, whose master
+carries a ground. The Home tagline stays three explicit lines (the brief's screen 6) although
+the Lux home page draws it as one span.
+
+**Operator, and device-only.** The viewer is the review: `.shots/refresh/index.html`, Before
+beside After. "Build it" is the next run — apply the patch in the real tree, copy nothing
+(the two art files are already in `assets/prestige/`), `npm run verify`, commit, OTA. Only
+the phone shows the 120 Hz check, the press spring and Continue riding the keyboard.
+
+**A preference to keep (memory is write-blocked).** The operator said, this run: the Lux HTML
+pages are the reference — `docs/mockups/html/lux/` and the SYSTEM_CSS numbers in
+`lux.build.mjs` — "reading pics is not always necessary"; screenshots are the check, the
+pages are the source. The memory directory outside the repo is refused by the guard
+(GUARD-PATH-ESCAPE), so this line is the record.
+
+**An incident, repaired.** Two shell calls issued in parallel with different working
+directories raced: one `sed` meant for the practice copy wrote an import line into the real
+`screens/WorkerHomeScreen.tsx` and `components/CreateSheet.tsx`. Both lines were reversed the
+same sitting by hand-checked `sed` on the absolute paths; `git status` then showed no app
+file modified. Rule from it: absolute paths, one working directory, never two `cd`s in
+flight at once.
+
+**Untracked and untouched.** The operator's own pages under `docs/mockups/html/lux/`
+(`lux-*-fable.html`, `lux-modes.mjs`, `lux-modes.build.mjs`, `modes/`) and that folder's
+modified `index.html` and `lux.build.mjs` predate this run and were not staged.
+
+**Verification and the push.** `npm run verify` in this tree, this sitting, before the docs commit `ef087db`: exit 0 (lint = `tsc --noEmit --noUnusedLocals --noUnusedParameters`, then `node --test tests/*.test.mjs`). Pushed as the run's last act, after this file's commit, with the one permitted form `git push origin mainexpo`; every commit green.
+
+**Next.** The operator reviews the viewer; on "build it", the patch lands in the real tree
+(`git apply --ignore-whitespace docs/mockups/refresh/after.patch`), then `npm run verify`,
+the commit, the OTA to the Beta.
 
 ## THE LUX REMAKE — brief written, run not started (2026-09-27, the refresh chat, latest); nothing in the app changed
 
