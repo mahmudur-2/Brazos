@@ -1,0 +1,535 @@
+<title>Publish Moment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#050C0B;
+  --panel:#0A1613;
+  --line:#1B2F29;
+  --line-strong:#2E6B53;
+  --text:#EAF0EC;
+  --muted:#93A59D;
+  --mint:#4FC58C;
+  --mint-lt:#7EE2B4;
+  --gold:#D4A24C;
+  --card-min:232px;
+  --dur:7s;
+  --ease:cubic-bezier(.4,0,.2,1);
+}
+body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;padding-inline:16px;padding-block:28px 56px}
+.wrap{max-width:1360px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:18px}
+.kicker{font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--gold)}
+.top h1{margin:6px 0 0;font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:clamp(26px,4.2vw,38px);line-height:1.08;letter-spacing:-.4px;text-wrap:balance}
+.lede{margin:10px 0 0;max-width:64ch;color:var(--muted);font-size:14px;line-height:1.55}
+.controls{display:flex;flex-wrap:wrap;gap:8px}
+.ctl{height:40px;padding:0 16px;border-radius:20px;border:1px solid #28443C;background:#0C1E19;color:var(--text);font:600 13px/1 Inter,system-ui,sans-serif;cursor:pointer}
+.ctl[aria-pressed="true"]{background:var(--mint);border-color:transparent;color:#04170F}
+.ctl:focus-visible{outline:2px solid var(--mint-lt);outline-offset:2px}
+.notice{margin:0;padding:12px 14px;border-radius:14px;background:#10231E;border:1px solid var(--line);color:var(--muted);font-size:13px;line-height:1.5}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(var(--card-min),100%),1fr));gap:22px}
+.opt{display:flex;flex-direction:column;gap:12px;padding:14px;border-radius:24px;background:var(--panel);border:1px solid var(--line);min-width:0}
+.opt.rec{border-color:var(--line-strong);box-shadow:0 0 0 1px rgba(79,197,140,.12),0 18px 40px rgba(0,0,0,.35)}
+.opt-head{display:flex;align-items:center;gap:10px}
+.letter{flex:none;width:28px;height:28px;border-radius:14px;background:#12302A;color:var(--mint-lt);display:grid;place-items:center;font-size:13px;font-weight:800}
+.opt-name{font-size:15px;font-weight:700}
+.rec-tag{margin-left:auto;padding:4px 9px;border-radius:10px;background:var(--mint);color:#04170F;font-size:11px;font-weight:800;letter-spacing:.4px}
+.opt-desc{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
+.stage{position:relative;width:100%;aspect-ratio:410/864;max-width:100%}
+.why{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:14px}
+.why h2{grid-column:1/-1;margin:8px 0 0;font-family:Georgia,"Times New Roman",serif;font-size:24px;letter-spacing:-.3px}
+.why div{padding:14px 16px;border-radius:18px;background:var(--panel);border:1px solid var(--line)}
+.why b{display:block;font-size:14px;margin-bottom:5px}
+.why span{color:var(--muted);font-size:13px;line-height:1.5}
+body.paused .phone,body.paused .phone *,body.paused .phone *::after{animation-play-state:paused!important}
+
+/* ============ the phone (390 x 844 pt screen) ============ */
+.phone{position:absolute;left:0;top:0;width:410px;height:864px;transform-origin:0 0;font-family:Inter,system-ui,-apple-system,sans-serif}
+.phone *{box-sizing:border-box}
+.bezel{position:absolute;inset:0;border-radius:62px;background:#0B0F0E;box-shadow:inset 0 0 0 2px #1F2B28,0 30px 60px rgba(0,0,0,.55)}
+.screen{position:absolute;left:10px;top:10px;width:390px;height:844px;border-radius:52px;overflow:hidden;background:linear-gradient(165deg,#062421 0%,#0A1A17 55%,#07110F 100%);color:#F3F1E8;isolation:isolate}
+.scr{position:absolute;inset:0}
+.review{z-index:1}
+.live{z-index:2;opacity:0}
+.fx{position:absolute;opacity:0;pointer-events:none;z-index:30}
+
+.status{position:absolute;left:0;right:0;top:0;height:54px;z-index:50;color:#F3F1E8}
+.status .time{position:absolute;left:40px;top:17px;font-size:16px;font-weight:600;letter-spacing:-.2px}
+.status .island{position:absolute;left:133px;top:11px;width:124px;height:36px;border-radius:18px;background:#000}
+.status .sic{position:absolute;right:28px;top:19px;display:flex;gap:6px;align-items:center}
+.status svg{fill:currentColor}
+
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:40;background:#071C16;border-top:1px solid #1F342E;display:grid;grid-template-columns:repeat(5,1fr)}
+.tab{display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:12px;font-size:12px;font-weight:500;line-height:14px;color:#9FA9A3}
+.tab .ic{height:26px;display:flex;align-items:center}
+.tab.on{color:#40CB87;font-weight:600}
+.fabc{display:flex;justify-content:center;padding-top:6px}
+.fab{width:58px;height:54px;border-radius:16px;background:#0C6C54;display:grid;place-items:center;box-shadow:0 6px 18px rgba(12,108,84,.45)}
+.homeind{position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:#E8ECEB}
+
+/* shared app pieces */
+.card{border-radius:22px;background:rgba(12,44,38,.58);border:1px solid rgba(200,255,230,.24);box-shadow:0 12px 34px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.10)}
+.eb{font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#D4A24C;line-height:16px}
+.hint{font-size:12px;color:#7E918A}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.jt{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:21px;line-height:26px;letter-spacing:-.2px;color:#F3F1E8}
+.lab{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:1.2px;color:#A9B8B1;line-height:14px}
+.lab svg{width:14px;height:14px;fill:none;stroke:#4FC58C;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.val{margin-top:5px;font-size:15px;font-weight:600;line-height:20px;color:#F3F1E8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.val .sub{font-weight:500;color:#A9B8B1}
+.dgrid{display:grid;grid-template-columns:1fr 1fr;column-gap:14px;row-gap:12px}
+.hr{height:1px;background:#1A3A33}
+.chip{display:inline-block;margin-top:4px;padding:3px 10px;border-radius:12px;background:rgba(79,197,140,.12);border:1px solid rgba(79,197,140,.28);color:#7EE2B4;font-size:13px;font-weight:600;line-height:18px}
+
+/* review screen */
+.hdr{position:absolute;left:0;right:0;top:58px;height:40px}
+.circ{position:absolute;left:16px;top:2px;width:36px;height:36px;border-radius:18px;background:rgba(12,44,38,.58);border:1px solid rgba(200,255,230,.24);display:grid;place-items:center}
+.circ svg{width:18px;height:18px;margin-left:-1px;fill:none;stroke:#D4A24C;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.hlab{position:absolute;left:60px;top:0;line-height:40px;font-size:17px;font-weight:700;color:#D4A24C}
+.htitle{position:absolute;left:0;right:0;top:0;text-align:center;line-height:40px;font-size:17px;font-weight:700}
+.rv-top{position:absolute;left:16px;right:16px;top:104px;display:flex;flex-direction:column}
+.h1{margin-top:4px;font-size:28px;line-height:32px;font-weight:700;letter-spacing:-.4px}
+.bars{margin-top:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.bars i{height:4px;border-radius:2px;background:#4FC58C}
+.blabels{margin-top:6px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:11px;line-height:14px;color:#A9B8B1}
+.blabels .cur{color:#F3F1E8;font-weight:700}
+.seg{margin-top:12px;display:flex;gap:4px;height:46px;padding:4px;border-radius:23px;background:rgba(255,255,255,.06);border:1px solid rgba(200,255,230,.14)}
+.sg{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:18px;font-size:15px;font-weight:700;color:rgba(243,241,232,.85)}
+.sg.on{background:#4FC58C;color:#062018}
+.sg svg{width:18px;height:18px}
+.sg.on svg{fill:currentColor}
+.sg:not(.on) svg{fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.pf{margin-top:8px;display:flex;align-items:center;gap:8px;height:48px;padding:0 18px;border-radius:24px;background:rgba(3,20,16,.55);border:1px solid rgba(200,255,230,.14)}
+.pf .m{font-size:15px;color:#A9B8B1}
+.pf .v{font-size:17px;font-weight:700;color:#F3F1E8}
+.pf svg{margin-left:auto;width:20px;height:20px;fill:none;stroke:#4FC58C;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.sum{position:absolute;left:16px;top:318px;width:358px;height:292px}
+.sumbody{padding:16px 18px;display:flex;flex-direction:column}
+.sumbody .jt{margin-top:8px}
+.mh{margin-top:12px;display:flex;justify-content:space-between;align-items:center}
+.mh .cnt{letter-spacing:0;font-weight:500;color:#7E918A}
+.mh .edit{font-size:13px;font-weight:600;color:#7EE2B4}
+.tiles{margin-top:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.tile{position:relative;height:84px;border-radius:12px;border:1px solid #304F47;overflow:hidden}
+.t1{background:linear-gradient(#22322E 0 60%,#3A2F25 60%)}
+.t1::before{content:"";position:absolute;left:10%;bottom:16%;width:62%;height:38%;border-radius:3px;background:linear-gradient(90deg,#A27B4F 0 44%,#D1B27C 44% 54%,#A27B4F 54%)}
+.t1::after{content:"";position:absolute;right:9%;top:10%;width:26%;height:38%;border-radius:2px;background:#5E8277;box-shadow:inset 0 0 0 3px #3C5A53}
+.t2{background:linear-gradient(#1F2E2B 0 64%,#382D24 64%)}
+.t2::before{content:"";position:absolute;left:12%;top:12%;width:40%;height:44%;background:#6F948A;box-shadow:inset 0 0 0 3px #3C5A53}
+.t2::after{content:"";position:absolute;right:12%;bottom:14%;width:48%;height:40%;border-radius:3px;background:linear-gradient(90deg,#A27B4F 0 45%,#D1B27C 45% 55%,#A27B4F 55%)}
+.t3{background:linear-gradient(#1A2825 0 60%,#33291F 60%)}
+.t3::before{content:"";position:absolute;left:14%;bottom:22%;width:44%;height:26%;border-radius:3px;background:#9B764B}
+.play{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:rgba(6,32,24,.75);border:1px solid rgba(243,241,232,.35)}
+.play::after{content:"";position:absolute;left:9px;top:7px;border-style:solid;border-width:5.5px 0 5.5px 9px;border-color:transparent transparent transparent #F3F1E8}
+.dur{position:absolute;right:5px;bottom:5px;font-size:10.5px;font-weight:700;color:#fff;background:rgba(0,0,0,.6);padding:2px 5px;border-radius:6px;line-height:1.2}
+.sumbody .hr{margin-top:14px}
+.sumbody .dgrid{margin-top:13px}
+.note{position:absolute;left:20px;top:630px;margin:0;display:flex;align-items:center;gap:10px;font-size:13px;line-height:18px;color:#A9B8B1;white-space:nowrap}
+.note svg,.notify svg{flex:none;width:18px;height:18px;fill:none;stroke:#4FC58C;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+.bar{position:absolute;left:0;right:0;top:708px;height:53px;display:flex;align-items:flex-start;gap:14px;padding:0 16px;background:#0A231E;border-top:1px solid #2C4D44}
+.btn{height:52px;border-radius:26px;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;white-space:nowrap;min-width:0}
+.btn svg{flex:none}
+.btn.draft{flex:3 1 0;gap:12px;background:#081F19;border:1.5px solid #2E765A;color:#ABB4AE;font-weight:600}
+.btn.draft svg{width:20px;height:20px;fill:none;stroke:#AFB8B3;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.btn.pub{flex:4 1 0;gap:10px;background:#4FC58C;color:#030A12;font-weight:700;letter-spacing:-.2px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.09),0 0 22px rgba(79,197,140,.26)}
+.rocket,.fx-rocket svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.rocket circle,.fx-rocket svg circle{fill:currentColor;stroke:none}
+.btn.pub .arrow{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+/* live screen (the proposed design) */
+.tick{position:absolute;left:157px;top:74px;width:76px;height:76px;border-radius:24px;background:rgba(12,44,38,.72);border:1px solid rgba(126,226,180,.35);box-shadow:0 0 0 6px rgba(79,197,140,.06),0 14px 34px rgba(0,0,0,.45),0 0 30px rgba(79,197,140,.22);display:grid;place-items:center}
+.tick svg{width:40px;height:40px;fill:none;stroke:#7EE2B4;stroke-width:4.4;stroke-linecap:round;stroke-linejoin:round}
+.tickpath{stroke-dasharray:34;stroke-dashoffset:0}
+.tick-echo{position:absolute;left:157px;top:74px;width:76px;height:76px;border-radius:24px;border:2px solid rgba(126,226,180,.7);opacity:0}
+.lv-title{position:absolute;left:0;right:0;top:170px;text-align:center;font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:32px;line-height:38px;letter-spacing:-.5px}
+.lv-sub{position:absolute;left:0;right:0;top:214px;text-align:center;font-size:15px;line-height:21px;color:#A9B8B1}
+.pubcard{position:absolute;left:16px;top:250px;width:358px;height:229px}
+.pubbody{padding:18px 18px 16px;display:flex;flex-direction:column}
+.pubbody .jt{margin-top:10px}
+.pubbody .hr{margin-top:14px}
+.pubbody .dgrid{margin-top:12px}
+.next{position:absolute;left:16px;top:493px;width:358px;padding:14px 16px;border-radius:20px;background:rgba(12,44,38,.40);border:1px solid rgba(200,255,230,.14)}
+.stepper{position:relative;margin-top:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stepper::before{content:"";position:absolute;left:7px;right:95px;top:6px;height:2px;background:#325047}
+.stepper::after{content:"";position:absolute;left:7px;width:56px;top:6px;height:2px;background:linear-gradient(90deg,#4FC58C,rgba(79,197,140,0))}
+.st{position:relative;display:flex;flex-direction:column;align-items:flex-start;min-width:0}
+.st i{position:relative;z-index:1;width:14px;height:14px;border-radius:50%;background:#0A1F1B;border:2px solid #325047;margin-bottom:6px}
+.st.on i{background:#4FC58C;border-color:#4FC58C;box-shadow:0 0 0 4px rgba(79,197,140,.16)}
+.st.on i::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid rgba(126,226,180,.6);animation:pulse 1.8s ease-out infinite}
+.st b{font-size:13px;font-weight:700;line-height:17px;color:#F3F1E8}
+.st span{font-size:11.5px;line-height:15px;color:#A9B8B1}
+.notify{position:absolute;left:20px;top:618px;margin:0;display:flex;align-items:center;gap:10px;font-size:13px;line-height:18px;color:#A9B8B1;white-space:nowrap}
+@keyframes pulse{0%{transform:scale(.6);opacity:.9}100%{transform:scale(1.6);opacity:0}}
+
+/* overlays used by the options */
+.fx-tap{left:252px;top:711px;width:48px;height:48px;border-radius:24px;background:rgba(255,255,255,.26);box-shadow:0 0 0 2px rgba(255,255,255,.35);z-index:60}
+.fx-wash{inset:0;background:radial-gradient(120% 70% at 70% 100%,rgba(79,197,140,.55),rgba(79,197,140,.12) 45%,rgba(79,197,140,0) 70%)}
+.fx-streak{left:239px;top:-65px;width:3px;height:800px;border-radius:2px;transform-origin:50% 100%;transform:rotate(10.9deg) scaleY(0);background:linear-gradient(to top,rgba(126,226,180,0) 0%,rgba(126,226,180,.9) 5%,rgba(126,226,180,.25) 60%,rgba(126,226,180,0) 100%)}
+.fx-rocket{left:229px;top:723px;width:23px;height:23px;color:#030A12;filter:drop-shadow(0 0 6px rgba(126,226,180,.6))}
+.fx-seal{left:177px;top:709px;width:197px;height:52px;border-radius:26px;background:#4FC58C;box-shadow:0 0 22px rgba(79,197,140,.30);display:grid;place-items:center}
+.seal-lbl{font-size:16px;font-weight:700;color:#030A12}
+.seal-ring{position:absolute;left:50%;top:50%;width:70px;height:70px;margin:-35px 0 0 -35px;transform:rotate(-90deg);fill:none;stroke:#7EE2B4;stroke-width:3;stroke-linecap:round;stroke-dasharray:195;stroke-dashoffset:195;opacity:0}
+.seal-tick{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;fill:none;stroke:#030A12;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:20;stroke-dashoffset:20;opacity:0}
+.fx-rings{inset:0;opacity:1}
+.r{position:absolute;left:226px;top:685px;width:100px;height:100px;border-radius:50%;border:2px solid rgba(126,226,180,.85);box-shadow:0 0 16px rgba(79,197,140,.35),inset 0 0 14px rgba(79,197,140,.18);opacity:0;transform:scale(.3)}
+.pin{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#7EE2B4;box-shadow:0 0 0 4px rgba(79,197,140,.18),0 0 14px rgba(126,226,180,.7);opacity:0;transform:scale(0)}
+.p1{left:84px;top:612px}.p2{left:332px;top:540px}.p3{left:150px;top:420px}.p4{left:304px;top:318px}.p5{left:70px;top:262px}.p6{left:226px;top:182px}.p7{left:352px;top:132px}
+.rlabel{position:absolute;left:0;right:0;top:672px;text-align:center;font-size:13px;font-weight:600;color:#7EE2B4;opacity:0}
+.fx-flip{left:16px;top:318px;width:358px;height:292px;perspective:1400px}
+.flip-inner{position:absolute;inset:0;transform-style:preserve-3d}
+.face{position:absolute;inset:0;border-radius:22px;overflow:hidden;-webkit-backface-visibility:hidden;backface-visibility:hidden;background:linear-gradient(165deg,#0B2C26 0%,#0A231F 70%);border:1px solid rgba(200,255,230,.24);box-shadow:0 18px 40px rgba(0,0,0,.45)}
+.face.back{transform:rotateY(180deg)}
+
+/* ============ timeline: one loop = var(--dur) ============
+   0-14% review at rest · 14-20% the tap · 20-48% the transition
+   48-88% the live page · 88-96% back to review */
+.run .fx-tap{animation:tap var(--dur) var(--ease) infinite}
+@keyframes tap{0%,11%{opacity:0;transform:scale(1.5)}14.5%{opacity:1;transform:scale(1)}17.5%{opacity:1;transform:scale(.8)}21%,100%{opacity:0;transform:scale(1.15)}}
+.run .review .bar .pub{animation:press var(--dur) var(--ease) infinite}
+@keyframes press{0%,15.5%{transform:scale(1)}17.5%{transform:scale(.96)}20%,100%{transform:scale(1)}}
+
+.run .live .tick{animation:lv-tile var(--dur) var(--ease) infinite}
+.run .live .tickpath{animation:lv-draw var(--dur) var(--ease) infinite}
+.run .live .lv-title{animation:lv-r1 var(--dur) var(--ease) infinite}
+.run .live .lv-sub{animation:lv-r2 var(--dur) var(--ease) infinite}
+.run .live .pubcard{animation:lv-r3 var(--dur) var(--ease) infinite}
+.run .live .next{animation:lv-r4 var(--dur) var(--ease) infinite}
+.run .live .notify{animation:lv-r5 var(--dur) var(--ease) infinite}
+.run .live .bar{animation:lv-bar var(--dur) var(--ease) infinite}
+@keyframes lv-tile{0%,38%{opacity:0;transform:scale(.6)}44%{opacity:1;transform:scale(1.06)}47%,100%{opacity:1;transform:scale(1)}}
+@keyframes lv-draw{0%,43%{stroke-dashoffset:34}50%,100%{stroke-dashoffset:0}}
+@keyframes lv-r1{0%,42%{opacity:0;transform:translateY(14px)}48%,100%{opacity:1;transform:none}}
+@keyframes lv-r2{0%,44%{opacity:0;transform:translateY(14px)}50%,100%{opacity:1;transform:none}}
+@keyframes lv-r3{0%,46%{opacity:0;transform:translateY(18px)}53%,100%{opacity:1;transform:none}}
+@keyframes lv-r4{0%,50%{opacity:0;transform:translateY(18px)}57%,100%{opacity:1;transform:none}}
+@keyframes lv-r5{0%,53%{opacity:0;transform:translateY(10px)}59%,100%{opacity:1;transform:none}}
+@keyframes lv-bar{0%,36%{opacity:0}42%,100%{opacity:1}}
+
+/* A — Lift-off */
+.run.opt-a .review{animation:a-review var(--dur) var(--ease) infinite}
+@keyframes a-review{0%,22%{opacity:1;transform:none}33%{opacity:0;transform:translateY(-16px) scale(.985)}90%{opacity:0;transform:none}96%,100%{opacity:1;transform:none}}
+.run.opt-a .review .rocket{animation:a-hide var(--dur) linear infinite}
+@keyframes a-hide{0%,19.9%{opacity:1}20%,95%{opacity:0}96%,100%{opacity:1}}
+.run.opt-a .fx-rocket{animation:a-fly var(--dur) var(--ease) infinite}
+@keyframes a-fly{0%,19.9%{opacity:0;transform:none;color:#030A12}20%{opacity:1;transform:none;color:#030A12;animation-timing-function:cubic-bezier(.3,0,.4,1)}22.5%{opacity:1;transform:translate(-3px,5px) rotate(-4deg);color:#7EE2B4;animation-timing-function:cubic-bezier(.6,0,.9,.4)}32%{opacity:1;transform:translate(150px,-780px) rotate(4deg) scale(1.25);color:#7EE2B4}33%,100%{opacity:0;transform:translate(150px,-780px) scale(1.25);color:#7EE2B4}}
+.run.opt-a .fx-streak{animation:a-streak var(--dur) var(--ease) infinite}
+@keyframes a-streak{0%,22%{opacity:0;transform:rotate(10.9deg) scaleY(0)}23%{opacity:1;transform:rotate(10.9deg) scaleY(.02);animation-timing-function:cubic-bezier(.6,0,.9,.4)}32%{opacity:1;transform:rotate(10.9deg) scaleY(1)}42%,100%{opacity:0;transform:rotate(10.9deg) scaleY(1)}}
+.run.opt-a .fx-wash{animation:a-wash var(--dur) var(--ease) infinite}
+@keyframes a-wash{0%,24%{opacity:0;transform:translateY(30%)}32%{opacity:1;transform:translateY(0)}45%,100%{opacity:0;transform:translateY(-20%)}}
+.run.opt-a .live{animation:a-live var(--dur) var(--ease) infinite}
+@keyframes a-live{0%,33%{opacity:0}39%,88%{opacity:1}95%,100%{opacity:0}}
+
+/* B — Card glide */
+.run.opt-b .review .hdr,.run.opt-b .review .rv-top,.run.opt-b .review .note{animation:b-fade var(--dur) var(--ease) infinite}
+@keyframes b-fade{0%,20%{opacity:1;transform:none}27%{opacity:0;transform:translateY(-10px)}90%{opacity:0;transform:none}96%,100%{opacity:1;transform:none}}
+.run.opt-b .review .sum{animation:b-card var(--dur) var(--ease) infinite}
+@keyframes b-card{0%,20%{opacity:1;transform:none;clip-path:inset(0 0 0 0 round 22px)}24%{opacity:1;transform:translateY(-4px) scale(1.015);clip-path:inset(0 0 0 0 round 22px)}37%{opacity:1;transform:translateY(-68px);clip-path:inset(0 0 63px 0 round 22px)}41%{opacity:0;transform:translateY(-68px);clip-path:inset(0 0 63px 0 round 22px)}90%{opacity:0;transform:none;clip-path:inset(0 0 0 0 round 22px)}96%,100%{opacity:1;transform:none;clip-path:inset(0 0 0 0 round 22px)}}
+.run.opt-b .review .bar{animation:b-bar var(--dur) var(--ease) infinite}
+@keyframes b-bar{0%,34%{opacity:1}40%,90%{opacity:0}96%,100%{opacity:1}}
+.run.opt-b .live{animation:b-live var(--dur) linear infinite}
+@keyframes b-live{0%,29.9%{opacity:0}30%,88%{opacity:1}95%,100%{opacity:0}}
+.run.opt-b .live .pubcard{animation:b-pub var(--dur) var(--ease) infinite}
+@keyframes b-pub{0%,36%{opacity:0;transform:none}41%,100%{opacity:1;transform:none}}
+.run.opt-b .live .bar{animation:b-lbar var(--dur) var(--ease) infinite}
+@keyframes b-lbar{0%,35%{opacity:0}41%,100%{opacity:1}}
+
+/* C — Seal (recommended) */
+.opt-c .live{background:linear-gradient(165deg,#062421 0%,#0A1A17 55%,#07110F 100%)}
+.run.opt-c .review{animation:c-review var(--dur) linear infinite}
+@keyframes c-review{0%,47.9%{opacity:1}48%,93%{opacity:0}94%,100%{opacity:1}}
+.run.opt-c .review .bar .pub{animation:c-pub var(--dur) var(--ease) infinite}
+@keyframes c-pub{0%,15.5%{opacity:1;transform:scale(1)}17.5%{opacity:1;transform:scale(.96)}19.9%{opacity:1;transform:scale(1)}20%,95%{opacity:0;transform:scale(1)}96%,100%{opacity:1;transform:scale(1)}}
+.run.opt-c .review .bar .draft{animation:c-draft var(--dur) var(--ease) infinite}
+@keyframes c-draft{0%,20%{opacity:1;transform:none}25%{opacity:0;transform:translateX(-10px)}90%{opacity:0;transform:none}96%,100%{opacity:1;transform:none}}
+.run.opt-c .fx-seal{animation:c-seal var(--dur) var(--ease) infinite}
+@keyframes c-seal{0%,19.9%{opacity:0;left:177px;width:197px;background:#4FC58C;transform:none}20%{opacity:1;left:177px;width:197px;background:#4FC58C;transform:none}26%{left:169px;width:52px;background:#4FC58C}28%{background:#0E3A30}35%{background:#0E3A30;transform:scale(1)}37%{background:#4FC58C;transform:scale(1.1)}40%{background:#4FC58C;transform:scale(1)}44%{opacity:1}47%,100%{opacity:0;left:169px;width:52px;background:#4FC58C;transform:scale(1)}}
+.run.opt-c .seal-lbl{animation:c-lbl var(--dur) var(--ease) infinite}
+@keyframes c-lbl{0%,20%{opacity:1}23%,100%{opacity:0}}
+.run.opt-c .seal-ring{animation:c-ring var(--dur) var(--ease) infinite}
+@keyframes c-ring{0%,26%{opacity:0;stroke-dashoffset:195}27%{opacity:1;stroke-dashoffset:195}35%{opacity:1;stroke-dashoffset:0}37%,100%{opacity:0;stroke-dashoffset:0}}
+.run.opt-c .seal-tick{animation:c-tick var(--dur) var(--ease) infinite}
+@keyframes c-tick{0%,36%{opacity:0;stroke-dashoffset:20}37%{opacity:1;stroke-dashoffset:20}40%{opacity:1;stroke-dashoffset:0}45%{opacity:1;stroke-dashoffset:0}47%,100%{opacity:0;stroke-dashoffset:0}}
+.run.opt-c .live{animation:c-live var(--dur) var(--ease) infinite}
+@keyframes c-live{0%,38.9%{opacity:0;clip-path:circle(0px at 195px 735px)}39%{opacity:1;clip-path:circle(26px at 195px 735px)}49%{opacity:1;clip-path:circle(900px at 195px 735px)}88%{opacity:1;clip-path:circle(900px at 195px 735px)}95%,100%{opacity:0;clip-path:circle(900px at 195px 735px)}}
+.run.opt-c .live .stg{animation-delay:calc(var(--dur) * .04)}
+
+/* D — Broadcast */
+.run.opt-d .review{animation:d-review var(--dur) var(--ease) infinite}
+@keyframes d-review{0%,21%{opacity:1;filter:none}30%{opacity:.4;filter:saturate(.6)}37%{opacity:.4;filter:saturate(.6)}43%{opacity:0;filter:none}90%{opacity:0;filter:none}96%,100%{opacity:1;filter:none}}
+.run.opt-d .r{animation:d-ring var(--dur) cubic-bezier(.15,.6,.3,1) infinite}
+.run.opt-d .r1{animation-delay:calc(var(--dur) * .20)}
+.run.opt-d .r2{animation-delay:calc(var(--dur) * .245)}
+.run.opt-d .r3{animation-delay:calc(var(--dur) * .29)}
+@keyframes d-ring{0%{opacity:0;transform:scale(.3)}1%{opacity:.85;transform:scale(.35)}22%,100%{opacity:0;transform:scale(14)}}
+.run.opt-d .pin{animation:d-pin var(--dur) var(--ease) infinite}
+.run.opt-d .p1{animation-delay:calc(var(--dur) * .235)}
+.run.opt-d .p2{animation-delay:calc(var(--dur) * .232)}
+.run.opt-d .p3{animation-delay:calc(var(--dur) * .262)}
+.run.opt-d .p4{animation-delay:calc(var(--dur) * .28)}
+.run.opt-d .p5{animation-delay:calc(var(--dur) * .305)}
+.run.opt-d .p6{animation-delay:calc(var(--dur) * .32)}
+.run.opt-d .p7{animation-delay:calc(var(--dur) * .34)}
+@keyframes d-pin{0%{opacity:0;transform:scale(0)}1.5%{opacity:1;transform:scale(1.5)}3%{opacity:1;transform:scale(1)}11%{opacity:1;transform:scale(1)}17%,100%{opacity:0;transform:scale(1)}}
+.run.opt-d .rlabel{animation:d-label var(--dur) var(--ease) infinite}
+@keyframes d-label{0%,21%{opacity:0;transform:translateY(6px)}25%{opacity:1;transform:none}36%{opacity:1;transform:none}40%,100%{opacity:0;transform:none}}
+.run.opt-d .live{animation:d-live var(--dur) var(--ease) infinite}
+@keyframes d-live{0%,40%{opacity:0}47%,88%{opacity:1}95%,100%{opacity:0}}
+.run.opt-d .live .stg{animation-delay:calc(var(--dur) * .03)}
+.run.opt-d .tick-echo{animation:d-echo var(--dur) var(--ease) infinite}
+@keyframes d-echo{0%,47%{opacity:0;transform:scale(1)}48%{opacity:.8;transform:scale(1)}62%,100%{opacity:0;transform:scale(1.9)}}
+
+/* E — Flip */
+.run.opt-e .review .hdr,.run.opt-e .review .rv-top,.run.opt-e .review .note,.run.opt-e .review .bar{animation:b-fade var(--dur) var(--ease) infinite}
+.run.opt-e .review .sum{animation:e-hide var(--dur) linear infinite}
+@keyframes e-hide{0%,19.9%{opacity:1}20%,95%{opacity:0}96%,100%{opacity:1}}
+.run.opt-e .fx-flip{animation:e-box var(--dur) var(--ease) infinite}
+@keyframes e-box{0%,19.9%{opacity:0;top:318px;height:292px}20%{opacity:1;top:318px;height:292px}24%{opacity:1;top:306px;height:292px}37%{opacity:1;top:250px;height:229px}43.9%{opacity:1;top:250px;height:229px}44%,100%{opacity:0;top:250px;height:229px}}
+.run.opt-e .flip-inner{animation:e-flip var(--dur) var(--ease) infinite}
+@keyframes e-flip{0%,24%{transform:rotateY(0deg) scale(1)}30%{transform:rotateY(90deg) scale(.93)}37%,100%{transform:rotateY(180deg) scale(1)}}
+.run.opt-e .live{animation:e-live var(--dur) linear infinite}
+@keyframes e-live{0%,35.9%{opacity:0}36%,88%{opacity:1}95%,100%{opacity:0}}
+.run.opt-e .live .pubcard{animation:e-pub var(--dur) linear infinite}
+@keyframes e-pub{0%,43.9%{opacity:0;transform:none}44%,100%{opacity:1;transform:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="kicker">BRAZOS · Post a Job</div>
+      <h1>From Publish to live</h1>
+      <p class="lede">Five ways to go from Review and Publish to the Job live page. Each phone loops: the tap on Publish, the transition, then the live page. The live page is the same in all five; it is the design I propose.</p>
+    </div>
+    <div class="controls">
+      <button type="button" class="ctl" id="ctl-pause" aria-pressed="false">Pause</button>
+      <button type="button" class="ctl" id="ctl-slow" aria-pressed="false">Slow motion</button>
+      <button type="button" class="ctl" id="ctl-big" aria-pressed="false">Bigger phones</button>
+      <button type="button" class="ctl" id="ctl-restart">Restart together</button>
+    </div>
+  </header>
+
+  <p class="notice" id="rm-note" hidden>Your device asks for reduced motion, so the phones start paused. Press Pause again to play them.</p>
+
+  <section class="grid" aria-label="Transition options">
+    <article class="opt">
+      <div class="opt-head"><span class="letter">A</span><span class="opt-name">Lift-off</span></div>
+      <p class="opt-desc">The rocket in Publish takes off, a mint glow rises, and the live page fades in.</p>
+      <div class="stage" data-opt="a"></div>
+    </article>
+    <article class="opt">
+      <div class="opt-head"><span class="letter">B</span><span class="opt-name">Card glide</span></div>
+      <p class="opt-desc">Everything else fades while your summary card glides up and becomes the published card.</p>
+      <div class="stage" data-opt="b"></div>
+    </article>
+    <article class="opt rec">
+      <div class="opt-head"><span class="letter">C</span><span class="opt-name">Seal</span><span class="rec-tag">RECOMMENDED</span></div>
+      <p class="opt-desc">Publish shrinks to a spinner while the job saves, ticks, then opens the live page from that tick.</p>
+      <div class="stage" data-opt="c"></div>
+    </article>
+    <article class="opt">
+      <div class="opt-head"><span class="letter">D</span><span class="opt-name">Broadcast</span></div>
+      <p class="opt-desc">Rings pulse out from Publish and light up workers nearby, then the live page settles.</p>
+      <div class="stage" data-opt="d"></div>
+    </article>
+    <article class="opt">
+      <div class="opt-head"><span class="letter">E</span><span class="opt-name">Flip</span></div>
+      <p class="opt-desc">The summary card turns over to show the published card, and the page builds around it.</p>
+      <div class="stage" data-opt="e"></div>
+    </article>
+  </section>
+
+  <section class="why" aria-label="Why the live page looks like this">
+    <h2>Why the live page looks like this</h2>
+    <div><b>Confirm first</b><span>A tick and one short line: your job is live and workers nearby can see it.</span></div>
+    <div><b>The same card you reviewed</b><span>Title, category, area, timing and budget in the Review summary's layout, so it reads as the same job. The price is white.</span></div>
+    <div><b>What happens next</b><span>Bids arrive, you choose and we hold the payment, you approve and they're paid. The money question is answered before it's asked.</span></div>
+    <div><b>Buttons stay put</b><span>The bar keeps its place from Review: Back to Home where Save draft was, View job and bids where Publish was.</span></div>
+    <div><b>An honest tick</b><span>The tick should draw only once the job has saved. Option C's spinner covers that wait, which is why I recommend it.</span></div>
+    <div><b>Reduce Motion</b><span>With Reduce Motion on in iOS, any option becomes a short fade.</span></div>
+  </section>
+</div>
+
+<template id="phone-tpl">
+<div class="phone" aria-hidden="true">
+  <div class="bezel"></div>
+  <div class="screen">
+    <section class="scr review">
+      <div class="hdr">
+        <span class="circ"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></span>
+        <span class="hlab">Location</span>
+        <span class="htitle">Post a Job</span>
+      </div>
+      <div class="rv-top">
+        <div class="eb">Step 4 of 4</div>
+        <div class="h1">Review and publish</div>
+        <div class="bars"><i></i><i></i><i></i><i></i></div>
+        <div class="blabels"><span>Describe</span><span>Media</span><span>Location</span><span class="cur">Review</span></div>
+        <div class="seg">
+          <span class="sg on"><svg viewBox="0 0 24 24"><circle cx="9" cy="8.2" r="3.4"/><path d="M2.6 19.2c.4-3.6 3.1-5.8 6.4-5.8s6 2.2 6.4 5.8c0 .5-.4.8-.9.8H3.5c-.5 0-.9-.3-.9-.8z"/><circle cx="17" cy="9.2" r="2.7"/><path d="M16.2 14.1c2.9-.3 5.2 1.5 5.6 4.5 0 .4-.3.7-.7.7h-3.7c-.1-2-.5-3.7-1.2-5.2z"/></svg>Ask for bids</span>
+          <span class="sg"><svg viewBox="0 0 24 24"><path d="M3.5 12.3V5a1.5 1.5 0 0 1 1.5-1.5h7.3l8.2 8.2a1.6 1.6 0 0 1 0 2.2l-6.9 6.9a1.6 1.6 0 0 1-2.2 0z"/><circle cx="8.2" cy="8.2" r="1.5"/></svg>Set a price</span>
+        </div>
+        <div class="pf"><span class="m">Up to</span><span class="v">$120</span><svg viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6"/></svg></div>
+      </div>
+      <div class="sum card"><div class="sumbody">
+        <div class="row"><span class="eb">Job summary</span><span class="hint">Tap any detail to edit</span></div>
+        <div class="jt">Assemble a three-seat sofa and an armchair</div>
+        <div class="mh"><span class="lab"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 16l-4.5-4.5L7 19"/></svg>MEDIA <span class="cnt">· 2 photos, 1 video</span></span><span class="edit">Edit</span></div>
+        <div class="tiles"><span class="tile t1"></span><span class="tile t2"></span><span class="tile t3"><i class="play"></i><b class="dur">0:14</b></span></div>
+        <div class="hr"></div>
+        <div class="dgrid">
+          <div><span class="lab"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>CATEGORY</span><span class="val">Furniture assembly</span></div>
+          <div><span class="lab"><svg viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>AREA</span><span class="val">Flatbush, Brooklyn</span></div>
+        </div>
+      </div></div>
+      <p class="note"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M8 12.3l2.7 2.7L16.2 9.4"/></svg>Publishing makes this job visible to workers nearby.</p>
+      <div class="bar">
+        <span class="btn draft"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>Save draft</span>
+        <span class="btn pub"><svg class="rocket" viewBox="0 0 24 24"><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><circle cx="15.9" cy="8.1" r="1.35"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/></svg>Publish</span>
+      </div>
+    </section>
+
+    <section class="scr live">
+      <div class="tick-echo"></div>
+      <div class="tick stg"><svg viewBox="0 0 48 48"><path class="tickpath stg" d="M13 25l7.5 7.5L35 17"/></svg></div>
+      <div class="lv-title stg">Your job is live.</div>
+      <div class="lv-sub stg">Workers nearby can see it now.</div>
+      <div class="pubcard card stg"><div class="pubbody">
+        <div class="row"><span class="eb">Published</span><span class="hint">Just now</span></div>
+        <div class="jt">Assemble a three-seat sofa and an armchair</div>
+        <div class="hr"></div>
+        <div class="dgrid">
+          <div><span class="lab">CATEGORY</span><span class="chip">Furniture assembly</span></div>
+          <div><span class="lab">BUDGET</span><span class="val"><span class="sub">Up to</span> $120</span></div>
+          <div><span class="lab">AREA</span><span class="val">Flatbush, Brooklyn</span></div>
+          <div><span class="lab">TIMING</span><span class="val">Sep 26 · 8–11 AM</span></div>
+        </div>
+      </div></div>
+      <div class="next stg">
+        <span class="eb">What happens next</span>
+        <div class="stepper">
+          <div class="st on"><i></i><b>Bids arrive</b><span>From workers nearby</span></div>
+          <div class="st"><i></i><b>You choose</b><span>We hold the payment</span></div>
+          <div class="st"><i></i><b>You approve</b><span>Then they're paid</span></div>
+        </div>
+      </div>
+      <p class="notify stg"><svg viewBox="0 0 24 24"><path d="M6.5 16.5v-5a5.5 5.5 0 0 1 11 0v5l1.5 1.8h-14z"/><path d="M10 21a2.1 2.1 0 0 0 4 0"/></svg>We'll let you know when the first bid arrives.</p>
+      <div class="bar stg">
+        <span class="btn draft">Back to Home</span>
+        <span class="btn pub">View job and bids<svg class="arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6.5l5.5 5.5-5.5 5.5"/></svg></span>
+      </div>
+    </section>
+
+    <div class="fx fx-wash"></div>
+    <div class="fx fx-streak"></div>
+    <div class="fx fx-rocket"><svg viewBox="0 0 24 24"><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><circle cx="15.9" cy="8.1" r="1.35"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/></svg></div>
+    <div class="fx fx-seal"><svg class="seal-ring" viewBox="0 0 70 70"><circle cx="35" cy="35" r="31"/></svg><svg class="seal-tick" viewBox="0 0 24 24"><path d="M6 12.5l4 4L18 8.5"/></svg><span class="seal-lbl">Publish</span></div>
+    <div class="fx fx-rings"><i class="r r1"></i><i class="r r2"></i><i class="r r3"></i><i class="pin p1"></i><i class="pin p2"></i><i class="pin p3"></i><i class="pin p4"></i><i class="pin p5"></i><i class="pin p6"></i><i class="pin p7"></i><span class="rlabel">Reaching workers nearby…</span></div>
+    <div class="fx fx-flip"><div class="flip-inner">
+      <div class="face front"><div class="sumbody">
+        <div class="row"><span class="eb">Job summary</span><span class="hint">Tap any detail to edit</span></div>
+        <div class="jt">Assemble a three-seat sofa and an armchair</div>
+        <div class="mh"><span class="lab"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 16l-4.5-4.5L7 19"/></svg>MEDIA <span class="cnt">· 2 photos, 1 video</span></span><span class="edit">Edit</span></div>
+        <div class="tiles"><span class="tile t1"></span><span class="tile t2"></span><span class="tile t3"><i class="play"></i><b class="dur">0:14</b></span></div>
+        <div class="hr"></div>
+        <div class="dgrid">
+          <div><span class="lab">CATEGORY</span><span class="val">Furniture assembly</span></div>
+          <div><span class="lab">AREA</span><span class="val">Flatbush, Brooklyn</span></div>
+        </div>
+      </div></div>
+      <div class="face back"><div class="pubbody">
+        <div class="row"><span class="eb">Published</span><span class="hint">Just now</span></div>
+        <div class="jt">Assemble a three-seat sofa and an armchair</div>
+        <div class="hr"></div>
+        <div class="dgrid">
+          <div><span class="lab">CATEGORY</span><span class="chip">Furniture assembly</span></div>
+          <div><span class="lab">BUDGET</span><span class="val"><span class="sub">Up to</span> $120</span></div>
+          <div><span class="lab">AREA</span><span class="val">Flatbush, Brooklyn</span></div>
+          <div><span class="lab">TIMING</span><span class="val">Sep 26 · 8–11 AM</span></div>
+        </div>
+      </div></div>
+    </div></div>
+
+    <div class="status">
+      <span class="time">9:41</span>
+      <span class="island"></span>
+      <span class="sic">
+        <svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+        <svg width="16" height="12" viewBox="0 0 16 12"><path d="M8 11.2 5.6 8.6a3.4 3.4 0 0 1 4.8 0z"/><path d="M3.3 6.4a6.6 6.6 0 0 1 9.4 0l-1.4 1.5a4.6 4.6 0 0 0-6.6 0z"/><path d="M1 4.1a9.9 9.9 0 0 1 14 0l-1.4 1.5a7.9 7.9 0 0 0-11.2 0z"/></svg>
+        <svg width="27" height="13" viewBox="0 0 27 13"><rect x=".5" y=".5" width="23" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="19" height="8" rx="2"/><path d="M25 4.5v4c.8-.3 1.3-1.1 1.3-2s-.5-1.7-1.3-2z" opacity=".5"/></svg>
+      </span>
+    </div>
+
+    <nav class="tabbar">
+      <span class="tab on"><span class="ic"><svg width="28" height="26" viewBox="1.2 2.4 21.6 19.6"><path d="M1.6 11.1L12 2.6l4.8 3.9V4.3c0-.4.3-.7.7-.7h1.8c.4 0 .7.3.7.7v4.6l2.4 2.2c.4.4.4 1-.1 1.3-.3.2-.8.2-1.1 0l-.7-.6v8.8c0 .7-.6 1.3-1.3 1.3h-4.4v-5.6c0-.6-.4-1-1-1h-3.6c-.6 0-1 .4-1 1v5.6H4.8c-.7 0-1.3-.6-1.3-1.3v-8.8l-.7.6c-.3.2-.8.2-1.1 0-.5-.3-.5-.9-.1-1.3z" fill="#40CB87"/></svg></span>Home</span>
+      <span class="tab"><span class="ic"><svg width="24" height="24" viewBox="2.6 2.6 19.3 19.3" fill="none" stroke="#8B9691" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><path d="M15.8 15.8L21 21"/></svg></span>Discover</span>
+      <span class="fabc"><span class="fab"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round"><path d="M12 2.5v19M2.5 12h19"/></svg></span></span>
+      <span class="tab"><span class="ic"><svg width="25" height="25" viewBox="2.1 1.7 19.8 20.2" fill="none" stroke="#8B9691" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.6a9 9 0 0 1-13.3 7.9L3 21l1.5-4.4A9 9 0 1 1 21 11.6z"/><circle cx="8.3" cy="11.6" r="1.1" fill="#8B9691" stroke="none"/><circle cx="12" cy="11.6" r="1.1" fill="#8B9691" stroke="none"/><circle cx="15.7" cy="11.6" r="1.1" fill="#8B9691" stroke="none"/></svg></span>Inbox</span>
+      <span class="tab"><span class="ic"><svg width="24" height="25" viewBox="2.9 2.6 18.2 19.3" fill="none" stroke="#8B9691" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="7.8" r="4.3"/><path d="M3.8 21c.6-4 4-6.6 8.2-6.6s7.6 2.6 8.2 6.6"/></svg></span>Profile</span>
+      <span class="homeind"></span>
+    </nav>
+
+    <div class="fx fx-tap"></div>
+  </div>
+</div>
+</template>
+
+<script>
+(function () {
+  var tpl = document.getElementById('phone-tpl');
+  var stages = Array.prototype.slice.call(document.querySelectorAll('.stage'));
+  var phones = stages.map(function (stage) {
+    var phone = tpl.content.firstElementChild.cloneNode(true);
+    phone.classList.add('opt-' + stage.getAttribute('data-opt'), 'run');
+    stage.appendChild(phone);
+    return phone;
+  });
+  function fit() {
+    stages.forEach(function (s, i) { phones[i].style.transform = 'scale(' + (s.clientWidth / 410) + ')'; });
+  }
+  fit();
+  if ('ResizeObserver' in window) {
+    var ro = new ResizeObserver(fit);
+    stages.forEach(function (s) { ro.observe(s); });
+  } else {
+    window.addEventListener('resize', fit);
+  }
+
+  var body = document.body;
+  var root = document.documentElement;
+  var pauseBtn = document.getElementById('ctl-pause');
+  var slowBtn = document.getElementById('ctl-slow');
+  var bigBtn = document.getElementById('ctl-big');
+  var restartBtn = document.getElementById('ctl-restart');
+
+  function restart() {
+    phones.forEach(function (p) { p.classList.remove('run'); });
+    void body.offsetWidth;
+    phones.forEach(function (p) { p.classList.add('run'); });
+  }
+  function setPaused(on) {
+    body.classList.toggle('paused', on);
+    pauseBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+  pauseBtn.addEventListener('click', function () { setPaused(!body.classList.contains('paused')); });
+  slowBtn.addEventListener('click', function () {
+    var on = slowBtn.getAttribute('aria-pressed') !== 'true';
+    slowBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    root.style.setProperty('--dur', on ? '14s' : '7s');
+    restart();
+  });
+  bigBtn.addEventListener('click', function () {
+    var on = bigBtn.getAttribute('aria-pressed') !== 'true';
+    bigBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    root.style.setProperty('--card-min', on ? '340px' : '232px');
+    requestAnimationFrame(fit);
+  });
+  restartBtn.addEventListener('click', restart);
+
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    setPaused(true);
+    document.getElementById('rm-note').hidden = false;
+  }
+})();
+</script>

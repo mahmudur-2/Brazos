@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set a price – list open</title>
+<!--
+  Price dropdown, board 6 of 8 — "Set a price – list open".
+  Unpacked 2026-09-28 (LUX-LIST-64) from the packed bundle .shots/refresh/refs/price-dropdown.html
+  into readable HTML: fonts by <link>, real viewBox attributes, the bundle's runtime and
+  component script left out (the boards are static states).
+  Changed from the bundle: #37 — the "Ask for bids | Set a price" switch carries its glyphs
+  (people, a price tag; filled on the chosen half, outline on the other, centred with the label);
+  #40 — prices are white (#F3F1E8, was the gold #E9C170).
+  UX reference only (#36): the app builds the flow with its own components and colours.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#091614;font-family:Inter,system-ui,sans-serif;color:#F1EDE1}
+button,input{font-family:inherit}
+</style>
+</head>
+<body>
+<div style="width: 390px; height: 720px; box-sizing: border-box; padding: 24px 20px; display: flex; flex-direction: column; background: #091614; font-family: Inter, system-ui, sans-serif; color: #F1EDE1">
+<div style="display: flex; gap: 4px; height: 52px; flex-shrink: 0; box-sizing: border-box; padding: 5px; background: #162521; border: 1px solid #2F5A4A; border-radius: 26px">
+<button type="button" aria-pressed="false" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 8px; flex-basis: 0; border: none; border-radius: 21px; background: transparent; color: #A9B8B1; font-size: 16px; font-weight: 700"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="7.5" r="3.6"/><path d="M2.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5z"/><circle cx="17" cy="8.5" r="2.8"/><path d="M17.2 13.6c2.7.2 4.8 2.6 4.8 5.4v1h-3.5"/></svg><span>Ask for bids</span></button>
+<button type="button" aria-pressed="true" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 8px; flex-basis: 0; border: none; border-radius: 21px; background: #4FC58C; color: #062018; font-size: 16px; font-weight: 700"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2.6 12.6A2 2 0 0 1 2 11.2V4a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l8 8a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.7" fill="#4FC58C"/></svg><span>Set a price</span></button>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; margin-top: 20px">
+<div style="font-size: 11px; line-height: 13px; font-weight: 700; letter-spacing: 1.6px; color: #D4A24C">YOUR PRICE</div>
+<button type="button" aria-haspopup="listbox" aria-expanded="true" aria-label="Your price: not chosen yet" style="display: flex; align-items: center; justify-content: space-between; height: 52px; flex-shrink: 0; box-sizing: border-box; padding: 0 18px 0 20px; background: #0C241F; border: 1.5px solid #4FC58C; border-radius: 26px; color: #A9B8B1; font-size: 17px; font-weight: 500; text-align: left">
+<span>Choose a price</span>
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4FC58C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"></path></svg>
+</button>
+<div style="display: flex; flex-direction: column; padding: 6px; background: #0C241F; border: 1px solid #2F5A4A; border-radius: 20px">
+<button type="button" style="display: flex; align-items: center; height: 46px; flex-shrink: 0; box-sizing: border-box; padding: 0 14px; border: none; border-radius: 14px; background: transparent; color: #F1EDE1; font-size: 16px; font-weight: 500; text-align: left">$50</button>
+<button type="button" style="display: flex; align-items: center; height: 46px; flex-shrink: 0; box-sizing: border-box; padding: 0 14px; border: none; border-radius: 14px; background: transparent; color: #F1EDE1; font-size: 16px; font-weight: 500; text-align: left">$100</button>
+<button type="button" style="display: flex; align-items: center; justify-content: space-between; height: 46px; flex-shrink: 0; box-sizing: border-box; padding: 0 14px; border: none; border-radius: 14px; background: #162521; color: #F1EDE1; font-size: 16px; font-weight: 700; text-align: left">
+<span>$150</span>
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4FC58C" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+</button>
+<button type="button" style="display: flex; align-items: center; height: 46px; flex-shrink: 0; box-sizing: border-box; padding: 0 14px; border: none; border-radius: 14px; background: transparent; color: #F1EDE1; font-size: 16px; font-weight: 500; text-align: left">$200</button>
+<button type="button" style="display: flex; align-items: center; height: 46px; flex-shrink: 0; box-sizing: border-box; padding: 0 14px; border: none; border-radius: 14px; background: transparent; color: #F1EDE1; font-size: 16px; font-weight: 500; text-align: left">$300</button>
+<button type="button" style="display: flex; align-items: center; height: 46px; flex-shrink: 0; box-sizing: border-box; padding: 0 14px; border: none; border-radius: 14px; background: transparent; color: #F1EDE1; font-size: 16px; font-weight: 500; text-align: left">$500</button>
+<div style="height: 1px; flex-shrink: 0; margin: 6px 10px; background: #29403A"></div>
+<button type="button" style="display: flex; align-items: center; gap: 10px; height: 46px; flex-shrink: 0; box-sizing: border-box; padding: 0 14px; border: none; border-radius: 14px; background: transparent; color: #4FC58C; font-size: 16px; font-weight: 600; text-align: left">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4FC58C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7.5 18.5 3 20l1.5-4.5z"></path></svg>
+<span>Enter your own amount</span>
+</button>
+</div>
+</div>
+<div style="flex-grow: 1"></div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 13px; line-height: 18px; color: #A9B8B1; text-align: center">Publishing makes this job visible to workers nearby.</div>
+<button type="button" disabled="{{ yes }}" style="height: 54px; border: none; border-radius: 27px; background: #073328; color: #909594; font-size: 17px; font-weight: 700">Publish</button>
+</div>
+</div>
+</body>
+</html>
