@@ -10,7 +10,8 @@
    · every request to the fake project is answered by mock.js; every other request is refused;
      realtime's socket is a quiet stand-in that accepts joins and heartbeats;
    · the viewer drives it by postMessage: {type:'scheme', value}, {type:'go', steps}, {type:'reload'}.
-   URL: index.html?scheme=dark|light&land=app|welcome|setup&mode=customer|worker&steps=<json> */
+   URL: index.html?scheme=dark|light&land=app|welcome|setup&mode=customer|worker&steps=<json>
+        [&draft=1 a post in progress] [&draft=2 one on Review with photos] [&fresh=1 a customer who has never posted] */
 (function () {
   'use strict';
   var params = new URLSearchParams(location.search);
@@ -20,7 +21,8 @@
   var USER_ID = '00000000-0000-4000-8000-000000000001';
   var HOST = 'https://harness.supabase.co';
 
-  window.__REFRESH__ = { scheme: scheme, land: land, mode: mode, userId: USER_ID, host: HOST, app: params.get('app') || '' };
+  // &fresh=1 (2026-09-28): a customer who has never posted — the Home's first-run state.
+  window.__REFRESH__ = { scheme: scheme, land: land, mode: mode, userId: USER_ID, host: HOST, app: params.get('app') || '', fresh: params.get('fresh') === '1' };
   window.__BRAZOS_CONFIG__ = { SUPABASE_URL: HOST, SUPABASE_KEY: 'harness-anon-key-not-a-real-key' };
 
   // ---- storage: fresh per load ------------------------------------------------------------
@@ -49,7 +51,17 @@
       storage.setItem('brazos.postJobDraft.v2.' + USER_ID, JSON.stringify({
         title: 'Hang a gallery wall', description: 'Eight frames of different sizes on a plaster wall in the hallway. I have the frames and the hooks.',
         category: 'tv_mounting', location: 'Park Slope, Brooklyn', coords: null, budgetMin: '', budgetMax: '', pricingMode: 'open_bids',
-        address: '', scheduledDate: null, arrivalStartHour: null, arrivalEndHour: null, photos: [], videos: [], step: 1, photoNudgeDismissed: false,
+        address: '', scheduledDate: null, arrivalStartHour: null, arrivalEndHour: null, photos: [], videos: [], step: 1,
+      }));
+    }
+    // A draft on its last step with three photos (&draft=2, 2026-09-28, LUX-LIST-64 #38):
+    // the review summary's media, as the posting flow resumes it.
+    if (params.get('draft') === '2') {
+      var sample = function (name) { return HOST + '/storage/v1/object/public/job-photos/samples/' + name; };
+      storage.setItem('brazos.postJobDraft.v2.' + USER_ID, JSON.stringify({
+        title: 'Assemble a three-seat sofa and an armchair', description: 'Both pieces are boxed in the living room. Tools on hand: an Allen key set and a drill. Please take the packaging with you.',
+        category: 'furniture_assembly', location: 'Park Slope, Brooklyn', coords: null, budgetMin: '', budgetMax: '120', pricingMode: 'open_bids',
+        address: '', scheduledDate: null, arrivalStartHour: 8, arrivalEndHour: 11, photos: [sample('armchair.webp'), sample('room.webp'), sample('toolbox.webp')], videos: [], step: 3,
       }));
     }
   }

@@ -233,6 +233,19 @@
   db.legal_acceptances = [{ user_id: ME, document: 'terms', version: LEGAL.terms }, { user_id: ME, document: 'privacy', version: LEGAL.privacy }];
   db.app_config = [];
   if (R.land === 'welcome' || R.land === 'legal') db.legal_acceptances = [];
+  // A NEW CUSTOMER (&fresh=1, 2026-09-28, LUX-LIST-64 #16): the same world without one job of
+  // yours in it — nothing posted, nobody hired, no one to hire again — so the Home shows its
+  // first-run card. Dana's jobs and the worker side are untouched.
+  if (R.fresh) {
+    var mine = db.jobs.filter(function (j) { return j.client_id === ME; }).map(function (j) { return j.id; });
+    var notMine = function (row) { return mine.indexOf(row.job_id) < 0; };
+    db.jobs = db.jobs.filter(function (j) { return j.client_id !== ME; });
+    db.job_offers = db.job_offers.filter(notMine);
+    db.payments = db.payments.filter(notMine);
+    db.job_locations = db.job_locations.filter(notMine);
+    db.messages = db.messages.filter(function (m) { return !m.job_id || mine.indexOf(m.job_id) < 0; });
+    db.saved_workers = [];
+  }
 
   // the conversations view: one row per job thread with at least one message, from either side
   function conversationsFor(uid) {

@@ -17,7 +17,7 @@ const browser = await chromium.launch();
 
 async function run(s) {
   const steps = which === 'after' && s.afterSteps ? s.afterSteps : s.steps;
-  const q = `app=${which}&scheme=${scheme}&land=${s.land || 'app'}&mode=${s.mode || 'customer'}` + (s.draft ? '&draft=1' : '') + (steps && steps.length ? '&steps=' + encodeURIComponent(JSON.stringify(steps)) : '');
+  const q = `app=${which}&scheme=${scheme}&land=${s.land || 'app'}&mode=${s.mode || 'customer'}` + (s.draft ? '&draft=' + (s.draft === 2 ? 2 : 1) : '') + (s.fresh ? '&fresh=1' : '') + (steps && steps.length ? '&steps=' + encodeURIComponent(JSON.stringify(steps)) : '');
   const page = await browser.newPage({ viewport: { width: 393, height: 852 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e).slice(0, 160)));

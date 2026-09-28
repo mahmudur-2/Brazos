@@ -46,8 +46,10 @@ for (const name of which) {
   const inject = [
     // the phone's own safe area: react-native-safe-area-context measures a hidden element padded
     // with env(safe-area-inset-*); a browser reports zero, the iPhone 54 and 34 — so this reports
-    // the iPhone's, and every screen lays out, and draws under the status bar, as it does there
-    '<style id="refresh-safe-area">div[style*="safe-area-inset-top"]{padding:54px 0 34px 0 !important}html,body{scrollbar-width:none}::-webkit-scrollbar{width:0;height:0}</style>',
+    // the iPhone's, and every screen lays out, and draws under the status bar, as it does there.
+    // 2026-09-28: and no BROWSER focus ring on anything — iOS draws none; a field's own focus
+    // glow (LUX-LIST-64 #8, components/FocusRing.tsx) is the one the phone shows
+    '<style id="refresh-safe-area">div[style*="safe-area-inset-top"]{padding:54px 0 34px 0 !important}html,body{scrollbar-width:none}::-webkit-scrollbar{width:0;height:0}*:focus{outline:none}</style>',
     '<link rel="preconnect" href="https://fonts.googleapis.com">',
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap">',

@@ -119,7 +119,7 @@ body.dark .homebar{background:rgba(255,255,255,.92)}
 
   function urlFor(app, s) {
     var steps = (app === 'after' && s.afterSteps) ? s.afterSteps : s.steps;
-    var q = 'app=' + app + '&scheme=' + scheme + '&land=' + (s.land || 'app') + '&mode=' + (s.mode || 'customer') + (s.draft ? '&draft=1' : '');
+    var q = 'app=' + app + '&scheme=' + scheme + '&land=' + (s.land || 'app') + '&mode=' + (s.mode || 'customer') + (s.draft ? '&draft=' + (s.draft === 2 ? 2 : 1) : '') + (s.fresh ? '&fresh=1' : '');
     if (steps && steps.length) q += '&steps=' + encodeURIComponent(JSON.stringify(steps));
     return app + '/index.html?' + q;
   }
