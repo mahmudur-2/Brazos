@@ -1,14 +1,96 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-27 (the handoff sitting, latest: NEXT SESSION — START HERE, the primer for
-the operator's next remake of the After, which they will brief more specifically — its section,
-the first below. THE OPERATOR'S REVIEW OF THE LUX AFTER, THE LUX REMAKE DONE, the brief's own
-section, THE REFRESH (2026-09-26, the After as one patch, NOT applied), the sign-in records, the
-WebP run's, the Welcome records, the mode switch's, the Lux drawing run's, the eighteen-item
-run's and the sittings before them follow, unchanged.
+WRITTEN: 2026-09-28 (the list run, latest: LUX-LIST-64 DONE in the practice copy — its section,
+the first below. The NEXT SESSION primer of 2026-09-27 (still the pipeline, the fences and the
+traps), THE OPERATOR'S REVIEW OF THE LUX AFTER, THE LUX REMAKE DONE, the brief's own section, THE
+REFRESH (2026-09-26, the After as one patch, NOT applied), the sign-in records, the WebP run's,
+the Welcome records, the mode switch's, the Lux drawing run's, the eighteen-item run's and the
+sittings before them follow, unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
+
+## LUX-LIST-64 — DONE in the practice copy; the After is `docs/mockups/refresh/after.patch`, NOT applied (2026-09-28, the list run); docs only, nothing in the app changed
+
+**What just happened.** The operator's sixty-four numbered changes to the After — one sitting of
+about eighty-five pictures, written the same day into `docs/dispatch/LUX-LIST-64.md` (the whole
+brief: every ruling, number, exception and reference, the pages under `docs/mockups/html/refs/`)
+— were built end to end in `.shots/refresh/practice`, fully autonomously ("Fully autonomous …
+surgically build it out … with extra accuracy"). The dated record is `docs/DECISIONS.md`
+2026-09-28 "LUX-LIST-64" (1)–(7): the reversals the operator ordered, the colour roles, what the
+run decided, the consistency set as built, the harness, the fences, what is left.
+
+**Item by item, and where the viewer shows it** (`file:///C:/Users/mdmah/BRAZOS/.shots/refresh/index.html#<id>`;
+"phone" = only a device shows it):
+- #1–#3 auth labels and icons mint, the email form on one screen — `signin-email`, `create-email`,
+  `create-phone`; #2 also `edit`, `details`. #4 the pill left the EMAIL sign-up (`create-email`);
+  the PHONE sign-up keeps its "Private until a job is confirmed." line — asked in the report.
+- #5 the country dropdown — tap the pill on `signin-phone`; flags are emoji (letters on Windows).
+- #6 round 52 buttons — `welcome` … `setup`. #7 the dark red — `report`, `delete`. #8 the focus
+  glow — any field while typing. #9 Finish Setup — `setup`. #10 the one legal button — `legal`.
+- #11 #52 #59 the bare bell, red badge, your photo — `home`, `w-home`. #12–#14 tiles 30, the
+  roller / bin / drill EVERYWHERE a category is drawn — `home`, `discover`, `post-what`, cards,
+  job pages. #13 View all → all services — tap it on `home`. #15 the Lux field — `home`, `w-home`.
+- #16 How Brazos works — `home-new` (new). #17 the draft card first — `home-draft` (new),
+  `myjobs-draft`. #18 #19 #21 #43 View details + a plain mint arrow, names alone — `myjobs`.
+- #20 Assigned gold, #46 In progress orange — `myjobs`, `w-myjobs`, `job-assigned`, `w-job`.
+- #22 #23 #27 #29 #60 headers: the round back button, "‹ Home", centred Title Case titles, the big
+  left title on Inbox / Discover / Profile — every pushed screen. #24 no leaf divider — `saved`.
+- #25 initials avatars — everywhere. #26 the grey bubble — any empty Inbox tab.
+- #28 the swipe tiles hidden until a swipe — phone (the swipe cannot be driven in the viewer).
+- #30–#35 Post a Job's header, privacy note, no nudge, mint media boxes, the address, chip checks —
+  `post-what`, `post-media`, `post-where`. #36–#41 the price first and its list, the switch
+  icons, the rebuilt summary, the add menu, white prices, the bar — `post-review`, `post-price`.
+- #42 Seal → Your job is live — `post-live` (new); the motion is the phone's.
+- #44 no "Post another job", #45 the stage rail (the customer's card, as in its reference) —
+  `myjobs`, `home-draft`. #47 light gold → green — every light screen, and the sheet
+  `.shots/refresh/gold-sheet.png`. #48 light labels antique gold — every light screen.
+- #49 #50 the red Sonar dots — `home-draft`, `w-home` (Paused: tap the switch); the ring is the
+  phone's. #51 no dot before AVAILABLE JOBS — `w-home-summary`. #53 the glass dropdown —
+  `inbox-manage`. #54–#58 the clean list, #55 pills without checks — `inbox`. #61 no Switch
+  pill — `w-home`. #62 the live bar and Hire again — `home`.
+- #63 payout honesty — not visible (the sample world pays through the sandbox);
+  `tests/earnings.test.mjs` executes it.
+- #64 the consistency set — `w-jobs` (the Custom chip), `w-filters` (Cancel), `bid-detail`,
+  `accept` (the words and the in-app dialog), `mode-switch`, `create-sheet`, `w-detail`,
+  `w-submit`.
+
+**Found by the run's own end pass, and fixed** (none was a new request): #24 had not been built
+(the leaf divider was still drawn); #14 had reached only the tiles, the list and the hub card —
+it now reaches every category icon, with solid twins for the filled ones
+(`assets/glyphs/*-fill.png`); the Notification Feed's centred title was cut
+("Notification Fe…") — its "Mark all read" is 15/700; and a VIEWER bug from `5f4aaf4`: the
+Before's four Post-a-Job screens typed into the After's shortened placeholders and stopped at
+step 1 — each app now types into its own (`steps` / `afterSteps`), and the Before arrives
+71/71 again.
+
+**Verification.** Practice copy: `tsc --noUnusedLocals --noUnusedParameters` clean; `node --test`
+1282 / 1282, the fences moved with dated reasons, two new (`tests/inboxRows.test.mjs`,
+`tests/consistencySet.test.mjs`). The viewer: 71 screens (68 + `home-new`, `home-draft`,
+`post-live`), After 71/71 dark and light, Before 71/71 dark and light; all 71 After screens shot
+in both schemes into `.shots/refresh/shots/` and looked at on contact sheets; a truncation probe
+over every screen in both schemes; the #47 gold scan over every light screen. `after.patch`:
+178 modified and 41 added — 219 files, 28,980 lines. `git apply --check --ignore-whitespace` clean against this tree. Real tree:
+`npm run verify` exit 0 — 1393 / 1393 — this run, before the docs commit; pushed as the run's last
+act with `git push origin mainexpo`.
+
+**Open for the operator.** (1) #4: should the phone sign-up lose its "Private until a job is
+confirmed." line too? (2) Confirm the #47 sheet of the gold left in light. (3) The CTA gradient,
+still DECISIONS 2026-09-27 review (9). (4) On the phone: the swipe (#28), the focus glow (#8),
+the Seal's timing (#42), the Sonar and breathing dots (#49, #50, #54, #62), real flags (#5).
+
+**Next.** On "build it": `git apply --ignore-whitespace docs/mockups/refresh/after.patch`, then
+`npm run verify`, the commit, the OTA to the Beta. The three baked glyphs and their three solid
+twins are ALREADY in the real `assets/glyphs/` (committed this run; nothing requires them until
+the patch lands). `components/PulseDot.tsx` is unused in the After and
+`components/EditBudgetDialog.tsx` is unmounted but still read by fences — `make-patch.mjs`
+cannot delete a file, so both stay until a hand removes them.
+
+**The primer below (2026-09-27) still holds**, with three updates: the viewer has 71 ids
+(§10 plus `home-new` and `home-draft` after `home`, `post-live` after `post-price`); the
+pipeline's fences gained `inboxRows` and `consistencySet` (§7); and image reads worked in this
+session — contact sheets (`.shots/refresh/contact.mjs <out.png> <cols> <width> <png,png,…>`)
+are how the renders were looked at.
 
 ## NEXT SESSION — START HERE: the operator's next remake of the After, which they will brief more specifically; everything the Lux chat established (2026-09-27, the handoff sitting)
 
