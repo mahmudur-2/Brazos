@@ -1,45 +1,76 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-28 (the list sitting after the list run, latest: LUX-LIST-2 IN PROGRESS — its
-section, the first below — then LUX-LIST-64 DONE in the practice copy, the NEXT SESSION primer of
-2026-09-27 (still the pipeline, the fences and the traps), THE OPERATOR'S REVIEW OF THE LUX AFTER,
-THE LUX REMAKE DONE, the brief's own section, THE REFRESH (2026-09-26, the After as one patch,
-NOT applied), the sign-in records, the WebP run's, the Welcome records, the mode switch's, the Lux
-drawing run's, the eighteen-item run's and the sittings before them, unchanged.
+WRITTEN: 2026-09-29 (the LUX-LIST-2 run — its section, the first below — then LUX-LIST-64 DONE in
+the practice copy, the NEXT SESSION primer of 2026-09-27 (still the pipeline, the fences and the
+traps), THE OPERATOR'S REVIEW OF THE LUX AFTER, THE LUX REMAKE DONE, the brief's own section, THE
+REFRESH (2026-09-26, the After as one patch, NOT applied), the sign-in records, the WebP run's, the
+Welcome records, the mode switch's, the Lux drawing run's, the eighteen-item run's and the sittings
+before them, unchanged).
 
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
 
-## LUX-LIST-2 — the next list, IN PROGRESS (2026-09-28, the list sitting after LUX-LIST-64); nothing built but item 1
+## LUX-LIST-2 — BUILT in the practice copy; the After is `docs/mockups/refresh/after.patch`, NOT applied (2026-09-29, the list run); docs only, nothing in the app changed
 
-**What just happened.** Right after LUX-LIST-64 landed (`03b5e15`), the operator marked the #47
-gold sheet and started the next list, `docs/dispatch/LUX-LIST-2.md`. The sitting's rules, in the
-operator's words: "dont rebuild it yet.... i have alot of changes still i want for the next run...
-so just keep adding them and just like yesterday last chat"; "After each change i mention make
-sure you understand 100% of what i am trying to say and if not ask me all of the questions"
-(questions as popups); "after every 5 changes send me full list that you put".
+**What just happened.** The list sitting closed at nine items (`docs/dispatch/LUX-LIST-2.md`, every
+item confirmed by popups and written in full), and the operator ordered the run: "run the list for
+now and make changes update into … the viewer … Implement these surgically and also see if there
+are any small inconsistencies / bugs … (fully autonomous… im leaving the desk)", and then a guide
+to making UI changes faster at the same precision (".md + chat summary"). Everything was built in
+`.shots/refresh/practice`, the viewer re-exported, and the patch regenerated. Commit `13097a8`; the
+record is `docs/DECISIONS.md` 2026-09-29 "LUX-LIST-2" (1)–(10); the brief's §4 is the run's own
+summary, with the judgment calls.
 
-**The list so far: 1 item.** #1 — LIGHT MODE ONLY (confirmed by popup): Profile details' "Edit
-profile" pill (rim, pencil, word) and its JOB CATEGORIES chips (rim, word), and the Welcome's
-"BRAZOS MARKETPLACE", gold → `#064C3B` (the `mark` role; dark keeps `#D4A24C`). Everything
-else on the gold sheet stays gold. It was applied in the practice copy BEFORE "dont rebuild"
-arrived (`screens/ProfileDetailsScreen.tsx`, `screens/WelcomeScreen.tsx`, the fence
-`tests/rimLight.test.mjs` moved with a dated ruling): practice `tsc` clean, `node --test`
-1282/1282, the After exported and 71/71 in both schemes. So the practice copy is `03b5e15`'s After
-PLUS item 1 — `make-patch.mjs` will show exactly that difference — and item 1 is not yet in
-`after.patch`, DECISIONS or the viewer notes. The operator's pictures: `.shots/refresh/brief-pics-2/`.
+**Item by item, and where the viewer shows it** (`file:///C:/Users/mdmah/BRAZOS/.shots/refresh/index.html#<id>`;
+"phone" = only a device shows it):
+- #1 the light spots → green (#064C3B) — `details`, `welcome` in light. #2 auth buttons 52 tall,
+  corners 22 — `welcome` … `setup`.
+- #3 one sheet presenter: the dim instant, only the card slides — `home` (View all), `create-sheet`,
+  `w-filters`; the motion is the phone's.
+- #4 light labels green again, 25 kept antique gold — every light screen (the 25 are in the brief).
+- #5 the lamp-lit armchair — `home`, `home-new`, `home-draft`.
+- #6 the lit card, tiles and status pills — every screen. After a census of all 72 screens found
+  misses, it now reaches the job pages' hero, Bid detail, Services, Approve, Delete account, the
+  checklist, Earnings, Saved, Route & arrival, Worker Home's needs card, "What happens next" and
+  the dark category squares.
+- #7 the Profile hub — `profile`, `profile-more`, `profile-open` (new: Legal and tools open),
+  `profile-worker`; the past work now on `details`; Account & safety trimmed — `safety`.
+- #8 the feed — `feed`; its gear → `notif`.
+- #9 the frost — `inbox-manage`, `mode-switch`, `accept`, `post-price`.
+- ALSO FIXED, the four cut-offs carried since LUX-LIST-64 — `w-jobs` ("Your job" no longer under the
+  pay), `create-sheet` ("Approval needed" / "releases in 66h"), `w-map` ("$140", not "$1…"),
+  `job-bids` (the bidder's full name).
 
-**Next.** The next chat CONTINUES the list under the same rules — confirm each item, popups when
-unsure, the full list every five — until the operator says "that's the list"; then finish the
-brief in LUX-LIST-64's shape (§4 settled defaults, §5 traps, §6 order and verification), rewrite
-this section as the build run's primer, commit, push. The build runs in a fresh session. Offered to
-the operator and not yet answered: "build it" for LUX-LIST-64 first, so the phone shows what the
-viewer cannot and LUX-LIST-2's patch carries only its own changes. Open questions carried: #4 (the
-phone sign-up's "Private until a job is confirmed." line), the CTA gradient (DECISIONS 2026-09-27
-review (9)), and four cut-off texts seen in the renders — Available Jobs' "Your job" chip over the
-price, the [+] sheet's "Approval needed — releases i…", the Map card's "$1…", "Priya Na…" on bid
-cards. The operator's guide to the process (this chat word for word, the item table, next steps):
-`.shots/refresh/BRAZOS-redesign-chat-2026-09-28.md` (local).
+**Verification.** Practice: `tsc` clean, `node --test` 1286/1286. The After and the Before are each
+72/72 in both schemes. The #4 scan finds exactly the 25 labels in `#86641A`, none missing or extra.
+All 14 notification types draw their icon and colour in both schemes. Real repo: `npm run verify`
+exit 0, 1393/1393; `after.patch` has 186 modified and 46 added files, and `git apply --check` is
+clean.
+
+**Blocked, and for the operator.**
+- SUBAGENTS: the evidence guard (`.claude/hooks/evidence-guard.ps1`) refused the parallel helpers
+  that the brief's "faster, same quality" plan named: "subagents require operator authorization for
+  this run". The run went single-threaded. Allowing render and check helpers is your edit, outside
+  a session.
+- THE GUIDE: `.shots/refresh/BRAZOS-faster-ui-guide-2026-09-29.md` (local).
+- JUDGMENT CALLS, each one line to overturn (brief §4):
+  - the past work moved to Profile details;
+  - Appearance's screen stays, reached by a "Design studio" row in internal builds only;
+  - the settings pages' gold-outlined icon squares stay outlined;
+  - #8's grouped row keeps the trigger's "$135.00".
+
+**Next.** "build it" for LUX-LIST-64 and LUX-LIST-2 together, in a fresh session:
+- apply `after.patch`;
+- copy item 5's eight files from the practice copy's `assets/prestige/` into the real one, and
+  delete the six retired armchair files by hand (`make-patch.mjs` carries no assets and cannot
+  delete);
+- `npm run verify`, commit, OTA to the Beta;
+- the phone walk: #3's dim, #7's dropdowns and Reduce Motion, #9 with expo-blur and under Reduce
+  Transparency, 120 Hz with the inset shadows.
+
+The practice copy stays the After's source until then. The two unused helper copies
+(`practice-profile`, `practice-notif`) are gone; their `node_modules` junctions were unlinked first,
+and the real `node_modules` is intact.
 
 ## LUX-LIST-64 — DONE in the practice copy; the After is `docs/mockups/refresh/after.patch`, NOT applied (2026-09-28, the list run); docs only, nothing in the app changed
 
