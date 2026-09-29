@@ -12,10 +12,13 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const which = process.argv[2];
-if (which !== 'before' && which !== 'after') throw new Error('export.mjs before|after');
+// 2026-09-29 (LUX-LIST-2's run) — `after-<name>` exports a helper's own copy of the practice copy
+// (.shots/refresh/practice-<name>), so parallel helpers never write into each other's export.
+const helper = /^after-[a-z]+$/.test(which || '') ? which.slice('after-'.length) : null;
+if (which !== 'before' && which !== 'after' && !helper) throw new Error('export.mjs before|after|after-<name>');
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..', '..');
-const cwd = which === 'before' ? repo : join(repo, '.shots', 'refresh', 'practice');
+const cwd = which === 'before' ? repo : join(repo, '.shots', 'refresh', helper ? `practice-${helper}` : 'practice');
 const out = join(repo, '.shots', 'refresh', `${which}-export`);
 if (!existsSync(join(cwd, 'app.config.ts'))) throw new Error(`no app at ${cwd}`);
 rmSync(out, { recursive: true, force: true });

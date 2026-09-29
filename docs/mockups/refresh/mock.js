@@ -194,11 +194,11 @@
     return { id: uuid(n), recipient_id: ME, category: category, type: type, title: title, body: body, data: data, read_at: read ? at : null, created_at: at };
   };
   db.notification_outbox = [
-    note(601, 'job_updates', 'worker_en_route', 'Sam is on the way', 'Sam Okafor is heading to Mount three floating shelves in the hallway.', { job_id: J.shelves }, ago(12 * 60e3), false),
-    note(602, 'bids', 'new_offer', 'New bid on your job', 'Priya Natarajan bid $135 on Assemble a three-seat sofa and an armchair.', { job_id: J.sofa, offer_id: uuid(302) }, ago(1.2 * H), false),
-    note(603, 'bids', 'new_offer', 'New bid on your job', 'Sam Okafor bid $120 on Assemble a three-seat sofa and an armchair.', { job_id: J.sofa, offer_id: uuid(301) }, ago(2.5 * H), false),
+    note(601, 'messages', 'message', 'Sam Okafor', 'On my way now, about 15 minutes.', { job_id: J.shelves }, ago(12 * 60e3), false),
+    note(602, 'bids', 'bid_received', 'New bid on Assemble a three-seat sofa and an armchair', 'Priya Natarajan bid $135.00', { screen: 'ClientJobDetail', jobId: J.sofa }, ago(1.2 * H), false),
+    note(603, 'bids', 'bid_received', 'New bid on Assemble a three-seat sofa and an armchair', 'Sam Okafor bid $120.00', { screen: 'ClientJobDetail', jobId: J.sofa }, ago(2.5 * H), false),
     note(604, 'job_updates', 'job_completed', 'Work marked complete', 'Review and approve Mount a 65-inch TV above the fireplace.', { job_id: J.tv }, ago(5 * H), true),
-    note(605, 'messages', 'new_message', 'Dana Whitfield', 'The boxes are in the bedroom on the left. The buzzer code is 2B.', { job_id: J.wardrobe }, ago(2 * H), true),
+    note(605, 'messages', 'message', 'Dana Whitfield', 'The boxes are in the bedroom on the left. The buzzer code is 2B.', { job_id: J.wardrobe }, ago(2 * H), true),
     note(606, 'job_updates', 'payment_released', 'Payment released', '$55.50 for Fix a squeaky bedroom door is on its way to your payouts.', { job_id: J.door }, ago(8.9 * D), true),
   ];
   db.notification_prefs = [{ user_id: ME, messages: true, bids: true, job_updates: true, hire_requests: true, nearby_jobs: true, nearby_radius_miles: 5, home_lat: 40.6715, home_lng: -73.9777 }];
