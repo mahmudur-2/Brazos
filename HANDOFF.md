@@ -1,14 +1,61 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-29 (the LUX-LIST-2 run — its section, the first below — then LUX-LIST-64 DONE in
-the practice copy, the NEXT SESSION primer of 2026-09-27 (still the pipeline, the fences and the
-traps), THE OPERATOR'S REVIEW OF THE LUX AFTER, THE LUX REMAKE DONE, the brief's own section, THE
-REFRESH (2026-09-26, the After as one patch, NOT applied), the sign-in records, the WebP run's, the
+WRITTEN: 2026-09-29 (BUILD IT — the After applied to the app and shipped to the Beta; its section,
+the first below — then the LUX-LIST-2 run's, LUX-LIST-64's, the NEXT SESSION primer of 2026-09-27
+(the pipeline, the fences and the traps), THE OPERATOR'S REVIEW OF THE LUX AFTER, THE LUX REMAKE,
+the brief's own section, THE REFRESH (2026-09-26), the sign-in records, the WebP run's, the
 Welcome records, the mode switch's, the Lux drawing run's, the eighteen-item run's and the sittings
 before them, unchanged).
 
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
+
+## BUILD IT — the After IS the app now: LUX-LIST-64 and LUX-LIST-2 applied, verified, pushed and on the Beta (2026-09-29, the build run)
+
+**What just happened.** The operator said "build it" (and: "build it with fable and use opus 5.5
+max for everything thats easy" — the evidence guard refused every helper, `BRAZOS_EVIDENCE` being
+unset for the session, so the run was single-threaded; see Blocked). The After that three sittings
+built in `.shots/refresh/practice` — the Lux remake (2026-09-27), the operator's review, LUX-LIST-64
+(2026-09-28) and LUX-LIST-2 (2026-09-29) — was applied to the real app as ONE commit, `c508b09`:
+`docs/mockups/refresh/after.patch` applied whole (186 files modified, 46 added), item 5's eight hero
+files copied into `assets/prestige/` (`hero_armchair_customer_lamp_{dark,light}.webp` + their PNG
+masters, the glow and shadow layers), and the six retired armchair scenes deleted
+(`hero_armchair_customer{,_light,_lux}.{png,webp}` — nothing in code named them; the roster fence
+compares code mounts to its keys, not the folder). Then HANDOFF (this), the push and the OTA.
+
+**The one trap met, and its fix (record it, it will recur).** `git apply` writes every patched file
+through `core.autocrlf`, so all 232 patched text files came out CRLF, while the fences — and the
+practice copy they were verified against — read LF: 12 fences went red on `\n` regexes over
+`lib/theme.ts`, `JobFilterSheet.tsx`, `money-walk.yml`, `CheckoutScreen.tsx` and the like. The
+working tree is mixed (98 of the 272 untouched source files are CRLF), and every failing fence's
+file was LF before the patch. The 232 files were converted back to LF
+(`.shots/refresh/buildit-lf.mjs`; tracked content unchanged — the index is LF either way) and
+`npm run verify` went green: exit 0, 1415/1415. Next time: apply the patch, then run that script
+before verify.
+
+**Verification.** `npm run verify` exit 0, 1415 / 0 (`.shots/refresh/buildit-verify2.txt`) — the
+full suite, `safety` and `governance` included, which the practice copy could never run. The
+viewer's Before is now the OLD app (its export predates the apply); the After and the app are the
+same code.
+
+**Pushed** `45d6bed..` this commit (`c508b09` the code, then this HANDOFF). **THE OTA:**
+`npm run update:preview` → branch `preview`, runtime `1.0.0`, update group `be8d26ea-bf13-49e2-9fc5-f43f37200738`, iOS update `01a0ede2-b43a-78c1-8b3f-40ccbe3f5a7b` (an Android update `01a0ede2-b43a-7df4-aebb-5751a0cc8a9f` rides the same group — no Android target, CLAUDE.md §Target), commit `c508b09`; dashboard `https://expo.dev/accounts/mah_r2/projects/BRAZOS/updates/be8d26ea-bf13-49e2-9fc5-f43f37200738`. The export went to the gitignored `dist/`; nothing tracked moved. Open the Beta twice to pull it.
+
+**Blocked.** Subagents: `.claude/hooks/evidence-guard.ps1` blocks the Agent tool unless
+`BRAZOS_EVIDENCE` contains `subagents` when the session is launched — chat authorization cannot
+reach it. To use Opus helpers next time, launch the session with that variable set (operator-only).
+
+**Now the phone (the operator's walk, both appearances).** Open the Beta twice to pull the update,
+then: #3's instant dim on View all, the [+] sheet and Filters; #7's Profile — the Edit pill, the
+mode card, Legal and Worker/Customer tools opening in place (and with Reduce Motion on); the
+Notifications feed's gear and day groups; #9's frost on the Inbox ••• and the dialogs (and under
+Reduce Transparency); the lit cards while scrolling My Jobs and Available Jobs at 120 Hz; the
+lamp-lit armchair on Home. What the viewer already proved is in the LUX-LIST-2 section below.
+
+**Left as it was.** `after.patch` stays committed as the record of what was applied (regenerating
+it now would produce an empty diff, since the practice copy and the app are the same); the practice
+copy stays for the next list. Judgment calls to overturn in one line each are in
+`docs/dispatch/LUX-LIST-2.md` §4.
 
 ## LUX-LIST-2 — BUILT in the practice copy; the After is `docs/mockups/refresh/after.patch`, NOT applied (2026-09-29, the list run); docs only, nothing in the app changed
 
