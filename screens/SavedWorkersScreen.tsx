@@ -22,6 +22,7 @@ import {
   spacing,
   starColors,
   themedStyles,
+  litCardStyle,
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
@@ -178,7 +179,7 @@ export function SavedWorkersScreen() {
     const summary = summaries?.get(profile.id) ?? null;
     const word = summary != null && summary.total > 0 ? ratingWord(summary) : null;
     return (
-      <View key={`${options.saved ? 's' : 'p'}:${profile.id}`} style={styles.row}>
+      <View key={`${options.saved ? 's' : 'p'}:${profile.id}`} style={[styles.row, litCardStyle(isDark)]}>
         <Pressable
           style={styles.rowMain}
           onPress={() =>
@@ -239,7 +240,8 @@ export function SavedWorkersScreen() {
           <Pressable
             onPress={() => removeSaved(profile.id)}
             disabled={busyId === profile.id}
-            hitSlop={8}
+            // M-34 — a 20pt glyph + 12 + 12 = the 44pt floor.
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Remove from saved"
           >
@@ -252,20 +254,12 @@ export function SavedWorkersScreen() {
 
   return (
     <DetailScreen
-      title="Saved & past workers"
+      title="Saved & Past Workers"
       onBack={goBackOrHome}
       state={state}
+      // 2026-09-28 (LUX-LIST-64 #24): no leaf divider under the header — the
+      // gold rule-leaf-rule was decoration between the title and the list.
       sections={[
-        {
-          // Master 22's leaf divider, the one place in the set it appears.
-          content: (
-            <View style={styles.leafDivider} pointerEvents="none">
-              <View style={styles.leafRule} />
-              <Ionicons name="leaf-outline" size={18} color={colors.gold} />
-              <View style={styles.leafRule} />
-            </View>
-          ),
-        },
         ...(saved.length > 0
           ? [
               {
@@ -346,21 +340,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   hireButtonTextDark: {
     color: colors.gold,
-  },
-  // Master 22's gold leaf divider under the header. Two rules with the
-  // brand's own leaf between them — decoration, so it takes no touches.
-  leafDivider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  leafRule: {
-    flex: 1,
-    height: 0,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   }),
 );

@@ -12,6 +12,7 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
 import { THEME_PREFERENCES, type ThemePreference } from '../lib/themePreference';
@@ -61,7 +62,7 @@ export function AppearanceScreen() {
   const studioOpen = useDesignStudioOpen();
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(palette, isDark)]} edges={['top']}>
       <ScreenHeader title="Appearance" onBack={goBackOrHome} palette={palette} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}>
         <Card palette={palette} style={styles.card}>
@@ -144,9 +145,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       fontSize: 11,
       fontWeight: '800',
       letterSpacing: 1.4,
-      color: colors.textMuted,
+      color: colors.eyebrow,
     },
-    eyebrowDark: { color: colors.gold },
+    eyebrowDark: { color: colors.eyebrow },
     row: {
       flexDirection: 'row',
       alignItems: 'center',

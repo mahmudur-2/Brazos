@@ -20,7 +20,7 @@ export function BidSentScreen() {
 
   return (
     <SuccessScreen
-      title="Bid sent"
+      title="Bid Sent"
       icon="paper-plane"
       body="The customer can now compare your bid with others and open your profile from it. You’ll hear the moment they respond."
       details={
@@ -75,7 +75,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   receiptAmount: {
     fontSize: 28,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.money,
   },
   receiptNote: {
     fontSize: 13,

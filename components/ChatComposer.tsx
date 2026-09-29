@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GlowTextInput } from '../components/GlowTextInput';
 import { AudioMeterBars } from './AudioMeterBars';
 import { DropMenu, type DropMenuItem } from './DropMenu';
 import { VoiceNote } from './VoiceNote';
@@ -383,7 +384,9 @@ export function ChatComposer({
             <Text style={styles.recordingTime}>{formatClipDuration(recorderDurationMs)}</Text>
           </View>
         ) : (
-          <TextInput
+          <GlowTextInput
+            glowRadius={radius.pill}
+            wrapStyle={styles.inputWrap}
             keyboardAppearance={isDark ? 'dark' : 'light'}
             style={[styles.input, listening && interim != null && styles.inputInterim]}
             value={listening && interim != null ? joinDictation(baseTextRef.current, interim) : text}
@@ -550,8 +553,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     minHeight: COMPOSER_CONTROL_SIZE,
     justifyContent: 'center',
   },
-  input: {
+  // 2026-09-28 (#8): the input's place in the row, so its glow sits on its edge.
+  // The explicit nudge asked for: shifts the input down relative to the round
+  // controls beside it, which share this row's centred baseline.
+  inputWrap: {
     flex: 1,
+    marginTop: spacing.xs,
+  },
+  input: {
     minHeight: COMPOSER_CONTROL_SIZE,
     maxHeight: 100,
     borderWidth: 1,
@@ -566,10 +575,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     lineHeight: 19,
     color: colors.text,
     backgroundColor: colors.background,
-    // The explicit nudge asked for: shifts the input down relative to the
-    // round controls beside it, which share this row's centred baseline but
-    // don't get this extra offset.
-    marginTop: spacing.xs,
   },
   // Provisional dictation: the placeholder's treatment until the final phrase
   // commits, so nobody mistakes a guess for what they will send.

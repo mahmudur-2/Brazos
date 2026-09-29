@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GlowTextInput } from '../components/GlowTextInput';
 import { SKILL_CATEGORIES } from '../lib/skillCategories';
 import {
   disabledControl,
@@ -105,7 +106,9 @@ export function CategoryAccordion({
           ))}
 
           <View style={styles.otherRow}>
-            <TextInput
+            <GlowTextInput
+              glowRadius={radius.sm}
+              wrapStyle={styles.otherInputWrap}
               keyboardAppearance={isDark ? 'dark' : 'light'}
               style={styles.otherInput}
               value={customInput}
@@ -178,8 +181,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
   },
-  otherInput: {
+  otherInputWrap: {
     flex: 1,
+  },
+  otherInput: {
     fontSize: 14,
     color: colors.text,
     paddingVertical: spacing.xs + 2,

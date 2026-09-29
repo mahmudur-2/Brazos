@@ -44,17 +44,20 @@ test('perspective is ModeContext, and worker mode has no posting affordance', ()
   // The screen must not accept its perspective from outside: it takes no
   // props at all, so a hand-passed mode is structurally impossible.
   assert.match(hubCode, /export function MyJobsHubScreen\(\) \{/);
-  // Posting affordances render only for customers: the bottom control, the
-  // empty-state CTA, and the resume-draft card are all inside isCustomer
-  // gates. The literal strings still exist (customer mode keeps them), so
-  // assert the GATES, not the absence of the strings.
+  // Posting affordances render only for customers: the empty-state CTA and
+  // the resume-draft card are inside isCustomer gates. 2026-09-28 (LUX-LIST-64
+  // #44): every "Post another job" left the screen — the list foot's pill and
+  // the Active CTA — so the one button left is the empty-state "Post a job",
+  // for an account with no jobs and no draft at all, and it is the GATE that
+  // is asserted.
+  assert.doesNotMatch(hubCode, /Post another job/);
   assert.match(
     hubCode,
-    /isCustomer \? \(\s*<Pressable\s+onPress=\{openPostJob\}/,
-    'the "Post another job" controls must be customer-gated'
+    /\{isCustomer && posted\.length === 0 && !draft \? \(\s*<Pressable\s+onPress=\{openPostJob\}/,
+    'the empty-state "Post a job" must be customer-gated'
   );
   const gateCount = [...hubCode.matchAll(/isCustomer \?/g)].length;
-  assert.ok(gateCount >= 2, 'both posting affordances must carry the customer gate');
+  assert.ok(gateCount >= 2, 'the perspective gates must stay');
   assert.match(hubCode, /const showDraft = isCustomer && filter === 'active'/);
   // Posted jobs render only in customer mode; accepted work and bids only in
   // worker mode.

@@ -132,7 +132,10 @@ test('the bar row paints nothing but the pill (emerald D2)', async () => {
   // unchanged — ONE painted View, resolved from the palette, wrapping both
   // trees — and the fallback is pinned so "no screen declared one" still
   // paints.
-  assert.match(shell, /<View style=\{\[styles\.tree, \{ backgroundColor: treeGround \}\]\}>/);
+  // 2026-09-27 (the Lux remake, ruling 9): the shell paints the Lux gradient
+  // OVER that flat ground in dark (`luxGround`, lib/theme.ts screenGround);
+  // the flat ground is still there beneath it, so the claim stands.
+  assert.match(shell, /<View style=\{\[styles\.tree, \{ backgroundColor: treeGround \}, luxGround\]\}>/);
   assert.match(shell, /const treeGround = ground \? palette\[ground\] : palette\.background;/);
   // Exactly one painted tree View — a second would be a second ground.
   assert.equal(
@@ -309,10 +312,15 @@ test('every screen inside the tab bar leaves the bottom safe-area inset to it', 
   const tabContained = [
     'screens/AdminReportsScreen.tsx',
     'screens/CellJobsScreen.tsx',
+    // 2026-09-26 (the refresh): the three job screens that pin an action bar
+    // above the tabs — a reserved inset there is a blank band under the bar.
+    'screens/ClientJobDetailScreen.tsx',
     'screens/HomeScreen.tsx',
+    'screens/JobDetailScreen.tsx',
     'screens/PostJobScreen.tsx',
     'screens/ProfileReviewsScreen.tsx',
     'screens/WorkerProfileScreen.tsx',
+    'screens/WorkerJobScreen.tsx',
     'screens/WorkerResultsScreen.tsx',
     'screens/WorkerSearchScreen.tsx',
   ];
@@ -393,8 +401,11 @@ test('every tab-contained scroll surface clears the floating pill', async () => 
     'screens/NotificationSettingsScreen.tsx',
     'screens/JobDetailScreen.tsx',
     'screens/WorkerJobScreen.tsx',
-    'screens/SubmitBidScreen.tsx',
-    'screens/CounterofferScreen.tsx',
+    // 2026-09-26 (the refresh, audit M-33): SubmitBid and Counteroffer left
+    // this list the way PostJob did — their body is OfferComposer's 'screen'
+    // layout, whose scroller sits above a footer that is always rendered, so
+    // nothing there travels under the pill. The footer is held to the pinned
+    // rule below.
     'screens/LegalDocumentScreen.tsx',
     'screens/ProfileReviewsScreen.tsx',
     'screens/WorkerProfileScreen.tsx',
@@ -504,11 +515,21 @@ test('a PINNED footer takes its own padding, never the scroll clearance', async 
   //   A PINNED footer never travels. The bar is laid out in normal flow
   //   beneath the scene, so its space is already reserved; a footer that also
   //   reserved it put ~104pt of empty chrome under every action button.
+  // 2026-09-28 (LUX-LIST-64 #41): Post a Job's last-step footer is the posting
+  // bar now, which the operator put FLUSH on the tab bar — "0 vertical padding"
+  // (refs/bottom-bar.html) — so it leaves this list; its own assertion below
+  // holds it to that, and to never reserving the pill's footprint either.
   const pinned = [
     ['ui/templates/FormScreen.tsx', 'footer'],
     ['ui/templates/DetailScreen.tsx', 'actionBar'],
-    ['screens/PostJobScreen.tsx', 'footer'],
+    // M-33 — the bid and counter forms' Send, pinned above the keyboard.
+    ['components/OfferComposer.tsx', 'footer'],
   ];
+  const bar = (await read('components/PostJobBar.tsx')).replace(/\s+/g, ' ');
+  const barStyle = / bar: \{([^}]*)\}/.exec(bar);
+  assert.ok(barStyle, 'the posting bar must keep a flat bar style');
+  assert.doesNotMatch(barStyle[1], /paddingBottom|paddingVertical|paddingTop/, 'the posting bar sits flush: no space above or below its buttons');
+  assert.doesNotMatch(bar, /navClearance|useScrollClearance/, 'and it never reserves the pill\'s footprint');
 
   // The shared value, and that it is DERIVED from the bar's own geometry
   // rather than being a fresh literal — the same rule the clearance follows.

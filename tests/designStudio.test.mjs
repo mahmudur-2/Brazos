@@ -920,7 +920,8 @@ test('S3 nav paint: solid chrome ground, the champagne [+] ring, and no raster i
   // recorded exception for it is deleted rather than left standing.
   assert.match(bar, /backgroundColor: colors\.postPillGreen,/, "the fill is the pill's green");
   assert.match(bar, /liftAlpha: navBar\.createLiftAlpha,/, 'lit with the pill’s own alpha');
-  assert.match(bar, /borderColor: colors\.goldDeep,/, "light's ring stays");
+  // 2026-09-28 (LUX-LIST-64 #47): light's [ + ] ring left the gold for the forest mark.
+  assert.match(bar, /borderColor: colors\.mark,/, "light's ring stays");
 
   // ---- D16, NO RASTER IN THE BAR (a proof, not a change) ----------------
   // Every mark in the bar is an Ionicons font glyph or a styled View, so it

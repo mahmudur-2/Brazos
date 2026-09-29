@@ -194,3 +194,73 @@ export function goBackOrHome(): void {
     navigateAcrossTabs('Home');
   });
 }
+
+/** Route names that are a Home root, in either tree. */
+const HOME_ROOTS = new Set(['HomeMain', 'WorkerHome']);
+
+type ReadState = {
+  type?: string;
+  index?: number;
+  routes?: { name: string; state?: ReadState }[];
+};
+
+/** The first tab navigator's state under the root, depth-first. */
+function findTabState(state: ReadState | undefined): ReadState | undefined {
+  if (!state) return undefined;
+  if (state.type === 'tab') return state;
+  for (const route of state.routes ?? []) {
+    const found = findTabState(route.state);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
+ * 2026-09-28 (LUX-LIST-64 #60) — WILL BACK LAND ON A HOME ROOT? A READ, never a
+ * dispatch: the header names "Home" beside its back button exactly when this
+ * says so. In the screen's own stack, the route underneath is a Home root; at
+ * its stack's root in another tab (My Jobs, Discover), goBackOrHome() falls to
+ * the tab bar, whose back goes to the first tab — Home — so that tab's own top
+ * decides. Unknown (no container yet, a harness) answers false: no label
+ * rather than a wrong one.
+ */
+export function backLandsOnHome(stack: ReadState | undefined): boolean {
+  try {
+    const index = stack?.index ?? 0;
+    if (stack?.routes && index > 0) {
+      return HOME_ROOTS.has(stack.routes[index - 1]?.name ?? '');
+    }
+    const tabs = navigationRef.isReady() ? findTabState(navigationRef.getRootState() as ReadState) : undefined;
+    if (!tabs?.routes) return false;
+    const current = tabs.routes[tabs.index ?? 0];
+    if (!current || current.name === 'Home') return false;
+    const home = tabs.routes.find((route) => route.name === 'Home');
+    const top = home?.state?.routes?.[home.state.index ?? 0]?.name;
+    return top === undefined || HOME_ROOTS.has(top);
+  } catch {
+    return false;
+  }
+}
+
+/** What a flow's first back step may name: the screen underneath, by the tab it roots. */
+const ORIGIN_LABELS: Record<string, string> = {
+  HomeMain: 'Home',
+  WorkerHome: 'Home',
+  MyJobsHub: 'My Jobs',
+  WorkerSearch: 'Discover',
+  MessagesInbox: 'Inbox',
+  ProfileMain: 'Profile',
+  MapMain: 'Map',
+};
+
+/**
+ * 2026-09-28 (LUX-LIST-64 #30) — WHERE A FLOW WAS OPENED FROM, in the words of
+ * the tab it came from: Post a Job's step 1 names it beside its back button
+ * ("‹ Home", "‹ My Jobs"). A read of the stack underneath; at a stack's root,
+ * whatever backLandsOnHome() says. Unknown answers undefined: the disc alone.
+ */
+export function originLabel(stack: ReadState | undefined): string | undefined {
+  const index = stack?.index ?? 0;
+  if (stack?.routes && index > 0) return ORIGIN_LABELS[stack.routes[index - 1]?.name ?? ''];
+  return backLandsOnHome(stack) ? 'Home' : undefined;
+}

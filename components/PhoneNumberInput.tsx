@@ -1,4 +1,4 @@
-import { forwardRef, useRef, useState } from 'react';
+import { forwardRef, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Pressable,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
-import { authSurface, metricStyles, useThemeColors } from '../lib/theme';
+import { authSurface, metricStyles, useThemeColors, withAlpha } from '../lib/theme';
 import { flagEmoji, type Country } from '../lib/countries';
 import {
   clampNational,
@@ -20,9 +20,11 @@ import {
   splitInternational,
 } from '../lib/phoneNumber';
 import { CountryPicker } from './CountryPicker';
-import { JS_DRIVER } from '../lib/motion';
-
-const FOCUS_MS = 160;
+import { FocusRing } from './FocusRing';
+import type { PopoverAnchor } from './PickerPopover';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
+import { MENU_MOTION_MS } from '../lib/motion120';
 
 type PhoneNumberInputProps = {
   label?: string;
@@ -66,31 +68,45 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
   ) {
     const styles = stylesFor();
     const [pickerOpen, setPickerOpen] = useState(false);
-    const focus = useRef(new Animated.Value(0)).current;
+    // 2026-09-28 (LUX-LIST-64 #5): the dropdown hangs off the pill, so the pill
+    // is measured in window points as it opens; its chevron points down and
+    // flips while the list is open (a rotation on the native driver).
+    const pillRef = useRef<View>(null);
+    const [anchor, setAnchor] = useState<PopoverAnchor | null>(null);
+    const reducedMotion = useReducedMotion();
+    const flip = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+      Animated.timing(flip, {
+        toValue: pickerOpen ? 1 : 0,
+        duration: reducedMotion ? 0 : MENU_MOTION_MS,
+        useNativeDriver: USE_NATIVE_DRIVER,
+      }).start();
+    }, [flip, pickerOpen, reducedMotion]);
+    const openPicker = () => {
+      const node = pillRef.current;
+      if (!node) return;
+      node.measureInWindow((x, y, width, height) => {
+        setAnchor({ x, y, width, height });
+        setPickerOpen(true);
+      });
+    };
+    const [focused, setFocused] = useState(false);
     const { palette, isDark } = useThemeColors();
     const surface = authSurface(palette, isDark);
     // Masters 3/4: gold label, gold hairlines, gold calling code and divider,
     // cream digits on the screen's own near-black.
-    const fill = themed ? (isDark ? surface.bg : surface.surface) : authColors.surface;
+    // 2026-09-27 (the Lux remake, the operator's pic 2): the field is the Lux
+    // well — white at .06 in dark — inside the lifted phone-number card; the
+    // label stays gold (surface.accent) and the dial and chevron read muted.
+    const fill = themed ? (isDark ? withAlpha(palette.white, 0.06) : surface.surface) : authColors.surface;
     const line = themed ? surface.line : authColors.line;
-    const muted = themed ? surface.accent : authColors.muted;
+    const muted = themed ? surface.muted : authColors.muted;
     const ink = themed ? surface.ink : authColors.ink;
 
-    const run = (to: number) =>
-      Animated.timing(focus, {
-        toValue: to,
-        duration: FOCUS_MS,
-        useNativeDriver: JS_DRIVER,
-      }).start();
-
-    const borderColor = error
-      ? themed
-        ? surface.danger
-        : authColors.danger
-      : focus.interpolate({
-          inputRange: [0, 1],
-          outputRange: [line, themed ? palette.emerald : authColors.emerald],
-        });
+    const danger = themed ? surface.danger : authColors.danger;
+    const borderColor = error ? danger : line;
+    // #8: the glow while typing, the mint (the light token's green in light).
+    const glow = error ? danger : themed ? palette.emerald : authColors.emerald;
 
     function handleChangeText(text: string) {
       // A pasted international number carries its own calling code. Peel it
@@ -121,11 +137,14 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
 
     return (
       <View style={styles.container}>
-        <Text style={[styles.label, themed && { color: surface.accent }]}>{label}</Text>
+        {/* 2026-09-28 (LUX-LIST-64 #2): "Phone number" is the mint everywhere
+            it is said — the light token's green in light. */}
+        <Text style={[styles.label, { color: themed ? surface.fieldLabel : palette.emerald }]}>{label}</Text>
 
         <View style={styles.row}>
           <Pressable
-            onPress={() => setPickerOpen(true)}
+            ref={pillRef}
+            onPress={openPicker}
             style={({ pressed }) => [
               styles.country,
               themed && { backgroundColor: fill, borderColor: line },
@@ -134,17 +153,14 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
             accessibilityRole="button"
             accessibilityLabel={`Country: ${country.name}, plus ${country.dial}`}
             accessibilityHint="Opens the country list"
+            accessibilityState={{ expanded: pickerOpen }}
           >
-            <Text style={styles.flag}>{flagEmoji(country.code)}</Text>
+            <Text style={[styles.flag, { color: ink }]}>{flagEmoji(country.code)}</Text>
             <Text style={[styles.iso, themed && { color: ink }]}>{country.code}</Text>
-            <Ionicons name="chevron-down" size={15} color={muted} />
-          </Pressable>
-
-          <Animated.View
-            style={[styles.field, themed && { backgroundColor: fill }, { borderColor }]}
-          >
-            {/* Announced as part of the input's own label instead of on its
-                own, so a screen reader reads one coherent field. */}
+            {/* 2026-09-27 (the Lux remake, the operator's pic 2): "US +1 ›" —
+                the calling code rides in the country pill, so the field holds
+                the number alone. Announced as part of the input's own label
+                below, so a screen reader still reads one coherent field. */}
             <Text
               style={[styles.dial, themed && { color: muted }]}
               importantForAccessibility="no"
@@ -152,14 +168,23 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
             >
               +{country.dial}
             </Text>
-            <View style={[styles.divider, themed && { backgroundColor: line }]} />
+            <Animated.View
+              style={{
+                transform: [{ rotate: flip.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] }) }],
+              }}
+            >
+              <Ionicons name="chevron-down" size={15} color={muted} />
+            </Animated.View>
+          </Pressable>
+
+          <View style={[styles.field, themed && { backgroundColor: fill }, { borderColor }]}>
             <TextInput
               ref={ref}
               style={[styles.input, themed && { color: ink }]}
               value={formatNational(country, value)}
               onChangeText={handleChangeText}
-              onFocus={() => run(1)}
-              onBlur={() => run(0)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
               placeholder={isNanp(country) ? '347 320 0610' : 'Phone number'}
               placeholderTextColor={themed ? surface.placeholder : authColors.placeholder}
               keyboardType="phone-pad"
@@ -169,7 +194,8 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
               accessibilityLabel={`${label}, ${country.name}, plus ${country.dial}`}
               {...inputProps}
             />
-          </Animated.View>
+            <FocusRing focused={focused} color={glow} radius={authRadius.field} />
+          </View>
         </View>
 
         {error ? (
@@ -183,6 +209,7 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
 
         <CountryPicker
           visible={pickerOpen}
+          anchor={anchor}
           selected={country}
           onSelect={handleSelectCountry}
           onClose={() => setPickerOpen(false)}
@@ -240,14 +267,9 @@ const stylesFor = metricStyles(() => StyleSheet.create({
     paddingLeft: authSpacing.md + 2,
   },
   dial: {
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '600',
     color: authColors.muted,
-  },
-  divider: {
-    width: 1,
-    height: 22,
-    marginHorizontal: authSpacing.md - 2,
-    backgroundColor: authColors.line,
   },
   input: {
     flex: 1,

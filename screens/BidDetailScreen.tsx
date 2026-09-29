@@ -22,6 +22,14 @@ import {
   effectiveOfferStatus,
 } from '../lib/offers';
 import { formatBudget } from '../lib/jobs';
+import {
+  COUNTER_OFFER_ACTION_LABEL,
+  acceptOfferActionLabel,
+  acceptOfferConfirmText,
+  acceptOfferConfirmTitle,
+  declineOfferActionLabel,
+  declineOfferConfirmTitle,
+} from '../lib/offerCopy';
 import { fetchProfileReviewSummary, type ReviewSummary } from '../lib/reviews';
 import { formatTimeAgo } from '../lib/time';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
@@ -31,6 +39,7 @@ import {
   spacing,
   starColors,
   themedStyles,
+  litCardStyle,
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
@@ -153,7 +162,7 @@ export function BidDetailScreen() {
   return (
     <>
       <DetailScreen
-        title="Bid detail"
+        title="Bid Detail"
         subtitle={job.title}
         onBack={goBackOrHome}
         state={state}
@@ -162,7 +171,7 @@ export function BidDetailScreen() {
             ? [
                 {
                   content: (
-                    <View style={styles.headerCard}>
+                    <View style={[styles.headerCard, litCardStyle(isDark)]}>
                       <View style={styles.statusRow}>
                         <StatusPill kind="offer" status={effective ?? offer.status} />
                         <Text style={styles.sentAt}>
@@ -191,6 +200,7 @@ export function BidDetailScreen() {
                     <Pressable
                       style={({ pressed }) => [
                         styles.workerCard,
+                        litCardStyle(isDark),
                         pressed && styles.pressed,
                       ]}
                       onPress={() =>
@@ -277,7 +287,7 @@ export function BidDetailScreen() {
                   ? [
                       {
                         content: (
-                          <View style={styles.waitingCard}>
+                          <View style={[styles.waitingCard, litCardStyle(isDark)]}>
                             <Ionicons
                               name="hourglass-outline"
                               size={18}
@@ -295,7 +305,7 @@ export function BidDetailScreen() {
                   ? [
                       {
                         content: (
-                          <View style={styles.consequences}>
+                          <View style={[styles.consequences, litCardStyle(isDark)]}>
                             <Text style={styles.consequenceLine}>
                               <Text style={styles.consequenceStrong}>Accept</Text> —
                               selects {workerName} for the job; the other active
@@ -323,7 +333,7 @@ export function BidDetailScreen() {
             <View style={styles.actions}>
               <View style={styles.actionRow}>
                 <Button
-                  title="Decline"
+                  title={declineOfferActionLabel(false)}
                   variant="secondary"
                   palette={{
                     ...colors,
@@ -335,7 +345,7 @@ export function BidDetailScreen() {
                   style={styles.actionButton}
                 />
                 <Button
-                  title="Counter"
+                  title={COUNTER_OFFER_ACTION_LABEL}
                   variant="secondary"
                   palette={emeraldColors}
                   onPress={() =>
@@ -351,7 +361,7 @@ export function BidDetailScreen() {
                 />
               </View>
               <Button
-                title={`Accept for ${formatBudget(offer.amount_cents)}`}
+                title={acceptOfferActionLabel(formatBudget(offer.amount_cents), false)}
                 palette={emeraldColors}
                 onPress={() => setConfirming('accept')}
                 loading={acting && confirming === 'accept'}
@@ -364,14 +374,14 @@ export function BidDetailScreen() {
 
       <ConfirmDialog
         visible={confirming === 'accept'}
-        title={`Accept ${formatBudget(offer?.amount_cents ?? null)} from ${workerName}?`}
+        title={acceptOfferConfirmTitle(formatBudget(offer?.amount_cents ?? null), false)}
         message={
           // D16 (R6a): the sandbox sentence renders in sandbox mode only.
           paymentsMode === 'sandbox'
             ? 'This selects this bid for the job. The other active bids will no longer be eligible. Next, you’ll authorize and protect the payment in a sandbox checkout — no real money is charged in this development build.'
             : 'This selects this bid for the job. The other active bids will no longer be eligible. Next, you’ll protect the payment in checkout.'
         }
-        confirmText="Accept bid"
+        confirmText={acceptOfferConfirmText(false)}
         cancelText="Cancel"
         loading={acting}
         palette={emeraldColors}
@@ -381,9 +391,9 @@ export function BidDetailScreen() {
 
       <ConfirmDialog
         visible={confirming === 'decline'}
-        title={`Decline ${workerName}’s bid?`}
+        title={declineOfferConfirmTitle(formatBudget(offer?.amount_cents ?? null), false)}
         message="This declines this bid. It will no longer be available to accept. They can send a new bid unless the job is filled."
-        confirmText="Decline bid"
+        confirmText={declineOfferActionLabel(false)}
         cancelText="Cancel"
         loading={acting}
         palette={emeraldColors}
@@ -417,7 +427,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   amount: {
     fontSize: 32,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.money,
   },
   expiry: {
     fontSize: 13,

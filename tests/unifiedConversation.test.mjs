@@ -210,15 +210,24 @@ test('the inbox subtitle is the resolver’s job, never a second opinion', async
     'the inbox must resolve the active job exactly once'
   );
   assert.match(inbox, /const activeJob = resolveActiveJob\(candidates\)/);
-  assert.match(inbox, /subtitle: isSelf \? null : activeJob\?\.title \?\? null/);
+  // 2026-09-28 (LUX-LIST-64 #54): the subtitle became the row's JOB CHIP. It
+  // names the resolver's active job whenever there is one — the same rule,
+  // still asked once — and only when there is none does it name the
+  // conversation's most recent job, as context: its title alone once the job
+  // is finished (the approved clean list's "a finished job shows the title
+  // only"). While a job is active, no other job is ever named.
+  assert.match(inbox, /const chipJob = activeJob\s*\? \{ id: activeJob\.id, title: activeJob\.title \}/);
+  assert.match(inbox, /job:\s*isSelf \|\| !chipJob\s*\? null/);
 
   // The candidate set is the active jobs shared with THAT person, and the
   // canonical activity timestamp comes from the conversation rows themselves.
   assert.match(inbox, /fetchActiveJobs\(user\.id\)/);
   assert.match(inbox, /lastMessageAt: activityByJob\[job\.id\] \?\? null/);
 
-  // No second definition of "still being worked" on this screen.
+  // No second definition of "still being worked" on this screen. The chip's
+  // stage is read and derived in the data layer (lib/inboxStages.ts).
   assert.doesNotMatch(inbox, /deriveJobLifecycle/);
+  assert.match(inbox, /fetchJobLifecycleStates\(jobIds\)/);
 });
 
 test('the active-job window is stated once, in the data layer', async () => {

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type ComponentProps } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
@@ -10,9 +10,10 @@ import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
-import { goBackOrHome } from '../lib/navigationRef';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
+import { useMode } from '../modes/ModeProvider';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
-import { payoutsCta, workerTakeCents, type PayoutsStatus } from '../lib/payments';
+import { payoutSetupNotice, payoutsCta, workerTakeCents, type PayoutsStatus } from '../lib/payments';
 import { fetchMyPayoutsStatus } from '../lib/payments/stripe';
 import { deriveEarnings, fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
 import { earningsRowMeta } from '../lib/earningsCopy';
@@ -25,6 +26,7 @@ import {
   radius,
   spacing,
   themedStyles,
+  litCardStyle,
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
@@ -42,10 +44,13 @@ import {
  * (D10): no rate lives on the client any more.
  */
 export function EarningsScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { user } = useAuth();
   const navigation = useNavigation<ProfileStackNavigation>();
+  // #63 (M-14): a ledger row opens its job — the worker's job screen, which
+  // lives in worker mode, so the rows open there and stay plain otherwise.
+  const { mode } = useMode();
 
   const [summary, setSummary] = useState<EarningsSummary | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -122,7 +127,7 @@ export function EarningsScreen() {
   return (
     <>
       <DetailScreen
-        title="Earnings"
+        title="Earnings & Payouts"
         subtitle={
           paymentsMode === 'sandbox'
             ? 'Sandbox — no real money'
@@ -162,7 +167,7 @@ export function EarningsScreen() {
                 },
                 {
                   content: (
-                    <View style={styles.feeCard}>
+                    <View style={[styles.feeCard, litCardStyle(isDark)]}>
                       <Ionicons name="receipt-outline" size={16} color={colors.textMuted} />
                       <Text style={styles.feeText}>
                         Platform fees on these rows: {formatBudget(s.feeCents)}. Every
@@ -174,6 +179,7 @@ export function EarningsScreen() {
                 },
                 {
                   title: 'Ledger',
+                  titleTone: 'gold',
                   content:
                     s.rows.length === 0 ? (
                       <Text style={styles.emptyText}>
@@ -183,7 +189,17 @@ export function EarningsScreen() {
                     ) : (
                       <View style={styles.list}>
                         {s.rows.map((row) => (
-                          <View key={row.id} style={styles.row}>
+                          <Pressable
+                            key={row.id}
+                            onPress={
+                              mode === 'worker' && row.job_id
+                                ? () => navigateAcrossTabs('MyJobs', 'WorkerJob', { jobId: row.job_id })
+                                : undefined
+                            }
+                            disabled={!(mode === 'worker' && row.job_id)}
+                            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                            accessibilityRole={mode === 'worker' && row.job_id ? 'button' : undefined}
+                          >
                             <View style={styles.rowCopy}>
                               <Text style={styles.rowTitle} numberOfLines={1}>
                                 {row.kind === 'tip' ? 'Tip — ' : ''}
@@ -205,6 +221,7 @@ export function EarningsScreen() {
                                     releaseDeadlineMs: releaseDeadlineMs({
                                       completed_at: row.job_completed_at ?? null,
                                     }),
+                                    waitingOnPayoutSetup: payoutSetupNotice(payouts, [row]) !== null,
                                   },
                                   nowMs,
                                   { countdown: releaseCountdownLabel, timeAgo: formatTimeAgo }
@@ -212,7 +229,10 @@ export function EarningsScreen() {
                               </Text>
                             </View>
                             <MoneyText cents={workerTakeCents(row)} state={row.status} captionHidden />
-                          </View>
+                            {mode === 'worker' && row.job_id ? (
+                              <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
+                            ) : null}
+                          </Pressable>
                         ))}
                       </View>
                     ),
@@ -332,14 +352,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   bucketLabel: {
     fontSize: 10,
     fontWeight: '800',
-    color: colors.emerald,
+    color: colors.eyebrow,
     letterSpacing: 1.1,
   },
   bucketAmount: {
     fontFamily: fonts.display,
     fontSize: 22,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.money,
     fontVariant: ['tabular-nums'],
   },
   bucketNote: {
@@ -375,6 +395,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.border,
     backgroundColor: colors.surface,
     minHeight: 56,
+  },
+  rowPressed: {
+    opacity: 0.7,
   },
   rowCopy: {
     flex: 1,

@@ -1,3 +1,4 @@
+import { useModalPresence } from '../hooks/useModalPresence';
 import { Modal, StyleSheet, Text, View } from 'react-native';
 import { Button } from './Button';
 import {
@@ -27,6 +28,9 @@ type ConfirmDialogProps = {
   loading?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** 2026-09-28 (#64, M-31): the Modal has actually appeared — the confirm
+   *  host's watchdog (components/ConfirmHost.tsx) listens for it. */
+  onShow?: () => void;
   palette?: ColorPalette;
 };
 
@@ -47,9 +51,12 @@ export function ConfirmDialog({
   loading = false,
   onConfirm,
   onCancel,
+  onShow,
   palette: paletteProp,
 }: ConfirmDialogProps) {
   const { palette: colors, isDark } = useThemeColors();
+  // #64 (M-31): on screen or not — the one confirm engine never stacks a second modal on iOS.
+  useModalPresence(visible);
   const palette = paletteProp ?? colors;
   const styles = stylesFor(colors);
   // RUN S2 (C7) — the shared sheet-family backdrop dials. The card RADIUS
@@ -73,6 +80,7 @@ export function ConfirmDialog({
       visible={visible}
       transparent
       animationType="fade"
+      onShow={onShow}
       // Hardware back on Android maps to the same request-close event Modal
       // already uses on iOS swipe-to-dismiss gestures — only honored while
       // nothing is in flight, so a back-press can't abandon a submitting
@@ -89,13 +97,27 @@ export function ConfirmDialog({
               radius, hairline weight) is unchanged via the props, and the
               backdrop above is byte-identical. A caller-supplied palette
               still colours the copy and the buttons. */}
-          <Surface material="sheet" corners="all" radius={radius.xl} style={[styles.sheet, sheetShadowDial != null && { shadowOpacity: sheetShadowDial }]}>
+          <Surface material="menu" corners="all" radius={radius.xl} style={[styles.sheet, sheetShadowDial != null && { shadowOpacity: sheetShadowDial }]}>
             <Text style={[styles.title, { color: palette.text }]}>{title}</Text>
             {message ? (
               <Text style={[styles.message, { color: palette.textMuted }]}>{message}</Text>
             ) : null}
 
+            {/* 2026-09-28 (LUX-LIST-64 #64, audit M-31) — ONE DIALOG GRAMMAR,
+                chosen once for every dialog (this one, AmountPrompt, the
+                budget dialog): a pair, Cancel on the left, the action on the
+                right — the iOS alert's own order. Cancel takes its word's
+                width and the action the rest, so a long action ("Cash out
+                (simulated)") still reads whole. */}
             <View style={styles.actions}>
+              <Button
+                title={cancelText}
+                variant="secondary"
+                palette={palette}
+                onPress={onCancel}
+                disabled={loading}
+                style={styles.cancel}
+              />
               <Button
                 title={confirmText}
                 variant={destructive ? 'destructive' : 'primary'}
@@ -103,13 +125,7 @@ export function ConfirmDialog({
                 onPress={onConfirm}
                 loading={loading}
                 disabled={loading}
-              />
-              <Button
-                title={cancelText}
-                variant="secondary"
-                palette={palette}
-                onPress={onCancel}
-                disabled={loading}
+                style={styles.action}
               />
             </View>
           </Surface>
@@ -149,8 +165,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     lineHeight: 20,
   },
   actions: {
+    flexDirection: 'row',
     gap: spacing.md,
     marginTop: spacing.lg,
+  },
+  cancel: {
+    flexShrink: 0,
+  },
+  action: {
+    flex: 1,
   },
   }),
 );

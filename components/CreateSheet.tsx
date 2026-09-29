@@ -1,7 +1,11 @@
+import { useModalPresence } from '../hooks/useModalPresence';
+import { useSheetPresence } from '../hooks/useSheetPresence';
 import { useEffect, useMemo, type ComponentProps } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { CategoryGlyph } from './CategoryGlyph';
+import { splitNextAction } from './HubCard';
 import {
   SCRIM_DARK_ALPHA,
   radius,
@@ -14,6 +18,8 @@ import {
 } from '../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 import { Surface } from '../ui/primitives/Surface';
+import { SheetHeader } from '../ui/primitives/SheetHeader';
+import { ConfirmHost } from './ConfirmHost';
 import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import { attentionItems } from '../lib/homeAttention';
 import { JOB_CATEGORY_ICONS, type Job } from '../lib/jobs';
@@ -88,6 +94,9 @@ export function CreateSheet({
   onClose,
 }: CreateSheetProps) {
   const { palette: colors, isDark } = useThemeColors();
+  // #64 (M-31): on screen or not — the one confirm engine never stacks a second modal on iOS.
+  useModalPresence(visible);
+  const presence = useSheetPresence(visible);
   const styles = stylesFor(colors);
   const insets = useSafeAreaInsets();
   // The mockup's chevrons: the cream at 35% on the dark glass, the nav's
@@ -110,26 +119,30 @@ export function CreateSheet({
 
   return (
     <Modal
-      visible={visible}
+      visible={presence.mounted}
       transparent
-      animationType="slide"
+      animationType="none"
       onRequestClose={onClose}
       statusBarTranslucent
     >
       <View style={styles.root}>
-        <Pressable
-          style={[styles.backdrop, isDark && styles.backdropDark, backdropDial]}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-        />
+        {/* 2026-09-29 (LUX-LIST-2 #3): the dim covers the screen at once; only the card moves (hooks/useSheetPresence). */}
+        {presence.dimVisible ? (
+          <Pressable
+            style={[styles.backdrop, isDark && styles.backdropDark, backdropDial]}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          />
+        ) : null}
+        <Animated.View style={presence.cardStyle}>
         <Surface
           material="clear"
           corners="top"
           style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}
         >
-          <View style={[styles.handle, isDark && styles.handleDark]} />
-          <Text style={styles.title}>{title}</Text>
+          {/* #64 (M-31) — the one sheet header; "Close": a row is the action. */}
+          <SheetHeader title={title} dismissWord="Close" onDismiss={onClose} />
 
           <NeedsYou onOpen={onOpenJob} />
 
@@ -177,6 +190,11 @@ export function CreateSheet({
             <Text style={[styles.hint, isDark && styles.hintDark]}>confirms first</Text>
           </Pressable>
         </Surface>
+        </Animated.View>
+        {/* #64 (M-31): the switch is asked with this sheet still up (M-38), so
+            its confirm is hosted here, over the sheet — iOS presents a Modal
+            from the screen that owns it. */}
+        <ConfirmHost level={1} />
       </View>
     </Modal>
   );
@@ -220,6 +238,9 @@ function NeedsYou({ onOpen }: { onOpen: (job: Job) => void }) {
   // A failed read must never render as "nothing needs you": absent, not empty.
   if (loading || error || !first) return null;
   const { job, line } = first;
+  // 2026-09-29 (LUX-LIST-2 run): "Approval needed — releases in 66h" breaks at the dash, as it does on the
+  // job cards — it was cut to "releases i…" on one line.
+  const [action, detail] = splitNextAction(line);
   return (
     <Pressable
       onPress={() => onOpen(job)}
@@ -228,17 +249,24 @@ function NeedsYou({ onOpen }: { onOpen: (job: Job) => void }) {
       accessibilityLabel={`Needs you: ${line}. ${job.title}`}
     >
       <View style={[styles.needsDisc, isDark && styles.needsDiscDark]}>
-        <Ionicons
+        {/* 2026-09-27 (the Lux remake, rulings 5 and 12): the Lux line icon, mint in dark. */}
+        <CategoryGlyph
           name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
           size={18}
-          color={colors.gold}
+          color={isDark ? colors.emerald : colors.mark}
+          bare
         />
       </View>
       <View style={styles.needsCopy}>
         <Text style={styles.eyebrow}>NEEDS YOU</Text>
         <Text style={styles.needsLine} numberOfLines={1}>
-          {line}
+          {action}
         </Text>
+        {detail ? (
+          <Text style={styles.needsDetail} numberOfLines={1}>
+            {detail}
+          </Text>
+        ) : null}
         <Text style={styles.needsJob} numberOfLines={1}>
           {job.title}
         </Text>
@@ -269,23 +297,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       paddingTop: 10,
       paddingHorizontal: 22,
       gap: 6,
-    },
-    handle: {
-      alignSelf: 'center',
-      width: 36,
-      height: 4,
-      borderRadius: radius.pill,
-      backgroundColor: withAlpha(colors.text, 0.18),
-      marginBottom: spacing.sm,
-    },
-    handleDark: { backgroundColor: withAlpha(colors.text, 0.28) },
-    title: {
-      fontSize: 17,
-      lineHeight: 22,
-      fontWeight: '600',
-      letterSpacing: -0.2,
-      color: colors.text,
-      marginBottom: spacing.sm,
     },
     // The contextual card: a pane on the pane. Light: the frost's own white
     // at 60% over an ink hairline; dark: the cream at 6% over its 10% ring.
@@ -330,6 +341,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       fontSize: 15,
       lineHeight: 19,
       fontWeight: '700',
+      color: colors.text,
+    },
+    // The detail after the dash: one weight lighter, one point smaller, under the action.
+    needsDetail: {
+      fontSize: 14,
+      lineHeight: 18,
+      fontWeight: '600',
       color: colors.text,
     },
     needsJob: {

@@ -13,10 +13,12 @@ import {
 } from 'react-native';
 import { NavigationContext } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { FocusRing } from '../../components/FocusRing';
 import {
   controls,
   radius,
   spacing,
+  wells,
   withAlpha,
   type EmeraldPalette,
   type as typeScale,
@@ -178,8 +180,15 @@ export function SearchBar({
   const ink = emphasis === 'ink';
   // The ink emphasis (the map's pill) draws its glyphs one point larger
   // since the pill grew to 62 (2026-09-20, sitting 2, (6)): 25 and 23.
-  const iconGlyphSize = iconSizeDial ?? (ink ? 25 : 18);
-  const leadingInk = ink ? withAlpha(colors.ink, 0.92) : isDark ? colors.ink : colors.emerald;
+  // 2026-09-28 (LUX-LIST-64 #15): every search field but the map's pill is the
+  // Lux Home field — 22pt mint glyphs, 16pt text, 54 tall, 18 in, 12 between.
+  const iconGlyphSize = iconSizeDial ?? (ink ? 25 : 22);
+  // 2026-09-27 (the operator's review, the Lux `.field svg{color:var(--acc)}`):
+  // the magnifier is the mint in both themes; only the map's ink pill differs.
+  const leadingInk = ink ? withAlpha(colors.ink, 0.92) : colors.emerald;
+  // The Lux well under the field in dark (ui/tokens.ts `wells.field`); the
+  // map's ink pill and light keep their own fill.
+  const well = isDark && !ink ? styles.fieldDark : null;
   const iconDialStyle =
     iconOffsetX || iconOffsetY
       ? { transform: [{ translateX: iconOffsetX }, { translateY: iconOffsetY }] }
@@ -267,7 +276,7 @@ export function SearchBar({
         onPress={onPress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
-        style={({ pressed }) => [styles.field, fieldDial, pressed && styles.pressed, style]}
+        style={({ pressed }) => [styles.field, !ink && styles.fieldLux, well, fieldDial, pressed && styles.pressed, style]}
         accessibilityRole="search"
         accessibilityLabel={accessibilityLabel ?? placeholder}
       >
@@ -286,7 +295,7 @@ export function SearchBar({
             focusable on some platforms and reads as broken rather than as a
             button. */}
         <Text
-          style={[styles.value, !value && styles.placeholder, !value && { color: placeholderInk }]}
+          style={[styles.value, !ink && styles.textLux, !value && styles.placeholder, !value && { color: placeholderInk }]}
           numberOfLines={1}
         >
           {value || placeholder}
@@ -297,7 +306,7 @@ export function SearchBar({
   }
 
   return (
-    <View style={[styles.field, fieldDial, focusDial, style]}>
+    <View style={[styles.field, !ink && styles.fieldLux, well, fieldDial, focusDial, style]}>
       {disableLeadingIcon ? null : (
         <Ionicons
           name="search"
@@ -308,7 +317,7 @@ export function SearchBar({
       )}
       <TextInput
         keyboardAppearance={isDark ? 'dark' : 'light'}
-        style={[styles.input, showingInterim && styles.inputInterim]}
+        style={[styles.input, !ink && styles.textLux, showingInterim && styles.inputInterim]}
         value={displayValue}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -347,7 +356,7 @@ export function SearchBar({
           accessibilityLabel="Search"
           style={styles.mic}
         >
-          <Ionicons name="search" size={20} color={colors.navInactive} />
+          <Ionicons name="search" size={22} color={isDark ? colors.emerald : colors.navInactive} />
         </Pressable>
       ) : voiceReady && !disableVoiceSearch ? (
         <Animated.View style={micPress.style}>
@@ -367,13 +376,21 @@ export function SearchBar({
           >
             <Ionicons
               name={listening ? 'mic' : 'mic-outline'}
-              size={ink ? 23 : 20}
-              color={listening ? colors.emerald : ink ? withAlpha(colors.ink, 0.85) : colors.navInactive}
+              size={ink ? 23 : 22}
+              color={
+                listening || (isDark && !ink)
+                  ? colors.emerald
+                  : ink
+                    ? withAlpha(colors.ink, 0.85)
+                    : colors.navInactive
+              }
             />
           </Pressable>
         </Animated.View>
       ) : null}
       {trailing}
+      {/* #8: the glow while typing — never on the map's pill (pinned). */}
+      {ink ? null : <FocusRing focused={inputFocused} color={colors.emerald} radius={radius.pill} />}
     </View>
   );
 }
@@ -393,6 +410,22 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   },
   pressed: {
     opacity: 0.9,
+  },
+  // 2026-09-28 (LUX-LIST-64 #15): the Lux `.field` — height 54, radius 27 (the
+  // pill), padding 0 18, gap 12.
+  fieldLux: {
+    minHeight: 54,
+    paddingHorizontal: 18,
+    gap: 12,
+  },
+  textLux: {
+    fontSize: 16,
+  },
+  // 2026-09-27 (the operator's review): the Lux `.field` well in dark — the
+  // deep ink under the light rim (ui/tokens.ts `wells.field`).
+  fieldDark: {
+    backgroundColor: withAlpha(wells.field.ink, wells.field.inkAlpha),
+    borderColor: withAlpha(wells.field.rim, wells.field.rimAlpha),
   },
   input: {
     flex: 1,

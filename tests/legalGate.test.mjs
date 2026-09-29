@@ -116,7 +116,10 @@ test('reading both documents still does not accept them', () => {
 });
 
 test('the CTA needs the explicit agreement AND both documents', () => {
-  assert.match(gate, /disabled=\{!agreed \|\| !bothSeen\}/);
+  // 2026-09-28 (LUX-LIST-64 #10): one button — while both are not read it offers
+  // the document still owed; once both are, it agrees, and only with the box ticked.
+  assert.match(gate, /disabled=\{bothSeen \? !agreed : !reviewReady\}/);
+  assert.match(gate, /bothSeen \|\| !reviewTarget \? handleContinue :/);
   // …and the handler re-checks rather than trusting the disabled prop alone.
   const handler = gate.slice(gate.indexOf('async function handleContinue()'));
   assert.match(handler.slice(0, 200), /if \(!agreed \|\| !bothSeen \|\| saving\) return;/);
@@ -212,8 +215,10 @@ test('the agreement unlock is announced, and only once', () => {
 });
 
 test('the next document is offered explicitly, never forced', () => {
-  assert.match(gate, /title=\{`Review \$\{nextDocument\.title\}`\}/);
-  assert.match(gate, /onPress=\{\(\) => switchTab\(nextDocument\.key\)\}/);
+  // 2026-09-28 (LUX-LIST-64 #10): offered by the one bottom button, which names
+  // the document still owed; still a button, still never automatic.
+  assert.match(gate, /`Review \$\{reviewTarget\.title\}`/);
+  assert.match(gate, /\(\) => switchTab\(reviewTarget\.key\)/);
   // The offer is a button; nothing navigates on its own.
   assert.doesNotMatch(gate, /useEffect\([^)]*switchTab/);
 });
@@ -228,7 +233,13 @@ test('reduced motion still completes every state', () => {
 test('the gate is on the auth palette and hardcodes no colour of its own', () => {
   assert.match(gate, /from '\.\.\/lib\/authTheme'/);
   assert.doesNotMatch(gate, /#[0-9A-Fa-f]{6}/, 'colours come from tokens, never hex literals');
-  assert.doesNotMatch(gate, /from '\.\.\/lib\/theme'/, 'one palette per surface');
+  // 2026-09-27 (the Lux remake, ruling 15): the gate follows the scheme —
+  // "There is no dark mode" — so every colour is a palette role resolved at
+  // render through the one palette read, and the Lux ground rides its root.
+  assert.match(gate, /from '\.\.\/lib\/theme'/, 'the palette is the resolved one');
+  assert.match(gate, /const \{ palette: colors, isDark \} = useThemeColors\(\);/);
+  assert.match(gate, /screenGround\(colors, isDark\)/);
+  assert.doesNotMatch(gate, /authColors\./, 'no Heritage literal survives');
 });
 
 test('the screen still owns its safe area and stays readable on a wide window', () => {

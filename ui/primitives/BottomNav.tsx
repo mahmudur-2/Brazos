@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { NavigationRouteContext, getFocusedRouteNameFromRoute } from '@react-navigation/native';
-import { glow, layout, spacing, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
+import { glow, layout, navBarPalette, spacing, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
 import { navBar } from '../tokens';
 import { tap } from '../../lib/haptics';
 import {
@@ -350,7 +350,9 @@ export function BottomNavItem({
   focused: boolean;
   color: string;
 }) {
-  const { palette: colors, isDark } = useThemeColors();
+  const { palette: live, isDark } = useThemeColors();
+  // 2026-09-26: the bar keeps its own colours (lib/theme.ts NAV_BAR_DARK).
+  const colors = navBarPalette(live, isDark);
   const styles = stylesFor(colors);
   // G1 (C4): the studio's glow dial, when set, replaces the standing alpha.
   const { glowAlpha } = useDesignOverrides();
@@ -755,7 +757,9 @@ export const HIDDEN_TAB_ITEM_OPTIONS: BottomTabNavigationOptions = {
 // RUN S2 (C6) — the schema registry reads the same defaults the control does.
 
 export function CenterCreateButton({ onPress }: { onPress: () => void }) {
-  const { palette: colors, isDark } = useThemeColors();
+  const { palette: live, isDark } = useThemeColors();
+  // 2026-09-26: the bar keeps its own colours (lib/theme.ts NAV_BAR_DARK).
+  const colors = navBarPalette(live, isDark);
   const styles = stylesFor(colors);
   // RUN S2 (C6) — THE [ + ] IS FULLY INDEPENDENT: size, radius, fill, ring,
   // glow, glyph size/colour/offset are its own dials, inheriting nothing
@@ -824,9 +828,10 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
   // so dark's halo takes the new fill and light's is left exactly as it was.
   // A ternary on the COLOUR only: the shape, the radius and the alpha are one
   // declaration still, so this is a palette translation and not a second depth.
+  // 2026-09-28 (LUX-LIST-64 #47): light's gold glow is the forest mark.
   const halo = glow.halo(
     withAlpha(
-      glowColorDial ?? (isDark ? colors.postPillGreen : colors.gold),
+      glowColorDial ?? (isDark ? colors.postPillGreen : colors.mark),
       glowDial ?? navBar.createGlowAlpha
     )
   );
@@ -899,7 +904,10 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
           // so the glyph has to be the content colour a green fill takes, and
           // the palette already names it. Referenced, never retyped. Light is
           // byte-identical: its arm is untouched.
-          color={glyphColorDial ?? (isDark ? colors.onForest : colors.gold)}
+          // 2026-09-28 (#47): light's gold plus leaves the gold — a green glyph
+          // would vanish on the green tile, so it takes the white the approved
+          // light pages draw it in (refs/home-tucked-in.html `.fab`).
+          color={glyphColorDial ?? (isDark ? colors.onForest : colors.white)}
           style={
             glyphOffsetX || glyphOffsetY
               ? { transform: [{ translateX: glyphOffsetX }, { translateY: glyphOffsetY }] }
@@ -930,7 +938,8 @@ export function BottomNavPreview({
   /** Draw D3's customer [ + ] at CUSTOMER_CREATE_SLOT. */
   showCreateAction?: boolean;
 }) {
-  const { palette: colors } = useThemeColors();
+  const { palette: live, isDark } = useThemeColors();
+  const colors = navBarPalette(live, isDark);
   const styles = stylesFor(colors);
 
   // A flat item list keeps every slot an equal flex column, exactly like the
@@ -1091,9 +1100,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // branch is always light's #C8A15B — while the ring reads the theme-constant
   // `goldDeep`, because "light's gold, deepened" has no per-theme meaning and
   // must not resolve to dark's gold deepened on a dark device.
+  // 2026-09-28 (#47): the ring leaves the gold for the forest mark.
   createButtonLight: {
     backgroundColor: colors.postPillGreen,
-    borderColor: colors.goldDeep,
+    borderColor: colors.mark,
   },
   // home(18): the transform moved to the call site with the lift, so the pressed
   // state cannot fall out of step with the resting one.

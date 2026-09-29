@@ -35,8 +35,10 @@ export const DEFAULT_HOME_DESIGN_SETTINGS: HomeDesignSettings = {
   // 2026-09-21: 44 -> 56 and 17 -> 20 — "way too small": the operator's pick
   // b of 52 / 56 / 60 on the reference, and the corner one notch up
   // (emeraldRadius.lg -> xl). The slider still runs from CLAUDE.md's 44 floor.
-  searchHeight: 56,
-  searchRadius: 20,
+  // 2026-09-28 (LUX-LIST-64 #15): 56 -> 54 and 20 -> 27 — the Lux Home field,
+  // fully round like every search field but the map's pill.
+  searchHeight: 54,
+  searchRadius: 27,
   ctaHeight: 48,
   ctaRadius: 24,
 };

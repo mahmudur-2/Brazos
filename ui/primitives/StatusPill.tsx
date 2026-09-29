@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
-import { metricStyles, useThemeColors } from '../../lib/theme';
+import { metricStyles, useThemeColors, withAlpha } from '../../lib/theme';
 import { useOverrideNumber } from '../../lib/designOverrides';
 
 /**
@@ -153,7 +153,7 @@ type StatusPillProps =
 
 export function StatusPill(props: StatusPillProps) {
   const styles = stylesFor();
-  const { emerald: colors } = useThemeColors();
+  const { emerald: colors, isDark } = useThemeColors();
   const { label, tone } =
     props.kind === 'job'
       ? { label: JOB_LABELS[props.status], tone: JOB_TONES[props.status] }
@@ -177,7 +177,9 @@ export function StatusPill(props: StatusPillProps) {
 
   return (
     <View
-      style={[styles.pill, { backgroundColor: palette.bg, borderColor: palette.border }, pillDial]}
+      // 2026-09-29 (LUX-LIST-2 #6): a status pill has no outline — dark fills with its own ink at .14
+      // (the Lux `.chip`), light keeps its filled tint; the rim stays transparent so the size holds.
+      style={[styles.pill, { backgroundColor: isDark ? withAlpha(palette.fg, 0.14) : palette.bg, borderColor: 'transparent' }, pillDial]}
       // The pill is the status, so it announces itself as text rather than
       // leaving a screen reader to infer meaning from a coloured shape.
       accessibilityRole="text"

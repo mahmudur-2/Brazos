@@ -1,11 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BrazosMonogram } from '../components/BrazosMonogram';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import { paymentsMode } from '../lib/adapters/payments';
 import { goBackOrHome } from '../lib/navigationRef';
 import {
-  fonts,
+  litCardStyle, fonts,
   radius,
   spacing,
   themedStyles,
@@ -30,7 +29,7 @@ export function PaymentMethodsScreen() {
 
   return (
     <DetailScreen
-      title="Payment methods"
+      title="Payment Methods"
       onBack={goBackOrHome}
       state={{ kind: 'ready' }}
       sections={[
@@ -39,8 +38,7 @@ export function PaymentMethodsScreen() {
           // whole card is a live-state claim about the build's payment mode),
           // and a display headline.
           content: (
-            <View style={[styles.heroCard, isDark && styles.cardDark]}>
-              {isDark ? <BrazosMonogram size={130} style={styles.heroMark} /> : null}
+            <View style={[styles.heroCard, litCardStyle(isDark)]}>
               <Text style={styles.eyebrow}>PAYMENT PROTECTION</Text>
               <Text style={styles.heroTitle}>Honest by design.</Text>
               <Text style={styles.bodyText}>
@@ -55,7 +53,7 @@ export function PaymentMethodsScreen() {
         },
         {
           content: (
-            <View style={[styles.modeCard, isDark && styles.cardDark]}>
+            <View style={[styles.modeCard, litCardStyle(isDark)]}>
               <View style={[styles.modeGlyph, isDark && styles.modeGlyphDark]}>
                 <Ionicons
                   name={sandbox ? 'flask-outline' : 'card-outline'}
@@ -86,7 +84,7 @@ export function PaymentMethodsScreen() {
           // They take the same card the two above already use, with the
           // master's own eyebrows and its serif headings.
           content: (
-            <View style={[styles.sectionCard, isDark && styles.cardDark]}>
+            <View style={[styles.sectionCard, litCardStyle(isDark)]}>
               <Text style={styles.eyebrow}>FUNDING SOURCE</Text>
               <Text style={styles.sectionTitle}>No stored payment methods</Text>
               <Text style={styles.bodyText}>
@@ -101,7 +99,7 @@ export function PaymentMethodsScreen() {
           ? [
               {
                 content: (
-                  <View style={[styles.sectionCard, isDark && styles.cardDark]}>
+                  <View style={[styles.sectionCard, litCardStyle(isDark)]}>
                     <Text style={styles.eyebrow}>SANDBOX LEDGER</Text>
                     <Text style={styles.sectionTitle}>What the sandbox does</Text>
                     <View style={styles.list}>
@@ -143,14 +141,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     overflow: 'hidden',
   },
   cardDark: { borderColor: colors.border },
-  heroMark: { position: 'absolute', right: -14, top: -18 },
   // Master 40 sets its card eyebrows GREEN, not gold (B-11): every one of
   // them states what the build's payment mode currently IS.
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.4,
-    color: colors.emerald,
+    color: colors.eyebrow,
   },
   heroTitle: {
     fontFamily: fonts.display,

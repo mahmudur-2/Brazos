@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthButton } from '../components/AuthButton';
 import { AuthField } from '../components/AuthField';
@@ -18,7 +18,7 @@ import {
 } from '../lib/theme';
 import { DEFAULT_COUNTRY, type Country } from '../lib/countries';
 import { alertAsync } from '../lib/dialog';
-import type { AuthStackNavigation } from '../lib/navigation';
+import type { AuthStackNavigation, AuthStackParamList } from '../lib/navigation';
 import { phoneValidationError, toE164 } from '../lib/phoneNumber';
 import { isValidEmail } from '../lib/validation';
 
@@ -36,6 +36,8 @@ import { isValidEmail } from '../lib/validation';
  */
 export function EmailCreateAccountScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
+  // M-18 — arriving from the phone form keeps what was typed there.
+  const { params } = useRoute<RouteProp<AuthStackParamList, 'EmailCreateAccount'>>();
   const { signUp } = useAuth();
   const phoneRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
@@ -47,9 +49,9 @@ export function EmailCreateAccountScreen() {
   // what the field renders, never what it holds or submits.
   const [passwordShown, setPasswordShown] = useState(false);
 
-  const [fullName, setFullName] = useState('');
-  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
-  const [phoneDigits, setPhoneDigits] = useState('');
+  const [fullName, setFullName] = useState(params?.fullName ?? '');
+  const [country, setCountry] = useState<Country>(params?.country ?? DEFAULT_COUNTRY);
+  const [phoneDigits, setPhoneDigits] = useState(params?.phoneDigits ?? '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -111,25 +113,28 @@ export function EmailCreateAccountScreen() {
 
   return (
     <AuthScaffold
-      title="Create account"
+      title="Create Account"
       onBack={() => navigation.goBack()}
       backdrop="soft"
       themed
     >
+      {/* 2026-09-28 (LUX-LIST-64 #3, #4): no CREATE ACCOUNT eyebrow (the bar
+          already says it) and no privacy pill — the form and both buttons fit
+          one screen at rest; the keyboard may still slide the focused field
+          into view (native-ui). */}
       <View style={styles.body}>
-        <Text style={[styles.eyebrow, { color: surface.accent }]}>CREATE ACCOUNT</Text>
         <Text style={styles.title} maxFontSizeMultiplier={1.5}>
           Sign up with your email
         </Text>
         <Text style={styles.subtitle}>
-          One account. You can hire help and accept work from the same profile.
+          One account. Hire help and accept work.
         </Text>
 
         <View style={styles.form}>
           <AuthField
             label="Full name"
             themed
-            leading={<Ionicons name="person-outline" size={20} color={surface.accent} />}
+            leading={<Ionicons name="person-outline" size={20} color={surface.fieldGlyph} />}
             value={fullName}
             onChangeText={(next) => {
               setFullName(next);
@@ -166,7 +171,7 @@ export function EmailCreateAccountScreen() {
             ref={emailRef}
             label="Email"
             themed
-            leading={<Ionicons name="mail-outline" size={20} color={surface.accent} />}
+            leading={<Ionicons name="mail-outline" size={20} color={surface.fieldGlyph} />}
             value={email}
             onChangeText={(next) => {
               setEmail(next);
@@ -189,7 +194,7 @@ export function EmailCreateAccountScreen() {
             ref={passwordRef}
             label="Password"
             themed
-            leading={<Ionicons name="lock-closed-outline" size={20} color={surface.accent} />}
+            leading={<Ionicons name="lock-closed-outline" size={20} color={surface.fieldGlyph} />}
             trailing={
               <Pressable
                 onPress={() => setPasswordShown((shown) => !shown)}
@@ -201,7 +206,7 @@ export function EmailCreateAccountScreen() {
                 <Ionicons
                   name={passwordShown ? 'eye-off-outline' : 'eye-outline'}
                   size={20}
-                  color={surface.accent}
+                  color={surface.fieldGlyph}
                 />
               </Pressable>
             }
@@ -228,13 +233,6 @@ export function EmailCreateAccountScreen() {
           ) : null}
         </View>
 
-        {/* Master 4 draws this as a hairlined card, not a sage wash. */}
-        <View style={[styles.privacy, { borderColor: surface.line }]}>
-          <Ionicons name="shield-checkmark-outline" size={20} color={surface.accent} />
-          <Text style={styles.privacyText}>
-            Your number stays private until a job is confirmed.
-          </Text>
-        </View>
 
         <View style={styles.actions}>
           <AuthButton
@@ -267,25 +265,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexGrow: 1,
     paddingBottom: authSpacing.lg,
   },
-  eyebrow: {
-    ...authType.eyebrow,
-    marginTop: authSpacing.xl + authSpacing.xs,
-  },
   // Master 4's display headline is the serif.
   title: {
     ...authType.title,
     fontFamily: fonts.display,
     color: colors.ink,
-    marginTop: authSpacing.md - 2,
+    marginTop: authSpacing.md,
   },
   subtitle: {
     ...authType.body,
     color: colors.textMuted,
-    marginTop: authSpacing.md - 2,
+    marginTop: authSpacing.xs + 2,
   },
   form: {
-    marginTop: authSpacing.xxl,
-    gap: authSpacing.xl - 4,
+    marginTop: authSpacing.xl - 4,
+    gap: authSpacing.md,
   },
   formError: {
     padding: authSpacing.md,
@@ -298,24 +292,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     ...authType.note,
     color: colors.danger,
   },
-  privacy: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: authSpacing.md - 2,
-    marginTop: authSpacing.xl,
-    padding: authSpacing.lg - 2,
-    borderRadius: authRadius.field + 2,
-    borderWidth: 1,
-    backgroundColor: colors.surface,
-  },
-  privacyText: {
-    ...authType.note,
-    flex: 1,
-    color: colors.ink,
-  },
   actions: {
     marginTop: 'auto',
-    paddingTop: authSpacing.xxl,
+    paddingTop: authSpacing.xl - 4,
     gap: authSpacing.md,
   },
   }),

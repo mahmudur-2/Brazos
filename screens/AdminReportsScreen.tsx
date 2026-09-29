@@ -25,12 +25,14 @@ import {
   unbanUser,
   type AdminReport,
 } from '../lib/moderation';
-import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { spacing, themedStyles, useThemeColors, type ColorPalette,
+  screenGround,
+} from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
 import { formatTimeAgo } from '../lib/time';
 
 export function AdminReportsScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // emerald(3): the floating pill's real footprint.
   const navClearance = useScrollClearance();
@@ -117,7 +119,7 @@ export function AdminReportsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader
         title="Reports"
         subtitle="Moderation queue"

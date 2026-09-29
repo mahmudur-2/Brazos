@@ -7,16 +7,18 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { GlowTextInput } from '../components/GlowTextInput';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ReviewSection } from '../components/ReviewSection';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ScreenStateView } from '../ui/templates/ScreenStates';
+import { PINNED_FOOTER_BOTTOM_PADDING } from '../ui/primitives';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
@@ -51,6 +53,7 @@ import {
   useThemeColors,
   type ColorPalette,
   selectedInDark,
+  screenGround,
 } from '../lib/theme';
 
 /** Round tip suggestions, in cents. Presets, not a fee schedule — the
@@ -110,6 +113,10 @@ export function ReviewAndTipScreen() {
 
   const [tipChoice, setTipChoice] = useState<number | 'custom' | null>(null);
   const [customTip, setCustomTip] = useState('');
+  // 2026-09-26 (the refresh, audit M-26) — the review is the last step of the
+  // job, so it gets an ending: once it is sent, a thank-you at the top and a
+  // pinned way out (Done, or hire the same person again). The tip stays open.
+  const [reviewed, setReviewed] = useState(false);
   const [confirmTip, setConfirmTip] = useState(false);
   const [sendingTip, setSendingTip] = useState(false);
   const sendingTipRef = useRef(false);
@@ -426,7 +433,8 @@ export function ReviewAndTipScreen() {
         </Pressable>
       </View>
       {tipChoice === 'custom' ? (
-        <TextInput
+        <GlowTextInput
+              glowRadius={radius.lg}
           keyboardAppearance={isDark ? 'dark' : 'light'}
           style={styles.customInput}
           value={customTip}
@@ -461,9 +469,10 @@ export function ReviewAndTipScreen() {
   })();
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    // The tab bar owns the bottom inset, so the pinned bar sits on it.
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader
-        title="Review & tip"
+        title="Review & Tip"
         subtitle={job.title}
         onBack={goBackOrHome}
         palette={emeraldColors}
@@ -482,6 +491,18 @@ export function ReviewAndTipScreen() {
             keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >
+            {reviewed ? (
+              <View style={styles.thanksCard} accessibilityLiveRegion="polite">
+                <Ionicons name="checkmark-circle" size={26} color={colors.emerald} />
+                <View style={styles.thanksCopy}>
+                  <Text style={styles.thanksTitle}>
+                    Thanks — {workerName ?? 'the worker'} has been rated.
+                  </Text>
+                  <Text style={styles.cardNote}>That closes the job. A tip is still open below.</Text>
+                </View>
+              </View>
+            ) : null}
+
             {payment ? (
               <View style={styles.paymentCard}>
                 {/* D16 / D23: sandbox keeps its wording verbatim; a stripe
@@ -522,6 +543,10 @@ export function ReviewAndTipScreen() {
                 prompt={`How was ${workerName ?? 'the worker'}’s work?`}
                 scrollRef={scrollRef}
                 palette={emeraldColors}
+                onSubmitted={() => {
+                  setReviewed(true);
+                  scrollRef.current?.scrollTo({ y: 0, animated: true });
+                }}
               />
             ) : null}
 
@@ -599,19 +624,19 @@ export function ReviewAndTipScreen() {
                           : `Entirely optional — every cent of the tip goes to ${workerName ?? 'the worker'}.`}
                     </Text>
                     {amountControls}
-                    {tipChoice !== null ? (
-                      <Button
-                        title={
-                          tipValid
-                            ? `Send ${formatBudget(tipCents)} tip by card`
-                            : 'Send tip by card'
-                        }
-                        palette={emeraldColors}
-                        onPress={() => void startCardTip()}
-                        disabled={!tipValid || sendingTip}
-                        loading={sendingTip}
-                      />
-                    ) : null}
+                    {/* M-26 — always here, so the next step is visible
+                        before an amount is chosen; it enables with one. */}
+                    <Button
+                      title={
+                        tipValid
+                          ? `Send ${formatBudget(tipCents)} tip by card`
+                          : 'Send tip by card'
+                      }
+                      palette={emeraldColors}
+                      onPress={() => void startCardTip()}
+                      disabled={tipChoice === null || !tipValid || sendingTip}
+                      loading={sendingTip}
+                    />
                   </>
                 )
               ) : !paymentsEnabled ? (
@@ -631,23 +656,41 @@ export function ReviewAndTipScreen() {
                     {workerName ?? 'the worker'}. Sandbox build, no real money.
                   </Text>
                   {amountControls}
-                  {tipChoice !== null ? (
-                    <Button
-                      title={
-                        tipValid
-                          ? `Send ${formatBudget(tipCents)} tip (sandbox)`
-                          : 'Send tip (sandbox)'
-                      }
-                      palette={emeraldColors}
-                      onPress={() => setConfirmTip(true)}
-                      disabled={!tipValid || sendingTip}
-                      loading={sendingTip}
-                    />
-                  ) : null}
+                  {/* M-26 — always here; it enables with an amount. */}
+                  <Button
+                    title={
+                      tipValid
+                        ? `Send ${formatBudget(tipCents)} tip (sandbox)`
+                        : 'Send tip (sandbox)'
+                    }
+                    palette={emeraldColors}
+                    onPress={() => setConfirmTip(true)}
+                    disabled={tipChoice === null || !tipValid || sendingTip}
+                    loading={sendingTip}
+                  />
                 </>
               )}
             </View>
           </ScrollView>
+          {reviewed ? (
+            <View style={[styles.doneBar, { paddingBottom: PINNED_FOOTER_BOTTOM_PADDING }]}>
+              {job.assigned_worker_id ? (
+                <Button
+                  title={`Hire ${(workerName ?? 'them').split(/\s+/)[0]} again`}
+                  variant="secondary"
+                  palette={emeraldColors}
+                  onPress={() =>
+                    navigation.navigate('PostJob', {
+                      hireWorkerId: job.assigned_worker_id!,
+                      hireWorkerName: workerName ?? 'this worker',
+                    })
+                  }
+                  style={styles.doneAction}
+                />
+              ) : null}
+              <Button title="Done" palette={emeraldColors} onPress={goBackOrHome} style={styles.doneAction} />
+            </View>
+          ) : null}
         </KeyboardAvoidingView>
       )}
 
@@ -693,10 +736,37 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
+  // M-26 — the completion moment and its pinned way out.
+  thanksCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  thanksCopy: { flex: 1, gap: 2 },
+  thanksTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  doneBar: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  doneAction: { flex: 1 },
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
-    color: colors.textMuted,
+    color: colors.eyebrow,
     letterSpacing: 0.8,
   },
   sectionTitle: {

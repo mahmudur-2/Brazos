@@ -60,7 +60,7 @@ test('n5 · Welcome leads with Continue with phone (the operator\'s ruling); ema
 
   // The route the first button names is a registered signed-out route.
   assert.match(code('screens/AuthFlow.tsx'), /<Stack\.Screen name="EmailCreateAccount"/);
-  assert.match(code('lib/navigation.ts'), /EmailCreateAccount: undefined;/);
+  assert.match(code('lib/navigation.ts'), /EmailCreateAccount:\s*\| \{ fullName\?: string; phoneDigits\?: string; country\?: Country \}\s*\| undefined;/);
 });
 
 // ---------------------------------------------------------------------------

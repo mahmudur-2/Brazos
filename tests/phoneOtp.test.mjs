@@ -653,12 +653,13 @@ test('create account requests a sign-up challenge and carries a draft, not a rec
 
 test('both halves of each pair are registered and offer each other', () => {
   assert.match(routes, /VerifyPhone: VerifyPhoneParams;/);
-  assert.match(routes, /EmailCreateAccount: undefined;/);
+  assert.match(routes, /EmailCreateAccount:\s*\| \{ fullName\?: string; phoneDigits\?: string; country\?: Country \}\s*\| undefined;/);
   assert.match(flow, /name="VerifyPhone" component=\{VerifyPhoneScreen\}/);
   assert.match(flow, /name="EmailCreateAccount" component=\{EmailCreateAccountScreen\}/);
 
   assert.match(signIn, /navigation\.navigate\('EmailSignIn'\)/);
-  assert.match(createAccount, /navigation\.navigate\('EmailCreateAccount'\)/);
+  // M-18: the phone form hands over what was typed.
+  assert.match(createAccount, /navigation\.navigate\('EmailCreateAccount', \{\s*fullName: fullName\.trim\(\) \|\| undefined,\s*phoneDigits: phoneDigits \|\| undefined,\s*country,\s*\}\)/);
   // popTo, not navigate: under React Navigation 7 navigate() pushes when the
   // target isn't current, which would stack a duplicate over the screen the
   // user came from and discard what they had typed there.

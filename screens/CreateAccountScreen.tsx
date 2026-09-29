@@ -106,26 +106,24 @@ export function CreateAccountScreen() {
 
   return (
     <AuthScaffold
-      title="Create account"
+      title="Create Account"
       onBack={() => navigation.goBack()}
       backdrop="soft"
       themed
     >
       <View style={styles.body}>
-        <Text style={[styles.eyebrow, { color: surface.accent }]}>CREATE ACCOUNT</Text>
         <Text style={styles.title} maxFontSizeMultiplier={1.5}>
           One account. Two ways to use it.
         </Text>
         <Text style={styles.subtitle}>
-          You can hire help and accept work. Your home screens change with your
-          current mode.
+          Switch modes to hire help or find work.
         </Text>
 
         <View style={styles.form}>
           <AuthField
             label="Full name"
             themed
-            leading={<Ionicons name="person-outline" size={20} color={surface.accent} />}
+            leading={<Ionicons name="person-outline" size={20} color={surface.fieldGlyph} />}
             value={fullName}
             onChangeText={(next) => {
               setFullName(next);
@@ -166,7 +164,7 @@ export function CreateAccountScreen() {
         <View style={[styles.privacy, { borderColor: surface.line }]}>
           <Ionicons name="shield-checkmark-outline" size={20} color={surface.accent} />
           <Text style={styles.privacyText}>
-            Your number stays private until a job is confirmed.
+            Private until a job is confirmed.
           </Text>
         </View>
 
@@ -185,7 +183,13 @@ export function CreateAccountScreen() {
             title="Use Email Instead"
             variant="ghost"
             themed
-            onPress={() => navigation.navigate('EmailCreateAccount')}
+            onPress={() =>
+              navigation.navigate('EmailCreateAccount', {
+                fullName: fullName.trim() || undefined,
+                phoneDigits: phoneDigits || undefined,
+                country,
+              })
+            }
             disabled={loading}
             accessibilityHint="Sign up with an email address and password"
           />
@@ -201,16 +205,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexGrow: 1,
     paddingBottom: authSpacing.lg,
   },
-  eyebrow: {
-    ...authType.eyebrow,
-    marginTop: authSpacing.xl + authSpacing.xs,
-  },
   // Master 3's display headline is the serif.
   title: {
     ...authType.title,
     fontFamily: fonts.display,
     color: colors.ink,
-    marginTop: authSpacing.md - 2,
+    marginTop: authSpacing.md,
   },
   subtitle: {
     ...authType.body,

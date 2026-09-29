@@ -51,6 +51,7 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
 
@@ -245,7 +246,7 @@ export function WorkerProfileScreen() {
   const heroTrust = deriveWorkerHeroTrust({ profile, ratingSummary, stats: jobStats });
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader title="Profile" onBack={goBackOrHome} />
 
       {loading ? (
@@ -558,7 +559,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   servicePrice: {
     fontSize: 14,
     fontWeight: '800',
-    color: colors.emerald,
+    color: colors.money,
   },
   safe: {
     flex: 1,

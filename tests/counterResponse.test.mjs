@@ -222,7 +222,8 @@ test('the hub’s pending-offer card reads a counter awaiting the user as requir
   assert.match(hub, /effectiveOfferStatus\(bid\) === 'pending'/);
   assert.match(hub, /bid\.awaiting_id === user\.id/);
   assert.match(hub, /bid\.author_id !== user\.id/);
-  assert.match(hub, /sent you a Counteroffer — respond/);
+  // 2026-09-28 (LUX-LIST-64 #64, audit M-17): the card's own spelling, sentence case.
+  assert.match(hub, /sent you a counter-offer — respond/);
   assert.match(hub, /'Their counter:'/);
   // It routes to the response surface (the worker job detail), same as before.
   assert.match(hub, /navigation\.navigate\('JobDetail', \{ job \}\)/);

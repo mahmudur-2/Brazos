@@ -43,6 +43,10 @@ export type EarningsRowFacts = {
   paid_out_at?: string | null;
   /** releaseDeadlineMs(job) computed by the caller from job_completed_at; null when no clock runs. */
   releaseDeadlineMs: number | null;
+  /** 2026-09-28 (LUX-LIST-64 #63, M-14): payoutSetupNotice() (lib/payments.ts)
+   *  answered for this row — the caller asks the ONE rule and hands the answer
+   *  in, so this import-free module never restates it. */
+  waitingOnPayoutSetup?: boolean;
 };
 
 export type EarningsFormatters = {
@@ -58,7 +62,11 @@ export function earningsRowMeta(
   if (row.status === 'held') {
     // D23 first: a requested release is a decision the customer has already
     // made, so the protection sentence must never describe that row.
-    if (row.release_requested_at) return 'Approved — payout on its way';
+    // #63 (M-14): approved, but nothing can be sent until the worker's payout
+    // setup is done — so the line names their step, never "on its way".
+    if (row.release_requested_at) {
+      return row.waitingOnPayoutSetup ? 'Approved — waiting on your payout setup' : 'Approved — payout on its way';
+    }
     const deadline = row.releaseDeadlineMs;
     if (deadline == null) return 'Held in protection';
     if (deadline > nowMs) {

@@ -131,7 +131,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // case by convention rather than by an allowlist entry, so a gold BUTTON
     // fill in this same file would still be an offender.
     barLeadingFill: {
-      backgroundColor: colors.gold,
+      backgroundColor: colors.mark,
     },
   })
 );

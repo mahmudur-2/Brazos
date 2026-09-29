@@ -27,7 +27,9 @@ import {
   spacing,
   themedStyles,
   useThemeColors,
+  withAlpha,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 
 /**
@@ -155,7 +157,7 @@ export function HiddenChatsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader
         title="Hidden Chats"
         subtitle="Unlocked for this visit"
@@ -185,6 +187,11 @@ export function HiddenChatsScreen() {
               onLongPress={() => unhide(item)}
               accessibilityHint="Press and hold to unhide"
             />
+          )}
+          // 2026-09-28 (LUX-LIST-64 #54): the Inbox's clean list — a hairline
+          // between rows, no card gap.
+          ItemSeparatorComponent={() => (
+            <View style={[styles.rowRule, { backgroundColor: withAlpha(colors.inboxRule, isDark ? 0.11 : 1) }]} />
           )}
           contentContainerStyle={
             rows.length === 0 ? styles.emptyContainer : styles.listContent
@@ -227,9 +234,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     listContent: {
       paddingHorizontal: spacing.lg,
-      paddingTop: spacing.lg,
-      paddingBottom: 0,
-      gap: spacing.md,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.lg,
+    },
+    rowRule: {
+      height: 1,
     },
     emptyContainer: {
       flexGrow: 1,

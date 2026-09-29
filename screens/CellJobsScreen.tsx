@@ -19,13 +19,15 @@ import { goBackOrHome } from '../lib/navigationRef';
 import type { OpenJob } from '../lib/jobs';
 import type { MapStackNavigation, MapStackParamList } from '../lib/navigation';
 import { supabase } from '../lib/supabase';
-import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { spacing, themedStyles, useThemeColors, type ColorPalette,
+  screenGround,
+} from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
 
 const REFRESH_DEBOUNCE_MS = 1500;
 
 export function CellJobsScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // emerald(3): the floating pill's real footprint.
   const navClearance = useScrollClearance();
@@ -97,9 +99,9 @@ export function CellJobsScreen() {
   const displayCount = loading ? params.count : jobs.length;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader
-        title="Jobs in this zone"
+        title="Jobs in This Zone"
         subtitle={`${displayCount} open ${displayCount === 1 ? 'job' : 'jobs'} nearby`}
         onBack={goBackOrHome}
       />

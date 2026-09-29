@@ -48,13 +48,14 @@ type MoneyTextProps = {
 };
 
 export function MoneyText({ cents, state, size = 'md', captionHidden = false }: MoneyTextProps) {
-  const { emerald: colors, isDark } = useThemeColors();
+  const { emerald: colors } = useThemeColors();
   const styles = stylesFor(colors);
-  // Prestige decision 6: money values are emerald in dark (EST. PAY, prices);
-  // light keeps Heritage ink. Unsettled payment states stay muted in both —
-  // the state machine's honesty outranks the accent.
+  // 2026-09-28 (LUX-LIST-64 #40): money is WHITE — the `money` role, the Lux ink
+  // in dark and the near-black ink in light; "gold for money" ends. Unsettled
+  // payment states stay muted in both — the state machine's honesty outranks
+  // the accent.
   const amountColor =
-    state && !SETTLED.includes(state) ? colors.muted : isDark ? colors.emerald : colors.ink;
+    state && !SETTLED.includes(state) ? colors.muted : colors.money;
   const caption = state ? CAPTIONS[state] : null;
 
   return (

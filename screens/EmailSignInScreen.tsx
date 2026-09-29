@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthButton } from '../components/AuthButton';
 import { AuthField } from '../components/AuthField';
 import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
+import { Card } from '../components/Card';
 import { useAuth } from '../hooks/useAuth';
 import { authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
 import {
@@ -18,6 +19,8 @@ import {
 } from '../lib/theme';
 import type { AuthStackNavigation } from '../lib/navigation';
 import { isValidEmail } from '../lib/validation';
+import { requestPasswordReset } from '../lib/passwordReset';
+import { userMessage } from '../lib/errorMessage';
 
 /**
  * Sign in with email — the alternate route off the phone-first SignIn screen,
@@ -72,6 +75,32 @@ export function EmailSignInScreen() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // 2026-09-26 (the refresh, audit M-21): the eye the create-account form already
+  // has, and the recovery this screen never had.
+  const [passwordShown, setPasswordShown] = useState(false);
+  const [resetNotice, setResetNotice] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+
+  async function handleForgotPassword() {
+    if (resetting) return;
+    setFormError(null);
+    setResetNotice(null);
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !isValidEmail(trimmedEmail)) {
+      setEmailError('Enter your email address first — the reset link goes there.');
+      return;
+    }
+    setResetting(true);
+    const { error } = await requestPasswordReset(trimmedEmail);
+    setResetting(false);
+    if (error) {
+      setFormError(userMessage(error));
+      return;
+    }
+    // The server never says whether an account exists for an address, so
+    // neither does this.
+    setResetNotice(`If an account uses ${trimmedEmail}, a reset link is on its way. Open it on this phone to set a new password.`);
+  }
 
   async function handleContinue() {
     // Guards a double tap that lands between the press and the disabled state
@@ -129,7 +158,7 @@ export function EmailSignInScreen() {
 
   return (
     <AuthScaffold
-      title="Sign in"
+      title="Sign In"
       onBack={() => navigation.goBack()}
       backdrop="soft"
       lift={authSpacing.xl}
@@ -143,7 +172,7 @@ export function EmailSignInScreen() {
           Sign in to Brazos
         </Text>
         <Text style={styles.subtitle}>
-          Use the email and password connected to your account.
+          The email and password on your account.
         </Text>
 
         {bannedNotice ? (
@@ -156,10 +185,16 @@ export function EmailSignInScreen() {
         ) : null}
 
         <View style={styles.form}>
+          {/* 2026-09-27 (the Lux remake, the operator's pic 3): ONE lifted
+              card — Email (the paper-plane glyph), Password (the lock, the
+              eye), "Forgot password?" at the right under the fields, inside
+              the card. The one card primitive, pop-out. */}
+          <Card>
+          <View style={styles.fields}>
           <AuthField
             label="Email"
             themed
-            leading={<Ionicons name="mail-outline" size={20} color={surface.accent} />}
+            leading={<Ionicons name="paper-plane-outline" size={20} color={surface.fieldGlyph} />}
             value={email}
             onChangeText={(next) => {
               setEmail(next);
@@ -181,7 +216,7 @@ export function EmailSignInScreen() {
             ref={passwordRef}
             label="Password"
             themed
-            leading={<Ionicons name="lock-closed-outline" size={20} color={surface.accent} />}
+            leading={<Ionicons name="lock-closed-outline" size={20} color={surface.fieldGlyph} />}
             value={password}
             onChangeText={(next) => {
               setPassword(next);
@@ -189,7 +224,22 @@ export function EmailSignInScreen() {
               if (formError) setFormError(null);
             }}
             error={passwordError}
-            secureTextEntry
+            trailing={
+              <Pressable
+                onPress={() => setPasswordShown((shown) => !shown)}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={passwordShown ? 'Hide password' : 'Show password'}
+                accessibilityState={{ selected: passwordShown }}
+              >
+                <Ionicons
+                  name={passwordShown ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={surface.fieldGlyph}
+                />
+              </Pressable>
+            }
+            secureTextEntry={!passwordShown}
             autoCapitalize="none"
             autoComplete="current-password"
             textContentType="password"
@@ -197,6 +247,24 @@ export function EmailSignInScreen() {
             returnKeyType="go"
             onSubmitEditing={handleContinue}
           />
+
+          <Pressable
+            onPress={handleForgotPassword}
+            disabled={resetting || loading}
+            hitSlop={10}
+            style={({ pressed }) => [styles.forgot, pressed && styles.forgotPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Forgot password?"
+            accessibilityHint="Emails you a link to set a new password"
+          >
+            <Text style={[styles.forgotText, { color: surface.accent }]}>
+              {resetting ? 'Sending the link…' : 'Forgot password?'}
+            </Text>
+          </Pressable>
+          </View>
+          </Card>
+
+          {resetNotice ? <AuthNotice tone="info">{resetNotice}</AuthNotice> : null}
 
           {formError ? (
             <View style={styles.formError} accessibilityLiveRegion="polite">
@@ -250,6 +318,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     marginTop: authSpacing.xl,
     gap: authSpacing.lg,
   },
+  // The card's column: the two fields and the recovery link.
+  fields: {
+    gap: authSpacing.lg,
+  },
   formError: {
     padding: authSpacing.md,
     borderRadius: authRadius.field,
@@ -261,6 +333,20 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   formErrorText: {
     ...authType.note,
     color: colors.danger,
+  },
+  // 2026-09-26: the recovery link sits under the password, right-aligned, at a
+  // 44-point target with its hit slop.
+  forgot: {
+    alignSelf: 'flex-end',
+    paddingVertical: authSpacing.xs,
+    marginTop: -authSpacing.sm,
+  },
+  forgotPressed: {
+    opacity: 0.6,
+  },
+  forgotText: {
+    ...authType.note,
+    fontWeight: '600',
   },
   // The pinned pair: Continue, 12, the phone route.
   footer: {

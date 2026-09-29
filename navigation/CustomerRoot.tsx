@@ -4,13 +4,15 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useNavBottomPad } from '../hooks/useNavInset';
 import { CreateSheet } from '../components/CreateSheet';
 import { navigateAcrossTabs } from '../lib/navigationRef';
-import { useThemeColors } from '../lib/theme';
+import { navBarPalette, useThemeColors } from '../lib/theme';
 import type {
   CustomerHomeStackParamList,
   CustomerParamList,
   DiscoverStackParamList,
 } from '../lib/navigation';
 import { HomeScreen } from '../screens/HomeScreen';
+import { NotificationsScreen } from '../screens/NotificationsScreen';
+import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';
 import { PostJobScreen } from '../screens/PostJobScreen';
 import { useMode } from '../modes';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
@@ -105,6 +107,8 @@ function CustomerHomeStackNavigator() {
   return (
     <CustomerHomeStack.Navigator screenOptions={{ headerShown: false }}>
       <CustomerHomeStack.Screen name="HomeMain" component={HomeScreen} />
+      <CustomerHomeStack.Screen name="Notifications" component={NotificationsScreen} />
+      <CustomerHomeStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
       <CustomerHomeStack.Screen name="PostJob" component={PostJobScreen} />
       <CustomerHomeStack.Screen name="WorkerSearch" component={WorkerSearchScreen} />
       <CustomerHomeStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
@@ -150,7 +154,7 @@ export function CustomerRoot() {
   // S2 (C6): re-render when a bar-container dial (height, padding, spread)
   // moves, so the plain screenOptions factory reads fresh values.
   useNavBarContainerDials();
-  const { palette } = useThemeColors();
+  const { palette, isDark } = useThemeColors();
   const [createOpen, setCreateOpen] = useState(false);
   // 2026-09-18: the customer's mode switch moved off Home and into the
   // sheet's bottom row — the same switchMode() the Home pill called, which
@@ -163,10 +167,19 @@ export function CustomerRoot() {
     dispatch();
   }
 
+  // 2026-09-26 (the refresh, audit M-38) — the switch row keeps the sheet up
+  // while switchMode() asks. A yes swaps the trees (this one unmounts, sheet
+  // and all); a no leaves the sheet exactly where it was, so the customer is
+  // one tap from any other row instead of dropped back on the screen below.
+  async function switchFromSheet() {
+    const switched = await switchMode('worker');
+    if (switched) setCreateOpen(false);
+  }
+
   return (
     <>
       <Tab.Navigator
-        screenOptions={bottomNavScreenOptions(navBottomPad, palette)}
+        screenOptions={bottomNavScreenOptions(navBottomPad, navBarPalette(palette, isDark))}
         screenListeners={bottomNavScreenListeners}
       >
         {/* The ONLY tabPress listener is the shared haptics tap
@@ -250,9 +263,8 @@ export function CustomerRoot() {
         onOpenJob={(job) =>
           runCreateAction(() => navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job }))
         }
-        // The sheet closes first; switchMode() then asks, and only a yes swaps
-        // the trees.
-        onSwitchMode={() => runCreateAction(() => void switchMode('worker'))}
+        // switchMode() asks with the sheet still up; only a yes swaps the trees.
+        onSwitchMode={() => void switchFromSheet()}
         switching={switching}
         onClose={() => setCreateOpen(false)}
       />

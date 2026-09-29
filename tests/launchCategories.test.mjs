@@ -66,15 +66,17 @@ test('3 · [static] the filter lives at ONE site in PostJobScreen, and every enu
   );
   assert.equal((screen.match(/LAUNCH_EXCLUDED_CATEGORIES/g) ?? []).length, 2, 'the import and the one filter');
   // JOB_CATEGORIES is named twice: the import and the filter. Every chip
-  // render, the measurement pass, the packing, the Other sheet's rows and the
-  // sheet's pick read POSTABLE_CATEGORIES.
+  // render, the measurement pass and the packing read POSTABLE_CATEGORIES.
+  // 2026-09-26 (the refresh, audit M-7): the Other sheet is retired — it
+  // listed these same categories again — so its rows and its pick are gone
+  // with it, and Other is an ordinary pill that selects the Other category.
   assert.equal((screen.match(/\bJOB_CATEGORIES\b/g) ?? []).length, 2, 'no enumeration of the unfiltered map remains');
-  assert.ok((screen.match(/\bPOSTABLE_CATEGORIES\b/g) ?? []).length >= 6);
+  assert.equal((screen.match(/\bPOSTABLE_CATEGORIES\b/g) ?? []).length, 5, 'the filter and its four readers');
   assert.match(screen, /\(chipOrder \?\? POSTABLE_CATEGORIES\)\.map/);
-  assert.match(screen, /const OTHER_SHEET_SERVICES: SkillCategory\[\] = POSTABLE_CATEGORIES\.map/);
   assert.match(screen, /const packable = POSTABLE_CATEGORIES\.filter\(\(c\) => c !== 'other'\);/);
   assert.match(screen, /POSTABLE_CATEGORIES\.some\(\(c\) => !chipWidthsRef\.current\.has\(c\)\)/);
-  assert.match(screen, /const chosen = POSTABLE_CATEGORIES\.find\(\(c\) => c === categoryKey\);/);
+  assert.ok(!screen.includes('ServicePickerSheet'), 'the posting wizard opens no category sheet');
+  assert.match(screen, /onPress=\{\(\) => setCategory\(category === c \? null : c\)\}/, 'every pill, Other included, toggles its own category');
 });
 
 test('4 · [static] search, browse, worker services and Home tiles never see the allowlist', () => {

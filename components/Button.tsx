@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { fonts, metricStyles, radius, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import { fonts, metricStyles, radius, shadows, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -133,7 +133,17 @@ export function Button({
         // manifest's measured hairline tier (gold @ 25–55%), the same
         // expression the segmented control's active cell already uses.
         // Neither rule moved: disabled is still flat neutralBg, no border.
-        borderColor: isDark ? withAlpha(palette.gold, 0.55) : palette.border,
+        // 2026-09-27 (the Lux remake): the standard control's hairline is the
+        // mint-neutral rim in dark (the Lux `.btn2`), never the warm gold line.
+        borderColor: isDark ? withAlpha(palette.emerald, 0.35) : palette.border,
+      }
+    : isDark
+    ? // 2026-09-26 (the refresh): the Emerald Lux CTA — a mint gradient pill
+      // with the dark Lux ink (`onPrimary`); the flat primary under it is the
+      // same mint, so a surface that cannot draw the gradient still reads right.
+      {
+        backgroundColor: palette.primary,
+        experimental_backgroundImage: `linear-gradient(135deg, ${palette.ctaTop}, ${palette.ctaBottom})`,
       }
     : { backgroundColor: palette.primary };
   const textColor = isDisabled
@@ -142,11 +152,11 @@ export function Button({
     ? palette.danger
     : isGhost
     ? isDark
-      ? palette.gold
+      ? palette.emerald
       : palette.primary
     : isSecondary
     ? isDark
-      ? palette.ink
+      ? palette.emerald
       : palette.primary
     : palette.onPrimary;
   const finalTextColor = !isDisabled && textDial != null ? textDial : textColor;
@@ -176,8 +186,8 @@ export function Button({
           ? {
               borderColor: withAlpha(
                 borderDial ??
-                  (isDestructive ? palette.danger : isDark ? palette.gold : palette.border),
-                borderAlphaDial ?? (isSecondary && isDark ? 0.55 : 1),
+                  (isDestructive ? palette.danger : isDark ? palette.emerald : palette.border),
+                borderAlphaDial ?? (isSecondary && isDark ? 0.35 : 1),
               ),
             }
           : null),
@@ -190,7 +200,10 @@ export function Button({
       style={(state) => [
         styles.base,
         {
-          height: heightDial ?? sizeStyle.height,
+          // 2026-09-26 (the refresh, audit M-36): a floor, not a ceiling, so
+          // the label grows with Dynamic Type instead of clipping. A one-line
+          // label still sits at exactly this height.
+          minHeight: heightDial ?? sizeStyle.height,
           paddingHorizontal: padXDial ?? sizeStyle.paddingHorizontal,
         },
         fillStyle,
@@ -203,7 +216,12 @@ export function Button({
               shadowOffset: { width: 0, height: heroShadowY ?? 4 },
               elevation: Math.round((heroShadowRadius ?? 12) / 2),
             }
-          : null,
+          : // 2026-09-27 (the operator's review): the Lux `.cta` glow under
+            // every primary button in dark (ui/tokens.ts `shadows.ctaDark`),
+            // unless the studio's hero-shadow dials are set, which win as before.
+            variant === 'primary' && !isDisabled && isDark && heroShadowOpacity == null
+            ? shadows.ctaDark
+            : null,
         state.pressed &&
           !isDisabled &&
           (pressedOpacityDial != null || pressedScaleDial != null

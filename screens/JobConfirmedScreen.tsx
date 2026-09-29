@@ -88,7 +88,7 @@ export function JobConfirmedScreen() {
           };
     return (
       <DetailScreen
-        title="Job confirmed"
+        title="Job Confirmed"
         onBack={goBackOrHome}
         state={state}
         sections={[]}
@@ -98,7 +98,7 @@ export function JobConfirmedScreen() {
 
   return (
     <SuccessScreen
-      title="Job confirmed"
+      title="Job Confirmed"
       icon="shield-checkmark"
       body={`${workerName} is hired and your payment is protected. Funds stay held until the work is done and approved — nothing has been released.`}
       details={

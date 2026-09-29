@@ -6,7 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { PastWork } from '../components/PastWork';
 import { PhotoViewer } from '../components/PhotoViewer';
+import { PortfolioPicker } from '../components/PortfolioPicker';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
@@ -17,13 +19,14 @@ import { fetchBothRoleSummaries, type ReviewSummary } from '../lib/reviews';
 import { skillCategoryLabel } from '../lib/skillCategories';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import {
-  fonts,
+  litCardStyle, fonts,
   radius,
   spacing,
   starColors,
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
 
@@ -67,6 +70,11 @@ export function ProfileDetailsScreen() {
   const [statsReadFailed, setStatsReadFailed] = useState(false);
   const [statsReadAttempt, setStatsReadAttempt] = useState(0);
   const [avatarViewerUri, setAvatarViewerUri] = useState<string | null>(null);
+  // 2026-09-29 (LUX-LIST-2 #7): the curation sheet, and the bump that makes
+  // PastWork refetch after it adds something — both moved here with the past
+  // work itself.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [portfolioVersion, setPortfolioVersion] = useState(0);
   // R8b-c: the rating comes from the per-role REVEALED summaries, never
   // profiles.rating_avg/rating_count — the legacy aggregate mixes both roles
   // and counts reviews the blind window still holds back. Null is a read
@@ -113,13 +121,15 @@ export function ProfileDetailsScreen() {
   const since = memberSince(user?.created_at);
   const categories = profile?.categories ?? [];
 
-  const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; muted?: boolean }[] = [
+  // 2026-09-28 (LUX-LIST-64 #2): the phone row's label is the mint (`accent`).
+  const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; muted?: boolean; accent?: boolean }[] = [
     { icon: 'person-outline', label: 'Full name', value: profile?.full_name?.trim() || 'Not set', muted: !profile?.full_name?.trim() },
     {
       icon: 'call-outline',
       label: 'Phone number',
       value: profile?.phone ? formatPhoneDisplay(profile.phone) : 'Not set',
       muted: !profile?.phone,
+      accent: true,
     },
     {
       icon: 'globe-outline',
@@ -135,7 +145,7 @@ export function ProfileDetailsScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader
         title="Profile"
         onBack={goBackOrHome}
@@ -222,7 +232,7 @@ export function ProfileDetailsScreen() {
           ) : null}
         </View>
 
-        <Card style={[styles.card, isDark && styles.cardDark]}>
+        <Card style={[styles.card, litCardStyle(isDark)]}>
           <View style={styles.cardHead}>
             <View style={[styles.cardGlyph, isDark && styles.cardGlyphDark]}>
               <Ionicons
@@ -240,7 +250,7 @@ export function ProfileDetailsScreen() {
               accessibilityRole="button"
               style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
             >
-              <Ionicons name="pencil" size={14} color={colors.gold} />
+              <Ionicons name="pencil" size={14} color={colors.mark} />
               <Text style={styles.chipText}>Edit profile</Text>
             </Pressable>
           </View>
@@ -254,7 +264,7 @@ export function ProfileDetailsScreen() {
                   color={isDark ? colors.gold : colors.textMuted}
                 />
               </View>
-              <Text style={styles.rowLabel}>{row.label}</Text>
+              <Text style={[styles.rowLabel, row.accent && { color: colors.emerald }]}>{row.label}</Text>
               <Text
                 style={[styles.rowValue, row.muted && styles.rowValueMuted]}
                 numberOfLines={2}
@@ -278,53 +288,30 @@ export function ProfileDetailsScreen() {
           ) : null}
         </Card>
 
-        {/* Master 42's PROOF OF WORK card. The dashed block is the honest
-            empty state; featured photos themselves live on the hub, which is
-            where they are managed. */}
-        <Card style={[styles.card, isDark && styles.cardDark]}>
-          <View style={styles.cardHead}>
-            <View style={[styles.cardGlyph, isDark && styles.cardGlyphDark]}>
-              <Ionicons
-                name="briefcase-outline"
-                size={18}
-                color={isDark ? colors.gold : colors.primary}
-              />
-            </View>
-            <View style={styles.cardHeadCopy}>
-              <Text style={styles.eyebrow}>PROOF OF WORK</Text>
-              <Text style={styles.cardTitle}>Past work</Text>
-            </View>
-            {jobStats && jobStats.length > 0 ? (
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>
-                  {jobStats[0].count} {skillCategoryLabel(jobStats[0].category)}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          <Pressable
-            onPress={() => navigation.navigate('ProfileMain')}
-            accessibilityRole="button"
-            accessibilityLabel="Manage your featured past work"
-            style={({ pressed }) => [styles.dashed, pressed && styles.chipPressed]}
-          >
-            <View style={[styles.cardGlyph, isDark && styles.cardGlyphDark]}>
-              <Ionicons
-                name="camera-outline"
-                size={18}
-                color={isDark ? colors.gold : colors.primary}
-              />
-            </View>
-            {/* The one past-work empty sentence — the same string the hub's
-                PastWork card renders, so the two pages stop describing one
-                state two ways. */}
-            <Text style={styles.dashedText}>
-              Feature photos from jobs you’ve finished to show clients your work.
-            </Text>
-          </Pressable>
-        </Card>
+        {/* 2026-09-29 (LUX-LIST-2 #7) — THE PAST WORK LIVES HERE NOW. The hub
+            dropped its Past Work block (its card opens this page), so this is
+            where your featured photos are seen and managed: the same PastWork
+            the hub drew, editable, with its curation sheet. It replaces the
+            placeholder that sent you back to the hub to manage them — and
+            that always said "no photos", even when there were some. */}
+        {user ? (
+          <PastWork
+            workerId={user.id}
+            editable
+            onManage={() => setPickerOpen(true)}
+            refreshToken={portfolioVersion}
+          />
+        ) : null}
       </ScrollView>
+
+      {user ? (
+        <PortfolioPicker
+          visible={pickerOpen}
+          workerId={user.id}
+          onClose={() => setPickerOpen(false)}
+          onChanged={() => setPortfolioVersion((v) => v + 1)}
+        />
+      ) : null}
 
       <PhotoViewer
         visible={!!avatarViewerUri}
@@ -429,7 +416,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.4,
-    color: colors.gold,
+    color: colors.eyebrow,
   },
   cardTitle: {
     fontFamily: fonts.display,
@@ -446,13 +433,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.gold,
+    // 2026-09-28 (LUX-LIST-64 #47, the operator's follow-up on the gold sheet):
+    // the "Edit profile" outline and the JOB CATEGORIES chips are the MARK — the
+    // gold in dark, as they were; the forest green #064C3B in light.
+    borderColor: colors.mark,
   },
   chipPressed: { opacity: 0.82 },
   chipText: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.gold,
+    color: colors.mark,
   },
   // Master 42's value-right row.
   detailRow: {
@@ -490,23 +480,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-  },
-  // Master 42's dashed empty block.
-  dashed: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
-  },
-  dashedText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textMuted,
   },
   }),
 );

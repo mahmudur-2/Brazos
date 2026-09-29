@@ -126,7 +126,10 @@ test('a fresh post survives in AsyncStorage, editing and hiring never touch it',
   // Autosave only fires once restore has resolved, so it can never clobber a
   // draft it hasn't read yet with the screen's still-blank initial state.
   assert.match(source, /if \(!isFreshPost \|\| !draftReady \|\| !draftUserId\) return;/);
-  assert.match(source, /void savePostJobDraft\(draftUserId, \{/);
+  // M-7: the object is built once, so the keep-on-Back check reads the
+  // same record the autosave writes.
+  assert.match(source, /const draft = \{\s*title,\s*description,\s*category,/);
+  assert.match(source, /draftHasContentRef\.current = draftHasContent\(draft\);\s*void savePostJobDraft\(draftUserId, draft\);/);
 
   // Restored media is treated as owned by this session (nothing published
   // references it yet), so it is deletable on removal or re-abandonment the
@@ -135,7 +138,7 @@ test('a fresh post survives in AsyncStorage, editing and hiring never touch it',
   assert.match(source, /for \(const url of draft\.videos\) sessionUploadsRef\.current\.add\(url\);/);
 });
 
-test('the draft is cleared exactly on publish and on a graceful abandon, never on app kill', async () => {
+test('the draft is cleared on publish and on an empty abandon, kept on Back with content, never cleared on app kill', async () => {
   const source = codeOnly(await read('screens/PostJobScreen.tsx'));
 
   // Cleared after a successful fresh publish (stale record, nothing left to
@@ -147,13 +150,22 @@ test('the draft is cleared exactly on publish and on a graceful abandon, never o
     /if \(!isEditing\) \{\s*maybePromptForPush\('Get told the moment a worker bids on your job\.'\);\s*if \(savedJob\) setPublishedJob\(savedJob\);\s*if \(draftUserId\) void clearPostJobDraft\(draftUserId\);/
   );
 
-  // Cleared on a graceful unmount (Back out of the wizard) in the same branch
-  // that already deletes that session's uploaded media on abandonment — so a
-  // later "Post a job" can never restore text pointing at photos that were
-  // just deleted from storage.
+  // 2026-09-26 (the refresh, audit M-7): a graceful unmount (Back out of the
+  // wizard) KEEPS a fresh post that has content — draft and media together,
+  // so a later "Post a job" never restores text pointing at deleted photos —
+  // and abandons everything else exactly as before: the session's uploads
+  // deleted and an empty fresh draft cleared, in the same branch.
   assert.match(
     source,
-    /if \(!uploadsCommittedRef\.current && !submittingRef\.current\) \{\s*cleanupSessionUploads\(\);[\s\S]{0,400}if \(isFreshPost && draftUserId\) void clearPostJobDraft\(draftUserId\);/
+    /if \(!uploadsCommittedRef\.current && !submittingRef\.current\) \{\s*const keepDraft = isFreshPost && !!draftUserId && draftHasContentRef\.current;\s*if \(!keepDraft\) \{\s*cleanupSessionUploads\(\);\s*if \(isFreshPost && draftUserId\) void clearPostJobDraft\(draftUserId\);\s*\}/
+  );
+  // …and a kept draft has its one explicit delete on the My Jobs card, which
+  // takes the draft's never-published media with it.
+  const hub = codeOnly(await read('screens/MyJobsHubScreen.tsx'));
+  assert.match(hub, /accessibilityLabel="Discard draft"/);
+  assert.match(
+    hub,
+    /await Promise\.all\(\[\.\.\.draft\.photos, \.\.\.draft\.videos\]\.map\(\(url\) => deleteJobPhoto\(url\)\)\);\s*await clearPostJobDraft\(userId\);/
   );
 
   // The unmount cleanup this piggybacks on only ever runs on a real component

@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
-import { PUBLIC_PROFILE_COLUMNS, type Profile } from './profiles';
+import { fetchRehirableWorkerIds } from './jobs';
+import { PUBLIC_PROFILE_COLUMNS, fetchProfilesByIds, type Profile } from './profiles';
+import { pastOnlyIds } from './rebook';
 
 /**
  * Screen 46 (+ the Rebook 08 fold-in) — the customer's saved-workers list
@@ -30,6 +32,32 @@ export async function fetchSavedWorkers(userId: string) {
   const rows = ((data ?? []) as unknown as { worker_id: string; created_at: string; profiles: Profile }[])
     .filter((r) => !!r.profiles);
   return { data: rows, error };
+}
+
+/** A person the "Saved & past workers" list shows, as much as a face and a name need. */
+export type RehirePerson = Pick<Profile, 'id' | 'full_name' | 'avatar_url'>;
+
+/**
+ * 2026-09-29 (LUX-LIST-2 #7) — the people Profile's "Saved & past workers" row names: the same
+ * population that screen lists — the saved (newest save first), then the past-only workers, deduped
+ * against the saved through the one `pastOnlyIds` rule — in the order it lists them. Any failed read answers
+ * `error` and nobody: the row keeps its plain subtitle rather than a guessed or partial list.
+ */
+export async function fetchRehirePeople(
+  userId: string
+): Promise<{ people: RehirePerson[]; error: unknown }> {
+  const [savedRes, pastIdsRes] = await Promise.all([
+    fetchSavedWorkers(userId),
+    fetchRehirableWorkerIds(userId),
+  ]);
+  if (savedRes.error || pastIdsRes.error) {
+    return { people: [], error: savedRes.error ?? pastIdsRes.error };
+  }
+  const saved: RehirePerson[] = savedRes.data.map((row) => row.profiles);
+  const pastIds = pastOnlyIds(pastIdsRes.data, new Set(savedRes.data.map((row) => row.worker_id)));
+  const past = await fetchProfilesByIds(pastIds);
+  if (past.error) return { people: [], error: past.error };
+  return { people: [...saved, ...past.data], error: null };
 }
 
 /**

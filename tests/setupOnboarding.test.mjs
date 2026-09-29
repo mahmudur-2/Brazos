@@ -405,7 +405,9 @@ test('selecting a card changes its colours, never its size', () => {
   assert.match(choice, /borderWidth: 1,/);
   const card = choice.slice(choice.indexOf('  card: {'));
   assert.doesNotMatch(card.slice(0, card.indexOf('  },')), /borderWidth: 0/);
-  assert.match(choice, /cardSelected: \{[\s\S]*?borderColor: authColors\.forest,[\s\S]*?backgroundColor: authColors\.mint,/);
+  // 2026-09-27 (the Lux remake, ruling 15): the colours are palette roles now
+  // — the same pair, resolved per theme.
+  assert.match(choice, /cardSelected: \{[\s\S]*?borderColor: colors\.forest,[\s\S]*?backgroundColor: colors\.mint,/);
 });
 
 test('what a card looks like cannot drift from what it is', () => {
@@ -414,7 +416,9 @@ test('what a card looks like cannot drift from what it is', () => {
   // the card freezes at its first paint — right state, wrong pixels. The
   // selected look is therefore plain conditional styling, and the animation is
   // an opacity-only overlay that can only ever be decoration.
-  assert.match(choice, /style=\{\[styles\.card, selected && styles\.cardSelected\]\}/);
+  // 2026-09-27 (the Lux remake, ruling 8): the pop-out shadow rides the same
+  // array in dark; the selected look is still plain conditional styling.
+  assert.match(choice, /style=\{\[styles\.card, litCardStyle\(isDark\), selected && styles\.cardSelected\]\}/ /* 2026-09-29 (LUX-LIST-2 #6): the lit card, the chosen rim still last */);
   assert.doesNotMatch(choice, /interpolate\(/, 'no animated colour on this card');
   assert.match(choice, /style=\{\[styles\.fill, \{ opacity: fade \}\]\}/);
   assert.match(choice, /pointerEvents="none"/);
@@ -433,16 +437,19 @@ test('primary text is the ink token and nothing is a raw hex', () => {
   ]) {
     assert.doesNotMatch(read(path), /#[0-9A-Fa-f]{6}/, `${path} must use tokens`);
   }
-  // Titles on the dark ink, supporting copy muted.
-  assert.match(row, /title: \{[\s\S]*?color: authColors\.ink,/);
-  assert.match(row, /subtitle: \{[\s\S]*?color: authColors\.muted,/);
-  assert.match(choice, /title: \{[\s\S]*?color: authColors\.ink,/);
+  // Titles on the ink, supporting copy muted — palette roles since 2026-09-27
+  // (the Lux remake, ruling 15), so both themes resolve them.
+  assert.match(row, /title: \{[\s\S]*?color: colors\.ink,/);
+  assert.match(row, /subtitle: \{[\s\S]*?color: colors\.textMuted,/);
+  assert.match(choice, /title: \{[\s\S]*?color: colors\.ink,/);
 });
 
 test('the screen scrolls and stays reachable on a short viewport', () => {
   // AuthScaffold owns the safe area, the scroll fallback and the centred
   // max-width column, so none of it is re-derived here.
-  assert.match(setup, /<AuthScaffold title="Setup" titleVariant="large" backdrop="soft">/);
+  // 2026-09-27 (the Lux remake, ruling 15): themed — Setup follows the scheme.
+  // 2026-09-28 (LUX-LIST-64 #9, #23): the bar says "Finish Setup".
+  assert.match(setup, /<AuthScaffold title="Finish Setup" titleVariant="large" backdrop="soft" themed>/);
   assert.match(read('components/AuthScaffold.tsx'), /keyboardShouldPersistTaps="handled"/);
   assert.match(read('components/AuthScaffold.tsx'), /maxWidth: authSizes\.maxContentWidth/);
   // The CTA is pushed off the bottom edge rather than pinned to it.

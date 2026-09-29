@@ -1,15 +1,11 @@
+import { useModalPresence } from '../hooks/useModalPresence';
 import { useEffect, useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button } from './Button';
 import { validateOfferAmount } from './OfferComposer';
-import { SegmentedControl } from './SegmentedControl';
 import { dollarsToCents } from '../lib/jobs';
 import { LitSurface } from '../ui/primitives';
-import {
-  budgetEditorCopy,
-  PRICING_MODE_OPTIONS,
-  type PricingMode,
-} from '../lib/pricingMode';
+import { budgetEditorCopy, type PricingMode } from '../lib/pricingMode';
 import { moneyCeilingError } from '../lib/validation';
 import {
   controls,
@@ -47,14 +43,15 @@ const DIALOG_LIFT_ALPHA = 0.04;
  * ConfirmDialog's lighter `text` @ 0.35, which is what deepens it; dark passes
  * the page ground exactly as every other sheet does.
  *
- * IT ASKS THE POSTING QUESTION TOO (a4, `docs/DECISIONS.md` 2026-09-05 entry
- * (2)). Ask for bids, or set a price — the existing `SegmentedControl` in its
- * existing dress, and the ONE amount below it is the maximum in the first mode
- * and the price in the second. One field, one dialog, never two amounts. The
- * mode is a DRAFT here exactly as the amount is: Cancel discards both, and
- * Save hands both back together, so the screen cannot end up holding a mode
- * the poster backed out of. Every string comes from `lib/pricingMode.ts`, the
- * one place the two modes are written.
+ * IT EDITS THE AMOUNT FOR THE MODE THE STEP CHOSE (a4, `docs/DECISIONS.md`
+ * 2026-09-05 entry (2); moved by the 2026-09-26 refresh, audit M-7). The
+ * posting question — Ask for bids, or set a price — used to be asked here,
+ * two layers below the review step. It is asked ON the step now, above the
+ * amount, and this dialog is handed the answer: the ONE amount is the maximum
+ * in the first mode and the price in the second, and its title, sentence and
+ * blank rule follow the mode. One field, one dialog, never two amounts. Every
+ * string comes from `lib/pricingMode.ts`, the one place the two modes are
+ * written.
  *
  * EMPTY IS LEGAL AND MEANS NO MAXIMUM — in the open-bids mode. That is a real
  * state on a job row — `budget_max_cents` is nullable and the poster's own view
@@ -80,38 +77,39 @@ export function EditBudgetDialog({
   visible: boolean;
   /** The current amount, in whole dollars as typed. Empty means no maximum. */
   value: string;
-  /** The current posting choice. The dialog edits a copy of it. */
+  /** The posting choice the review step made. The dialog reads it and
+   *  never changes it. */
   mode: PricingMode;
-  /** Called with the accepted text and the chosen mode. An empty string means
-   *  "no maximum", which only the open-bids mode allows. */
+  /** Called with the accepted text and the mode it was typed for. An empty
+   *  string means "no maximum", which only the open-bids mode allows. */
   onSave: (next: string, mode: PricingMode) => void;
   onCancel: () => void;
   palette?: ColorPalette;
 }) {
   const { palette: colors, isDark } = useThemeColors();
+  // #64 (M-31): on screen or not — the one confirm engine never stacks a second modal on iOS.
+  useModalPresence(visible);
   const palette = paletteProp ?? colors;
   const styles = stylesFor(colors);
   const [draft, setDraft] = useState(value);
-  const [draftMode, setDraftMode] = useState<PricingMode>(mode);
   const [problem, setProblem] = useState<string | null>(null);
-  const copy = budgetEditorCopy(draftMode);
+  const copy = budgetEditorCopy(mode);
 
   // Opening the dialog re-seeds it from the live value: a cancelled edit
   // discards, so the next open must not resume the discarded text.
   useEffect(() => {
     if (!visible) return;
     setDraft(value);
-    setDraftMode(mode);
     setProblem(null);
-  }, [visible, value, mode]);
+  }, [visible, value]);
 
   function handleSave() {
-    const found = problemFor(draft, draftMode);
+    const found = problemFor(draft, mode);
     if (found) {
       setProblem(found);
       return;
     }
-    onSave(draft.trim(), draftMode);
+    onSave(draft.trim(), mode);
   }
 
   return (
@@ -134,20 +132,6 @@ export function EditBudgetDialog({
           >
             <Text style={[styles.title, { color: palette.onForest }]}>{copy.title}</Text>
             <Text style={[styles.message, { color: palette.onForest }]}>{copy.message}</Text>
-
-            {/* a4 — THE POSTING QUESTION, on the control that already answers
-                two-way questions in this app (ClientJobDetail's bid order
-                renders the same one). NO NEW STYLE: it sits in the same
-                `field` wrapper the amount row below uses, so the two carry the
-                same rhythm, and the segments bring their own 44pt targets. */}
-            <View style={styles.field}>
-              <SegmentedControl<PricingMode>
-                options={[...PRICING_MODE_OPTIONS]}
-                value={draftMode}
-                onChange={setDraftMode}
-                palette={palette}
-              />
-            </View>
 
             {/* PUBLISH1 (C2) — THE LABEL IS GONE, NOT MOVED, and the field is
                 drawn here rather than through components/TextField.tsx.
@@ -186,11 +170,10 @@ export function EditBudgetDialog({
               {problem ? <Text style={styles.amountError}>{problem}</Text> : null}
             </View>
 
-            {/* C2: one row, Save first. Two full-width buttons stacked read as
-                a list of choices; side by side they read as one decision with a
-                default, which is what this is. */}
+            {/* C2: one row — side by side they read as one decision with a
+                default. 2026-09-28 (LUX-LIST-64 #64, audit M-31): Cancel on the
+                left, Save on the right, the one dialog order. */}
             <View style={styles.actions}>
-              <Button title="Save" palette={palette} onPress={handleSave} style={styles.action} />
               <Button
                 title="Cancel"
                 variant="secondary"
@@ -198,6 +181,7 @@ export function EditBudgetDialog({
                 onPress={onCancel}
                 style={styles.action}
               />
+              <Button title="Save" palette={palette} onPress={handleSave} style={styles.action} />
             </View>
           </LitSurface>
         </View>
@@ -297,7 +281,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       fontSize: 12,
       color: colors.danger,
     },
-    // C2: SIDE BY SIDE on one row, Save first, each half of the row.
+    // C2: SIDE BY SIDE on one row, each half of it; Cancel left, Save right (#64).
     actions: {
       flexDirection: 'row',
       gap: spacing.md,

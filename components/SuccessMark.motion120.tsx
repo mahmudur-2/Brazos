@@ -9,10 +9,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useThemeColors } from '../lib/theme';
 import {
-  MARK_CHECK,
+  CHECK_LEGS,
   MARK_ENTRANCE_MS,
   MARK_RINGS,
   MARK_SPARKLES,
+  legBox,
   markStylesFor,
   sparkleOffset,
   type SuccessMarkProps,
@@ -28,18 +29,21 @@ import {
  *
  * ONE SHARED VALUE, NOT FOUR ANIMATIONS. Everything on screen is a function of
  * a single 0 -> 1 progress driven by one `withTiming`: the disc scales in over
- * the first third, the rings expand and fade across the middle, and each
- * sparkle rises and fades around its own phase. That is what makes "once" a
- * property of the code rather than a promise — there is exactly one animation,
- * it has no callback, no `withRepeat`, and no reverse, so when it lands on 1
- * the surface is static and stays static.
+ * the first third, the check's two legs draw themselves in sequence through
+ * the middle (2026-09-27, ruling 14 — the short leg, then the long, each a
+ * transform about its own start point on the UI thread), the rings expand and
+ * fade across the middle, and each sparkle rises and fades around its own
+ * phase. That is what makes "once" a property of the code rather than a
+ * promise — there is exactly one animation, it has no callback, no
+ * `withRepeat`, and no reverse, so when it lands on 1 the surface is static
+ * and stays static.
  *
  * IT ENDS ON THE STILL FRAME. At progress 1 every interpolation below resolves
  * to the value SuccessMarkStill draws, so a build with worklets and a build
  * without are indistinguishable a second after the screen opens.
  *
- * The artwork itself — geometry, sparkle table, stylesheet — is the shared
- * module's, so the two paths cannot become two marks.
+ * The artwork itself — geometry, legs, sparkle table, stylesheet — is the
+ * shared module's, so the two paths cannot become two marks.
  */
 export function SuccessMark({ accessibilityLabel }: SuccessMarkProps) {
   const { palette: colors, isDark } = useThemeColors();
@@ -81,14 +85,44 @@ export function SuccessMark({ accessibilityLabel }: SuccessMarkProps) {
       />
 
       <Animated.View style={[styles.disc, isDark && styles.discGlow, discStyle]}>
-        <Ionicons name="checkmark" size={MARK_CHECK} color={colors.onForest} />
+        <View style={styles.check}>
+          {CHECK_LEGS.map((leg) => (
+            <CheckLeg key={leg.key} leg={leg} progress={progress} />
+          ))}
+        </View>
       </Animated.View>
 
       {MARK_SPARKLES.map((sparkle) => (
-        <Sparkle key={sparkle.key} sparkle={sparkle} progress={progress} color={colors.gold} />
+        <Sparkle key={sparkle.key} sparkle={sparkle} progress={progress} color={colors.mark} />
       ))}
     </View>
   );
+}
+
+/**
+ * One leg of the check, drawn over its own window of the progress: the bar
+ * grows from its start point along its angle — the same transform the still
+ * draws at 1 (legTransform in the shared module, spelled out here because a
+ * worklet reads its inputs, not a helper).
+ */
+function CheckLeg({
+  leg,
+  progress,
+}: {
+  leg: (typeof CHECK_LEGS)[number];
+  progress: { value: number };
+}) {
+  const styles = markStylesFor(useThemeColors().palette);
+  const style = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: -leg.length / 2 },
+      { rotate: `${leg.angle}deg` },
+      { scaleX: interpolate(progress.value, [leg.from, leg.to], [0, 1], 'clamp') },
+      { translateX: leg.length / 2 },
+    ],
+  }));
+
+  return <Animated.View style={[styles.stroke, legBox(leg), style]} />;
 }
 
 /**

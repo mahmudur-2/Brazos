@@ -1,10 +1,12 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { RemoteImage } from './RemoteImage';
+import { CategoryGlyph } from './CategoryGlyph';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { JobVideo } from './JobVideo';
 import { DetailScreen } from '../ui/templates/DetailScreen';
+import { navigateAcrossTabs } from '../lib/navigationRef';
 import { useModeSwitch } from '../modes';
 import {
   arrivalWindowLabel,
@@ -49,11 +51,21 @@ export function MarketJobPreview({ job, poster, onBack }: MarketJobPreviewProps)
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { switching, switchToOtherMode } = useModeSwitch();
+
+  // 2026-09-26 (the refresh, audit M-23) — the switch keeps its promise. A
+  // confirmed switch used to drop the person on Worker Home with the job
+  // gone; now, like a tapped push (lib/notificationRoutes.ts), it routes only
+  // after the worker tree is mounted, to this job's detail in My Jobs, where
+  // bidding is. Declining leaves them exactly here.
+  async function switchAndOpen() {
+    const switched = await switchToOtherMode();
+    if (switched) navigateAcrossTabs('MyJobs', 'JobDetail', { job });
+  }
   const accent = categoryAccent(job.category);
 
   return (
     <DetailScreen
-      title="Job on the market"
+      title="Job on the Market"
       subtitle={JOB_CATEGORY_LABELS[job.category] ?? job.category}
       onBack={onBack}
       state={{ kind: 'ready' }}
@@ -68,10 +80,11 @@ export function MarketJobPreview({ job, poster, onBack }: MarketJobPreviewProps)
                     isDark ? styles.iconCircleDark : { backgroundColor: accent.bg },
                   ]}
                 >
-                  <Ionicons
+                  <CategoryGlyph
                     name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                     size={20}
-                    color={isDark ? colors.gold : accent.icon}
+                    color={isDark ? colors.emerald : accent.icon}
+                    bare
                   />
                 </View>
                 <Text style={styles.postedAt}>Posted {formatTimeAgo(job.created_at)}</Text>
@@ -174,9 +187,9 @@ export function MarketJobPreview({ job, poster, onBack }: MarketJobPreviewProps)
       ]}
       actionBar={
         <Button
-          title="Switch to Worker Mode to bid"
+          title="Switch to Worker Mode and open this job"
           variant="secondary"
-          onPress={() => void switchToOtherMode()}
+          onPress={() => void switchAndOpen()}
           loading={switching}
           disabled={switching}
         />
@@ -232,7 +245,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   priceEyebrow: {
     fontSize: 11,
     fontWeight: '800',
-    color: colors.emerald,
+    color: colors.eyebrow,
     letterSpacing: 0.8,
   },
   price: {

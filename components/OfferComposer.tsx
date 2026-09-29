@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -36,6 +36,7 @@ import {
 } from '../lib/offers';
 import { quoteJobPrice, workerTakeLine, type JobPriceQuote } from '../lib/payments';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { PINNED_FOOTER_BOTTOM_PADDING } from '../ui/primitives';
 
 /** How long after the last keystroke the take-home quote is asked for. */
 const TAKE_LINE_DEBOUNCE_MS = 400;
@@ -79,6 +80,14 @@ type OfferComposerProps = {
   /** Called only after the RPC succeeded. Receives the new offer's id. */
   onSubmitted: (offerId: string, amountCents: number) => void;
   palette?: ColorPalette;
+  /**
+   * 2026-09-26 (the refresh, audit M-33). 'inline' (the default) is the form
+   * as one block, for a host that scrolls it (the job detail's counter).
+   * 'screen' makes the composer the whole body of its screen: the fields
+   * scroll, and the consequence line with Send is pinned beneath them inside
+   * the keyboard-avoiding view, so the commit never hides under the keyboard.
+   */
+  layout?: 'inline' | 'screen';
 };
 
 /**
@@ -118,6 +127,8 @@ export function OfferAmountField({
   return (
     <TextField
       label={label}
+      // 2026-09-29 (LUX-LIST-2 #4): the amount label — bid and counter-offer alike — stays gold.
+      labelTone="gold"
       value={value}
       onChangeText={onChangeText}
       placeholder="e.g. 45"
@@ -129,7 +140,12 @@ export function OfferAmountField({
   );
 }
 
-export function OfferComposer({ context, onSubmitted, palette: paletteProp }: OfferComposerProps) {
+export function OfferComposer({
+  context,
+  onSubmitted,
+  palette: paletteProp,
+  layout = 'inline',
+}: OfferComposerProps) {
   const { palette: colors } = useThemeColors();
   const palette = paletteProp ?? colors;
   const styles = stylesFor(colors);
@@ -303,8 +319,8 @@ export function OfferComposer({ context, onSubmitted, palette: paletteProp }: Of
     }
   }
 
-  return (
-    <View style={styles.wrap}>
+  const fields = (
+    <>
       {/* Context: what these terms answer. Original terms stay visible while
           new ones are typed, so a counter is a visible before/after. */}
       {context.kind === 'bid' ? (
@@ -339,8 +355,7 @@ export function OfferComposer({ context, onSubmitted, palette: paletteProp }: Of
             </Text>
           </View>
           <Text style={styles.contextMeta}>
-            Your counter replaces those terms with your price below. Nothing is
-            agreed until one side accepts.
+            Nothing is agreed until one side accepts.
           </Text>
         </Card>
       )}
@@ -371,6 +386,17 @@ export function OfferComposer({ context, onSubmitted, palette: paletteProp }: Of
           // reads as a full field instead of a database error.
           maxLength={OFFER_MESSAGE_MAX}
         />
+      ) : null}
+
+      {/* 2026-09-28 (LUX-LIST-64 #64, audit M-37) — THE PITCH IS WHERE A
+          QUESTION GOES before the hire: it travels with the bid, and chat
+          stays locked until someone is hired (the messaging lock is the
+          server's and does not move). The job screen says the same under its
+          bid bar. */}
+      {isBid ? (
+        <Text style={styles.chipReason}>
+          Questions? Put them in your pitch — chat opens the moment you’re hired.
+        </Text>
       ) : null}
 
       {isBid ? (
@@ -459,15 +485,20 @@ export function OfferComposer({ context, onSubmitted, palette: paletteProp }: Of
         </View>
       ) : null}
 
+    </>
+  );
+
+  const commit = (
+    <>
       {/* The exact consequence, stated before the tap. */}
       <View style={styles.consequenceRow}>
         <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
         <Text style={styles.consequenceText}>
           {isBid
-            ? 'Sends your bid to the customer. You can withdraw it any time before it’s accepted, and it expires on its own after 7 days.'
+            ? 'Withdrawable until accepted; expires after 7 days.'
             : context.countersRemaining > 1
-              ? `Replaces their offer with yours — it’s then their turn. You have ${context.countersRemaining} counter-offers left; each expires after 7 days.`
-              : 'Replaces their offer with yours — it’s then their turn. This is your last counter-offer; after this you can only accept or decline.'}
+              ? `${context.countersRemaining} counter-offers left; each expires after 7 days.`
+              : 'Your last counter — after it, accept or decline.'}
         </Text>
       </View>
 
@@ -478,6 +509,32 @@ export function OfferComposer({ context, onSubmitted, palette: paletteProp }: Of
         disabled={submitting}
         palette={palette}
       />
+    </>
+  );
+
+  if (layout === 'screen') {
+    return (
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.screenContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.wrap}>{fields}</View>
+        </ScrollView>
+        <View style={[styles.footer, { paddingBottom: PINNED_FOOTER_BOTTOM_PADDING }]}>{commit}</View>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  return (
+    <View style={styles.wrap}>
+      {fields}
+      {commit}
     </View>
   );
 }
@@ -487,6 +544,22 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   wrap: {
     gap: spacing.lg,
   },
+  // M-33 — the 'screen' layout: the scrolling fields, then the pinned commit.
+  screen: {
+    flex: 1,
+  },
+  screenContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  footer: {
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+  },
   contextCard: {
     gap: spacing.sm,
     borderRadius: radius.xl,
@@ -494,7 +567,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   contextEyebrow: {
     fontSize: 11,
     fontWeight: '800',
-    color: colors.emerald,
+    // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
+    color: colors.eyebrowGold,
     letterSpacing: 0.9,
   },
   contextTitle: {
@@ -530,7 +604,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   originalAmount: {
     fontSize: 18,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.money,
   },
   multiline: {
     height: 90,

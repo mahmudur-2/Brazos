@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { RemoteImage } from './RemoteImage';
+import { CategoryGlyph } from './CategoryGlyph';
 import { Ionicons } from '@expo/vector-icons';
 import { Chip } from './Chip';
 import { Skeleton } from './Skeleton';
 import { useAuth } from '../hooks/useAuth';
 import {
-  fonts,
+  litCardStyle, fonts,
   radius,
   shadows,
   spacing,
@@ -67,7 +68,8 @@ const META_GLYPH = 16;
 const PEEK_PHOTO_SIZE = 52;
 /** The pay column over the row's top two lines: 56 wide, 6 of air before it. */
 const PEEK_PAY_WIDTH = 56;
-const PEEK_PAY_CLEAR = PEEK_PAY_WIDTH + 6;
+const PEEK_PAY_AIR = 6;
+const PEEK_PAY_CLEAR = PEEK_PAY_WIDTH + PEEK_PAY_AIR;
 
 /**
  * A job as a worker evaluating it sees it: what the work is, roughly where,
@@ -90,6 +92,10 @@ const PEEK_PAY_CLEAR = PEEK_PAY_WIDTH + 6;
  *     match the reference's exact field list (title, category, location,
  *     bid status, optional Break the ice); still on JobDetail if needed.
  */
+/** The space between the category chip and "Your job" — the row's gap and the fit's arithmetic (read at
+ *  render time: `spacing` is a live, dialable metric). */
+const chipGap = () => spacing.xs + 2;
+
 export function WorkerJobCard({
   job,
   bidCount,
@@ -145,14 +151,19 @@ export function WorkerJobCard({
   const [fullFits, setFullFits] = useState<boolean | null>(null);
   const [chipRowWidth, setChipRowWidth] = useState<number | null>(null);
   const [chipWidth, setChipWidth] = useState<number | null>(null);
+  // 2026-09-29 (LUX-LIST-2 run): the poster's own "Your job" chip shares the row, so the fit counts it
+  // and its gap too — it used to be left out, and ran under the pay block on a long category.
+  const [ownWidth, setOwnWidth] = useState<number | null>(null);
   useEffect(() => {
     setFullFits(null);
     setChipWidth(null);
   }, [fullLabel, payClear]);
   useEffect(() => {
     if (fullFits !== null || payWidth === null || chipRowWidth === null || chipWidth === null) return;
-    setFullFits(chipWidth <= chipRowWidth - payClear);
-  }, [fullFits, payWidth, chipRowWidth, chipWidth, payClear]);
+    if (isOwn && ownWidth === null) return;
+    const own = isOwn && ownWidth !== null ? chipGap() + ownWidth : 0;
+    setFullFits(chipWidth + own <= chipRowWidth - payClear);
+  }, [fullFits, payWidth, chipRowWidth, chipWidth, payClear, isOwn, ownWidth]);
   const onChipRowLayout = (event: LayoutChangeEvent) => setChipRowWidth(event.nativeEvent.layout.width);
   const onChipLayout = (event: LayoutChangeEvent) => {
     if (fullFits === null) setChipWidth(event.nativeEvent.layout.width);
@@ -184,7 +195,8 @@ export function WorkerJobCard({
   //
   // THE ROW NEVER GROWS A LINE AND NOTHING OVERLAPS THE PAY (operator,
   // 2026-09-20). The pay column sits over the top two lines only — the title
-  // and the category line keep PEEK_PAY_CLEAR of it, the location line runs
+  // and the category line keep its measured width + air clear (PEEK_PAY_CLEAR
+  // until it has laid out), the location line runs
   // the full width beneath — and the day word sits beside the chip only when
   // the two fit that width, measured, otherwise at the end of the location
   // line ("Park Slope · Tmrw"). Until measured it renders unseen.
@@ -198,7 +210,7 @@ export function WorkerJobCard({
       style={({ pressed }) => [
         styles.card,
         isDark && styles.cardDark,
-        isDark && shadows.cardDark,
+        litCardStyle(isDark),
         pressed && styles.cardPressed,
       ]}
       accessibilityRole="button"
@@ -221,13 +233,15 @@ export function WorkerJobCard({
           style={[
             styles.thumb,
             styles.thumbFallback,
-            isDark ? styles.thumbFallbackDark : { backgroundColor: accent.bg },
+            // 2026-09-29 (LUX-LIST-2 #6): the lit tile in dark; light keeps the category colour.
+            isDark ? [styles.thumbFallbackDark, litCardStyle(true, 'tile')] : { backgroundColor: accent.bg },
           ]}
         >
-          <Ionicons
+          <CategoryGlyph
             name={icon}
             size={Math.round(THUMB_SIZE * 0.38)}
-            color={isDark ? colors.gold : accent.icon}
+            color={isDark ? colors.emerald : accent.icon}
+            bare
           />
         </View>
       )}
@@ -244,7 +258,14 @@ export function WorkerJobCard({
             style={[styles.categoryChip, fullFits === null && styles.chipUnmeasured]}
             onLayout={onChipLayout}
           />
-          {isOwn ? <Chip label="Your job" variant="soft" size="sm" /> : null}
+          {isOwn ? (
+            <Chip
+              label="Your job"
+              variant="soft"
+              size="sm"
+              onLayout={(event) => setOwnWidth(event.nativeEvent.layout.width)}
+            />
+          ) : null}
         </View>
 
         {/* Master 12: the meta rows read gold glyph + cream text; light keeps
@@ -275,7 +296,7 @@ export function WorkerJobCard({
 
         {showBreakIce ? (
           <View style={styles.breakIce}>
-            <Ionicons name="sparkles" size={12} color={colors.gold} />
+            <Ionicons name="sparkles" size={12} color={colors.mark} />
             <Text style={styles.breakIceText}>Break the ice</Text>
           </View>
         ) : null}
@@ -310,17 +331,21 @@ function PeekRow({ job, onPress }: { job: OpenJob; onPress: () => void }) {
 
   // Does the day fit beside the chip? Unknown until both have laid out;
   // re-asked whenever the words change.
+  // 2026-09-29 (LUX-LIST-2 run): the pay column's MEASURED width (never under PEEK_PAY_WIDTH) + air is what
+  // the title and the category line keep clear — a fixed 56 cut "$140" to "$1…".
+  const [payWidth, setPayWidth] = useState<number | null>(null);
+  const payClear = payWidth === null ? PEEK_PAY_CLEAR : Math.max(PEEK_PAY_WIDTH, Math.ceil(payWidth)) + PEEK_PAY_AIR;
   const [dayFits, setDayFits] = useState<boolean | null>(null);
   const [metaWidth, setMetaWidth] = useState<number | null>(null);
   const [dayRight, setDayRight] = useState<number | null>(null);
   useEffect(() => {
     setDayFits(null);
     setDayRight(null);
-  }, [day, category]);
+  }, [day, category, payClear]);
   useEffect(() => {
     if (dayFits !== null || metaWidth === null || dayRight === null) return;
-    setDayFits(dayRight <= metaWidth - PEEK_PAY_CLEAR);
-  }, [dayFits, metaWidth, dayRight]);
+    setDayFits(dayRight <= metaWidth - payClear);
+  }, [dayFits, metaWidth, dayRight, payClear]);
   const onMetaLayout = (event: LayoutChangeEvent) => setMetaWidth(event.nativeEvent.layout.width);
   const onDayLayout = (event: LayoutChangeEvent) =>
     setDayRight(event.nativeEvent.layout.x + event.nativeEvent.layout.width);
@@ -344,14 +369,14 @@ function PeekRow({ job, onPress }: { job: OpenJob; onPress: () => void }) {
         />
       ) : (
         <View style={[styles.peekPhoto, styles.thumbFallback]}>
-          <Ionicons name={icon} size={22} color={isDark ? colors.gold : accent.icon} />
+          <CategoryGlyph name={icon} size={22} color={isDark ? colors.emerald : accent.icon} bare />
         </View>
       )}
       <View style={styles.peekBody}>
-        <Text style={[styles.peekTitle, styles.peekClearOfPay]} numberOfLines={1}>
+        <Text style={[styles.peekTitle, { paddingRight: payClear }]} numberOfLines={1}>
           {job.title}
         </Text>
-        <View style={[styles.peekMeta, styles.peekClearOfPay]} onLayout={onMetaLayout}>
+        <View style={[styles.peekMeta, { paddingRight: payClear }]} onLayout={onMetaLayout}>
           <View style={[styles.peekCategory, isDark && styles.peekCategoryDark]}>
             <Text style={styles.peekCategoryText} numberOfLines={1}>
               {category}
@@ -382,7 +407,11 @@ function PeekRow({ job, onPress }: { job: OpenJob; onPress: () => void }) {
             ) : null}
           </View>
         ) : null}
-        <View style={styles.peekPay} pointerEvents="none">
+        <View
+          style={styles.peekPay}
+          pointerEvents="none"
+          onLayout={(event) => setPayWidth(event.nativeEvent.layout.width)}
+        >
           <Text style={styles.peekPayCaption}>EST. PAY</Text>
           <Text style={[styles.peekPayValue, isDark && styles.peekPayValueDark]} numberOfLines={1}>
             {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
@@ -398,7 +427,7 @@ export function WorkerJobCardSkeleton() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   return (
-    <View style={[styles.card, isDark && shadows.cardDark]}>
+    <View style={[styles.card, litCardStyle(isDark)]}>
       <Skeleton style={styles.thumb} />
       <View style={styles.info}>
         <Skeleton style={styles.skeletonLine} />
@@ -429,10 +458,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // The pay block rides over the card's top-right corner (a1); the title and
   // the chip row keep its MEASURED width + PAY_AIR of it (applied at the call
   // site), the lines beneath run full width.
+  // Wraps only as the last resort: the short label and "Your job" together too wide for the room.
   chipRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: spacing.xs + 2,
+    gap: chipGap(),
   },
   // The chip at the full label, before the fit is decided: laid out, unseen.
   chipUnmeasured: {
@@ -529,9 +560,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 26,
     lineHeight: 30,
     fontWeight: '800',
-    color: colors.forest,
+    color: colors.money,
   },
-  payValueDark: { color: colors.emerald },
+  payValueDark: { color: colors.money },
   // The peek row. Light: the page's cream ground under a gold hairline at a
   // quarter strength — the operator's "subtle, not too cream"; dark: the page
   // ink at half, ringed in the sage line. The category pill takes the same
@@ -569,9 +600,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     minWidth: 0,
     gap: spacing.xs + 1,
     overflow: 'hidden',
-  },
-  peekClearOfPay: {
-    paddingRight: PEEK_PAY_CLEAR,
   },
   peekTitle: {
     fontFamily: fonts.display,
@@ -626,7 +654,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     top: 0,
     bottom: 0,
     right: 0,
-    width: PEEK_PAY_WIDTH,
+    // Sized by its figure, never under PEEK_PAY_WIDTH (LUX-LIST-2 run: a fixed width cut "$140").
+    minWidth: PEEK_PAY_WIDTH,
     alignItems: 'flex-end',
     justifyContent: 'center',
   },

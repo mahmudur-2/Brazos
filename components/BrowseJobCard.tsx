@@ -3,11 +3,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
+import { CategoryGlyph } from './CategoryGlyph';
 import { useAuth } from '../hooks/useAuth';
 import {
   fonts,
   radius,
   spacing,
+  litCardStyle,
   themedStyles,
   useThemeColors,
   type ColorPalette,
@@ -88,10 +90,11 @@ export function BrowseJobCard({
             style={[
               styles.thumb,
               styles.thumbFallback,
-              isDark ? styles.thumbFallbackDark : { backgroundColor: accent.bg },
+              // LUX-LIST-2 #6: the lit tile in dark; light keeps the category colour.
+              isDark ? [styles.thumbFallbackDark, litCardStyle(true, 'tile')] : { backgroundColor: accent.bg },
             ]}
           >
-            <Ionicons name={icon} size={30} color={isDark ? colors.gold : accent.icon} />
+            <CategoryGlyph name={icon} size={30} color={isDark ? colors.emerald : accent.icon} bare />
           </View>
         )}
 
@@ -226,9 +229,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontFamily: fonts.display,
     fontSize: 18,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.money,
   },
-  budgetDark: { color: colors.emerald },
+  budgetDark: { color: colors.money },
   bids: {
     flexShrink: 1,
     fontSize: 12,

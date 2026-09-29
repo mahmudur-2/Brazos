@@ -4,9 +4,9 @@ import { StatusBadge } from './StatusBadge';
 import {
   COUNTER_OFFER_ACTION_LABEL,
   COUNTERS_SPENT_NOTE,
-  DECLINE_OFFER_ACTION_LABEL,
   YOUR_MOVE_BADGE_LABEL,
   acceptOfferActionLabel,
+  declineOfferActionLabel,
   offerResponseHeading,
 } from '../lib/offerCopy';
 import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
@@ -48,6 +48,9 @@ type OfferResponseActionsProps = {
   amountLabel: string;
   /** The explanatory sentence — lib/offerCopy.ts offerResponseNote(). */
   note: string;
+  /** 2026-09-28 (#64, M-17): the viewer's side of THIS chain, from the offer
+   *  row — the noun is the audience's (a worker reads "offer", a customer "bid"). */
+  viewerIsWorker: boolean;
   /** False once this side's counter allowance is spent (phase63 cap). */
   canCounter: boolean;
   /** An RPC is in flight; every control locks rather than double-firing. */
@@ -68,6 +71,7 @@ export function OfferResponseActions({
   isCounter,
   amountLabel,
   note,
+  viewerIsWorker,
   canCounter,
   busy = false,
   onAccept,
@@ -83,7 +87,7 @@ export function OfferResponseActions({
     <View style={styles.root}>
       <View style={styles.headingRow}>
         <Text style={[styles.heading, compact && styles.headingCompact]}>
-          {offerResponseHeading(senderFirstName, isCounter)}
+          {offerResponseHeading(senderFirstName, isCounter, viewerIsWorker)}
         </Text>
         <StatusBadge status="pending" label={YOUR_MOVE_BADGE_LABEL} />
       </View>
@@ -96,7 +100,7 @@ export function OfferResponseActions({
 
       <View style={styles.actions}>
         <Button
-          title={acceptOfferActionLabel(amountLabel)}
+          title={acceptOfferActionLabel(amountLabel, viewerIsWorker)}
           icon="checkmark"
           iconPosition="leading"
           size={buttonSize}
@@ -117,7 +121,7 @@ export function OfferResponseActions({
           <Text style={styles.capNote}>{COUNTERS_SPENT_NOTE}</Text>
         )}
         <Button
-          title={DECLINE_OFFER_ACTION_LABEL}
+          title={declineOfferActionLabel(viewerIsWorker)}
           icon="close"
           iconPosition="leading"
           variant="destructive"
@@ -159,7 +163,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   amount: {
     fontSize: 28,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.money,
     lineHeight: 34,
   },
   amountCompact: {

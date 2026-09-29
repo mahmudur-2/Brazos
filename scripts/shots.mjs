@@ -335,7 +335,7 @@ function projectColumns(row, select) {
 //                signed-in, not-yet-set-up tree. Absent is today's seeding.
 //   accepting    optional. `true` answers the profile fixture with
 //                `accepting_work: true`, so worker Home renders ONLINE
-//                ("Online", "Visible to customers"). Absent keeps the
+//                ("Shown as available on your profile"). Absent keeps the
 //                fixture's `false` — OFFLINE, which every worker target has
 //                always photographed — so every existing PNG stays
 //                byte-identical. A fixture rather than a tap on the toggle:
@@ -456,8 +456,8 @@ const TARGETS = [
   // own entries (RUN figma-extract, at the end of the registry). The wait is
   // the status word only the offline card draws, so this entry proves its
   // state and not just its arrival; "Get hired." is still on the page.
-  { name: 'worker-home-dark', mode: 'worker', colorScheme: 'dark', wait: 'Offline' },
-  { name: 'worker-home-light', mode: 'worker', colorScheme: 'light', wait: 'Offline' },
+  { name: 'worker-home-dark', mode: 'worker', colorScheme: 'dark', wait: 'Offers still reach you' },
+  { name: 'worker-home-light', mode: 'worker', colorScheme: 'light', wait: 'Offers still reach you' },
 
   ...['dark', 'light'].flatMap((colorScheme) => [
     {
@@ -891,7 +891,8 @@ const TARGETS = [
       mode: 'customer',
       colorScheme,
       setup: false,
-      wait: 'FINAL SETUP',
+      // 2026-09-28 (LUX-LIST-64 #9): the eyebrow left; the headline proves arrival.
+      wait: 'Set up your experience',
     },
   ]),
 
@@ -949,7 +950,7 @@ const TARGETS = [
       mode: 'worker',
       colorScheme,
       accepting: true,
-      wait: 'Online',
+      wait: 'Shown as available on your profile',
     },
     {
       // Worker Home POPULATED (offline, as the baseline is): the third

@@ -20,12 +20,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  useFocusEffect,
-  useNavigation,
-  useRoute,
-  type RouteProp,
-} from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
@@ -35,12 +30,9 @@ import { FadeIn } from '../components/FadeIn';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { userMessage } from '../lib/errorMessage';
-import { fetchRehirableWorkerIds } from '../lib/jobs';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
-import { fetchProfilesByIds } from '../lib/profiles';
-import { rebookStripItems, type RebookStripItem } from '../lib/rebook';
+import { useRebookWorkers } from '../hooks/useRebookWorkers';
 import { fetchProfileReviewSummaries, type ProfileReviewSummaryRow } from '../lib/reviews';
-import { fetchSavedWorkers } from '../lib/savedWorkers';
 import { SKILL_CATEGORIES, skillCategoryLabel } from '../lib/skillCategories';
 import {
   emptyResultTitle,
@@ -57,6 +49,7 @@ import type {
 } from '../lib/navigation';
 import { useDialNumber } from '../lib/designOverrides';
 import {
+  litCardStyle, EYEBROW_TYPE,
   emeraldColorsFor,
   fonts,
   radius,
@@ -66,7 +59,9 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
+import { CategoryGlyph } from '../components/CategoryGlyph';
 import { SearchBar, useScrollClearance } from '../ui/primitives';
 
 /** Tiles offered before anything has been typed: the whole shared skill list,
@@ -102,6 +97,9 @@ export function WorkerSearchScreen() {
   const EMERALD_PALETTE = emeraldColorsFor(colors);
   const navigation = useNavigation<CustomerHomeStackNavigation>();
   const { params } = useRoute<RouteProp<WorkerSearchRouteParamList, 'WorkerSearch'>>();
+  // M-16 — the Discover tab mounts this screen with autoFocus: false and
+  // nothing else; every push from Home leaves it unset.
+  const isTabRoot = params?.autoFocus === false && !params?.query && !params?.category;
   const { user } = useAuth();
   const { height: windowHeight } = useWindowDimensions();
 
@@ -122,7 +120,9 @@ export function WorkerSearchScreen() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   // §4.4 — the Saved / Worked-for-you-before sections collapsed into one
   // horizontal strip at the top of this surface's landing state.
-  const [rebook, setRebook] = useState<RebookStripItem[]>([]);
+  // 2026-09-28 (LUX-LIST-64 #62): the one rebook read, shared with the Home's
+  // "Hire again" row (hooks/useRebookWorkers.ts).
+  const rebook = useRebookWorkers('WorkerSearch');
 
   // Guards a slow response from overwriting a newer one — a fast second search
   // finishing first would otherwise leave the older results on screen.
@@ -147,47 +147,6 @@ export function WorkerSearchScreen() {
     tileRowRef.current?.scrollTo({ x: Math.max(0, x), animated: false });
   }, []);
 
-  const loadRebook = useCallback(async () => {
-    if (!user) {
-      setRebook([]);
-      return;
-    }
-    const [savedRes, pastIdsRes] = await Promise.all([
-      fetchSavedWorkers(user.id),
-      fetchRehirableWorkerIds(user.id),
-    ]);
-    // The strip is a rebook shortcut, not this surface's content: a failed
-    // read renders no strip (and says so in the log) rather than blocking
-    // search behind a retry state.
-    if (savedRes.error || pastIdsRes.error) {
-      console.warn(
-        '[WorkerSearch] rebook strip read failed',
-        (savedRes.error ?? pastIdsRes.error)?.message
-      );
-      return;
-    }
-    const savedProfiles = savedRes.data.map((r) => r.profiles);
-    const savedIdSet = new Set(savedProfiles.map((p) => p.id));
-    const pastIds = [...pastIdsRes.data].filter((id) => !savedIdSet.has(id));
-    let pastProfiles: { id: string; full_name: string | null; avatar_url: string | null }[] =
-      [];
-    if (pastIds.length > 0) {
-      const { data, error } = await fetchProfilesByIds(pastIds);
-      if (error) {
-        console.warn('[WorkerSearch] rebook strip profiles failed', error.message);
-        return;
-      }
-      pastProfiles = data;
-    }
-    setRebook(rebookStripItems(savedProfiles, pastProfiles));
-  }, [user]);
-
-  // Refresh on focus: a hire or an unsave elsewhere changes who belongs here.
-  useFocusEffect(
-    useCallback(() => {
-      void loadRebook();
-    }, [loadRebook])
-  );
 
   const run = useCallback(
     async (text: string, category: string | null) => {
@@ -308,15 +267,24 @@ export function WorkerSearchScreen() {
     : undefined;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Master 1 sets "Find help" as the screen's own display headline —
-          the back control stays because this surface is pushed from Home as
-          well as mounted as a tab root. */}
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
+      {/* Master 1 sets "Find help" as the screen's own display headline.
+          2026-09-26 (the refresh, audit M-16): as the Discover TAB root it
+          wears the tab's own word and draws no back chevron (there is
+          nothing behind a tab root); pushed from Home's "Browse workers" it
+          is "Find help" with its way back. The tab root is the one mount
+          that carries autoFocus: false (navigation/CustomerRoot.tsx). */}
+      {/* 2026-09-27 (the Lux remake, the operator's Discover picture): the
+          circle back button is back on the tab root too — it goes Home, as
+          `goBackOrHome` does — the title "Discover", no eyebrow. */}
+      {/* 2026-09-28 (LUX-LIST-64 #27): Discover keeps the big left title even
+          when it opens from Home with a back button — Back on its own row
+          above it, named "Home" when that is where it goes (#60). */}
       <ScreenHeader
-        title="Find help"
+        title={isTabRoot ? 'Discover' : 'Find Help'}
         onBack={goBackOrHome}
         palette={EMERALD_PALETTE}
-        titleSize={32}
+        largeTitle
       />
 
       <KeyboardAvoidingView
@@ -326,14 +294,10 @@ export function WorkerSearchScreen() {
         <View style={styles.discoveryHeader}>
           {!keyboardVisible && windowHeight >= 650 ? (
             <View style={styles.intro}>
-              {/* Master 1's own eyebrow and sub. The second display line the
-                  Heritage screen carried is gone: the header title IS the
-                  display headline there. */}
-              <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
-                FIND TRUSTED HELP, FAST
-              </Text>
+              {/* 2026-09-27 (the Lux remake): no eyebrow, and the subtitle on
+                  one line at 393 wide (ruling 10). */}
               <Text style={styles.introText}>
-                Describe the task in your own words, or start with a service below.
+                Describe the task, or pick a service below.
               </Text>
             </View>
           ) : null}
@@ -355,7 +319,8 @@ export function WorkerSearchScreen() {
               arrivalCategory.current = null;
             }}
             onSubmit={submit}
-            placeholder="What do you need help with?"
+            // One line, never two (the operator's Discover picture).
+            placeholder="What do you need?"
             autoCapitalize="sentences"
             autoCorrect
             // autoFocus:false is the Discover tab-root mount — opening a TAB
@@ -386,7 +351,9 @@ export function WorkerSearchScreen() {
                 <Ionicons
                   name="arrow-forward"
                   size={20}
-                  color={isDark ? colors.gold : colors.onForest}
+                  // 2026-09-27 (the Lux remake): the arrow disc is the Lux `.disc`
+                  // — a solid mint disc with the CTA's dark ink on it.
+                  color={isDark ? colors.onPrimary : colors.onForest}
                 />
               </Pressable>
             }
@@ -425,6 +392,8 @@ export function WorkerSearchScreen() {
                           minHeight: serviceTileHeight,
                           borderRadius: serviceTileRadius,
                         },
+                        // 2026-09-29 (LUX-LIST-2 #6): the lit tile; a chosen tile's mint rim still wins.
+                        litCardStyle(isDark, 'tile'),
                         selected && styles.serviceTileSelected,
                         pressed && styles.serviceTilePressed,
                       ]}
@@ -440,10 +409,12 @@ export function WorkerSearchScreen() {
                       accessibilityLabel={category.label}
                       accessibilityHint={`Find workers for ${category.label.toLowerCase()}`}
                     >
-                      <Ionicons
+                      {/* 2026-09-27 (the Lux remake, ruling 12): the Lux line icon, mint. */}
+                      <CategoryGlyph
                         name={category.icon}
                         size={24}
-                        color={isDark ? colors.gold : colors.forest}
+                        color={isDark ? colors.emerald : colors.forest}
+                        bare
                       />
                       <Text style={styles.serviceTileLabel} numberOfLines={2}>
                         {category.label}
@@ -544,8 +515,9 @@ export function WorkerSearchScreen() {
             <SearchStateCard
               icon="people-outline"
               eyebrow="START WITH THE TASK"
+              eyebrowGold
               title="Describe what you need"
-              message="Try “move a queen mattress up three flights” — or choose a popular service above."
+              message="e.g. “move a queen mattress up three flights”"
             />
           </SearchStateScroll>
         ) : state.matches.length === 0 ? (
@@ -584,7 +556,7 @@ export function WorkerSearchScreen() {
                     {resultHeading(state.mode, state.matches.length, appliedCategoryLabel)}
                   </Text>
                   <Text style={styles.resultsHint}>
-                    Open a profile to review real work, services, and feedback.
+                    Open a profile to see real work and reviews.
                   </Text>
                 </View>
               }
@@ -637,11 +609,14 @@ function SearchStateCard({
   title,
   message,
   tone = 'brand',
+  eyebrowGold = false,
   children,
 }: {
   icon?: IoniconName;
   busy?: boolean;
   eyebrow: string;
+  /** 2026-09-29 (LUX-LIST-2 #4): START WITH THE TASK is one of the kept-gold labels. */
+  eyebrowGold?: boolean;
   title: string;
   message: string;
   tone?: 'brand' | 'danger';
@@ -664,7 +639,7 @@ function SearchStateCard({
           />
         )}
       </View>
-      <Text style={[styles.stateEyebrow, danger && styles.stateEyebrowDanger]}>{eyebrow}</Text>
+      <Text style={[styles.stateEyebrow, eyebrowGold && styles.stateEyebrowGold, danger && styles.stateEyebrowDanger]}>{eyebrow}</Text>
       <Text style={styles.stateTitle} maxFontSizeMultiplier={1.35}>
         {title}
       </Text>
@@ -777,7 +752,7 @@ function WorkerResultCard({
           View full profile
         </Text>
         <View style={[styles.resultActionIcon, isDark && styles.resultActionIconDark]}>
-          <Ionicons name="arrow-forward" size={17} color={isDark ? colors.gold : colors.forest} />
+          <Ionicons name="arrow-forward" size={17} color={isDark ? colors.emerald : colors.forest} />
         </View>
       </View>
     </Card>
@@ -807,9 +782,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.1,
-    color: colors.emerald,
+    color: colors.eyebrow,
   },
-  eyebrowDark: { color: colors.gold },
+  eyebrowDark: { color: colors.eyebrow },
   introText: {
     maxWidth: 420,
     fontSize: 14,
@@ -819,11 +794,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    minHeight: 64,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.sm,
-    borderRadius: radius.xl,
+    gap: 12,
+    minHeight: 54,
+    paddingLeft: 18,
+    paddingRight: 5,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.mint2,
     backgroundColor: colors.surface,
@@ -831,10 +806,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // Master 1 rings the whole field in gold; light keeps the Heritage sage
   // hairline.
-  searchRowDark: { borderColor: colors.gold },
+  // 2026-09-27 (the Lux remake): the field's rim is the mint-neutral rim, not gold.
+  searchRowDark: { borderColor: colors.border },
   searchButton: {
-    width: 46,
-    height: 46,
+    width: 44,
+    height: 44,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -843,8 +819,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.border,
   },
   searchButtonDark: {
-    backgroundColor: 'transparent',
-    borderColor: colors.gold,
+    backgroundColor: colors.emerald,
+    borderColor: 'transparent',
   },
   searchButtonPressed: {
     backgroundColor: colors.emerald,
@@ -866,12 +842,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'space-between',
     gap: spacing.md,
   },
+  // 2026-09-27 (the Lux remake, ruling 4): "POPULAR SERVICES" is the eyebrow —
+  // gold in dark, emerald in light; the hint beside it stays muted.
   serviceHeading: {
     flexShrink: 1,
-    fontFamily: fonts.display,
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.ink,
+    ...EYEBROW_TYPE,
+    // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
+    color: colors.eyebrowGold,
   },
   serviceHint: {
     flexShrink: 1,
@@ -879,7 +856,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.textMuted,
   },
   serviceHintDark: {
-    color: colors.gold,
+    color: colors.textMuted,
   },
   chipRow: {
     flexDirection: 'row',
@@ -899,9 +876,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
+  // A chosen tile lights its rim mint (ruling 11), never gold.
   serviceTileSelected: {
     borderWidth: 2,
-    borderColor: colors.gold,
+    borderColor: colors.emerald,
   },
   serviceTilePressed: {
     opacity: 0.82,
@@ -931,10 +909,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  // 2026-09-27 (the Lux remake, ruling 4): a section heading is the eyebrow.
   rebookTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.ink,
+    ...EYEBROW_TYPE,
+    // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
+    color: colors.eyebrowGold,
   },
   rebookSeeAll: {
     fontSize: 13,
@@ -985,8 +964,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.1,
-    color: colors.emerald,
+    // The eyebrow role: gold in dark, emerald in light (ruling 4).
+    color: colors.eyebrow,
   },
+  stateEyebrowGold: { color: colors.eyebrowGold },
   stateEyebrowDanger: {
     color: colors.danger,
   },
@@ -1031,7 +1012,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.1,
-    color: colors.emerald,
+    color: colors.eyebrow,
   },
   resultCount: {
     fontFamily: fonts.display,
@@ -1065,7 +1046,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1,
-    color: colors.emerald,
+    color: colors.eyebrow,
   },
   nameRow: {
     flexDirection: 'row',

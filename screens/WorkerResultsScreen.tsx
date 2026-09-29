@@ -3,6 +3,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { Chip } from '../components/Chip';
 import { DistanceChips } from '../components/DistanceChips';
 import { JobFilterSheet } from '../components/JobFilterSheet';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -13,7 +14,7 @@ import { useOfferCounts } from '../hooks/useOfferCounts';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useWorkerSkills } from '../hooks/useWorkerSkills';
 import { resolveCurrentPlace } from '../lib/geolocation';
-import { goBackOrHome } from '../lib/navigationRef';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { fetchJobsWithinRadius } from '../lib/hotspots';
 import { NEARBY_RADIUS_MILES, type DistanceFilterMiles } from '../lib/discoveryFilter';
 import { readDistanceFilter, writeDistanceFilter } from '../lib/discoveryFilterStorage';
@@ -22,9 +23,9 @@ import {
   activeJobFilterCount,
   applyJobFilters,
   completedByCategory,
-  type JobFilterModel,
   type JobSortContext,
 } from '../lib/jobFilters';
+import { useSessionJobFilters } from '../hooks/useSessionJobFilters';
 import {
   JOB_CATEGORY_LABELS,
   jobMatchesSkills,
@@ -43,6 +44,7 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
 
@@ -170,14 +172,21 @@ export function WorkerResultsScreen() {
   // header badge shows it, the sheet's category chip arrives pre-selected,
   // and clearing filters clears it. Allow-list validation — an unknown key
   // seeds nothing rather than silently emptying the list.
-  const [filters, setFilters] = useState<JobFilterModel>(() =>
-    params.category != null && params.category in JOB_CATEGORY_LABELS
-      ? {
-          ...DEFAULT_JOB_FILTERS,
-          categories: new Set<JobCategory>([params.category as JobCategory]),
-        }
-      : DEFAULT_JOB_FILTERS
-  );
+  //
+  // 2026-09-28 (LUX-LIST-64 #64, audit M-25): the model is the worker's ONE
+  // filter memory (hooks/useSessionJobFilters) — the map's choices arrive
+  // here intact and this list's go back with the worker. A Home category pill
+  // is an explicit choice, so it seeds the categories of that memory, once per
+  // arrival, and leaves the rest of it alone.
+  const [filters, setFilters] = useSessionJobFilters();
+  useEffect(() => {
+    // Allow-list validation — an unknown key seeds nothing.
+    if (params.category != null && params.category in JOB_CATEGORY_LABELS) {
+      setFilters((prev) => ({ ...prev, categories: new Set<JobCategory>([params.category as JobCategory]) }));
+    }
+    // Once per arrival with a category, not on every change of the memory.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.category]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Distance sort only means something when rows carry distance_miles.
   const distanceAvailable =
@@ -326,7 +335,7 @@ export function WorkerResultsScreen() {
       : MODE_TITLES[params.mode];
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader
         title={title}
         subtitle={subtitle}
@@ -361,6 +370,19 @@ export function WorkerResultsScreen() {
           value={radius ?? null}
           onChange={selectRadius}
           includeAny={params.mode !== 'nearby'}
+          trailing={
+            // M-39 — the same sheet the header icon opens, reachable mid-screen.
+            <Chip
+              label={filterCount > 0 ? `Filters · ${filterCount}` : 'Filters'}
+              icon="options-outline"
+              variant="filter"
+              selected={filterCount > 0}
+              // #35: a door to the Filters sheet, not a choice — it keeps its glyph.
+              check={false}
+              onPress={() => setFiltersOpen(true)}
+              accessibilityLabel={filterCount > 0 ? `Open filters, ${filterCount} active` : 'Open filters'}
+            />
+          }
         />
       ) : null}
       {radiusUnavailable ? (
@@ -451,6 +473,16 @@ export function WorkerResultsScreen() {
                 <Text style={styles.emptyText}>
                   {emptyBody(params.mode, geoMessage, params.query)}
                 </Text>
+                {/* M-29 — the sentence names the fix; the button opens it. */}
+                {params.mode === 'skills' && skills.size === 0 && !geoMessage ? (
+                  <Pressable
+                    onPress={() => navigateAcrossTabs('Profile', 'ProfileMain', { edit: true })}
+                    accessibilityRole="button"
+                    style={styles.clearFilters}
+                  >
+                    <Text style={styles.clearFiltersText}>Add categories</Text>
+                  </Pressable>
+                ) : null}
               </View>
             )
           }
@@ -468,17 +500,13 @@ export function WorkerResultsScreen() {
         onClose={() => setFiltersOpen(false)}
         value={filters}
         onApply={setFilters}
-        distance={
-          params.mode === 'nearby'
-            ? undefined
-            : { value: radius ?? null, onChange: selectRadius, available: !radiusUnavailable }
-        }
+        // #64 (M-25): the chip row above the list is this screen's ONE radius
+        // control (Custom included), so the sheet carries no Distance row here.
+        distance={undefined}
         distanceAvailable={distanceAvailable}
         skills={skills}
         skillsState={skillsState}
-        countFor={(draft, draftDistance) =>
-          draftDistance === (radius ?? null) ? applyJobFilters(base, draft, sortContext).length : null
-        }
+        countFor={(draft) => applyJobFilters(base, draft, sortContext).length}
       />
     </SafeAreaView>
   );

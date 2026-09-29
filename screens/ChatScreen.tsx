@@ -43,7 +43,10 @@ import { useReactions } from '../hooks/useReactions';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { canRehireWorker, fetchJobById, formatBudget, toOpenJob } from '../lib/jobs';
 import {
+  COUNTER_OFFER_ACTION_LABEL,
+  acceptOfferConfirmText,
   acceptOfferConfirmTitle,
+  declineOfferActionLabel,
   declineOfferConfirmTitle,
 } from '../lib/offerCopy';
 import { offerJobTarget } from '../lib/offerNavigation';
@@ -59,7 +62,14 @@ import {
   visibleMessages,
   type SharedJob,
 } from '../lib/conversations';
-import { fetchMyConversationStates, indexConversationStates } from '../lib/conversationStates';
+import {
+  BLOCK_DURATIONS,
+  blockExpiryFrom,
+  fetchMyConversationStates,
+  indexConversationStates,
+  setBlockUntil,
+  type BlockDuration,
+} from '../lib/conversationStates';
 import type { ConversationState } from '../lib/conversationVisibility';
 import {
   deliveryFor,
@@ -74,19 +84,22 @@ import {
   otherParticipant,
   type DirectThread,
 } from '../lib/directThreads';
-import { LIVE_LOCATION, READ_TICKS, TRANSLATION } from '../lib/featureFlags';
+import { LIVE_LOCATION, READ_TICKS, TIMED_BLOCK, TRANSLATION } from '../lib/featureFlags';
 import { SHARE_DURATIONS } from '../lib/liveLocation';
 import { useLiveLocation } from '../hooks/useLiveLocation';
 import { chatTargetKey, type ChatTarget } from '../lib/messages';
 import { supabase } from '../lib/supabase';
 import { deviceLanguage, translateTexts, type TranslateResult } from '../lib/translate';
 import {
+  blockUser,
   EMPTY_RELATION,
   fetchRelation,
   muteUser,
+  unblockUser,
   unmuteUser,
   type RelationState,
 } from '../lib/moderation';
+import { ReportDialog } from '../components/ReportDialog';
 import { permissionOutcome, trackIntent } from '../lib/observability/analytics';
 import { fetchSavedWorkerIds, saveWorker, unsaveWorker } from '../lib/savedWorkers';
 import { shareDocument, shareProfileLink } from '../lib/sharing';
@@ -117,7 +130,9 @@ import { removeReaction, setReaction } from '../lib/reactions';
 import { uploadChatAudio, uploadChatDocument, uploadChatPhoto } from '../lib/storage';
 import type { ChatRouteParamList } from '../lib/navigation';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette,
+  screenGround,
+} from '../lib/theme';
 import { useFloatingNavClearance } from '../ui/primitives';
 
 /** One entry in the merged timeline: a message, or the job it belongs to. */
@@ -126,7 +141,7 @@ type TimelineItem =
   | { kind: 'message'; key: string; message: Message };
 
 export function ChatScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // Perspective for the header menu comes from ModeContext, never a prop.
   const { mode } = useMode();
@@ -859,6 +874,84 @@ export function ChatScreen() {
   }
 
   /**
+   * 2026-09-26 (the refresh, audit M-10) — BLOCK AND REPORT, FROM THE PERSON.
+   *
+   * They lived only behind a long press or a swipe on the inbox row, so in a
+   * conversation — where a person is most likely to need them — there was no
+   * visible way to reach either. The header menu now carries both, through
+   * the same calls the inbox makes: blockUser / unblockUser / setBlockUntil
+   * and the shared ReportDialog, each confirming exactly as the inbox does.
+   */
+  const [reportOpen, setReportOpen] = useState(false);
+  const [blockChooserOpen, setBlockChooserOpen] = useState(false);
+  const counterpartyName = counterparty?.full_name ?? 'this person';
+
+  async function rereadRelation() {
+    if (user && counterpartyId) setRelation(await fetchRelation(user.id, counterpartyId));
+  }
+
+  async function blockPermanently() {
+    setBlockChooserOpen(false);
+    if (!user || !counterpartyId) return;
+    const ok = await confirmAsync({
+      title: `Block ${counterpartyName}?`,
+      message: "You won't be able to message each other on any job. You can undo this later.",
+      confirmText: 'Block',
+      cancelText: 'Cancel',
+      destructive: true,
+    });
+    if (!ok) return;
+    const { error: blockError } = await blockUser(user.id, counterpartyId);
+    if (blockError) await alertAsync('Could not block', userMessage(blockError));
+    await rereadRelation();
+  }
+
+  async function blockForDuration(duration: BlockDuration) {
+    setBlockChooserOpen(false);
+    if (!counterpartyId) return;
+    const ok = await confirmAsync({
+      title: `Block ${counterpartyName} for ${duration.label}?`,
+      message: "You won't be able to message each other until it lapses. You can unblock sooner.",
+      confirmText: 'Block',
+      cancelText: 'Cancel',
+      destructive: true,
+    });
+    if (!ok) return;
+    const { error: blockError } = await setBlockUntil(
+      counterpartyId,
+      blockExpiryFrom(Date.now(), duration.ms)
+    );
+    if (blockError) await alertAsync('Could not block', userMessage(blockError));
+    await rereadRelation();
+  }
+
+  async function unblock() {
+    if (!user || !counterpartyId) return;
+    const { error: unblockError } = await unblockUser(user.id, counterpartyId);
+    if (unblockError) await alertAsync('Could not unblock', userMessage(unblockError));
+    await rereadRelation();
+  }
+
+  /** Block's one chooser — permanently first, then the timed durations. */
+  const blockChooserItems: ActionSheetItem[] = [
+    {
+      key: 'block-permanent',
+      label: 'Permanently',
+      icon: 'ban-outline',
+      destructive: true,
+      onPress: () => void blockPermanently(),
+    },
+    ...(TIMED_BLOCK
+      ? BLOCK_DURATIONS.map((duration) => ({
+          key: duration.key,
+          label: duration.label,
+          icon: 'time-outline' as const,
+          onPress: () => void blockForDuration(duration),
+        }))
+      : []),
+  ];
+
+  /**
    * TRANSLATE, one message or the whole conversation.
    *
    * The two entries differ only in what they pass: one string, or every
@@ -955,11 +1048,11 @@ export function ChatScreen() {
    * product and inventing one to balance the menus would be inventing a
    * feature.
    *
-   * WHAT IS NOT HERE. Mute is written and flag-gated (lib/featureFlags.ts:
-   * MUTE), so it renders the day its per-conversation row exists and not
-   * before. Report and Block are NOT duplicated here: they live on the
-   * message long-press sheet and the inbox row, and a third entry point for
-   * the same two actions is three places to keep in step.
+   * 2026-09-26 (the refresh, audit M-10): ONE SKELETON IN BOTH MODES — the
+   * person's profile rows first (View profile, Rating / Reviews, and for a
+   * customer Save, Hire again and Share), then Mute, Block… and Report, which
+   * reach the same calls the inbox row makes. They were reachable only by a
+   * hidden gesture on the inbox, never from the conversation itself.
    */
   const muteMenuItem: DropMenuItem = {
     key: 'mute',
@@ -971,6 +1064,12 @@ export function ChatScreen() {
   const headerMenuItems: DropMenuItem[] = [];
   if (counterparty && !isSelfConversation) {
     if (mode === 'customer') {
+      headerMenuItems.push({
+        key: 'view-profile',
+        label: 'View Profile',
+        icon: 'person-outline',
+        onPress: openCounterpartyProfile,
+      });
       if (canRehire) {
         headerMenuItems.push({
           key: 'hire-again',
@@ -1007,13 +1106,13 @@ export function ChatScreen() {
           onPress: () => void toggleSavedWorker(),
         });
       }
-      headerMenuItems.push(muteMenuItem);
       headerMenuItems.push({
         key: 'share-profile',
         label: 'Share Profile',
         icon: 'share-outline',
         onPress: () => void handleShareProfile(),
       });
+      headerMenuItems.push(muteMenuItem);
     } else {
       headerMenuItems.push({
         key: 'view-profile',
@@ -1029,6 +1128,30 @@ export function ChatScreen() {
       });
       headerMenuItems.push(muteMenuItem);
     }
+    // M-10 — the safety pair, last and in red, the same in both modes.
+    headerMenuItems.push(
+      relation.blocking
+        ? {
+            key: 'unblock',
+            label: 'Unblock',
+            icon: 'lock-open-outline',
+            onPress: () => void unblock(),
+          }
+        : {
+            key: 'block',
+            label: 'Block…',
+            icon: 'ban-outline',
+            destructive: true,
+            onPress: () => setBlockChooserOpen(true),
+          },
+      {
+        key: 'report',
+        label: 'Report',
+        icon: 'flag-outline',
+        destructive: true,
+        onPress: () => setReportOpen(true),
+      }
+    );
   }
 
   // Once the jump has happened, only genuinely NEW messages pull the view back
@@ -1557,7 +1680,7 @@ export function ChatScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       {/* THE HEADER LAYER. `zIndex` is load-bearing: the overflow menu
           below drops DOWN out of the header, and the message column is a
           LATER sibling, so without this the dropdown would render beneath
@@ -1628,7 +1751,7 @@ export function ChatScreen() {
                   accessibilityState={{ expanded: openMenu === 'header' }}
                   style={({ pressed }) => [styles.headerDots, pressed && styles.headerDotsPressed]}
                 >
-                  <Ionicons name="ellipsis-horizontal" size={22} color={colors.gold} />
+                  <Ionicons name="ellipsis-horizontal" size={22} color={colors.mark} />
                 </Pressable>
                 <DropMenu
                   visible={openMenu === 'header'}
@@ -1872,7 +1995,7 @@ export function ChatScreen() {
               <Ionicons name="ban-outline" size={18} color={colors.danger} />
               <Text style={styles.blockedText}>
                 {relation.blocking
-                  ? "You've blocked this person. Unblock them from Messages to start talking again."
+                  ? "You've blocked this person. Unblock them from the ⋯ menu above to start talking again."
                   : "You can't reply to this conversation."}
               </Text>
             </View>
@@ -2012,6 +2135,29 @@ export function ChatScreen() {
       />
 
       <ActionSheet
+        visible={blockChooserOpen}
+        title={counterpartyName}
+        subtitle="Block — for how long?"
+        items={blockChooserItems}
+        onClose={() => setBlockChooserOpen(false)}
+      />
+
+      {user && counterpartyId ? (
+        <ReportDialog
+          visible={reportOpen}
+          reporterId={user.id}
+          reportedId={counterpartyId}
+          reportedName={counterpartyName}
+          jobId={activeJob?.id ?? null}
+          onClose={() => setReportOpen(false)}
+          onSubmitted={() => {
+            setReportOpen(false);
+            void rereadRelation();
+          }}
+        />
+      ) : null}
+
+      <ActionSheet
         visible={durationPickerOpen}
         title="Share live location"
         subtitle={`${counterparty?.full_name ?? 'They'} will see where you are until it ends. You can stop it at any time.`}
@@ -2031,14 +2177,14 @@ export function ChatScreen() {
 
       <AmountPrompt
         visible={!!counterTarget}
-        title="Counter offer"
+        title="Counter-offer"
         message={
           counterTarget
             ? `Currently ${formatBudget(counterTarget.amount_cents)}. Propose a different amount.`
             : ''
         }
         initialCents={counterTarget?.amount_cents ?? null}
-        confirmText="Send counter"
+        confirmText={COUNTER_OFFER_ACTION_LABEL}
         onCancel={() => setCounterTarget(null)}
         onSubmit={(cents) => {
           const pending = counterTarget;
@@ -2052,13 +2198,15 @@ export function ChatScreen() {
         title={
           confirmResponse?.action === 'accept'
             ? acceptOfferConfirmTitle(
-                formatBudget(confirmResponse.request.amount_cents)
+                formatBudget(confirmResponse.request.amount_cents),
+                confirmResponse.request.worker_id === user?.id
               )
             : confirmResponse?.action === 'withdraw'
               ? 'Withdraw your offer?'
               : confirmResponse
                 ? declineOfferConfirmTitle(
-                    formatBudget(confirmResponse.request.amount_cents)
+                    formatBudget(confirmResponse.request.amount_cents),
+                    confirmResponse.request.worker_id === user?.id
                   )
                 : ''
         }
@@ -2071,10 +2219,12 @@ export function ChatScreen() {
         }
         confirmText={
           confirmResponse?.action === 'accept'
-            ? 'Accept job'
+            ? acceptOfferConfirmText(confirmResponse.request.worker_id === user?.id)
             : confirmResponse?.action === 'withdraw'
               ? 'Withdraw offer'
-              : 'Decline'
+              : confirmResponse
+                ? declineOfferActionLabel(confirmResponse.request.worker_id === user?.id)
+                : ''
         }
         cancelText="Cancel"
         destructive={

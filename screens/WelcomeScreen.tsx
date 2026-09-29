@@ -307,7 +307,7 @@ export function WelcomeScreen() {
           <Text style={{ color: colors.authAccent }}>{'Work with\nconfidence.'}</Text>
         </Animated.Text>
         <Animated.Text style={[styles.body, step(STAGGER.body)]}>
-          Hire trusted local help or find nearby work from one account.
+          Hire local help or find nearby work.
         </Animated.Text>
       </View>
 
@@ -410,10 +410,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   copy: {
     paddingHorizontal: LAYOUT.inset,
   },
+  // 2026-09-27 (the Lux remake, the operator's Welcome picture): "BRAZOS
+  // MARKETPLACE" is GOLD — every eyebrow is (ruling 4). 2026-09-28 (LUX-LIST-64
+  // #47, the operator's follow-up on the gold sheet): the MARK — the same gold
+  // in dark, the forest green #064C3B in light. The badges, the rings and the
+  // lead's glint keep the auth gold.
   eyebrow: {
     ...authType.heroEyebrow,
     marginTop: LAYOUT.eyebrowGap,
-    color: colors.authAccent,
+    color: colors.mark,
   },
   headline: {
     ...authType.heroDisplay,

@@ -568,7 +568,7 @@ test('[static] LIVE_LOCATION is flipped, and its docblock records the refusal', 
 
   // The guard site guards the ASSEMBLY, the READ_TICKS arrangement.
   const chat = stripComments(await read('screens/ChatScreen.tsx'));
-  assert.match(chat, /import \{ LIVE_LOCATION, READ_TICKS, TRANSLATION \} from '\.\.\/lib\/featureFlags';/);
+  assert.match(chat, /import \{ LIVE_LOCATION, READ_TICKS, TIMED_BLOCK, TRANSLATION \} from '\.\.\/lib\/featureFlags';/);
   assert.match(chat, /LIVE_LOCATION && !isSelfConversation/);
   // The hook does nothing at all when it is not enabled.
   const hook = stripComments(await read(HOOK));

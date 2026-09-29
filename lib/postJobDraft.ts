@@ -56,12 +56,9 @@ export type PostJobDraft = {
   photos: string[];
   videos: string[];
   step: number;
-  /**
-   * Whether this draft's "Jobs with a photo get more bids." nudge was
-   * dismissed (4D-3 §3.4). Lives on the draft — not a global preference — so
-   * dismissal dies with the draft and the next fresh post nudges again.
-   */
-  photoNudgeDismissed: boolean;
+  // 2026-09-28 (LUX-LIST-64 #32): `photoNudgeDismissed` is gone with the photo
+  // nudge it remembered; a stored draft that still carries it simply has the
+  // key ignored on load.
 };
 
 /** The pre-phase49 draft shape stored a single `budget` string. */
@@ -102,8 +99,6 @@ export async function loadPostJobDraft(userId: string): Promise<PostJobDraft | n
       photos: Array.isArray(parsed.photos) ? parsed.photos : [],
       videos: Array.isArray(parsed.videos) ? parsed.videos : [],
       step: typeof parsed.step === 'number' ? parsed.step : 0,
-      // Pre-4D-3 drafts have no flag; an undismissed nudge is the safe read.
-      photoNudgeDismissed: parsed.photoNudgeDismissed === true,
     };
   } catch {
     // A corrupt or unreadable draft is treated as "no draft" rather than a

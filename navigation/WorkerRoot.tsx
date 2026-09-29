@@ -2,7 +2,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useNavBottomPad } from '../hooks/useNavInset';
 import type { WorkerHomeStackParamList, WorkerParamList } from '../lib/navigation';
-import { useThemeColors } from '../lib/theme';
+import { navBarPalette, useThemeColors } from '../lib/theme';
 import { BidSentScreen } from '../screens/BidSentScreen';
 import { ChatScreen } from '../screens/ChatScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
@@ -10,6 +10,8 @@ import { PostJobScreen } from '../screens/PostJobScreen';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
 import { SubmitBidScreen } from '../screens/SubmitBidScreen';
 import { WorkerHomeScreen } from '../screens/WorkerHomeScreen';
+import { NotificationsScreen } from '../screens/NotificationsScreen';
+import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
 import { WorkerResultsScreen } from '../screens/WorkerResultsScreen';
 import {
@@ -55,6 +57,8 @@ function WorkerHomeStackNavigator() {
       screenOptions={{ headerShown: false }}
     >
       <WorkerHomeStack.Screen name="WorkerHome" component={WorkerHomeScreen} />
+      <WorkerHomeStack.Screen name="Notifications" component={NotificationsScreen} />
+      <WorkerHomeStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
       <WorkerHomeStack.Screen name="WorkerResults" component={WorkerResultsScreen} />
       <WorkerHomeStack.Screen name="JobDetail" component={JobDetailScreen} />
       {/* Phase 5 — registered wherever JobDetail is, so the bid entry can
@@ -82,11 +86,11 @@ export function WorkerRoot() {
   // S2 (C6): re-render when a bar-container dial (height, padding, spread)
   // moves, so the plain screenOptions factory reads fresh values.
   useNavBarContainerDials();
-  const { palette } = useThemeColors();
+  const { palette, isDark } = useThemeColors();
 
   return (
     <Tab.Navigator
-      screenOptions={bottomNavScreenOptions(navBottomPad, palette)}
+      screenOptions={bottomNavScreenOptions(navBottomPad, navBarPalette(palette, isDark))}
       screenListeners={bottomNavScreenListeners}
     >
       <Tab.Screen name="Home" component={WorkerHomeStackNavigator} />

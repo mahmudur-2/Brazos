@@ -76,7 +76,7 @@ export function conversationTarget(c: Conversation): ChatTarget {
 }
 
 /** Stable list key for a conversation row, whichever kind it is. */
-export function conversationKey(c: Conversation): string {
+export function conversationKey(c: Pick<Conversation, 'job_id' | 'direct_thread_id'>): string {
   return c.job_id ? `job:${c.job_id}` : `direct:${c.direct_thread_id}`;
 }
 
@@ -257,6 +257,46 @@ export async function fetchSharedJobs(userId: string, otherId: string) {
     );
 
   return { data: (data ?? []) as SharedJob[], error };
+}
+
+/**
+ * 2026-09-28 (LUX-LIST-64 #54) — THE ROWS THE INBOX'S UNREAD COUNT IS COUNTED
+ * FROM: the other person's messages (never unsent ones) in the threads the
+ * inbox has unread, sent after `since` — the earliest read position among
+ * them. One read per kind of thread; RLS already limits `messages` to threads
+ * the caller is a party to. countUnseen() (lib/conversationVisibility.ts) does
+ * the counting, the clear watermark included. Capped: a row says "99+" long
+ * before the cap could matter.
+ */
+const UNSEEN_READ_CAP = 500;
+export async function fetchUnseenStamps(
+  userId: string,
+  threads: { jobIds: string[]; directIds: string[] },
+  since: string
+) {
+  const read = (column: 'job_id' | 'direct_thread_id', ids: string[]) =>
+    supabase
+      .from('messages')
+      .select('job_id, direct_thread_id, created_at')
+      .in(column, ids)
+      .neq('sender_id', userId)
+      .is('unsent_at', null)
+      .gt('created_at', since)
+      .limit(UNSEEN_READ_CAP);
+  const reads = [
+    ...(threads.jobIds.length ? [read('job_id', threads.jobIds)] : []),
+    ...(threads.directIds.length ? [read('direct_thread_id', threads.directIds)] : []),
+  ];
+  const results = await Promise.all(reads);
+  const error = results.find((result) => result.error)?.error ?? null;
+  const rows = results.flatMap(
+    (result) =>
+      (result.data ?? []) as { job_id: string | null; direct_thread_id: string | null; created_at: string }[]
+  );
+  return {
+    data: rows.map((row) => ({ key: conversationKey(row), created_at: row.created_at })),
+    error,
+  };
 }
 
 export type ReadState = { job_id: string; last_read_at: string };

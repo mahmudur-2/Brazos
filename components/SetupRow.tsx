@@ -2,9 +2,9 @@ import type { ComponentProps, ReactNode } from 'react';
 import { useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { authColors, authRadius, authSpacing } from '../lib/authTheme';
+import { authRadius, authSpacing } from '../lib/authTheme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
-import { metricStyles } from '../lib/theme';
+import { themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -50,7 +50,10 @@ export function SetupRow({
   accessibilityLabel,
   accessibilityHint,
 }: SetupRowProps) {
-  const styles = stylesFor();
+  // 2026-09-27 (the Lux remake, ruling 15): the row follows the scheme —
+  // every colour a palette role, so Setup renders in dark too.
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const scale = useRef(new Animated.Value(1)).current;
 
   const animate = (to: number, duration: number) =>
@@ -63,7 +66,7 @@ export function SetupRow({
   const body = (
     <>
       <View style={[styles.iconTile, done && styles.iconTileDone]}>
-        <Ionicons name={icon} size={20} color={done ? authColors.emerald : authColors.forest} />
+        <Ionicons name={icon} size={20} color={done ? colors.emerald : colors.forest} />
       </View>
 
       <View style={styles.text}>
@@ -104,7 +107,7 @@ export function SetupRow({
   );
 }
 
-const stylesFor = metricStyles(() => StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -117,12 +120,12 @@ const stylesFor = metricStyles(() => StyleSheet.create({
     paddingVertical: authSpacing.md,
   },
   rowPressed: {
-    backgroundColor: authColors.mint,
+    backgroundColor: colors.mint,
   },
   divider: {
     borderTopWidth: 1,
     // Barely there: the reference separates the rows without drawing a table.
-    borderTopColor: authColors.line,
+    borderTopColor: colors.border,
   },
   iconTile: {
     width: 44,
@@ -130,10 +133,10 @@ const stylesFor = metricStyles(() => StyleSheet.create({
     borderRadius: authRadius.field,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: authColors.mint,
+    backgroundColor: colors.mint,
   },
   iconTileDone: {
-    backgroundColor: authColors.mint2,
+    backgroundColor: colors.mint2,
   },
   // flex + numberOfLines on the children: a long subtitle truncates rather
   // than pushing the control off the row.
@@ -144,7 +147,7 @@ const stylesFor = metricStyles(() => StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '700',
-    color: authColors.ink,
+    color: colors.ink,
   },
   subtitle: {
     // Under the note scale, which is what lets the longest of these
@@ -153,7 +156,7 @@ const stylesFor = metricStyles(() => StyleSheet.create({
     // the fixed height is for the default case, not a clamp on the text.
     fontSize: 12,
     lineHeight: 16.5,
-    color: authColors.muted,
+    color: colors.textMuted,
   },
   // Fixed width so all three controls line up on one right edge whatever
   // they are — a switch, a check, or a chevron. No wider than the switch

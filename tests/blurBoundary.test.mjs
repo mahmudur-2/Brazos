@@ -79,7 +79,10 @@ test('[static] lib/blur renders the vendor, a colourless CSS blur on web, or not
     /if \(Platform\.OS === 'web'\) \{ const px = Math\.round\(intensity \* WEB_PX_PER_INTENSITY\); if \(px <= 0\) return null; return <View pointerEvents="none" style=\{\[style \?\? StyleSheet\.absoluteFill, webBlurStyle\(px\)\]\} \/>; \}/,
     'web blurs with a colourless CSS view, sized from the intensity',
   );
-  assert.match(flat, /export const canBlur = Platform\.OS === 'web' \|\| BlurView != null;/);
+  // 2026-09-29 (LUX-LIST-2 #9): the web ASKS whether it can draw a backdrop blur (CSS.supports),
+  // never assumes — a renderer without it showed see-through pop-ups with the rows readable through them.
+  assert.match(flat, /export const canBlur = Platform\.OS === 'web' \? webCanBlur\(\) : BlurView != null;/);
+  assert.match(flat, /css\.supports\('backdrop-filter', 'blur\(1px\)'\)/);
   assert.match(flat, /const WEB_PX_PER_INTENSITY = 0\.5;/);
   assert.doesNotMatch(code, /tint[^\n]*backdropFilter|backdropFilter[^\n]*tint/, 'the CSS blur carries no tint');
 });

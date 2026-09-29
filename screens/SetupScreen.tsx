@@ -15,12 +15,13 @@ import { SetupChoiceCard } from '../components/SetupChoiceCard';
 import { SetupRow } from '../components/SetupRow';
 import { useAuth } from '../hooks/useAuth';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { authColors, authRadius, authShadows, authSpacing, authType } from '../lib/authTheme';
+import { authRadius, authShadows, authSpacing, authType } from '../lib/authTheme';
 import type { OnboardingStackNavigation } from '../lib/navigation';
 import { setPendingLanding } from '../lib/setupLanding';
 import { writeSetupRecord } from '../lib/setupStorage';
 import { DEFAULT_LANDING, type LandingPreference } from '../lib/setupState';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
+import { litCardStyle, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 const ENTER_MS = 340;
 const COMPLETE_PULSE_MS = 300;
@@ -56,6 +57,11 @@ type SetupScreenProps = {
  */
 export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
   const navigation = useNavigation<OnboardingStackNavigation>();
+  // 2026-09-27 (the Lux remake, ruling 15): "There is no dark mode" — Setup
+  // follows the scheme like Welcome and Sign in do, in the emerald style, on
+  // today's layout: every colour is a palette role resolved at render.
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
   const { user, logout } = useAuth();
   const reducedMotion = useReducedMotion();
 
@@ -178,17 +184,17 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
   const canFinish = legalComplete && !saving;
 
   return (
-    <AuthScaffold title="Setup" titleVariant="large" backdrop="soft">
+    <AuthScaffold title="Finish Setup" titleVariant="large" backdrop="soft" themed>
       <View style={styles.body}>
         <Animated.View style={stagger(0, 0.42)}>
-          <Text style={styles.eyebrow}>FINAL SETUP</Text>
           <Text style={styles.title} maxFontSizeMultiplier={1.4}>
             Set up your experience
           </Text>
           <Text style={styles.subtitle}>These choices can be changed later.</Text>
         </Animated.View>
 
-        <Animated.View style={[styles.card, stagger(0.14, 0.62)]}>
+        {/* The Terms & Privacy row card, a pop-out in dark (ruling 8). */}
+        <Animated.View style={[styles.card, litCardStyle(isDark), stagger(0.14, 0.62)]}>
           <View>
             <Animated.View
               style={[styles.pulseOverlay, pulseStyle]}
@@ -209,9 +215,9 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
               accessibilityHint="Opens the Terms of Service and Privacy Policy"
               control={
                 legalComplete ? (
-                  <Ionicons name="checkmark-circle" size={26} color={authColors.forest} />
+                  <Ionicons name="checkmark-circle" size={26} color={colors.forest} />
                 ) : (
-                  <Ionicons name="chevron-forward" size={20} color={authColors.placeholder} />
+                  <Ionicons name="chevron-forward" size={20} color={colors.textSubtle} />
                 )
               }
             />
@@ -282,25 +288,21 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   body: {
     flexGrow: 1,
     paddingTop: authSpacing.sm,
     paddingBottom: authSpacing.lg,
   },
-  eyebrow: {
-    ...authType.eyebrow,
-    color: authColors.emerald,
-    marginTop: authSpacing.lg,
-  },
   title: {
     ...authType.title,
-    color: authColors.ink,
-    marginTop: authSpacing.sm,
+    color: colors.ink,
+    marginTop: authSpacing.lg,
   },
   subtitle: {
     ...authType.body,
-    color: authColors.muted,
+    color: colors.textMuted,
     marginTop: authSpacing.sm,
   },
   card: {
@@ -308,15 +310,15 @@ const styles = StyleSheet.create({
     borderRadius: authRadius.card,
     borderWidth: 1,
     // Nearly invisible: the elevation carries the card, not the outline.
-    borderColor: authColors.line,
-    backgroundColor: authColors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
     ...authShadows.card,
   },
   sectionTitle: {
     fontSize: 19,
     fontWeight: '700',
-    color: authColors.ink,
+    color: colors.ink,
     marginTop: authSpacing.xl,
   },
   choices: {
@@ -335,7 +337,7 @@ const styles = StyleSheet.create({
   // first so the row paints over it, and untouchable either way.
   pulseOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: authColors.mint,
+    backgroundColor: colors.mint,
   },
   messageSlot: {
     minHeight: 34,
@@ -343,12 +345,12 @@ const styles = StyleSheet.create({
   },
   helper: {
     ...authType.note,
-    color: authColors.muted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   error: {
     ...authType.note,
-    color: authColors.danger,
+    color: colors.danger,
     textAlign: 'center',
   },
   signOutRow: {
@@ -360,6 +362,7 @@ const styles = StyleSheet.create({
   signOut: {
     fontSize: 14,
     fontWeight: '600',
-    color: authColors.muted,
+    color: colors.textMuted,
   },
-});
+  }),
+);

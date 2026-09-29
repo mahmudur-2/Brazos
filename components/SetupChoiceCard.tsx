@@ -2,9 +2,9 @@ import type { ComponentProps } from 'react';
 import { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { authColors, authRadius, authShadows, authSpacing, authType } from '../lib/authTheme';
+import { authRadius, authShadows, authSpacing, authType } from '../lib/authTheme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
-import { metricStyles } from '../lib/theme';
+import { litCardStyle, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -51,7 +51,10 @@ export function SetupChoiceCard({
   onSelect,
   reducedMotion,
 }: SetupChoiceCardProps) {
-  const styles = stylesFor();
+  // 2026-09-27 (the Lux remake, ruling 15): the tile follows the scheme —
+  // every colour a palette role — and is a pop-out card in dark (ruling 8).
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
   const fade = useRef(new Animated.Value(selected ? 1 : 0)).current;
 
   useEffect(() => {
@@ -78,19 +81,22 @@ export function SetupChoiceCard({
       aria-checked={selected}
       accessibilityLabel={`${title}. ${subtitle}`}
     >
-      <View style={[styles.card, selected && styles.cardSelected]}>
+      <View style={[styles.card, litCardStyle(isDark), selected && styles.cardSelected]}>
         {/* Purely the crossfade. Inset by the border width so it covers the
             base card's outline exactly rather than sitting inside it. */}
         <Animated.View
           style={[styles.fill, { opacity: fade }]}
           pointerEvents="none"
         />
+        {/* 2026-09-28 (LUX-LIST-64 #9): the tile NOT chosen shows its glyph and
+            title in the operator's grey (the `grey` role); the chosen one keeps its white title
+            and mint glyph. */}
         <Ionicons
           name={icon}
           size={26}
-          color={selected ? authColors.forest : authColors.ink}
+          color={selected ? colors.forest : colors.grey}
         />
-        <Text style={styles.title} numberOfLines={1}>
+        <Text style={[styles.title, !selected && { color: colors.grey }]} numberOfLines={1}>
           {title}
         </Text>
         <Text style={styles.subtitle} numberOfLines={1}>
@@ -101,7 +107,7 @@ export function SetupChoiceCard({
   );
 }
 
-const stylesFor = metricStyles(() => StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) => StyleSheet.create({
   pressable: {
     // The pair splits the row evenly at every width.
     flex: 1,
@@ -110,8 +116,8 @@ const stylesFor = metricStyles(() => StyleSheet.create({
     borderRadius: authRadius.card,
     // Always present, so selecting cannot change the card's size.
     borderWidth: 1,
-    borderColor: authColors.line,
-    backgroundColor: authColors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     paddingHorizontal: authSpacing.lg - 2,
     paddingTop: authSpacing.lg,
     paddingBottom: authSpacing.lg,
@@ -121,8 +127,8 @@ const stylesFor = metricStyles(() => StyleSheet.create({
     ...authShadows.card,
   },
   cardSelected: {
-    borderColor: authColors.forest,
-    backgroundColor: authColors.mint,
+    borderColor: colors.forest,
+    backgroundColor: colors.mint,
   },
   fill: {
     position: 'absolute',
@@ -132,18 +138,18 @@ const stylesFor = metricStyles(() => StyleSheet.create({
     bottom: -1,
     borderRadius: authRadius.card,
     borderWidth: 1,
-    borderColor: authColors.forest,
-    backgroundColor: authColors.mint,
+    borderColor: colors.forest,
+    backgroundColor: colors.mint,
   },
   title: {
     ...authType.title,
     fontSize: 19,
     lineHeight: 24,
-    color: authColors.ink,
+    color: colors.ink,
     marginTop: authSpacing.sm,
   },
   subtitle: {
     ...authType.note,
-    color: authColors.muted,
+    color: colors.textMuted,
   },
 }));

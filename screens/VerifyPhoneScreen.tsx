@@ -279,7 +279,7 @@ export function VerifyPhoneScreen() {
 
   return (
     <AuthScaffold
-      title="Verify phone"
+      title="Verify Phone"
       titleVariant="large"
       onBack={() => leaveChallenge(() => navigation.goBack())}
       backdrop="soft"

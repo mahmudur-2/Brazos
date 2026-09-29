@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -18,6 +20,7 @@ import {
   type RouteProp,
 } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { CategoryGlyph } from '../components/CategoryGlyph';
 import * as ImagePicker from 'expo-image-picker';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -27,20 +30,27 @@ import { PhotoViewer } from '../components/PhotoViewer';
 import { ReviewSection } from '../components/ReviewSection';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusBadge } from '../components/StatusBadge';
-import { goBackOrHome } from '../lib/navigationRef';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
+import { PayoutNudge } from '../components/PayoutNudge';
 import { useAuth } from '../hooks/useAuth';
 import { useJob } from '../hooks/useJob';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { Sentry } from '../lib/observability/sentry';
 import {
+  arrivalWindowLabel,
   categoryAccent,
   completionPhotosOf,
   completionVideosOf,
+  fetchJobLocation,
   formatBudget,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
+  markWorkerArrival,
   updateJobStatus,
+  type JobPrivateLocation,
 } from '../lib/jobs';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { paymentsMode } from '../lib/adapters/payments';
@@ -50,13 +60,17 @@ import {
   isHeld,
   isReleased,
   isReleaseRequested,
+  PAYOUT_SETUP_NOTICE,
+  payoutSetupNotice,
   workerTakeCents,
   type Payment,
+  type PayoutsStatus,
 } from '../lib/payments';
+import { fetchMyPayoutsStatus } from '../lib/payments/stripe';
 import { fetchOpenJobDispute } from '../lib/disputes';
-import { JOB_LIFECYCLE_LABELS, deriveJobLifecycle } from '../lib/jobLifecycle';
+import { JOB_LIFECYCLE_LABELS, deriveJobLifecycle, trackStepIndex } from '../lib/jobLifecycle';
 import { MoneyText } from '../ui/primitives/MoneyText';
-import { useScrollClearance } from '../ui/primitives';
+import { PINNED_FOOTER_BOTTOM_PADDING, useScrollClearance } from '../ui/primitives';
 import {
   deleteJobPhoto,
   rejectionForPickedVideo,
@@ -65,14 +79,19 @@ import {
 } from '../lib/storage';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { useDialNumber } from '../lib/designOverrides';
+
+/** The stepper's crossfade into a done stage (2026-09-27, the Lux remake, ruling 14). */
+const STAGE_FILL_MS = 220;
 import {
   fonts,
   radius,
   spacing,
   themedStyles,
+  litCardStyle,
   useThemeColors,
   withAlpha,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 
 /** Same cap as a job posting's photos, for consistency. */
@@ -153,6 +172,23 @@ export function WorkerJobScreen() {
   // checkout/approval on their side shows up when the worker returns here.
   const [payment, setPayment] = useState<Payment | null>(null);
   const [issueOpen, setIssueOpen] = useState(false);
+  // 2026-09-28 (LUX-LIST-64 #63, audit M-14) — the stored payout state, read on
+  // the card path only (no RPC on the sandbox path), so an approved payment
+  // that is waiting on the worker's own setup says so. A failed read is null,
+  // and null says nothing — the card is then today's.
+  const [payouts, setPayouts] = useState<PayoutsStatus | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (paymentsMode !== 'stripe') return;
+      fetchMyPayoutsStatus().then(({ data }) => {
+        if (active) setPayouts(data);
+      });
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
   useFocusEffect(
     useCallback(() => {
       let active = true;
@@ -169,6 +205,24 @@ export function WorkerJobScreen() {
     }, [job?.id, job?.status])
   );
 
+  // M-3 — the exact address (job_locations), so the stage screen can say where
+  // the job is and open directions. RLS grants the hired worker this read and
+  // nobody else; the screen is the worker's own job surface.
+  const [location, setLocation] = useState<JobPrivateLocation | null>(null);
+  const [marking, setMarking] = useState<'en_route' | 'arrived' | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (!job || (job.status !== 'assigned' && job.status !== 'in_progress')) return;
+      fetchJobLocation(job.id).then(({ data, error: locationError }) => {
+        if (active && !locationError) setLocation(data);
+      });
+      return () => {
+        active = false;
+      };
+    }, [job?.id, job?.status])
+  );
+
   async function handleStart() {
     setWorking(true);
     const { error } = await updateJobStatus(params.jobId, 'in_progress');
@@ -178,6 +232,32 @@ export function WorkerJobScreen() {
       return;
     }
     await refresh();
+  }
+
+  /** The two one-way declarations, the same mark_worker_arrival() calls
+   *  Route & arrival makes. Nothing tracks a location. */
+  async function handleMark(step: 'en_route' | 'arrived') {
+    if (marking) return;
+    setMarking(step);
+    const { error: markError } = await markWorkerArrival(params.jobId, step);
+    setMarking(null);
+    if (markError) {
+      await alertAsync('Could not update your status', userMessage(markError));
+      return;
+    }
+    await refresh();
+  }
+
+  /** Directions in Apple Maps to the exact address — the phone's own app, no
+   *  location is read or shared by this screen. */
+  async function openDirections(address: string) {
+    const query = encodeURIComponent(address);
+    const url = Platform.OS === 'ios' ? `maps://?daddr=${query}` : `https://maps.apple.com/?daddr=${query}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      await alertAsync('Could not open Maps', 'Copy the address and paste it into your maps app instead.');
+    }
   }
 
   const photoSlots = MAX_DONE_PHOTOS - donePhotos.length;
@@ -351,8 +431,198 @@ export function WorkerJobScreen() {
     await refresh();
   }
 
+  // M-3 — THE STAGE. Where the worker is on the canonical track (P3-31: the
+  // one derivation, read here and nowhere re-decided): 0 hired, 1 on the way,
+  // 2 arrived, 3 working, 4 done. While the job is live the screen is one
+  // pinned primary that is always the NEXT step — the same one-way calls
+  // Route & arrival and the old cards made — instead of two cards of equal
+  // weight and a status the worker had to find.
+  const lifecycle = job ? deriveJobLifecycle({ job, payment, hasOpenDispute: issueOpen }) : null;
+  const track = lifecycle ? trackStepIndex(lifecycle) : -1;
+  const live = !!job && isWorker && (job.status === 'assigned' || job.status === 'in_progress');
+  // M-27 — hired is not paid. Until the customer's payment is protected the
+  // primary is the conversation, not the trip; starting stays possible behind
+  // a confirm that says what it risks.
+  const awaitingProtection = lifecycle === 'pending_payment';
+  const stageAction: { title: string; onPress: () => void; loading: boolean; disabled?: boolean } | null =
+    !live || !job
+      ? null
+      : awaitingProtection
+        ? { title: `Message ${clientName}`, onPress: () => navigation.navigate('Chat', { jobId: job.id }), loading: false }
+      : job.status === 'in_progress'
+        ? { title: 'Mark complete', onPress: handleComplete, loading: working, disabled: uploadingMedia }
+        : !job.en_route_at && !job.arrived_at
+          ? { title: 'I’m on my way', onPress: () => void handleMark('en_route'), loading: marking === 'en_route', disabled: marking !== null || working }
+          : !job.arrived_at
+            ? { title: 'I’ve arrived', onPress: () => void handleMark('arrived'), loading: marking === 'arrived', disabled: marking !== null || working }
+            : { title: 'Start job', onPress: handleStart, loading: working, disabled: marking !== null };
+  // Declaring the trip is optional, never a gate: before arriving, "Start job"
+  // stays one tap away under the primary.
+  const canSkipToStart = live && job?.status === 'assigned' && (awaitingProtection || !job?.arrived_at);
+
+  async function startAnyway() {
+    const ok = await confirmAsync({
+      title: 'Start before the payment is protected?',
+      message: `${clientName} hasn’t put the payment in protection yet. You can start, but nothing is held for this job until they do.`,
+      confirmText: 'Start anyway',
+      cancelText: 'Wait',
+    });
+    if (ok) await handleStart();
+  }
+  const addressLine = location?.address_line ?? null;
+  const windowLabel = job ? arrivalWindowLabel(job) : null;
+  const STAGES = ['On my way', 'Arrived', 'Started', 'Finished'];
+  // 2026-09-27 (the Lux remake, ruling 14): the stepper's dots and connectors
+  // fill with a short native-driver crossfade as the job moves on — one
+  // opacity per stage, the done fill drawn over the idle ring; reduced motion
+  // jumps to the end state.
+  const reducedMotion = useReducedMotion();
+  const stageFills = useRef(
+    STAGES.map((_, index) => new Animated.Value(track >= index + 1 ? 1 : 0)),
+  ).current;
+  useEffect(() => {
+    stageFills.forEach((fill, index) => {
+      const toValue = track >= index + 1 ? 1 : 0;
+      if (reducedMotion !== false) {
+        fill.setValue(toValue);
+        return;
+      }
+      Animated.timing(fill, {
+        toValue,
+        duration: STAGE_FILL_MS,
+        useNativeDriver: USE_NATIVE_DRIVER,
+      }).start();
+    });
+  }, [stageFills, track, reducedMotion]);
+
+  // #63 — the ONE rule (payoutSetupNotice): the card path, a read status that
+  // is not enabled, this held stripe row approved. Null everywhere else.
+  const waitingOnSetup = payment ? payoutSetupNotice(payouts, [payment]) !== null : false;
+
+  const paymentCard =
+    isWorker && payment && job ? (
+      <Card style={styles.paymentCard}>
+        {/* Masters 6 and 7 set a large outlined shield-check here. */}
+        <View style={styles.paymentShield} pointerEvents="none">
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={54}
+            color={isDark ? colors.gold : colors.emerald}
+          />
+        </View>
+        {/* D16: sandbox keeps its wording verbatim; the card path says
+            the same money fact without the label. D23: a held row the
+            customer approved (release_requested_at set) is approved —
+            the payout is on its way; MoneyText keeps the row's real
+            status, and nothing here says released before it is. */}
+        <Text style={[styles.paymentEyebrow, isDark && styles.paymentEyebrowDark, isHeld(payment) && !isReleaseRequested(payment) && !isReleased(payment) && styles.eyebrowGold]}>
+          {paymentsMode === 'sandbox'
+            ? isReleased(payment)
+              ? 'PAYMENT RELEASED · SANDBOX'
+              : isHeld(payment)
+                ? 'PAYMENT PROTECTED · SANDBOX'
+                : 'PAYMENT · SANDBOX'
+            : isReleased(payment)
+              ? 'PAYMENT RELEASED'
+              : isReleaseRequested(payment)
+                ? waitingOnSetup
+                  ? 'APPROVED · SET UP PAYOUTS TO RECEIVE IT'
+                  : 'APPROVED · PAYOUT ON ITS WAY'
+                : isHeld(payment)
+                  ? 'PAYMENT PROTECTED'
+                  : 'PAYMENT'}
+        </Text>
+        {/* R6c (D7): the figure a worker reads as "yours" is the take —
+            amount_cents − platform_fee_cents through the one helper.
+            Sandbox rows carry a zero fee, so nothing changes there. */}
+        <MoneyText cents={workerTakeCents(payment)} state={payment.status} />
+        <Text style={styles.paymentNote}>
+          {(() => {
+            // A7: the disputed/awaiting fork comes from THE derivation
+            // point; the money predicates stay payment vocabulary.
+            const lifecycle = deriveJobLifecycle({ job, payment, hasOpenDispute: issueOpen });
+            const sandbox = paymentsMode === 'sandbox';
+            if (isReleased(payment)) {
+              return payment.release_reason === 'auto_approved'
+                ? sandbox
+                  ? 'Released automatically after 72 hours with no response from the customer. Sandbox build — no real money.'
+                  : 'Released automatically after 72 hours with no response from the customer.'
+                : sandbox
+                  ? `${clientName} approved the finished work and the funds were released. Sandbox build — no real money.`
+                  : `${clientName} approved the finished work and the payment was released.`;
+            }
+            if (lifecycle === 'disputed') {
+              return `${clientName} reported an issue, which holds the funds while it’s open. Sort it out together in chat — release resumes when the report is withdrawn or resolved.`;
+            }
+            if (isReleaseRequested(payment) && waitingOnSetup) {
+              return payment.release_reason === 'auto_approved'
+                ? `Approved automatically after 72 hours with no response from ${clientName}. ${PAYOUT_SETUP_NOTICE}`
+                : `${clientName} approved the finished work. ${PAYOUT_SETUP_NOTICE}`;
+            }
+            if (isReleaseRequested(payment)) {
+              return payment.release_reason === 'auto_approved'
+                ? `Approved automatically after 72 hours with no response from ${clientName}. Your payout is on its way and shows as released when the transfer lands.`
+                : `${clientName} approved the finished work. Your payout is on its way and shows as released when the transfer lands.`;
+            }
+            if (lifecycle === 'awaiting_approval') {
+              return sandbox
+                ? `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically. Sandbox build — no real money.`
+                : `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically.`;
+            }
+            if (isHeld(payment)) {
+              return sandbox
+                ? `${clientName} placed the funds in protection. They’re released only after the finished work is approved — sandbox build, no real money.`
+                : `${clientName} placed the funds in protection. They’re released only after the finished work is approved.`;
+            }
+            return sandbox
+              ? 'Sandbox build — payment states here are development records, not real money.'
+              : 'The payment isn’t in protection yet — the states here follow the ledger.';
+          })()}
+        </Text>
+        {/* #63 (M-14) — one tap to Payouts, where the setup is (it was three). */}
+        {waitingOnSetup ? (
+          <View style={styles.payoutNudge}>
+            <PayoutNudge
+              cents={workerTakeCents(payment)}
+              onPress={() => navigateAcrossTabs('Profile', 'Payouts', {})}
+            />
+          </View>
+        ) : null}
+        {/* R6c (D7): the three-line breakdown, off the row's own
+            columns, once the customer's charge has actually landed
+            (held or later) — never on an unfunded row. Card path
+            only: the sandbox ledger carries no charge figure. */}
+        {paymentsMode === 'stripe' &&
+        payment.charge_amount_cents != null &&
+        (payment.status === 'held' ||
+          payment.status === 'released' ||
+          payment.status === 'paid_out') ? (
+          <View style={styles.breakdown}>
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>Customer paid</Text>
+              <Text style={styles.breakdownValue}>
+                {formatBudget(payment.charge_amount_cents)}
+              </Text>
+            </View>
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>Brazos Protection</Text>
+              <Text style={styles.breakdownValue}>{formatBudget(brazosFeeCents(payment))}</Text>
+            </View>
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownStrongLabel}>You receive</Text>
+              <Text style={styles.breakdownStrongValue}>
+                {formatBudget(workerTakeCents(payment))}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+      </Card>
+    ) : null;
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    // M-3 — the tab bar owns the bottom inset (tests/layout.test.mjs), so the
+    // pinned bar sits flush on it rather than above a blank band.
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader title="Your Job" onBack={goBackOrHome} />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -374,7 +644,8 @@ export function WorkerJobScreen() {
           ref={scrollRef}
           contentContainerStyle={[
             styles.content,
-            { padding: contentPadding, gap: contentGap, paddingBottom: navClearance },
+            { padding: contentPadding, gap: contentGap },
+            stageAction ? { paddingBottom: contentGap } : { paddingBottom: navClearance },
           ]}
           keyboardShouldPersistTaps="handled"
           // Swiping the list down puts the keyboard away, so it never has to
@@ -390,15 +661,18 @@ export function WorkerJobScreen() {
                 style={[
                   styles.iconCircle,
                   { width: iconCircleSize, height: iconCircleSize },
+                  // LUX-LIST-2 #6: the lit tile in dark; light keeps the category colour.
                   isDark
-                    ? styles.iconCircleDark
+                    ? [styles.iconCircleDark, litCardStyle(true, 'tile')]
                     : { backgroundColor: categoryAccent(job.category).bg },
                 ]}
               >
-                <Ionicons
+                <CategoryGlyph
                   name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                   size={22}
                   color={isDark ? colors.gold : categoryAccent(job.category).icon}
+                  filled
+                  bare
                 />
               </View>
               <View style={styles.jobHeaderText}>
@@ -420,321 +694,330 @@ export function WorkerJobScreen() {
             </View>
           </Card>
 
-          <Card>
-            <JobProgress status={job.status} />
-          </Card>
-
-          {isWorker && payment ? (
-            <Card style={styles.paymentCard}>
-              {/* Masters 6 and 7 set a large outlined shield-check here. */}
-              <View style={styles.paymentShield} pointerEvents="none">
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={54}
-                  color={isDark ? colors.gold : colors.emerald}
-                />
-              </View>
-              {/* D16: sandbox keeps its wording verbatim; the card path says
-                  the same money fact without the label. D23: a held row the
-                  customer approved (release_requested_at set) is approved —
-                  the payout is on its way; MoneyText keeps the row's real
-                  status, and nothing here says released before it is. */}
-              <Text style={[styles.paymentEyebrow, isDark && styles.paymentEyebrowDark]}>
-                {paymentsMode === 'sandbox'
-                  ? isReleased(payment)
-                    ? 'PAYMENT RELEASED · SANDBOX'
-                    : isHeld(payment)
-                      ? 'PAYMENT PROTECTED · SANDBOX'
-                      : 'PAYMENT · SANDBOX'
-                  : isReleased(payment)
-                    ? 'PAYMENT RELEASED'
-                    : isReleaseRequested(payment)
-                      ? 'APPROVED · PAYOUT ON ITS WAY'
-                      : isHeld(payment)
-                        ? 'PAYMENT PROTECTED'
-                        : 'PAYMENT'}
-              </Text>
-              {/* R6c (D7): the figure a worker reads as "yours" is the take —
-                  amount_cents − platform_fee_cents through the one helper.
-                  Sandbox rows carry a zero fee, so nothing changes there. */}
-              <MoneyText cents={workerTakeCents(payment)} state={payment.status} />
-              <Text style={styles.paymentNote}>
-                {(() => {
-                  // A7: the disputed/awaiting fork comes from THE derivation
-                  // point; the money predicates stay payment vocabulary.
-                  const lifecycle = deriveJobLifecycle({ job, payment, hasOpenDispute: issueOpen });
-                  const sandbox = paymentsMode === 'sandbox';
-                  if (isReleased(payment)) {
-                    return payment.release_reason === 'auto_approved'
-                      ? sandbox
-                        ? 'Released automatically after 72 hours with no response from the customer. Sandbox build — no real money.'
-                        : 'Released automatically after 72 hours with no response from the customer.'
-                      : sandbox
-                        ? `${clientName} approved the finished work and the funds were released. Sandbox build — no real money.`
-                        : `${clientName} approved the finished work and the payment was released.`;
-                  }
-                  if (lifecycle === 'disputed') {
-                    return `${clientName} reported an issue, which holds the funds while it’s open. Sort it out together in chat — release resumes when the report is withdrawn or resolved.`;
-                  }
-                  if (isReleaseRequested(payment)) {
-                    return payment.release_reason === 'auto_approved'
-                      ? `Approved automatically after 72 hours with no response from ${clientName}. Your payout is on its way and shows as released when the transfer lands.`
-                      : `${clientName} approved the finished work. Your payout is on its way and shows as released when the transfer lands.`;
-                  }
-                  if (lifecycle === 'awaiting_approval') {
-                    return sandbox
-                      ? `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically. Sandbox build — no real money.`
-                      : `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically.`;
-                  }
-                  if (isHeld(payment)) {
-                    return sandbox
-                      ? `${clientName} placed the funds in protection. They’re released only after the finished work is approved — sandbox build, no real money.`
-                      : `${clientName} placed the funds in protection. They’re released only after the finished work is approved.`;
-                  }
-                  return sandbox
-                    ? 'Sandbox build — payment states here are development records, not real money.'
-                    : 'The payment isn’t in protection yet — the states here follow the ledger.';
-                })()}
-              </Text>
-              {/* R6c (D7): the three-line breakdown, off the row's own
-                  columns, once the customer's charge has actually landed
-                  (held or later) — never on an unfunded row. Card path
-                  only: the sandbox ledger carries no charge figure. */}
-              {paymentsMode === 'stripe' &&
-              payment.charge_amount_cents != null &&
-              (payment.status === 'held' ||
-                payment.status === 'released' ||
-                payment.status === 'paid_out') ? (
-                <View style={styles.breakdown}>
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLabel}>Customer paid</Text>
-                    <Text style={styles.breakdownValue}>
-                      {formatBudget(payment.charge_amount_cents)}
-                    </Text>
-                  </View>
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLabel}>Brazos Protection</Text>
-                    <Text style={styles.breakdownValue}>{formatBudget(brazosFeeCents(payment))}</Text>
-                  </View>
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownStrongLabel}>You receive</Text>
-                    <Text style={styles.breakdownStrongValue}>
-                      {formatBudget(workerTakeCents(payment))}
-                    </Text>
-                  </View>
-                </View>
-              ) : null}
-            </Card>
-          ) : null}
-
-          {isWorker && (
-            <Button
-              title={`Message ${clientName}`}
-              icon="chatbubble-outline"
-              iconPosition="leading"
-              variant="secondary"
-              onPress={() => navigation.navigate('Chat', { jobId: job.id })}
-            />
-          )}
-
-          {!isWorker ? (
-            <Card style={styles.noticeCard}>
-              <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />
-              <Text style={styles.noticeText}>
-                You’re not the assigned worker for this job.
-              </Text>
-            </Card>
-          ) : job.status === 'assigned' ? (
+          {live ? (
             <>
-              <Card>
-                <Text style={styles.actionTitle}>
-                  {JOB_LIFECYCLE_LABELS[deriveJobLifecycle({ job, payment })]}
-                </Text>
-                <Text style={styles.actionText}>
-                  Let {clientName} know you’re on the way and when you arrive —
-                  two simple status taps, no location tracking.
-                </Text>
-                <Button
-                  title="Route & arrival"
-                  variant="secondary"
-                  onPress={() => navigation.navigate('RouteArrival', { jobId: job.id })}
-                  style={styles.action}
-                />
-                <Button
-                  title="Work checklist"
-                  variant="secondary"
-                  onPress={() => navigation.navigate('WorkChecklist', { jobId: job.id })}
-                  style={styles.action}
-                />
-              </Card>
-              <Card>
-                <Text style={styles.actionTitle}>Ready to start?</Text>
-                <Text style={styles.actionText}>
-                  Mark the job in progress when you begin the work.
-                </Text>
-                <Button
-                  title="Start job"
-                  onPress={handleStart}
-                  loading={working}
-                  style={styles.action}
-                />
-              </Card>
-            </>
-          ) : job.status === 'in_progress' ? (
-            <>
-            <Button
-              title="Work checklist"
-              variant="secondary"
-              onPress={() => navigation.navigate('WorkChecklist', { jobId: job.id })}
-            />
-            <Card>
-              <Text style={styles.actionTitle}>Finish up</Text>
-              <Text style={styles.actionText}>
-                Add at least one photo of the finished work — up to {MAX_DONE_PHOTOS},
-                plus one short video if you like — then mark it complete.
-              </Text>
-
-              {doneVideo && (
-                <View style={styles.videoWrap}>
-                  <JobVideo uri={doneVideo.url} label="Finished work" />
+              {/* M-3 — GETTING THERE, above the fold: where, when, and the
+                  person, before anything else. The address opens directions;
+                  the timeline behind the two declarations stays one tap away
+                  on Route & arrival. */}
+              <Card style={styles.thereCard}>
+                <View style={styles.thereHead}>
+                  <Text style={[styles.stageEyebrow, isDark && styles.stageEyebrowDark]}>GETTING THERE</Text>
+                  {/* The client, one compact tap away beside the facts. */}
                   <Pressable
-                    style={styles.photoRemove}
-                    onPress={removeDoneVideo}
-                    hitSlop={6}
+                    onPress={() => navigation.navigate('Chat', { jobId: job.id })}
+                    hitSlop={8}
+                    style={({ pressed }) => [styles.messagePill, pressed && styles.pressed]}
                     accessibilityRole="button"
-                    accessibilityLabel="Remove video"
+                    accessibilityLabel={`Message ${clientName}`}
                   >
-                    <Ionicons name="close" size={16} color={colors.onPrimary} />
+                    <Ionicons name="chatbubble-outline" size={15} color={colors.emerald} />
+                    <Text style={styles.messagePillText}>Message</Text>
                   </Pressable>
-                  <Text style={styles.mediaCount}>
-                    Video attached
-                    {doneVideo.durationMs != null
-                      ? ` · ${formatDuration(doneVideo.durationMs)}`
-                      : ''}
-                  </Text>
                 </View>
-              )}
+                {addressLine || job.location ? (
+                  <Pressable
+                    onPress={addressLine ? () => void openDirections(addressLine) : undefined}
+                    disabled={!addressLine}
+                    style={({ pressed }) => [styles.thereRow, pressed && styles.pressed]}
+                    accessibilityRole={addressLine ? 'button' : undefined}
+                    accessibilityLabel={addressLine ? `Directions to ${addressLine}` : undefined}
+                  >
+                    <Ionicons name="location-outline" size={20} color={colors.emerald} />
+                    <View style={styles.thereCopy}>
+                      <Text style={styles.thereText} selectable>
+                        {addressLine ?? job.location}
+                      </Text>
+                      <Text style={styles.thereCaption}>
+                        {addressLine
+                          ? 'Shared: you were hired.'
+                          : 'The customer hasn’t added an exact address — ask in chat.'}
+                      </Text>
+                    </View>
+                    {addressLine ? (
+                      <View style={styles.directions}>
+                        <Ionicons name="navigate-outline" size={16} color={colors.emerald} />
+                        <Text style={styles.directionsText}>Directions</Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                ) : null}
+                {windowLabel ? (
+                  <View style={styles.thereRow}>
+                    <Ionicons name="time-outline" size={20} color={colors.emerald} />
+                    <View style={styles.thereCopy}>
+                      <Text style={styles.thereText}>{windowLabel}</Text>
+                      <Text style={styles.thereCaption}>The arrival window the customer asked for.</Text>
+                    </View>
+                  </View>
+                ) : null}
+              </Card>
 
-              {donePhotos.length > 0 && (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.donePhotoRow}
-                  style={styles.donePhotoScroll}
+              {/* M-3 — ONE STAGE BLOCK. The two cards ("Route & arrival /
+                  Work checklist" and "Ready to start?") are one stepper whose
+                  next step is the pinned button below. */}
+              <Card style={styles.stageCard}>
+                <Pressable
+                  onPress={() => navigation.navigate('RouteArrival', { jobId: job.id })}
+                  style={({ pressed }) => [styles.stageHead, pressed && styles.pressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Arrival details"
                 >
-                  {donePhotos.map((url) => (
-                    <View key={url} style={styles.photoWrap}>
-                      <Pressable onPress={() => setViewerUri(url)}>
-                        <RemoteImage uri={url} style={[styles.photo, { height: photoHeight }]} />
-                      </Pressable>
+                  <View style={styles.thereCopy}>
+                    <Text style={[styles.stageEyebrow, isDark && styles.stageEyebrowDark, styles.eyebrowGold]}>YOUR PROGRESS</Text>
+                    <Text style={styles.stageTitle}>{lifecycle ? JOB_LIFECYCLE_LABELS[lifecycle] : ''}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </Pressable>
+                <View style={styles.stepper}>
+                  {STAGES.map((label, index) => {
+                    const done = track >= index + 1;
+                    const current = track === index;
+                    return (
+                      <View key={label} style={styles.stepperItem}>
+                        <View style={styles.stepperTrack}>
+                          {/* 2026-09-27 (the Lux remake, ruling 14): the done fill of each
+                              connector and dot crossfades in on the native driver
+                              (`stageFills`) rather than snapping. */}
+                          <View style={[styles.stepperLine, index === 0 && styles.stepperLineHidden]}>
+                            <Animated.View style={[styles.stepperLineFill, { opacity: stageFills[index] }]} />
+                          </View>
+                          <View style={[styles.stepperDot, done && styles.stepperDotDone, current && styles.stepperDotCurrent]}>
+                            <Animated.View style={[styles.stepperDotFill, { opacity: stageFills[index] }]} />
+                            {done ? <Ionicons name="checkmark" size={12} color={colors.onPrimary} /> : null}
+                          </View>
+                          <View style={[styles.stepperLine, index === STAGES.length - 1 && styles.stepperLineHidden]}>
+                            <Animated.View
+                              style={[styles.stepperLineFill, { opacity: stageFills[Math.min(index + 1, STAGES.length - 1)] }]}
+                            />
+                          </View>
+                        </View>
+                        <Text style={[styles.stepperLabel, (done || current) && styles.stepperLabelOn]} numberOfLines={1}>
+                          {label}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+                <Text style={styles.stageNote}>
+                  {awaitingProtection
+                    ? `Waiting on ${clientName} to protect the payment. Until it’s held, sort out the details in chat.`
+                    : `Each tap tells ${clientName} where things stand — nothing tracks your location.`}
+                </Text>
+              </Card>
+
+              {/* M-3 — the checklist is one fixed row that never moves,
+                  whatever the stage. */}
+              <Pressable
+                onPress={() => navigation.navigate('WorkChecklist', { jobId: job.id })}
+                style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Work checklist"
+              >
+                <Ionicons name="list-outline" size={20} color={colors.emerald} />
+                <Text style={styles.linkRowText}>Work checklist</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
+
+              {job.status === 'in_progress' ? (
+                <Card>
+                  <Text style={styles.actionTitle}>Finish up</Text>
+                  <Text style={styles.actionText}>
+                    Add at least one photo of the finished work — up to {MAX_DONE_PHOTOS},
+                    plus one short video if you like — then mark it complete.
+                  </Text>
+
+                  {doneVideo && (
+                    <View style={styles.videoWrap}>
+                      <JobVideo uri={doneVideo.url} label="Finished work" />
                       <Pressable
                         style={styles.photoRemove}
-                        onPress={() => removeDonePhoto(url)}
+                        onPress={removeDoneVideo}
                         hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel="Remove video"
                       >
                         <Ionicons name="close" size={16} color={colors.onPrimary} />
                       </Pressable>
+                      <Text style={styles.mediaCount}>
+                        Video attached
+                        {doneVideo.durationMs != null
+                          ? ` · ${formatDuration(doneVideo.durationMs)}`
+                          : ''}
+                      </Text>
                     </View>
-                  ))}
-                </ScrollView>
-              )}
-
-              {canAddMedia && (
-                <Pressable
-                  style={styles.photoPicker}
-                  onPress={pickCompletionMedia}
-                  disabled={uploadingMedia}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add photos or video of the finished work"
-                >
-                  {uploadingMedia ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  ) : (
-                    <Ionicons name="camera-outline" size={22} color={colors.primary} />
                   )}
-                  <Text style={styles.photoPickerText}>
-                    {uploadingMedia ? 'Uploading…' : 'Add photos or video'}
-                  </Text>
-                </Pressable>
-              )}
 
-              {(donePhotos.length > 0 || doneVideo) && (
-                <Text style={styles.mediaCount}>
-                  {donePhotos.length}/{MAX_DONE_PHOTOS} photos
-                  {doneVideo ? ' · 1 video' : ''}
-                </Text>
-              )}
-              {donePhotos.length === 0 && (
-                <Text style={styles.mediaCount}>
-                  A photo of the finished work is required to mark it complete.
-                </Text>
-              )}
-
-              <Button
-                title="Mark complete"
-                onPress={handleComplete}
-                loading={working}
-                disabled={uploadingMedia}
-                style={styles.action}
-              />
-            </Card>
-            </>
-          ) : job.status === 'completed' ? (
-            <>
-              {completionPhotosOf(job).length > 0 || completionVideosOf(job).length > 0 ? (
-                <Card>
-                  <Text style={styles.actionTitle}>Finished work</Text>
-                  {completionPhotosOf(job).length > 0 && (
+                  {donePhotos.length > 0 && (
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={styles.donePhotoRow}
                       style={styles.donePhotoScroll}
                     >
-                      {completionPhotosOf(job).map((url) => (
-                        <Pressable key={url} onPress={() => setViewerUri(url)}>
-                          <RemoteImage uri={url} style={[styles.donePhoto, { height: photoHeight }]} />
-                        </Pressable>
+                      {donePhotos.map((url) => (
+                        <View key={url} style={styles.photoWrap}>
+                          <Pressable onPress={() => setViewerUri(url)}>
+                            <RemoteImage uri={url} style={[styles.photo, { height: photoHeight }]} />
+                          </Pressable>
+                          <Pressable
+                            style={styles.photoRemove}
+                            onPress={() => removeDonePhoto(url)}
+                            hitSlop={6}
+                          >
+                            <Ionicons name="close" size={16} color={colors.onPrimary} />
+                          </Pressable>
+                        </View>
                       ))}
                     </ScrollView>
                   )}
-                  {completionVideosOf(job).length > 0 && (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.donePhotoRow}
-                      style={styles.donePhotoScroll}
+
+                  {canAddMedia && (
+                    <Pressable
+                      style={styles.photoPicker}
+                      onPress={pickCompletionMedia}
+                      disabled={uploadingMedia}
+                      accessibilityRole="button"
+                      accessibilityLabel="Add photos or video of the finished work"
                     >
-                      {completionVideosOf(job).map((url) => (
-                        <JobVideo key={url} uri={url} label="Finished work" />
-                      ))}
-                    </ScrollView>
+                      {uploadingMedia ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : (
+                        <Ionicons name="camera-outline" size={22} color={colors.primary} />
+                      )}
+                      <Text style={styles.photoPickerText}>
+                        {uploadingMedia ? 'Uploading…' : 'Add photos or video'}
+                      </Text>
+                    </Pressable>
+                  )}
+
+                  {(donePhotos.length > 0 || doneVideo) && (
+                    <Text style={styles.mediaCount}>
+                      {donePhotos.length}/{MAX_DONE_PHOTOS} photos
+                      {doneVideo ? ' · 1 video' : ''}
+                    </Text>
+                  )}
+                  {donePhotos.length === 0 && (
+                    <Text style={styles.mediaCount}>
+                      A photo of the finished work is required to mark it complete.
+                    </Text>
                   )}
                 </Card>
               ) : null}
 
-              {user && (
-                <ReviewSection
-                  key={`${job.id}:${user.id}`}
-                  jobId={job.id}
-                  reviewerId={user.id}
-                  revieweeId={job.client_id}
-                  revieweeName={clientName}
-                  revieweeRole="customer"
-                  prompt={`How was working with ${clientName}?`}
-                  scrollRef={scrollRef}
-                />
-              )}
+              {/* The payment drops below the stage while the job is live. */}
+              {paymentCard}
             </>
           ) : (
-            <Card style={styles.noticeCard}>
-              <Ionicons name="information-circle-outline" size={20} color={colors.textMuted} />
-              <Text style={styles.noticeText}>
-                This job is {job.status.replace(/_/g, ' ')}.
-              </Text>
-            </Card>
+            <>
+              <Card>
+                <JobProgress status={job.status} />
+              </Card>
+
+              {paymentCard}
+
+              {isWorker && (
+                <Button
+                  title={`Message ${clientName}`}
+                  icon="chatbubble-outline"
+                  iconPosition="leading"
+                  variant="secondary"
+                  onPress={() => navigation.navigate('Chat', { jobId: job.id })}
+                />
+              )}
+
+              {!isWorker ? (
+                <Card style={styles.noticeCard}>
+                  <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />
+                  <Text style={styles.noticeText}>
+                    You’re not the assigned worker for this job.
+                  </Text>
+                </Card>
+              ) : job.status === 'completed' ? (
+                <>
+                  {completionPhotosOf(job).length > 0 || completionVideosOf(job).length > 0 ? (
+                    <Card>
+                      <Text style={styles.actionTitle}>Finished work</Text>
+                      {completionPhotosOf(job).length > 0 && (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.donePhotoRow}
+                          style={styles.donePhotoScroll}
+                        >
+                          {completionPhotosOf(job).map((url) => (
+                            <Pressable key={url} onPress={() => setViewerUri(url)}>
+                              <RemoteImage uri={url} style={[styles.donePhoto, { height: photoHeight }]} />
+                            </Pressable>
+                          ))}
+                        </ScrollView>
+                      )}
+                      {completionVideosOf(job).length > 0 && (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.donePhotoRow}
+                          style={styles.donePhotoScroll}
+                        >
+                          {completionVideosOf(job).map((url) => (
+                            <JobVideo key={url} uri={url} label="Finished work" />
+                          ))}
+                        </ScrollView>
+                      )}
+                    </Card>
+                  ) : null}
+
+                  {user && (
+                    <ReviewSection
+                      key={`${job.id}:${user.id}`}
+                      jobId={job.id}
+                      reviewerId={user.id}
+                      revieweeId={job.client_id}
+                      revieweeName={clientName}
+                      revieweeRole="customer"
+                      prompt={`How was working with ${clientName}?`}
+                      scrollRef={scrollRef}
+                    />
+                  )}
+                </>
+              ) : (
+                <Card style={styles.noticeCard}>
+                  <Ionicons name="information-circle-outline" size={20} color={colors.textMuted} />
+                  <Text style={styles.noticeText}>
+                    This job is {job.status.replace(/_/g, ' ')}.
+                  </Text>
+                </Card>
+              )}
+            </>
           )}
         </ScrollView>
+
+        {/* M-3 — THE ONE PINNED PRIMARY: always the next step, never two
+            buttons of equal weight. */}
+        {stageAction ? (
+          <View style={[styles.actionBar, { paddingBottom: PINNED_FOOTER_BOTTOM_PADDING }]}>
+            <Button
+              title={stageAction.title}
+              onPress={stageAction.onPress}
+              loading={stageAction.loading}
+              disabled={stageAction.disabled}
+            />
+            {canSkipToStart ? (
+              <Pressable
+                onPress={awaitingProtection ? () => void startAnyway() : handleStart}
+                disabled={working || marking !== null}
+                hitSlop={8}
+                style={({ pressed }) => [styles.skipLink, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={awaitingProtection ? 'Start anyway' : 'Start job now'}
+              >
+                <Text style={styles.skipLinkText}>
+                  {awaitingProtection ? 'Start anyway' : 'Already there? Start the job'}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
         </KeyboardAvoidingView>
       )}
 
@@ -749,6 +1032,186 @@ export function WorkerJobScreen() {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // M-3 — the stage screen: getting there, your progress, the checklist row,
+  // and the one pinned primary.
+  thereCard: {
+    gap: spacing.md,
+  },
+  thereHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  messagePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minHeight: 32,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  messagePillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.emerald,
+  },
+  thereRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  thereCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  thereText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  thereCaption: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textMuted,
+  },
+  directions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minHeight: 36,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  directionsText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.emerald,
+  },
+  stageEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    color: colors.eyebrow,
+  },
+  stageEyebrowDark: { color: colors.eyebrow },
+  eyebrowGold: { color: colors.eyebrowGold }, // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
+  stageCard: {
+    gap: spacing.md,
+  },
+  stageHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  stageTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  stepper: {
+    flexDirection: 'row',
+  },
+  stepperItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  stepperTrack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+  },
+  stepperLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: colors.border,
+  },
+  stepperLineHidden: {
+    backgroundColor: 'transparent',
+  },
+  // The done fill of a connector, crossfaded over the idle line.
+  stepperLineFill: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.primary,
+  },
+  stepperDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperDotDone: {
+    borderColor: colors.primary,
+  },
+  // The done fill of a dot, crossfaded inside its ring.
+  stepperDotFill: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 9,
+    backgroundColor: colors.primary,
+  },
+  stepperDotCurrent: {
+    borderColor: colors.primary,
+  },
+  stepperLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  stepperLabelOn: {
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  stageNote: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textMuted,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 52,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  linkRowText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  actionBar: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  skipLink: {
+    alignSelf: 'center',
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  skipLinkText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  pressed: {
+    opacity: 0.7,
+  },
   paymentCard: {
     gap: spacing.sm,
   },
@@ -756,10 +1219,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   paymentEyebrow: {
     fontSize: 11,
     fontWeight: '800',
-    color: colors.textMuted,
+    color: colors.eyebrow,
     letterSpacing: 1.4,
   },
-  paymentEyebrowDark: { color: colors.gold },
+  paymentEyebrowDark: { color: colors.eyebrow },
   // Masters 6 and 7 set a large outlined shield-check against the payment
   // card's copy — decoration beside a claim the words already make.
   paymentShield: {
@@ -773,6 +1236,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 13,
     color: colors.textMuted,
     lineHeight: 19,
+  },
+  // #63 — the nudge sits under the note, above the breakdown.
+  payoutNudge: {
+    marginTop: spacing.sm,
   },
   // R6c (D7): the breakdown rows under the payment note.
   breakdown: {
@@ -806,7 +1273,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   breakdownStrongValue: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.money,
     fontVariant: ['tabular-nums'],
   },
   safe: {
@@ -871,7 +1338,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontFamily: fonts.display,
     fontSize: 24,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.money,
   },
   muted: {
     fontSize: 13,

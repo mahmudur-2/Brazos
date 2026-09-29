@@ -1,3 +1,4 @@
+import { useModalPresence } from '../hooks/useModalPresence';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -66,6 +67,8 @@ export function PhotoViewer({
   allowShare = true,
 }: PhotoViewerProps) {
   const { palette: colors } = useThemeColors();
+  // #64 (M-31): on screen or not — the one confirm engine never stacks a second modal on iOS.
+  useModalPresence(visible);
   const styles = stylesFor(colors);
   const { width, height } = useWindowDimensions();
   const [sharing, setSharing] = useState(false);

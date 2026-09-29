@@ -376,7 +376,18 @@ test('the Filters sheet draws the five rows from the ruled lists, and every clos
 
   // EVERY CLOSE APPLIES: Done and the backdrop go through the same function
   // the button does, and the distance writes only when it changed.
-  assert.match(sheet, /<Sheet\s+visible=\{visible\}\s+onClose=\{applyAndClose\}\s+title="Filters"\s+material="pane"/);
+  // 2026-09-28 (LUX-LIST-64 #64, audit M-25) — THE ONE BEND, the operator's:
+  // Done (the header's word) and "Show N jobs" still apply the draft; a
+  // CANCEL on the header's left discards it, and with it the backdrop and
+  // Android's back mean Cancel (ui/primitives/Sheet.tsx `onCancel`).
+  assert.match(
+    sheet,
+    /<Sheet\s+visible=\{visible\}\s+onClose=\{applyAndClose\}\s+dismissWord="Done"\s+onCancel=\{discardAndClose\}\s+title="Filters"\s+material="pane"/
+  );
+  assert.match(sheet, /function discardAndClose\(\) \{\s*setPopover\(null\);\s*onClose\(\);\s*\}/, 'Cancel applies nothing');
+  const primitive = stripComments(await read('ui/primitives/Sheet.tsx'));
+  assert.match(primitive, /onPress=\{dismissOnBackdropPress \? onCancel \?\? onClose : undefined\}/);
+  assert.match(primitive, /onRequestClose=\{onCancel \?\? onClose\}/);
   // 2026-09-21 — THE SHEET'S TINT IS THE MOCKUP'S GRADIENT: paneFills.filters,
   // drawn by Surface as the tint itself (no scrim, no sheen) — this sheet
   // alone; the values live in ui/tokens.ts, never here.

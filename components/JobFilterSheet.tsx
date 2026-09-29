@@ -2,6 +2,7 @@ import { Children, useEffect, useRef, useState, type ReactNode, type RefObject }
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
+import { ChipCheck } from './ChipCheck';
 import {
   PickerPopover,
   POPOVER_ROW_HEIGHT,
@@ -46,6 +47,7 @@ import {
   withAlpha,
   type ColorPalette,
 } from '../lib/theme';
+import { PalettePinContext } from '../hooks/useThemeColors';
 
 /** The design's sheet: 28pt top corners, and its sage hairline in dark (the
  *  pane rim's own mint) where every other sheet draws `line` — 0.20 since
@@ -73,9 +75,12 @@ const SHEET_EDGE = 'top' as const;
  * four popups in four nested Modals was the 2026-09-19 build, and the phone
  * walk found the first one's list under every pill (see PickerPopover).
  *
- * THE DRAFT IS LOCAL until the sheet closes, and EVERY close applies it —
- * Done, the backdrop, "Show N jobs" — so a filter is never lost to the way
- * the sheet was dismissed; Reset clears the draft in place. The distance is
+ * THE DRAFT IS LOCAL until the sheet closes. Done and "Show N jobs" apply
+ * it; Reset clears the draft in place. 2026-09-28 (LUX-LIST-64 #64, audit
+ * M-25) — THE ONE BEND of the 2026-09-19 "every close applies" ruling, the
+ * operator's: a CANCEL on the header's left throws the draft away, so a look
+ * can be backed out of; with it, the backdrop and Android's back mean Cancel
+ * (the one sheet header, ui/primitives/SheetHeader.tsx). The distance is
  * separate state on both surfaces that carry it (the one storage path,
  * lib/discoveryFilterStorage), so it arrives and leaves through its own
  * prop rather than joining the model.
@@ -200,6 +205,13 @@ export function JobFilterSheet({
     setPopover(null);
     onApply(draft);
     if (distance && draftDistance !== distance.value) distance.onChange(draftDistance);
+    onClose();
+  }
+
+  // #64 — Cancel: close and keep what was applied (the draft re-seeds from it on
+  // the next open).
+  function discardAndClose() {
+    setPopover(null);
     onClose();
   }
 
@@ -356,9 +368,14 @@ export function JobFilterSheet({
   );
 
   return (
+    // 2026-09-27 (the Lux remake, ruling 2): the Filters sheet and its popups
+    // keep today's colours — the whole subtree resolves the pinned palette.
+    <PalettePinContext.Provider value="map">
     <Sheet
       visible={visible}
       onClose={applyAndClose}
+      dismissWord="Done"
+      onCancel={discardAndClose}
       title="Filters"
       material="pane"
       topRadius={SHEET_TOP_RADIUS}
@@ -392,6 +409,7 @@ export function JobFilterSheet({
               <Pill
                 label={distanceIsPreset ? 'Custom' : distanceChipLabel(draftDistance)}
                 on={!distanceIsPreset || popover?.kind === 'distance'}
+                check={!distanceIsPreset}
                 onPress={() => openPopover('distance', distanceRef)}
                 accessibilityLabel="Custom distance"
               />
@@ -418,6 +436,7 @@ export function JobFilterSheet({
             <Pill
               label={budgetIsPreset ? 'Custom' : formatBudget(draft.minBudgetCents)}
               on={!budgetIsPreset || popover?.kind === 'budget'}
+              check={!budgetIsPreset}
               onPress={() => openPopover('budget', budgetRef)}
               accessibilityLabel="Custom minimum budget"
             />
@@ -449,6 +468,7 @@ export function JobFilterSheet({
             <Pill
               label={dateIsPreset || draft.scheduledOn === null ? 'Custom' : shortDate(draft.scheduledOn)}
               on={!dateIsPreset || popover?.kind === 'date'}
+              check={!dateIsPreset}
               onPress={() => openPopover('date', dateRef)}
               accessibilityLabel="Custom date"
             />
@@ -489,6 +509,7 @@ export function JobFilterSheet({
             <Pill
               label={sortNow.pill ?? sortNow.label}
               on
+              check={false}
               dimLead="Sort by"
               trailing={<Ionicons name="chevron-down" size={14} color={colors.emeraldBright} />}
               onPress={() => openPopover('sort', sortRef)}
@@ -499,6 +520,7 @@ export function JobFilterSheet({
 
       </View>
     </Sheet>
+    </PalettePinContext.Provider>
   );
 }
 
@@ -583,6 +605,7 @@ function Pill({
   trailing,
   dimLead,
   accessibilityLabel,
+  check = true,
 }: {
   label: string;
   on: boolean;
@@ -594,9 +617,17 @@ function Pill({
   /** A muted word before the label ("Sort by"). */
   dimLead?: string;
   accessibilityLabel?: string;
+  /** #35 — false where `on` is not a choice made (the Sort pill is always on;
+   *  a Custom pill is lit while its list is open, before anything is picked). */
+  check?: boolean;
 }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // 2026-09-28 (LUX-LIST-64 #35): a chosen pill carries a small check at its
+  // left — in place of its own lead glyph where it has one (no width change),
+  // added where it has none, its slot gliding open (components/ChipCheck.tsx,
+  // the motion boundary).
+  const checked = on && check;
   return (
     <Pressable
       onPress={onPress}
@@ -611,7 +642,15 @@ function Pill({
       accessibilityState={{ selected: on }}
       accessibilityLabel={accessibilityLabel ?? label}
     >
-      {lead}
+      {lead ? (
+        checked ? <Ionicons name="checkmark" size={14} color={colors.emeraldBright} /> : lead
+      ) : check ? (
+        // The pill's own gap sits between its children and the slot carries its
+        // own, so the pill's is taken back — the label never moves off its place.
+        <View style={styles.checkSlot}>
+          <ChipCheck shown={checked} size={14} color={colors.emeraldBright} />
+        </View>
+      ) : null}
       {dimLead ? <Text style={styles.pillDim}>{dimLead}</Text> : null}
       <Text style={[styles.pillText, isDark && styles.pillTextDark, on && styles.pillTextOn]} numberOfLines={1}>
         {label}
@@ -680,6 +719,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     pillDark: {
       borderColor: colors.mint2,
       backgroundColor: withAlpha(colors.white, 0.045),
+    },
+    // #35 — the check's slot brings its own gap; this takes the pill's back.
+    checkSlot: {
+      marginRight: -(spacing.xs + 2),
     },
     pillWide: {
       minWidth: 55,

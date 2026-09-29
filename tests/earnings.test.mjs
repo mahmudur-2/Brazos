@@ -157,6 +157,49 @@ test('a6 · every payment state gets its own sentence, and nothing else gets one
   assert.equal(earningsRowMeta(facts({ status: 'refunded' }), NOW, FAKE), '');
 });
 
+// 2026-09-28 (LUX-LIST-64 #63, audit M-14) — PAYOUT HONESTY. An approved card-
+// path row that process-settlements cannot send (the worker's payouts are not
+// enabled) must never read "on its way": the ledger names the worker's own
+// step. The answer is payoutSetupNotice()'s (lib/payments.ts), asked by the
+// caller and handed in — this import-free module never restates the rule.
+test('#63 · an approved payment waiting on the payout setup says so, and only then', async () => {
+  assert.equal(
+    earningsRowMeta(
+      facts({ provider: 'stripe', release_requested_at: '2026-09-05T11:00:00Z', waitingOnPayoutSetup: true }),
+      NOW,
+      FAKE
+    ),
+    `Approved ${EM} waiting on your payout setup`
+  );
+  // Enabled, unread or sandbox: today's sentence, unchanged.
+  assert.equal(
+    earningsRowMeta(
+      facts({ provider: 'stripe', release_requested_at: '2026-09-05T11:00:00Z', waitingOnPayoutSetup: false }),
+      NOW,
+      FAKE
+    ),
+    `Approved ${EM} payout on its way`
+  );
+  // The flag never reaches past the approved state: a held row still in
+  // protection is described by its clock, whatever the setup.
+  assert.equal(earningsRowMeta(facts({ waitingOnPayoutSetup: true }), NOW, FAKE), 'Held in protection');
+
+  // The screens ask the ONE rule, on the card path only.
+  const screen = await read('screens/EarningsScreen.tsx');
+  assert.match(screen, /waitingOnPayoutSetup: payoutSetupNotice\(payouts, \[row\]\) !== null,/);
+  assert.match(screen, /navigateAcrossTabs\('MyJobs', 'WorkerJob', \{ jobId: row\.job_id \}\)/, 'a ledger row opens its job');
+  const job = await read('screens/WorkerJobScreen.tsx');
+  assert.match(job, /const waitingOnSetup = payment \? payoutSetupNotice\(payouts, \[payment\]\) !== null : false;/);
+  assert.match(job, /'APPROVED · SET UP PAYOUTS TO RECEIVE IT'/);
+  assert.match(job, /approved the finished work\. \$\{PAYOUT_SETUP_NOTICE\}`/);
+  assert.match(job, /navigateAcrossTabs\('Profile', 'Payouts', \{\}\)/, 'one tap to Payouts');
+  assert.match(job, /if \(paymentsMode !== 'stripe'\) return;\s*fetchMyPayoutsStatus\(\)/, 'no RPC on the sandbox path');
+  const home = await read('screens/WorkerHomeScreen.tsx');
+  assert.match(home, /if \(!user \|\| paymentsMode !== 'stripe'\) return;/, 'Worker Home reads nothing on the sandbox path');
+  assert.match(home, /\.filter\(\(row\) => payoutSetupNotice\(status\.data, \[row\]\) !== null\)/);
+  assert.match(home, /Set up payouts to receive \{formatBudget\(payoutWaitCents\)\}/);
+});
+
 test('a6 · a missing timestamp is TRIMMED, not left with a trailing space', () => {
   // The choice pinned (D3): today's ternary rendered "Released " with a
   // trailing space when released_at was null. Trimmed here, so the card-path

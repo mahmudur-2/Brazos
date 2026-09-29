@@ -32,13 +32,13 @@ import {
 import { clusterPoints, type ClusterPin } from '../lib/mapClustering';
 import { distanceChipLabel, type DistanceFilterMiles } from '../lib/discoveryFilter';
 import {
-  DEFAULT_JOB_FILTERS,
   applyJobFilters,
   completedByCategory,
   localDateKey,
   type JobFilterModel,
   type JobSortContext,
 } from '../lib/jobFilters';
+import { useSessionJobFilters } from '../hooks/useSessionJobFilters';
 import { readDistanceFilter, writeDistanceFilter } from '../lib/discoveryFilterStorage';
 import { userMessage } from '../lib/errorMessage';
 import { useMode } from '../modes';
@@ -57,6 +57,7 @@ import {
   withAlpha,
   type ColorPalette,
 } from '../lib/theme';
+import { PalettePinContext } from '../hooks/useThemeColors';
 
 /** Matches HotspotMap.native's DEFAULT_REGION span — the pre-interaction zoom. */
 const INITIAL_LAT_DELTA = 0.08;
@@ -340,7 +341,10 @@ export function MapScreen() {
   // (lib/jobFilters.ts) rather than a second one owned by this screen. Only
   // the chips the map offers are ever set here; the rest stay at their
   // defaults so the model means the same thing it means on the results list.
-  const [jobFilters, setJobFilters] = useState<JobFilterModel>(DEFAULT_JOB_FILTERS);
+  // 2026-09-28 (LUX-LIST-64 #64, audit M-25): the worker's ONE filter memory —
+  // the job list reads and writes the same model, so "Open the full list" and
+  // the search capsule arrive with the map's choices, and back again.
+  const [jobFilters, setJobFilters] = useSessionJobFilters();
 
   const userId = user?.id ?? null;
   useEffect(() => {
@@ -522,6 +526,10 @@ export function MapScreen() {
   const chosen = selectedInDark(colors);
 
   return (
+    // 2026-09-27 (the Lux remake, ruling 2): the map — worker and customer —
+    // keeps today's colours: the whole subtree resolves the pinned palette
+    // (hooks/useThemeColors.ts PalettePinContext, lib/theme.ts mapPalette).
+    <PalettePinContext.Provider value="map">
     <View style={styles.root} onLayout={onRootLayout}>
       {/* 2026-08-23 — THE MAP IS THE GROUND, not a panel between two bands.
           It fills the whole screen absolutely: under the status bar, under
@@ -835,6 +843,7 @@ export function MapScreen() {
         </Sheet>
       </SafeAreaView>
     </View>
+    </PalettePinContext.Provider>
   );
 }
 

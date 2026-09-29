@@ -204,7 +204,9 @@ test('the customer switches through switchMode() and nothing else, from the [+] 
   // could stand in for one.
   const codeOnly = (source) =>
     source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-  assert.match(customerRoot, /onSwitchMode=\{\(\) => runCreateAction\(\(\) => void switchMode\('worker'\)\)\}/);
+  // M-38 (2026-09-26): the same one call, asked with the sheet still up.
+  assert.match(customerRoot, /onSwitchMode=\{\(\) => void switchFromSheet\(\)\}/);
+  assert.match(customerRoot, /const switched = await switchMode\('worker'\);/);
   assert.match(customerRoot, /const \{ switchMode, switching \} = useMode\(\);/);
   assert.doesNotMatch(codeOnly(home), /switchMode\(|useMode\(|Switch to Worker/);
   // The sheet's row is the label the confirm dialog is reached from.
@@ -353,9 +355,11 @@ test('the tree swap is sequenced: unmount commit, then mount commit', () => {
   assert.match(provider, /setMode\(resolved\);\s*setTreeMode\(resolved\);/);
   // 4. The shell renders NO tree while the two disagree — ground only. The
   //    outgoing tree must be fully unmounted before the incoming one renders.
+  // 2026-09-27 (the Lux remake, ruling 9): the Lux gradient rides over the
+  // flat ground in dark (`luxGround`); the gap frame is still ground only.
   assert.match(
     shell,
-    /if \(treeMode !== mode\) \{\s*return <View style=\{\[styles\.tree, \{ backgroundColor: palette\.background \}\]\} \/>;\s*\}/
+    /if \(treeMode !== mode\) \{\s*return <View style=\{\[styles\.tree, \{ backgroundColor: palette\.background \}, luxGround\]\} \/>;\s*\}/
   );
 });
 
@@ -440,8 +444,9 @@ test('each tree carries its own tab contract (emerald D1 + D4)', () => {
   // formula or the studio dial — from the one hook in hooks/useNavInset.ts.
   assert.match(customerRoot, /const navBottomPad = useNavBottomPad\(\);/);
   assert.match(workerRoot, /const navBottomPad = useNavBottomPad\(\);/);
-  assert.match(customerRoot, /bottomNavScreenOptions\(navBottomPad, palette\)/);
-  assert.match(workerRoot, /bottomNavScreenOptions\(navBottomPad, palette\)/);
+  // 2026-09-26 (the refresh): the bar paints with its own frozen colours in dark.
+  assert.match(customerRoot, /bottomNavScreenOptions\(navBottomPad, navBarPalette\(palette, isDark\)\)/);
+  assert.match(workerRoot, /bottomNavScreenOptions\(navBottomPad, navBarPalette\(palette, isDark\)\)/);
 });
 
 test('customer Home no longer links to Map, and the Map route survived anyway', () => {

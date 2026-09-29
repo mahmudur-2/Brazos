@@ -18,6 +18,14 @@ import { glow, radius, shadows, themedStyles, withAlpha, type ColorPalette } fro
  * masksToBounds, which clips the layer's own shadow off. Nothing here clips at
  * all — the disc's roundness is a border radius on a node with no overflow
  * rule — so the halo survives.
+ *
+ * 2026-09-27 (the Lux remake, ruling 14) — THE CHECK DRAWS ITSELF. The glyph
+ * is two STROKES of the disc's ink — the short leg, then the long — each a
+ * rounded bar that grows from its own start point along its own angle. The
+ * growth is a transform (a scaleX about the bar's left end), never a layout,
+ * so the fast path runs it on the UI thread and the fallback on the native
+ * driver; the still draws both legs full. The geometry is stated inside the
+ * MARK_CHECK box, so the mark's size is still one number.
  */
 
 /** The filled disc. */
@@ -28,6 +36,38 @@ export const MARK_CHECK = 54;
 export const MARK_RINGS = [140, 176] as const;
 /** The artwork's box — the outermost ring plus room for the sparkles. */
 export const MARK_FIELD = 200;
+/** A stroke's thickness. */
+export const CHECK_STROKE = 6;
+
+/**
+ * The two legs of the check, inside the MARK_CHECK box: each starts at (x, y),
+ * runs `length` along `angle` (clockwise from the x axis), and is drawn over
+ * the progress window [from, to] — the short leg first, the long leg from
+ * the join. The join is the vertex at (22, 40); the long leg ends at (46, 12).
+ */
+export const CHECK_LEGS = [
+  { key: 'short', x: 9, y: 27, length: 19, angle: 45, from: 0.36, to: 0.56 },
+  { key: 'long', x: 22, y: 40, length: 37, angle: -49, from: 0.56, to: 0.9 },
+] as const;
+
+/** Where a leg's bar sits inside the check box before its transform. */
+export function legBox(leg: (typeof CHECK_LEGS)[number]) {
+  return { left: leg.x, top: leg.y - CHECK_STROKE / 2, width: leg.length, height: CHECK_STROKE };
+}
+
+/**
+ * A leg's transform at a given growth (0..1): pivot to the left end, turn to
+ * the leg's angle, scale along it, pivot back — so the bar grows out of its
+ * start point rather than from its centre.
+ */
+export function legTransform(leg: (typeof CHECK_LEGS)[number], scaleX: number) {
+  return [
+    { translateX: -leg.length / 2 },
+    { rotate: `${leg.angle}deg` },
+    { scaleX },
+    { translateX: leg.length / 2 },
+  ];
+}
 
 /**
  * The sparkles, as fractions of the field.
@@ -95,6 +135,18 @@ export const markStylesFor = themedStyles((colors: ColorPalette) =>
       ...shadows.card,
     },
     discGlow: glow.halo(withAlpha(colors.emerald, 0.55)),
+    // The check box the two legs are drawn in, centred in the disc.
+    check: {
+      width: MARK_CHECK,
+      height: MARK_CHECK,
+    },
+    // One leg: a rounded bar of the disc's ink, positioned by legBox() and
+    // grown by legTransform().
+    stroke: {
+      position: 'absolute',
+      borderRadius: CHECK_STROKE / 2,
+      backgroundColor: colors.onForest,
+    },
     sparkle: {
       position: 'absolute',
     },

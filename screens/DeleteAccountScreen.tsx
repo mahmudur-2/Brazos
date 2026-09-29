@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
 import { FormScreen } from '../ui/templates/FormScreen';
 import { alertAsync, confirmAsync } from '../lib/dialog';
@@ -17,6 +16,7 @@ import {
   radius,
   spacing,
   themedStyles,
+  litCardStyle,
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
@@ -43,7 +43,7 @@ import {
 const CONFIRM_WORD = 'DELETE';
 
 export function DeleteAccountScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const navigation = useNavigation<ProfileStackNavigation>();
 
@@ -143,9 +143,16 @@ export function DeleteAccountScreen() {
 
   return (
     <FormScreen
-      title="Delete account"
+      title="Delete Account"
       subtitle="Permanent. Please read this first."
       onBack={goBackOrHome}
+      // M-33 — the commit is pinned above the keyboard, red, and stays
+      // disabled until DELETE is typed (or while anything blocks deletion).
+      submitLabel="Delete my account"
+      onSubmit={handleDelete}
+      submitDisabled={!canDelete}
+      submitLoading={deleting}
+      submitVariant="destructive"
       state={
         loading
           ? { kind: 'loading', variant: 'spinner' }
@@ -154,7 +161,7 @@ export function DeleteAccountScreen() {
           : { kind: 'ready' }
       }
     >
-      <View style={styles.card}>
+      <View style={[styles.card, litCardStyle(isDark)]}>
         <Text style={styles.cardTitle}>What is removed</Text>
         <Line text="Your name, phone number, photo, bio and categories." />
         <Line text="Your services, availability and portfolio." />
@@ -163,7 +170,7 @@ export function DeleteAccountScreen() {
         <Line text="Your sign-in. You will not be able to sign back in with this account." />
       </View>
 
-      <View style={styles.card}>
+      <View style={[styles.card, litCardStyle(isDark)]}>
         <Text style={styles.cardTitle}>What is kept, and why</Text>
         <Line
           text="Reviews you wrote and reviews you received stay on the marketplace. They are attributed to “Deleted user” — removing them would rewrite other people’s reputation."
@@ -190,7 +197,7 @@ export function DeleteAccountScreen() {
           </Text>
         </View>
       ) : (
-        <View style={styles.card}>
+        <View style={[styles.card, litCardStyle(isDark)]}>
           <Text style={styles.cardTitle}>Confirm</Text>
           <Text style={styles.body}>
             Type {CONFIRM_WORD} to enable the button below.
@@ -207,15 +214,6 @@ export function DeleteAccountScreen() {
         </View>
       )}
 
-      <Button
-        title="Delete my account"
-        variant="destructive"
-        icon="trash-outline"
-        iconPosition="leading"
-        onPress={handleDelete}
-        disabled={!canDelete}
-        loading={deleting}
-      />
     </FormScreen>
   );
 }
@@ -260,7 +258,7 @@ function Line({ text }: { text: string }) {
   return (
     <View style={styles.line}>
       {/* Masters 31/32 set each removal bullet in gold. */}
-      <Ionicons name="ellipse" size={6} color={colors.gold} style={styles.bullet} />
+      <Ionicons name="ellipse" size={6} color={colors.mark} style={styles.bullet} />
       <Text style={styles.body}>{text}</Text>
     </View>
   );
@@ -345,7 +343,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '800',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: colors.emerald,
+    color: colors.eyebrow,
   },
   blockerLabel: {
     fontFamily: fonts.display,

@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { PINNED_FOOTER_BOTTOM_PADDING, useScrollClearance } from '../primitives';
-import { layout, radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
-import { themedStyles, useThemeColors } from '../../lib/theme';
+import { layout, radius, spacing, type EmeraldPalette } from '../tokens';
+import { EYEBROW_TYPE, screenGround, themedStyles, useThemeColors } from '../../lib/theme';
 import { useOverrideNumber } from '../../lib/designOverrides';
 import { ScreenStateView, isReady, type ScreenState } from './ScreenStates';
 
@@ -22,6 +22,8 @@ import { ScreenStateView, isReady, type ScreenState } from './ScreenStates';
 export type DetailSection = {
   /** Omit for an untitled block (a lede paragraph, a card). */
   title?: string;
+  /** 2026-09-29 (LUX-LIST-2 #4): 'gold' — one of the kept-gold labels (YOUR STATUS, LEDGER). */
+  titleTone?: 'gold';
   content: ReactNode;
 };
 
@@ -29,6 +31,8 @@ type DetailScreenProps = {
   title: string;
   subtitle?: string;
   onBack?: () => void;
+  /** 2026-09-29 (LUX-LIST-2 #8): the header's back label; '' draws the disc alone (the feed). */
+  backLabel?: string;
   headerRight?: ReactNode;
 
   /** A single hero image. Rendered at a fixed aspect ratio, never a fixed
@@ -49,6 +53,7 @@ export function DetailScreen({
   title,
   subtitle,
   onBack,
+  backLabel,
   headerRight,
   mediaUri,
   media,
@@ -57,7 +62,7 @@ export function DetailScreen({
   state,
   insideTabs = true,
 }: DetailScreenProps) {
-  const { emerald: colors } = useThemeColors();
+  const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // emerald(3): whichever of the two bottom elements is last on screen takes
   // the pill's real footprint — the action bar when there is one, otherwise
@@ -73,8 +78,8 @@ export function DetailScreen({
     ...(sectionGapDial != null ? { gap: sectionGapDial } : null),
   };
   return (
-    <SafeAreaView style={styles.safe} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
-      <ScreenHeader title={title} subtitle={subtitle} onBack={onBack} right={headerRight} />
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
+      <ScreenHeader title={title} subtitle={subtitle} onBack={onBack} backLabel={backLabel} right={headerRight} />
 
       {!isReady(state) ? (
         <ScreenStateView state={state as Exclude<ScreenState, { kind: 'ready' }>} />
@@ -99,7 +104,7 @@ export function DetailScreen({
 
             {sections.map((section, index) => (
               <View key={section.title ?? `section-${index}`} style={styles.section}>
-                {section.title ? <Text style={styles.sectionTitle}>{section.title}</Text> : null}
+                {section.title ? <Text style={[styles.sectionTitle, section.titleTone === 'gold' && styles.sectionTitleGold]}>{section.title}</Text> : null}
                 {section.content}
               </View>
             ))}
@@ -152,10 +157,14 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   section: {
     gap: spacing.md,
   },
+  // 2026-09-27 (the Lux remake, ruling 4): a section's heading is the Lux
+  // eyebrow — gold in dark, emerald in light through the `eyebrow` role; the
+  // measure is one for both.
   sectionTitle: {
-    ...typeScale.h2,
-    color: colors.ink,
+    ...EYEBROW_TYPE,
+    color: colors.eyebrow,
   },
+  sectionTitleGold: { color: colors.eyebrowGold },
   actionBar: {
     padding: layout.screenGutter,
     gap: spacing.md,

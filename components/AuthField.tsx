@@ -1,6 +1,5 @@
-import { forwardRef, useRef, type ReactNode } from 'react';
+import { forwardRef, useState, type ReactNode } from 'react';
 import {
-  Animated,
   StyleSheet,
   Text,
   TextInput,
@@ -8,12 +7,8 @@ import {
   type TextInputProps,
 } from 'react-native';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
-import { authSurface, useThemeColors } from '../lib/theme';
-import { JS_DRIVER } from '../lib/motion';
-
-// Border crossfade on focus. Colour can't run on the native driver, so this is
-// a JS-driven value — one animated property on one view.
-const FOCUS_MS = 160;
+import { authSurface, useThemeColors, withAlpha } from '../lib/theme';
+import { FocusRing } from './FocusRing';
 
 type AuthFieldProps = {
   /** Rendered as the reference's small uppercase field caption. */
@@ -42,16 +37,11 @@ export const AuthField = forwardRef<TextInput, AuthFieldProps>(function AuthFiel
   { label, error, style, onFocus, onBlur, themed = false, leading, trailing, ...rest },
   ref
 ) {
-  const focus = useRef(new Animated.Value(0)).current;
+  // 2026-09-28 (LUX-LIST-64 #8): focus is a state the glow reads — the ring
+  // fades on the native driver (components/FocusRing.tsx), not a JS colour tween.
+  const [focused, setFocused] = useState(false);
   const { palette, isDark } = useThemeColors();
   const surface = authSurface(palette, isDark);
-
-  const run = (to: number) =>
-    Animated.timing(focus, {
-      toValue: to,
-      duration: FOCUS_MS,
-      useNativeDriver: JS_DRIVER,
-    }).start();
 
   // Masters 3/4: gold field label, gold hairline, cream value on the screen's
   // own near-black. Untouched screens keep every Heritage value below.
@@ -59,20 +49,20 @@ export const AuthField = forwardRef<TextInput, AuthFieldProps>(function AuthFiel
   const focusLine = themed ? palette.emerald : authColors.emerald;
   const danger = themed ? surface.danger : authColors.danger;
 
-  const borderColor = error
-    ? danger
-    : focus.interpolate({
-        inputRange: [0, 1],
-        outputRange: [idleLine, focusLine],
-      });
+  const borderColor = error ? danger : idleLine;
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, themed && { color: surface.accent }]}>{label}</Text>
-      <Animated.View
+      {/* 2026-09-28 (LUX-LIST-64 #1–#3): the caption is the mint (the light
+          token's green in light) — sign-in and sign-up only; AuthField is
+          theirs alone. */}
+      <Text style={[styles.label, themed && { color: surface.fieldLabel }]}>{label}</Text>
+      <View
         style={[
           styles.field,
-          themed && { backgroundColor: isDark ? surface.bg : surface.surface },
+          // 2026-09-27 (the Lux remake): in dark the field is the Lux well —
+          // white at .06 — inside the pop-out card it sits in, not the ground.
+          themed && { backgroundColor: isDark ? withAlpha(palette.white, 0.06) : surface.surface },
           { borderColor },
         ]}
       >
@@ -87,18 +77,19 @@ export const AuthField = forwardRef<TextInput, AuthFieldProps>(function AuthFiel
           ]}
           placeholderTextColor={themed ? surface.placeholder : authColors.placeholder}
           onFocus={(e) => {
-            run(1);
+            setFocused(true);
             onFocus?.(e);
           }}
           onBlur={(e) => {
-            run(0);
+            setFocused(false);
             onBlur?.(e);
           }}
           accessibilityLabel={label}
           {...rest}
         />
         {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
-      </Animated.View>
+        <FocusRing focused={focused} color={error ? danger : focusLine} radius={authRadius.field} />
+      </View>
       {/* Nothing is reserved for this: the message adds 4pt when it appears,
           which is small enough that a validation error can't shove the submit
           button out from under a thumb. */}

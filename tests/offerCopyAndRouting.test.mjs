@@ -45,7 +45,10 @@ test('the notifications feed owns no routing of its own', async () => {
   // A row that resolves to nothing is not tappable — a tap that only marks
   // read is the defect this replaced.
   assert.match(screen, /const routable = canRouteNotification\(n\.data\)/);
-  assert.match(screen, /onPress=\{routable \? \(\) => open\(n\) : undefined\}/);
+  // 2026-09-29 (LUX-LIST-2 #8): a row is a feed ENTRY (bids on one job the same day fold into one),
+  // and `n` is its lead notification — the one whose route the entry opens.
+  assert.match(screen, /const n = entry\.lead;/);
+  assert.match(screen, /onPress=\{routable \? \(\) => open\(entry\) : undefined\}/);
   assert.match(screen, /disabled=\{!routable\}/);
 });
 
@@ -122,7 +125,8 @@ test('the worker job detail names an incoming counter by first name', async () =
   // The heading moved into the shared actionable card, which the screen hands
   // that same first name — the wording itself now has exactly one definition.
   assert.match(detail, /senderFirstName=\{posterFirstName\}/);
-  assert.match(copy, /`\$\{senderFirstName\} sent you a Counteroffer`/);
+  // 2026-09-28 (#64, M-17): sentence case, the worker's noun.
+  assert.match(copy, /`\$\{senderFirstName\} sent you a counter-offer`/);
   // The full-name form must not come back.
   assert.doesNotMatch(detail, /\{poster\?\.full_name \?\? 'The customer'\} countered/);
 });
@@ -131,7 +135,8 @@ test('the My Jobs hub names an incoming counter by first name', async () => {
   const hub = stripComments(await read('screens/MyJobsHubScreen.tsx'));
 
   assert.match(hub, /const clientFirstName =\s*\n?\s*clientName\.trim\(\)\.split\(\/\\s\+\/\)\[0\] \|\| clientName;/);
-  assert.match(hub, /\$\{clientFirstName\} sent you a Counteroffer — respond/);
+  // 2026-09-28 (#64, M-17): the card's own spelling, sentence case.
+  assert.match(hub, /\$\{clientFirstName\} sent you a counter-offer — respond/);
   assert.doesNotMatch(hub, /\$\{clientName\} countered/);
 });
 

@@ -713,6 +713,30 @@ export async function fetchJobsAssignedToWorker(workerId: string) {
   return { data: (data ?? []).map(mapJobRow), error };
 }
 
+/** 2026-09-28 (LUX-LIST-64 #54) — what a job's stage derives from, and no more. */
+export type JobStageFacts = {
+  id: string;
+  status: string;
+  en_route_at: string | null;
+  arrived_at: string | null;
+  completed_at: string | null;
+};
+
+/**
+ * The stage facts of the jobs the Inbox's rows name — the input
+ * deriveJobLifecycle() takes from a job (with the payment and the dispute read
+ * beside it), for the job chip's stage word. RLS limits `jobs` to rows the
+ * caller may see; every job an inbox row names is one the caller shares.
+ */
+export async function fetchJobStageFacts(ids: string[]) {
+  if (ids.length === 0) return { data: [] as JobStageFacts[], error: null };
+  const { data, error } = await supabase
+    .from('jobs')
+    .select('id, status, en_route_at, arrived_at, completed_at')
+    .in('id', ids);
+  return { data: (data ?? []) as JobStageFacts[], error };
+}
+
 /** Fetch a single job by id, with its bid count. */
 export async function fetchJobById(jobId: string) {
   const { data, error } = await supabase

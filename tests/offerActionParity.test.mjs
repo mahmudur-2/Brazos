@@ -369,24 +369,38 @@ test('the counter cap is still 10 per side, per chain', async () => {
 test('the actionable card uses the required labels, order and icons', async () => {
   const {
     acceptOfferActionLabel,
+    acceptOfferConfirmText,
     COUNTER_OFFER_ACTION_LABEL,
-    DECLINE_OFFER_ACTION_LABEL,
+    declineOfferActionLabel,
+    offerNoun,
     offerResponseHeading,
     acceptOfferConfirmTitle,
     declineOfferConfirmTitle,
     firstNameOf,
   } = await copyModule;
 
-  assert.equal(acceptOfferActionLabel('$110'), 'Accept Offer ($110)');
-  assert.equal(COUNTER_OFFER_ACTION_LABEL, 'Send Counter Offer');
-  assert.equal(DECLINE_OFFER_ACTION_LABEL, 'Decline Offer');
-  assert.equal(
-    offerResponseHeading('Mahmudur', true),
-    'Mahmudur sent you a Counteroffer'
-  );
-  assert.equal(offerResponseHeading('Mahmudur', false), 'Mahmudur sent you an Offer');
-  assert.equal(acceptOfferConfirmTitle('$110'), 'Accept this offer for $110?');
-  assert.equal(declineOfferConfirmTitle('$110'), 'Decline this $110 offer?');
+  // 2026-09-28 (LUX-LIST-64 #64, audit M-17) — ONE NOUN PER AUDIENCE, sentence
+  // case: a worker reads "offer" for what a customer sent, a customer reads
+  // "bid" for what a worker sent; every confirmation repeats its button's verb
+  // and noun. (Were: 'Accept Offer ($110)', 'Send Counter Offer', 'Decline
+  // Offer', 'sent you a Counteroffer' / 'an Offer', whichever side read them.)
+  assert.equal(offerNoun(true), 'offer');
+  assert.equal(offerNoun(false), 'bid');
+  assert.equal(acceptOfferActionLabel('$110', true), 'Accept offer ($110)');
+  assert.equal(acceptOfferActionLabel('$110', false), 'Accept bid ($110)');
+  assert.equal(acceptOfferConfirmText(true), 'Accept offer');
+  assert.equal(acceptOfferConfirmText(false), 'Accept bid');
+  assert.equal(COUNTER_OFFER_ACTION_LABEL, 'Send counter-offer');
+  assert.equal(declineOfferActionLabel(true), 'Decline offer');
+  assert.equal(declineOfferActionLabel(false), 'Decline bid');
+  assert.equal(offerResponseHeading('Mahmudur', true, true), 'Mahmudur sent you a counter-offer');
+  assert.equal(offerResponseHeading('Mahmudur', false, true), 'Mahmudur sent you an offer');
+  assert.equal(offerResponseHeading('Sam', true, false), 'Sam sent you a new bid');
+  assert.equal(offerResponseHeading('Sam', false, false), 'Sam sent you a bid');
+  assert.equal(acceptOfferConfirmTitle('$110', true), 'Accept this offer for $110?');
+  assert.equal(acceptOfferConfirmTitle('$110', false), 'Accept this bid for $110?');
+  assert.equal(declineOfferConfirmTitle('$110', true), 'Decline this $110 offer?');
+  assert.equal(declineOfferConfirmTitle('$110', false), 'Decline this $110 bid?');
   assert.equal(firstNameOf('Mahmudur Rahman', 'They'), 'Mahmudur');
   assert.equal(firstNameOf('   ', 'They'), 'They');
   assert.equal(firstNameOf(null, 'They'), 'They');
@@ -396,7 +410,7 @@ test('the actionable card uses the required labels, order and icons', async () =
   // the rendered block, so the import list at the top cannot satisfy it.
   const rendered = actions.slice(actions.indexOf('<View style={styles.actions}>'));
   assert.ok(rendered.length > 0, 'the actions block must exist');
-  const order = ['acceptOfferActionLabel(', 'COUNTER_OFFER_ACTION_LABEL', 'DECLINE_OFFER_ACTION_LABEL']
+  const order = ['acceptOfferActionLabel(', 'COUNTER_OFFER_ACTION_LABEL', 'declineOfferActionLabel(']
     .map((needle) => rendered.indexOf(needle));
   assert.ok(order.every((i) => i > 0), 'all three actions must render');
   assert.deepEqual([...order].sort((a, b) => a - b), order, 'Accept, then Counter, then Decline');

@@ -357,8 +357,11 @@ test('[static] every flagged More row has a real handler, and none is a no-op', 
     'a flagged row with an empty handler is a dead control'
   );
 
+  // 2026-09-26 (the refresh, audit M-11): "Block…" opens the one chooser,
+  // whose first row runs the permanent block.
   const wired = {
-    'block-timed': /setBlockDurationUserId\(target\.userId\)/,
+    block: /setBlockDurationUserId\(target\.userId\)/,
+    'block-permanent': /void toggleBlock\(target\)/,
     'mark-unread': /onPress: \(\) => markUnread\(target\)/,
     'clear-chat': /applyConversationState\(target, \{ clear: true \}/,
     hide: /\{ hidden: !target\.hidden \}/,
@@ -366,7 +369,7 @@ test('[static] every flagged More row has a real handler, and none is a no-op', 
     'delete-chat': /applyConversationState\(target, \{ delete: true \}/,
   };
   for (const [key, handler] of Object.entries(wired)) {
-    assert.ok(screen.includes(`key: '${key}'`), `More must carry the ${key} row`);
+    assert.ok(screen.includes(`key: '${key}'`), `the sheet or its choosers must carry the ${key} row`);
     assert.match(screen, handler, `${key} must call its real handler`);
   }
 

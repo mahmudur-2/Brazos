@@ -761,7 +761,8 @@ test('[static] interim text is presentation-only: painted while live, never thro
   assert.match(searchBarCode, /setInterimTranscript\(null\);/);
   // Provisional styling: the palette's muted (placeholder) treatment while
   // interim, the normal input treatment for committed text.
-  assert.match(searchBarCode, /style=\{\[styles\.input, showingInterim && styles\.inputInterim\]\}/);
+  // 2026-09-28 (LUX-LIST-64 #15): the Lux text size rides between the two.
+  assert.match(searchBarCode, /style=\{\[styles\.input, !ink && styles\.textLux, showingInterim && styles\.inputInterim\]\}/);
   assert.match(searchBarCode, /inputInterim: \{\s*color: colors\.muted,\s*\}/);
 });
 
@@ -833,15 +834,19 @@ test('[static] the mic is palette-fed and holds the 44pt touch floor', () => {
   // separately guarantees no raw literal anywhere in ui/).
   // 2026-09-20: the 'ink' emphasis (the map's field) lifts the idle mic to
   // the ink at 0.85 and 22pt; the default keeps navInactive at 20.
+  // 2026-09-27 (the operator's review, the Lux `.field svg`): the idle mic is
+  // the mint in dark; the map's ink pill and light are as they were.
   assert.match(
     searchBarCode,
-    /color=\{listening \? colors\.emerald : ink \? withAlpha\(colors\.ink, 0\.85\) : colors\.navInactive\}/
+    /color=\{\s*listening \|\| \(isDark && !ink\)\s*\? colors\.emerald\s*: ink\s*\? withAlpha\(colors\.ink, 0\.85\)\s*: colors\.navInactive\s*\}/
   );
   assert.match(searchBarCode, /withAlpha\(colors\.emerald, 0\.15\)/);
   // 20pt glyph + spacing.xs (4pt) padding + 8pt hitSlop = 44pt effective.
   assert.match(searchBarCode, /hitSlop=\{8\}/);
   // 23 in the ink emphasis since the map's pill grew to 62 (2026-09-20, sitting 2).
-  assert.match(searchBarCode, /size=\{ink \? 23 : 20\}/);
+  // 2026-09-28 (LUX-LIST-64 #15): 22 elsewhere, the Lux field's glyph — 22 + 4 +
+  // 8 of slop still clears the 44pt floor.
+  assert.match(searchBarCode, /size=\{ink \? 23 : 22\}/);
   assert.match(searchBarCode, /padding: spacing\.xs,/);
 });
 
@@ -902,8 +907,9 @@ test('[static] the mic is on for every converted surface — no opt-out, no side
 test('[static] WorkerSearch keeps its exact search behaviour behind the conversion', () => {
   const source = read('screens/WorkerSearchScreen.tsx');
   const code = stripCommentsForScan(source);
-  // Verbatim copy: placeholder and accessibility label unchanged.
-  assert.match(source, /placeholder="What do you need help with\?"/);
+  // The placeholder on ONE line, never two (2026-09-27, the Lux remake, the
+  // operator's Discover picture); the accessibility label unchanged.
+  assert.match(source, /placeholder="What do you need\?"/);
   assert.match(source, /accessibilityLabel="Describe the help you need"/);
   // Sentence-typing posture preserved through the new additive props.
   assert.match(code, /autoCapitalize="sentences"/);
@@ -968,20 +974,30 @@ test("[static] customer Home's trailing magnifier submits — same contract as t
   // magnifier lives in SearchBar under `micBecomesSearch`. The CLAIM holds:
   // the magnifier is a Pressable firing the same submitSearch the keyboard
   // return fires (SearchBar's onSubmit), with the same role and label.
+  //
+  // 2026-09-26 — RE-POINTED BY THE REFRESH (audit M-12): customer Home is
+  // posting, so its field's return starts the draft (startJobDraft, the
+  // pill's own action) and it no longer passes micBecomesSearch — a
+  // magnifier would promise a search it does not run. The magnifier contract
+  // below is SearchBar's, unchanged, for any caller that opts in.
   const code = stripCommentsForScan(read('screens/HomeScreen.tsx'));
-  assert.match(code, /onSubmit=\{submitSearch\}/);
-  assert.match(code, /disableLeadingIcon\s+micBecomesSearch\s/, 'the mic becomes the magnifier; no leading glyph');
+  assert.match(code, /onSubmit=\{startJobDraft\}/);
+  assert.doesNotMatch(code, /micBecomesSearch/, 'Home draws the mic only; no magnifier');
   assert.doesNotMatch(code, /trailing=\{/, 'the divider and the second button are gone from the field');
   assert.doesNotMatch(code, /searchDivider|searchGoPressed/);
   const magnifier = /\{micBecomesSearch && value\.length > 0 && !listening \? \(([\s\S]*?)\) : voiceReady/.exec(searchBarCode);
   assert.ok(magnifier, 'SearchBar draws the magnifier in the mic\'s slot');
   assert.match(magnifier[1], /<Pressable/, 'the magnifier must be pressable, not decoration');
   assert.match(magnifier[1], /onPress=\{onSubmit\}/);
-  assert.match(magnifier[1], /name="search" size=\{20\} color=\{colors\.navInactive\}/);
+  // 2026-09-27 (the operator's review): the magnifier is the mint in dark too.
+  // 2026-09-28 (LUX-LIST-64 #15): the Lux field's 22pt glyph.
+  assert.match(magnifier[1], /name="search" size=\{22\} color=\{isDark \? colors\.emerald : colors\.navInactive\}/);
   assert.match(magnifier[1], /accessibilityRole="button"/);
   assert.match(magnifier[1], /accessibilityLabel="Search"/);
-  // The guard that makes empty a no-op lives in submitSearch itself.
-  assert.match(code, /const trimmed = query\.trim\(\);\s*if \(!trimmed\) return;/);
+  // 2026-09-27 (the Lux remake, ruling 13): the "Browse workers" route left
+  // Home with its line — the Discover tab is the way to a person, and nothing
+  // on Home opens worker search any more.
+  assert.doesNotMatch(code, /navigate\('WorkerSearch'/);
 });
 
 test("[static] SearchBar's additive props default to the exact posture existing consumers had", () => {

@@ -46,8 +46,10 @@ test('2 · JobConfirmed, ClientJobDetail and ApproveOrDispute show the customer 
     assert.doesNotMatch(code, /formatBudget\(payment\?\.amount_cents/, `${file}: no CTA or dialog figure is amount_cents`);
   }
   const approve = stripComments(read('screens/ApproveOrDisputeScreen.tsx'));
-  assert.match(approve, /`Approve & release \$\{formatBudget\(payment \? customerChargeCents\(payment\) : null\)\}`/);
-  assert.match(approve, /`Release \$\{formatBudget\(payment \? customerChargeCents\(payment\) : null\)\} to the worker\?`/);
+  // 2026-09-26 (the refresh, audit M-6): the CTA names the act; the dialog names
+  // the charge — still the charge, never amount_cents.
+  assert.match(approve, /`Approve & release payment`/);
+  assert.match(approve, /`Your card was charged \$\{formatBudget\(payment \? customerChargeCents\(payment\) : null\)\} at checkout/);
   const detail = stripComments(read('screens/ClientJobDetailScreen.tsx'));
   assert.equal((detail.match(/customerChargeCents\(payment\)/g) ?? []).length, 3, 'the protected, window-closed and approved cards');
 });

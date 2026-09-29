@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
+  conversationKey,
   fetchConversations,
   fetchMyReadStates,
+  fetchUnseenStamps,
   resolveOtherId,
+  threadUnread,
   type Conversation,
 } from '../lib/conversations';
+import { countUnseen, FULLY_UNREAD_AT, type UnseenThread } from '../lib/conversationVisibility';
 import {
   fetchMyConversationStates,
   indexConversationStates,
@@ -59,6 +63,10 @@ export function useConversations() {
     Record<string, Reaction[]>
   >({});
   const [moderation, setModeration] = useState<ModerationLists>(EMPTY_MODERATION);
+  // 2026-09-28 (LUX-LIST-64 #54) — the number beside the name: each unread
+  // thread's unseen messages, COUNTED from the rows (countUnseen), keyed like
+  // readMap and stateByKey. A thread with no entry shows the mark alone.
+  const [unseenByKey, setUnseenByKey] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,16 +106,49 @@ export function useConversations() {
     // A FAILED state read is an empty index, which is exactly "no conversation
     // has any state" — the behaviour of every build before phase77. It cannot
     // hide a row, cannot clear a thread, and cannot silently archive anything.
-    setStateByKey(indexConversationStates(stateRes.data));
+    const states = indexConversationStates(stateRes.data);
+    setStateByKey(states);
     setConversations(convRes.data);
 
+    // The threads with something unseen, and where each one's count starts. A
+    // job thread marked unread by hand has no count (its mark is the fact), so
+    // it is not asked about; the read starts at the earliest position left.
+    const unseenThreads: UnseenThread[] = convRes.data
+      .filter((c) => threadUnread(c, user.id, reads))
+      .map((c) => ({
+        key: conversationKey(c),
+        readAt: (c.job_id ? reads[c.job_id] : c.my_read_at) ?? null,
+        state: states[conversationKey(c)],
+      }))
+      .filter((thread) => thread.readAt !== FULLY_UNREAD_AT);
+    // Compared as instants: the database's ISO form and JavaScript's differ.
+    const since = new Date(
+      unseenThreads.reduce(
+        (earliest, thread) => Math.min(earliest, thread.readAt ? Date.parse(thread.readAt) : 0),
+        Date.now()
+      )
+    ).toISOString();
+    const unseenJobIds = convRes.data
+      .filter((c) => c.job_id && unseenThreads.some((thread) => thread.key === conversationKey(c)))
+      .map((c) => c.job_id as string);
+    const unseenDirectIds = convRes.data
+      .filter((c) => c.direct_thread_id && unseenThreads.some((thread) => thread.key === conversationKey(c)))
+      .map((c) => c.direct_thread_id as string);
+
     const otherIds = convRes.data.map((c) => resolveOtherId(c, user.id));
-    const [{ data: people }, { data: reactionRows }, moderationLists] =
+    const [{ data: people }, { data: reactionRows }, moderationLists, unseenRes] =
       await Promise.all([
         fetchProfilesByIds(otherIds),
         fetchReactionsForMessages(convRes.data.map((c) => c.last_message_id)),
         fetchMyModerationLists(user.id),
+        unseenThreads.length > 0
+          ? fetchUnseenStamps(user.id, { jobIds: unseenJobIds, directIds: unseenDirectIds }, since)
+          : Promise.resolve({ data: [], error: null }),
       ]);
+
+    // A FAILED count read is no count at all — every unread row keeps its mark
+    // and shows no number, rather than a number that is not true.
+    setUnseenByKey(unseenRes.error ? {} : countUnseen(unseenRes.data, unseenThreads));
 
     setModeration(moderationLists);
 
@@ -175,6 +216,7 @@ export function useConversations() {
     profiles,
     lastMessageReactions,
     moderation,
+    unseenByKey,
     loading,
     error,
     refresh,

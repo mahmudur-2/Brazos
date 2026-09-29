@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { RemoteImage } from '../../components/RemoteImage';
+import { CategoryGlyph } from '../../components/CategoryGlyph';
 import { Ionicons } from '@expo/vector-icons';
 import { useModePerspective } from '../../modes';
 import {
@@ -23,7 +24,7 @@ import {
   type EmeraldPalette,
   type as typeScale,
 } from '../tokens';
-import { themedStyles, useThemeColors, withAlpha } from '../../lib/theme';
+import { litCardStyle, themedStyles, useThemeColors, withAlpha } from '../../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../../lib/designOverrides';
 import { usePressFeedback } from '../../hooks/usePressFeedback';
 
@@ -171,7 +172,7 @@ export function JobCard({
         onPress={onPress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
-        style={({ pressed }) => [styles.card, isDark && shadows.cardDark, cardDial, pressed && styles.cardPressed]}
+        style={({ pressed }) => [styles.card, litCardStyle(isDark), cardDial, pressed && styles.cardPressed]}
         accessibilityRole="button"
         accessibilityLabel={job.title}
       >
@@ -190,10 +191,12 @@ export function JobCard({
             style={[
               styles.thumb,
               styles.thumbFallback,
-              isDark ? styles.thumbFallbackDark : { backgroundColor: accent.bg },
+              // 2026-09-29 (LUX-LIST-2 #6): the lit tile in dark; light keeps the category colour.
+              isDark ? [styles.thumbFallbackDark, litCardStyle(true, 'tile')] : { backgroundColor: accent.bg },
             ]}
           >
-            <Ionicons name={icon} size={30} color={isDark ? colors.gold : accent.icon} />
+            {/* 2026-09-27 (the Lux remake, rulings 5 and 12): the Lux line icon, mint in dark. */}
+            <CategoryGlyph name={icon} size={30} color={isDark ? colors.emerald : accent.icon} bare />
           </View>
         )}
 
@@ -218,7 +221,7 @@ export function JobCard({
               ) : null}
               {showBreakTheIce ? (
                 <View style={styles.iceBadge}>
-                  <Ionicons name="sparkles" size={11} color={colors.gold} />
+                  <Ionicons name="sparkles" size={11} color={colors.mark} />
                   <Text style={styles.iceBadgeText}>Break the ice</Text>
                 </View>
               ) : null}
@@ -231,7 +234,7 @@ export function JobCard({
                   dark — and the value is MONEY — emerald in dark. Light keeps
                   the Heritage pairing. Resolves conflict B-4 (12/43 green vs
                   13/10 gold values) toward the law. */}
-              <Text style={[styles.moneyLabel, isDark && { color: colors.gold }]}>
+              <Text style={styles.moneyLabel}>
                 {moneyLabel}
               </Text>
               <Text
@@ -380,14 +383,14 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   },
   moneyLabel: {
     ...typeScale.eyebrow,
-    color: colors.emerald,
+    color: colors.eyebrow,
   },
   money: {
     // Decision 9: prices speak the serif in both themes.
     fontFamily: fonts.display,
     fontSize: 16,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.money,
   },
   bids: {
     ...typeScale.sub,

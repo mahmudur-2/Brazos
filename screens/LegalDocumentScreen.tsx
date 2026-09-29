@@ -6,7 +6,9 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { LEGAL_DOCUMENTS } from '../lib/legal';
 import { goBackOrHome } from '../lib/navigationRef';
 import type { LegalDocumentRouteParamList } from '../lib/navigation';
-import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { spacing, themedStyles, useThemeColors, type ColorPalette,
+  screenGround,
+} from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
 
 /**
@@ -15,7 +17,7 @@ import { useScrollClearance } from '../ui/primitives';
  * the two can't drift.
  */
 export function LegalDocumentScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // emerald(3): the floating pill's real footprint.
   const navClearance = useScrollClearance();
@@ -28,7 +30,7 @@ export function LegalDocumentScreen() {
 
   if (!doc) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
+      <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
         <ScreenHeader title="Document" onBack={goBackOrHome} />
         <View style={styles.center}>
           <Text style={styles.muted}>

@@ -153,46 +153,51 @@ test('§3.3 · the advance control is disabled by the floor, with the written co
     screen,
     /const advanceDisabled =\s*uploadingPhoto \|\| uploadingVideo \|\| \(step === 0 && descNeeded > 0\);/
   );
-  // The header's advance link carries it…
-  assert.match(screen, /rightDisabled=\{advanceDisabled\}/);
+  // The header's advance link carries it (M-7: beside the step's written
+  // blocker, which the pinned Continue reads too)…
+  assert.match(screen, /rightDisabled=\{advanceDisabled \|\| stepBlocker != null\}/);
   // …and so does the last step's Publish button, from the same const — one
-  // rule, never two copies (P3-31).
-  assert.match(screen, /disabled=\{advanceDisabled\}/);
+  // rule, never two copies (P3-31). 2026-09-28 (LUX-LIST-64 #38, #41): Publish
+  // sits in the posting bar and also waits on the summary's own uploads and a
+  // missing set price; the floor's const is still the one it reads.
+  assert.match(screen, /const uploadingNow = advanceDisabled \|\| summaryUploading;/);
+  assert.match(screen, /primaryDisabled=\{uploadingNow \|\| priceMissing \|\| submitting\}/);
   assert.equal(
     (stripComments(screen).match(/uploadingPhoto \|\| uploadingVideo/g) ?? []).length,
     1,
     'the floor/upload rule must exist exactly once in this screen'
   );
-  // …and the count is written next to the field, never a raw error.
-  assert.match(screen, /more \{descNeeded === 1 \? 'character' : 'characters'\} needed/);
+  // …and the count is written, never a raw error. 2026-09-27 (the Lux remake,
+  // the operator's Post-a-job picture): it sits UNDER the description it
+  // counts, in as few words as say it — "6 more characters".
+  assert.match(screen, /more \$\{descNeeded === 1 \? 'character' : 'characters'\}`/);
+  assert.match(screen, /\{reasonUnder\('description'\)\}/);
 });
 
 // ---------------------------------------------------------------------------
 // §3.4 — the photo nudge is a nudge, not a gate
 // ---------------------------------------------------------------------------
 
-test('§3.4 · the nudge renders, dismisses per-draft, and never blocks advancing [static]', async () => {
+// 2026-09-28 (LUX-LIST-64 #32): the operator removed the nudge entirely — its
+// sentence, its dismissal state and its draft field. What the §3.4 fence
+// protected still holds and is still asserted: photos never gate advancing.
+test('§3.4 · the photo nudge is gone, and photos never gate advancing [static]', async () => {
   const screen = await read('screens/PostJobScreen.tsx');
   const draft = await read('lib/postJobDraft.ts');
+  const code = (source) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
-  assert.match(screen, /Add photos so workers can see the work\./);
-  assert.match(screen, /setPhotoNudgeDismissed\(true\)/, 'the nudge is dismissible');
+  assert.ok(!screen.includes('Add photos so workers can see the work.'), 'the nudge sentence is gone');
+  assert.doesNotMatch(code(screen), /photoNudge|showPhotoNudge|nudgeRow/, 'its state and styles went with it');
+  assert.doesNotMatch(code(draft), /photoNudgeDismissed/, 'and so did its draft field');
 
-  // The advance control's disabled expression must not mention the nudge or
-  // the photo count — advancing with zero photos stays possible. RUN P1: that
-  // expression is now the named const the header link and the Publish button
-  // share, not a footer button's attribute.
+  // The advance control's disabled expression must not mention the photo count
+  // — advancing with zero photos stays possible.
   const disabledExpr = screen.match(/const advanceDisabled =[^;]*;/)?.[0] ?? '';
   assert.ok(disabledExpr.length > 0, 'the advance-disabled expression exists');
-  assert.ok(!disabledExpr.includes('photoNudge'), 'nudge state cannot gate advancing');
   assert.ok(!disabledExpr.includes('photos.length'), 'photo count cannot gate advancing');
-
-  // Dismissal is stored ON THE DRAFT (dies with it), not in a global setting.
-  assert.match(draft, /photoNudgeDismissed: boolean/);
-  assert.match(draft, /photoNudgeDismissed: parsed\.photoNudgeDismissed === true/);
   assert.ok(
     !draft.includes('brazos.photoNudge'),
-    'no dedicated global storage key for the nudge'
+    'no dedicated global storage key for a nudge'
   );
 });
 
@@ -299,7 +304,10 @@ test('§4 · SavedWorkersScreen: sections, suppressed Hire, no writes, no verifi
 test('§4.4 · the rebook strip tops the search surface and "Hire someone again" resolves to SavedWorkers [static]', async () => {
   const search = await read('screens/WorkerSearchScreen.tsx');
 
-  assert.match(search, /rebookStripItems\(/);
+  // 2026-09-28 (LUX-LIST-64 #62): the loader moved into hooks/useRebookWorkers.ts
+  // so the customer Home's "Hire again" row reads the same list; Discover calls it.
+  assert.match(await read('hooks/useRebookWorkers.ts'), /rebookStripItems\(/);
+  assert.match(search, /useRebookWorkers\('WorkerSearch'\)/);
   assert.match(search, /Hire someone again/);
   assert.match(search, /navigateAcrossTabs\('Profile', 'SavedWorkers'\)/);
   // Strip taps open the SAME prefilled composer as the Hire control.
@@ -634,20 +642,23 @@ test('§6.2 · over-ceiling amounts refuse with written text before any RPC', as
 
 const completenessModule = importLibModule('lib/profileCompleteness.ts');
 
-test('§6.4 · four steps, complete at 4/4 (where the meter disappears)', async () => {
+test('§6.4 · five steps, complete at 5/5 (where the meter disappears)', async () => {
   const { profileCompleteness } = await completenessModule;
 
+  // 2026-09-26 (the refresh, audit M-29): job categories lead the meter.
   const done = profileCompleteness({
+    categoryCount: 2,
     avatarUrl: 'https://x/avatar.jpg',
     bio: 'I fix things.',
     publishedServiceCount: 3,
     portfolioCount: 1,
   });
   assert.equal(done.complete, true);
-  assert.equal(done.done, 4);
-  assert.equal(done.total, 4);
+  assert.equal(done.done, 5);
+  assert.equal(done.total, 5);
 
   const partial = profileCompleteness({
+    categoryCount: 0,
     avatarUrl: null,
     bio: '   ',
     publishedServiceCount: 2,
@@ -658,6 +669,7 @@ test('§6.4 · four steps, complete at 4/4 (where the meter disappears)', async 
   assert.deepEqual(
     partial.steps.map((s) => [s.key, s.done]),
     [
+      ['categories', false],
       ['avatar', false],
       ['bio', false],
       ['services', false],

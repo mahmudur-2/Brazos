@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { CategoryGlyph } from './CategoryGlyph';
 import { HOME_SERVICE_TILES } from '../lib/skillCategories';
 import { useModePerspective } from '../modes';
 import {
+  litCardStyle, EYEBROW_TYPE,
   emeraldRadius,
-  fonts,
+  shadows,
   spacing,
   themedStyles,
   useThemeColors,
@@ -29,15 +31,19 @@ export const TILE_FLOOR = 68;
 export function tileSizeFor(rowWidth: number, gap: number): number {
   return (rowWidth - (TILES_ACROSS - 1) * gap) / TILES_ACROSS;
 }
-/** The glyph inside the square (the mockup's 30 at the bigger tile). */
+/** The glyph inside the square: the Lux tile draws 26; 2026-09-28 (LUX-LIST-64
+ *  #12) the operator's 30, dead centre in the tile. */
 const TILE_ICON_SIZE = 30;
 /**
- * The heading's size — the customer Home's own section-title rung
- * (screens/HomeScreen.tsx `sectionTitle`, serifSize(30) = 20), so "Popular
- * services" sets exactly as "Your jobs" does. tests/workerHome.test.mjs
- * re-derives that rung from the screen's ladder and compares it to this.
+ * 2026-09-27 (the Lux remake, ruling 12): the Lux line icons — the Ionicons
+ * `-outline` variant of each tile's own glyph, mint. Every name in
+ * lib/skillCategories.ts has one (checked against the Ionicons glyph map at
+ * the remake), so the derivation is a suffix, never a second table.
  */
-const HEADING_FONT_SIZE = 20;
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
+export function outlineIcon(name: IoniconName): IoniconName {
+  return (name.endsWith('-outline') || name.endsWith('-sharp') ? name : `${name}-outline`) as IoniconName;
+}
 
 type ServiceTileRowProps = {
   /**
@@ -58,6 +64,11 @@ type ServiceTileRowProps = {
   onOther: () => void;
   /** An optional section title above the row, in the screen's title style. */
   heading?: string;
+  /**
+   * 2026-09-28 (LUX-LIST-64 #13) — "View all →" at the heading's right, styled
+   * like the Home's "See all →"; the screen opens its all-services list.
+   */
+  onViewAll?: () => void;
 };
 
 /**
@@ -91,8 +102,8 @@ type ServiceTileRowProps = {
  * the gaps are `spacing`, the colours are palette roles. The only literals
  * are sizes — the box, the glyph, the type — which no scale carries.
  */
-export function ServiceTileRow({ inset, onSelect, onOther, heading }: ServiceTileRowProps) {
-  const { palette: colors } = useThemeColors();
+export function ServiceTileRow({ inset, onSelect, onOther, heading, onViewAll }: ServiceTileRowProps) {
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // The hint is worded for the perspective the row renders in — "help" for a
   // customer finding workers, "jobs" for a worker finding work — read from
@@ -116,9 +127,25 @@ export function ServiceTileRow({ inset, onSelect, onOther, heading }: ServiceTil
   return (
     <View style={styles.block}>
       {heading ? (
-        <Text style={styles.heading} maxFontSizeMultiplier={1.3}>
-          {heading}
-        </Text>
+        <View style={styles.headingRow}>
+          {/* 2026-09-27 (the Lux remake, ruling 4): the heading is the Lux eyebrow
+              — gold in dark, the eyebrow role in light. */}
+          <Text style={styles.heading} maxFontSizeMultiplier={1.3}>
+            {heading}
+          </Text>
+          {onViewAll ? (
+            <Pressable
+              onPress={onViewAll}
+              hitSlop={6}
+              style={({ pressed }) => [styles.viewAll, pressed && styles.viewAllPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="View all services"
+            >
+              <Text style={[styles.viewAllText, { color: isDark ? colors.emerald : colors.forest }]}>View all</Text>
+              <Ionicons name="arrow-forward" size={19} color={isDark ? colors.emerald : colors.forest} />
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
       <ScrollView
         horizontal
@@ -146,12 +173,12 @@ export function ServiceTileRow({ inset, onSelect, onOther, heading }: ServiceTil
             accessibilityLabel={service.label}
             accessibilityHint={hintFor(service.label)}
           >
-            <View style={[styles.box, { width: tile, height: tile }]}>
-              <Ionicons name={service.icon} size={TILE_ICON_SIZE} color={colors.emerald} />
+            <View style={[styles.box, litCardStyle(isDark, 'tile'), { width: tile, height: tile }]}>
+              <CategoryGlyph name={service.icon} size={TILE_ICON_SIZE} color={colors.emerald} />
+              <Text style={styles.label} numberOfLines={2}>
+                {service.tileLabel}
+              </Text>
             </View>
-            <Text style={styles.label} numberOfLines={2}>
-              {service.tileLabel}
-            </Text>
           </Pressable>
         ))}
         <Pressable
@@ -161,12 +188,12 @@ export function ServiceTileRow({ inset, onSelect, onOther, heading }: ServiceTil
           accessibilityLabel="Other services"
           accessibilityHint="Opens the full list of services"
         >
-          <View style={[styles.box, { width: tile, height: tile }]}>
+          <View style={[styles.box, litCardStyle(isDark, 'tile'), { width: tile, height: tile }]}>
             <Ionicons name="ellipsis-horizontal" size={TILE_ICON_SIZE} color={colors.emerald} />
+            <Text style={styles.label} numberOfLines={2}>
+              Other
+            </Text>
           </View>
-          <Text style={styles.label} numberOfLines={2}>
-            Other
-          </Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -179,32 +206,64 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // gap: 12 }` there), so the title sits over its row as "Your jobs" sits
     // over its cards.
     block: { gap: spacing.md },
+    headingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+      // the link's 44pt target sits inside the row's rhythm, not on top of it
+      marginVertical: -spacing.md,
+    },
     heading: {
-      fontFamily: fonts.display,
-      fontSize: HEADING_FONT_SIZE,
-      fontWeight: '700',
-      color: colors.ink,
+      ...EYEBROW_TYPE,
+      // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
+      color: colors.eyebrowGold,
+    },
+    viewAll: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      minHeight: 44,
+    },
+    viewAllPressed: { opacity: 0.78 },
+    viewAllText: {
+      fontSize: 14,
+      fontWeight: '600',
     },
     // The gap is set at render: the gutter itself, which is what makes four
     // whole tiles end exactly at the screen's edge.
-    row: { flexDirection: 'row' },
+    // 2026-09-29 (LUX-LIST-2 #6): a scroller clips what it holds, so the row keeps the tiles' shadow
+    // room below them now the names no longer sit there.
+    row: { flexDirection: 'row', paddingBottom: spacing.lg },
     // A tile is its box and its label, centred; the 6 between them is the
     // mockup's, spelled off the scale the way components/Chip.tsx spells its
     // own 6 (`spacing.xs + 2`). Box plus label clears the 44pt touch floor.
     // The width is set at render from the row's measurement.
-    tile: { alignItems: 'center', gap: spacing.xs + 2 },
+    tile: { alignItems: 'center' },
     tilePressed: { opacity: 0.85 },
+    // 2026-09-27 (the Lux remake, rulings 8 and 12): the Lux glass tile — the
+    // card fill inside the mint-neutral rim at the tile radius, the line icon
+    // in mint — a pop-out under the card shadow in dark; white under the soft
+    // card shadow in light.
+    // 2026-09-29 (LUX-LIST-2 #6): the name sits inside, under the icon — the sim's `.tile` (gap 6).
     box: {
-      borderRadius: emeraldRadius.md,
+      borderRadius: emeraldRadius.lg,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.mint,
+      gap: spacing.xs + 2,
+      paddingHorizontal: 2,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.card,
     },
+    // The sim's tile name: 12 / 600 in the ink, two lines at most ("TV mounting" wraps in a 73pt tile).
     label: {
-      fontSize: 13,
-      lineHeight: 16,
+      fontSize: 12,
+      lineHeight: 14,
+      fontWeight: '600',
       textAlign: 'center',
-      color: colors.textMuted,
+      color: colors.text,
     },
   })
 );

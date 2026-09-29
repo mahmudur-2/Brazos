@@ -12,7 +12,7 @@ import {
   type EmeraldPalette,
   type as typeScale,
 } from '../tokens';
-import { themedStyles, useThemeColors } from '../../lib/theme';
+import { screenGround, themedStyles, useThemeColors } from '../../lib/theme';
 import { useEntrance } from '../../hooks/useEntrance';
 import { confirm } from '../../lib/haptics';
 
@@ -135,7 +135,7 @@ export function SuccessScreen({
   }, []);
 
   return (
-    <SafeAreaView style={styles.safe} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -225,8 +225,9 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     borderWidth: 1,
     borderColor: colors.line,
   },
+  // 2026-09-27 (the Lux remake): the mark's ring is the mint, never the gold line.
   glyphDark: {
-    borderColor: withAlpha(colors.gold, 0.55),
+    borderColor: withAlpha(colors.emerald, 0.55),
   },
   copy: {
     gap: spacing.sm,
@@ -279,7 +280,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   },
   secondaryDark: {
     backgroundColor: colors.surface,
-    borderColor: withAlpha(colors.gold, 0.55),
+    borderColor: withAlpha(colors.emerald, 0.35),
   },
   buttonLabel: {
     ...typeScale.title,

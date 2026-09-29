@@ -263,7 +263,8 @@ const SANDBOX_STRINGS = {
     'What the sandbox does',
   ],
   'screens/TrackWorkerScreen.tsx': ['SANDBOX — NO REAL MONEY'],
-  'screens/AccountSafetyScreen.tsx': ['Sandbox only · no stored card.'],
+  // 2026-09-29 (LUX-LIST-2 #7): the Payment methods row moved from Account & safety to the hub.
+  'screens/ProfileScreen.tsx': ['Sandbox only · no stored card.'],
   'screens/BidDetailScreen.tsx': [
     'protect the payment in a sandbox checkout — no real money is charged in this development build.',
   ],

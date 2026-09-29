@@ -1,37 +1,33 @@
-import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { BrazosMonogram } from '../components/BrazosMonogram';
-import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
-import { paymentsMode } from '../lib/adapters/payments';
-import { alertAsync, confirmAsync } from '../lib/dialog';
-import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import {
-  fonts,
+  litCardStyle, fonts,
   radius,
   spacing,
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
 
 /**
  * Golden master 41 — the profile hub's account & safety page.
  *
- * Everything an account holder can do TO the account rather than with it:
- * payment, the two legal documents, appearance, log out, and the deletion
- * entry point. It performs no destructive action itself — deletion's warning
- * and confirmation live on DeleteAccount, where phase67's real blocker list
- * is, and log out keeps the confirmation it always had.
+ * 2026-09-29 (LUX-LIST-2 #7): what is about the account itself — the privacy
+ * promise, the one-account principle, and the deletion entry point. Payment
+ * methods, Appearance, the two legal documents, the mode switch and Log out
+ * each moved to the Profile hub, where every one of them still is (Sign out
+ * at its foot, with the same confirmation). It performs no destructive action
+ * itself — deletion's warning and confirmation live on DeleteAccount, where
+ * phase67's real blocker list is.
  */
 export function AccountSafetyScreen() {
   const { palette: colors, isDark } = useThemeColors();
@@ -40,74 +36,18 @@ export function AccountSafetyScreen() {
   // same hub, same defect.
   const navClearance = useScrollClearance();
   const navigation = useNavigation<ProfileStackNavigation>();
-  const { logout } = useAuth();
   const { profile } = useProfile();
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  async function handleLogout() {
-    // Same confirmation and same landing as the hub's control had; only its
-    // address changed.
-    const ok = await confirmAsync({
-      title: 'Log out?',
-      message: 'You can sign back in any time.',
-      confirmText: 'Log out',
-      cancelText: 'Cancel',
-      destructive: true,
-    });
-    if (!ok) return;
-
-    setLoggingOut(true);
-    const { error } = await logout();
-    setLoggingOut(false);
-    if (error) await alertAsync('Logout failed', userMessage(error));
-  }
-
-  const rows: {
-    icon: keyof typeof Ionicons.glyphMap;
-    label: string;
-    sub: string;
-    onPress: () => void;
-  }[] = [
-    {
-      icon: 'card-outline',
-      label: 'Payment methods',
-      // D16 (R6a): the sandbox subtitle renders in sandbox mode only.
-      sub:
-        paymentsMode === 'sandbox'
-          ? 'Sandbox only · no stored card.'
-          : 'No stored cards · entered at checkout.',
-      onPress: () => navigation.navigate('PaymentMethods'),
-    },
-    {
-      icon: 'contrast-outline',
-      label: 'Appearance',
-      sub: 'Light, dark, or follow the system.',
-      onPress: () => navigation.navigate('Appearance'),
-    },
-    {
-      icon: 'document-text-outline',
-      label: 'Terms of Service',
-      sub: 'Read the current agreement.',
-      onPress: () => navigation.navigate('LegalDocument', { document: 'terms' }),
-    },
-    {
-      icon: 'lock-closed-outline',
-      label: 'Privacy Policy',
-      sub: 'How your data is protected.',
-      onPress: () => navigation.navigate('LegalDocument', { document: 'privacy' }),
-    },
-  ];
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Profile" onBack={goBackOrHome} />
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
+      {/* M-16 — the page wears its own name, the row that opens it. */}
+      <ScreenHeader title="Account & Safety" onBack={goBackOrHome} />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
         showsVerticalScrollIndicator={false}
       >
-        <Card style={[styles.card, isDark && styles.cardDark]}>
-          {isDark ? <BrazosMonogram size={140} style={styles.mark} /> : null}
+        <Card style={[styles.card, litCardStyle(isDark)]}>
           <Text style={styles.eyebrow}>ACCOUNT &amp; SAFETY</Text>
           <View style={styles.heroRow}>
             <Text style={styles.heroTitle}>Private by default.</Text>
@@ -118,42 +58,13 @@ export function AccountSafetyScreen() {
             />
           </View>
           <Text style={styles.heroBody}>
-            Control payment, legal and account actions from one protected place.
+            Privacy, and deleting your account.
           </Text>
-        </Card>
-
-        <Card style={[styles.rowsCard, isDark && styles.cardDark]}>
-          {rows.map((row, index) => (
-            <Pressable
-              key={row.label}
-              onPress={row.onPress}
-              accessibilityRole="button"
-              accessibilityLabel={row.label}
-              style={({ pressed }) => [
-                styles.row,
-                index > 0 && styles.rowDivider,
-                pressed && styles.rowPressed,
-              ]}
-            >
-              <View style={[styles.rowGlyph, isDark && styles.rowGlyphDark]}>
-                <Ionicons
-                  name={row.icon}
-                  size={20}
-                  color={isDark ? colors.gold : colors.primary}
-                />
-              </View>
-              <View style={styles.rowCopy}>
-                <Text style={styles.rowLabel}>{row.label}</Text>
-                <Text style={styles.rowSub}>{row.sub}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-            </Pressable>
-          ))}
         </Card>
 
         {/* Master 41's safety principle. It restates the app's one-account
             invariant, so it is product truth rather than marketing. */}
-        <Card style={[styles.card, isDark && styles.cardDark]}>
+        <Card style={[styles.card, litCardStyle(isDark)]}>
           <View style={[styles.rowGlyph, isDark && styles.rowGlyphDark]}>
             <Ionicons
               name="shield-checkmark-outline"
@@ -164,8 +75,7 @@ export function AccountSafetyScreen() {
           <Text style={styles.eyebrow}>SAFETY PRINCIPLE</Text>
           <Text style={styles.heroTitle}>One identity, two modes.</Text>
           <Text style={styles.heroBody}>
-            Switching between customer and worker changes the dashboard — not your
-            account, reviews or protected job history.
+            Modes change the view, not your account.
           </Text>
         </Card>
 
@@ -196,15 +106,6 @@ export function AccountSafetyScreen() {
           </Pressable>
         ) : null}
 
-        <Button
-          title="Log out"
-          variant="secondary"
-          icon="log-out-outline"
-          iconPosition="leading"
-          onPress={handleLogout}
-          loading={loggingOut}
-        />
-
         {/* App Store Guideline 5.1.1(v). Master 41 draws this as the set's
             strongest outlined control; the screen it opens is where the
             warning, the real blocker list and the confirmation live. */}
@@ -218,11 +119,10 @@ export function AccountSafetyScreen() {
           <Text style={styles.deleteLabel}>Delete account</Text>
         </Pressable>
 
-        <View style={[styles.noteCard, isDark && styles.cardDark]}>
+        <View style={[styles.noteCard, litCardStyle(isDark)]}>
           <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
           <Text style={styles.noteText}>
-            Deletion is permanent. Active jobs and unsettled payments must be
-            resolved first.
+            Permanent; settle jobs and payments first.
           </Text>
         </View>
       </ScrollView>
@@ -240,12 +140,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   card: { gap: spacing.sm, overflow: 'hidden' },
   cardDark: { borderColor: colors.border },
-  mark: { position: 'absolute', right: -18, top: -22 },
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.4,
-    color: colors.gold,
+    color: colors.eyebrow,
   },
   heroRow: {
     flexDirection: 'row',
@@ -266,18 +165,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     lineHeight: 21,
     color: colors.textMuted,
   },
-  rowsCard: { gap: 0 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: 64,
-    paddingVertical: spacing.sm,
-  },
-  rowDivider: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
   rowPressed: { opacity: 0.82 },
   rowGlyph: {
     width: 44,
@@ -292,17 +179,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   rowGlyphDark: {
     backgroundColor: 'transparent',
     borderColor: colors.gold,
-  },
-  rowCopy: { flex: 1, gap: 2 },
-  rowLabel: {
-    fontFamily: fonts.display,
-    fontSize: 19,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  rowSub: {
-    fontSize: 13,
-    color: colors.textMuted,
   },
   adminCard: {
     flexDirection: 'row',

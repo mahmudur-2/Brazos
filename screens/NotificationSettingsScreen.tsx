@@ -42,6 +42,7 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 
 /**
@@ -192,8 +193,8 @@ export function NotificationSettingsScreen() {
   const notice = deliveryNotice();
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Notifications" onBack={goBackOrHome} />
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
+      <ScreenHeader title="Notification Settings" onBack={goBackOrHome} />
 
       {loading ? (
         <View style={styles.center}>

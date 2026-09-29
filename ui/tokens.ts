@@ -138,6 +138,28 @@ export const colors = {
    */
   emeraldBright: '#0D6B52',
   /**
+   * 2026-09-27 (the Lux remake, ruling 4) — THE EYEBROW'S COLOUR: every small
+   * section heading and field label reads this role — the emerald in light
+   * (gold on the cream ground fails contrast for small text) and today's gold
+   * in dark. A role rather than an `isDark` fork at sixty call sites, so a
+   * heading style names ONE token in both themes. Light restates the emerald
+   * (an object literal cannot read its own keys).
+   */
+  // 2026-09-28 (#48): light labels were the antique gold #86641A.
+  // 2026-09-29 (LUX-LIST-2 #4): back to the emerald #0D6B52 — the operator's
+  // boxes on the #86641A sheet kept 25 labels gold; those read eyebrowGold.
+  eyebrow: '#0D6B52',
+  /** 2026-09-29 (LUX-LIST-2 #4) — the 25 labels that stay antique gold in light. */
+  eyebrowGold: '#86641A',
+  /** 2026-09-29 (LUX-LIST-2 #8) — the notification feed's MESSAGE kind: a soft blue, its one use. */
+  notifMessage: '#2F6FA8',
+  /**
+   * 2026-09-27 (the Lux remake, ruling 6) — the Post-a-job PROGRESS BAR keeps
+   * today's green: the Prestige emerald in dark, the Heritage emerald in
+   * light. Pinned as its own role because `emerald` moved to the one mint.
+   */
+  wizardProgress: '#0D6B52',
+  /**
    * 2026-09-21 — THE WELCOME PAGE AS SHIPPED (docs/mockups/html/lux/
    * welcome-ship.html and welcome-ship-light.html, the operator's pick with
    * the rim glint; DECISIONS 18): the auth surface's roles, one value per
@@ -167,6 +189,76 @@ export const colors = {
   heroDiscBottom: '#CDDCCF',
   authCtaTop: '#064C3B',
   authCtaBottom: '#064C3B',
+  /**
+   * 2026-09-28 (LUX-LIST-64) — THE STAGE COLOURS, one role per job stage, so a
+   * status pill, the Inbox job chip, the Home live bar's Sonar dot and the
+   * stage rail all say "Assigned" / "In progress" / "Review work" in the same
+   * hue. Light is the FILLED recipe the app's light pills already use (a pale
+   * tint under the ink, the rim near-invisible): `stageAssigned` #8A6414 on
+   * #F5EAD2 and `stageReview` #5B45C7 on #ECE7FF are the approved reference
+   * pages' own (docs/mockups/html/refs/home-tucked-in.html,
+   * inbox-clean-list.html); `stageProgress` #9A4608 on #FBE2CA is the
+   * operator's peach (#46). Dark draws the ink itself, outlined (see `dark`).
+   */
+  stageAssigned: '#8A6414',
+  stageAssignedBg: '#F5EAD2',
+  stageProgress: '#9A4608',
+  stageProgressBg: '#FBE2CA',
+  stageReview: '#5B45C7',
+  stageReviewBg: '#ECE7FF',
+  /** 2026-09-28 (#25) — an initials avatar: the deep green disc with cream
+   *  initials, its rim the fill itself in light (the reference's own). */
+  avatarFill: '#1F4A3C',
+  avatarRim: '#1F4A3C',
+  avatarInk: '#F1EDE1',
+  /** 2026-09-28 (#40) — MONEY IS WHITE: a price is ink, never the gold
+   *  ("gold for money" ends). Light: the near-black display ink. */
+  money: '#13201B',
+  /**
+   * 2026-09-28 (#47) — A MARK: the small non-destructive icons and glyphs
+   * that wore the brand gold (a menu row's glyph, the chat ⋯, the swipe
+   * buttons, the create sheet, the job card's sparkle, the success tick…).
+   * Gold in dark, as today; the deep forest green in light, where the gold
+   * read as too much gold on the cream. Brand and ratings (the wordmark,
+   * stars, read ticks, toggle knobs) keep `gold`.
+   */
+  mark: '#064C3B',
+  /** 2026-09-28 (LUX-LIST-64) — THE GREY the operator names #909594: a quiet
+   *  state that is not text — an unchosen Start-in tile (#9), the Inbox's empty
+   *  glyph (#26), the media limit pills' words (#33). One value, both themes. */
+  grey: '#909594',
+  /** 2026-09-28 (#10, #41) — A PRIMARY THAT IS WAITING: its fill and ink until it
+   *  can be tapped (the job-summary page's `.publish:disabled`). Light is the
+   *  app's own disabled fill (`neutralBg`, emerald D7) under the same grey. */
+  waitingFill: '#EDE7DA',
+  waitingInk: '#909594',
+  /** 2026-09-28 (#41) — THE POSTING BAR (refs/bottom-bar.html): its ground and
+   *  top line, and the quiet Save draft button's fill, rim and ink. Light: the
+   *  light tab bar's own ground and line (refs/home-tucked-in.html), a white
+   *  pill under the sage rim with the muted ink. */
+  barGround: '#FBFAF6',
+  barRim: '#E6DFD3',
+  draftFill: '#FFFFFF',
+  draftRim: '#B9D3C6',
+  draftInk: '#5F6B66',
+  /** 2026-09-28 (#41) — the Save draft glyph, a shade off its words (#AFB8B3 in
+   *  dark), and the commitment's ink (#030A12 in dark, measured on the
+   *  reference's Publish). Light: the muted ink, and the light primary's cream. */
+  draftIcon: '#5F6B66',
+  publishInk: '#F4F1E8',
+  /** 2026-09-28 (#54) — THE INBOX ROW (refs/inbox-clean-list.html, version 9):
+   *  the message under the name (#2E3A35 light, #D5DED9 dark), the job chip's
+   *  quiet ink (#6B7A73 / #93A59D), and the hairline between rows (#E6DFD3 in
+   *  light; dark draws #C8FFE6 at .11 — the alpha rides at the call site). */
+  inboxPreview: '#2E3A35',
+  inboxChipInk: '#6B7A73',
+  inboxRule: '#E6DFD3',
+  /** 2026-09-28 (#53) — THE ••• GLASS DROPDOWN's glyphs (#4E6A5F light, #9CC9B6
+   *  dark), its red rows (#A8432B light, #E36A53 dark — the reference's own red,
+   *  for this menu), and its group rule (#0E6B52 / #C8FFE6, at .12). */
+  dropGlyph: '#4E6A5F',
+  dropDanger: '#A8432B',
+  dropRule: '#0E6B52',
 } as const;
 
 export type ColorToken = keyof typeof colors;
@@ -204,32 +296,47 @@ export const light = colors;
  * active nav); `warn` is the hot amber of the delete gates.
  */
 export const dark = {
-  forest: '#1B3527',
-  emerald: '#5FAE81',
+  // 2026-09-26 (the refresh) — EMERALD LUX GLASS (DECISIONS (14), the operator's
+  // pick; docs/mockups/html/lux/README.md is the system). `forest` is the mint of
+  // the Lux CTA (its gradient #8DF0C0 → #4FC58C, flat at its middle) with the Lux
+  // dark ink on it; `emerald` is mint #7EE2B4, the ONE action colour; `gold` is
+  // the Lux gold, for money and eyebrows only; cream ink, grey-green muted; the
+  // ground's middle stop and the glass card's flat equivalent; mint-neutral
+  // lines, never the warm gold hairline.
+  // 2026-09-27 (the Lux remake, docs/dispatch/LUX-REMAKE.md rulings 4 and 5):
+  // ONE mint, #4FC58C — the darker stop of the Lux CTA gradient — as the
+  // action colour AND the CTA fill ("one accent, nothing brighter"); the gold
+  // is today's Prestige gold #D4A24C, never the Lux #E9C170 ("please dont
+  // change any gold colors besides that"). The rim is the Lux glass rim
+  // (rgba(200,255,230,.20)) flattened over the card fill.
+  forest: '#4FC58C',
+  emerald: '#4FC58C',
   gold: '#D4A24C',
-  goldSoft: '#251E10',
-  mint: '#0E1F18',
-  mint2: '#254539',
+  goldSoft: '#2B2A1D',
+  mint: '#1A362D',
+  mint2: '#2F5A4A',
+  // The cream the light [ + ] and pill are built from (H3) — kept at the
+  // Prestige cream, which the Lux ink #F3F1E8 matches to the eye.
   ink: '#F1EDE1',
 
-  bg: '#02110D',
-  surface: '#0A1813',
-  muted: '#93A096',
-  line: '#55482E',
+  bg: '#0A1A17',
+  surface: '#0C241F',
+  muted: '#A9B8B1',
+  line: '#325047',
+  // 2026-09-28 (#7): the dark error red is the Map's #D8604B everywhere.
   danger: '#D8604B',
   // Danger SURFACES keep their pre-v2 values by decision.
   dangerSurface: '#33201B',
   dangerBorder: '#4C2E26',
-  secondaryBorder: '#2F5140',
+  secondaryBorder: '#2C4A42',
   navInactive: '#7C8A80',
-  onForest: '#F1EDE1',
+  onForest: '#062018',
   warn: '#F2B04F',
-  // 2026-09-18 — the task card's lit shades, docs/mockups/html/home-redesign.html
-  // `.theme-dark .card` verbatim: lighter at the top, settling to the bottom
-  // stop inside its own edge. See the `colors` block above for the roles.
-  taskCardLitTop: '#15362B',
-  taskCardLitBottom: '#0B2019',
-  taskCardEdge: '#27473A',
+  // 2026-09-18 — the task card's lit shades; 2026-09-26 in the Lux glass: the
+  // card's lit top settling into its flat glass, inside the mint-neutral rim.
+  taskCardLitTop: '#11342C',
+  taskCardLitBottom: '#0B211C',
+  taskCardEdge: '#2E4E46',
   // 2026-09-19 — the map pin's dark shades, the reference sheet's own.
   pinTop: '#224634',
   pinBottom: '#06180F',
@@ -237,6 +344,14 @@ export const dark = {
   // 2026-09-21 — the Filters sheet's chosen green, the approved mockup's own
   // (--emerald there); see the `colors` block above for the roles.
   emeraldBright: '#84DFAA',
+  // 2026-09-27 — the eyebrow role: today's gold in dark (ruling 4).
+  eyebrow: '#D4A24C',
+  // 2026-09-29 (LUX-LIST-2 #4) — the kept-gold labels: the same gold in dark.
+  eyebrowGold: '#D4A24C',
+  // 2026-09-29 (LUX-LIST-2 #8) — the feed's message kind, a soft blue.
+  notifMessage: '#7DB9F0',
+  // 2026-09-27 — the wizard's progress bar keeps today's #5FAE81 (ruling 6).
+  wizardProgress: '#5FAE81',
   // 2026-09-21 — the shipped Welcome page's own numbers (welcome-ship.html):
   // the Emerald Lux Glass ink, muted, accent and gold; the glint's cream core
   // (its halo IS the gold); the badge glass; black as the shade; the Lux
@@ -245,10 +360,12 @@ export const dark = {
   // block above for the roles.
   authInk: '#F3F1E8',
   authMuted: '#A9B8B1',
-  authAccent: '#7EE2B4',
-  authGold: '#E9C170',
+  // 2026-09-27 (the Lux remake): the auth accent is the one mint and the auth
+  // gold is today's gold — rulings 4 and 5 reach the auth surface too.
+  authAccent: '#4FC58C',
+  authGold: '#D4A24C',
   authGlintCore: '#FFE9B0',
-  authGlintHalo: '#E9C170',
+  authGlintHalo: '#D4A24C',
   authBadgeFill: '#0A2822',
   authShade: '#000000',
   authGroundTop: '#062421',
@@ -259,6 +376,45 @@ export const dark = {
   heroDiscBottom: '#0A2A23',
   authCtaTop: '#1C503F',
   authCtaBottom: '#0E3229',
+  // 2026-09-28 (LUX-LIST-64): the stage inks in dark — Assigned the Lux gold
+  // #E9C170 (#20), In progress the bright orange #FF9046 (#46), Review work the
+  // lavender #B9A6FF (#54). A dark pill draws its ink with the rim at .55 and a
+  // .09 wash of the same (the reference pill), so each `…Bg` is the ink itself.
+  stageAssigned: '#E9C170',
+  stageAssignedBg: '#E9C170',
+  stageProgress: '#FF9046',
+  stageProgressBg: '#FF9046',
+  stageReview: '#B9A6FF',
+  stageReviewBg: '#B9A6FF',
+  // #25: the initials avatar — fill #173A31, the card-border rim #325047, cream.
+  avatarFill: '#173A31',
+  avatarRim: '#325047',
+  avatarInk: '#F1EDE1',
+  // #40: money is the Lux ink.
+  money: '#F3F1E8',
+  // #47: marks stay today's gold in dark.
+  mark: '#D4A24C',
+  grey: '#909594',
+  // #10, #41: the waiting primary — #909594 on #073328.
+  waitingFill: '#073328',
+  waitingInk: '#909594',
+  // #41: the posting bar — #0A231E under a #2C4D44 line; Save draft #081F19 in a
+  // 1.5pt #2E765A rim with #ABB4AE words (refs/bottom-bar.html, measured).
+  barGround: '#0A231E',
+  barRim: '#2C4D44',
+  draftFill: '#081F19',
+  draftRim: '#2E765A',
+  draftInk: '#ABB4AE',
+  draftIcon: '#AFB8B3',
+  publishInk: '#030A12',
+  // #54: the Inbox row — the brighter message, the chip's ink, the row rule (at .11).
+  inboxPreview: '#D5DED9',
+  inboxChipInk: '#93A59D',
+  inboxRule: '#C8FFE6',
+  // #53: the ••• dropdown — its glyphs, its red rows, its group rule (at .12).
+  dropGlyph: '#9CC9B6',
+  dropDanger: '#E36A53',
+  dropRule: '#C8FFE6',
 } as const satisfies Record<ColorToken, string>;
 
 export { withAlpha } from './colorAlpha';
@@ -605,7 +761,7 @@ export const type = {
 // Shadow (§I: color #10261D, opacity 0.08, radius ~14, offset (0,5), elev ~3)
 // ---------------------------------------------------------------------------
 
-export const shadows: Record<'card' | 'cardDark', ViewStyle> = {
+export const shadows: Record<'card' | 'cardDark' | 'ctaDark', ViewStyle> = {
   card: Platform.select({
     // boxShadow on web avoids RN-web's shadow* deprecation warnings, the same
     // way lib/theme.ts already handles it.
@@ -653,13 +809,32 @@ export const shadows: Record<'card' | 'cardDark', ViewStyle> = {
    * applied the same way, gated on isDark at its call sites. Light is
    * untouched: every site keeps `card` and only ADDS this one in dark.
    */
+  // 2026-09-27 (the Lux remake, ruling 8): the Lux glass card's drop shadow,
+  // `0 10px 30px rgba(0,0,0,.35)` — the "3D pop-out" every dark card wears.
+  // A CSS blur of 30 is a native shadowRadius of 15.
+  // 2026-09-27 (the operator's review, "more 3D popping out"): one notch past
+  // the Lux `0 10px 30px .35` — `0 12px 34px .42`, the same shadow the `card`
+  // material carries — so a hand-styled card and a material card lift alike.
   cardDark: Platform.select({
-    web: { boxShadow: '0 6px 16px rgba(0,0,0,0.5)' },
+    web: { boxShadow: '0 12px 34px rgba(0,0,0,0.42)' },
     default: {
       shadowColor: '#000000',
-      shadowOpacity: 0.5,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.42,
+      shadowRadius: 17,
+      shadowOffset: { width: 0, height: 12 },
+      elevation: 9,
+    },
+  }) as ViewStyle,
+  // The Lux `.cta` glow, `0 10px 24px rgba(79,197,140,.30)`: the mint CTA's
+  // lift in dark. The fill stays the one flat mint (ruling 5); only the
+  // shadow under it is the reference's.
+  ctaDark: Platform.select({
+    web: { boxShadow: '0 10px 24px rgba(79,197,140,0.30)' },
+    default: {
+      shadowColor: '#4FC58C',
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 10 },
       elevation: 6,
     },
   }) as ViewStyle,
@@ -735,6 +910,8 @@ const PANE_SCRIM = '#062418';
  * only — light panes are flat by ruling and ignore these.
  */
 const PANE_RIM_BRIGHT = '#7DE7A4';
+/** The search pill's and the Today chip's rim: today's Prestige emerald, pinned (2026-09-27). */
+const PANE_RIM_SEARCH = '#5FAE81';
 /** Each glow ring is this many points, outside the rim, fading outward. */
 export const PANE_HALO_RING = 2;
 
@@ -743,9 +920,12 @@ export type PaneHalo = { color: string; alphas: readonly number[] };
 
 export const paneEdges = {
   /** The search pill and the Today chip — option C. */
+  // 2026-09-27 (the Lux remake, ruling 2): the map's panes are PINNED to
+  // today's exact values — the Prestige emerald #5FAE81 the operator chose,
+  // written as itself now that `dark.emerald` is the one mint.
   search: {
-    rim: { color: dark.emerald, alpha: 0.7 } as PaneRim,
-    halo: { color: dark.emerald, alphas: [0.12, 0.06, 0.03] } as PaneHalo,
+    rim: { color: PANE_RIM_SEARCH, alpha: 0.7 } as PaneRim,
+    halo: { color: PANE_RIM_SEARCH, alphas: [0.12, 0.06, 0.03] } as PaneHalo,
   },
   /** The jobs sheet — option B. */
   sheet: {
@@ -779,9 +959,37 @@ export type PaneFill = {
   angle: number;
   from: { color: string; alpha: number };
   to: { color: string; alpha: number };
+  /** 2026-09-28 (#53) — the LIGHT recipe's own gradient, drawn only by a material
+   *  that is glass in light (its `light` block). Absent: light stays flat. */
+  light?: { angle: number; from: { color: string; alpha: number }; to: { color: string; alpha: number } };
 };
 
+/**
+ * 2026-09-28 (LUX-LIST-64 #53) — THE INBOX ••• DROPDOWN's glass, from
+ * docs/mockups/html/refs/inbox-clean-list.html: dark `linear-gradient(160deg,
+ * rgba(26,74,62,.66), rgba(9,34,28,.80))`; light the frosted white
+ * `rgba(255,255,255,.82) → rgba(236,244,239,.76)`.
+ */
+const DROPDOWN_INK_TOP = '#1A4A3E';
+const DROPDOWN_INK_BOTTOM = '#09221C';
+const DROPDOWN_FROST_BOTTOM = '#ECF4EF';
+/** The gradient's mean — the fill where no blur can draw. */
+const DROPDOWN_INK_MEAN = '#11362D';
+/** The rims: the Lux mint (#7EE2B4) at .24 in dark, the light green (#0E6B52) at .16 in light. */
+const DROPDOWN_RIM = '#7EE2B4';
+const DROPDOWN_FROST_RIM = '#0E6B52';
 export const paneFills = {
+  // 2026-09-29 (LUX-LIST-2 #9): frosted, stronger and denser — the rows behind become smudges; solid (1) where blur cannot draw. Was .66 → .80 (light .82 → .76).
+  dropdown: {
+    angle: 160,
+    from: { color: DROPDOWN_INK_TOP, alpha: 0.86 },
+    to: { color: DROPDOWN_INK_BOTTOM, alpha: 0.92 },
+    light: {
+      angle: 160,
+      from: { color: colors.surface, alpha: 0.86 },
+      to: { color: DROPDOWN_FROST_BOTTOM, alpha: 0.92 },
+    },
+  } as PaneFill,
   filters: {
     angle: 125,
     from: { color: FILTERS_INK_TOP, alpha: 0.95 },
@@ -789,7 +997,69 @@ export const paneFills = {
   } as PaneFill,
 } as const;
 
-export type MaterialName = 'chrome' | 'sheet' | 'menu' | 'clear' | 'pane';
+export type MaterialName = 'chrome' | 'sheet' | 'menu' | 'clear' | 'pane' | 'card' | 'dropdown';
+
+/**
+ * 2026-09-27 (the Lux remake, ruling 8) — THE CARD MATERIAL'S OWN NUMBERS,
+ * from docs/mockups/html/lux/lux.build.mjs `.card`: the fill
+ * rgba(12,44,38,.52), the rim rgba(200,255,230,.20), the specular top edge
+ * rgba(255,255,255,.16), the shadow 0 10px 30px rgba(0,0,0,.35), radius 22.
+ * Flat — no blur ("on a static ground a blur adds nothing but frames").
+ * Light is a white card under lib/authTheme.ts's soft card shadow.
+ */
+const CARD_INK = '#0C2C26';
+const CARD_RIM = '#C8FFE6';
+
+/**
+ * 2026-09-29 (LUX-LIST-2 #6) — THE LIT CARD: every card, tile and icon square, material or hand-styled.
+ * The operator's pick from .shots/refresh/depth/ ("B lit but … a tiny bit lesser dial on the lit"):
+ * DARK — the task card's lit wash at 70% of its lift, #0F2E27 falling to #0B211C; the Lux mint rim
+ * (#C8FFE6 at .20); the Lux 1pt top edge (white at .16) drawn as an INSET shadow, so it follows the
+ * corner arcs and reads ~2pt on top (the straight strip that crossed into the arcs is gone); today's
+ * lift, 0 12px 34px black .42. LIGHT — white falling to #F9F8F3, the green rim (#0D6B52 at .14), the
+ * Lux light card's shadow 0 10px 30px (#10261D at .105); tiles and icon squares a softer 0 6px 16px .08.
+ */
+export const litCard = {
+  dark: {
+    top: '#0F2E27',
+    bottom: '#0B211C',
+    rim: { color: CARD_RIM, alpha: 0.2 },
+    edge: { color: '#FFFFFF', alpha: 0.16 } as { color: string; alpha: number } | null,
+    shadow: { color: '#000000', alpha: 0.42, radius: 17, y: 12 },
+    tileShadow: { color: '#000000', alpha: 0.42, radius: 17, y: 12 },
+  },
+  light: {
+    top: '#FFFFFF',
+    bottom: '#F9F8F3',
+    rim: { color: '#0D6B52', alpha: 0.14 },
+    edge: null as { color: string; alpha: number } | null,
+    shadow: { color: '#10261D', alpha: 0.105, radius: 15, y: 10 },
+    tileShadow: { color: '#10261D', alpha: 0.08, radius: 8, y: 6 },
+  },
+} as const;
+
+/**
+ * 2026-09-27 (the operator's review) — THE LUX FIELD WELL: the search field's
+ * fill and rim in dark, the reference's `.field` — `rgba(3,20,16,.55)` under a
+ * `rgba(200,255,230,.14)` rim — so the field sits INTO its card instead of
+ * floating lighter than it. Read by ui/primitives/SearchBar.tsx and never
+ * spelled at a call site; light keeps its flat surface, the map its ink pill.
+ */
+export const wells = {
+  field: { ink: '#031410', inkAlpha: 0.55, rim: CARD_RIM, rimAlpha: 0.14 },
+} as const;
+
+/**
+ * 2026-09-28 (LUX-LIST-64 #22, #30) — THE ROUND HEADER BUTTON in dark: the back
+ * disc (and Post a Job's forward disc) wears the glass card's own ink at .58
+ * inside the card rim at .24 — the approved pages' `.circ` — so the outline
+ * reads as the card's edge. Light keeps its faint ink disc, as rendered today.
+ */
+export const discs = {
+  header: { ink: CARD_INK, inkAlpha: 0.58, rim: CARD_RIM, rimAlpha: 0.24 },
+} as const;
+/** A material's drop shadow: `radius` is the native shadowRadius (half the CSS blur). */
+export type MaterialShadow = { color: string; alpha: number; radius: number; y: number };
 
 /**
  * 2026-09-18 — A LIGHT-THEME GLASS RECIPE. Surface's light path has always
@@ -809,6 +1079,12 @@ export type LightGlassSpec = {
   fallbackScrimAlpha: number;
   /** The 1pt bright inner top edge, `borderColor` at this alpha. */
   highlightAlpha: number;
+  /** 2026-09-27: the light card's soft shadow; absent, none. */
+  shadow?: MaterialShadow;
+  /** 2026-09-27: the specular edge's own colour; absent, `borderColor`. */
+  highlightColor?: string;
+  /** 2026-09-29 (LUX-LIST-2 #6) — a lit wash, top to bottom, drawn over the scrim in this theme. */
+  wash?: { top: string; bottom: string };
 };
 
 export type MaterialSpec = {
@@ -850,6 +1126,15 @@ export type MaterialSpec = {
    * asked for lives on a phone whose blur cannot saturate.
    */
   sheen?: { fromAlpha: number; toAlpha: number; color?: string };
+  /**
+   * 2026-09-27 — the specular edge's own colour, when it is not the rim's:
+   * the Lux card's is white at .16 over a mint rim. Absent, `borderColor`.
+   */
+  highlightColor?: string;
+  /** 2026-09-27 — the flat card's drop shadow; absent, no shadow. */
+  shadow?: MaterialShadow;
+  /** 2026-09-29 (LUX-LIST-2 #6) — a lit wash, top to bottom, drawn over the scrim (the card's). */
+  wash?: { top: string; bottom: string };
 };
 
 /**
@@ -890,12 +1175,14 @@ export const materials: Record<MaterialName, MaterialSpec> = {
     radiusTopOnly: true,
   },
   menu: {
-    blur: 50,
+    // 2026-09-29 (LUX-LIST-2 #9): frosted, stronger and denser — the rows behind become smudges; solid (1) where blur cannot draw.
+    // Was blur 50 / .82 / fallback .95.
+    blur: 80,
     scrimColor: GLASS_SCRIM,
-    scrimAlpha: 0.82,
+    scrimAlpha: 0.9,
     borderColor: brand.mint,
     borderAlpha: 0.14,
-    fallbackScrimAlpha: 0.95,
+    fallbackScrimAlpha: 1,
     radius: 16,
     radiusTopOnly: false,
   },
@@ -969,6 +1256,76 @@ export const materials: Record<MaterialName, MaterialSpec> = {
     radiusTopOnly: true,
     highlightAlpha: 0,
     sheen: { fromAlpha: 0.1, toAlpha: 0.04, color: brand.mint },
+  },
+  // 2026-09-27 — CARD: the Lux glass card, flat (ruling 8 of docs/dispatch/
+  // LUX-REMAKE.md — "Cards are flat — no blur"). Every panel, row card, hub
+  // tile and field group wears it through components/Card.tsx: a fill lighter
+  // than the ground, the 1px mint-neutral rim, the white specular edge and
+  // the drop shadow. The fallback (Reduce Transparency) draws the fill nearly
+  // opaque so the card reads as a card without the ground through it. Light:
+  // a white card with no visible rim under the auth surface's soft shadow.
+  card: {
+    blur: 0,
+    // 2026-09-29 (LUX-LIST-2 #6): the lit card (`litCard` above) — an opaque wash from #0F2E27 to
+    // #0B211C, the rim .20, the white edge .16 as an inset shadow, today's lift. Was: #0C2C26 at .58,
+    // rim .24, a straight strip at .22 ("one notch past the Lux", 2026-09-27).
+    scrimColor: litCard.dark.bottom,
+    scrimAlpha: 1,
+    wash: { top: litCard.dark.top, bottom: litCard.dark.bottom },
+    borderColor: CARD_RIM,
+    borderAlpha: litCard.dark.rim.alpha,
+    fallbackScrimAlpha: 1,
+    radius: 22,
+    radiusTopOnly: false,
+    highlightAlpha: 0.16,
+    highlightColor: colors.surface,
+    shadow: litCard.dark.shadow,
+    light: {
+      blur: 0,
+      scrimColor: litCard.light.bottom,
+      scrimAlpha: 1,
+      wash: { top: litCard.light.top, bottom: litCard.light.bottom },
+      borderColor: litCard.light.rim.color,
+      borderAlpha: litCard.light.rim.alpha,
+      fallbackScrimAlpha: 1,
+      highlightAlpha: 0,
+      shadow: litCard.light.shadow,
+    },
+  },
+  // 2026-09-28 (LUX-LIST-64 #53) — DROPDOWN: the Inbox ••• menu's glass, the
+  // approved page's own (docs/mockups/html/refs/inbox-clean-list.html `.menu`).
+  // It wears `paneFills.dropdown` — the 160° gradient in dark, the frosted white
+  // in light — over a blur of 22 (web draws intensity × 0.5), the mint rim at
+  // .24, the white top edge at .14 and the page's `0 22px 48px rgba(0,0,0,.55)`.
+  // The one material besides `clear` that is glass in LIGHT too: the reference
+  // draws it frosted white under a green rim at .16 and a soft green shadow.
+  // Where no blur can draw (Reduce Transparency), the fill falls back to the
+  // gradient's mean nearly opaque, so the rows stay legible. Radius 18.
+  dropdown: {
+    // 2026-09-29 (LUX-LIST-2 #9): frosted, stronger and denser — the rows behind become smudges; solid (1) where blur cannot draw.
+    // Was blur 44, the gradient .66 → .80 (mean .73), fallback .95.
+    blur: 80,
+    scrimColor: DROPDOWN_INK_MEAN,
+    scrimAlpha: 0.89,
+    borderColor: DROPDOWN_RIM,
+    borderAlpha: 0.24,
+    fallbackScrimAlpha: 1,
+    radius: 18,
+    radiusTopOnly: false,
+    highlightAlpha: 0.14,
+    highlightColor: colors.surface,
+    shadow: { color: '#000000', alpha: 0.55, radius: 24, y: 22 },
+    light: {
+      blur: 80,
+      scrimColor: colors.surface,
+      scrimAlpha: 0.89,
+      borderColor: DROPDOWN_FROST_RIM,
+      borderAlpha: 0.16,
+      fallbackScrimAlpha: 1,
+      highlightAlpha: 0.9,
+      highlightColor: colors.surface,
+      shadow: { color: '#102A1D', alpha: 0.18, radius: 22, y: 18 },
+    },
   },
 };
 

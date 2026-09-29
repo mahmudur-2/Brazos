@@ -192,7 +192,9 @@ test('the phone field is the only path from the auth flow to the backend', () =>
   for (const source of [createAccount, emailCreateAccount]) {
     assert.match(source, /const phone = toE164\(country, phoneDigits\)/);
     assert.match(source, /phoneValidationError\(country, phoneDigits\)/);
-    assert.match(source, /useState<Country>\(DEFAULT_COUNTRY\)/);
+    // 2026-09-26 (the refresh, audit M-18): the email form may start on the
+    // country the phone form already had, handed over by "Use Email Instead".
+    assert.match(source, /useState<Country>\((?:params\?\.country \?\? )?DEFAULT_COUNTRY\)/);
   }
   assert.match(emailCreateAccount, /signUp\(trimmedEmail, password, trimmedName, phone\)/);
 
@@ -212,7 +214,9 @@ test('every screen with a phone field starts on the default country', () => {
     'screens/EmailCreateAccountScreen.tsx',
   ]) {
     const source = read(path);
-    assert.match(source, /useState<Country>\(DEFAULT_COUNTRY\)/, `${path} must default to US`);
+    // M-18: arriving fresh it is still the default; from the phone form, the
+    // country already chosen there.
+    assert.match(source, /useState<Country>\((?:params\?\.country \?\? )?DEFAULT_COUNTRY\)/, `${path} must default to US`);
     // The shared field, not a bare TextInput — that is what keeps the calling
     // code out of the national digits.
     assert.match(source, /<PhoneNumberInput/, `${path} must use the shared field`);

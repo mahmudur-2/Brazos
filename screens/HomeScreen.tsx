@@ -17,21 +17,35 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { HomeAtmosphere } from '../components/HomeAtmosphere';
 import { HubCard } from '../components/HubCard';
+import { DraftCard } from '../components/DraftCard';
+import { HireAgainRow } from '../components/HireAgainRow';
+import { HomeAvatarButton } from '../components/HomeAvatarButton';
+import { HomeLiveBar } from '../components/HomeLiveBar';
+import { HowBrazosWorks } from '../components/HowBrazosWorks';
+import { LiveDot } from '../components/LiveDot';
 import { ServicePickerSheet } from '../components/ServicePickerSheet';
 import { ServiceTileRow } from '../components/ServiceTileRow';
 import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import { useProfile } from '../hooks/useProfile';
+import { useAuth } from '../hooks/useAuth';
+import { usePostJobDraft } from '../hooks/usePostJobDraft';
+import { useRebookWorkers } from '../hooks/useRebookWorkers';
 import {
   fetchJobById,
+  JOB_CATEGORIES,
   JOB_CATEGORY_ICONS,
   jobThumbnailUrl,
   type Job,
+  type JobCategory,
 } from '../lib/jobs';
+import { NotificationBell } from '../components/NotificationBell';
 import { alertAsync } from '../lib/dialog';
 import { ATTENTION_CAP, attentionItems } from '../lib/homeAttention';
+import { deriveJobLifecycle, releaseDeadlineMs } from '../lib/jobLifecycle';
+import { firstNameOf, liveJobStatus, pickLiveBarItem, postedCardLive } from '../lib/liveJobStatus';
 import { navigateAcrossTabs } from '../lib/navigationRef';
 import { openOwnJob } from '../lib/ownJobCard';
-import { MORE_SERVICES } from '../lib/skillCategories';
+import { ALL_SERVICES } from '../lib/skillCategories';
 import { formatTimeAgo, greetingFor } from '../lib/time';
 import type { CustomerHomeStackNavigation } from '../lib/navigation';
 import { useHomeDesignSettings } from '../lib/homeDesignStudio';
@@ -39,6 +53,7 @@ import { useDialNumber } from '../lib/designOverrides';
 import { useShellGround } from '../lib/shellGround';
 import { useEntrance } from '../hooks/useEntrance';
 import {
+  litCardStyle, EYEBROW_TYPE,
   fonts,
   radius,
   shadows,
@@ -46,6 +61,7 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 import { litFill, SearchBar, useScrollClearance } from '../ui/primitives';
 import { litBetween } from '../ui/primitives/LitSurface';
@@ -130,17 +146,30 @@ const CTA_EDGE_ALPHA = 0.38;
 // 2026-09-21 — WebP (q90, alpha kept), encoded from the PNG master beside it;
 // the roster in tests/themeResolution.test.mjs measures the master's bake and
 // checks the WebP is that master's size. 165 KB → 21 KB.
-const PRESTIGE_HERO_ART = require('../assets/prestige/hero_armchair_customer.webp');
-// The LIGHT half of that pair, measured rather than assumed to mirror the dark
-// one (RUN H2): 400x351 RGBA like its counterpart, but a different BAKE. The
-// dark file is 97.93% fully opaque with a hard 2.05% strip trimmed off its
-// bottom edge and 35 partial samples in the whole frame; this one ramps —
-// every alpha bucket populated, 22.43% of it partially transparent, 1.43% cut
-// to zero, all four corners empty — while its interior stays 98.73% solid
-// inside a 42px inset. That is a FEATHERED EDGE on a solid scene, which is
-// neither of the two bakes the roster knew, so it carries its own word there
-// ('baked-feathered') rather than being rounded to the nearer one.
-const PRESTIGE_HERO_ART_LIGHT = require('../assets/prestige/hero_armchair_customer_light.webp');
+// 2026-09-27 (the Lux remake, the operator's Home picture): the chair, the
+// lamp and the plant BLENDED IN — the scene with the Lux radial mask baked
+// into its alpha, reaching zero inside its own box, so its night never meets
+// the gradient ground with an edge (.shots/refresh/hero-lux-bake.mjs from the
+// feathered master beside it; the roster measures the bake). Its LIGHT half was
+// a feathered room (RUN H2's 'baked-feathered'). Both files stay on disk,
+// required by nothing, since:
+//
+// 2026-09-29 (LUX-LIST-2 #5, the operator's pick "Lamp-lit", option c) — THE
+// OPERATOR'S OWN CUT-OUTS, standing on the Home's ground with no room at all:
+// a deep-emerald armchair, a brass lamp and a plant in a black pot for dark; a
+// sage armchair and a brass pot for light. Each file is the ink alone at 3x of
+// the one 150 x 156 pt box both schemes share, right- and bottom-aligned, the
+// solid interior made fully opaque (the cut-outs stopped at alpha 240-253),
+// WebP q92 from the PNG master beside it (.shots/refresh/blend/build-assets.mjs).
+// The floor shadow and the lamp's warm pool are their own two small layers
+// below — soft, so the phone stretches them — measured the same look as one
+// baked picture at about half the bytes.
+const PRESTIGE_HERO_ART = require('../assets/prestige/hero_armchair_customer_lamp_dark.webp');
+const PRESTIGE_HERO_ART_LIGHT = require('../assets/prestige/hero_armchair_customer_lamp_light.webp');
+const HERO_GLOW_DARK = require('../assets/prestige/hero_armchair_customer_glow_dark.png');
+const HERO_GLOW_LIGHT = require('../assets/prestige/hero_armchair_customer_glow_light.png');
+const HERO_SHADOW_DARK = require('../assets/prestige/hero_armchair_customer_shadow_dark.png');
+const HERO_SHADOW_LIGHT = require('../assets/prestige/hero_armchair_customer_shadow_light.png');
 /**
  * 2026-09-17 — how many of the customer's own postings "Your jobs" draws.
  *
@@ -205,7 +234,11 @@ const YOUR_JOBS_COUNT = 3;
 const MASTER_TO_DEVICE = 852 / 1844;
 /** Georgia's cap height as a fraction of its em. */
 const GEORGIA_CAP_RATIO = 0.692;
-const MASTER_SERIF_CAPS = {
+// 2026-09-27 (the Lux remake): the section title became the Lux eyebrow, so no
+// style on this screen reads the ladder any more. The measurement stays ON
+// RECORD — exported, so it is a read rather than a dead local — because
+// tests/emeraldFences.test.mjs home(16) still re-derives every rung from it.
+export const MASTER_SERIF_CAPS = {
   /** "Take a task", the T's stem: y 351..402 = 52px. */
   heroHeadline: 52,
   /** "Live Nearby", the L's stem: y 1571..1600 = 30px. */
@@ -213,7 +246,7 @@ const MASTER_SERIF_CAPS = {
   /** "Post a job", the P's stem: y 1406..1434 = 29px. Frozen at 24 — see below. */
   ctaLabel: 29,
 } as const;
-const serifSize = (capPx: number) =>
+export const serifSize = (capPx: number) =>
   Math.round((capPx * MASTER_TO_DEVICE) / GEORGIA_CAP_RATIO);
 
 // home(26) — THE SAME LADDER, FOR THE LABEL THAT IS NOT SERIF.
@@ -270,7 +303,11 @@ const sansSize = (capPx: number) =>
 // (y 430..498, where the art's ink starts at x=531px = 244.6pt inside a box
 // running 470..870px), and tests/emeraldFences.test.mjs re-derives it from the
 // asset file so it cannot drift from the artwork.
-const HERO_ART_INK_LEFT = 0.1775;
+//
+// 2026-09-29 (LUX-LIST-2 #5): the cut-outs' own number — structure starts at
+// 0.073 of the box on the dark master's headline rows and 0.087 on the light
+// one's (the plant's leaves), so one shared 0.08 stays inside both.
+const HERO_ART_INK_LEFT = 0.08;
 /**
  * The dark hero's box in points — master 44's own 400x351 of its 853x1844
  * pixels, at (470, 221). See `homeHeroArtDark` for how it was found and why
@@ -278,8 +315,23 @@ const HERO_ART_INK_LEFT = 0.1775;
  * stylesheet because the headline's column is COMPUTED from them: the copy has
  * to stop where the artwork's ink starts, and a number typed twice is a number
  * that drifts.
+ *
+ * 2026-09-29 (LUX-LIST-2 #5): the cut-outs' box IS their ink — 240..390 x
+ * 136..292 on the 393-pt screen, option c as rendered: the ink 156 tall, its
+ * right edge 3pt short of the screen's (a cut-out has nothing to bleed), its
+ * foot 11pt above the live bar. `right` and `top` stay measured from `intro`.
  */
-const HERO_ART_DARK = { width: 184, height: 162, right: -33, top: 70 } as const;
+const HERO_ART_DARK = { width: 150, height: 156, right: -17, top: 74 } as const;
+/**
+ * 2026-09-29 (LUX-LIST-2 #5): the two soft layers under the cut-out, each in
+ * the one box both schemes share (the FILE is the only thing that forks):
+ * the lamp's warm pool, 263..393 x 78..276, and the floor shadow, 256..393 x
+ * 264..300 — a tight contact under each leg tip, the pot and the lamp's disc,
+ * and the seat's soft pool (one flattened band floated the front leg). Both
+ * end at the screen's right edge, where the art is pinned.
+ */
+const HERO_GLOW = { width: 130, height: 198, right: -20, top: 16 } as const;
+const HERO_SHADOW = { width: 137, height: 36, right: -20, top: 202 } as const;
 /**
  * The dark headline's leading, as a multiple of whatever size the studio is
  * showing. Master 44 runs 82px of line pitch = 37.9pt, and this is that pitch
@@ -298,7 +350,8 @@ const HEADLINE_LEADING = 38 / 31;
  * name once there is one, and otherwise how many bids have come in.
  */
 function counterpartyLine(job: Job, names: Record<string, string | null>): string {
-  if (job.assigned_worker_id) return `Worker · ${names[job.assigned_worker_id] ?? 'Worker'}`;
+  // 2026-09-28 (LUX-LIST-64 #19): the person's name alone, no "Worker ·".
+  if (job.assigned_worker_id) return names[job.assigned_worker_id] ?? 'Worker';
   if (job.bid_count > 0) return `${job.bid_count} ${job.bid_count === 1 ? 'bid' : 'bids'} received`;
   return 'Awaiting bids';
 }
@@ -372,6 +425,13 @@ export function HomeScreen() {
 
   const [query, setQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
+  const { user } = useAuth();
+  // 2026-09-28 (LUX-LIST-64 #17): the unpublished draft, the SAME read My Jobs'
+  // Draft section makes (hooks/usePostJobDraft.ts) — NEEDS YOUR ATTENTION's
+  // first card.
+  const { draft } = usePostJobDraft();
+  // #62: the people the customer can hire again — Discover's list, one read.
+  const rebook = useRebookWorkers('HomeScreen');
 
   const firstName = profile?.full_name?.trim().split(/\s+/)[0];
 
@@ -424,6 +484,46 @@ export function HomeScreen() {
   // same job is a true answer to each.
   const yourJobs = useMemo(() => posted.slice(0, YOUR_JOBS_COUNT), [posted]);
 
+  // 2026-09-28 (LUX-LIST-64 #45, #62) — WHERE EACH HIRED JOB STANDS. The one
+  // lifecycle derivation (lib/jobLifecycle.ts), read with the hub's own facts
+  // exactly as My Jobs reads it, so a card here and its twin there cannot
+  // disagree; the rail, the chat words and the held note come from the one
+  // rule both screens call (lib/liveJobStatus.ts postedCardLive).
+  const lifecycleOf = useCallback(
+    (job: Job) =>
+      deriveJobLifecycle(
+        { job, payment: payments[job.id] ?? null, hasOpenDispute: openDisputeJobIds.has(job.id) },
+        nowMs
+      ),
+    [payments, openDisputeJobIds, nowMs]
+  );
+  const cardLive = (job: Job, state: ReturnType<typeof lifecycleOf>) =>
+    postedCardLive({
+      job,
+      state,
+      paymentStatus: payments[job.id]?.status,
+      workerName: job.assigned_worker_id ? names[job.assigned_worker_id] : null,
+      nowMs,
+    });
+  const openChat = (job: Job) => navigateAcrossTabs('MyJobs', 'Chat', { jobId: job.id });
+
+  // #62 — THE LIVE BAR speaks for the first job underway (on the way, arrived,
+  // working, or done and waiting for review), and only while there is one.
+  const liveBar = useMemo(() => {
+    const pick = pickLiveBarItem(posted.map((job) => ({ job, state: lifecycleOf(job) })));
+    if (!pick) return null;
+    const status = liveJobStatus({
+      state: pick.state,
+      job: pick.job,
+      releaseDeadline: releaseDeadlineMs(pick.job),
+      surface: 'bar',
+      nowMs,
+    });
+    if (!status) return null;
+    const workerId = pick.job.assigned_worker_id;
+    return { job: pick.job, status, workerFirstName: firstNameOf(workerId ? names[workerId] : null) };
+  }, [posted, lifecycleOf, names, nowMs]);
+
   // 2026-09-17: the live-nearby pulse left with the section it marked, and
   // `browseOpenJobs()` — the confirmed Worker Mode switch every Nearby card
   // and its "View all" ran — left with it too. Neither had another caller on
@@ -432,25 +532,32 @@ export function HomeScreen() {
   // switchMode(); this screen no longer carries a switch of its own.
 
 
-  // The "Post a job" CTA's own entry point — carries over whatever the
-  // customer already typed in the search field so a fresh post doesn't start
-  // blank. Service tiles are a separate action (searchCategory below): they
-  // find matching workers, not start a job draft.
+  // 2026-09-26 (the refresh, audit M-12) — HOME IS POSTING. The field said
+  // "Describe your task..." but its return key searched for workers, and the
+  // tiles did too, while the pill under them started a post: two products
+  // behind one card. Now the field's return, the pill and every tile start
+  // the same thing — a job draft, carrying the typed text as its description
+  // and a tile's category pre-selected. Finding a specific person is still
+  // one tap away, and says so: "Browse workers" below the card carries the
+  // typed text into worker search (Discover keeps its own search whole).
   function startJobDraft() {
+    Keyboard.dismiss();
     navigation.navigate('PostJob', {
       initialDescription: query.trim() || undefined,
     });
   }
 
-  function searchCategory(categoryKey: string) {
-    navigation.navigate('WorkerSearch', { category: categoryKey });
-  }
-
-  function submitSearch() {
-    const trimmed = query.trim();
-    if (!trimmed) return;
-    Keyboard.dismiss();
-    navigation.navigate('WorkerSearch', { query: trimmed });
+  function startCategoryDraft(categoryKey: string) {
+    // A tile's key is a job category wherever the two lists overlap (every
+    // Home tile does, lib/skillCategories.ts); anything else opens the wizard
+    // with no category rather than a guessed one.
+    const category = (JOB_CATEGORIES as readonly string[]).includes(categoryKey)
+      ? (categoryKey as JobCategory)
+      : undefined;
+    navigation.navigate('PostJob', {
+      initialCategory: category,
+      initialDescription: query.trim() || undefined,
+    });
   }
 
   // home(9): the "View map" pill and its openMap() dispatch are gone from
@@ -463,7 +570,7 @@ export function HomeScreen() {
   // navigator only.
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       {/* home(4): a fixed layer, OUTSIDE the scroller, so the page slides over
           it instead of carrying it. Dark only; renders nothing in light. */}
       <HomeAtmosphere />
@@ -490,6 +597,21 @@ export function HomeScreen() {
           keyboardDismissMode="on-drag"
         >
           <View style={styles.intro}>
+            {/* 2026-09-29 (LUX-LIST-2 #5): under the cut-out, the lamp's warm
+                pool of light and the floor shadow it stands in — soft layers
+                stretched to their boxes, each file picked by the palette. */}
+            <Image
+              source={isDark ? HERO_GLOW_DARK : HERO_GLOW_LIGHT}
+              style={styles.homeHeroGlow}
+              resizeMode="stretch"
+              accessibilityIgnoresInvertColors
+            />
+            <Image
+              source={isDark ? HERO_SHADOW_DARK : HERO_SHADOW_LIGHT}
+              style={styles.homeHeroShadow}
+              resizeMode="stretch"
+              accessibilityIgnoresInvertColors
+            />
             <Image
               // 2026-08-23 unified this slot onto ONE file for both themes.
               // RUN H2 SPLITS IT AGAIN, because the file it unified onto is a
@@ -542,6 +664,13 @@ export function HomeScreen() {
                     </Text>
                   ) : null}
                 </View>
+                {/* M-24 — the feed, one tap from Home, with its unread count.
+                    2026-09-28 (LUX-LIST-64 #59): your photo right of the bell,
+                    36 round; a tap opens your profile to edit. */}
+                <View style={styles.headerActions}>
+                  <NotificationBell onPress={() => navigation.navigate('Notifications')} />
+                  <HomeAvatarButton name={profile?.full_name} uri={profile?.avatar_url} />
+                </View>
               </View>
 
               <Text
@@ -572,6 +701,21 @@ export function HomeScreen() {
             </View>
           </View>
 
+          {/* 2026-09-28 (LUX-LIST-64 #62, option B "Tucked in") — THE LIVE BAR,
+              between the hero and the task card, only while a job is underway:
+              the Sonar dot in the stage's colour, where the job stands, and
+              "Message Sam ›". It adds 78pt above the card and the pill still
+              sits well above the fold the E2E walk needs (see the attention
+              block's note). */}
+          {liveBar ? (
+            <HomeLiveBar
+              status={liveBar.status}
+              workerFirstName={liveBar.workerFirstName}
+              onOpen={() => navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job: liveBar.job })}
+              onMessage={() => openChat(liveBar.job)}
+            />
+          ) : null}
+
           {/* 2026-09-18 — THE TASK CARD, directly under the hero: the
               standalone search bar and the "FASTEST WAY TO START" promo card
               (its eyebrow, its two-line heading, the gold B mark and the copy
@@ -597,6 +741,10 @@ export function HomeScreen() {
                 bottom: colors.taskCardLitBottom,
                 flat: !isDark,
               }),
+              // 2026-09-27 (the Lux remake, ruling 8): the pop-out — the card
+              // shadow in dark, added under the light shadow the style carries.
+              // 2026-09-29 (LUX-LIST-2 #6): the lit card — the wash, rim, top edge and lift, both themes.
+              litCardStyle(isDark),
               cardEntrance,
             ]}
           >
@@ -616,18 +764,22 @@ export function HomeScreen() {
                 and the second button are gone (DECISIONS 2026-09-20 sitting
                 3, (8)). The leading glyph is omitted here and only here, so
                 the field never draws two magnifiers. */}
+            {/* M-12 — the return key starts the draft, exactly as the pill
+                does; the trailing control stays the mic, since a magnifier
+                would promise a search this field no longer runs. */}
             <SearchBar
               value={query}
               onChangeText={setQuery}
-              onSubmit={submitSearch}
+              onSubmit={startJobDraft}
               placeholder="Describe your task..."
               autoCapitalize="sentences"
               autoCorrect
-              disableLeadingIcon
-              micBecomesSearch
+              // 2026-09-27 (the Lux remake, the operator's Home picture): the
+              // magnifier leads the field again, the mic trails it as today.
+              // 2026-09-27 (the operator's review): the field's dark fill is
+              // SearchBar's own Lux well now, so nothing here overrides it.
               style={[
                 styles.searchField,
-                isDark && styles.searchFieldDark,
                 { minHeight: design.searchHeight, borderRadius: design.searchRadius },
               ]}
             />
@@ -644,6 +796,8 @@ export function HomeScreen() {
               style={({ pressed }) => [
                 styles.heroButton,
                 isDark && styles.heroButtonDark,
+                // 2026-09-27 (the operator's review): the Lux `.cta` glow.
+                isDark && shadows.ctaDark,
                 {
                   minHeight: design.ctaHeight,
                   borderRadius: design.ctaRadius,
@@ -654,8 +808,12 @@ export function HomeScreen() {
                 // `flat` returns undefined, which React Native drops from a
                 // style array: no key, no node, no pixel, which is what keeps
                 // the light render byte-identical.
+                // 2026-09-27 (the Lux remake, the operator's Home picture):
+                // the pill at today's size and font, COLOURED AS THE SYSTEM
+                // CTA — the one mint in dark (`primary`, what every Button's
+                // hero fill is); light keeps its own green. Colour only.
                 litFill({
-                  surface: colors.postPillGreen,
+                  surface: isDark ? colors.primary : colors.postPillGreen,
                   lift: colors.emerald,
                   liftAlpha: CTA_LIFT_ALPHA,
                   highlight: true,
@@ -671,6 +829,24 @@ export function HomeScreen() {
                 Post a job ›
               </Text>
             </Pressable>
+
+            {/* 2026-09-27 (the Lux remake, ruling 13): the refresh's "Looking
+                for a specific pro? Browse workers ›" line is GONE — the Discover
+                tab is the way to a person, and the card keeps to its one job. */}
+
+            {/* 2026-09-28 (LUX-LIST-64 #62): HIRE AGAIN, under the pill — the
+                faces of the people who can be hired again, each ringed in the
+                card's own colour; picking one starts the direct offer. */}
+            <HireAgainRow
+              items={rebook}
+              ringColor={colors.taskCardLitBottom}
+              onHire={(item) =>
+                navigation.navigate('PostJob', {
+                  hireWorkerId: item.id,
+                  hireWorkerName: item.name?.trim() || 'Worker',
+                })
+              }
+            />
           </Animated.View>
 
           {/* 2026-09-17 — THE SERVICE ROW: one sliding row of every service,
@@ -686,10 +862,19 @@ export function HomeScreen() {
             <ServiceTileRow
               heading="Popular services"
               inset={design.screenPadding}
-              onSelect={searchCategory}
+              onSelect={startCategoryDraft}
               onOther={() => setMoreOpen(true)}
+              onViewAll={() => setMoreOpen(true)}
             />
           </Animated.View>
+
+          {/* 2026-09-28 (LUX-LIST-64 #16) — HOW BRAZOS WORKS, for a new customer:
+              from setup until they close it or post a first job. Drawn only
+              once the customer's own read has answered — an unfinished or
+              failed read is not "has never posted". */}
+          {!myJobsLoading && !myJobsError ? (
+            <HowBrazosWorks userId={user?.id} hasPosted={posted.length > 0} />
+          ) : null}
 
           {/* a2 — WHAT NEEDS THE CUSTOMER'S MOVE, the first job section
               (docs/DECISIONS.md 2026-09-05 entry (4), and the 2026-09-18
@@ -711,10 +896,15 @@ export function HomeScreen() {
               is the hub's own HubCard with the hub's own props — the line
               included, which myJobsNextAction() derives once for both
               surfaces. */}
-          {myJobsError || items.length > 0 ? (
+          {myJobsError || items.length > 0 || draft ? (
             <View style={styles.section}>
               <View style={styles.liveNearbyHeader}>
-                <Text style={styles.sectionTitle}>Needs your attention</Text>
+                {/* 2026-09-28 (LUX-LIST-64 #49): the label stays gold, with the
+                    red Sonar dot before it — still, a ring travelling out. */}
+                <View style={styles.alarmLabel}>
+                  <LiveDot color={colors.danger} size={9} motion="sonar" />
+                  <Text style={styles.sectionTitle}>Needs your attention</Text>
+                </View>
                 {items.length > ATTENTION_CAP ? (
                   <Pressable
                     style={({ pressed }) => [styles.viewAll, pressed && styles.viewAllPressed]}
@@ -734,6 +924,9 @@ export function HomeScreen() {
                 ) : null}
               </View>
 
+              {/* #17 — the unpublished draft is the FIRST card; a tap resumes it. */}
+              {draft ? <DraftCard draft={draft} onPress={() => navigation.navigate('PostJob')} /> : null}
+
               {myJobsError ? (
                 // A failed read must never render as "nothing needs your
                 // attention". Nearby's own error pattern, one notice for the
@@ -744,9 +937,11 @@ export function HomeScreen() {
                     <Text style={styles.retry}>Try again</Text>
                   </Pressable>
                 </View>
-              ) : (
+              ) : items.length > 0 ? (
                 <View style={styles.cardList}>
-                  {items.slice(0, ATTENTION_CAP).map(({ job, line }) => (
+                  {items.slice(0, ATTENTION_CAP).map(({ job, state, line }) => {
+                    const { live, chatLabel, moneyNote } = cardLive(job, state);
+                    return (
                     <HubCard
                       key={`attention-${job.id}`}
                       icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
@@ -758,14 +953,19 @@ export function HomeScreen() {
                       priceCents={job.final_amount_cents ?? job.budget_cents}
                       status={job.status}
                       nextAction={line}
+                      live={live}
+                      onChat={live ? () => openChat(job) : undefined}
+                      chatLabel={chatLabel}
+                      moneyNote={moneyNote}
                       // The hub's read returns the FULL row, so the detail
                       // screen opens on it — no re-fetch (n5's own-card path
                       // re-fetches because that card holds an OpenJob).
                       onPress={() => navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job })}
                     />
-                  ))}
+                    );
+                  })}
                 </View>
-              )}
+              ) : null}
             </View>
           ) : null}
 
@@ -800,7 +1000,9 @@ export function HomeScreen() {
 
             {yourJobs.length > 0 ? (
               <View style={styles.cardList}>
-                {yourJobs.map((job) => (
+                {yourJobs.map((job) => {
+                  const { live, chatLabel, moneyNote } = cardLive(job, lifecycleOf(job));
+                  return (
                   <HubCard
                     key={`posted-${job.id}`}
                     icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
@@ -815,7 +1017,12 @@ export function HomeScreen() {
                     // list and the attention block: a recency list makes no
                     // claim about what is owed, so the card falls back to its
                     // own "View details" affordance rather than a line this
-                    // screen would have to derive (P3-31).
+                    // screen would have to derive (P3-31). A hired job's
+                    // card carries its live rail (#45) — the shared rule.
+                    live={live}
+                    onChat={live ? () => openChat(job) : undefined}
+                    chatLabel={chatLabel}
+                    moneyNote={moneyNote}
                     onPress={() =>
                       void openOwnJob(
                         { fetchJob: fetchJobById, navigate: navigateAcrossTabs, alert: alertAsync },
@@ -823,7 +1030,8 @@ export function HomeScreen() {
                       )
                     }
                   />
-                ))}
+                  );
+                })}
               </View>
             ) : myJobsLoading || myJobsError ? (
               // NOTHING, on purpose. A failed or unfinished read is not "no job
@@ -852,10 +1060,10 @@ export function HomeScreen() {
         visible={moreOpen}
         title="All services"
         subtitle="Pick what you need help with"
-        services={MORE_SERVICES}
+        services={ALL_SERVICES}
         onSelect={(categoryKey) => {
           setMoreOpen(false);
-          searchCategory(categoryKey);
+          startCategoryDraft(categoryKey);
         }}
         onClose={() => setMoreOpen(false)}
       />
@@ -920,6 +1128,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
   },
   greetingBlock: { flexShrink: 1, gap: 2 },
+  // #59 — the bell and the photo. The reference sets them 14 apart as a 30pt
+  // bell box and a 36 photo (refs/home-tucked-in.html `.hdr`); here each sits
+  // in a 44pt target, so 3 between the targets keeps the ink ~16 apart, and the
+  // photo's own 4pt of target slack is taken back at the column's edge.
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 3, marginRight: -4 },
   greeting: { fontSize: 18, fontWeight: '500', color: colors.homeSlate },
   greetingName: { color: colors.gold },
   // RUN H2 — LIGHT's accent for the same line. It is the light Post-a-job
@@ -1008,6 +1221,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // "Switch to Worker" pill, 44pt tall against the master's 40.2, covered the
   // art's first 4.2pt; the pill is gone and the sliver shows — the master's
   // number was kept throughout.)
+  //
+  // 2026-09-29 (LUX-LIST-2 #5): the operator's cut-outs replace the room, and
+  // a cut-out's box is its ink — see HERO_ART_DARK. The file's aspect is the
+  // box's, so `cover` crops nothing.
   homeHeroArt: {
     position: 'absolute',
     zIndex: 0,
@@ -1015,6 +1232,22 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     height: HERO_ART_DARK.height,
     right: HERO_ART_DARK.right,
     top: HERO_ART_DARK.top,
+  },
+  homeHeroGlow: {
+    position: 'absolute',
+    zIndex: 0,
+    width: HERO_GLOW.width,
+    height: HERO_GLOW.height,
+    right: HERO_GLOW.right,
+    top: HERO_GLOW.top,
+  },
+  homeHeroShadow: {
+    position: 'absolute',
+    zIndex: 0,
+    width: HERO_SHADOW.width,
+    height: HERO_SHADOW.height,
+    right: HERO_SHADOW.right,
+    top: HERO_SHADOW.top,
   },
   // Laid over the shared SearchBar so the reference geometry wins; the input,
   // clear control and (when available) the voice mic ride SearchBar itself.
@@ -1045,14 +1278,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // sm gap between them, a shorter right pad, a 20pt divider in the same ring
   // colour. No margin: home(25) places the field by the card's own gap.
   searchField: {
-    gap: spacing.sm,
+    gap: spacing.md,
     paddingLeft: 18,
-    paddingRight: 12,
+    paddingRight: 14,
     borderWidth: 1,
     borderColor: colors.secondaryBorder,
     backgroundColor: colors.surface,
   },
-  searchFieldDark: { backgroundColor: colors.mint },
   // 2026-09-17: serviceRows / serviceRow / serviceChip / compactServiceChip /
   // goldOutlineChip / otherChip — home(24)'s two-row chip geometry, held
   // byte-identical to worker Home's — were removed with the chips they laid
@@ -1092,6 +1324,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // fence), and no ladder rung: this is the reference's own number, not a cap
   // measured off master 44.
   taskCardTitle: { fontSize: 20, lineHeight: 24, fontWeight: '700', color: colors.ink },
+  // M-12 — the quiet line under the pill: search is a choice, not the default.
   // The 1pt ring is part of the box in both themes (parity 2026-08-22), and
   // since 2026-08-23 it is DRAWN in both.
   //
@@ -1143,10 +1376,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
-  heroButtonDark: { backgroundColor: colors.postPillGreen, borderColor: 'transparent' },
+  heroButtonDark: { backgroundColor: colors.primary, borderColor: 'transparent' },
   heroButtonPressed: { opacity: 0.9 },
   heroButtonText: { fontFamily: fonts.display, fontSize: 24, fontWeight: '700', color: colors.onForest },
-  heroButtonTextDark: { color: colors.onForest },
+  // The system CTA's ink on the mint (lib/theme.ts `onPrimary`, the Lux dark ink).
+  heroButtonTextDark: { color: colors.onPrimary },
   // home(26) — the NEGATIVE margin is honest, and both themes carry it since
   // the parity pass.
   //
@@ -1175,13 +1409,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // this row — "Needs your attention" (untouched by the 2026-09-17 change) and
   // "Your jobs" — so renaming it would edit the attention block for no pixel.
   liveNearbyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
+  // #49 — the alarm label: the Sonar dot, 9 before the eyebrow (`.lb`).
+  alarmLabel: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   // home(16)/home(26)'s ladder rung (serifSize(30) = 20), in BOTH themes since
   // the parity pass — light's 22 is retired.
+  // 2026-09-27 (the Lux remake, ruling 4): "NEEDS YOUR ATTENTION" and "YOUR
+  // JOBS" are the Lux EYEBROW — gold in dark, emerald in light through the
+  // `eyebrow` role; one measure (lib/theme.ts EYEBROW_TYPE) for both themes.
+  // The serif ladder's `sectionTitle` cap stays measured for the record.
   sectionTitle: {
-    fontFamily: fonts.display,
-    fontSize: serifSize(MASTER_SERIF_CAPS.sectionTitle),
-    fontWeight: '700',
-    color: colors.ink,
+    ...EYEBROW_TYPE,
+    // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
+    color: colors.eyebrowGold,
   },
   // 2026-09-17: liveNearbyTitle / liveIndicator / liveDotHalo / liveDot were
   // removed with the pulsing mark they drew. "Your jobs" is the customer's own

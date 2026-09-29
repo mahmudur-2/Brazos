@@ -1,4 +1,7 @@
+import { useModalPresence } from '../hooks/useModalPresence';
+import { useSheetPresence } from '../hooks/useSheetPresence';
 import {
+  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -9,7 +12,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { SheetHeader } from '../ui/primitives/SheetHeader';
 import type { SkillCategory } from '../lib/skillCategories';
+import { CategoryGlyph } from './CategoryGlyph';
 import {
   fonts,
   radius,
@@ -51,6 +56,9 @@ export function ServicePickerSheet({
   onClose,
 }: ServicePickerSheetProps) {
   const { palette: colors, isDark } = useThemeColors();
+  // #64 (M-31): on screen or not — the one confirm engine never stacks a second modal on iOS.
+  useModalPresence(visible);
+  const presence = useSheetPresence(visible);
   const styles = stylesFor(colors);
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -62,63 +70,59 @@ export function ServicePickerSheet({
 
   return (
     <Modal
-      visible={visible}
+      visible={presence.mounted}
       transparent
-      animationType="slide"
+      animationType="none"
       onRequestClose={onClose}
       // Android hardware back closes the sheet via onRequestClose above.
       statusBarTranslucent
     >
-      <Pressable
-        style={[styles.backdrop, isDark && styles.backdropDark]}
-        onPress={onClose}
-        accessibilityRole="button"
-      >
+      <View style={styles.root}>
+        {/* 2026-09-29 (LUX-LIST-2 #3): the dim covers the screen at once; only the card moves (hooks/useSheetPresence). */}
+        {presence.dimVisible ? (
+          <Pressable
+            style={[StyleSheet.absoluteFill, styles.backdrop, isDark && styles.backdropDark]}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          />
+        ) : null}
+        <Animated.View style={presence.cardStyle}>
         <Pressable
           style={[styles.sheet, { maxHeight, paddingBottom: insets.bottom + spacing.sm }]}
           // Absorbs taps so a press inside the sheet can't reach the backdrop.
           onPress={() => {}}
         >
-          <View style={styles.grabber} />
-
-          <View style={styles.header}>
-            <View style={styles.headerText}>
-              <Text style={styles.title} numberOfLines={1} maxFontSizeMultiplier={1.3}>
-                {title}
-              </Text>
-              {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-            </View>
-
-            <Pressable
-              onPress={onClose}
-              hitSlop={10}
-              style={styles.close}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-            >
-              <Ionicons name="close" size={20} color={colors.textMuted} />
-            </Pressable>
-          </View>
+          {/* #64 (M-31) — the one sheet header: "Close" on the right, in place
+              of the X; picking a service is the action. */}
+          <SheetHeader
+            title={title}
+            subtitle={subtitle}
+            dismissWord="Close"
+            onDismiss={onClose}
+            titleStyle={styles.title}
+            subtitleStyle={styles.subtitle}
+          />
 
           <ScrollView
             style={styles.list}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
           >
-            {services.map((service) => (
+            {services.map((service, index) => (
               <Pressable
                 // Several rows deliberately share a category key (see
                 // MORE_SERVICES), so the label is what makes a row unique.
                 key={service.label}
-                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                style={({ pressed }) => [styles.row, index > 0 && styles.rowDivided, pressed && styles.rowPressed]}
                 onPress={() => onSelect(service.key)}
                 accessibilityRole="button"
                 accessibilityLabel={service.label}
               >
-                <View style={styles.rowIcon}>
-                  <Ionicons name={service.icon} size={19} color={colors.emerald} />
-                </View>
-                <Text style={styles.rowLabel} numberOfLines={2}>
+                {/* 2026-09-28 (LUX-LIST-64 #13, #14): sim.html's list row — the
+                    service's own line glyph in the mint, its name, a chevron. */}
+                <CategoryGlyph name={service.icon} size={22} color={colors.emerald} />
+                <Text style={styles.rowLabel} numberOfLines={1}>
                   {service.label}
                 </Text>
                 <Ionicons name="chevron-forward" size={17} color={colors.textSubtle} />
@@ -126,7 +130,8 @@ export function ServicePickerSheet({
             ))}
           </ScrollView>
         </Pressable>
-      </Pressable>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }
@@ -136,6 +141,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // D7 — the scrim dims the parent. `ink` is the CREAM in dark, so the one
   // expression that dims in light lightens in dark; dark scrims with the page
   // ground instead.
+  root: { flex: 1, justifyContent: 'flex-end' },
   backdrop: {
     flex: 1,
     backgroundColor: withAlpha(colors.ink, 0.42),
@@ -149,43 +155,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     overflow: 'hidden',
     ...shadows.raised,
   },
-  grabber: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.border,
-    marginTop: spacing.md,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  headerText: {
-    flex: 1,
-    gap: 2,
-  },
+  // #13 — sim.html's "All services" type, kept inside the one header (#64).
   title: {
     fontFamily: fonts.display,
-    fontSize: 22,
+    fontSize: 24,
+    lineHeight: 28,
     fontWeight: '700',
     color: colors.ink,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 14,
     color: colors.textMuted,
-  },
-  close: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
   },
   list: {
     // flexGrow:0 so the ScrollView measures to its content and the sheet hugs
@@ -193,58 +173,35 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexGrow: 0,
   },
   listContent: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
     paddingBottom: spacing.md,
   },
-  // RUN H2 — THE ROWS BECOME CARDS. They were bare text on the sheet's own
-  // ground: no fill, no edge, and nothing but a 56pt minimum saying where one
-  // row ended and the next began.
-  //
-  // THE FILL IS THE PAGE GROUND, NOT `surface`. A card in this app is `surface`
-  // over `background` (components/Card.tsx), but this row sits ON a `surface`
-  // sheet — so `surface` here would be a card painted its own backdrop's colour,
-  // invisible in both themes. The relationship is what makes a card read, so it
-  // is inverted rather than copied, and the hairline is Card's own `border`
-  // token (which in dark is the Prestige dim-gold, not a neutral grey).
-  //
-  // TYPE AND RHYTHM ARE UNTOUCHED: no size, weight, family, gap, padding or
-  // minHeight moved. The only box change is the 1pt hairline itself.
+  // 2026-09-28 (LUX-LIST-64 #13) — sim.html's "All services" LIST. RUN H2 had
+  // made each row a card (the page ground under a hairline, an icon tile); the
+  // approved sheet is a plain list instead: no card per row, a hairline between
+  // rows, 12 by 4 of padding, the service's own line glyph in the mint (no
+  // tile), its name at 16, a chevron.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    minHeight: 56,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
+    gap: spacing.md + 2,
+    minHeight: 48,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.md,
+  },
+  rowDivided: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   rowPressed: {
     backgroundColor: colors.mint,
   },
-  // The tile was `mint` with no edge — #E5F1EC on white is nearly nothing in
-  // light, and in dark #0E1F18 on the #0A1813 sheet is nearly nothing squared.
-  // The mint2 ring is what makes the tile a tile in both. The glyph moves from
-  // `forest` to `emerald` — the BRIGHTER green in each palette (#0D6B52 over
-  // #064C3B in light, #5FAE81 in dark), which is also the hue the category
-  // chips on Home already draw their icons in.
-  rowIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.mint,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-  },
+  // The icon tile (`rowIcon`, RUN H2's mint square) is gone with the cards:
+  // the glyph sits bare in the row, the emerald in each palette.
   rowLabel: {
     flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text,
+    fontSize: 16,
+    color: colors.ink,
   },
   }),
 );

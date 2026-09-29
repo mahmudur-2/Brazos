@@ -26,7 +26,6 @@ import {
   type LegalDocumentKey,
 } from '../lib/legal';
 import {
-  authColors,
   authRadius,
   authShadows,
   authSizes,
@@ -34,6 +33,7 @@ import {
   authType,
 } from '../lib/authTheme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
+import { litCardStyle, screenGround, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /** How long the "scroll to the end" hint stays up on its own. */
 const GUIDANCE_MS = 1800;
@@ -65,6 +65,11 @@ type LegalGateScreenProps = {
 export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
   const { logout } = useAuth();
   const reducedMotion = useReducedMotion();
+  // 2026-09-27 (the Lux remake, ruling 15): the gate follows the scheme —
+  // today's layout exactly, every colour a palette role, the Lux ground in
+  // dark, the two cards pop-out.
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
 
   // Everything on this screen is fixed height except the reader, which takes
   // what is left — so on a short device the reader is what collapses. At
@@ -165,6 +170,12 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
   const bothSeen = seen.terms && seen.privacy;
   const canCheck = bothSeen;
   const nextDocument = REQUIRED_DOCUMENTS.find((d) => !seen[d.key]);
+  // 2026-09-28 (LUX-LIST-64 #10): ONE button that changes. Until both are read
+  // it names the document still owed ("Review Privacy Policy") and waits until
+  // the open one has been read to the end; then it is "Agree and continue".
+  const pending = REQUIRED_DOCUMENTS.filter((d) => !seen[d.key]);
+  const reviewTarget = pending.find((d) => d.key !== tab) ?? pending[0];
+  const reviewReady = !!reviewTarget && seen[tab] && reviewTarget.key !== tab;
 
   const unlock = useRef(new Animated.Value(0)).current;
   const wasUnlocked = useRef(false);
@@ -228,7 +239,7 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>BEFORE YOU START</Text>
@@ -240,7 +251,7 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
               first thing to go when height is scarce. */}
           {compact ? null : (
             <Text style={styles.subtitle}>
-              Read both documents to the end, then confirm below.
+              Read both to the end, then confirm.
             </Text>
           )}
         </View>
@@ -253,7 +264,7 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
           hand, because the only thing that completes a row is reaching the
           bottom of that document.
         */}
-        <View style={styles.statusCard}>
+        <View style={[styles.statusCard, litCardStyle(isDark)]}>
           {REQUIRED_DOCUMENTS.map((required, index) => (
             <DocumentStatusRow
               key={required.key}
@@ -273,7 +284,7 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
         <View style={styles.docWrapper}>
           <ScrollView
             ref={scrollRef}
-            style={styles.docScroll}
+            style={[styles.docScroll, litCardStyle(isDark)]}
             contentContainerStyle={styles.docContent}
             onScroll={onScroll}
             onContentSizeChange={onContentSizeChange}
@@ -293,26 +304,11 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
             importantForAccessibility="no-hide-descendants"
           >
             <Text style={styles.guidanceText}>Scroll to the end to continue</Text>
-            <Ionicons name="chevron-down" size={15} color={authColors.forest} />
+            <Ionicons name="chevron-down" size={15} color={colors.forest} />
           </Animated.View>
         </View>
 
         <View style={[styles.footer, compact && styles.footerCompact]}>
-          {/* When one document is done and the other isn't, the next step is
-              named explicitly rather than left for the user to infer from a
-              tick. Nothing moves them automatically. */}
-          {!bothSeen && seen[tab] && nextDocument ? (
-            <AuthButton
-              title={`Review ${nextDocument.title}`}
-              variant="ghost"
-              onPress={() => switchTab(nextDocument.key)}
-            />
-          ) : null}
-
-          {!bothSeen ? (
-            <Text style={styles.helper}>Review both documents to enable agreement.</Text>
-          ) : null}
-
           <Animated.View style={unlockStyle}>
             <Pressable
               style={styles.checkRow}
@@ -332,7 +328,7 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
               <Ionicons
                 name={agreed ? 'checkbox' : 'square-outline'}
                 size={24}
-                color={agreed ? authColors.forest : authColors.placeholder}
+                color={agreed ? colors.forest : colors.textSubtle}
               />
               <Text style={styles.checkLabel}>
                 I have read and agree to the Terms of Service and Privacy Policy.
@@ -347,13 +343,20 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
           ) : null}
 
           <AuthButton
-            title="Agree and continue"
+            accent
+            title={bothSeen || !reviewTarget ? 'Agree and continue' : `Review ${reviewTarget.title}`}
             weight="semibold"
-            onPress={handleContinue}
-            disabled={!agreed || !bothSeen}
+            onPress={
+              bothSeen || !reviewTarget ? handleContinue : () => switchTab(reviewTarget.key)
+            }
+            disabled={bothSeen ? !agreed : !reviewReady}
             loading={saving}
             accessibilityHint={
-              bothSeen ? undefined : 'Read both documents to the end to enable this'
+              bothSeen
+                ? agreed
+                  ? undefined
+                  : 'Tick the box above to enable this'
+                : 'Read the open document to the end to enable this'
             }
           />
 
@@ -398,6 +401,8 @@ function DocumentStatusRow({
   reducedMotion: boolean;
   onPress: () => void;
 }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const check = useRef(new Animated.Value(done ? 1 : 0)).current;
   const wasDone = useRef(done);
 
@@ -437,7 +442,7 @@ function DocumentStatusRow({
         <Ionicons
           name={icon}
           size={compact ? 17 : 19}
-          color={done ? authColors.emerald : authColors.muted}
+          color={done ? colors.emerald : colors.textMuted}
         />
       </View>
 
@@ -461,19 +466,20 @@ function DocumentStatusRow({
             ],
           }}
         >
-          <Ionicons name="checkmark-circle" size={24} color={authColors.emerald} />
+          <Ionicons name="checkmark-circle" size={24} color={colors.emerald} />
         </Animated.View>
       ) : (
-        <Ionicons name="ellipse-outline" size={24} color={authColors.line} />
+        <Ionicons name="ellipse-outline" size={24} color={colors.border} />
       )}
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: authColors.bg,
+    backgroundColor: colors.background,
   },
   // The same centred column the auth screens use, so a wide web window shows
   // one composition rather than a stretched document.
@@ -492,13 +498,14 @@ const styles = StyleSheet.create({
     paddingTop: authSpacing.xs,
     gap: 2,
   },
+  // "BEFORE YOU START": the eyebrow role — gold in dark, emerald in light (ruling 4).
   eyebrow: {
     ...authType.eyebrow,
-    color: authColors.emerald,
+    color: colors.eyebrow,
   },
   title: {
     ...authType.title,
-    color: authColors.ink,
+    color: colors.ink,
     marginTop: 2,
   },
   titleCompact: {
@@ -508,14 +515,14 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     lineHeight: 19,
-    color: authColors.muted,
+    color: colors.textMuted,
   },
   statusCard: {
     marginTop: authSpacing.md - 2,
     borderRadius: authRadius.card,
     borderWidth: 1,
-    borderColor: authColors.line,
-    backgroundColor: authColors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
     ...authShadows.card,
   },
@@ -537,10 +544,10 @@ const styles = StyleSheet.create({
   },
   statusRowDivider: {
     borderTopWidth: 1,
-    borderTopColor: authColors.line,
+    borderTopColor: colors.border,
   },
   statusRowActive: {
-    backgroundColor: authColors.mint,
+    backgroundColor: colors.mint,
   },
   statusIcon: {
     width: 34,
@@ -548,14 +555,14 @@ const styles = StyleSheet.create({
     borderRadius: authRadius.iconButton - 4,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: authColors.bg,
+    backgroundColor: colors.background,
   },
   statusIconCompact: {
     width: 30,
     height: 30,
   },
   statusIconDone: {
-    backgroundColor: authColors.mint2,
+    backgroundColor: colors.mint2,
   },
   statusText: {
     // flex + numberOfLines on the children: a long document title truncates
@@ -566,12 +573,12 @@ const styles = StyleSheet.create({
   statusTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: authColors.ink,
+    color: colors.ink,
   },
   statusSubtitle: {
     fontSize: 12,
     lineHeight: 16,
-    color: authColors.muted,
+    color: colors.textMuted,
   },
   // flex:1 — the reader takes every point the fixed blocks above and below
   // do not, so tightening those is what makes it grow.
@@ -582,9 +589,9 @@ const styles = StyleSheet.create({
   docScroll: {
     flex: 1,
     borderWidth: 1,
-    borderColor: authColors.line,
+    borderColor: colors.border,
     borderRadius: authRadius.card,
-    backgroundColor: authColors.surface,
+    backgroundColor: colors.surface,
   },
   docContent: {
     padding: authSpacing.lg,
@@ -593,7 +600,7 @@ const styles = StyleSheet.create({
   version: {
     marginTop: authSpacing.lg,
     fontSize: 11,
-    color: authColors.placeholder,
+    color: colors.textSubtle,
   },
   guidance: {
     position: 'absolute',
@@ -608,12 +615,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: authSpacing.md,
     paddingVertical: 6,
     borderRadius: authRadius.chip,
-    backgroundColor: authColors.mint,
+    backgroundColor: colors.mint,
   },
   guidanceText: {
     ...authType.note,
     fontWeight: '700',
-    color: authColors.forest,
+    color: colors.forest,
   },
   // Sits lower and less cramped than before: a wider gap above it separates
   // the controls from the reader, and a real inset underneath keeps Sign out
@@ -630,12 +637,12 @@ const styles = StyleSheet.create({
   },
   helper: {
     ...authType.note,
-    color: authColors.muted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   error: {
     ...authType.note,
-    color: authColors.danger,
+    color: colors.danger,
     textAlign: 'center',
   },
   checkRow: {
@@ -648,7 +655,7 @@ const styles = StyleSheet.create({
   checkLabel: {
     flex: 1,
     ...authType.note,
-    color: authColors.ink,
+    color: colors.ink,
   },
   signOutRow: {
     minHeight: 44,
@@ -658,7 +665,8 @@ const styles = StyleSheet.create({
   signOut: {
     fontSize: 14,
     fontWeight: '600',
-    color: authColors.muted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
-});
+  }),
+);

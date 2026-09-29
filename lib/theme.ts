@@ -7,9 +7,11 @@ import {
   metricGeneration,
   metricGroup,
   shadows as tokenShadows,
+  litCard as tokenLitCard,
   THEME_RADIUS_DEFAULTS,
   THEME_SPACING_DEFAULTS,
   withAlpha as alpha,
+  type EmeraldPalette,
 } from '../ui/tokens';
 
 // lib/theme.ts is the standard import surface for screens (CLAUDE.md): the
@@ -18,7 +20,7 @@ import {
 // 20/22) under an explicit name, since this file's own older `radius` scale
 // (8/12/16/24) already claims the size names; the VALUES of both live in
 // exactly one place.
-export { withAlpha, layout, controls, glow, paneEdges, paneFills, PANE_HALO_RING } from '../ui/tokens';
+export { withAlpha, layout, controls, glow, paneEdges, paneFills, PANE_HALO_RING, wells, discs } from '../ui/tokens';
 export type { PaneRim, PaneHalo, PaneFill } from '../ui/tokens';
 export { radius as emeraldRadius } from '../ui/tokens';
 // The ONE reactive palette read (4D-4): re-exported here so screens can take
@@ -58,6 +60,12 @@ export const colors = {
   primary: '#1F4D3A',
   primaryDark: '#173A2C',
   primarySoft: '#E3EBE2',
+  /** 2026-09-26 (the refresh) — the primary button's two stops. Light draws
+   *  its primary flat (both stops the primary); dark draws the Emerald Lux CTA,
+   *  a mint gradient (docs/mockups/html/lux/README.md "The CTA is a mint
+   *  gradient pill"), with the Lux dark ink on it (`onPrimary`). */
+  ctaTop: '#1F4D3A',
+  ctaBottom: '#1F4D3A',
   // Cream content (text/icons) shown on a solid primary-filled surface —
   // buttons, selected chips, own chat bubbles, progress dots, etc.
   onPrimary: '#F4F1E8',
@@ -113,6 +121,44 @@ export const colors = {
   pinGlyph: emeraldLight.pinGlyph,
   /** 2026-09-21 — the Filters sheet's chosen green, by reference (light: the emerald). */
   emeraldBright: emeraldLight.emeraldBright,
+  /** 2026-09-27 — the eyebrow role, by reference (light: the emerald; dark: the gold). */
+  eyebrow: emeraldLight.eyebrow,
+  /** 2026-09-29 (LUX-LIST-2 #4) — the kept-gold labels (light #86641A; dark the gold). */
+  eyebrowGold: emeraldLight.eyebrowGold,
+  /** 2026-09-29 (LUX-LIST-2 #8) — the feed's message kind (light #2F6FA8; dark #7DB9F0). */
+  notifMessage: emeraldLight.notifMessage,
+  /** 2026-09-27 — the wizard progress bar's green, by reference (ruling 6). */
+  wizardProgress: emeraldLight.wizardProgress,
+  /** 2026-09-28 (LUX-LIST-64) — the stage inks and their light fills, the
+   *  initials avatar, money and the small marks, by reference to ui/tokens.ts
+   *  (where each is reasoned). */
+  stageAssigned: emeraldLight.stageAssigned,
+  stageAssignedBg: emeraldLight.stageAssignedBg,
+  stageProgress: emeraldLight.stageProgress,
+  stageProgressBg: emeraldLight.stageProgressBg,
+  stageReview: emeraldLight.stageReview,
+  stageReviewBg: emeraldLight.stageReviewBg,
+  avatarFill: emeraldLight.avatarFill,
+  avatarRim: emeraldLight.avatarRim,
+  avatarInk: emeraldLight.avatarInk,
+  money: emeraldLight.money,
+  mark: emeraldLight.mark,
+  grey: emeraldLight.grey,
+  waitingFill: emeraldLight.waitingFill,
+  waitingInk: emeraldLight.waitingInk,
+  barGround: emeraldLight.barGround,
+  barRim: emeraldLight.barRim,
+  draftFill: emeraldLight.draftFill,
+  draftRim: emeraldLight.draftRim,
+  draftInk: emeraldLight.draftInk,
+  draftIcon: emeraldLight.draftIcon,
+  publishInk: emeraldLight.publishInk,
+  inboxPreview: emeraldLight.inboxPreview,
+  inboxChipInk: emeraldLight.inboxChipInk,
+  inboxRule: emeraldLight.inboxRule,
+  dropGlyph: emeraldLight.dropGlyph,
+  dropDanger: emeraldLight.dropDanger,
+  dropRule: emeraldLight.dropRule,
   /** 2026-09-21 — the shipped Welcome page's auth roles, by reference to the
    *  ONE definition in ui/tokens.ts (light: the Heritage ink, muted, emerald
    *  and gold, the ivory ground flat, the forest CTA, the pale mint disc). */
@@ -204,13 +250,19 @@ export const emeraldColors: ColorPalette = {
  * low-alpha-style "Bg" tints instead of the light palette's pale tints.
  */
 export const darkColors: ColorPalette = {
-  // Prestige v2: the masters' ONE solid conversion fill is the deep forest,
-  // so the primary role IS emeraldDark.forest; pressed/soft steps stay in
-  // the same family. Content on it is the cream ink, both palettes.
-  primary: '#1B3527',
-  primaryDark: '#162B21',
-  primarySoft: '#0E1F18',
-  onPrimary: '#F1EDE1',
+  // 2026-09-26 (the refresh) — EMERALD LUX GLASS in dark (DECISIONS (14), the
+  // operator's pick; docs/mockups/html/lux/README.md is the system): mint is the
+  // ONE action colour, so the primary fill is the mint of the Lux CTA with the
+  // Lux dark ink on it; pressed/soft steps stay in that family.
+  // 2026-09-27 (the Lux remake, ruling 5): ONE mint — #4FC58C is the action
+  // colour and the CTA fill, both stops, so the CTA is flat ("one accent,
+  // nothing brighter"); pressed steps one shade down.
+  primary: '#4FC58C',
+  primaryDark: '#3FB07A',
+  primarySoft: '#1A362D',
+  onPrimary: '#062018',
+  ctaTop: '#4FC58C',
+  ctaBottom: '#4FC58C',
   onForest: emeraldDark.onForest,
   star: '#F59E0B',
   // RUN H2's cross-theme trio, restated here from the SAME source object the
@@ -231,10 +283,12 @@ export const darkColors: ColorPalette = {
   mint: emeraldDark.mint,
   mint2: emeraldDark.mint2,
   ink: emeraldDark.ink,
-  homeBackground: '#02110D',
-  homeSlate: '#93A096',
-  homeModeRing: '#6A736C',
-  homeHairline: '#55482E',
+  // The Lux ground's middle stop (the gradient itself is painted by the screen
+  // roots that carry it); cream-muted slate; mint-neutral hairlines, never warm.
+  homeBackground: '#0A1A17',
+  homeSlate: '#A9B8B1',
+  homeModeRing: '#6F807A',
+  homeHairline: '#325047',
   homeLive: emeraldDark.emerald,
   homeLiveHalo: emeraldDark.mint2,
   // 2026-09-18 — the task card's lit shades, by reference: ui/tokens.ts `dark`
@@ -246,6 +300,38 @@ export const darkColors: ColorPalette = {
   pinBottom: emeraldDark.pinBottom,
   pinGlyph: emeraldDark.pinGlyph,
   emeraldBright: emeraldDark.emeraldBright,
+  eyebrow: emeraldDark.eyebrow,
+  eyebrowGold: emeraldDark.eyebrowGold,
+  notifMessage: emeraldDark.notifMessage,
+  wizardProgress: emeraldDark.wizardProgress,
+  // 2026-09-28 (LUX-LIST-64): the stage, avatar, money and mark roles, by reference.
+  stageAssigned: emeraldDark.stageAssigned,
+  stageAssignedBg: emeraldDark.stageAssignedBg,
+  stageProgress: emeraldDark.stageProgress,
+  stageProgressBg: emeraldDark.stageProgressBg,
+  stageReview: emeraldDark.stageReview,
+  stageReviewBg: emeraldDark.stageReviewBg,
+  avatarFill: emeraldDark.avatarFill,
+  avatarRim: emeraldDark.avatarRim,
+  avatarInk: emeraldDark.avatarInk,
+  money: emeraldDark.money,
+  mark: emeraldDark.mark,
+  grey: emeraldDark.grey,
+  waitingFill: emeraldDark.waitingFill,
+  waitingInk: emeraldDark.waitingInk,
+  barGround: emeraldDark.barGround,
+  barRim: emeraldDark.barRim,
+  draftFill: emeraldDark.draftFill,
+  draftRim: emeraldDark.draftRim,
+  draftInk: emeraldDark.draftInk,
+  draftIcon: emeraldDark.draftIcon,
+  publishInk: emeraldDark.publishInk,
+  inboxPreview: emeraldDark.inboxPreview,
+  inboxChipInk: emeraldDark.inboxChipInk,
+  inboxRule: emeraldDark.inboxRule,
+  dropGlyph: emeraldDark.dropGlyph,
+  dropDanger: emeraldDark.dropDanger,
+  dropRule: emeraldDark.dropRule,
   secondaryBorder: emeraldDark.secondaryBorder,
   // 2026-09-21 — the shipped Welcome page's auth roles, by reference to ui/tokens.ts.
   authInk: emeraldDark.authInk,
@@ -265,29 +351,32 @@ export const darkColors: ColorPalette = {
   authCtaTop: emeraldDark.authCtaTop,
   authCtaBottom: emeraldDark.authCtaBottom,
 
+  // Lux: cream ink, the grey-green muted; the ground's middle stop; the glass
+  // card's flat equivalent (rgba(12,44,38,.52) over the ground); the mint-neutral
+  // rim — "NEUTRAL / MINT HAIRLINES everywhere … never the warm gold line".
   text: '#F1EDE1',
-  textMuted: '#93A096',
-  textSubtle: '#7C8A80',
+  textMuted: '#A9B8B1',
+  textSubtle: '#7F918A',
 
-  background: '#02110D',
-  // The dim-gold hairline is what makes Prestige read as Prestige: `border`
-  // is the flat equivalent of gold at hairline alpha, not a neutral grey.
-  surface: '#0A1813',
-  border: '#55482E',
+  background: '#0A1A17',
+  surface: '#0C241F',
+  // 2026-09-27: the Lux rim, rgba(200,255,230,.20), flattened over the card.
+  border: '#325047',
   navInactive: emeraldDark.navInactive,
 
-  // Live-state/status greens ride the v2 emerald; warning rides the masters'
-  // hot amber on the goldSoft wash. Danger SURFACES keep pre-v2 values.
-  success: '#5FAE81',
-  successBg: '#0E1F18',
+  // Live-state greens ride the one mint; warning keeps the hot amber on the
+  // gold wash; danger is the Lux page's soft coral, readable on the dark glass.
+  success: '#4FC58C',
+  successBg: '#1A362D',
   warning: '#F2B04F',
-  warningBg: '#251E10',
+  warningBg: '#2B2A1D',
+  // 2026-09-28 (#7): the Map's red, #D8604B, is the one dark error red.
   danger: '#D8604B',
-  dangerBg: '#301E19',
-  info: '#5FA3A3',
-  infoBg: '#1B2B2A',
-  neutral: '#A79D8B',
-  neutralBg: '#2A2620',
+  dangerBg: '#3A1F1B',
+  info: '#7FC4C4',
+  infoBg: '#16302E',
+  neutral: '#A9A08F',
+  neutralBg: '#23302C',
 
   white: '#FFFFFF',
   black: '#000000',
@@ -362,11 +451,187 @@ export const radius = metricGroup('theme.radius', THEME_RADIUS_DEFAULTS, {
  */
 export const fonts = {
   display: undefined as TextStyle['fontFamily'],
-  /** The customer Home hero title's face — the ONE serif role. Everything
-   *  else stays on `display`'s system sans. Nothing bundles this: 'Georgia'
-   *  is the platform face, so the naming style owes it a `fontWeight`. */
-  displayHero: 'Georgia' as TextStyle['fontFamily'],
+  /** The hero headlines' face. 2026-09-26 (the refresh): the system sans like
+   *  every other role — the operator, pointing at the system face: "so i want
+   *  this font… change any font from everywhere to this (default one i already
+   *  have on the app)". The ROLE is kept so the four hero sites keep one lever;
+   *  the naming styles keep their `fontWeight`, which the system face honours. */
+  displayHero: undefined as TextStyle['fontFamily'],
 } as const;
+
+/**
+ * 2026-09-26 (the refresh) — THE BOTTOM BAR KEEPS ITS OWN COLOURS. The operator:
+ * "please dont touch the bottom nav bar... I like the current bottom nav bar".
+ * The dark palette moved to Emerald Lux Glass; the bar reads THESE — the
+ * palette it was drawn in — for every role it paints, so the refresh cannot
+ * reach it. Light never moved, so light is the live palette itself.
+ */
+export const NAV_BAR_DARK = {
+  background: '#02110D',
+  surface: '#0A1813',
+  emerald: '#5FAE81',
+  gold: '#D4A24C',
+  navInactive: '#7C8A80',
+  onForest: '#F1EDE1',
+  text: '#F1EDE1',
+  textMuted: '#93A096',
+  border: '#55482E',
+} as const;
+
+/** The palette the bottom bar paints with: the live one, with the bar's own
+ *  frozen roles laid over it in dark. */
+export function navBarPalette<P extends ColorPalette>(palette: P, isDark: boolean): P {
+  return isDark ? { ...palette, ...NAV_BAR_DARK } : palette;
+}
+
+/**
+ * 2026-09-27 (the Lux remake, ruling 2) — THE MAP AND THE FILTERS KEEP TODAY'S
+ * COLOURS. "Map (worker and customer), the Filters sheet and its popups:
+ * untouched … and their colours pinned to today's exact values". This is the
+ * dark palette exactly as the repository shipped it before the remake (the
+ * Prestige v2 set, every role those surfaces read), laid over the live one
+ * for the subtree hooks/useThemeColors.ts pins (`PalettePinContext`,
+ * value 'map'). Light never moved, so light is the live palette itself. The
+ * pane materials and their edges are pinned beside it in ui/tokens.ts.
+ */
+export const MAP_DARK: ColorPalette = {
+  primary: '#1B3527',
+  primaryDark: '#162B21',
+  primarySoft: '#0E1F18',
+  ctaTop: '#1B3527',
+  ctaBottom: '#1B3527',
+  onPrimary: '#F1EDE1',
+  onForest: '#F1EDE1',
+  star: '#F59E0B',
+  ...constantAccents,
+  forest: '#1B3527',
+  emerald: '#5FAE81',
+  gold: '#D4A24C',
+  goldSoft: '#251E10',
+  mint: '#0E1F18',
+  mint2: '#254539',
+  ink: '#F1EDE1',
+  homeBackground: '#02110D',
+  homeSlate: '#93A096',
+  homeModeRing: '#6A736C',
+  homeHairline: '#55482E',
+  homeLive: '#5FAE81',
+  homeLiveHalo: '#254539',
+  taskCardLitTop: '#15362B',
+  taskCardLitBottom: '#0B2019',
+  taskCardEdge: '#27473A',
+  pinTop: '#224634',
+  pinBottom: '#06180F',
+  pinGlyph: '#EEE4C4',
+  emeraldBright: '#84DFAA',
+  eyebrow: '#D4A24C',
+  eyebrowGold: '#D4A24C',
+  notifMessage: '#7DB9F0',
+  wizardProgress: '#5FAE81',
+  // 2026-09-28: roles born after the pin; the Map's money and marks stay today's gold.
+  stageAssigned: '#E9C170',
+  stageAssignedBg: '#E9C170',
+  stageProgress: '#FF9046',
+  stageProgressBg: '#FF9046',
+  stageReview: '#B9A6FF',
+  stageReviewBg: '#B9A6FF',
+  avatarFill: '#173A31',
+  avatarRim: '#325047',
+  avatarInk: '#F1EDE1',
+  money: '#D4A24C',
+  mark: '#D4A24C',
+  grey: '#909594',
+  waitingFill: '#073328',
+  waitingInk: '#909594',
+  barGround: '#0A231E',
+  barRim: '#2C4D44',
+  draftFill: '#081F19',
+  draftRim: '#2E765A',
+  draftInk: '#ABB4AE',
+  draftIcon: '#AFB8B3',
+  publishInk: '#030A12',
+  inboxPreview: '#D5DED9',
+  inboxChipInk: '#93A59D',
+  inboxRule: '#C8FFE6',
+  dropGlyph: '#9CC9B6',
+  dropDanger: '#E36A53',
+  dropRule: '#C8FFE6',
+  secondaryBorder: '#2F5140',
+  authInk: '#F3F1E8',
+  authMuted: '#A9B8B1',
+  authAccent: '#7EE2B4',
+  authGold: '#E9C170',
+  authGlintCore: '#FFE9B0',
+  authGlintHalo: '#E9C170',
+  authBadgeFill: '#0A2822',
+  authShade: '#000000',
+  authGroundTop: '#062421',
+  authGroundMid: '#0A1A17',
+  authGroundBottom: '#07110F',
+  heroDiscTop: '#19553F',
+  heroDiscMid: '#0F3B30',
+  heroDiscBottom: '#0A2A23',
+  authCtaTop: '#1C503F',
+  authCtaBottom: '#0E3229',
+  text: '#F1EDE1',
+  textMuted: '#93A096',
+  textSubtle: '#7C8A80',
+  background: '#02110D',
+  surface: '#0A1813',
+  border: '#55482E',
+  navInactive: '#7C8A80',
+  success: '#5FAE81',
+  successBg: '#0E1F18',
+  warning: '#F2B04F',
+  warningBg: '#251E10',
+  danger: '#D8604B',
+  dangerBg: '#301E19',
+  info: '#5FA3A3',
+  infoBg: '#1B2B2A',
+  neutral: '#A79D8B',
+  neutralBg: '#2A2620',
+  white: '#FFFFFF',
+  black: '#000000',
+  mediaChrome: '#0F1F17',
+};
+
+/** The palette a pinned map subtree resolves: today's dark, or the live light. */
+export function mapPalette<P extends ColorPalette>(palette: P, isDark: boolean): P {
+  return isDark ? { ...palette, ...MAP_DARK } : palette;
+}
+
+/** The §I (ui/tokens.ts) dark roles the remake moved, as they were — for the
+ *  same pinned subtree's `emerald` read. */
+export const MAP_EMERALD_DARK: Partial<EmeraldPalette> = {
+  forest: '#1B3527',
+  emerald: '#5FAE81',
+  gold: '#D4A24C',
+  goldSoft: '#251E10',
+  mint: '#0E1F18',
+  mint2: '#254539',
+  ink: '#F1EDE1',
+  bg: '#02110D',
+  surface: '#0A1813',
+  muted: '#93A096',
+  line: '#55482E',
+  danger: '#D8604B',
+  secondaryBorder: '#2F5140',
+  onForest: '#F1EDE1',
+  taskCardLitTop: '#15362B',
+  taskCardLitBottom: '#0B2019',
+  taskCardEdge: '#27473A',
+  eyebrow: '#D4A24C',
+  eyebrowGold: '#D4A24C',
+  notifMessage: '#7DB9F0',
+  wizardProgress: '#5FAE81',
+  authAccent: '#7EE2B4',
+  authGold: '#E9C170',
+  authGlintHalo: '#E9C170',
+};
+
+export function mapEmerald<P extends EmeraldPalette>(palette: P, isDark: boolean): P {
+  return isDark ? { ...palette, ...MAP_EMERALD_DARK } : palette;
+}
 
 export const typography = {
   // Prestige decision 9: the heading roles carry the display voice in BOTH
@@ -392,7 +657,7 @@ export const typography = {
 } as const;
 
 /** Soft, grounded shadows. Uses boxShadow on web to avoid deprecation warnings. */
-export const shadows: Record<'card' | 'raised' | 'cardDark', ViewStyle> = {
+export const shadows: Record<'card' | 'raised' | 'cardDark' | 'ctaDark', ViewStyle> = {
   /**
    * RUN GROUND1 (C4) — SURFACED HERE, DEFINED ONCE, IN ui/tokens.ts.
    *
@@ -406,6 +671,8 @@ export const shadows: Record<'card' | 'raised' | 'cardDark', ViewStyle> = {
    * Its docblock in ui/tokens.ts carries the measurement and the reasoning.
    */
   cardDark: tokenShadows.cardDark,
+  // 2026-09-27 (the operator's review): the Lux CTA glow, surfaced the same way.
+  ctaDark: tokenShadows.ctaDark,
   card: Platform.select({
     web: { boxShadow: '0 1px 3px rgba(31,46,34,0.07), 0 1px 2px rgba(31,46,34,0.05)' },
     default: {
@@ -466,9 +733,17 @@ export function authSurface(palette: ColorPalette, isDark: boolean) {
     surface: palette.surface,
     ink: palette.ink,
     muted: palette.textMuted,
-    /** Field and card hairlines: gold line-work in dark. */
-    line: isDark ? palette.gold : palette.border,
+    /** Field and card hairlines. 2026-09-27 (the Lux remake): mint-neutral in
+     *  dark, never the warm gold line — gold is for the labels, the eyebrows,
+     *  the money and the greeting's name (ruling 4), lines are the Lux rim. */
+    line: isDark ? alpha(palette.emerald, 0.28) : palette.border,
     accent: isDark ? palette.gold : palette.emerald,
+    /** 2026-09-28 (LUX-LIST-64 #1–#3): a sign-in/up FIELD's caption is the
+     *  mint in dark and the light token's green in light (the Lux `.field
+     *  svg{color:var(--acc)}`), no longer the gold eyebrow; its glyph is the
+     *  mint in dark and the forest #064C3B in light (#47). */
+    fieldLabel: palette.emerald,
+    fieldGlyph: palette.forest,
     danger: palette.danger,
     placeholder: palette.textSubtle,
   } as const;
@@ -525,14 +800,18 @@ export function starColors(palette: ColorPalette, isDark: boolean) {
  * palette rather than a new token surface.
  */
 export function selectedInDark(palette: ColorPalette) {
+  // 2026-09-27 (the Lux remake, ruling 11) — the chosen option lights MINT,
+  // not gold: "the chip keeps its dark glass; the icon and text turn #4FC58C
+  // and the rim lights mint". The shape of the treatment is unchanged (a line
+  // and a label, no fill); only the colour moved, with the ruling.
   return {
     /** The chosen option's outline, and its label and glyph. */
-    line: palette.gold,
-    /** Gold never fills a control, so a chosen option carries no fill. */
+    line: palette.emerald,
+    /** The accent never fills a control, so a chosen option carries no fill. */
     fill: 'transparent',
-    /** The other options in the same group — the manifest's measured hairline
-     *  tier, so a group of outlined chips still has a clear winner. */
-    idleLine: alpha(palette.gold, 0.35),
+    /** The other options in the same group — the hairline tier, so a group of
+     *  outlined chips still has a clear winner. */
+    idleLine: alpha(palette.emerald, 0.3),
   } as const;
 }
 
@@ -590,6 +869,83 @@ export function disabledControl(palette: ColorPalette) {
  * are the same six entries and deliberately stay in one place — this function
  * reads them from `typography` so the two can never drift.
  */
+/**
+ * 2026-09-27 (the Lux remake, ruling 4) — THE EYEBROW: every small section
+ * heading (POPULAR SERVICES, YOUR JOBS, NEEDS YOUR ATTENTION, GETTING THERE,
+ * FINAL SETUP, BEFORE YOU START, STEP 1 OF 4, BRAZOS MARKETPLACE…) is the Lux
+ * page's eyebrow — small caps, tracked, 700 — GOLD in dark and, because gold
+ * on the cream ground fails contrast for small text, EMERALD in light. One
+ * measure for both themes; only the colour forks — through the `eyebrow`
+ * palette role, so a heading names one token. The measure is the Lux
+ * `.eyebrow` (11.5/700/1.6) at whole points.
+ */
+export const EYEBROW_TYPE = {
+  fontSize: 12,
+  fontWeight: '700',
+  letterSpacing: 1.5,
+  textTransform: 'uppercase',
+} as const satisfies TextStyle;
+
+export function eyebrowStyle(palette: { eyebrow: string }): TextStyle {
+  return { ...EYEBROW_TYPE, color: palette.eyebrow };
+}
+
+/**
+ * 2026-09-27 (the Lux remake, ruling 9) — THE GROUND of every dark screen: the
+ * Lux diagonal, `linear-gradient(165deg, #062421 0%, #0A1A17 55%, #07110F
+ * 100%)`, read from the three auth ground stops so there is one definition of
+ * it (ui/tokens.ts `dark.authGround*`). Spread onto a screen's root OVER its
+ * flat `background`, which stays underneath as the fallback. Light returns
+ * null and keeps its flat cream — its three stops are equal, so nothing would
+ * draw. The platform branch is the one every lit surface uses
+ * (ui/primitives/LitSurface.tsx): CSS on web, `experimental_backgroundImage`
+ * on native.
+ */
+/**
+ * 2026-09-29 (LUX-LIST-2 #6) — THE LIT CARD for a hand-styled card, tile or icon square: the same
+ * numbers the `card` material wears (ui/tokens.ts `litCard`) — the wash, the 1pt rim, the top edge as
+ * an inset shadow and the lift, in ONE boxShadow on both platforms. Spread it LAST over a card's own
+ * style: it owns the fill, the rim and the shadow in both themes. `kind: 'tile'` takes the softer light
+ * shadow of a tile or icon square.
+ */
+export function litCardStyle(isDark: boolean, kind: 'card' | 'tile' = 'card'): ViewStyle {
+  const look = isDark ? tokenLitCard.dark : tokenLitCard.light;
+  const lift = kind === 'tile' ? look.tileShadow : look.shadow;
+  const parts = [
+    look.edge ? `inset 0 1px 0 ${alpha(look.edge.color, look.edge.alpha)}` : null,
+    `0 ${lift.y}px ${lift.radius * 2}px ${alpha(lift.color, lift.alpha)}`,
+  ].filter(Boolean);
+  const gradient = `linear-gradient(180deg, ${look.top} 0%, ${look.bottom} 100%)`;
+  return {
+    backgroundColor: look.bottom,
+    ...(Platform.OS === 'web'
+      ? ({ backgroundImage: gradient } as unknown as ViewStyle)
+      : ({ experimental_backgroundImage: gradient } as ViewStyle)),
+    borderWidth: 1,
+    borderColor: alpha(look.rim.color, look.rim.alpha),
+    boxShadow: parts.join(', '),
+  } as ViewStyle;
+}
+
+/**
+ * 2026-09-29 (LUX-LIST-2 #7) — the lit card's own ground (its lower stop), for a ring that has to
+ * read as the card behind it: Profile's overlapping faces cut into each other with it.
+ */
+export function litCardGround(isDark: boolean): string {
+  return (isDark ? tokenLitCard.dark : tokenLitCard.light).bottom;
+}
+
+export function screenGround(
+  palette: { authGroundTop: string; authGroundMid: string; authGroundBottom: string },
+  isDark: boolean,
+): ViewStyle | null {
+  if (!isDark) return null;
+  const gradient = `linear-gradient(165deg, ${palette.authGroundTop} 0%, ${palette.authGroundMid} 55%, ${palette.authGroundBottom} 100%)`;
+  return Platform.OS === 'web'
+    ? ({ backgroundImage: gradient } as unknown as ViewStyle)
+    : ({ experimental_backgroundImage: gradient } as ViewStyle);
+}
+
 export function typographyFor(palette: ColorPalette): Record<keyof typeof typography, TextStyle> {
   return {
     title: { ...typography.title, color: palette.text },

@@ -19,7 +19,7 @@ import {
   type EmeraldPalette,
   type as typeScale,
 } from '../tokens';
-import { themedStyles, useThemeColors } from '../../lib/theme';
+import { screenGround, themedStyles, useThemeColors } from '../../lib/theme';
 import { useOverrideNumber } from '../../lib/designOverrides';
 import { ScreenStateView, isReady, type ScreenState } from './ScreenStates';
 
@@ -54,6 +54,9 @@ type FormScreenProps = PropsWithChildren<{
   onSubmit?: () => void;
   submitDisabled?: boolean;
   submitLoading?: boolean;
+  /** 2026-09-26 (the refresh, audit M-32/M-33): an irreversible commit —
+   *  Delete my account — wears the danger fill, pinned like any other. */
+  submitVariant?: 'primary' | 'destructive';
   /** Secondary action beside the primary — usually Back in a wizard. */
   secondaryLabel?: string;
   onSecondary?: () => void;
@@ -76,6 +79,7 @@ export function FormScreen({
   onSubmit,
   submitDisabled = false,
   submitLoading = false,
+  submitVariant = 'primary',
   secondaryLabel,
   onSecondary,
   footerNote,
@@ -83,7 +87,7 @@ export function FormScreen({
   insideTabs = true,
   children,
 }: FormScreenProps) {
-  const { emerald: colors } = useThemeColors();
+  const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const showFooter = Boolean(submitLabel && onSubmit);
   // RUN S2 (C9) — the layout dials, live across every template screen.
@@ -101,7 +105,7 @@ export function FormScreen({
   const navClearance = useScrollClearance();
 
   return (
-    <SafeAreaView style={styles.safe} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
       <ScreenHeader title={title} subtitle={subtitle} onBack={onBack} />
 
       {steps && steps.length > 0 && typeof step === 'number' ? (
@@ -172,7 +176,7 @@ export function FormScreen({
                   disabled={submitDisabled || submitLoading}
                   style={({ pressed }) => [
                     styles.button,
-                    styles.primary,
+                    submitVariant === 'destructive' ? styles.destructive : styles.primary,
                     // flex:2 so the primary always reads as the main action
                     // even next to a secondary with a longer label.
                     secondaryLabel ? styles.primaryWithSecondary : null,
@@ -233,6 +237,9 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   },
   primary: {
     backgroundColor: colors.forest,
+  },
+  destructive: {
+    backgroundColor: colors.danger,
   },
   primaryWithSecondary: {
     flex: 2,

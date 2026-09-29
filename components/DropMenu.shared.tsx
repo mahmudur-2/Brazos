@@ -169,7 +169,7 @@ export function DropMenuItems({
             <Ionicons
               name={item.icon}
               size={20}
-              color={item.destructive ? colors.danger : colors.gold}
+              color={item.destructive ? colors.danger : colors.mark}
             />
           ) : null}
           <Text style={[styles.itemLabel, item.destructive && styles.itemLabelDestructive]}>

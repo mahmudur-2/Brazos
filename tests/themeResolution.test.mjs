@@ -195,13 +195,16 @@ test('[static] Profile → Appearance is typed, registered, and applies through 
     read('screens/AppearanceScreen.tsx'),
   ]);
 
-  // Typed on the Profile stack, registered once, reachable from a Profile row.
-  // Since the golden-master split (decision 10) that row is on the account &
-  // safety page, which the hub's "Account" chip opens.
+  // Typed on the Profile stack, registered once. 2026-09-29 (LUX-LIST-2 #7):
+  // the choice itself is made IN the hub's Appearance row — Light / Dark /
+  // Auto through the same setPreference — and the screen, which also holds
+  // the design studio's switch, is reached from the hub where the studio's
+  // gate allows it. Account & safety no longer carries the row.
   assert.match(routes, /Appearance: undefined;/);
   assert.match(stacks, /<ProfileStack\.Screen name="Appearance" component=\{AppearanceScreen\} \/>/);
-  assert.match(hub, /navigation\.navigate\('AccountSafety'\)/);
-  assert.match(accountSafety, /navigation\.navigate\('Appearance'\)/);
+  assert.match(hub, /onPress=\{\(\) => setPreference\(option\.value\)\}/);
+  assert.match(hub, /navigation\.navigate\('Appearance'\)/);
+  assert.doesNotMatch(accountSafety, /navigation\.navigate\('Appearance'\)/);
 
   // The screen offers exactly the three preferences by their labels and
   // indicates the current one; a tap goes through the provider's one
@@ -252,7 +255,6 @@ const LITERAL_FILE_ALLOWLIST = {
   // Auth surface (stays light this run; lib/authTheme.ts is never-modified,
   // so these cannot move into tokens yet — logged as the authTheme follow-up).
   'components/AuthNotice.tsx': 'auth surface; token home is frozen authTheme',
-  'components/CountryPicker.tsx': 'auth surface scrim; token home is frozen authTheme',
 };
 
 test('[static] the auth flow is one design system, and authTheme stayed frozen', async () => {
@@ -303,27 +305,31 @@ test('[static] the auth flow is one design system, and authTheme stayed frozen',
   //    nothing it depends on moved. It still takes no `themed` prop and still
   //    resolves every colour from the frozen constant, so its light rendering
   //    cannot have changed.
+  // 2026-09-28 (LUX-LIST-64 #5): the country list is a DROPDOWN on the Filters'
+  // system — dark or light by the scheme — so it now reads the resolved palette
+  // like the popover it is built on, and no Heritage constant at all.
   const pickerCode = stripCommentsForScan(countryPicker);
-  assert.doesNotMatch(pickerCode, /\bthemed\b/, 'CountryPicker must stay Heritage-only');
-  assert.doesNotMatch(pickerCode, /useThemeColors|authSurface/, 'CountryPicker must stay Heritage-only');
-  assert.match(pickerCode, /authColors\./, 'CountryPicker still resolves from authTheme');
+  assert.match(pickerCode, /const \{ palette: colors, isDark \} = useThemeColors\(\);/, 'CountryPicker follows the scheme');
+  assert.doesNotMatch(pickerCode, /\bauthColors\b/, 'CountryPicker reads no Heritage constant');
 
   // 4. The opt-in reached exactly the five auth screens that have a dark
   //    treatment, and no further: the rest of the flow is untouched, so no
   //    other light surface moved.
+  // 2026-09-27 (the Lux remake, ruling 15 — "There is no dark mode"): Setup
+  // opts in too, and the legal gate resolves the palette on its own root.
   for (const path of [
     'screens/WelcomeScreen.tsx',
     'screens/CreateAccountScreen.tsx',
     'screens/EmailCreateAccountScreen.tsx',
     'screens/SignInScreen.tsx',
     'screens/EmailSignInScreen.tsx',
+    'screens/SetupScreen.tsx',
   ]) {
     assert.match(stripCommentsForScan(await read(path)), /\bthemed\b/, `${path} must opt in`);
   }
+  assert.match(stripCommentsForScan(await read('screens/LegalGateScreen.tsx')), /useThemeColors\(\)/);
   for (const path of [
     'screens/VerifyPhoneScreen.tsx',
-    'screens/SetupScreen.tsx',
-    'screens/LegalGateScreen.tsx',
     'screens/LaunchScreen.tsx',
   ]) {
     assert.doesNotMatch(
@@ -457,7 +463,41 @@ const BAKED_ART = {
   // the MASTER: the bake below is still measured on the master's bytes, and
   // rosterBytes() first proves the WebP is a real WebP of the master's size.
   // 165 KB → 21 KB; the same for the three entries below that carry a master.
-  'assets/prestige/hero_armchair_customer.webp': { bake: 'baked-feathered', gate: true, master: 'assets/prestige/hero_armchair_customer.png' },
+  // 2026-09-27 — THE LUX BAKE. The Lux remake (docs/dispatch/LUX-REMAKE.md,
+  // the operator's Home picture: "the chair / lamp / plant blended in") mounts
+  // hero_armchair_customer_lux.webp, the feathered master above with the Lux
+  // radial mask (60% / 48%, solid to 42%) baked in with radii that reach ZERO
+  // inside the box — 8.46% cut away, 70.81% partial, measured at the bake —
+  // so the photo's night never meets the gradient ground with an edge. The
+  // previous mount stays on disk beside its master, required by nothing; this
+  // entry replaces it BECAUSE the added-or-removed assertion below demands
+  // exactly that of a raster the app stops mounting. Still gated: the dark
+  // half of the per-theme pair.
+  // GONE 2026-09-29 (LUX-LIST-2 #5) — hero_armchair_customer_lux.webp (bake
+  // 'baked-feathered', gated, master hero_armchair_customer_lux.png) and its
+  // light half hero_armchair_customer_light.webp (the entry below this one's
+  // history). The operator replaced the room with their OWN CUT-OUTS ("Lamp-lit",
+  // option c): screens/HomeScreen.tsx no longer requires either, so both leave
+  // this roster BECAUSE the added-or-removed assertion demands exactly that of a
+  // raster the app stops mounting. All four files stay on disk, byte for byte.
+  //
+  // THE NEW PAIR, measured on the PNG masters beside them: 450x468 RGBA, the ink
+  // alone at 3x of the shared 150x156 pt box — dark 45.92% of samples at 0,
+  // 46.85% solid, 7.23% the soft edge between; light 49.75 / 43.46 / 6.79. A
+  // CUT-OUT by this roster's own measure (a cut-out here runs 38% to 73% empty),
+  // and gated as the pair always was: a dark composition and a light one.
+  'assets/prestige/hero_armchair_customer_lamp_dark.webp': { bake: 'transparent', gate: true, master: 'assets/prestige/hero_armchair_customer_lamp_dark.png' },
+  'assets/prestige/hero_armchair_customer_lamp_light.webp': { bake: 'transparent', gate: true, master: 'assets/prestige/hero_armchair_customer_lamp_light.png' },
+  // ...and the two soft layers under them, a NEW WORD rather than a rounding:
+  // 'soft-layer' is a light or a shadow, not a picture — RGBA that reaches 0 at
+  // its rim and holds NO fully opaque sample anywhere (the hero sweep below pins
+  // both). They are small by design (the phone stretches them; a blur has no
+  // detail to lose): the lamp's warm pool 65x99, the floor shadow 274x72. Gated:
+  // dark's pool is gold on the night, light's a faint warmth on the cream.
+  'assets/prestige/hero_armchair_customer_glow_dark.png': { bake: 'soft-layer', gate: true },
+  'assets/prestige/hero_armchair_customer_glow_light.png': { bake: 'soft-layer', gate: true },
+  'assets/prestige/hero_armchair_customer_shadow_dark.png': { bake: 'soft-layer', gate: true },
+  'assets/prestige/hero_armchair_customer_shadow_light.png': { bake: 'soft-layer', gate: true },
   // The LIGHT half of that pair, installed by the operator and MEASURED here
   // rather than assumed to mirror the dark one — it is not the same bake.
   //
@@ -481,7 +521,7 @@ const BAKED_ART = {
   // Gated, and for the same reason its counterpart is: it is one half of a
   // per-theme pair. Mounting a light composition under the dark palette is the
   // mirror of the fault that put the gate back on.
-  'assets/prestige/hero_armchair_customer_light.webp': { bake: 'baked-feathered', gate: true, master: 'assets/prestige/hero_armchair_customer_light.png' },
+  // (Its entry left with its mount on 2026-09-29 — see LUX-LIST-2 #5 above.)
   // GONE 2026-09-18 — assets/prestige/brazos_b_drape.png, the dark B mark
   // (transparent, gated). It drew the customer Home promo card's mark, and the
   // promo card became the task card, which carries no mark; screens/
@@ -489,7 +529,35 @@ const BAKED_ART = {
   // added-or-removed assertion below demands exactly that of a raster the app
   // stops mounting. The file stays on disk, byte for byte, required by
   // nothing — the change is one `git revert` away.
-  'assets/prestige/hero_toolbox_worker.webp': { bake: 'transparent', gate: true, master: 'assets/prestige/hero_toolbox_worker.png' },
+  // 2026-09-28 (LUX-LIST-64 #61) — THE GATE COMES OFF THE TOOLBOX, and it is the
+  // RECORD catching up with a decision a month old, not a rule relaxed. Worker
+  // Home has mounted this crop in BOTH themes since the 2026-08-22 parity pass
+  // (its docblock: "mounted in BOTH themes … its baked dark halo disc renders as
+  // drawn on light"); the gate scan below kept passing only because the "Switch
+  // to Customer" pill's `isDark && styles.modeSwitchTextDark` happened to sit
+  // inside the 240-character window before the <Image>. #61 removed the pill,
+  // the scan saw the mount as it really is — unconditional, by decision — and
+  // this entry now says so, exactly as the customer hero's 2026-08-23 entry did
+  // when both themes mounted it. The bake is untouched and still measured.
+  'assets/prestige/hero_toolbox_worker.webp': { bake: 'transparent', gate: false, master: 'assets/prestige/hero_toolbox_worker.png' },
+  // 2026-09-28 (LUX-LIST-64 #14) — THE THREE BAKED CATEGORY GLYPHS: sim.html's
+  // paint roller (Painting) and bin (Junk Removal), and a drill (Handyman, since
+  // the hammer is Assembly's) — 96px white line art on a transparent ground,
+  // baked by .shots/refresh/bake-glyphs.mjs because no SVG library ships, and
+  // drawn by components/CategoryGlyph.tsx through Image tintColor in the
+  // palette's own green. White on nothing is the same file in both themes (the
+  // tint is the palette's), so no gate is owed.
+  'assets/glyphs/roller.png': { bake: 'transparent', gate: false },
+  'assets/glyphs/trash.png': { bake: 'transparent', gate: false },
+  'assets/glyphs/drill.png': { bake: 'transparent', gate: false },
+  // 2026-09-28 (LUX-LIST-64 #14, completed "everywhere"): their SOLID twins, for the
+  // places that draw a category's filled Ionicon (a choice chip, a job page's
+  // category well, the portfolio picker) — the same shapes, closed parts filled,
+  // the bin's slits and the drill's seam cut out; baked by
+  // .shots/refresh/bake-glyphs-fill.mjs. White on nothing, tinted: no gate owed.
+  'assets/glyphs/roller-fill.png': { bake: 'transparent', gate: false },
+  'assets/glyphs/trash-fill.png': { bake: 'transparent', gate: false },
+  'assets/glyphs/drill-fill.png': { bake: 'transparent', gate: false },
   // home(4)'s fixed atmosphere behind both homes. GATE DECISION: gated, and it
   // is the strongest case on the roster — this one is genuinely still baked
   // (RGB, no alpha channel at all, 1290x2796 of dark room), it is full-bleed
@@ -504,7 +572,14 @@ const BAKED_ART = {
   // region in the lower right gutter — and scripts/atmosphere-tune.mjs is the
   // record of it. The 1080x2335 this comment used to name was never this
   // file's size; it is corrected here rather than carried forward.
-  'assets/prestige/home-atmosphere-dark.webp': { bake: 'opaque-dark', gate: true, master: 'assets/prestige/home-atmosphere-dark.png' },
+  // GONE 2026-09-27 — assets/prestige/home-atmosphere-dark.webp (bake
+  // 'opaque-dark', gated, master home-atmosphere-dark.png). The Lux remake
+  // (docs/dispatch/LUX-REMAKE.md ruling 9) makes the ground of every dark
+  // screen the Lux GRADIENT, drawn by lib/theme.ts screenGround(); components/
+  // HomeAtmosphere.tsx draws that and mounts no raster, so the entry leaves
+  // this roster BECAUSE the added-or-removed assertion below demands exactly
+  // that of a raster the app stops mounting. Both files stay on disk, byte for
+  // byte, required by nothing — one `git revert` away.
   // GONE 2026-08-23 — the Heritage armchair. It was the LIGHT-only hero (RGBA,
   // 62.81% fully transparent, a stem-less rosette and a whole chair on
   // nothing) opposite the baked prestige scene, and the operator unified both
@@ -772,9 +847,17 @@ test('[static] every roster bake claim is re-derived from the file, both ways', 
   // slipped past: the two files still exist, still transparent, and are
   // simply not required by the app any more — the floor follows the roster's
   // composition down exactly as it followed it up.
-  assert.ok(opaqueChecked >= 2, `the opaque half must stay measured (saw ${opaqueChecked})`);
+  // 2026-09-27: 2 -> 1 as the atmosphere raster LEFT the roster with its mount
+  // (the Lux remake, ruling 9 — the ground is drawn). The app icon is the one
+  // opaque entry left, and it is measured exactly as before.
+  // 2026-09-28 (LUX-LIST-64 #14): the transparent floor 4 -> 7 as the three
+  // baked category glyphs JOINED the roster — it rises with the composition;
+  // 7 -> 10 the same day as their three solid twins joined it.
+  // 2026-09-29 (LUX-LIST-2 #5): 10 -> 14 — the two retired room scenes left, the
+  // operator's two cut-outs and their four soft layers joined.
+  assert.ok(opaqueChecked >= 1, `the opaque half must stay measured (saw ${opaqueChecked})`);
   assert.ok(
-    transparentChecked >= 4,
+    transparentChecked >= 14,
     `the transparent half must stay measured (saw ${transparentChecked})`,
   );
 });
@@ -805,11 +888,18 @@ test('[static] each hero raster is the bake the roster records', async () => {
   // 2026-09-18: assets/prestige/brazos_b_drape.png left this list with the
   // roster entry it checked against — the app no longer mounts it (the promo
   // card's mark went with the promo card). Three heroes stay measured.
+  // 2026-09-29 (LUX-LIST-2 #5): the customer pair is the operator's cut-outs now
+  // (recorded 'transparent', measured below as such), and the four soft layers
+  // under them join the sweep under their own word — seven measured.
   let checked = 0;
   for (const asset of [
-    'assets/prestige/hero_armchair_customer.webp',
-    'assets/prestige/hero_armchair_customer_light.webp',
+    'assets/prestige/hero_armchair_customer_lamp_dark.webp',
+    'assets/prestige/hero_armchair_customer_lamp_light.webp',
     'assets/prestige/hero_toolbox_worker.webp',
+    'assets/prestige/hero_armchair_customer_glow_dark.png',
+    'assets/prestige/hero_armchair_customer_glow_light.png',
+    'assets/prestige/hero_armchair_customer_shadow_dark.png',
+    'assets/prestige/hero_armchair_customer_shadow_light.png',
   ]) {
     const recorded = BAKED_ART[asset]?.bake;
     assert.ok(recorded, `${asset} must stay on the roster`);
@@ -864,6 +954,19 @@ test('[static] each hero raster is the bake the roster records', async () => {
         `${asset}: only ${alpha.partialSamples}/${alpha.samples} samples are partially ` +
           'transparent — the feathered edge is what this word records, and it has gone',
       );
+    } else if (recorded === 'soft-layer') {
+      // 2026-09-29 (LUX-LIST-2 #5) — a LIGHT or a SHADOW, not a picture. The
+      // phone stretches these files to boxes many times their size, which is
+      // only honest for something with no detail to lose: so it must carry
+      // alpha, fade to 0 at its rim, and hold NO fully opaque sample — a solid
+      // pixel here would be a picture passing itself off as light.
+      assert.equal(alpha.colourType, 6, `${asset} is recorded soft-layer but is not RGBA`);
+      assert.equal(alpha.minAlpha, 0, `${asset} is recorded soft-layer but never fades to 0`);
+      assert.equal(
+        alpha.samples - alpha.transparentSamples - alpha.partialSamples,
+        0,
+        `${asset} is recorded soft-layer but carries fully opaque samples — that is a picture, not a light`,
+      );
     } else {
       assert.equal(recorded, 'opaque-dark', `${asset}: unknown bake "${recorded}" on the roster`);
       assert.equal(
@@ -878,7 +981,7 @@ test('[static] each hero raster is the bake the roster records', async () => {
       );
     }
   }
-  assert.equal(checked, 3, 'all three hero rasters must stay measured');
+  assert.equal(checked, 7, 'all three hero rasters and the four soft layers must stay measured');
 });
 
 test('[static] a theme-specific asset is mounted only behind an isDark decision', async () => {
@@ -889,7 +992,13 @@ test('[static] a theme-specific asset is mounted only behind an isDark decision'
   // same assertions.
   const repoRoot = fileURLToPath(new URL('../', import.meta.url));
   const gated = Object.entries(BAKED_ART).filter(([, meta]) => meta.gate);
-  assert.ok(gated.length >= 4, 'the gated set must not empty out');
+  // 2026-09-27: three gated entries — the two armchairs and the toolbox — once
+  // the atmosphere raster left the roster with its mount (the Lux remake).
+  // 2026-09-28 (LUX-LIST-64 #61): two — the customer Home's per-theme pair —
+  // once the toolbox's record caught up with its both-theme mount (see its
+  // roster entry). The floor tracks the roster; the sweep below is unchanged.
+  // 2026-09-29 (LUX-LIST-2 #5): six — the cut-out pair and its two soft pairs.
+  assert.ok(gated.length >= 6, 'the gated set must not empty out');
 
   const roots = ['screens', 'components', 'ui'];
   const offenders = [];
@@ -917,8 +1026,11 @@ test('[static] a theme-specific asset is mounted only behind an isDark decision'
       }
     }
   }
-  // The sweep must actually be looking at real mounts.
-  assert.ok(checked >= 4, `the gate scan must see the known mounts (saw ${checked})`);
+  // The sweep must actually be looking at real mounts. 2026-09-28 (#61): the
+  // customer Home's ternary names both halves of its pair — two known mounts.
+  // 2026-09-29 (LUX-LIST-2 #5): six — three ternaries (the art, its pool of
+  // light, its floor shadow), each naming both halves.
+  assert.ok(checked >= 6, `the gate scan must see the known mounts (saw ${checked})`);
   assert.deepEqual(offenders, [], 'baked artwork must resolve per palette, never unconditionally');
 });
 
@@ -986,7 +1098,6 @@ const MODULE_SCOPE_SHEET_EXCLUSIONS = {
   'components/AuthField.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
   'components/AuthNotice.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
   'components/AuthScaffold.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
-  'components/CountryPicker.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
   'components/HotspotMap.web.tsx': 'frozen web surface (CLAUDE.md) — a *.web.tsx file is never edited',
 };
 
@@ -1030,7 +1141,11 @@ test('[static] T1 (D6): every eligible sheet is lazy, and the exclusions are nam
 
   // 2. AND WHAT WAS CONVERTED ACTUALLY READS THE SHEET AT USE TIME. A file
   //    that wraps the factory but never calls it renders nothing.
-  assert.equal(lazy.length, 23, 'the D6 conversion set is 23 files');
+  // 2026-09-27 (the Lux remake, ruling 15): 23 -> 21 — components/SetupRow.tsx
+  // and components/SetupChoiceCard.tsx carry colour now (palette roles, so
+  // Setup renders in dark), so they moved from the colourless `metricStyles`
+  // to `themedStyles`, which is the other lazy factory. Nothing went eager.
+  assert.equal(lazy.length, 21, 'the D6 conversion set is 21 files');
   for (const path of lazy) {
     const source = await read(path);
     assert.match(source, /^\s*const styles = stylesFor\(\);$/m, `${path} must read its sheet inside the component`);

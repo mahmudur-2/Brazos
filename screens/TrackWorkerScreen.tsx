@@ -21,7 +21,7 @@ import {
 } from '../lib/jobLifecycle';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import {
-  fonts,
+  litCardStyle, fonts,
   radius,
   spacing,
   themedStyles,
@@ -159,14 +159,14 @@ export function TrackWorkerScreen() {
 
   return (
     <DetailScreen
-      title="Track worker"
+      title="Track Worker"
       subtitle={job.title}
       onBack={goBackOrHome}
       state={state}
       sections={[
         {
           content: (
-            <View style={[styles.noticeCard, isDark && styles.cardDark]}>
+            <View style={[styles.noticeCard, litCardStyle(isDark)]}>
               <View style={[styles.noticeGlyph, isDark && styles.noticeGlyphDark]}>
                 <Ionicons name="navigate-outline" size={18} color={accent} />
               </View>
@@ -236,7 +236,7 @@ export function TrackWorkerScreen() {
               {
                 title: 'Scheduled window',
                 content: (
-                  <View style={[styles.infoCard, isDark && styles.cardDark]}>
+                  <View style={[styles.infoCard, litCardStyle(isDark)]}>
                     <View style={[styles.noticeGlyph, isDark && styles.noticeGlyphDark]}>
                       <Ionicons name="time-outline" size={18} color={accent} />
                     </View>
@@ -251,10 +251,10 @@ export function TrackWorkerScreen() {
               {
                 title: 'Payment',
                 content: (
-                  <View style={[styles.paymentCard, isDark && styles.cardDark]}>
+                  <View style={[styles.paymentCard, litCardStyle(isDark)]}>
                     {/* D16 (R6a): the sandbox label renders in sandbox mode
                         only; the card path names the money state. */}
-                    <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
+                    <Text style={[styles.eyebrow, isDark && styles.eyebrowDark, paymentsMode === 'stripe' && payment.status === 'held' && styles.eyebrowGold]}>
                       {paymentsMode === 'sandbox'
                         ? 'SANDBOX — NO REAL MONEY'
                         : payment.status === 'held'
@@ -424,10 +424,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
-    color: colors.textMuted,
+    color: colors.eyebrow,
     letterSpacing: 1.4,
   },
-  eyebrowDark: { color: colors.gold },
+  eyebrowDark: { color: colors.eyebrow },
+  eyebrowGold: { color: colors.eyebrowGold }, // 2026-09-29 (LUX-LIST-2 #4): PROTECTED PAYMENT while held stays antique gold in light.
   paymentNote: {
     fontSize: 13,
     color: colors.textMuted,

@@ -4,15 +4,20 @@ import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { Card } from './Card';
+import { CategoryGlyph } from './CategoryGlyph';
+import { StageRail } from './StageRail';
 import { StatusBadge } from './StatusBadge';
+import type { LiveJobStatus } from '../lib/liveJobStatus';
 import {
   fonts,
   radius,
   spacing,
   themedStyles,
+  litCardStyle,
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
+// `radius` still shapes the thumb and the details chip below.
 import { categoryAccent, formatBudget, type JobCategory } from '../lib/jobs';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -50,7 +55,32 @@ type HubCardProps = {
    */
   nextAction?: string;
   onPress: () => void;
+  /**
+   * 2026-09-28 (LUX-LIST-64 #45) — an ASSIGNED job's live status: the stage
+   * rail, one status line and a chat button (components/StageRail.tsx), in
+   * place of the next-action line. From lib/liveJobStatus.ts; absent, the card
+   * is as it was.
+   */
+  live?: LiveJobStatus | null;
+  /** The rail's message button, and what it says to a screen reader. */
+  onChat?: () => void;
+  chatLabel?: string;
+  /** A word after the price — "held" while the payment sits in protection. */
+  moneyNote?: string;
 };
+
+/**
+ * 2026-09-27 (the operator's review): a next-action label that carries a
+ * detail after an em dash — "Approval needed — releases in 66h", "Worker on
+ * the way — track progress" — breaks THERE, the action on the first line and
+ * the detail under it, instead of wherever the column happens to run out
+ * ("66h" alone on a second line). A label without a dash is untouched.
+ */
+export function splitNextAction(label: string): [string, string | null] {
+  const at = label.indexOf(' — ');
+  if (at < 0) return [label, null];
+  return [label.slice(0, at), label.slice(at + 3)];
+}
 
 export function HubCard({
   icon,
@@ -66,17 +96,22 @@ export function HubCard({
   statusLabel,
   nextAction,
   onPress,
+  live,
+  onChat,
+  chatLabel,
+  moneyNote,
 }: HubCardProps) {
   const { palette: colors, isDark } = useThemeColors();
-  // Forest is near-black on a dark surface under palette v2; masters
-  // 35/36/37 draw these accents gold.
-  const chrome = isDark ? colors.gold : colors.forest;
+  // 2026-09-27 (the Lux remake): the next-action link is the one mint action
+  // colour in dark (the Lux hub card's `.act`); light keeps the forest.
+  const chrome = isDark ? colors.emerald : colors.forest;
   const styles = stylesFor(colors);
   const accent = categoryAccent(category);
   // A stored URL can still be dead (deleted object, expired host); falling back
   // on error keeps a broken image from rendering as a grey hole in the list.
   const [imageFailed, setImageFailed] = useState(false);
   const showImage = !!thumbnailUrl && !imageFailed;
+  const [actionHead, actionTail] = splitNextAction(nextAction ?? '');
 
   return (
     <Card onPress={onPress} style={styles.card}>
@@ -100,10 +135,12 @@ export function HubCard({
             style={[
               styles.thumb,
               styles.iconCircle,
-              isDark ? styles.iconCircleDark : { backgroundColor: accent.bg },
+              // LUX-LIST-2 #6: the lit tile in dark; light keeps the category colour.
+              isDark ? [styles.iconCircleDark, litCardStyle(true, 'tile')] : { backgroundColor: accent.bg },
             ]}
           >
-            <Ionicons name={icon} size={24} color={isDark ? colors.gold : accent.icon} />
+            {/* 2026-09-27 (the Lux remake, rulings 5 and 12): the Lux line icon, mint in dark. */}
+            <CategoryGlyph name={icon} size={24} color={isDark ? colors.emerald : accent.icon} />
           </View>
         )}
         <View style={styles.headerText}>
@@ -121,29 +158,49 @@ export function HubCard({
         </View>
       </View>
 
+      {/* 2026-09-28 (LUX-LIST-64 #45): an assigned job shows where it stands. */}
+      {live ? <StageRail status={live} onChat={onChat} chatLabel={chatLabel} /> : null}
+
       <View style={styles.footerRow}>
         <View style={styles.priceWrap}>
           {priceLabel ? <Text style={styles.priceLabel}>{priceLabel}</Text> : null}
-          <Text style={[styles.price, isDark && styles.priceDark]} numberOfLines={1}>
-            {formatBudget(priceCents)}
-          </Text>
+          <View style={styles.priceLine}>
+            <Text style={styles.price} numberOfLines={1}>
+              {formatBudget(priceCents)}
+            </Text>
+            {moneyNote ? <Text style={styles.moneyNote}>{moneyNote}</Text> : null}
+          </View>
         </View>
-        {nextAction ? (
+        {/* 2026-09-28 (LUX-LIST-64 #18, #21, #43): "View details" and a PLAIN mint
+            arrow after it — no circle, no outlined pill. An action line above it
+            carries no arrow of its own, and under one "View details" is the
+            quiet grey; alone it is the mint link. The target stays 44 tall. */}
+        {nextAction && !live ? (
           <View style={styles.nextActionWrap}>
-            <View style={styles.nextActionRow}>
-              <Ionicons name="arrow-forward-circle" size={16} color={chrome} />
+            <View style={styles.nextActionLines}>
               <Text
                 style={[styles.nextActionText, isDark && styles.chromeTextDark]}
-                numberOfLines={2}
+                numberOfLines={actionTail ? 1 : 2}
               >
-                {nextAction}
+                {actionHead}
               </Text>
+              {actionTail ? (
+                <Text
+                  style={[styles.nextActionTail, isDark && styles.chromeTextDark]}
+                  numberOfLines={1}
+                >
+                  {actionTail}
+                </Text>
+              ) : null}
             </View>
-            <Text style={styles.detailsSecondary}>View details</Text>
+            <View style={styles.detailsRow}>
+              <Text style={styles.detailsSecondary}>View details</Text>
+              <Ionicons name="arrow-forward" size={15} color={chrome} />
+            </View>
           </View>
         ) : (
-          <View style={[styles.detailsAffordance, isDark && styles.detailsAffordanceDark]}>
-            <Text style={[styles.detailsText, isDark && styles.chromeTextDark]}>
+          <View style={styles.detailsAffordance}>
+            <Text style={[styles.detailsText, live ? styles.detailsQuiet : isDark && styles.chromeTextDark]}>
               View details
             </Text>
             <Ionicons name="arrow-forward" size={16} color={chrome} />
@@ -156,10 +213,10 @@ export function HubCard({
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // 2026-09-27 (the Lux remake): the card's shape and rim are the material's
+  // (components/Card.tsx); this only spaces the rows.
   card: {
     gap: spacing.md,
-    borderRadius: radius.xl,
-    borderColor: colors.mint2,
     padding: spacing.lg,
   },
   statusRow: {
@@ -232,28 +289,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontFamily: fonts.display,
     fontSize: 24,
     fontWeight: '800',
-    color: colors.forest,
+    color: colors.money,
   },
-  // Masters 35/36/37 set the OWNER's own figure cream, like masters 8/16/17.
-  priceDark: { color: colors.ink },
-  // Masters 35/36/37 draw "View details →" as a gold-outline chip.
+  // The "View details →" chip: a mint outline in dark (the Lux link colour).
   detailsAffordance: {
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.mint,
-    borderWidth: 1,
-    borderColor: colors.border,
+    justifyContent: 'flex-end',
+    gap: spacing.xs + 2,
   },
-  detailsAffordanceDark: {
-    backgroundColor: 'transparent',
-    borderColor: colors.gold,
-  },
-  chromeTextDark: { color: colors.ink },
+  chromeTextDark: { color: colors.emerald },
   // The next-action is the card's primary action label; "View details" sits
   // under it as the demoted secondary line.
   nextActionWrap: {
@@ -261,10 +307,32 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'flex-end',
     gap: 2,
   },
-  nextActionRow: {
+  // #43: "View details" and its plain mint arrow, under the action line.
+  detailsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 5,
+  },
+  // A live card's link is the quiet grey (refs/live-job-cards.html `.vd`).
+  detailsQuiet: {
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  priceLine: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  // #45: "$110 held" — the word after the price, 13/600 muted.
+  moneyNote: {
+    marginLeft: 6,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  nextActionLines: {
+    flexShrink: 1,
+    alignItems: 'flex-end',
+    gap: 1,
   },
   nextActionText: {
     flexShrink: 1,
@@ -274,8 +342,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.forest,
     textAlign: 'right',
   },
+  // The detail after the dash: one weight lighter, one point smaller, under
+  // the action it belongs to.
+  nextActionTail: {
+    flexShrink: 1,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '600',
+    color: colors.forest,
+    textAlign: 'right',
+  },
   detailsSecondary: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
     color: colors.textMuted,
   },

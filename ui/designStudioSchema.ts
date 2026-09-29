@@ -270,6 +270,11 @@ const MATERIAL_SUBCATEGORY: Record<MaterialName, string> = {
   clear: 'Create sheet glass',
   // 2026-09-19: the Map design's jobs and Filters panes.
   pane: 'Map pane glass',
+  // 2026-09-27 (the Lux remake): the flat card every panel wears. Not dialled
+  // — no `materialDials('card')` row is registered; the label only names it.
+  card: 'Card',
+  // 2026-09-28 (LUX-LIST-64 #53): the Inbox ••• dropdown's glass. Not dialled.
+  dropdown: 'Inbox menu glass',
 };
 
 function materialDial(
@@ -1702,7 +1707,8 @@ function screenDialEntries(): StudioEntry[] {
       // [+] create sheet now (components/CreateSheet.tsx), which draws no
       // pill and reads no dial. Same rule as the jobCard rows below: a dial
       // its wearer no longer reads is a control that lies. Worker Home's own
-      // pill and its `workerHome.modeSwitch.paddingX` row are untouched.
+      // pill and its `workerHome.modeSwitch.paddingX` row were untouched —
+      // until 2026-09-28 (LUX-LIST-64 #61), when that pill left too.
       // 2026-09-17: the four `home.jobCard.*` rows are GONE — inner padding,
       // photo-to-text gap, photo size and the demand strip's height. Every one
       // of them dialled `OpenJobCard`, the card the Nearby list drew, and
@@ -1771,17 +1777,9 @@ function screenDialEntries(): StudioEntry[] {
         inheritsFrom: 'theme.spacing.lg',
         defaultValue: THEME_SPACING_DEFAULTS.lg,
       },
-      {
-        key: 'workerHome.modeSwitch.paddingX',
-        label: 'Switch-to-Customer pill — side padding',
-        description: 'How much room the mode pill keeps either side of its label, which is what sets its width.',
-        tier: 'advanced',
-        scope: 'local',
-        min: 0,
-        max: 28,
-        step: 1,
-        defaultValue: 13,
-      },
+      // 2026-09-28 (LUX-LIST-64 #61): the `workerHome.modeSwitch.paddingX` row
+      // is GONE with Worker Home's "Switch to Customer" pill — switching lives
+      // in Profile now. A dial its wearer no longer reads is a control that lies.
     ]),
     // C3 — screens/PostJobScreen.tsx. `theme.*` scale. Left undialled: the
     // step header, the fields and the footer buttons (ScreenHeader, Input and
@@ -1871,6 +1869,8 @@ function screenDialEntries(): StudioEntry[] {
     // job cards themselves (JobCard's own dials reach every one of them), the
     // status pills (StatusPill's), and the selected tab's 44pt minimum, which
     // is CLAUDE.md's touch floor rather than a styling choice.
+    // 2026-09-27 (the operator's review): the bar is the shared Lux segment —
+    // 52 tall, and the pill corner is 26, half of it.
     ...dialEntries('screens', 'My Jobs', [
       {
         key: 'myJobs.tabs.height',
@@ -1881,7 +1881,7 @@ function screenDialEntries(): StudioEntry[] {
         min: 44,
         max: 72,
         step: 1,
-        defaultValue: 50,
+        defaultValue: 52,
       },
       {
         key: 'myJobs.tabs.radius',
@@ -1892,8 +1892,7 @@ function screenDialEntries(): StudioEntry[] {
         min: 0,
         max: 40,
         step: 1,
-        inheritsFrom: 'theme.radius.lg',
-        defaultValue: THEME_RADIUS_DEFAULTS.lg,
+        defaultValue: 26,
       },
       {
         key: 'myJobs.content.gap',
@@ -1919,17 +1918,8 @@ function screenDialEntries(): StudioEntry[] {
         inheritsFrom: 'theme.spacing.xxl',
         defaultValue: THEME_SPACING_DEFAULTS.xxl,
       },
-      {
-        key: 'myJobs.headerMark.size',
-        label: 'Header mark — size',
-        description: 'The square glyph tile beside the screen title, width and height together.',
-        tier: 'advanced',
-        scope: 'local',
-        min: 32,
-        max: 80,
-        step: 2,
-        defaultValue: 48,
-      },
+      // 2026-09-27 (the operator's review): the header mark is gone from
+      // My jobs, and its dial with it.
     ]),
     // C5 — screens/ProfileScreen.tsx. `theme.*` scale: `radius`/`spacing` come
     // from lib/theme here, and `emeraldRadius` — the one name in this file that
@@ -1950,17 +1940,19 @@ function screenDialEntries(): StudioEntry[] {
         step: 1,
         defaultValue: 64,
       },
+      // 2026-09-29 (LUX-LIST-2 #7): your card rounds at 22 like every #6
+      // card, which theme.radius.xl (24) is not — so the chain is dropped,
+      // as RUN N3 did for the rows that stopped matching their parent.
       {
         key: 'profile.hubCard.radius',
         label: 'Hub card — corner roundness',
-        description: 'The gold-marked card at the top of Profile that names who you are here.',
+        description: 'Your own card at the top of Profile: photo, name, rating and Edit.',
         tier: 'basic',
         scope: 'local',
         min: 0,
         max: 48,
         step: 1,
-        inheritsFrom: 'theme.radius.xl',
-        defaultValue: THEME_RADIUS_DEFAULTS.xl,
+        defaultValue: 22,
       },
       {
         key: 'profile.hubCard.padding',
@@ -1974,21 +1966,23 @@ function screenDialEntries(): StudioEntry[] {
         inheritsFrom: 'theme.spacing.lg',
         defaultValue: THEME_SPACING_DEFAULTS.lg,
       },
+      // 2026-09-29 (LUX-LIST-2 #7): the tile is gone — each row leads with a
+      // plain 22pt icon (#47's colours), and this dial sizes it.
       {
         key: 'profile.settingsGlyph.size',
-        label: 'Settings row — glyph tile size',
-        description: 'The square icon tile at the left of each settings row, width and height together.',
+        label: 'Settings row — icon size',
+        description: 'The plain icon at the left of each row down Profile.',
         tier: 'advanced',
         scope: 'local',
-        min: 28,
-        max: 72,
-        step: 2,
-        defaultValue: 44,
+        min: 16,
+        max: 32,
+        step: 1,
+        defaultValue: 22,
       },
       {
         key: 'profile.content.gap',
         label: 'Section gap',
-        description: 'Between the avatar block, the hub card and the settings list.',
+        description: 'Between the blocks down Profile: your card and mode, each section, Sign out.',
         tier: 'advanced',
         scope: 'local',
         min: 0,
@@ -2005,6 +1999,7 @@ function screenDialEntries(): StudioEntry[] {
     // four dials to be honest; and the empty-state medallion, whose corner is
     // half its own size.
     ...dialEntries('screens', 'Inbox', [
+      // 2026-09-28 (LUX-LIST-64 #55): 34, the approved clean list's chip.
       {
         key: 'messages.filterPill.height',
         label: 'Filter pill — height',
@@ -2014,20 +2009,10 @@ function screenDialEntries(): StudioEntry[] {
         min: 24,
         max: 56,
         step: 1,
-        defaultValue: 36,
+        defaultValue: 34,
       },
-      {
-        key: 'messages.list.gap',
-        label: 'Conversation gap',
-        description: 'Between one conversation row and the next.',
-        tier: 'basic',
-        scope: 'local',
-        min: 0,
-        max: 32,
-        step: 1,
-        inheritsFrom: 'theme.spacing.md',
-        defaultValue: THEME_SPACING_DEFAULTS.md,
-      },
+      // 2026-09-28 (LUX-LIST-64 #54): the conversation-gap dial is gone — the
+      // clean list's rows carry no gap; a hairline parts them.
       {
         key: 'messages.list.paddingX',
         label: 'List gutter',
@@ -2040,7 +2025,8 @@ function screenDialEntries(): StudioEntry[] {
         inheritsFrom: 'theme.spacing.lg',
         defaultValue: THEME_SPACING_DEFAULTS.lg,
       },
-      // N3: 10, dialled; theme.spacing.sm ships at 8, so the chain goes.
+      // N3: 10, dialled, off the chain. 2026-09-28 (LUX-LIST-64 #55): the
+      // reference's 8 — theme.spacing.sm — so the chain comes back.
       {
         key: 'messages.filterRow.gap',
         label: 'Filter pill gap',
@@ -2050,7 +2036,8 @@ function screenDialEntries(): StudioEntry[] {
         min: 0,
         max: 24,
         step: 1,
-        defaultValue: 10,
+        inheritsFrom: 'theme.spacing.sm',
+        defaultValue: THEME_SPACING_DEFAULTS.sm,
       },
     ]),
     // C7 — screens/ClientJobDetailScreen.tsx. `theme.*` scale. Left undialled:

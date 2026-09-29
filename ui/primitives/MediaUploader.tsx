@@ -106,7 +106,9 @@ export type MediaUploaderProps = {
  * informative one. No thumbnail service and no new dependency: expo-video is
  * already how this app shows a paused frame.
  */
-function VideoTile({
+// 2026-09-28 (LUX-LIST-64 #38): exported — the review summary's clip tiles are
+// this same poster, not a second one.
+export function VideoTile({
   uri,
   durationMs,
   playSize = 30,
@@ -174,7 +176,10 @@ export function MediaUploader({
   // counter, the add tile's dashed edge and glyph, the clip mark — resolved to
   // a deep green on a deep-green ground. In dark those become the gold
   // line-work the converted screens use.
-  const lineWork = isDark ? colors.gold : colors.forest;
+  // 2026-09-28 (LUX-LIST-64 #33): the line-work is the MINT in dark — the add
+  // tiles' dashed edge, their + and camera glyphs, the cap pills' rim and
+  // glyph; light keeps its forest.
+  const lineWork = isDark ? colors.emerald : colors.forest;
   const [uploading, setUploading] = useState(false);
   // Only tiles added through this component instance are ever candidates for
   // delete-on-remove; a caller may seed `items` with media it already owns
@@ -331,7 +336,8 @@ export function MediaUploader({
             <Pressable
               style={[styles.remove, chrome.scrim]}
               onPress={() => handleRemove(url)}
-              hitSlop={8}
+              // 2026-09-26 (the refresh, audit M-34): 24 + 10 + 10 = the 44pt floor.
+              hitSlop={10}
               accessibilityRole="button"
               accessibilityLabel={`Remove ${kind} ${index + 1}`}
             >
@@ -470,15 +476,17 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     backgroundColor: colors.mint,
   },
   capPillDark: {
-    borderColor: withAlpha(colors.gold, 0.55),
+    borderColor: withAlpha(colors.emerald, 0.55),
     backgroundColor: 'transparent',
   },
+  // #33: the pills' words are the quiet grey — #909594 in dark, the light
+  // palette's own muted grey in light — so the mint line-work carries them.
   capPillText: {
     ...typeScale.caption,
     fontWeight: '700',
-    color: colors.forest,
+    color: colors.muted,
   },
-  capPillTextDark: { color: colors.ink },
+  capPillTextDark: { color: colors.grey },
   addTile: {
     borderWidth: 1,
     borderStyle: 'dashed',
@@ -487,7 +495,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     justifyContent: 'center',
   },
   // The dashed add-affordance the manifest's chip vocabulary names (masters 35
-  // and 42 draw it in gold line-work).
-  addTileDark: { borderColor: colors.gold },
+  // and 42 drew it in gold line-work); 2026-09-28 (#33) it is the mint.
+  addTileDark: { borderColor: colors.emerald },
   }),
 );

@@ -1,20 +1,21 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useModalPresence } from '../../hooks/useModalPresence';
+import { useSheetPresence } from '../../hooks/useSheetPresence';
+import { Animated, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { PropsWithChildren, ReactNode } from 'react';
 import {
-  controls,
   layout,
   radius,
   spacing,
   withAlpha,
   type EmeraldPalette,
   type MaterialName,
-  type as typeScale,
 } from '../tokens';
 import { SCRIM_DARK_ALPHA, scrimInDark, themedStyles, useThemeColors, type PaneFill, type PaneRim } from '../../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../../lib/designOverrides';
 import { BlurLayer } from '../../lib/blur';
 import { Surface } from './Surface';
+import { SheetHeader, type SheetDismissWord } from './SheetHeader';
 
 /**
  * The generic bottom sheet / modal (§I).
@@ -37,6 +38,13 @@ type SheetProps = PropsWithChildren<{
   title?: string;
   /** Set false for a step the user must resolve with an explicit control. */
   dismissOnBackdropPress?: boolean;
+  /** 2026-09-28 (LUX-LIST-64 #64, audit M-31): the header's one word — "Done"
+   *  where closing applies what the sheet holds, "Close" (the default) where
+   *  it only dismisses. The backdrop means the same. */
+  dismissWord?: SheetDismissWord;
+  /** A second way out that DISCARDS ("Cancel" on the left); with it, the
+   *  backdrop and Android's back mean Cancel, not the word on the right. */
+  onCancel?: () => void;
   /** The card's material. `sheet` is every dialog's; the Filters sheet
    *  (2026-09-19) wears `pane`, the approved Map design's deeper glass. */
   material?: MaterialName;
@@ -81,6 +89,8 @@ export function Sheet({
   onClose,
   title,
   dismissOnBackdropPress = true,
+  dismissWord = 'Close',
+  onCancel,
   material = 'sheet',
   topRadius: topRadiusProp,
   hairline,
@@ -92,6 +102,9 @@ export function Sheet({
   children,
 }: SheetProps) {
   const { emerald: colors, isDark } = useThemeColors();
+  // #64 (M-31): on screen or not — the one confirm engine never stacks a second modal on iOS.
+  useModalPresence(visible);
+  const presence = useSheetPresence(visible);
   const styles = stylesFor(colors);
   const insets = useSafeAreaInsets();
 
@@ -140,17 +153,20 @@ export function Sheet({
 
   return (
     <Modal
-      visible={visible}
+      visible={presence.mounted}
       transparent
-      animationType="slide"
-      // Android's hardware back must close the sheet, not the screen behind it.
-      onRequestClose={onClose}
+      animationType="none"
+      // Android's hardware back must close the sheet, not the screen behind it —
+      // discarding, where the sheet can (#64).
+      onRequestClose={onCancel ?? onClose}
       statusBarTranslucent
     >
       <View style={styles.root}>
+        {/* 2026-09-29 (LUX-LIST-2 #3): the dim covers the screen at once; only the card moves (hooks/useSheetPresence). */}
+        {presence.dimVisible ? (
         <Pressable
           style={[styles.backdrop, isDark && styles.backdropDark, backdropDial]}
-          onPress={dismissOnBackdropPress ? onClose : undefined}
+          onPress={dismissOnBackdropPress ? onCancel ?? onClose : undefined}
           // The backdrop is a dismiss affordance, not content — it should not
           // be announced as a button when it does nothing.
           accessibilityElementsHidden={!dismissOnBackdropPress}
@@ -163,6 +179,16 @@ export function Sheet({
               scrim alone is the backdrop it has always been. */}
           <BlurLayer />
         </Pressable>
+        ) : null}
+        {/* The card's frame carries the height cap now (a percentage of the screen), so the card
+            inside can shrink to it while the frame moves. */}
+        <Animated.View
+          style={[
+            styles.cardFrame,
+            maxHeightPct != null ? { maxHeight: `${maxHeightPct}%` as `${number}%` } : null,
+            presence.cardStyle,
+          ]}
+        >
         {/* G1 (C5): the docked card wears the sheet material — the top
             corners keep their xxl radius via the props; in light this adds
             the material hairline. The backdrop above and every open/close
@@ -185,35 +211,21 @@ export function Sheet({
             // the bar's top; DECISIONS 2026-09-20 sitting 3, (7)). Without one,
             // the padding is what it has always been.
             { paddingBottom: insets.bottom + (footer ? 0 : spacing.lg) + (footerPad - spacing.lg) },
-            maxHeightPct != null ? { maxHeight: `${maxHeightPct}%` as `${number}%` } : null,
             handleAbove != null ? { paddingTop: handleAbove } : null,
           ]}
         >
-          <View style={[styles.handle, handleDial]} />
-          {title ? (
-            <View
-              style={[
-                styles.header,
-                headerHairline,
-                headerPad != null ? { paddingHorizontal: headerPad } : null,
-              ]}
-            >
-              <Text style={styles.title} numberOfLines={1}>
-                {title}
-              </Text>
-              <Pressable
-                onPress={onClose}
-                hitSlop={12}
-                style={styles.close}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-              >
-                {/* Master 11 draws the sheet's Done in gold; light keeps
-                    the Heritage emerald. */}
-                <Text style={[styles.closeLabel, isDark && styles.closeLabelDark]}>Done</Text>
-              </Pressable>
-            </View>
-          ) : null}
+          {/* #64 (M-31) — the one sheet header: the handle, the title, and the
+              one word that closes it (Master 11's gold in dark, the Heritage
+              emerald in light), with Cancel on the left where the sheet can
+              throw its draft away. */}
+          <SheetHeader
+            title={title}
+            dismissWord={dismissWord}
+            onDismiss={onClose}
+            onCancel={onCancel}
+            handleStyle={handleDial}
+            rowStyle={[headerHairline, headerPad != null ? { paddingHorizontal: headerPad } : null]}
+          />
           <ScrollView
             style={styles.scroll}
             contentContainerStyle={[
@@ -227,6 +239,7 @@ export function Sheet({
           </ScrollView>
           {footer ? <View style={[styles.footer, footerHairline]}>{footer}</View> : null}
         </Surface>
+        </Animated.View>
         {overlay ? (
           <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
             {overlay}
@@ -253,45 +266,12 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   },
   backdropDark: { backgroundColor: scrimInDark(colors.bg) },
   // G1 (C5): fill, top radius and hairline are the sheet material's now.
+  // Never taller than most of the screen, whatever the content — on the moving frame (#3).
+  cardFrame: { maxHeight: '88%' },
   sheet: {
-    // Never taller than most of the screen, whatever the content.
-    maxHeight: '88%',
+    flexShrink: 1,
     paddingTop: spacing.sm,
   },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.line,
-    marginBottom: spacing.sm,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingHorizontal: layout.screenGutter,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  title: {
-    ...typeScale.h2,
-    color: colors.ink,
-    // flex so a long title truncates rather than shoving Done off-screen.
-    flex: 1,
-  },
-  close: {
-    minHeight: controls.minTouchTarget,
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  closeLabel: {
-    ...typeScale.title,
-    color: colors.emerald,
-  },
-  closeLabelDark: { color: colors.gold },
   scroll: {
     flexGrow: 0,
     flexShrink: 1,

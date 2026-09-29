@@ -31,13 +31,17 @@ function tokenValue(source, blockStart, key) {
   return found[1];
 }
 
-/** The JSX region that renders the published-job success surface. */
+/**
+ * The published-job success surface. 2026-09-28 (LUX-LIST-64 #42): it is the
+ * live page the Seal opens — its own component, components/JobLivePage.tsx —
+ * mounted as one half of the success overlay's ternary in the screen.
+ */
 function publishBranch(screen) {
-  const at = screen.indexOf('<SuccessScreen');
-  assert.notEqual(at, -1, 'the publish surface must still be the SuccessScreen template');
+  const at = screen.indexOf('<JobLivePage');
+  assert.notEqual(at, -1, 'the publish surface must still be the live page');
   const end = screen.indexOf('\n          ) : (', at);
   assert.notEqual(end, -1, 'the publish branch must still be one half of a ternary');
-  return screen.slice(at, end);
+  return screen.slice(at, end) + '\n' + read('components/JobLivePage.tsx');
 }
 
 // ---------------------------------------------------------------------------
@@ -102,22 +106,26 @@ test('D0 · the success overlay renders opaque — no animated opacity, no trans
   }
 });
 
-test('D0 · the publish surface and the bottom nav resolve ONE green, and it is #5FAE81', () => {
+test('D0 · the publish surface paints the palette green (the Lux mint); the bottom nav keeps its own #5FAE81', () => {
   const tokens = read('ui/tokens.ts');
   const emeraldDark = tokenValue(tokens, 'export const dark = {', 'emerald');
+  // 2026-09-26 (the refresh): Emerald Lux Glass moved the live-state green to the
+  // Lux mint; the operator froze the bar ("please dont touch the bottom nav bar"),
+  // so it keeps the green it was drawn in — lib/theme.ts NAV_BAR_DARK.
+  // 2026-09-27 (the Lux remake, ruling 5): ONE mint, #4FC58C.
   assert.equal(
     emeraldDark,
-    '#5FAE81',
+    '#4FC58C',
     'the dark palette\'s live-state green is the one the whole flow paints'
   );
+  assert.match(read('lib/theme.ts'), /export const NAV_BAR_DARK = \{[\s\S]*?\n  emerald: '#5FAE81',/, 'the bar keeps its own green');
 
-  // The publish surface takes its green from that token — through the
-  // template, which is the same component the rest of the app configures.
-  const template = stripComments(read('ui/templates/SuccessScreen.tsx'));
+  // The publish surface takes its green from that token. 2026-09-28 (LUX-LIST-64
+  // #42): the live page's tick draws itself in it (components/JobLivePage.tsx).
   assert.match(
-    template,
-    /color=\{isDark \? colors\.emerald : colors\.forest\}/,
-    'the success mark resolves its dark green from the emerald token'
+    stripComments(read('components/JobLivePage.tsx')),
+    /<DrawnCheck size=\{40\} color=\{colors\.emerald\} progress=\{tick\} \/>/,
+    'the live page\'s tick resolves its green from the emerald token'
   );
 
   // The bottom nav is ONE component with ONE active tint, so the publish
@@ -127,7 +135,7 @@ test('D0 · the publish surface and the bottom nav resolve ONE green, and it is 
   assert.match(
     nav,
     /tabBarActiveTintColor: palette\.emerald,/,
-    'the nav active tint is the same emerald token the publish surface uses'
+    'the nav active tint is the emerald role of the palette the bar is handed'
   );
 
   // ANTI-VACUITY: the dark palette lib/theme.ts hands screens must BE that
@@ -182,10 +190,16 @@ test('D1-D4 · the header owns navigation, and its two links are the neighbourin
   const labels = stepLabels(screen);
 
   // The derivation, asserted as source…
+  // 2026-09-26 (the refresh, audit M-7): the first step's back is a plain
+  // chevron, like every other pushed screen — the wizard opens from several
+  // places and "Home" named only one of them.
   assert.match(
     flat,
-    /const backLabel = step === 0 \? 'Home' : POST_STEPS\[step - 1\]\.label;/,
-    'the left link is the previous step, or the exit for the first one'
+    // 2026-09-28 (LUX-LIST-64 #30): step 1 names WHERE IT WAS OPENED FROM ("‹ Home",
+    // "‹ My Jobs"), read from the stack underneath — which answers M-7's point:
+    // it names the real origin, never Home by default.
+    /const backLabel = step === 0 \? originLabel\(navigation\.getState\(\)\) : POST_STEPS\[step - 1\]\.label;/,
+    'the left link is the previous step, or where the flow was opened from'
   );
   assert.match(
     flat,
@@ -195,11 +209,11 @@ test('D1-D4 · the header owns navigation, and its two links are the neighbourin
 
   // …then RUN it against the real labels and check the resulting table.
   const table = labels.map((_, step) => [
-    step === 0 ? 'Home' : labels[step - 1],
+    step === 0 ? undefined : labels[step - 1],
     step === labels.length - 1 ? undefined : labels[step + 1],
   ]);
   assert.deepEqual(table, [
-    ['Home', 'Media'],
+    [undefined, 'Media'],
     ['Describe', 'Location'],
     ['Media', 'Review'],
     ['Location', undefined],
@@ -210,7 +224,8 @@ test('D1-D4 · the header owns navigation, and its two links are the neighbourin
   assert.match(flat, /backLabel=\{backLabel\}/);
   assert.match(flat, /rightLabel=\{advanceLabel\}/);
   assert.match(flat, /onPressRight=\{handleContinue\}/);
-  assert.match(flat, /rightDisabled=\{advanceDisabled\}/);
+  // M-7: the link reads the same answer the pinned Continue reads.
+  assert.match(flat, /rightDisabled=\{advanceDisabled \|\| stepBlocker != null\}/);
   assert.match(flat, /centerTitle/);
   // The title itself never changes across the steps — one expression, no step
   // term in it.
@@ -221,72 +236,89 @@ test('D1-D4 · the header owns navigation, and its two links are the neighbourin
   );
 });
 
-test('D2/D4 · no step but the last renders a footer button, and its footer holds one', () => {
+test('M-7 · every step ends in ONE pinned footer control, and a disabled one says why', () => {
+  // 2026-09-26 (the refresh, audit M-7) replaced D2/D4's last-step-only
+  // footer with a pinned Continue on every step. 2026-09-27 (the Lux remake,
+  // ruling 13 and the operator's Post-a-job pictures) REVERSED that half:
+  // "no pinned Continue, no footer padding" on steps 1-3 — the way forward is
+  // the header's link, which greys out until the step is complete, and the
+  // reason sits UNDER THE FIELD that blocks it. The last step keeps its
+  // footer: Publish is a commitment and stays a pinned pill.
   const flat = flatten(read('screens/PostJobScreen.tsx'));
 
-  // The footer exists only under the last-step gate.
-  const at = flat.indexOf('<View style={styles.footer}>');
-  assert.notEqual(at, -1, 'the pinned footer must still be a bare styles.footer View');
+  // 2026-09-28 (LUX-LIST-64 #41): the last step's footer is the POSTING BAR
+  // (components/PostJobBar.tsx) — the quiet "Save draft" (a fresh post's)
+  // beside the commitment, whose label is the one expression below. Still the
+  // last step only, still inside the keyboard-avoiding view.
+  const at = flat.indexOf('<PostJobBar');
+  assert.notEqual(at, -1, 'the last step ends in the posting bar');
   assert.match(
     flat.slice(Math.max(0, at - 40), at),
-    /\{isLastStep && \( $/,
-    'the footer must be gated on the last step — steps 1-3 carry none'
+    /isLastStep && !showSuccess \? \( $/,
+    'the bar renders on the last step only'
   );
-
-  // And it holds exactly one control.
-  const close = flat.indexOf('</View> )}', at);
-  assert.notEqual(close, -1, 'the gated footer must close');
+  const close = flat.indexOf('</KeyboardAvoidingView>', at);
+  assert.notEqual(close, -1, 'the bar sits inside the keyboard-avoiding view, so it rides the keyboard');
   const footer = flat.slice(at, close);
-  assert.equal(
-    (footer.match(/<Button/g) ?? []).length,
-    1,
-    'the last step commits with ONE full-width control, not a Back/Publish pair'
-  );
-  assert.ok(!footer.includes('Continue'), 'Continue is a header link now, not a button');
-  assert.ok(!footer.includes('footerBack'), 'the Back button and its style are gone');
-  assert.match(
-    footer,
-    /title=\{isEditing \? 'Save changes' : isHiring \? 'Send request' : 'Publish'\}/
-  );
 
-  // A pill, not a rounded rectangle.
+  // ONE commitment in it, and the quiet draft beside it on a fresh post.
+  assert.match(footer, /primary=\{\{ label: primaryLabel, onPress: onPublish \}\}/, 'the commitment');
   assert.match(
     flat,
-    /footerPrimary: \{ flex: 1, borderRadius: radius\.pill, \}/,
-    'the Publish control is a pill'
+    /const primaryLabel = uploadingNow \? 'Uploading…' : isEditing \? 'Save changes' : isHiring \? 'Send request' : 'Publish';/,
+    'Publish on the last step — "Uploading…" while a file travels'
   );
+  assert.match(footer, /label: 'Save draft'/, 'Save draft beside it');
+  assert.ok(!flat.includes('title="Continue"'), 'no pinned Continue on any step');
+  assert.ok(!footer.includes('footerBack'), 'the Back button and its style are gone');
+
+  // The reason is never silent: it sits under the field that blocks the step,
+  // in as few words as say it, and the header's forward link reads the same
+  // answer. On the last step a waiting Publish SAYS so on itself ("Uploading…").
+  assert.match(flat, /rightDisabled=\{advanceDisabled \|\| stepBlocker != null\}/);
+  for (const reason of ["'Add a title'", "'Add a description'", "'Pick a category'", "'Add an area'"]) {
+    assert.ok(flat.includes(reason), `${reason} is one of the step's written reasons`);
+  }
+  for (const field of ['title', 'description', 'category', 'area']) {
+    assert.ok(flat.includes(`{reasonUnder('${field}')}`), `the reason is drawn under the ${field} field`);
+  }
+  assert.match(flat, /const reasonUnder = \(field: typeof blockedField\) => blockedField === field && stepBlocker \? \( <Text style=\{styles\.fieldReason\}/);
+
+  // Pills, not rounded rectangles: both of the bar's buttons are fully round
+  // at 52 (refs/bottom-bar.html).
+  assert.match(
+    flatten(read('components/PostJobBar.tsx')),
+    /button: \{ height: POST_BAR_BUTTON, borderRadius: POST_BAR_BUTTON \/ 2,/,
+    'the bar\'s controls are full pills'
+  );
+  assert.match(read('components/PostJobBar.tsx'), /export const POST_BAR_BUTTON = 52;/);
 });
 
-test('D5 · the last step scroller clears its own footer, from the shared constant', () => {
+test('D5 · the last step scroller ends above its bar, which never covers it', () => {
   const screen = read('screens/PostJobScreen.tsx');
   const flat = flatten(screen);
 
   assert.match(
     flat,
     // RUN T2 (C3) put this screen's gutter and section gap on their own dials,
-    // so a third member joins the array between the two named here. What this
-    // fence is for is unchanged and still exact: `contentWithFooter` is
-    // applied by `isLastStep` and by nothing else.
-    /contentContainerStyle=\{\[ styles\.content,[^\]]*isLastStep && styles\.contentWithFooter, \]\}/,
-    'the clearance applies on the step that HAS a footer, and only there'
+    // so a third member joins the array between the two named here.
+    // 2026-09-27 (the Lux remake): only the LAST step has a footer to clear —
+    // "no pinned Continue, no footer padding" on steps 1-3 — and it is still
+    // the one style that clears it.
+    /contentContainerStyle=\{\[ styles\.content,[^\]]*\}, isLastStep && styles\.contentWithFooter, \]\}/,
+    'the clearance applies on the last step, the one step with a footer'
   );
+  // 2026-09-28 (LUX-LIST-64 #41): the bar is in the column UNDER the scroller —
+  // it never covers the content — and sits flush on the tab bar, so what the
+  // scroller keeps is the reference's 16 between the publish line and the bar.
   assert.match(
     flat,
-    /contentWithFooter: \{ paddingBottom: spacing\.xl \+ PINNED_FOOTER_BOTTOM_PADDING, \}/,
-    'the clearance is the content padding plus the SAME constant the footer applies'
+    /contentWithFooter: \{ paddingBottom: spacing\.lg, \}/,
+    'the publish line keeps its 16 above the bar'
   );
-  // ANTI-VACUITY: that constant is imported here and is the shared one. RUN
-  // PUBLISH1 (C1) widened this import to a multi-line block when the publish
-  // surface took LitSurface and MoneyText, so the assertion reads the import
-  // BLOCK rather than one line of it — the guarantee is unchanged.
-  assert.match(
-    flatten(screen),
-    /import \{[^}]*PINNED_FOOTER_BOTTOM_PADDING,? *\} from '\.\.\/ui\/primitives'/
-  );
-  assert.match(
-    read('ui/primitives/BottomNav.tsx'),
-    /export const PINNED_FOOTER_BOTTOM_PADDING = layout\.floatingNavGap;/
-  );
+  const scrollerEnd = flat.lastIndexOf('</ScrollView>', flat.indexOf('<PostJobBar'));
+  assert.ok(scrollerEnd > 0, 'the bar follows the scroller in the column');
+  assert.doesNotMatch(flat, /PINNED_FOOTER_BOTTOM_PADDING/, 'the flush bar takes no pinned-footer padding');
 });
 
 test('D6 · dropping the footers kept the exit guard and the draft autosave', () => {
@@ -295,12 +327,14 @@ test('D6 · dropping the footers kept the exit guard and the draft autosave', ()
   // Header back, Android back and the iOS edge gesture still all mean "one
   // step back" while the wizard is mid-flow, and a write in flight still
   // cannot be removed from the stack.
-  assert.match(code, /usePreventRemove\(submitting \|\| \(step > 0 && !showSuccess\), \(\) => \{/);
+  // 2026-09-28 (LUX-LIST-64 #41): …except while "Save draft" leaves on purpose.
+  assert.match(code, /usePreventRemove\(!leaving && \(submitting \|\| \(step > 0 && !showSuccess\)\), \(\) => \{/);
   assert.match(code, /if \(!submitting\) setStep\(\(current\) => Math\.max\(0, current - 1\)\);/);
   // The header's own left link routes through the same handler.
   assert.match(code, /onBack=\{handleBack\}/);
   // And the autosave effect still writes every field the draft carries.
-  assert.match(code, /void savePostJobDraft\(draftUserId, \{/);
+  assert.match(code, /void savePostJobDraft\(draftUserId, draft\);/);
+  assert.match(code, /const draft = \{\s*title,\s*description,\s*category,/);
   assert.match(code, /if \(!isFreshPost \|\| !draftReady \|\| !draftUserId\) return;/);
 });
 
@@ -312,7 +346,10 @@ test('D2 · the header new props are optional and leave every other caller untou
     assert.ok(code.includes(prop), `${prop} must be optional`);
   }
   assert.match(code, /rightDisabled = false,/, 'a caller that passes nothing gets an enabled default');
-  assert.match(code, /centerTitle = false,/, 'a caller that passes nothing keeps the left-aligned title');
+  // 2026-09-28 (LUX-LIST-64 #22, #27): ONE TITLE SYSTEM — every titled header
+  // centres its title at 17 (the tab roots take the big left title by asking),
+  // so a caller that passes nothing now gets the centred title.
+  assert.match(code, /const centred = alignDial === 'left' \? false : true;/, 'a caller that passes nothing gets the centred title');
 
   // The default branch is the arrangement the chat header depends on:
   // leading between the back control and the title block.
@@ -362,11 +399,15 @@ test('D7/PJ1-C4 · the media advisory is one plain sentence, and the heading is 
 
   // The PJ1-C4 copy, verbatim, in the shared info-text treatment with its
   // dark-ink override intact.
+  // 2026-09-27 (the Lux remake, ruling 10 — the operator's Media picture): the
+  // privacy note at most two lines at 393 wide. 2026-09-28 (LUX-LIST-64 #31):
+  // the operator's own words, still two lines at most, and the eye in the red.
   assert.match(
     flat,
-    /<Text style=\{\[styles\.infoText, isDark && styles\.infoTextDark\]\}> Avoid faces, documents, license plates, addresses, or any other personal information <\/Text>/,
-    'the advisory body is the exact PJ1-C4 sentence'
+    /<Text style=\{\[styles\.infoText, isDark && styles\.infoTextDark\]\}> Avoid faces, documents, plates, addresses and personal details\. Just show the job\. <\/Text>/,
+    'the advisory body is the operator\'s two sentences'
   );
+  assert.match(flat, /<EyeOffIcon color=\{colors\.danger\} \/>/, 'the crossed-out eye is the error red');
   // The heading is DELETED outright — text, style and column wrapper — and
   // the old list went with it rather than surviving beside the new sentence.
   assert.ok(!flat.includes('Avoid Sensitive Information'), 'the heading text is deleted');
@@ -499,7 +540,8 @@ test('D10/PJ1-C4 · both cap badges read the caps actually enforced, through ONE
 
   // The caption under the tile keeps ONLY the explanation — the badge says
   // the minute now, so the duplicate first sentence is deleted.
-  assert.match(screen, /A short clip explains an awkward job faster than a paragraph\./);
+  // 2026-09-27 (the Lux remake, ruling 10): on one line at 393 wide.
+  assert.match(screen, /A short clip explains an awkward job fast\./);
   assert.ok(
     !screen.includes('seconds. A short clip'),
     'the "Up to 60 seconds." sentence is deleted from the caption'
@@ -520,17 +562,21 @@ test('D10/PJ1-C4 · both cap badges read the caps actually enforced, through ONE
 // extracted from the screen and RUN over every count combination that matters.
 // ---------------------------------------------------------------------------
 
-/** The real mediaSummary, lifted out of the screen and executed. */
+/**
+ * The real media count, lifted out of the summary card and executed. 2026-09-28
+ * (LUX-LIST-64 #38): the summary moved into components/JobSummaryCard.tsx and
+ * its count went with it — `mediaCountText`, the reference's "2 photos, 1 video".
+ */
 const mediaSummary = await (async () => {
-  const source = read('screens/PostJobScreen.tsx');
-  const at = source.indexOf('function mediaSummary');
-  assert.notEqual(at, -1, 'the screen must declare mediaSummary');
+  const source = read('components/JobSummaryCard.tsx');
+  const at = source.indexOf('export function mediaCountText');
+  assert.notEqual(at, -1, 'the summary card must declare mediaCountText');
   const end = source.indexOf('\n}', at);
-  assert.ok(end > at, 'mediaSummary must close');
-  const js = stripTypeScriptTypes('export ' + source.slice(at, end + 2), { mode: 'strip' });
+  assert.ok(end > at, 'mediaCountText must close');
+  const js = stripTypeScriptTypes(source.slice(at, end + 2), { mode: 'strip' });
   const url =
     'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
-  return (await import(url)).mediaSummary;
+  return (await import(url)).mediaCountText;
 })();
 
 test('D11/PJ1-C7 · the area card is deleted, and the privacy fact still reads twice', () => {
@@ -549,9 +595,11 @@ test('D11/PJ1-C7 · the area card is deleted, and the privacy fact still reads t
 
   // The privacy fact survives it, stated at least twice on the same step —
   // the step subtitle and the address caption, both verbatim.
+  // 2026-09-27 (the Lux remake, ruling 10): the subtitle on one line, the rule
+  // still in it.
   assert.match(
     flat,
-    /Workers browsing see only the area\. The exact address stays private until you hire someone\./,
+    /Workers see only the area until you hire someone\./,
     'the Location step subtitle still states the privacy rule'
   );
   assert.match(
@@ -560,14 +608,15 @@ test('D11/PJ1-C7 · the area card is deleted, and the privacy fact still reads t
     'the address caption still states the privacy rule'
   );
 
-  // Exactly ONE info card remains — the media advisory — and it keeps the
-  // dark overrides D11 established (deep-green text on a near-black-green
-  // card is the fault they exist for).
+  // Exactly ONE info card remains — the media advisory. 2026-09-27 (the
+  // operator's review): it is the pop-out card material (components/Card.tsx),
+  // whose dark recipe is the treatment D11's overrides used to hand-apply.
   assert.equal(
-    (flat.match(/\[styles\.infoCard, isDark && styles\.infoCardDark\]/g) ?? []).length,
+    (flat.match(/<Card style=\{styles\.infoCard\}>/g) ?? []).length,
     1,
-    'one info card remains and it takes the dark card treatment'
+    'one info card remains, on the card material'
   );
+  assert.doesNotMatch(flat, /infoCardDark/, 'the hand-applied dark override went with the material');
   assert.equal(
     (flat.match(/\[styles\.infoText, isDark && styles\.infoTextDark\]/g) ?? []).length,
     1,
@@ -584,9 +633,11 @@ test('D11/PJ1-C7 · the area card is deleted, and the privacy fact still reads t
     const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
+  // 2026-09-26 (the refresh): forest is now the Lux mint CTA, so the pair that hid
+  // no longer hides; what must hold is that BOTH pairs read on the mint wash.
   assert.ok(
-    Math.abs(luminance(forest) - luminance(mint)) < 24,
-    `dark forest ${forest} on dark mint ${mint} is the near-invisible pair this fixes`
+    luminance(forest) - luminance(mint) > 100,
+    `dark forest ${forest} on dark mint ${mint} reads`
   );
   assert.ok(
     luminance(ink) - luminance(mint) > 150,
@@ -594,16 +645,17 @@ test('D11/PJ1-C7 · the area card is deleted, and the privacy fact still reads t
   );
 });
 
-test('D12 · the address caption is below the field, and the label owns its row', () => {
+test('D12 · the address caption is below the field, and the label row carries only a word-hint', () => {
   const flat = flatten(read('screens/PostJobScreen.tsx'));
 
-  const at = flat.indexOf('label="Service address (private, optional)"');
-  assert.notEqual(at, -1, 'the private-address field must still be here');
+  // 2026-09-28 (LUX-LIST-64 #34): the label is "Service address" and
+  // "(private, optional)" is its hint, beside it in the Required grey — a
+  // two-word hint, which is what the row was always able to hold. The caption
+  // SENTENCE still never goes into the label row.
+  const at = flat.indexOf('label="Service address" hint="(private, optional)"');
+  assert.notEqual(at, -1, 'the private-address field must still be here, its privacy said beside the label');
   const field = flat.slice(at, at + 400);
-
-  // No hint on the field — a hint is laid out BESIDE the label, and this is
-  // the longest label in the app.
-  assert.doesNotMatch(field, /hint=/, 'the sentence must not go back into the label row');
+  assert.doesNotMatch(field, /hint="Never shown/, 'the sentence must not go into the label row');
   // The caption is a plain line under the field, verbatim.
   assert.match(
     field,
@@ -615,58 +667,61 @@ test('D12 · the address caption is below the field, and the label owns its row'
   );
 });
 
-test('D13/D14 · the budget pill displays, the pencil edits, and nothing else is a control', () => {
+// 2026-09-28 (LUX-LIST-64 #36) — THE CONSTANTS MOVED WITH THE DESIGN. The pill
+// that only DISPLAYED the amount, and the pencil that was its one way in, are
+// replaced by ONE field that is itself the way in: it opens the price list
+// (the Filters' tick list) with "No maximum", the ready amounts and "Enter your
+// own amount". What D13/D14 held still holds: one amount, no minimum anywhere,
+// no slider, and the shared field label.
+test('D13/D14 · the price is ONE field that opens its list — no pencil, no dialog, no minimum', () => {
   const flat = flatten(read('screens/PostJobScreen.tsx'));
+  const drop = flatten(read('components/PriceDropdown.tsx'));
 
-  // RUN a4 (2026-09-05): the label is now the mode's own word — 'Max budget'
-  // in open bids, 'Price' in posted — so the block is anchored on the
-  // expression rather than on the string it resolves to. Logic unchanged.
-  const at = flat.indexOf(
-    '<FieldLabel palette={emeraldColors}>{priceFieldLabel(pricingMode)}</FieldLabel>'
+  assert.match(
+    flat,
+    /<PriceDropdown ref=\{priceRef\} mode=\{pricingMode\} amount=\{budgetMax\} onModeChange=\{setPricingMode\} onAmountChange=\{setBudgetMax\} onEditingChange=\{setEditingBudget\} viewport=\{priceViewport\} palette=\{emeraldColors\} \/>/,
+    'the review step\'s price is the one dropdown, on the screen\'s one figure'
   );
-  assert.notEqual(at, -1, 'the maximum carries the shared field label, left-aligned');
-  const end = flat.indexOf('Optional — leave blank', at);
-  assert.notEqual(end, -1, 'the helper must follow the pill');
-  const block = flat.slice(at, end);
+  // The pencil and its dialog are gone from the screen.
+  assert.ok(!flat.includes('<EditBudgetDialog'), 'the budget dialog is not mounted');
+  assert.ok(!flat.includes('<Ionicons name="pencil"'), 'the pencil is gone');
+  assert.ok(!flat.includes('budgetPill'), 'the display pill is gone');
 
-  // THE PILL IS NOT A TOUCH TARGET. Exactly one Pressable in the block, and
-  // it is the pencil.
-  assert.equal(
-    (block.match(/<Pressable/g) ?? []).length,
-    1,
-    'the pill itself must not be pressable — the pencil is the only touch target'
-  );
-  assert.match(block, /<View style=\{styles\.budgetPill\}> <Text style=\{styles\.budgetPillValue\}/);
-  assert.match(block, /accessibilityLabel="Edit budget"/);
-  assert.match(block, /onPress=\{\(\) => setEditingBudget\(true\)\}/);
-  assert.match(block, /<Ionicons name="pencil"/);
+  // THE FIELD IS THE TOUCH TARGET, labelled for the E2E walk. 2026-09-28: the
+  // list always DROPS DOWN inside the scroller's band — the page scrolls first
+  // when the band has no room under the field (the viewport the screen hands it).
+  assert.match(drop, /onPress=\{\(\) => openList\(\)\}/);
+  assert.match(drop, /direction="down"/);
+  assert.match(drop, /accessibilityLabel="Edit budget"/);
+  // The list: No maximum in open bids only, the ready amounts, then the way to type one.
+  assert.match(drop, /export const PRICE_PRESETS = \[50, 100, 150, 200, 300, 500\] as const;/);
+  assert.match(drop, /\.\.\.\(posted \? \[\] : \[\{ value: NONE, label: 'No maximum' \}\]\)/);
+  assert.match(drop, /\{ value: CUSTOM, label: 'Enter your own amount', icon: 'pencil' as const, accent: true \}/);
 
-  // AND IT IS NOT A TEXT INPUT.
-  assert.ok(!block.includes('<TextField'), 'the pill is a display, not a field');
-  assert.ok(!block.includes('onChangeText'), 'nothing in the pill accepts typing');
-
-  // D13 — the minimum is gone entirely, field and label. (The `budgetMin`
-  // STATE survives, and must: the draft record and edit mode both carry it,
-  // and D16 is about not WRITING it, not about corrupting a saved draft.
-  // What has to be gone is any way to enter one.)
+  // D13 — the minimum is gone entirely, field and label.
   assert.ok(!flat.includes('Min budget'), 'the MIN BUDGET field and label are removed');
   assert.ok(!flat.includes('budgetRow'), 'the two-field row is gone with it');
-  assert.ok(!block.includes('budgetMin'), 'the review step offers no minimum to edit');
+  assert.ok(!drop.includes('budgetMin'), 'the price offers no minimum to edit');
 
-  // D14 — no slider, no track, no second edit affordance.
+  // D14 — no slider, no track.
   for (const banned of ['Slider', 'FilterSlider', 'Edit Amount', 'budgetTrack']) {
-    assert.ok(!flat.includes(banned), `${banned} must not appear — the pencil is the one edit path`);
+    assert.ok(!flat.includes(banned) && !drop.includes(banned), `${banned} must not appear`);
   }
 
-  // D15a — the range sentence is deleted, not reworded.
-  assert.match(flat, /Optional — leave blank if you want workers to propose a price\./);
+  // D15a — the range sentence stays deleted; the line under the field says
+  // what each state means, in the approved flow's words.
   assert.ok(!flat.includes('A range helps workers bid'), 'the range sentence is gone');
+  assert.match(drop, /'Workers will propose a price\.'/);
+  assert.match(drop, /'Workers can bid up to this amount\.'/);
+  assert.match(drop, /'Pick a price to publish\.'/);
 
   // The label treatment is the SHARED one, so it cannot drift from Title and
   // Description on step 1.
+  assert.match(drop, /<FieldLabel palette=\{palette\} tone="gold">\{priceFieldLabel\(mode\)\}<\/FieldLabel>/ /* 2026-09-29 (LUX-LIST-2 #4): MAX BUDGET / PRICE stay antique gold */);
   const field = read('components/TextField.tsx');
   assert.match(field, /export function FieldLabel\(\{/);
-  assert.match(field, /<FieldLabel palette=\{palette\}>\{label\}<\/FieldLabel>/);
+  // 2026-09-28 (LUX-LIST-64 #2): the label may take the accent tone ("Phone number").
+  assert.match(field, /<FieldLabel palette=\{palette\} tone=\{labelTone\}>\s*\{label\}\s*<\/FieldLabel>/);
 });
 
 test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses over-ceiling in writing', () => {
@@ -688,7 +743,7 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
   assert.match(flat, /borderRadius: radius\.xl,/, 'the budget editor keeps the xl radius');
   assert.match(
     confirm,
-    /<Surface material="sheet" corners="all" radius=\{radius\.xl\}/,
+    /<Surface material="menu" corners="all" radius=\{radius\.xl\}/ /* 2026-09-29 (LUX-LIST-2 #9): the dialogs wear the pop-ups' dense frost */,
     "ConfirmDialog's card wears the sheet material at the same xl radius (G1 C5)"
   );
 
@@ -736,7 +791,7 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
   const modes = read('lib/pricingMode.ts');
   assert.match(modes, /title: 'Edit Budget',/);
   assert.match(modes, /message: 'Set the maximum amount workers can bid up to\.',/);
-  assert.match(flat, /const copy = budgetEditorCopy\(draftMode\);/);
+  assert.match(flat, /const copy = budgetEditorCopy\(mode\);/);
   assert.match(flat, /<Text style=\{\[styles\.title, \{ color: palette\.onForest \}\]\}>\{copy\.title\}<\/Text>/);
   assert.match(flat, /\{copy\.message\}<\/Text>/);
   assert.match(flat, /accessibilityLabel=\{copy\.fieldLabel\}/);
@@ -790,21 +845,23 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
   assert.ok(!flat.includes('supabase'), 'the dialog contacts nothing');
   assert.ok(!flat.includes('createJob'), 'the dialog writes nothing');
 
-  // Cancel discards: the next open re-seeds from the live value. RUN a4: and
-  // from the live MODE, so a cancelled mode change discards with the amount.
+  // Cancel discards: the next open re-seeds from the live value. (M-7: the
+  // mode is the review step's now, so there is no draft mode to re-seed.)
   assert.match(
     flat,
-    /useEffect\(\(\) => \{ if \(!visible\) return; setDraft\(value\); setDraftMode\(mode\); setProblem\(null\); \}/
+    /useEffect\(\(\) => \{ if \(!visible\) return; setDraft\(value\); setProblem\(null\); \}/
   );
 
-  // The screen wires it: Save writes and closes, Cancel only closes. RUN a4:
-  // Save now writes both halves of the one decision.
+  // 2026-09-28 (LUX-LIST-64 #36): the screen no longer mounts the dialog — the
+  // price list's own entry is the way to type an amount — and that entry
+  // refuses the ceiling the same way, in writing, through the same shared rule.
   const screen = flatten(read('screens/PostJobScreen.tsx'));
-  assert.match(
-    screen,
-    /onSave=\{\(next, mode\) => \{ setBudgetMax\(next\); setPricingMode\(mode\); setEditingBudget\(false\); \}\}/
-  );
-  assert.match(screen, /onCancel=\{\(\) => setEditingBudget\(false\)\}/);
+  assert.ok(!screen.includes('<EditBudgetDialog'), 'the dialog is not mounted by the wizard');
+  const drop = flatten(read('components/PriceDropdown.tsx'));
+  assert.match(drop, /import \{ moneyCeilingError \} from '\.\.\/lib\/validation';/);
+  assert.match(drop, /const ceiling = moneyCeilingError\(typed\); if \(ceiling\) \{ setProblem\(ceiling\); return; \}/);
+  assert.match(drop, /if \(copy\.allowEmpty\) \{ onAmountChange\(''\); setEntering\(false\); return; \} setProblem\('Enter an amount\.'\);/);
+  assert.ok(!drop.includes('supabase') && !drop.includes('createJob'), 'the field contacts nothing and writes nothing');
 });
 
 test('D16 · this screen writes no minimum, and nothing else about the column moved', () => {
@@ -818,9 +875,11 @@ test('D16 · this screen writes no minimum, and nothing else about the column mo
     flat,
     /budgetCents: posted \? budgetMaxCents : null, budgetMinCents: null, budgetMaxCents: posted \? null : budgetMaxCents, pricingMode,/
   );
-  // The summary label must not claim a minimum either. RUN a4: that derivation
-  // is now the open-bids branch, which is the only one that can render a range.
-  assert.match(flat, /budget_min_cents: null, budget_max_cents: validMax,/);
+  // The summary must not claim a minimum either. 2026-09-28 (LUX-LIST-64 #38):
+  // its BUDGET cell is handed ONE figure — "Up to $X" for an open-bids maximum,
+  // "$X" for a price or an offer — so a range cannot be written there at all.
+  assert.match(flat, /budgetCents=\{summaryCents\} budgetUpTo=\{!isHiring && !postedPrice\}/);
+  assert.doesNotMatch(flat, /budgetRangeLabel/, 'the review step writes no range');
 
   // NOT A SCHEMA CHANGE. No migration was written and the column's other
   // readers are untouched — lib/jobs still carries it end to end.
@@ -832,43 +891,48 @@ test('D16 · this screen writes no minimum, and nothing else about the column mo
   assert.match(flat, /setBudgetMin\(draft\.budgetMin\)/);
 });
 
-test('D17/D18 · the summary keeps all six rows, and the media row counts honestly', () => {
+test('D17/D18 · the summary keeps all six details, and the media count is honest', () => {
   const flat = flatten(read('screens/PostJobScreen.tsx'));
+  const card = flatten(read('components/JobSummaryCard.tsx'));
 
-  const at = flat.indexOf('<Text style={styles.reviewEyebrow}>JOB SUMMARY</Text>');
+  // 2026-09-28 (LUX-LIST-64 #38): the summary is components/JobSummaryCard.tsx,
+  // mounted on the review step before the publish line.
+  const at = flat.indexOf('<JobSummaryCard');
   assert.notEqual(at, -1, 'the summary card must still be here');
-  const end = flat.indexOf('<View style={styles.publishNotice}>', at);
-  assert.notEqual(end, -1, 'the summary card must close before the publish notice');
-  const card = flat.slice(at, end);
+  assert.ok(flat.indexOf('<View style={styles.publishNotice}>', at) > at, 'and close before the publish line');
+  assert.match(card, /<Text style=\{styles\.eyebrow\}>JOB SUMMARY<\/Text>/);
 
-  const rows = [...card.matchAll(/<Text style=\{styles\.reviewLabel\}>([^<]+)<\/Text>/g)].map(
-    (match) => match[1]
+  // SIX DETAILS STILL — media now a section of its own with its count, the
+  // other five opening their steps; the amount's label still comes from the
+  // posting mode ('Budget' / 'Price') or is the offer's.
+  const cells = [...card.matchAll(/<SummaryCell onPress=\{\(\) => onEdit\('(\w+)'\)\} label=(?:"([^"]+)"|\{(\w+)\})/g)].map(
+    (match) => `${match[1]}:${match[2] ?? `{${match[3]}}`}`
   );
-  // RUN a4 (2026-09-05): SIX ROWS STILL, and the last one is still the amount —
-  // what changed is that its label now comes from the posting mode ('Budget'
-  // for open bids, 'Price' for a posted price) instead of being written here.
-  assert.deepEqual(rows, [
-    'Category',
-    'Area',
-    'Media',
-    'Timing',
-    'Address (private)',
-    '{isHiring ? \'Offer\' : priceRowLabel(pricingMode)}',
+  assert.deepEqual(cells, [
+    'category:Category',
+    'area:Area',
+    'timing:Timing',
+    'address:Address (private)',
+    'budget:{budgetLabel}',
   ]);
+  assert.match(flat, /budgetLabel=\{isHiring \? 'Offer' : priceRowLabel\(pricingMode\)\}/);
+  assert.match(card, /MEDIA/);
+  assert.match(card, /mediaCountText\(photos\.length, videos\.length\)/);
 
-  // The private-address row no longer disappears when it is empty — a
-  // missing address is a fact a review screen should state.
-  assert.match(card, /\{address\.trim\(\) \|\| 'Not added'\}/);
-  assert.match(card, /\{mediaSummary\(photos\.length, videos\.length\)\}/);
+  // The private-address detail never disappears when it is empty — a missing
+  // address is a fact a review screen should state, and the way to add it.
+  assert.match(card, /Add address/);
 });
 
-test('D18 · [executed] the media row pluralises each side and omits an empty one', () => {
-  assert.equal(mediaSummary(3, 1), '3 photos • 1 video');
-  assert.equal(mediaSummary(1, 2), '1 photo • 2 videos');
-  assert.equal(mediaSummary(1, 1), '1 photo • 1 video');
+test('D18 · [executed] the media count pluralises each side and omits an empty one', () => {
+  // 2026-09-28 (LUX-LIST-64 #38): the reference's comma; an empty count is
+  // not drawn at all (the section shows "Add photos or videos" instead).
+  assert.equal(mediaSummary(3, 1), '3 photos, 1 video');
+  assert.equal(mediaSummary(1, 2), '1 photo, 2 videos');
+  assert.equal(mediaSummary(1, 1), '1 photo, 1 video');
   assert.equal(mediaSummary(10, 0), '10 photos');
   assert.equal(mediaSummary(0, 1), '1 video');
-  assert.equal(mediaSummary(0, 0), 'None');
+  assert.equal(mediaSummary(0, 0), '');
   // "video", never "clip" — one word for one thing across the flow.
   for (const [photos, videos] of [[0, 1], [2, 3], [1, 1]]) {
     assert.doesNotMatch(mediaSummary(photos, videos), /clip/);
@@ -891,41 +955,37 @@ test('D18 · [executed] the media row pluralises each side and omits an empty on
 // this fence would say which link.
 // ---------------------------------------------------------------------------
 
-test('D19-D21 · the publish copy, the amount glyph, and where the second action goes', () => {
+test('D19-D21 · the publish copy, the amount, and where the second action goes', () => {
   const flat = flatten(read('screens/PostJobScreen.tsx'));
-  const publish = publishBranch(read('screens/PostJobScreen.tsx'));
+  const publish = flatten(publishBranch(read('screens/PostJobScreen.tsx')));
 
-  // D20 — verbatim.
-  assert.match(
-    flat,
-    /body="Workers can now see your job\. Bids appear as workers respond, and you choose who gets it\."/
-  );
+  // D20 — verbatim. 2026-09-28 (LUX-LIST-64 #42): the live page's two lines,
+  // the approved page's own (refs/publish-moment.html).
+  assert.match(publish, />Your job is live\.</);
+  assert.match(publish, />Workers nearby can see it now\.</);
   assert.ok(
-    !flat.includes('Workers browsing BRAZOS can now see it'),
-    'the body it replaced is retired'
+    !flat.includes('Workers browsing BRAZOS can now see it') && !publish.includes('Workers browsing BRAZOS'),
+    'the body D20 replaced stays retired'
   );
 
-  // D19 — the BUDGET row's glyph is the amount's own sign, and the wallet is
-  // gone from THIS card. (Step 4's summary keeps its own glyph: D19 is scoped
-  // to the publish screen.)
-  assert.match(publish, /<Text style=\{styles\.reviewIconGlyph\}>\$<\/Text>/);
-  assert.ok(
-    !publish.includes('wallet-outline'),
-    'the wallet glyph is gone from the publish screen\'s budget row'
-  );
-  assert.match(flat, /reviewIconGlyph: \{[^}]*color: colors\.emerald,/);
+  // D19 — the published card's amount is the amount itself, WHITE (#40, the
+  // money role), and no wallet glyph stands for it.
+  assert.match(publish, /<Text style=\{styles\.money\}>\{formatBudget\(cents\)\}<\/Text>/);
+  assert.match(publish, /money: \{ fontWeight: '700', color: colors\.money, \}/);
+  assert.ok(!publish.includes('wallet-outline'), 'no wallet glyph on the published card');
 
-  // D21 — new label, same handler and same destination.
-  assert.match(publish, /label: 'Back to Home',/);
-  assert.match(publish, /onPress: \(\) => leaveAfterSuccess\(false\),/);
+  // D21 — the label says where it goes; same handler and same destination.
+  assert.match(publish, /label: 'Back to Home'/);
+  assert.match(flat, /onBackHome=\{\(\) => leaveAfterSuccess\(false\)\}/);
   assert.ok(!publish.includes('Keep browsing'), 'the old label is replaced, not kept beside it');
 });
 
-test('D22 · the bids card is on the screen because the schema actually backs it', () => {
-  const flat = flatten(read('screens/PostJobScreen.tsx'));
-
-  assert.match(flat, /Expect the first bids soon/);
-  assert.match(flat, /You&apos;ll be notified when a worker bids on this job\./);
+test('D22 · the notify line is on the screen because the schema actually backs it', () => {
+  // 2026-09-28 (LUX-LIST-64 #42): the live page says it in one line, the
+  // approved page's own — and the promise is the same one, so the three links
+  // below are exactly what it still rests on.
+  const live = flatten(read('components/JobLivePage.tsx'));
+  assert.match(live, /We’ll let you know when the first bid arrives\./);
 
   // LINK 1 — the preference defaults to on, so a fresh account receives it.
   const phase20 = read('supabase/archive/phases/phase20_push_notifications.sql');
@@ -972,9 +1032,14 @@ test('D23 · the mark is a bigger check on a filled disc, ringed, haloed and spa
   assert.ok(check > templateGlyph, `the check grew: ${check} > ${templateGlyph}`);
   assert.ok(disc > templateDisc, `the disc grew: ${disc} > ${templateDisc}`);
 
-  // A FILLED disc, in the one solid conversion fill, with cream on it.
+  // A FILLED disc, in the one solid conversion fill, with the check on it.
+  // 2026-09-27 (the Lux remake, ruling 14): the check is TWO STROKES of the
+  // disc's ink that draw themselves — the still draws both legs full
+  // (legTransform at 1), inside the MARK_CHECK box.
   assert.match(flatShared, /disc: \{[^}]*backgroundColor: colors\.forest,/);
-  assert.match(flatten(still), /<Ionicons name="checkmark" size=\{MARK_CHECK\} color=\{colors\.onForest\} \/>/);
+  assert.match(flatShared, /export const CHECK_LEGS = \[ \{ key: 'short',[^\]]*\{ key: 'long',/);
+  assert.match(flatShared, /stroke: \{ position: 'absolute', borderRadius: CHECK_STROKE \/ 2, backgroundColor: colors\.onForest, \}/);
+  assert.match(flatten(still), /\{CHECK_LEGS\.map\(\(leg\) => \( <View key=\{leg\.key\} style=\{\[styles\.stroke, legBox\(leg\), \{ transform: legTransform\(leg, 1\) \}\]\} \/> \)\)\}/);
 
   // CONCENTRIC RING BORDERS behind it — borders, not fills, and two of them
   // stepping outward.
@@ -1084,12 +1149,18 @@ test('D25/D26 · the boundary holds, and reduced motion gets the still artwork',
 
   // D26 — REDUCED MOTION NEVER GETS A DEGRADED ANIMATION, it gets the same
   // artwork standing still. And `null` — the hook's "not read yet" — does not
-  // animate either, which is that hook's own stated contract.
+  // animate either, which is that hook's own stated contract. 2026-09-27 (the
+  // Lux remake, ruling 14): a binary WITHOUT worklets no longer gets the still
+  // — it gets the same entrance on core Animated's native driver, which is the
+  // motion boundary's own rule for that case; reduced motion is decided first.
   assert.match(
     flatFallback,
-    /const reducedMotion = useReducedMotion\(\); if \(reducedMotion !== false \|\| !canWorklet\(\)\) return <SuccessMarkStill \{\.\.\.props\} \/>;/,
+    /const reducedMotion = useReducedMotion\(\); if \(reducedMotion !== false\) return <SuccessMarkStill \{\.\.\.props\} \/>; if \(!canWorklet\(\)\) return <SuccessMarkAnimated \{\.\.\.props\} \/>;/,
     'only an explicit false may animate'
   );
+  assert.match(flatFallback, /Animated\.timing\(progress, \{ toValue: 1, duration: MARK_ENTRANCE_MS, useNativeDriver: USE_NATIVE_DRIVER, \}\)\.start\(\);/);
+  assert.equal((stripComments(fallback).match(/Animated\.timing\(/g) ?? []).length, 1, 'one animation on the fallback too');
+  assert.doesNotMatch(stripComments(fallback), /extrapolate: '(extend|identity)'/, 'the fallback clamps like the fast path');
   assert.match(
     read('hooks/useReducedMotion.ts'),
     /export function useReducedMotion\(\): boolean \| null \{/,
@@ -1101,9 +1172,14 @@ test('D25/D26 · the boundary holds, and reduced motion gets the still artwork',
   assert.match(flatFallback, /\{MARK_RINGS\.map\(\(size, index\) =>/);
   assert.match(flatFallback, /\{MARK_SPARKLES\.map\(\(sparkle\) =>/);
 
-  // And the screen mounts the mark through the template's slot.
-  const screen = flatten(read('screens/PostJobScreen.tsx'));
-  assert.match(screen, /mark=\{<SuccessMark accessibilityLabel="Your job is published" \/>\}/);
+  // 2026-09-28 (LUX-LIST-64 #42): the publish surface is the live page, whose
+  // tick tile draws the SAME check — the mark's two legs, from the shared
+  // module, through components/DrawnCheck.tsx — and says the same words. The
+  // template's own slot rule below still holds for the screens that mount it.
+  const live = flatten(read('components/JobLivePage.tsx'));
+  assert.match(live, /accessibilityLabel="Your job is published"/);
+  assert.match(live, /<DrawnCheck /);
+  assert.match(read('components/DrawnCheck.tsx'), /from '\.\/SuccessMark\.shared'/);
   // RUN MOTION1 (C2) staggered the template's own pieces, so the default glyph
   // is an Animated.View carrying an entrance style. The guarantee this line
   // makes is the `??`, and it is unchanged: a caller-supplied mark REPLACES the
@@ -1133,6 +1209,16 @@ test('D25/D26 · the boundary holds, and reduced motion gets the still artwork',
 
 /** Every file this run created or reshaped. */
 const TOUCHED = [
+  // 2026-09-28 (LUX-LIST-64 #36–#42): the rebuilt review step and publish
+  // moment join the sweep — the same three limits hold for every one of them.
+  'components/DrawnCheck.tsx',
+  'components/JobLivePage.tsx',
+  'components/JobSummaryCard.tsx',
+  'components/MediaViewer.tsx',
+  'components/PostJobBar.tsx',
+  'components/PriceDropdown.tsx',
+  'components/SealTransition.tsx',
+  'components/UndoToast.tsx',
   'components/EditBudgetDialog.tsx',
   'components/ScreenHeader.tsx',
   'components/SuccessMark.motion120.tsx',
@@ -1208,7 +1294,10 @@ test('gate · the payment-holding mechanism is protection, never escrow', () => 
 // with no fence at all, which is the one outcome the original was written to
 // prevent.
 test('gate · the staged light hero has landed: one mount, gated, on customer Home', () => {
-  const staged = 'hero_armchair_customer_light';
+  // 2026-09-29 (LUX-LIST-2 #5): light's hero is the operator's own sage-armchair
+  // cut-out now; the gate follows the file it guards and holds the same three
+  // things — one screen, one require, one palette ternary.
+  const staged = 'hero_armchair_customer_lamp_light';
   const dirs = ['components', 'screens', 'ui', 'lib', 'hooks', 'navigation', 'modes'];
   const referencing = [];
   const walk = (dir) => {

@@ -8,12 +8,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { RemoteImage } from './RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { CategoryGlyph } from './CategoryGlyph';
+import { GlowTextInput } from '../components/GlowTextInput';
 import { Button } from './Button';
 import { useOneTimeNotice } from '../hooks/useOneTimeNotice';
 import {
@@ -415,7 +416,9 @@ export function PortfolioPicker({
                           (isDark ? styles.categoryChipSelectedDark : styles.categoryChipSelected),
                       ]}
                     >
-                      <Ionicons
+                      <CategoryGlyph
+                        filled
+                        bare
                         name={JOB_CATEGORY_ICONS[c]}
                         size={14}
                         // D2: the saturated per-category palette is retired in
@@ -470,7 +473,9 @@ export function PortfolioPicker({
                 </View>
 
                 {category === OTHER_KEY && (
-                  <TextInput
+                  <GlowTextInput
+              glowRadius={radius.md}
+              wrapStyle={styles.customCategoryWrap}
                     keyboardAppearance={isDark ? 'dark' : 'light'}
                     style={styles.customCategoryInput}
                     value={customCategory}
@@ -485,7 +490,8 @@ export function PortfolioPicker({
                 <Text style={styles.detailHint}>
                   A real sentence or two — this is what clients read to judge your work.
                 </Text>
-                <TextInput
+                <GlowTextInput
+              glowRadius={radius.md}
                   keyboardAppearance={isDark ? 'dark' : 'light'}
                   style={styles.descriptionInput}
                   value={description}
@@ -645,7 +651,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   gridLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: colors.gold,
+    color: colors.eyebrow,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginTop: spacing.xs,
@@ -740,6 +746,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   categoryChipTextSelectedDark: {
     color: selectedInDark(colors).line,
   },
+  customCategoryWrap: {
+    marginTop: spacing.xs,
+  },
   customCategoryInput: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -748,7 +757,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingVertical: spacing.sm + 2,
     fontSize: 14,
     color: colors.text,
-    marginTop: spacing.xs,
   },
   descriptionInput: {
     borderWidth: 1,

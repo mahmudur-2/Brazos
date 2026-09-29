@@ -8,10 +8,12 @@ import {
   Text,
   View,
 } from 'react-native';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { HubCard } from '../components/HubCard';
+import { SegmentedControl } from '../components/SegmentedControl';
 import { useAuth } from '../hooks/useAuth';
 import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import {
@@ -29,20 +31,26 @@ import {
   type MyJobsTab,
 } from '../lib/jobLifecycle';
 import { effectiveOfferStatus, type PendingOffer } from '../lib/offers';
-import { draftHasContent, loadPostJobDraft, type PostJobDraft } from '../lib/postJobDraft';
+import { clearPostJobDraft } from '../lib/postJobDraft';
+import { deleteJobPhoto } from '../lib/storage';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DraftCard } from '../components/DraftCard';
+import { usePostJobDraft } from '../hooks/usePostJobDraft';
 import type { MyJobsStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes';
+import { goBackOrHome } from '../lib/navigationRef';
 import { useDialNumber } from '../lib/designOverrides';
 import {
-  fonts,
   radius,
   spacing,
   themedStyles,
   useThemeColors,
   type ColorPalette,
-  selectedInDark,
+  withAlpha,
+  screenGround,
 } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
+import { postedCardLive } from '../lib/liveJobStatus';
 
 /** "Cleaning · Bushwick" — the same category+location line the browse feed's
  *  card shows, so one job reads identically on both surfaces. */
@@ -73,56 +81,35 @@ function FilterTabs({
   value: Filter;
   onChange: (filter: Filter) => void;
 }) {
-  const { palette: colors, isDark } = useThemeColors();
-  const styles = stylesFor(colors);
   // RUN T2 (C4) — the segmented bar is this screen's signature control, and
   // both of its numbers were unreachable. They fall back to what this file
-  // drew, spelled here and nowhere else.
-  const tabsHeight = useDialNumber('myJobs.tabs.height') ?? 50;
-  const tabsRadius = useDialNumber('myJobs.tabs.radius') ?? radius.lg;
+  // drew, spelled here and nowhere else. 2026-09-27 (the operator's review):
+  // the bar is the shared Lux segment (components/SegmentedControl.tsx) — the
+  // mint-filled pill in the glass track — at its 48pt, pill-cornered; the two
+  // dials still reach it.
+  const tabsHeight = useDialNumber('myJobs.tabs.height') ?? 52;
+  // 26 is half the 52pt track: the pill. A dial in 0..40 cannot say "pill".
+  const tabsRadius = useDialNumber('myJobs.tabs.radius') ?? 26;
   return (
-    <View
-      style={[styles.tabs, { minHeight: tabsHeight, borderRadius: tabsRadius }]}
-      accessibilityRole="tablist"
-    >
-      {FILTERS.map((option) => {
-        const selected = option.value === value;
-        return (
-          <Pressable
-            key={option.value}
-            onPress={() => onChange(option.value)}
-            style={({ pressed }) => [
-              styles.tab,
-              selected && styles.tabSelected,
-              selected && isDark && styles.tabSelectedDark,
-              pressed && styles.pressed,
-            ]}
-            accessibilityRole="tab"
-            accessibilityState={{ selected }}
-          >
-            <Text
-              style={[
-                styles.tabLabel,
-                selected && styles.tabLabelSelected,
-                selected && isDark && styles.tabLabelSelectedDark,
-              ]}
-            >
-              {option.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
+    <SegmentedControl
+      options={FILTERS}
+      value={value}
+      onChange={onChange}
+      height={tabsHeight}
+      radius={tabsRadius}
+    />
   );
 }
 
-function SectionHeading({ title, count }: { title: string; count: number }) {
-  const { palette: colors } = useThemeColors();
+function SectionHeading({ title, count, gold = false }: { title: string; count: number; gold?: boolean }) {
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // 2026-09-27 (the operator's review, the Lux `.sect` + `.badge`): the count
+  // sits right beside its label, not across the row.
   return (
     <View style={styles.sectionHeaderRow}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.countBadge}>
+      <Text style={[styles.sectionTitle, gold && styles.sectionTitleGold]}>{title}</Text>
+      <View style={[styles.countBadge, isDark && styles.countBadgeDark]}>
         <Text style={styles.countBadgeText}>{count}</Text>
       </View>
     </View>
@@ -147,7 +134,6 @@ export function MyJobsHubScreen() {
   // file imports spacing/radius from lib/theme.
   const contentGap = useDialNumber('myJobs.content.gap') ?? spacing.xl;
   const emptyPaddingY = useDialNumber('myJobs.empty.paddingY') ?? spacing.xxl;
-  const headerMarkSize = useDialNumber('myJobs.headerMark.size') ?? 48;
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { user } = useAuth();
   // Perspective comes from ModeContext — never a hand-passed prop (CLAUDE.md).
@@ -173,26 +159,29 @@ export function MyJobsHubScreen() {
   // The local, unpublished wizard draft (lib/postJobDraft). §H groups drafts
   // under Active — and this device's draft is real work worth resuming, even
   // though it has no jobs row yet. Empty autosaves don't count as a draft.
-  const [draft, setDraft] = useState<PostJobDraft | null>(null);
+  // 2026-09-28 (LUX-LIST-64 #17): read by the one hook the Home's card uses too.
+  const { draft, setDraft } = usePostJobDraft();
+  // M-7 — backing out of the wizard keeps a draft with content, so this card
+  // carries the one explicit delete. Its media was never published and
+  // belongs to no job, so it goes with it.
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+
+  async function discardDraft() {
+    const userId = user?.id;
+    if (!userId || !draft) return;
+    setDiscarding(true);
+    await Promise.all([...draft.photos, ...draft.videos].map((url) => deleteJobPhoto(url)));
+    await clearPostJobDraft(userId);
+    setDiscarding(false);
+    setConfirmDiscard(false);
+    setDraft(null);
+  }
 
   useFocusEffect(
     useCallback(() => {
       void refresh();
-      let active = true;
-      // The draft slot is per account (AUD-P1-07): no signed-in user, no
-      // draft card — never another account's leftovers.
-      const userId = user?.id;
-      if (userId) {
-        loadPostJobDraft(userId).then((d) => {
-          if (active) setDraft(d && draftHasContent(d) ? d : null);
-        });
-      } else {
-        setDraft(null);
-      }
-      return () => {
-        active = false;
-      };
-    }, [refresh, user?.id])
+    }, [refresh])
   );
 
   async function onRefresh() {
@@ -260,11 +249,15 @@ export function MyJobsHubScreen() {
     navigation.navigate('PostJob');
   }
 
+  // 2026-09-26 (the refresh, audit M-28) — an empty tab teaches the one step
+  // it holds, in one sentence, and says only what the product does: posting
+  // is free, the charge comes when you hire, and the held payment waits here
+  // for your approval.
   const emptyText = isCustomer
     ? filter === 'active'
-      ? 'Post a job to get started.'
+      ? 'Post a job — you’re only charged when you hire someone.'
       : filter === 'review'
-        ? 'Nothing is waiting on your approval right now.'
+        ? 'When a worker finishes, the held payment waits here for your approval.'
         : 'Finished and cancelled jobs land here.'
     : filter === 'active'
       ? 'Accepted work and the bids you’ve placed show up here.'
@@ -273,33 +266,17 @@ export function MyJobsHubScreen() {
         : 'Finished work and settled bids land here.';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        {/* Masters 35/36/37 ring the header's briefcase squircle in gold
-            rather than filling it; light keeps the Heritage forest fill. */}
-        <View
-          style={[
-            styles.headerMark,
-            { width: headerMarkSize, height: headerMarkSize },
-            isDark && styles.headerMarkDark,
-          ]}
-        >
-          <Ionicons
-            name="briefcase-outline"
-            size={22}
-            color={isDark ? colors.gold : colors.onForest}
-          />
-        </View>
-        <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>YOUR WORK</Text>
-          <Text style={styles.headerTitle}>My jobs</Text>
-          <Text style={styles.headerSubtitle} numberOfLines={2}>
-            {isCustomer
-              ? 'Jobs you posted, from first bid to final review.'
-              : 'Work you accepted and bids awaiting a response.'}
-          </Text>
-        </View>
-      </View>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
+      {/* M-9 — the customer's My Jobs is a hidden tab reached from Home and
+          the [+] sheet, so it has a way back. 2026-09-28 (LUX-LIST-64 #22):
+          the shared header — the round back button, "My Jobs" centred on its
+          row at 17, no line under it. The worker's My Jobs is a real tab: a
+          tab root's big left title (#27), its one line kept. */}
+      {isCustomer ? (
+        <ScreenHeader title="My Jobs" onBack={goBackOrHome} />
+      ) : (
+        <ScreenHeader title="My Jobs" subtitle="Accepted work and open bids." largeTitle />
+      )}
 
       <View style={styles.filterBar}>
         <FilterTabs value={filter} onChange={setFilter} />
@@ -352,15 +329,18 @@ export function MyJobsHubScreen() {
                 </View>
                 <Text style={styles.emptyTitle}>Nothing here yet</Text>
                 <Text style={styles.emptyText}>{emptyText}</Text>
-                {isCustomer ? (
+                {/* 2026-09-28 (LUX-LIST-64 #44): only an account with no jobs at all
+                    gets a button here — "Post a job"; a tab that is merely empty
+                    does not, and no "Post another job" is left anywhere. */}
+                {isCustomer && posted.length === 0 && !draft ? (
                   <Pressable
                     onPress={openPostJob}
                     style={({ pressed }) => [styles.primaryCta, pressed && styles.pressed]}
                     accessibilityRole="button"
-                    accessibilityLabel="Post another job"
+                    accessibilityLabel="Post a job"
                   >
                     <Ionicons name="add" size={20} color={colors.onForest} />
-                    <Text style={styles.primaryCtaText}>Post another job</Text>
+                    <Text style={styles.primaryCtaText}>Post a job</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -369,26 +349,16 @@ export function MyJobsHubScreen() {
             <>
               {showDraft && draft ? (
                 <View style={styles.section}>
-                  <SectionHeading title="Draft" count={1} />
+                  <SectionHeading title="Draft" count={1} gold />
+                  <DraftCard draft={draft} onPress={openPostJob} />
                   <Pressable
-                    onPress={openPostJob}
-                    style={({ pressed }) => [styles.draftCard, pressed && styles.pressed]}
+                    onPress={() => setConfirmDiscard(true)}
+                    hitSlop={10}
+                    style={({ pressed }) => [styles.draftDiscard, pressed && styles.pressed]}
                     accessibilityRole="button"
-                    accessibilityLabel="Resume your job draft"
+                    accessibilityLabel="Discard draft"
                   >
-                    <View style={styles.draftIcon}>
-                      <Ionicons name="create-outline" size={20} color={accent} />
-                    </View>
-                    <View style={styles.draftCopy}>
-                      <Text style={styles.draftEyebrow}>NOT PUBLISHED YET</Text>
-                      <Text style={styles.draftTitle} numberOfLines={1}>
-                        {draft.title.trim() || 'Untitled job'}
-                      </Text>
-                      <Text style={styles.draftMeta} numberOfLines={1}>
-                        Resume where you left off — workers can’t see it until you publish.
-                      </Text>
-                    </View>
-                    <Ionicons name="arrow-forward" size={18} color={accent} />
+                    <Text style={styles.draftDiscardText}>Discard draft</Text>
                   </Pressable>
                 </View>
               ) : null}
@@ -405,7 +375,7 @@ export function MyJobsHubScreen() {
                       icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                       category={job.category}
                       title={job.title}
-                      subtitle={`Client · ${names[job.client_id] ?? 'Client'}`}
+                      subtitle={names[job.client_id] ?? 'Client'}
                       thumbnailUrl={jobThumbnailUrl(job)}
                       metaLine={metaLineFor(job)}
                       timeLabel={formatTimeAgo(job.created_at)}
@@ -430,11 +400,22 @@ export function MyJobsHubScreen() {
                 <View style={styles.section}>
                   <SectionHeading title="You posted" count={postedItems.length} />
                   {postedItems.map((job) => {
+                    // 2026-09-28 (LUX-LIST-64 #19): the person's name alone.
                     const worker = job.assigned_worker_id
-                      ? `Worker · ${names[job.assigned_worker_id] ?? 'Worker'}`
+                      ? names[job.assigned_worker_id] ?? 'Worker'
                       : job.bid_count > 0
                       ? `${job.bid_count} ${job.bid_count === 1 ? 'bid' : 'bids'} received`
                       : 'Awaiting bids';
+                    const state = lifecycleOf(job);
+                    // #45: the rail, the chat words and the held note — the one
+                    // rule the Home's cards read too (lib/liveJobStatus.ts).
+                    const { live, chatLabel, moneyNote } = postedCardLive({
+                      job,
+                      state,
+                      paymentStatus: payments[job.id]?.status,
+                      workerName: job.assigned_worker_id ? names[job.assigned_worker_id] : null,
+                      nowMs,
+                    });
                     return (
                       <HubCard
                         key={`posted-${job.id}`}
@@ -447,9 +428,13 @@ export function MyJobsHubScreen() {
                         timeLabel={formatTimeAgo(job.created_at)}
                         priceCents={job.final_amount_cents ?? job.budget_cents}
                         status={job.status}
+                        live={live}
+                        onChat={live ? () => navigation.navigate('Chat', { jobId: job.id }) : undefined}
+                        chatLabel={chatLabel}
+                        moneyNote={moneyNote}
                         nextAction={myJobsNextAction({
                           perspective: 'customer',
-                          state: lifecycleOf(job),
+                          state,
                           bidCount: job.bid_count,
                           reviewedByMe: reviewedJobIds.has(job.id),
                           releaseDeadline: releaseDeadlineMs(job),
@@ -466,7 +451,7 @@ export function MyJobsHubScreen() {
 
               {bidItems.length > 0 && (
                 <View style={styles.section}>
-                  <SectionHeading title="Pending bids" count={bidItems.length} />
+                  <SectionHeading title="Pending bids" count={bidItems.length} gold />
                   {bidItems.map((bid) => {
                     if (!bid.job) return null;
                     // Normalized once so the card and the screen it opens are
@@ -493,8 +478,8 @@ export function MyJobsHubScreen() {
                         title={job.title}
                         subtitle={
                           awaitingMe
-                            ? `${clientFirstName} sent you a Counteroffer — respond`
-                            : `Client · ${clientName}`
+                            ? `${clientFirstName} sent you a counter-offer — respond`
+                            : clientName
                         }
                         thumbnailUrl={jobThumbnailUrl(job)}
                         metaLine={metaLineFor(job)}
@@ -530,7 +515,7 @@ export function MyJobsHubScreen() {
                         icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                         category={job.category}
                         title={job.title}
-                        subtitle={`Client · ${names[job.client_id] ?? 'Client'}`}
+                        subtitle={names[job.client_id] ?? 'Client'}
                         thumbnailUrl={jobThumbnailUrl(job)}
                         metaLine={metaLineFor(job)}
                         timeLabel={formatTimeAgo(bid.created_at)}
@@ -545,24 +530,21 @@ export function MyJobsHubScreen() {
                 </View>
               )}
 
-              {isCustomer ? (
-                <Pressable
-                  onPress={openPostJob}
-                  style={({ pressed }) => [styles.postAnother, pressed && styles.pressed]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Post another job"
-                >
-                  <View style={styles.postAnotherIcon}>
-                    <Ionicons name="add" size={20} color={accent} />
-                  </View>
-                  <Text style={styles.postAnotherText}>Post another job</Text>
-                  <Ionicons name="arrow-forward" size={18} color={accent} />
-                </Pressable>
-              ) : null}
             </>
           )}
         </ScrollView>
       )}
+
+      <ConfirmDialog
+        visible={confirmDiscard}
+        title="Discard this draft?"
+        message="Its text and photos are deleted from Brazos. Workers never saw it."
+        confirmText="Discard"
+        destructive
+        loading={discarding}
+        onConfirm={() => void discardDraft()}
+        onCancel={() => setConfirmDiscard(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -573,99 +555,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.lg,
-  },
-  headerMark: {
-    borderRadius: radius.lg,
-    backgroundColor: colors.forest,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  headerMarkDark: {
-    backgroundColor: 'transparent',
-    borderColor: colors.gold,
-  },
-  headerCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  // Masters 35/36/37 set YOUR WORK gold over a display-serif title.
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.4,
-    color: colors.gold,
-  },
-  headerTitle: {
-    fontFamily: fonts.display,
-    fontSize: 30,
-    lineHeight: 36,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.textMuted,
-  },
   filterBar: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
   },
-  // Masters 36/37: the segmented bar is a hairlined track, and the ACTIVE
-  // cell is a dark fill inside a gold border with a serif cream label.
-  // Master 35 fills its active cell green instead (B-3); decision 5 names
-  // the gold-bordered form as the rule, so that is what all three tabs use.
-  tabs: {
-    flexDirection: 'row',
-    gap: 3,
-    padding: 3,
-    backgroundColor: colors.mint,
-  },
-  tab: {
-    minHeight: 44,
-    flex: 1,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-  },
-  tabSelected: {
-    backgroundColor: colors.surface,
-    shadowColor: colors.ink,
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  tabSelectedDark: {
-    borderColor: colors.gold,
-  },
-  tabLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  tabLabelSelected: {
-    color: colors.forest,
-    fontSize: 16,
-  },
-  tabLabelSelectedDark: {
-    // emerald D6: the chosen segment's LABEL is gold, not just its hairline —
-    // the same treatment every chip, pill and radio now carries.
-    color: selectedInDark(colors).line,
-  },
+  // 2026-09-27 (the operator's review): the segmented bar's own styles are
+  // gone — it is the shared Lux segment (components/SegmentedControl.tsx).
   center: {
     flex: 1,
     alignItems: 'center',
@@ -689,25 +584,30 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   // Masters 35/36: each section is a gold small-caps eyebrow beside a sage
   // pill whose count reads green.
+  sectionTitleGold: { color: colors.eyebrowGold }, // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
   sectionTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: colors.gold,
+    color: colors.eyebrow,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
   },
+  // The Lux `.badge`: 22 tall, the mint at .14 in dark, the count in mint.
   countBadge: {
-    minWidth: 30,
-    height: 30,
+    minWidth: 22,
+    height: 22,
     backgroundColor: colors.mint,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.pill,
+    paddingHorizontal: 7,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  countBadgeDark: {
+    backgroundColor: withAlpha(colors.emerald, 0.14),
   },
   countBadgeText: {
     fontSize: 12,
@@ -760,70 +660,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '800',
     color: colors.onForest,
   },
-  draftCard: {
-    minHeight: 72,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.forest,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-  },
-  draftIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    backgroundColor: colors.mint,
-    alignItems: 'center',
+  draftDiscard: {
+    alignSelf: 'flex-end',
+    minHeight: 44,
     justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
   },
-  draftCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  draftEyebrow: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    color: colors.emerald,
-  },
-  draftTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  draftMeta: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  postAnother: {
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-  },
-  postAnotherIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    backgroundColor: colors.mint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  postAnotherText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.forest,
+  draftDiscardText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.danger,
   },
   errorCard: {
     minHeight: 72,

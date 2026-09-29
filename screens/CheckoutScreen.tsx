@@ -451,7 +451,7 @@ export function CheckoutScreen() {
   return (
     <>
       <DetailScreen
-        title="Protected checkout"
+        title="Protected Checkout"
         subtitle={phase === 'confirming' ? 'Confirming your payment…' : job.title}
         onBack={goBackOrHome}
         state={state}
@@ -767,7 +767,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   totalValue: {
     fontSize: 18,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.money,
   },
   explainer: {
     gap: spacing.md,

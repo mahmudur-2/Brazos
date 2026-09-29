@@ -33,6 +33,31 @@ function relativeAge(iso: string, style: 'long' | 'short'): string {
 }
 
 /**
+ * 2026-09-28 (LUX-LIST-64 #54) — THE INBOX ROW'S STAMP, in the row's 44pt
+ * right column (refs/inbox-clean-list.html): "now", "12m", "4h" today; "1d"
+ * for the day before; the weekday ("Mon") within the week; then the date
+ * ("Sep 12"), with the year as digits once it is another year ("9/12/25").
+ * A stamp, not an age — past a day it names the day.
+ */
+export function formatInboxStamp(iso: string, nowMs: number = Date.now()): string {
+  const then = new Date(iso);
+  const thenMs = then.getTime();
+  if (Number.isNaN(thenMs)) return '';
+  const mins = Math.floor(Math.max(0, nowMs - thenMs) / 60_000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  if (hours < 48) return '1d';
+  const days = Math.floor(hours / 24);
+  if (days < 7) return then.toLocaleDateString('en-US', { weekday: 'short' });
+  const now = new Date(nowMs);
+  return then.getFullYear() === now.getFullYear()
+    ? then.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : then.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
+}
+
+/**
  * Time-of-day greeting, e.g. "Good morning".
  *
  * Takes the date rather than reading the clock itself so the boundaries are

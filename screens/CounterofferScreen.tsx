@@ -1,12 +1,13 @@
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { OfferComposer } from '../components/OfferComposer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { goBackOrHome } from '../lib/navigationRef';
-import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
-import { useScrollClearance } from '../ui/primitives';
+import { themedStyles, useThemeColors, type ColorPalette,
+  screenGround,
+} from '../lib/theme';
 
 /**
  * Screen 30 — Counteroffer, the OfferComposer's counter entry from the
@@ -21,27 +22,18 @@ import { useScrollClearance } from '../ui/primitives';
  * this route is the bid-side counter that never existed before Phase 5.)
  */
 export function CounterofferScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
-  // emerald(3): the floating pill's real footprint.
-  const navClearance = useScrollClearance();
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'Counteroffer'>>();
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <ScreenHeader title="Counter-offer" onBack={goBackOrHome} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
-        >
+    // M-33 — the composer is the whole body: its fields scroll and Send is
+    // pinned above the keyboard. The tab bar owns the bottom inset.
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
+      <ScreenHeader title="Counter-Offer" onBack={goBackOrHome} />
           <OfferComposer
+            layout="screen"
             context={{
               kind: 'counter',
               offer: params.offer,
@@ -55,8 +47,6 @@ export function CounterofferScreen() {
               navigation.popTo('ClientJobDetail', { job: params.job });
             }}
           />
-        </ScrollView>
-      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -66,13 +56,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   safe: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  flex: {
-    flex: 1,
-  },
-  content: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
   },
   }),
 );

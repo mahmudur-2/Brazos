@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { AuthButton } from '../components/AuthButton';
 import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
+import { Card } from '../components/Card';
 import { PhoneNumberInput } from '../components/PhoneNumberInput';
 import { useAuth } from '../hooks/useAuth';
 import { authSizes, authSpacing, authType } from '../lib/authTheme';
@@ -162,7 +163,7 @@ export function SignInScreen() {
 
   return (
     <AuthScaffold
-      title="Sign in"
+      title="Sign In"
       onBack={() => navigation.goBack()}
       backdrop="soft"
       lift={authSpacing.xl}
@@ -176,7 +177,7 @@ export function SignInScreen() {
           Sign in to Brazos
         </Text>
         <Text style={styles.subtitle}>
-          Use the phone number connected to your account.
+          The number connected to your account.
         </Text>
 
         {bannedNotice ? (
@@ -189,23 +190,28 @@ export function SignInScreen() {
         ) : null}
 
         <View style={styles.form}>
-          <PhoneNumberInput
-            themed
-            country={country}
-            onChangeCountry={setCountry}
-            value={phoneDigits}
-            onChangeValue={(digits) => {
-              setPhoneDigits(digits);
-              if (phoneError) setPhoneError(null);
-              if (notice) setNotice(null);
-            }}
-            error={phoneError}
-            editable={!loading}
-            // No return key. The number pad has none of its own, and asking
-            // for one ("go") made iOS float a "Go" pill over the keyboard —
-            // the operator's "get rid of the go" (DECISIONS 22). Continue,
-            // pinned on the keyboard, is the way onward.
-          />
+          {/* 2026-09-27 (the Lux remake, the operator's pic 2): the phone-
+              number card LIFTED — the one card primitive, pop-out with the
+              shadow behind it — the label gold, the rest as today. */}
+          <Card>
+            <PhoneNumberInput
+              themed
+              country={country}
+              onChangeCountry={setCountry}
+              value={phoneDigits}
+              onChangeValue={(digits) => {
+                setPhoneDigits(digits);
+                if (phoneError) setPhoneError(null);
+                if (notice) setNotice(null);
+              }}
+              error={phoneError}
+              editable={!loading}
+              // No return key. The number pad has none of its own, and asking
+              // for one ("go") made iOS float a "Go" pill over the keyboard —
+              // the operator's "get rid of the go" (DECISIONS 22). Continue,
+              // pinned on the keyboard, is the way onward.
+            />
+          </Card>
 
           {notice ? <AuthNotice tone="info">{notice}</AuthNotice> : null}
         </View>

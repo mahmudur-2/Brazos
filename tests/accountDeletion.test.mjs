@@ -168,7 +168,10 @@ test('the entry point is on the Profile surface and the route is registered once
   // Deletion lives on the last of those, which the hub's "Account" chip
   // opens — so the guarantee is that the surface reaches it, not that one
   // particular file spells the dispatch.
-  assert.match(hub, /navigation\.navigate\('AccountSafety'\)/);
+  // 2026-09-29 (LUX-LIST-2 #7): Account & safety is a row of the hub's one
+  // table, dispatched through its one navigate call — the same reach, as data.
+  assert.match(hub, /route: 'AccountSafety'/);
+  assert.match(hub, /navigation\.navigate\(row\.route\)/);
   assert.match(accountSafety, /navigation\.navigate\('DeleteAccount'\)/);
   assert.match(stacks, /name="DeleteAccount" component=\{DeleteAccountScreen\}/);
   assert.match(navTypes, /DeleteAccount: undefined;/);

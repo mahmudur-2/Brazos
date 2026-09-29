@@ -1,9 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
+import { Card } from '../components/Card';
 import { useAuth } from '../hooks/useAuth';
 import { useNotificationModeBridge } from '../hooks/useNotificationModeBridge';
 import { alertAsync } from '../lib/dialog';
@@ -14,14 +16,15 @@ import {
   markNotificationRead,
   type AppNotification,
 } from '../lib/notifications';
+import { groupFeed, type FeedEntry } from '../lib/notificationGroups';
 import { goBackOrHome } from '../lib/navigationRef';
 import { canRouteNotification, handleNotificationData } from '../lib/notificationRoutes';
 import {
-  fonts,
-  radius,
+  discs,
   spacing,
   themedStyles,
   useThemeColors,
+  withAlpha,
   type ColorPalette,
 } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
@@ -30,18 +33,62 @@ import { formatTimeAgo } from '../lib/time';
  * Keyed on `notification_outbox.type`, NOT on category — a category covers
  * several types (`job_updates` is assignment, completion AND a review).
  *
- * Only the types worth a distinct glyph are listed; every other emitted type
- * deliberately falls back to the bell below. What is NOT allowed is a key no
- * trigger emits: `review` was one, and its star silently never rendered
- * because phase20's notify_on_review() enqueues `review_received`. A test
- * pins every key here against the migrations' own inventory.
+ * 2026-09-29 (LUX-LIST-2 #8): EVERY type the database emits has its own glyph
+ * now (it was four; the other ten wore the bell) — the operator: "dff icons for
+ * each type of notification". What is still NOT allowed is a key no trigger
+ * emits: `review` was one, and its star silently never rendered because
+ * phase20's notify_on_review() enqueues `review_received`. A test pins every
+ * key here against the migrations' own inventory, and any type a later
+ * migration adds falls back to the bell until it is given one.
  */
 const KIND_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  message: 'chatbubble-outline',
-  payment_released: 'checkmark-done-outline',
+  bid_received: 'pricetag-outline',
+  bid_competition: 'people-outline',
+  offer_countered: 'swap-horizontal-outline',
+  hire_countered: 'swap-horizontal-outline',
+  hire_request: 'repeat-outline',
+  hire_accepted: 'checkmark-circle-outline',
+  job_assigned: 'checkmark-circle-outline',
+  job_completed: 'clipboard-outline',
+  job_nearby: 'location-outline',
+  hire_declined: 'close-circle-outline',
+  payment_released: 'cash-outline',
   dispute_opened: 'alert-circle-outline',
   review_received: 'star-outline',
+  message: 'chatbubble-outline',
 };
+
+/**
+ * 2026-09-29 (LUX-LIST-2 #8) — THE KIND'S COLOUR ("colour by kind", the operator's popup): bids and
+ * jobs mint, money gold, messages a soft blue (their own colour), disputes red, reviews the gold star,
+ * a declined hire grey. Palette roles, one per kind, never a literal.
+ */
+type Kind = 'bids' | 'money' | 'message' | 'dispute' | 'review' | 'muted';
+const KIND_OF: Record<string, Kind> = {
+  payment_released: 'money',
+  message: 'message',
+  dispute_opened: 'dispute',
+  review_received: 'review',
+  hire_declined: 'muted',
+};
+const kindColour = (type: string, colors: ColorPalette): string => {
+  switch (KIND_OF[type] ?? 'bids') {
+    case 'money':
+    case 'review':
+      return colors.stageAssigned;
+    case 'message':
+      return colors.notifMessage;
+    case 'dispute':
+      return colors.danger;
+    case 'muted':
+      return colors.textSubtle;
+    default:
+      return colors.emerald;
+  }
+};
+
+/** The feed opens its settings from its own header (LUX-LIST-2 #7/#8), in whichever stack it sits. */
+type FeedNavigation = NativeStackNavigationProp<{ NotificationSettings: undefined }>;
 
 /**
  * Screen 42 — the event feed over the phase20/56 outbox. Every row is a real
@@ -55,12 +102,19 @@ const KIND_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
  * destination: an event about the other side of the marketplace prompts the
  * one authoritative switchMode() (mandatory confirmation) before routing.
  * The bridge below only forwards ModeContext; this screen never switches.
+ *
+ * 2026-09-29 (LUX-LIST-2 #8) — the feed made smarter: the round back button
+ * alone (no "Home" beside it — back goes where you came from), "Notifications"
+ * centred, a settings gear; "N unread · Mark all read" under the header; the
+ * rows in day groups (lib/notificationGroups), one card per group; bids on one
+ * job the same day folded into one row.
  */
 export function NotificationsScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { user } = useAuth();
   const modeBridge = useNotificationModeBridge();
+  const navigation = useNavigation<FeedNavigation>();
 
   const [rows, setRows] = useState<AppNotification[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -80,9 +134,11 @@ export function NotificationsScreen() {
   );
 
   /**
-   * A tapped row marks itself read and opens its subject. Only rows that
-   * resolve to a real destination are tappable at all — see the render, which
-   * asks canRouteNotification() the same question this delegates to.
+   * A tapped row marks itself read and opens its subject — a folded row marks
+   * EVERY row in it read and opens the lead's subject (the job's bids). Only
+   * rows that resolve to a real destination are tappable at all — see the
+   * render, which asks canRouteNotification() the same question this
+   * delegates to.
    *
    * Routing is delegated WHOLE to lib/notificationRoutes.ts, the resolver the
    * push-tap path already uses. This screen used to carry its own copy of the
@@ -93,19 +149,21 @@ export function NotificationsScreen() {
    * event was consumed and led nowhere. One implementation per rule — a second
    * copy is exactly how the first one goes stale.
    */
-  function open(notification: AppNotification) {
-    if (!notification.read_at) {
-      setRows((prev) =>
-        prev?.map((n) =>
-          n.id === notification.id ? { ...n, read_at: new Date().toISOString() } : n
-        ) ?? null
-      );
+  function open(entry: FeedEntry) {
+    const unreadIds = entry.rows.filter((n) => !n.read_at).map((n) => n.id);
+    if (unreadIds.length) {
+      const readAt = new Date().toISOString();
+      setRows((prev) => prev?.map((n) => (unreadIds.includes(n.id) ? { ...n, read_at: readAt } : n)) ?? null);
       // Fire-and-forget by design: the focus reload self-heals a failed
       // write; the log keeps the failure observable (hardening A8).
-      void markNotificationRead(notification.id).then(({ error }) => {
-        if (error) console.warn('[Notifications] mark-read failed', error.message);
-      });
+      for (const id of unreadIds) {
+        void markNotificationRead(id).then(({ error }) => {
+          if (error) console.warn('[Notifications] mark-read failed', error.message);
+        });
+      }
     }
+    // A folded row opens its newest (lead) row's subject: the job's bids.
+    const notification = entry.lead;
     void handleNotificationData(notification.data, modeBridge);
   }
 
@@ -120,7 +178,9 @@ export function NotificationsScreen() {
     }
   }
 
+  // "N unread" counts EVENTS, so it matches the bell on Home even where rows fold.
   const unread = rows?.filter((n) => !n.read_at).length ?? 0;
+  const groups = useMemo(() => groupFeed(rows ?? []), [rows]);
 
   const state: ScreenState = !user
     ? { kind: 'permissionDenied', title: 'Sign in required', body: '' }
@@ -138,84 +198,93 @@ export function NotificationsScreen() {
             }
           : { kind: 'ready' };
 
+  const discStyle = isDark
+    ? {
+        backgroundColor: withAlpha(discs.header.ink, discs.header.inkAlpha),
+        borderColor: withAlpha(discs.header.rim, discs.header.rimAlpha),
+      }
+    : { backgroundColor: withAlpha(colors.text, 0.08), borderColor: withAlpha(colors.text, 0.1) };
+
+  const renderEntry = (entry: FeedEntry, index: number) => {
+    // The lead row carries the type, the time and the route; a folded row reads as its newest bid.
+    const n = entry.lead;
+    // Every category the triggers emit resolves today (Chat with a jobId or a
+    // directThreadId, ClientJobDetail, JobDetail, WorkerJob, ProfileMain). This
+    // is the safety net for a payload that does not — it stays a readable row,
+    // but it never offers a tap that would only mark it read.
+    const routable = canRouteNotification(n.data);
+    const tone = kindColour(n.type, colors);
+    return (
+      <Pressable
+        key={entry.key}
+        style={({ pressed }) => [
+          styles.row,
+          index > 0 && styles.rowDivided,
+          entry.unread && styles.rowUnread,
+          pressed && routable && styles.rowPressed,
+        ]}
+        onPress={routable ? () => open(entry) : undefined}
+        disabled={!routable}
+        accessibilityRole={routable ? 'button' : 'text'}
+        accessibilityLabel={entry.title}
+      >
+        <View style={[styles.well, { backgroundColor: withAlpha(tone, isDark ? 0.14 : 0.11) }]}>
+          <Ionicons name={KIND_ICONS[n.type] ?? 'notifications-outline'} size={20} color={tone} />
+        </View>
+        <View style={styles.rowCopy}>
+          <Text style={[styles.rowTitle, entry.unread && styles.rowTitleUnread]} numberOfLines={1}>
+            {entry.title}
+          </Text>
+          {entry.body ? (
+            <Text style={styles.rowBody} numberOfLines={2}>
+              {entry.body}
+            </Text>
+          ) : null}
+          <Text style={styles.rowMeta}>{formatTimeAgo(n.created_at)}</Text>
+        </View>
+        {entry.unread ? <View style={styles.dot} /> : null}
+      </Pressable>
+    );
+  };
+
   return (
     <DetailScreen
       title="Notifications"
-      subtitle={unread > 0 ? `${unread} unread` : undefined}
       onBack={goBackOrHome}
+      backLabel=""
       state={state}
       headerRight={
-        unread > 0 ? (
-          <Pressable onPress={() => void markAll()} hitSlop={8} accessibilityRole="button">
-            <Text style={[styles.markAll, isDark && styles.markAllDark]}>Mark all read</Text>
-          </Pressable>
-        ) : undefined
+        <Pressable
+          onPress={() => navigation.navigate('NotificationSettings')}
+          hitSlop={4}
+          style={styles.gearHit}
+          accessibilityRole="button"
+          accessibilityLabel="Notification settings"
+        >
+          <View style={[styles.gear, discStyle]}>
+            <Ionicons name="settings-outline" size={18} color={colors.text} />
+          </View>
+        </Pressable>
       }
       sections={[
-        {
-          content: (
-            <View style={styles.list}>
-              {(rows ?? []).map((n) => {
-                // Every category the triggers emit resolves today (Chat with
-                // a jobId or a directThreadId, ClientJobDetail, JobDetail,
-                // WorkerJob, ProfileMain). This is the safety net for a
-                // payload that does not — it stays a readable row, but it
-                // never offers a tap that would only mark it read.
-                const routable = canRouteNotification(n.data);
-                return (
-                  <Pressable
-                    key={n.id}
-                    style={[
-                      styles.row,
-                      !n.read_at && styles.rowUnread,
-                      !n.read_at && isDark && styles.rowUnreadDark,
-                    ]}
-                    onPress={routable ? () => open(n) : undefined}
-                    disabled={!routable}
-                    accessibilityRole={routable ? 'button' : 'text'}
-                    accessibilityLabel={n.title}
-                  >
-                    {/* Master 26 rings every notification's glyph in gold,
-                        read or unread; the green dot at the row's end is what
-                        marks it unread.
-
-                        emerald D10: the RING is gold and the GLYPH inside it
-                        is EMERALD — the app was drawing both gold, which
-                        flattened the ring and its contents into one shape.
-                        The glyph does not carry read state in dark for the
-                        same reason the ring does not: the dot does. Light is
-                        untouched and still dims a read glyph to textSubtle. */}
-                    <View style={[styles.rowGlyph, isDark && styles.rowGlyphDark]}>
-                      <Ionicons
-                        name={KIND_ICONS[n.type] ?? 'notifications-outline'}
-                        size={18}
-                        color={
-                          isDark
-                            ? colors.emerald
-                            : !n.read_at
-                              ? colors.emerald
-                              : colors.textSubtle
-                        }
-                      />
-                    </View>
-                    <View style={styles.rowCopy}>
-                      <Text style={[styles.rowTitle, !n.read_at && styles.rowTitleUnread]} numberOfLines={1}>
-                        {n.title}
-                      </Text>
-                      {n.body ? (
-                        <Text style={styles.rowBody} numberOfLines={2}>
-                          {n.body}
-                        </Text>
-                      ) : null}
-                      <Text style={styles.rowMeta}>{formatTimeAgo(n.created_at)}</Text>
-                    </View>
-                    {!n.read_at ? <View style={styles.dot} /> : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-          ),
-        },
+        ...(unread > 0
+          ? [
+              {
+                content: (
+                  <View style={styles.unreadLine}>
+                    <Text style={styles.unreadCount}>{`${unread} unread`}</Text>
+                    <Pressable onPress={() => void markAll()} hitSlop={10} accessibilityRole="button">
+                      <Text style={styles.markAll}>Mark all read</Text>
+                    </Pressable>
+                  </View>
+                ),
+              },
+            ]
+          : []),
+        ...groups.map((group) => ({
+          title: group.label,
+          content: <Card style={styles.groupCard}>{group.entries.map(renderEntry)}</Card>,
+        })),
       ]}
     />
   );
@@ -223,61 +292,79 @@ export function NotificationsScreen() {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
-  // Master 26 sets "Mark all read" as gold serif; light keeps the emerald.
-  markAll: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.emerald,
-  },
-  markAllDark: {
-    color: colors.gold,
-  },
-  rowGlyph: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.pill,
+  gearHit: {
+    minWidth: 44,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  gear: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  rowGlyphDark: {
-    borderColor: colors.gold,
+  unreadLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+    marginBottom: -spacing.sm,
   },
-  list: {
-    gap: spacing.sm,
+  unreadCount: {
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  markAll: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.emerald,
+  },
+  // One card per day group: the rows inside it, a hairline between them.
+  groupCard: {
+    padding: 0,
+    overflow: 'hidden',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.lg,
     minHeight: 60,
   },
-  rowUnread: {
-    borderColor: colors.mint2,
-    backgroundColor: colors.mint,
+  rowDivided: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: withAlpha(colors.text, 0.12),
   },
-  // Master 26 draws every card identically; the dot is what carries unread.
-  rowUnreadDark: {
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+  // Unread keeps its soft tint (light's mint wash; a faint one in dark).
+  rowUnread: {
+    backgroundColor: withAlpha(colors.emerald, 0.07),
+  },
+  rowPressed: {
+    opacity: 0.8,
+  },
+  well: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rowCopy: {
     flex: 1,
     gap: 2,
   },
   rowTitle: {
-    fontFamily: fonts.display,
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
     color: colors.text,
   },
   rowTitleUnread: {
+    fontWeight: '800',
     color: colors.ink,
   },
   rowBody: {
@@ -286,7 +373,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     lineHeight: 18,
   },
   rowMeta: {
-    fontSize: 11,
+    marginTop: 2,
+    fontSize: 12,
     color: colors.textSubtle,
   },
   dot: {

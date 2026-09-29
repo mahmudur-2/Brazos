@@ -232,3 +232,39 @@ export function blockExpiryFrom(now: number, ms: number): string {
  * correctly against the ISO-8601 strings the unread derivation already uses.
  */
 export const FULLY_UNREAD_AT = new Date(0).toISOString();
+
+/** One message the unseen count may take: its thread's key and when it was sent. */
+export type UnseenStamp = { key: string; created_at: string };
+
+/** A thread the count is asked about: its read position and its clear watermark. */
+export type UnseenThread = {
+  key: string;
+  readAt: string | null;
+  state: ClearWatermark | null | undefined;
+};
+
+/**
+ * 2026-09-28 (LUX-LIST-64 #54) — HOW MANY MESSAGES A THREAD HOLDS THAT THE USER
+ * HAS NOT SEEN: the number beside the name on the Inbox row. COUNTED from the
+ * rows the read returns (the other person's, never unsent ones), never
+ * estimated. A message counts when it is newer than the thread's read position
+ * (none yet: every one) and still in this user's copy — which the ONE
+ * `clearedBy` decides, so a cleared message never counts. A job thread rewound
+ * by hand (FULLY_UNREAD_AT) has no count: its "unread" is a mark the user set,
+ * not a number of messages, and the row shows the mark alone.
+ */
+export function countUnseen(
+  stamps: readonly UnseenStamp[],
+  threads: readonly UnseenThread[]
+): Record<string, number> {
+  const byKey = new Map(threads.map((thread) => [thread.key, thread]));
+  const counts: Record<string, number> = {};
+  for (const stamp of stamps) {
+    const thread = byKey.get(stamp.key);
+    if (!thread || thread.readAt === FULLY_UNREAD_AT) continue;
+    if (thread.readAt && !(new Date(stamp.created_at) > new Date(thread.readAt))) continue;
+    if (clearedBy(stamp.created_at, thread.state)) continue;
+    counts[stamp.key] = (counts[stamp.key] ?? 0) + 1;
+  }
+  return counts;
+}

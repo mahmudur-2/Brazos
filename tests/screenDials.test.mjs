@@ -92,7 +92,9 @@ const SCREENS = [
       { key: 'workerHome.summaryCard.gap', drew: 14, parent: null, fallback: '14' },
       { key: 'workerHome.content.paddingX', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
       { key: 'workerHome.content.gap', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
-      { key: 'workerHome.modeSwitch.paddingX', drew: 13, parent: null, fallback: '13' },
+      // 2026-09-28 (LUX-LIST-64 #61): `workerHome.modeSwitch.paddingX` is gone
+      // from both sides — the "Switch to Customer" pill left Worker Home, and a
+      // dial its wearer no longer reads is a control that lies (rule 1).
     ],
   },
   {
@@ -115,11 +117,13 @@ const SCREENS = [
     prefix: 'myJobs',
     scale: 'theme',
     dials: [
-      { key: 'myJobs.tabs.height', drew: 50, parent: null, fallback: '50' },
-      { key: 'myJobs.tabs.radius', drew: 16, parent: 'theme.radius.lg', fallback: 'radius.lg' },
+      // 2026-09-27 (the operator's review): the bar is the shared Lux segment
+      // — 48 tall (components/SegmentedControl.tsx TRACK_HEIGHT), pill
+      // corners; the header mark is gone, and its dial with it.
+      { key: 'myJobs.tabs.height', drew: 52, parent: null, fallback: '52' },
+      { key: 'myJobs.tabs.radius', drew: 26, parent: null, fallback: '26' },
       { key: 'myJobs.content.gap', drew: 24, parent: 'theme.spacing.xl', fallback: 'spacing.xl' },
       { key: 'myJobs.empty.paddingY', drew: 32, parent: 'theme.spacing.xxl', fallback: 'spacing.xxl' },
-      { key: 'myJobs.headerMark.size', drew: 48, parent: null, fallback: '48' },
     ],
   },
   {
@@ -129,9 +133,12 @@ const SCREENS = [
     scale: 'theme',
     dials: [
       { key: 'profile.settingsRow.height', drew: 64, parent: null, fallback: '64' },
-      { key: 'profile.hubCard.radius', drew: 24, parent: 'theme.radius.xl', fallback: 'radius.xl' },
+      // 2026-09-29 (LUX-LIST-2 #7): the rebuilt hub — your card rounds at 22
+      // like every #6 card (off theme.radius.xl's 24, so no parent), and the
+      // row's glyph is a plain 22pt icon, no longer a 44pt tile.
+      { key: 'profile.hubCard.radius', drew: 22, parent: null, fallback: '22' },
       { key: 'profile.hubCard.padding', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
-      { key: 'profile.settingsGlyph.size', drew: 44, parent: null, fallback: '44' },
+      { key: 'profile.settingsGlyph.size', drew: 22, parent: null, fallback: '22' },
       { key: 'profile.content.gap', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
     ],
   },
@@ -141,10 +148,11 @@ const SCREENS = [
     prefix: 'messages',
     scale: 'theme',
     dials: [
-      { key: 'messages.filterPill.height', drew: 36, parent: null, fallback: 'FILTER_PILL_HEIGHT' },
-      { key: 'messages.list.gap', drew: 12, parent: 'theme.spacing.md', fallback: 'spacing.md' },
+      // 2026-09-28 (LUX-LIST-64 #54, #55): the clean list — the pill 34, the
+      // pills 8 apart (spacing.sm, the chain back), and no row gap to dial.
+      { key: 'messages.filterPill.height', drew: 34, parent: null, fallback: 'FILTER_PILL_HEIGHT' },
       { key: 'messages.list.paddingX', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
-      { key: 'messages.filterRow.gap', drew: 10, parent: null, fallback: '10' },
+      { key: 'messages.filterRow.gap', drew: 8, parent: 'theme.spacing.sm', fallback: 'spacing.sm' },
     ],
   },
   {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -11,17 +11,21 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { HomeAtmosphere } from '../components/HomeAtmosphere';
-import { PulseDot } from '../components/PulseDot';
+import { HomeAvatarButton } from '../components/HomeAvatarButton';
+import { LiveDot } from '../components/LiveDot';
+import { NotificationBell } from '../components/NotificationBell';
 import { ServicePickerSheet } from '../components/ServicePickerSheet';
 import { ServiceTileRow } from '../components/ServiceTileRow';
+import { CategoryGlyph } from '../components/CategoryGlyph';
 import { Skeleton } from '../components/Skeleton';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
 import { useAuth } from '../hooks/useAuth';
 import { useBidCounts } from '../hooks/useBidCounts';
+import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import { useWorkerSkills } from '../hooks/useWorkerSkills';
@@ -30,13 +34,27 @@ import { openJobsPotential } from '../lib/earningsMath';
 import { userMessage } from '../lib/errorMessage';
 import { resolveCurrentPlace } from '../lib/geolocation';
 import { fetchJobsWithinRadius } from '../lib/hotspots';
-import { formatBudget, jobMatchesSkills, type OpenJob } from '../lib/jobs';
+import { workerAttentionItems } from '../lib/homeAttention';
+import {
+  formatBudget,
+  JOB_CATEGORY_ICONS,
+  jobMatchesSkills,
+  toOpenJob,
+  type OpenJob,
+} from '../lib/jobs';
+import { navigateAcrossTabs } from '../lib/navigationRef';
+import { paymentsMode } from '../lib/adapters/payments';
+import { fetchMyEarnings } from '../lib/earnings';
+import { payoutSetupNotice, workerTakeCents } from '../lib/payments';
+import { fetchMyPayoutsStatus } from '../lib/payments/stripe';
+import { fetchNotificationPrefs } from '../lib/notificationPrefs';
+import { effectiveOfferStatus } from '../lib/offers';
 import type { WorkerHomeStackNavigation } from '../lib/navigation';
 import { updateProfile } from '../lib/profiles';
 import { MORE_SERVICES } from '../lib/skillCategories';
 import { greetingFor } from '../lib/time';
-import { useMode } from '../modes';
 import {
+  litCardStyle, EYEBROW_TYPE,
   fonts,
   layout,
   radius,
@@ -45,6 +63,7 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 import { useDialNumber } from '../lib/designOverrides';
 import { SearchBar, Toggle, useScrollClearance } from '../ui/primitives';
@@ -69,7 +88,9 @@ type NearbyState = 'checking' | 'unavailable' | 'loading' | 'ready';
  * keeps the retired atlas-48 browse screen's exact dispatch shape.
  *
  * Everything here is derived from data sources that already exist:
- *   - greeting + the mandatory-confirm mode switch: useProfile / switchMode()
+ *   - greeting: useProfile. 2026-09-28 (LUX-LIST-64 #61): the "Switch to
+ *     Customer" pill left this screen — switching lives in Profile, behind
+ *     the same confirm (components/ModeSwitchRow.tsx → switchMode()).
  *   - availability: the phase53 profiles.accepting_work field, read from the
  *     profile row and written through updateProfile() — the same path
  *     ServicesPricingScreen's toggle uses. The 4D-6 card renders it as the
@@ -97,7 +118,6 @@ export function WorkerHomeScreen() {
   const summaryCardGap = useDialNumber('workerHome.summaryCard.gap') ?? 14;
   const contentPaddingX = useDialNumber('workerHome.content.paddingX') ?? spacing.lg;
   const contentGap = useDialNumber('workerHome.content.gap') ?? spacing.lg;
-  const modeSwitchPaddingX = useDialNumber('workerHome.modeSwitch.paddingX') ?? 13;
   // RUN GROUND1 (C3): the nav pill is out of layout flow on this route, so this
   // scene is the whole screen and the atmosphere behind it reaches the bottom
   // edge instead of stopping at a band above the bar. The pill's footprint is
@@ -114,11 +134,110 @@ export function WorkerHomeScreen() {
   const { user } = useAuth();
   const { profile, setProfile } = useProfile();
   const { jobs, loading, error, refresh } = useOpenJobs();
-  const { switchMode, switching } = useMode();
   const [refreshing, setRefreshing] = useState(false);
   const [savingAvailability, setSavingAvailability] = useState(false);
   const [query, setQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
+
+  // M-15 — WHAT NEEDS THE WORKER, from the same batched read My Jobs makes:
+  // a counter waiting on the worker first, then the worker's own next step on
+  // a hired job (lib/homeAttention.ts workerAttentionItems — the hub card's
+  // own lines). Two cards at most; the rest are counted behind "See all".
+  const {
+    working,
+    pendingBids,
+    payments,
+    openDisputeJobIds,
+    reviewedJobIds,
+    names,
+    refresh: refreshMyJobs,
+  } = useMyJobsHub();
+  useFocusEffect(
+    useCallback(() => {
+      void refreshMyJobs();
+    }, [refreshMyJobs])
+  );
+  const needsYou = useMemo(() => {
+    const counters = pendingBids
+      .filter(
+        (bid) =>
+          !!bid.job &&
+          !!user &&
+          effectiveOfferStatus(bid) === 'pending' &&
+          bid.awaiting_id === user.id &&
+          bid.author_id !== user.id
+      )
+      .map((bid) => ({ kind: 'counter' as const, bid }));
+    const moves = workerAttentionItems({ working, payments, openDisputeJobIds, reviewedJobIds }).map(
+      (item) => ({ kind: 'job' as const, item })
+    );
+    return [...counters, ...moves];
+  }, [pendingBids, working, payments, openDisputeJobIds, reviewedJobIds, user]);
+
+  // 2026-09-28 (LUX-LIST-64 #63, audit M-14) — MONEY WAITING ON THE WORKER'S
+  // OWN SETUP: on the card path only (no RPC on the sandbox path), the stored
+  // payout status; and only when it was read and is not enabled, the ledger,
+  // whose approved-and-waiting rows the ONE rule (payoutSetupNotice) picks.
+  // Their takes, summed, head the "Needs you" strip as one tap to Payouts.
+  // Anything unread says nothing.
+  const [payoutWaitCents, setPayoutWaitCents] = useState<number | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (!user || paymentsMode !== 'stripe') return;
+      void (async () => {
+        const status = await fetchMyPayoutsStatus();
+        if (!active) return;
+        if (!status.data || status.data === 'enabled') {
+          setPayoutWaitCents(null);
+          return;
+        }
+        const earnings = await fetchMyEarnings(user.id);
+        if (!active) return;
+        if (earnings.error || !earnings.data) {
+          setPayoutWaitCents(null);
+          return;
+        }
+        const cents = earnings.data.rows
+          .filter((row) => payoutSetupNotice(status.data, [row]) !== null)
+          .reduce((sum, row) => sum + workerTakeCents(row), 0);
+        setPayoutWaitCents(cents > 0 ? cents : null);
+      })();
+      return () => {
+        active = false;
+      };
+    }, [user?.id])
+  );
+
+  // M-20 — whether "default-on" nearby alerts can actually reach this worker:
+  // the toggle AND a saved area (alerts are measured from home_lat/home_lng,
+  // which only Notification settings writes). Said in one line on the summary
+  // card, with the way to fix it. An unread or failed read shows no line.
+  const [alerts, setAlerts] = useState<{ on: boolean; radius: number; located: boolean } | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (!user) return;
+      fetchNotificationPrefs(user.id).then(({ data }) => {
+        if (!active) return;
+        setAlerts(
+          data
+            ? { on: data.nearby_jobs, radius: data.nearby_radius_miles, located: data.home_lat != null && data.home_lng != null }
+            : null
+        );
+      });
+      return () => {
+        active = false;
+      };
+    }, [user?.id])
+  );
+  const alertsLine = !alerts
+    ? null
+    : alerts.on && alerts.located
+      ? `Nearby alerts on · ${alerts.radius} mi`
+      : alerts.on
+        ? 'Set your area to get nearby alerts'
+        : 'Turn on nearby alerts';
 
   const firstName = profile?.full_name?.trim().split(/\s+/)[0];
   const accepting = profile?.accepting_work ?? true;
@@ -200,12 +319,6 @@ export function WorkerHomeScreen() {
     setRefreshing(false);
   }
 
-  function switchToCustomer() {
-    // The one authoritative switch — its confirmation is mandatory and lives
-    // inside switchMode() itself (modes/ModeProvider.tsx).
-    void switchMode('customer');
-  }
-
   function submitSearch() {
     const trimmed = query.trim();
     if (!trimmed) return;
@@ -231,9 +344,11 @@ export function WorkerHomeScreen() {
     if (data) setProfile(data);
   }
 
+  // M-29 — with no skills the pill names the fix and opens it: the profile
+  // editor, where the categories are picked. With skills it is the count.
   const matchLabel = hasSkills
     ? `${skillMatchCount} match your skills`
-    : 'Add skills to see matches';
+    : 'Add your skills';
   const nearbyLabel =
     nearbyState === 'ready'
       ? `${nearbyCount} within ${NEARBY_RADIUS_MILES} miles`
@@ -242,7 +357,7 @@ export function WorkerHomeScreen() {
         : `Within ${NEARBY_RADIUS_MILES} miles`;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       {/* home(4): a fixed layer, OUTSIDE the scroller, so the page slides over
           it instead of carrying it. Dark only; renders nothing in light. The
           ScrollView below paints no ground of its own, so nothing covers it. */}
@@ -270,7 +385,9 @@ export function WorkerHomeScreen() {
             />
           }
         >
-          {/* --- Greeting + the deliberate mode switch ---------------------- */}
+          {/* --- Greeting, the bell and your photo. 2026-09-28 (LUX-LIST-64
+              #61): the mode pill is gone, so the greeting shows in full;
+              switching is Profile's, behind its confirm. ---------------- */}
           <View style={styles.greetingRow}>
             <View style={styles.greetingBlock}>
               {/* Master 43 stacks the greeting: the salutation muted, the name
@@ -289,24 +406,13 @@ export function WorkerHomeScreen() {
                 </Text>
               ) : null}
             </View>
-            <Pressable
-              onPress={switchToCustomer}
-              disabled={switching}
-              style={({ pressed }) => [
-                styles.modeSwitch,
-                { paddingHorizontal: modeSwitchPaddingX },
-                pressed && styles.modeSwitchPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Switch to Customer"
-              accessibilityHint="Returns to posting and managing your own jobs"
-              accessibilityState={{ disabled: switching }}
-            >
-              <Ionicons name="person" size={19} color={accent} />
-              <Text style={[styles.modeSwitchText, isDark && styles.modeSwitchTextDark]}>
-                Switch to Customer
-              </Text>
-            </Pressable>
+            {/* M-24 — the feed, one tap from Home, with its unread count.
+                #59 — your photo right of the bell; a tap opens your profile
+                to edit. The customer Home's pair, the same two components. */}
+            <View style={styles.headerActions}>
+              <NotificationBell onPress={() => navigation.navigate('Notifications')} />
+              <HomeAvatarButton name={profile?.full_name} uri={profile?.avatar_url} />
+            </View>
           </View>
 
           {/* --- The hero (master 43): headline with the second sentence on
@@ -334,6 +440,100 @@ export function WorkerHomeScreen() {
               </Text>
             </View>
           </View>
+
+          {/* --- M-15 — NEEDS YOU: under the greeting and the hero, above the
+              search and the summary card, only when something is the
+              worker's move. --- */}
+          {needsYou.length > 0 || payoutWaitCents != null ? (
+            <View style={styles.needsYou}>
+              <View style={styles.needsYouHeader}>
+                {/* 2026-09-28 (LUX-LIST-64 #49): the gold label with the red
+                    Sonar dot before it — the customer Home's alarm, the same. */}
+                <View style={styles.alarmLabel}>
+                  <LiveDot color={colors.danger} size={9} motion="sonar" />
+                  <Text style={styles.needsYouTitle}>Needs you</Text>
+                </View>
+                {needsYou.length > (payoutWaitCents != null ? 1 : 2) ? (
+                  <Pressable
+                    onPress={() => navigateAcrossTabs('MyJobs')}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="See all in My Jobs"
+                  >
+                    <Text style={styles.needsYouAll}>See all ({needsYou.length})</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <View style={[styles.needsCard, litCardStyle(isDark)]}>
+                {/* #63 (M-14) — money approved and waiting on the worker's own
+                    payout setup: first, one tap to Payouts (it was three). */}
+                {payoutWaitCents != null ? (
+                  <Pressable
+                    onPress={() => navigateAcrossTabs('Profile', 'Payouts', {})}
+                    style={({ pressed }) => [styles.needsRow, pressed && styles.pillPressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set up payouts to receive ${formatBudget(payoutWaitCents)}`}
+                  >
+                    <View style={[styles.needsGlyph, isDark && styles.needsGlyphDark]}>
+                      <Ionicons name="wallet-outline" size={18} color={isDark ? colors.emerald : colors.forest} />
+                    </View>
+                    <View style={styles.needsCopy}>
+                      <Text style={styles.needsMove} numberOfLines={1}>
+                        Set up payouts to receive {formatBudget(payoutWaitCents)}
+                      </Text>
+                      <Text style={styles.needsJob} numberOfLines={1}>
+                        Approved — waiting on your payout setup
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+                  </Pressable>
+                ) : null}
+                {needsYou.slice(0, payoutWaitCents != null ? 1 : 2).map((entry, index) => {
+                  // A counter opens the offer on its job; a hired job opens the
+                  // stage screen. The first line is the MOVE, the second the job.
+                  const isCounter = entry.kind === 'counter';
+                  const job = isCounter ? toOpenJob(entry.bid.job!) : entry.item.job;
+                  const client = names[job.client_id] ?? 'Client';
+                  const move = isCounter
+                    ? `${client.split(/\s+/)[0] || client} sent you a counter-offer — respond`
+                    : entry.item.line;
+                  return (
+                    <Pressable
+                      key={isCounter ? `counter-${entry.bid.id}` : `move-${job.id}`}
+                      onPress={() =>
+                        isCounter
+                          ? navigateAcrossTabs('MyJobs', 'JobDetail', { job })
+                          : navigateAcrossTabs('MyJobs', 'WorkerJob', { jobId: job.id })
+                      }
+                      style={({ pressed }) => [
+                        styles.needsRow,
+                        (index > 0 || payoutWaitCents != null) && styles.needsRowDivider,
+                        pressed && styles.pillPressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${move}: ${job.title}`}
+                    >
+                      <View style={[styles.needsGlyph, isDark && styles.needsGlyphDark]}>
+                        <CategoryGlyph
+                          name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
+                          size={18}
+                          color={isDark ? colors.emerald : colors.forest}
+                          bare
+                        />
+                      </View>
+                      <View style={styles.needsCopy}>
+                        <Text style={styles.needsMove} numberOfLines={1}>{move}</Text>
+                        <Text style={styles.needsJob} numberOfLines={1}>
+                          {job.title} · {client}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
 
           {/* --- Search (mirrors the locked 48's field — the one route to
               WorkerResults mode 'search'). The shared SearchBar carries the
@@ -400,24 +600,33 @@ export function WorkerHomeScreen() {
             style={[
               styles.summaryCard,
               { gap: summaryCardGap, borderRadius: summaryCardRadius },
-              isDark && shadows.cardDark,
+              litCardStyle(isDark),
             ]}
           >
             <View style={styles.summaryRow}>
               <View style={styles.availabilityHalf}>
-                <Text style={styles.summaryEyebrow}>AVAILABLE NOW</Text>
+                {/* M-13 — the flag's own name, as Services & availability
+                    says it: this is phase53 accepting_work, shown on the
+                    profile. It never hid anyone, so nothing here says
+                    online, offline or visible. */}
+                <Text style={styles.summaryEyebrow}>TAKING NEW WORK</Text>
                 <View style={styles.statusRow}>
                   {/* 30pt is the spec; auto-fit lets the word fall as far as
                       the 26pt continue-path floor (0.87 × 30) before anything
                       could clip on the narrowest supported width. */}
+                  {/* 2026-09-28 (LUX-LIST-64 #50): "Paused" whole. The column
+                      beside the 52pt toggle holds 91pt of word; "Open" fits at 30,
+                      "Paused" is SET at 24 (0.8 × 30) rather than left to the
+                      platform's shrink — which web never runs and a larger text
+                      size outgrew — and the word never scales past the toggle. */}
                   <Text
-                    style={styles.statusWord}
+                    style={[styles.statusWord, !accepting && styles.statusWordPaused]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                     minimumFontScale={0.87}
-                    maxFontSizeMultiplier={1.2}
+                    maxFontSizeMultiplier={1}
                   >
-                    {accepting ? 'Online' : 'Offline'}
+                    {accepting ? 'Open' : 'Paused'}
                   </Text>
                   <Toggle
                     value={accepting}
@@ -435,12 +644,27 @@ export function WorkerHomeScreen() {
                       one dot the reference specifies was the one drawn in two
                       colours, neither of them the measured one. The ONLINE
                       branch keeps `emerald` — the live-state hue, unchanged. */}
-                  <PulseDot color={accepting ? colors.emerald : colors.referenceCoral} />
+                  {/* 2026-09-28 (LUX-LIST-64 #50): paused, the red dot takes the
+                      Sonar — a ring travelling out, every 2 s; open, the green
+                      dot holds still. Reduce Motion: both still. */}
+                  <LiveDot
+                    color={accepting ? colors.emerald : colors.referenceCoral}
+                    size={10}
+                    motion={accepting ? 'still' : 'sonar'}
+                  />
                   {/* Master 43 spells the consequence out rather than
                       abbreviating it; the PNG is the authority over the
                       earlier two-word draft. Same accepting_work fact. */}
-                  <Text style={styles.statusCaption} numberOfLines={1}>
-                    {accepting ? 'Visible to customers' : 'Not visible to customers'}
+                  {/* #50: "Offers still reach you" on ONE line, at any text size
+                      the row can hold; the open caption keeps its two lines. */}
+                  <Text
+                    style={styles.statusCaption}
+                    numberOfLines={accepting ? 2 : 1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.85}
+                    maxFontSizeMultiplier={1.1}
+                  >
+                    {accepting ? 'Shown as available on your profile' : 'Offers still reach you'}
                   </Text>
                 </View>
               </View>
@@ -477,7 +701,11 @@ export function WorkerHomeScreen() {
 
             <View style={styles.pillRow}>
               <Pressable
-                onPress={() => navigation.navigate('WorkerResults', { mode: 'skills' })}
+                onPress={() =>
+                  hasSkills
+                    ? navigation.navigate('WorkerResults', { mode: 'skills' })
+                    : navigateAcrossTabs('Profile', 'ProfileMain', { edit: true })
+                }
                 // 40pt visual height is the spec; the slop keeps the 44pt
                 // touch floor.
                 hitSlop={{ top: 2, bottom: 2 }}
@@ -524,12 +752,29 @@ export function WorkerHomeScreen() {
                 </Text>
               </Pressable>
             </View>
+            {alertsLine ? (
+              <Pressable
+                onPress={() => navigateAcrossTabs('Profile', 'NotificationSettings')}
+                hitSlop={8}
+                style={({ pressed }) => [styles.alertsRow, pressed && styles.pillPressed]}
+                accessibilityRole="button"
+                accessibilityLabel={alertsLine}
+              >
+                <Ionicons
+                  name={alerts?.on && alerts.located ? 'notifications-outline' : 'notifications-off-outline'}
+                  size={15}
+                  color={alerts?.on && alerts.located ? colors.emerald : colors.textMuted}
+                />
+                <Text style={styles.alertsText} numberOfLines={1}>{alertsLine}</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.textSubtle} />
+              </Pressable>
+            ) : null}
           </View>
 
           {/* --- A taste of the open-jobs feed ------------------------------ */}
           <View style={styles.feedHeader}>
+            {/* 2026-09-28 (LUX-LIST-64 #51): the heading alone — no dot. */}
             <View style={styles.feedTitleRow}>
-              <View style={styles.feedDot} />
               <Text style={styles.sectionTitle}>Available Jobs</Text>
             </View>
             <Pressable
@@ -609,7 +854,48 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  greetingBlock: { flexShrink: 1, gap: 2 },
+  greetingBlock: { flexShrink: 1, flexGrow: 1, gap: 2 },
+  // #59 — the bell and the photo, the customer Home's own spacing: 3 between
+  // the 44pt targets keeps the ink ~16 apart, and the photo's 4pt of target
+  // slack is taken back at the column's edge.
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 3, marginRight: -4 },
+  // #49 — the alarm label: the Sonar dot, 9 before the eyebrow.
+  alarmLabel: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  // M-15 — the "Needs you" strip.
+  needsYou: { gap: spacing.sm },
+  needsYouHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  needsYouTitle: { ...EYEBROW_TYPE, color: colors.eyebrowGold }, // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
+  needsYouAll: { fontSize: 13, fontWeight: '700', color: colors.emerald },
+  needsCard: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  needsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 60,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  needsRowDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+  needsGlyph: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.mint,
+    backgroundColor: colors.mint,
+  },
+  needsGlyphDark: { borderColor: colors.border },
+  needsCopy: { flex: 1, gap: 2 },
+  needsMove: { fontSize: 14, fontWeight: '800', color: colors.ink },
+  needsJob: { fontSize: 12, color: colors.textMuted },
   greeting: { fontSize: 15, fontWeight: '600', color: colors.textMuted },
   greetingName: { color: colors.gold },
   // The customer Home headline treatment, mirrored token for token (serif
@@ -631,20 +917,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   heroHeadlineAccent: { color: colors.emerald },
   heroSubtitle: { fontSize: 16, fontWeight: '500', color: colors.homeSlate },
   heroArt: { position: 'absolute', zIndex: 0, right: -10, top: 18, width: 162, height: 108 },
-  modeSwitch: {
-    flexShrink: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    minHeight: 44,
-    borderRadius: radius.pill,
-    borderWidth: 1.25,
-    borderColor: colors.gold,
-    backgroundColor: colors.surface,
-  },
-  modeSwitchPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
-  modeSwitchText: { fontSize: 15, fontWeight: '600', color: colors.forest },
-  modeSwitchTextDark: { color: colors.emerald },
+  // 2026-09-28 (LUX-LIST-64 #61): the modeSwitch* styles left with the pill.
   // The locked 48's searchField/searchDivider, value for value — laid over
   // the shared SearchBar's own field so the mirror's geometry wins; the
   // input styling inside now rides SearchBar itself.
@@ -664,8 +937,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    minHeight: 63,
-    paddingHorizontal: spacing.lg,
+    minHeight: 54,
+    paddingHorizontal: 18,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border,
@@ -700,7 +973,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   summaryCard: {
     padding: layout.cardPadding,
     borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: colors.border,
     backgroundColor: colors.surface,
     ...shadows.card,
   },
@@ -718,7 +991,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.2,
-    color: colors.gold,
+    color: colors.eyebrow,
   },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   statusWord: {
@@ -730,6 +1003,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   statusDotRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   statusCaption: { fontSize: 13, color: colors.textMuted },
+  // #50 — "Paused" set to fit the 91pt beside the toggle: 24 (0.8 × 30).
+  statusWordPaused: { fontSize: 24 },
   // The figure reads in the GREEN accent on surface in both palettes —
   // emerald, not forest (gold in dark) and not white (white-on-gold was the
   // live dark defect this card shipped with).
@@ -737,12 +1012,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontFamily: fonts.display,
     fontSize: 30,
     fontWeight: '700',
-    color: colors.emerald,
+    color: colors.money,
   },
   earningsCaption: { fontSize: 13, color: colors.textMuted },
   earningsAmountLoading: { height: 34, width: 96, borderRadius: radius.sm },
   earningsCaptionLoading: { height: 14, width: 80, borderRadius: radius.sm },
   pillRow: { flexDirection: 'row', gap: spacing.md },
+  // M-20 — the alerts status line under the pills.
+  alertsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 28 },
+  alertsText: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.textMuted },
   pill: {
     flex: 1,
     flexDirection: 'row',
@@ -766,11 +1044,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
   },
   feedTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
-  // The section heading's status dot (mockup 43) marks the live jobs FEED —
-  // distinct from the summary card's availability dot above, which tracks
-  // the worker's own accepting_work state.
-  feedDot: { width: 10, height: 10, borderRadius: radius.pill, backgroundColor: colors.emerald },
-  sectionTitle: { fontFamily: fonts.display, fontSize: 22, fontWeight: '800', color: colors.ink },
+  // 2026-09-28 (LUX-LIST-64 #51): `feedDot` — mockup 43's status dot on the
+  // feed heading — is gone with the dot it drew.
+  // 2026-09-27 (the Lux remake, ruling 4): the section heading is the Lux
+  // eyebrow — gold in dark, emerald in light through the `eyebrow` role.
+  sectionTitle: { ...EYEBROW_TYPE, color: colors.eyebrowGold }, // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
   viewAll: {
     flexShrink: 0,
     flexDirection: 'row',

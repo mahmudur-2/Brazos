@@ -6,6 +6,7 @@ import {
   spacing,
   themedStyles,
   useThemeColors,
+  withAlpha,
   type ColorPalette,
 } from '../lib/theme';
 
@@ -15,8 +16,11 @@ const statusStylesFor = themedStyles((colors: ColorPalette) => {
   const byStatus: Record<string, { bg: string; text: string }> = {
     // Job statuses
     open: { bg: colors.successBg, text: colors.success },
-    assigned: { bg: colors.infoBg, text: colors.info },
-    in_progress: { bg: colors.warningBg, text: colors.warning },
+    // 2026-09-28 (LUX-LIST-64 #20, #46): Assigned is the gold stage and In
+    // progress the orange one — the same inks the Inbox job chip, the Home live
+    // bar and the stage rail use (ui/tokens.ts `stage*`).
+    assigned: { bg: colors.stageAssignedBg, text: colors.stageAssigned },
+    in_progress: { bg: colors.stageProgressBg, text: colors.stageProgress },
     // Completed and cancelled previously shared a near-identical low-contrast
     // tan pill (completed) next to a red one (cancelled) — visually backwards,
     // since red reads as "needs attention" for a job that's just over and
@@ -73,13 +77,22 @@ export function StatusBadge({ status, label }: StatusBadgeProps) {
   // to `undefined` (themeTokens' one-serif fence pins that), so it never named
   // a face — all it actually did was make the label a point larger in dark.
   // 13 is dark's size and both now use it.
+  //
+  // 2026-09-28 (LUX-LIST-64): the dark pill is the approved reference's own
+  // (docs/mockups/html/refs/live-job-cards.html `.pill`): the ink at full
+  // strength, its rim at .55 and a .09 wash of the same inside — so every dark
+  // status reads as one family, the orange In progress and the gold Assigned
+  // included. Light keeps the filled tint.
+  // 2026-09-29 (LUX-LIST-2 #6): the dark pill is the Lux `.chip` — a soft .14
+  // tint of the ink and NO outline (the rim stays transparent so the pill keeps
+  // its size); light keeps its filled tint, and its near-invisible rim goes too.
   return (
     <View
       style={[
         styles.badge,
         {
-          backgroundColor: isDark ? 'transparent' : style.bg,
-          borderColor: isDark ? style.text : style.bg,
+          backgroundColor: isDark ? withAlpha(style.text, 0.14) : style.bg,
+          borderColor: 'transparent',
         },
       ]}
     >

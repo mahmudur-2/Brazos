@@ -19,9 +19,16 @@ import {
   type RouteProp,
 } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { CategoryGlyph } from '../components/CategoryGlyph';
 import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import {
+  acceptOfferActionLabel,
+  acceptOfferConfirmText,
+  acceptOfferConfirmTitle,
+  firstNameOf,
+} from '../lib/offerCopy';
 import { OfferCard } from '../components/OfferCard';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JobOwnerActions } from '../components/JobOwnerActions';
@@ -42,6 +49,8 @@ import {
   isHeld,
   isReleased,
   isReleaseRequested,
+  quoteJobPrice,
+  type JobPriceQuote,
   type Payment,
 } from '../lib/payments';
 import { customerChargeCents } from '../lib/paymentRules';
@@ -49,7 +58,7 @@ import { paymentsMode } from '../lib/adapters/payments';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
 import { MoneyText } from '../ui/primitives/MoneyText';
-import { useScrollClearance } from '../ui/primitives';
+import { PINNED_FOOTER_BOTTOM_PADDING, useScrollClearance } from '../ui/primitives';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
@@ -61,7 +70,13 @@ import {
   type BidSortChip,
 } from '../lib/compareBids';
 import { jobStage } from '../lib/jobStage';
-import { deriveJobLifecycle, releaseCountdownLabel, trackStepIndex } from '../lib/jobLifecycle';
+import {
+  deriveJobLifecycle,
+  JOB_LIFECYCLE_LABELS,
+  releaseCountdownLabel,
+  releaseDeadlineMs,
+  trackStepIndex,
+} from '../lib/jobLifecycle';
 import {
   arrivalWindowLabel,
   budgetRangeLabel,
@@ -85,8 +100,10 @@ import {
   spacing,
   themedStyles,
   typographyFor,
+  litCardStyle,
   useThemeColors,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
@@ -172,6 +189,9 @@ export function ClientJobDetailScreen() {
   // render the previous assignment while this job's profile read is pending.
   const assignedWorker = worker?.id === job.assigned_worker_id ? worker : null;
   const workerName = assignedWorker?.full_name ?? 'the worker';
+  // 2026-09-27 (the Lux remake, ruling 10): the settled line addresses the
+  // worker by first name so it holds one line on a 393-wide phone.
+  const workerFirstName = firstNameOf(assignedWorker?.full_name, 'the worker');
   const accent = categoryAccent(job.category);
   // "An accepted price exists" = the job sits on the hire-to-done track,
   // classified through THE derivation (F-012). Deliberately payment- and
@@ -358,6 +378,82 @@ export function ClientJobDetailScreen() {
 
   const sortedBids = useMemo(() => sortBidsForChip(pendingBids, sort), [pendingBids, sort]);
 
+  // 2026-09-26 (the refresh, audit M-5): the fee is shown BEFORE the accept,
+  // from the same quote_job_price() the worker's composer and Checkout use —
+  // one total per distinct pending amount, never a rate computed here.
+  const [quotes, setQuotes] = useState<Record<number, JobPriceQuote>>({});
+  const pendingAmountsKey = pendingBids.map((b) => b.amount_cents).join(',');
+  useEffect(() => {
+    let active = true;
+    const amounts = Array.from(new Set(pendingBids.map((b) => b.amount_cents)));
+    Promise.all(amounts.map((cents) => quoteJobPrice(cents).then((r) => [cents, r.data] as const))).then(
+      (rows) => {
+        if (!active) return;
+        const next: Record<number, JobPriceQuote> = {};
+        for (const [cents, quote] of rows) if (quote) next[cents] = quote;
+        setQuotes(next);
+      }
+    );
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAmountsKey]);
+  const acceptQuote = pendingAccept ? quotes[pendingAccept.amount_cents] ?? null : null;
+
+  // 2026-09-26 (the refresh, audit M-1 / M-4): THE ONE DECISION this page exists
+  // for, pinned in a bar under the scroll instead of at the end of it — derived
+  // from the same lifecycle the hub's next-action line reads, so the sentence on
+  // the hub card and the button here always agree. Null = nothing to decide.
+  const approvalDeadline = releaseDeadlineMs(job);
+  const primaryAction: { label: string; onPress: () => void } | null = (() => {
+    if (statusReadError) return null;
+    if (canAccept) {
+      if (pendingBids.length === 1) {
+        const only = pendingBids[0].offer;
+        return { label: acceptOfferActionLabel(formatBudget(only.amount_cents), false), onPress: () => confirmAccept(only) };
+      }
+      if (pendingBids.length > 1) {
+        return { label: `Compare ${pendingBids.length} bids`, onPress: () => navigation.navigate('CompareBids', { job }) };
+      }
+      return null;
+    }
+    // The funding CTA renders from canOfferJobFunding ALONE (AUD-P1-02), and
+    // D15's kill switch hides it in every mode.
+    const fundingAction = canFundNow ? (paymentsEnabled ? { label: 'Protect payment in checkout', onPress: () => navigation.navigate('Checkout', { job }) } : null) : undefined;
+    if (fundingAction !== undefined) return fundingAction;
+    switch (lifecycle) {
+      case 'confirmed':
+      case 'en_route':
+      case 'arrived':
+      case 'in_progress':
+        return job.assigned_worker_id
+          ? { label: 'Track worker', onPress: () => navigation.navigate('TrackWorker', { job }) }
+          : null;
+      case 'awaiting_approval':
+        return {
+          label:
+            approvalDeadline != null
+              ? `Review & approve · ${releaseCountdownLabel(approvalDeadline, Date.now())} left`
+              : 'Review & approve the work',
+          onPress: () => navigation.navigate('ApproveOrDispute', { job }),
+        };
+      case 'disputed':
+        return openDispute
+          ? { label: 'Manage your report', onPress: () => navigation.navigate('ApproveOrDispute', { job }) }
+          : null;
+      case 'completed':
+        return payment && (isReleased(payment) || releaseRequested)
+          ? {
+              label: stripe || !isReleased(payment) ? 'Leave a review' : 'Review & tip',
+              onPress: () => navigation.navigate('ReviewAndTip', { job }),
+            }
+          : null;
+      default:
+        return null;
+    }
+  })();
+
   async function onRefresh() {
     const runId = ++refreshRunRef.current;
     const refreshJobId = job.id;
@@ -440,9 +536,9 @@ export function ClientJobDetailScreen() {
 
   if (missing) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
         <ScreenHeader
-          title="Job unavailable"
+          title="Job Unavailable"
           onBack={goBackOrHome}
           palette={emeraldColors}
         />
@@ -466,9 +562,9 @@ export function ClientJobDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
-        title={canAccept ? 'Job & bids' : 'Job detail'}
+        title={canAccept ? 'Job & Bids' : 'Job Detail'}
         onBack={goBackOrHome}
         palette={emeraldColors}
       />
@@ -481,7 +577,8 @@ export function ClientJobDetailScreen() {
           ref={scrollRef}
           contentContainerStyle={[
             styles.content,
-            { paddingHorizontal: contentPaddingX, gap: contentGap, paddingBottom: navClearance },
+            { paddingHorizontal: contentPaddingX, gap: contentGap },
+            primaryAction ? { paddingBottom: contentGap } : { paddingBottom: navClearance },
           ]}
           keyboardShouldPersistTaps="handled"
           // Swiping the list down puts the keyboard away, so it never has to
@@ -503,10 +600,20 @@ export function ClientJobDetailScreen() {
             { padding: jobHeroPadding, borderRadius: jobHeroRadius },
             isDark && styles.jobHeroDark,
             !canAccept && styles.jobHeroActive,
+            // 2026-09-29 (LUX-LIST-2 #6): the lit card in both schemes, as the approved reference
+            // (.shots/refresh/depth/ "S", job-assigned) drew this hero — its own fill, rim and lift.
+            litCardStyle(isDark),
           ]}
         >
           <View style={styles.heroTopRow}>
-            <StatusBadge status={stage.statusKey} label={stage.label} />
+            <StatusBadge
+              status={stage.statusKey}
+              label={
+                hasLifecycle && !statusReadError && lifecycle !== 'unknown'
+                  ? JOB_LIFECYCLE_LABELS[lifecycle]
+                  : stage.label
+              }
+            />
             <Text style={[styles.postedAt, !canAccept && styles.heroTextLight]}>
               Posted {formatTimeAgo(job.created_at)}
             </Text>
@@ -523,13 +630,16 @@ export function ClientJobDetailScreen() {
               style={[
                 styles.iconCircle,
                 { width: iconCircleSize, height: iconCircleSize },
-                isDark ? styles.iconCircleDark : { backgroundColor: accent.bg },
+                // LUX-LIST-2 #6: the lit tile in dark; light keeps the category colour.
+                isDark ? [styles.iconCircleDark, litCardStyle(true, 'tile')] : { backgroundColor: accent.bg },
               ]}
             >
-              <Ionicons
+              <CategoryGlyph
                 name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                 size={18}
                 color={isDark ? colors.gold : accent.icon}
+                filled
+                bare
               />
             </View>
             <Text
@@ -585,10 +695,12 @@ export function ClientJobDetailScreen() {
             {job.description}
           </Text>
           <View style={[styles.scopeTag, isDark && styles.scopeTagDark]}>
-            <Ionicons
+            <CategoryGlyph
               name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
               size={15}
               color={isDark ? colors.gold : colors.emerald}
+              filled
+              bare
             />
             <Text style={styles.scopeTagText}>
               {JOB_CATEGORY_LABELS[job.category] ?? job.category}
@@ -757,15 +869,7 @@ export function ClientJobDetailScreen() {
                     {pendingBids.length === 1 ? 'bid' : 'bids'} to compare
                   </Text>
                 </View>
-                {pendingBids.length > 1 && (
-                  <Button
-                    title="Compare"
-                    size="sm"
-                    variant="secondary"
-                    palette={emeraldColors}
-                    onPress={() => navigation.navigate('CompareBids', { job })}
-                  />
-                )}
+
               </View>
               {pendingBids.length > 1 && (
                 <SegmentedControl
@@ -789,6 +893,7 @@ export function ClientJobDetailScreen() {
                       variant="list"
                       offer={bid}
                       summary={summaries?.get(bid.worker_id) ?? null}
+                      allInCents={quotes[bid.amount_cents]?.total_cents ?? null}
                       palette={emeraldColors}
                       canAccept={canAccept}
                       accepting={acceptingId === bid.id}
@@ -843,7 +948,7 @@ export function ClientJobDetailScreen() {
               <>
             {hasLifecycle ? (
               <Card palette={emeraldColors} style={[styles.progressCard, isDark && styles.hairlineDark]}>
-                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>JOB PROGRESS</Text>
+                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark, styles.eyebrowGold]}>JOB PROGRESS</Text>
                 <Text style={styles.sectionTitle}>Where things stand</Text>
                 <JobProgress status={job.status} palette={emeraldColors} />
               </Card>
@@ -876,6 +981,7 @@ export function ClientJobDetailScreen() {
                 style={({ pressed }) => [
                   styles.workerRow,
                   isDark && styles.workerRowDark,
+                  litCardStyle(isDark),
                   pressed && styles.workerRowPressed,
                 ]}
                 onPress={() =>
@@ -935,17 +1041,7 @@ export function ClientJobDetailScreen() {
             {/* Phase 6 — the static tracking surface (screen 33): where the
                 worker is in the confirmed → done march, from their own
                 declarations. Meaningless once the job is completed. */}
-            {job.assigned_worker_id &&
-              (job.status === 'assigned' || job.status === 'in_progress') && (
-                <Button
-                  title="Track worker"
-                  icon="location-outline"
-                  iconPosition="leading"
-                  variant="secondary"
-                  palette={emeraldColors}
-                  onPress={() => navigation.navigate('TrackWorker', { job })}
-                />
-              )}
+            {/* 2026-09-26: Track worker is the pinned primary while the job runs. */}
 
             {/* The money truth for this job (phase50 ledger). Labels come from
                 MoneyText's fixed §H.3 captions — never hand-written here. The
@@ -1005,29 +1101,29 @@ export function ClientJobDetailScreen() {
                     ? ' Payments are paused right now — check back shortly to protect it.'
                     : ''}
                 </Text>
-                {/* D15: the kill switch hides the checkout CTA in every mode. */}
-                {paymentsEnabled ? (
-                  <Button
-                    title="Protect payment in checkout"
-                    palette={emeraldColors}
-                    onPress={() => navigation.navigate('Checkout', { job })}
-                  />
-                ) : null}
+                {/* D15: the kill switch hides the checkout CTA in every mode —
+                    and it is the pinned primary below (2026-09-26). */}
               </Card>
             ) : payment && isHeld(payment) && job.status === 'assigned' ? (
               <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
                 {/* Master 17 rings a shield at the payment card's right. */}
                 <View style={styles.paymentShield}>
-                  <Ionicons name="shield-outline" size={22} color={colors.gold} />
+                  <Ionicons name="shield-outline" size={22} color={colors.mark} />
                 </View>
                 {/* D16: sandbox keeps its label verbatim; stripe drops it. */}
-                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
+                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark, styles.eyebrowGold]}>
                   {paymentsMode === 'sandbox' ? 'PROTECTED PAYMENT · SANDBOX' : 'PROTECTED PAYMENT'}
                 </Text>
                 {/* Tier A (C2, D-4): the customer's held figure is the row's
                     charge_amount_cents — the agreed price is said beside the
                     title; this is what the card was charged. */}
                 <MoneyText cents={customerChargeCents(payment)} state={payment.status} size="lg" />
+                {/* 2026-09-26 (audit M-6): one money block, both figures named —
+                    what the card paid (the charge, above) and the agreed price
+                    it protects. */}
+                <Text style={styles.paymentNote}>
+                  Charged to your card · {formatBudget(job.final_amount_cents ?? job.budget_cents)} agreed price
+                </Text>
                 <Text style={styles.paymentNote}>
                   {paymentsMode === 'sandbox'
                     ? 'Funds stay held until you approve the finished work. Sandbox build — no real money moves.'
@@ -1040,7 +1136,7 @@ export function ClientJobDetailScreen() {
               // checkout follows. Never a payment into a lapsed row.
               <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
                 <View style={styles.paymentShield}>
-                  <Ionicons name="shield-outline" size={22} color={colors.gold} />
+                  <Ionicons name="shield-outline" size={22} color={colors.mark} />
                 </View>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>FUNDING WINDOW CLOSED</Text>
                 <MoneyText cents={customerChargeCents(payment)} state={payment.status} />
@@ -1059,7 +1155,7 @@ export function ClientJobDetailScreen() {
             ) : payment ? (
               <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
                 <View style={styles.paymentShield}>
-                  <Ionicons name="shield-outline" size={22} color={colors.gold} />
+                  <Ionicons name="shield-outline" size={22} color={colors.mark} />
                 </View>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
                   {paymentsMode === 'sandbox'
@@ -1181,11 +1277,7 @@ export function ClientJobDetailScreen() {
                       {DISPUTE_REASON_LABELS[openDispute.reason]} — the payment
                       stays held while your report is open.
                     </Text>
-                    <Button
-                      title="Manage your report"
-                      palette={emeraldColors}
-                      onPress={() => navigation.navigate('ApproveOrDispute', { job })}
-                    />
+
                   </Card>
                 ) : lifecycle === 'awaiting_approval' ? (
                   <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
@@ -1196,7 +1288,8 @@ export function ClientJobDetailScreen() {
                       funds release automatically after 72 hours.
                     </Text>
                     <Button
-                      title="Review & approve the work"
+                      title="Report an issue"
+                      variant="secondary"
                       palette={emeraldColors}
                       onPress={() => navigation.navigate('ApproveOrDispute', { job })}
                     />
@@ -1206,14 +1299,9 @@ export function ClientJobDetailScreen() {
                     <Text style={styles.approvalTitle}>Payment released</Text>
                     <Text style={styles.noticeText}>
                       {stripe
-                        ? `All settled with ${workerName}. Leave a review.`
-                        : `All settled with ${workerName}. Leave a review — and a tip, if you’d like.`}
+                        ? `Settled. Leave ${workerFirstName} a review.`
+                        : `Settled. Leave ${workerFirstName} a review or a tip.`}
                     </Text>
-                    <Button
-                      title={stripe ? 'Review' : 'Review & tip'}
-                      palette={emeraldColors}
-                      onPress={() => navigation.navigate('ReviewAndTip', { job })}
-                    />
                   </Card>
                 ) : releaseRequested ? (
                   // D23: approved, payout pending. The decision is made; the
@@ -1226,11 +1314,6 @@ export function ClientJobDetailScreen() {
                       way to them and shows as released when the transfer
                       lands. Leave a review whenever you like.
                     </Text>
-                    <Button
-                      title="Review"
-                      palette={emeraldColors}
-                      onPress={() => navigation.navigate('ReviewAndTip', { job })}
-                    />
                   </Card>
                 ) : null
               ) : // An authorized row landed in the funding card above; any other
@@ -1256,8 +1339,7 @@ export function ClientJobDetailScreen() {
               <Card palette={emeraldColors} style={[styles.noticeCard, isDark && styles.hairlineDark]}>
                 <Ionicons name="time-outline" size={20} color={colors.textMuted} />
                 <Text style={styles.noticeText}>
-                  Waiting for the worker to finish. You can leave a review once the
-                  job is completed.
+                  Waiting for the worker to finish.
                 </Text>
               </Card>
             )}
@@ -1266,6 +1348,16 @@ export function ClientJobDetailScreen() {
           </>
         )}
         </ScrollView>
+        {primaryAction ? (
+          <View style={[styles.actionBar, { paddingBottom: PINNED_FOOTER_BOTTOM_PADDING }]}>
+            <Button
+              title={primaryAction.label}
+              palette={emeraldColors}
+              onPress={primaryAction.onPress}
+              disabled={acceptingId !== null}
+            />
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
 
       <PhotoViewer
@@ -1285,17 +1377,22 @@ export function ClientJobDetailScreen() {
         visible={!!pendingAccept}
         title={
           pendingAccept
-            ? `Accept ${formatBudget(pendingAccept.amount_cents)} from ${
-                pendingAccept.worker?.full_name ?? 'this worker'
-              }?`
+            ? acceptOfferConfirmTitle(formatBudget(pendingAccept.amount_cents), false)
             : ''
         }
         message={
-          paymentsMode === 'sandbox'
+          (acceptQuote
+            ? `Agreed price ${formatBudget(acceptQuote.job_price_cents)} · Protection fee ${formatBudget(
+                acceptQuote.customer_fee_cents
+              )} · Total charged ${formatBudget(acceptQuote.total_cents)}.\n\n`
+            : '') +
+          (paymentsMode === 'sandbox'
             ? 'This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll authorize and protect the payment in a sandbox checkout (no real money in this build).'
-            : 'This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll protect the payment in checkout.'
+            : 'This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll protect the payment in checkout.')
         }
-        confirmText="Accept bid"
+        // #64 (M-17): the confirmation repeats the button's verb and noun; the
+        // total it charges is spelled out in the message above.
+        confirmText={acceptOfferConfirmText(false)}
         cancelText="Cancel"
         loading={!!pendingAccept && acceptingId === pendingAccept.id}
         palette={emeraldColors}
@@ -1312,6 +1409,13 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
   safe: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  actionBar: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
   },
   flex: {
     flex: 1,
@@ -1408,17 +1512,17 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
   // in dark; light keeps the Heritage emerald.
   valueLabel: {
     ...typography.caption,
-    color: colors.emerald,
+    color: colors.eyebrow,
     fontWeight: '800',
     letterSpacing: 1.4,
   },
-  valueLabelDark: { color: colors.gold },
+  valueLabelDark: { color: colors.eyebrow },
   // Masters 8, 16 and 17 all set the OWNER's own figure in cream, not green —
   // decision 6's emerald covers the marketplace-facing money (EST. PAY, feed
   // prices, Open/live/unread), which is what those examples all are.
   budget: {
     ...typography.heading,
-    color: colors.ink,
+    color: colors.money,
     fontVariant: ['tabular-nums'],
   },
   bidCount: {
@@ -1478,11 +1582,12 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
   // Every card's section eyebrow on masters 8, 16 and 17 is gold small-caps.
   eyebrow: {
     ...typography.caption,
-    color: colors.emerald,
+    color: colors.eyebrow,
     fontWeight: '800',
     letterSpacing: 1.4,
   },
-  eyebrowDark: { color: colors.gold },
+  eyebrowDark: { color: colors.eyebrow },
+  eyebrowGold: { color: colors.eyebrowGold }, // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
   scopeDescription: {
     ...typography.body,
     color: colors.ink,
@@ -1641,7 +1746,7 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
   photoGroupLabel: {
     ...typography.caption,
     fontWeight: '800',
-    color: colors.textMuted,
+    color: colors.eyebrow,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
   },

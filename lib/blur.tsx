@@ -72,7 +72,15 @@ const BlurView: BlurViewComponent | null = Platform.OS === 'web' ? null : load()
 /** Whether this binary can actually blur: the vendor on native, CSS on web.
  *  Every caller still renders `BlurLayer` unconditionally; Surface reads this
  *  only to pick the material's fallback scrim where the layer will be absent. */
-export const canBlur = Platform.OS === 'web' || BlurView != null;
+// 2026-09-29 (LUX-LIST-2 #9): the web ASKS whether it can draw a backdrop blur instead of assuming it —
+// a browser (or preview) without `backdrop-filter` showed a see-through pop-up with the rows readable
+// through it. Where the answer is no, Surface draws the material's solid fallback.
+const webCanBlur = (): boolean => {
+  const css = (globalThis as { CSS?: { supports?: (property: string, value: string) => boolean } }).CSS;
+  if (!css || typeof css.supports !== 'function') return false;
+  return css.supports('backdrop-filter', 'blur(1px)') || css.supports('-webkit-backdrop-filter', 'blur(1px)');
+};
+export const canBlur = Platform.OS === 'web' ? webCanBlur() : BlurView != null;
 
 /**
  * How far through. 24 is a frosted pane rather than a smear: the pill's

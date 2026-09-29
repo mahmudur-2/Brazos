@@ -75,7 +75,10 @@ export const authColors = {
 /** Reference radii: .field-value 14, .btn 13, .card 20, .icon-btn 14. */
 export const authRadius = {
   field: 14,
-  button: 16,
+  /** 2026-09-28 (LUX-LIST-64 #6): fully round — half the 52 height, the Lux `.cta` 52/26.
+   *  2026-09-28 (LUX-LIST-2 #2): softened to 22 — the operator found the pill too circular and
+   *  picked the middle ground (option b): 8 pt of straight side on the 52 height. */
+  button: 22,
   card: 20,
   chip: 17,
   iconButton: 14,
@@ -83,6 +86,8 @@ export const authRadius = {
   otpCell: 16,
   /** 2026-09-21 — the shipped Welcome page's controls (docs/mockups/html/lux/
    *  welcome-ship.html): the two boxed actions at radius 22, the badges at 20. */
+  /** 2026-09-28 (#6): the Welcome's boxed actions take the one round 52 shape too —
+   *  22 since LUX-LIST-2 #2, with every other auth button. */
   heroButton: 22,
   heroBadge: 20,
 } as const;
@@ -103,10 +108,11 @@ export const authSpacing = {
  * minimum touch target the repo requires, so both are raised.
  */
 export const authSizes = {
-  /** .btn height 38 -> 54. */
-  button: 54,
-  /** The shipped Welcome page's boxed actions, its text link, its badges. */
-  heroButton: 58,
+  /** .btn height 38 -> 54; 2026-09-28 (LUX-LIST-64 #6): 52, the Lux `.cta`,
+   *  on every launch, sign-in, sign-up, verify, legal and setup button. */
+  button: 52,
+  /** The shipped Welcome page's boxed actions (52 since #6), its text link, its badges. */
+  heroButton: 52,
   heroLink: 44,
   /** 42, not 40: the page's badge is a 40 content box inside a 1-pt border. */
   heroBadge: 42,

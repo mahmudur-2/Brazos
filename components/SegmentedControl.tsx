@@ -1,16 +1,24 @@
+import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
-  fonts,
   metricStyles,
   radius,
-  selectedInDark,
   spacing,
   useThemeColors,
   withAlpha,
   type ColorPalette,
 } from '../lib/theme';
 
-type Option<T extends string> = { label: string; value: T };
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
+
+/**
+ * 2026-09-28 (LUX-LIST-64 #37) — a segment may carry an icon beside its label,
+ * the pair centred in the half: the FILLED glyph while chosen, the OUTLINE
+ * otherwise, so the two swap as the choice moves (Post a Job's "Ask for bids"
+ * people and "Set a price" tag).
+ */
+type Option<T extends string> = { label: string; value: T; icon?: { on: IoniconName; off: IoniconName } };
 
 type SegmentedControlProps<T extends string> = {
   options: Option<T>[];
@@ -20,31 +28,52 @@ type SegmentedControlProps<T extends string> = {
   value: T | null;
   onChange: (value: T) => void;
   palette?: ColorPalette;
+  /** The track's outer height; the cells fill it inside the 4pt padding. */
+  height?: number;
+  /** The track's corner; the cells round to half their own height. */
+  radius?: number;
 };
 
+/** The Lux `.seg2` at the app's 44pt touch floor: 44pt cells inside a 4pt-padded track — 52 tall. */
+export const TRACK_PADDING = 4;
+export const TRACK_HEIGHT = 52;
+
+/**
+ * 2026-09-27 (the operator's review — "pills shape and sizes like the
+ * reference, anywhere on the app, the highlighted colour #4FC58C") — THE LUX
+ * SEGMENT (`.seg2`): a low glass track (the ink at .06 under the rim, 4pt of
+ * padding, pill corners) and the chosen cell FILLED with the one mint, its
+ * label in the CTA ink; the other cells bare and muted at the same weight.
+ * It replaces the gold-lined chosen cell of decision 5 / emerald D6 for
+ * segmented tabs only — a chosen CHIP keeps its glass (ruling 11). Dark and
+ * light share the geometry; light fills the chosen cell with its own
+ * primary green and floats the track on the mint tint.
+ */
 export function SegmentedControl<T extends string>({
   options,
   value,
   onChange,
   palette: paletteProp,
+  height = TRACK_HEIGHT,
+  radius: trackRadius = radius.pill,
 }: SegmentedControlProps<T>) {
   const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
-  // Prestige decision 5 — separated cells instead of a filled well; the
-  // active cell wears the surface fill under a gold hairline (dark; light
-  // keeps its Heritage hairline) and speaks the serif; inactive cells stay
-  // bare muted sans. Structure is the same in both themes.
-  const activeBorder = isDark ? withAlpha(palette.gold, 0.55) : palette.border;
-  // emerald D6: the chosen segment's LABEL is gold too, not just its hairline.
-  // Master 23 draws the flat/ask pill — this exact control — that way, and it
-  // is the same treatment every other chosen chip, pill and radio now carries.
-  // The active cell keeps its surface fill: unlike a chip, a segment's fill is
-  // what separates it from the bare cells beside it, so removing it would
-  // erase the control rather than restyle it.
-  const activeLabel = isDark ? selectedInDark(palette).line : palette.text;
+  const cellHeight = Math.max(0, height - TRACK_PADDING * 2);
   return (
-    <View style={styles.container} accessibilityRole="tablist">
+    <View
+      style={[
+        styles.track,
+        {
+          minHeight: height,
+          borderRadius: trackRadius,
+          backgroundColor: isDark ? withAlpha(palette.text, 0.06) : palette.mint,
+          borderColor: palette.border,
+        },
+      ]}
+      accessibilityRole="tablist"
+    >
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -52,26 +81,26 @@ export function SegmentedControl<T extends string>({
             key={option.value}
             onPress={() => onChange(option.value)}
             style={({ pressed }) => [
-              styles.segment,
-              selected && [
-                styles.segmentSelected,
-                {
-                  backgroundColor: palette.surface,
-                  borderColor: activeBorder,
-                  shadowColor: palette.text,
-                },
-              ],
+              styles.cell,
+              // The cell is the touch target: never under the 44pt floor,
+              // taller only when the track is dialled taller.
+              cellHeight > 44 && { minHeight: cellHeight },
+              { borderRadius: Math.round(Math.max(cellHeight, 44) / 2) },
+              selected && { backgroundColor: palette.primary },
               pressed && styles.pressed,
             ]}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
           >
+            {option.icon ? (
+              <Ionicons
+                name={selected ? option.icon.on : option.icon.off}
+                size={18}
+                color={selected ? palette.onPrimary : palette.textMuted}
+              />
+            ) : null}
             <Text
-              style={[
-                styles.label,
-                { color: palette.textMuted },
-                selected && [styles.labelSelected, { color: activeLabel }],
-              ]}
+              style={[styles.label, { color: selected ? palette.onPrimary : palette.textMuted }]}
               numberOfLines={1}
             >
               {option.label}
@@ -84,37 +113,22 @@ export function SegmentedControl<T extends string>({
 }
 
 const stylesFor = metricStyles(() => StyleSheet.create({
-  container: {
+  track: {
     flexDirection: 'row',
-    gap: 6,
+    padding: TRACK_PADDING,
+    borderWidth: 1,
   },
-  segment: {
+  cell: {
     flex: 1,
     minHeight: 44,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radius.md,
-    // Every cell carries the border WIDTH so selection never shifts layout;
-    // only the active cell colours it in.
-    borderWidth: 1,
-    borderColor: 'transparent',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  segmentSelected: {
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  labelSelected: {
-    // Decision 9: segmented labels join the serif voice when active.
-    fontFamily: fonts.display,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
   pressed: {

@@ -269,8 +269,10 @@ test('emerald fence: the money primitive keeps its colour rule', () => {
   );
   assert.match(
     flat,
-    /const amountColor = state && !SETTLED\.includes\(state\) \? colors\.muted : isDark \? colors\.emerald : colors\.ink;/,
-    'the amount colour rule is frozen: muted unless settled, then emerald in dark and ink in light'
+    // 2026-09-28 (LUX-LIST-64 #40): money is white — one `money` role, the Lux ink
+    // in dark and the near-black in light; "gold for money" ends.
+    /const amountColor = state && !SETTLED\.includes\(state\) \? colors\.muted : colors\.money;/,
+    'the amount colour rule is frozen: muted unless settled, then the money ink in both'
   );
   // Money is cents through formatBudget() and nothing else (CLAUDE.md).
   assert.match(money, /\{formatBudget\(cents\)\}/);
@@ -401,9 +403,11 @@ test('emerald D1 fence: hiding a tab item never unregisters its route', () => {
   // asserted separately below so "declares nothing" can never mean "paints
   // nothing".
   const shell = flatten(read('navigation/ModeShell.tsx'));
+  // 2026-09-27 (the Lux remake, ruling 9): the Lux gradient rides OVER the flat
+  // ground in dark (`luxGround`); the paint is still there.
   assert.match(
     shell,
-    /<View style=\{\[styles\.tree, \{ backgroundColor: treeGround \}\]\}>/,
+    /<View style=\{\[styles\.tree, \{ backgroundColor: treeGround \}, luxGround\]\}>/,
     'ModeShell must PAINT the ground behind the bar row — emerald D2 added this ' +
       'paint rather than removing one, and deleting it restores the white band'
   );
@@ -511,8 +515,10 @@ test('home(2) fence: the task card holds the title, the field and the pill, and 
 
   // THE TASK CARD: one node, lit between the two palette stops and flat in
   // light, wearing the entrance the promo card wore, holding three rows.
+  // 2026-09-27 (the Lux remake, ruling 8): the card is a POP-OUT — the dark
+  // card shadow rides the same node, after the lit fill and before the entrance.
   const card =
-    /<Animated\.View style=\{\[ styles\.taskCard, \{ borderRadius: taskCardRadius \}, litBetween\(\{ top: colors\.taskCardLitTop, bottom: colors\.taskCardLitBottom, flat: !isDark, \}\), cardEntrance, \]\} >([\s\S]*?)<\/Animated\.View>/.exec(
+    /<Animated\.View style=\{\[ styles\.taskCard, \{ borderRadius: taskCardRadius \}, litBetween\(\{ top: colors\.taskCardLitTop, bottom: colors\.taskCardLitBottom, flat: !isDark, \}\), litCardStyle\(isDark\), cardEntrance, \]\} >([\s\S]*?)<\/Animated\.View>/.exec(
       flat
     );
   assert.ok(card, 'the task card must be one Animated.View lit between the two palette stops');
@@ -524,11 +530,18 @@ test('home(2) fence: the task card holds the title, the field and the pill, and 
   assert.ok(titleAt < fieldAt && fieldAt < pillAt, 'in that order: title, field, pill');
   assert.match(inside, /<Text style=\{styles\.taskCardTitle\} maxFontSizeMultiplier=\{1\.3\}> What do you need done\? <\/Text>/);
   // The field is the SAME instance — the studio's height and radius, the
-  // sentence posture, submitSearch — with the mockup's placeholder and no
-  // leading glyph, because the magnifier is its trailing submit.
+  // sentence posture — with the mockup's placeholder and no leading glyph.
+  // 2026-09-26 (the refresh, audit M-12): its return key starts the draft
+  // the pill starts, so it draws no magnifier (that would promise a search)
+  // and its one trailing control stays the mic.
   assert.match(inside, /placeholder="Describe your task\.\.\."/);
-  assert.match(inside, /onSubmit=\{submitSearch\}/);
-  assert.match(inside, /autoCapitalize="sentences" autoCorrect disableLeadingIcon micBecomesSearch/);
+  assert.match(inside, /onSubmit=\{startJobDraft\}/);
+  // 2026-09-27 (the Lux remake, the operator's Home picture): the magnifier
+  // LEADS the field again ("the field with a magnifier before 'Describe your
+  // task…'"), drawn by SearchBar itself; the mic trails it as today.
+  assert.match(inside, /autoCapitalize="sentences" autoCorrect style=/);
+  assert.doesNotMatch(inside, /disableLeadingIcon/);
+  assert.doesNotMatch(inside, /micBecomesSearch/);
   assert.match(inside, /\{ minHeight: design\.searchHeight, borderRadius: design\.searchRadius \}/);
   // 2026-09-21: the field's ONE trailing control is SearchBar's — the mic,
   // which becomes the magnifier once text is typed (tests/voiceSearch pins
@@ -539,6 +552,9 @@ test('home(2) fence: the task card holds the title, the field and the pill, and 
   assert.match(inside, /styles\.heroButton, isDark && styles\.heroButtonDark,/);
   assert.match(inside, /onPress=\{\(\) => startJobDraft\(\)\}/);
   assert.match(inside, /Post a job ›/);
+  // 2026-09-27 (the Lux remake, ruling 13): the refresh's "Browse workers ›"
+  // line under the pill is GONE — the Discover tab is the way to a person.
+  assert.ok(!inside.includes('Browse workers'), 'no Browse workers line under the pill');
   const dial = "useDialNumber('home.promoCard.radius') ?? 22";
   assert.ok(home.includes(dial), 'the card’s corner is the dial the promo card wore, at 22');
 
@@ -566,9 +582,10 @@ test('home(2) fence: the task card holds the title, the field and the pill, and 
   // reached by lib/theme.ts BY REFERENCE on both sides.
   const tokens = read('ui/tokens.ts');
   const darkBlock = tokens.slice(tokens.indexOf('export const dark = {'), tokens.indexOf('export { withAlpha }'));
-  assert.match(darkBlock, /\n  taskCardLitTop: '#15362B',/);
-  assert.match(darkBlock, /\n  taskCardLitBottom: '#0B2019',/);
-  assert.match(darkBlock, /\n  taskCardEdge: '#27473A',/);
+  // 2026-09-26 (the refresh): the task card in the Lux glass.
+  assert.match(darkBlock, /\n  taskCardLitTop: '#11342C',/);
+  assert.match(darkBlock, /\n  taskCardLitBottom: '#0B211C',/);
+  assert.match(darkBlock, /\n  taskCardEdge: '#2E4E46',/);
   const lightBlock = tokens.slice(tokens.indexOf('export const colors = {'), tokens.indexOf('export type ColorToken'));
   const lightHex = (key) => {
     const hit = new RegExp(`\\n  ${key}: '(#[0-9A-Fa-f]{6})'`).exec(lightBlock);
@@ -677,19 +694,20 @@ test('home(3) fence: -1 tracking on the serif headings, and only there', () => {
 test('home(4) fence: the atmosphere sits behind both homes and never scrolls', () => {
   const layer = stripComments(read('components/HomeAtmosphere.tsx'));
 
-  // It is the one mount of the raster, and it is gated.
-  assert.match(layer, /require\('\.\.\/assets\/prestige\/home-atmosphere-dark\.webp'\)/);
+  // 2026-09-27 (the Lux remake, ruling 9): the layer is the Lux GRADIENT, from
+  // the one definition of it (lib/theme.ts screenGround), and mounts no raster
+  // any more — home-atmosphere-dark stays on disk, required by nothing.
+  assert.match(layer, /screenGround\(palette, isDark\)/);
+  assert.doesNotMatch(layer, /require\(/, 'the ground is drawn, not mounted');
   assert.match(
     layer,
     /if \(!isDark\) return null;/,
-    'the atmosphere is an OPAQUE dark raster — light must render nothing at all'
+    'the ground is a DARK layer — light must render nothing at all'
   );
   // Fixed, full-bleed, aspect-preserving.
   assert.match(flatten(layer), /layer: \{ position: 'absolute', left: 0, right: 0, bottom: 0, \}/);
-  assert.match(flatten(layer), /style=\{\[styles\.layer, \{ top: -insets\.top \}\]\}/,
+  assert.match(flatten(layer), /style=\{\[styles\.layer, \{ top: -insets\.top \}, screenGround\(palette, isDark\)\]\}/,
     'the layer must be pulled up by the safe-area inset or it leaves a band above the notch');
-  assert.match(flatten(layer), /resizeMode="cover"/,
-    'cover fills without distorting; contain would letterbox the ground');
 
   for (const path of ['screens/HomeScreen.tsx', 'screens/WorkerHomeScreen.tsx']) {
     const flat = flatten(read(path));
@@ -823,9 +841,11 @@ test('home(24) fence: four whole service tiles fill the row and nothing peeks', 
   // The gap IS the gutter, by construction — the screen's inset, set at render.
   assert.match(rowSource, /const gap = inset;/);
   assert.match(rowSource, /\{ paddingHorizontal: inset, gap \}/);
-  assert.match(rowSource, /row: \{ flexDirection: 'row' \}/);
+  assert.match(rowSource, /row: \{ flexDirection: 'row', paddingBottom: spacing\.lg \}/ /* 2026-09-29 (LUX-LIST-2 #6): room under the tiles for their shadow, the names now inside them */);
   const gap = padding;
-  assert.match(rowSource, /borderRadius: emeraldRadius\.md,/);
+  // 2026-09-27 (the Lux remake, ruling 8): the tile is the Lux glass tile at
+  // its own radius, one notch up from the mockup's 14.
+  assert.match(rowSource, /borderRadius: emeraldRadius\.lg,/);
   assert.match(flat, /<ServiceTileRow heading="Popular services" inset=\{design\.screenPadding\}/);
 
   const SCREEN = 393;
@@ -931,13 +951,16 @@ test('home(25) fence: the task card’s height is the mockup’s, term by term',
 
   // 2026-09-21: the field is 56 (was 44), so the sum is 192 — the reference's
   // 186 with the pill's 48 for its 44 and the border inside the box.
+  // 2026-09-28 (LUX-LIST-64 #15): the field is the Lux Home field, 54 — so 190.
   const height = 2 * border + 2 * padding + titleLine + gap + field + gap + cta;
-  assert.equal(height, 192, `the task card stacks to ${height}pt; the reference's card is 192 in this app's terms`);
+  assert.equal(height, 190, `the task card stacks to ${height}pt; with the Lux 54 field the card is 190 in this app's terms`);
 
   // The two studio terms are the reference's own, and the field is pinned by
   // name — a smaller field is the one move this sum would not catch as a sum.
-  assert.equal(field, 56, 'the field is the reference’s 56 — the operator’s pick b');
-  assert.equal(Number(/searchRadius: (\d+)/.exec(studio)?.[1]), 20, 'at the reference’s 20 radius, one notch up from 17');
+  // 2026-09-28 (LUX-LIST-64 #15): every search field but the map's pill is the
+  // Lux Home field — 54 tall, fully round (27).
+  assert.equal(field, 54, 'the field is the Lux 54');
+  assert.equal(Number(/searchRadius: (\d+)/.exec(studio)?.[1]), 27, 'fully round: half the 54');
   assert.equal(cta, 48, 'the pill’s 48 did not move');
   assert.equal(Number(/ctaRadius: (\d+)/.exec(studio)?.[1]), 24, 'nor its 24 radius');
 });
@@ -1149,13 +1172,19 @@ test('home(17) fence: the mode switch lives in the [+] sheet, not on customer Ho
 
   const tree = stripComments(read('navigation/CustomerRoot.tsx'));
   assert.match(tree, /const \{ switchMode, switching \} = useMode\(\);/);
-  assert.match(tree, /onSwitchMode=\{\(\) => runCreateAction\(\(\) => void switchMode\('worker'\)\)\}/);
+  // M-38 (2026-09-26): the sheet stays up while the switch asks.
+  assert.match(tree, /onSwitchMode=\{\(\) => void switchFromSheet\(\)\}/);
+  assert.match(tree, /const switched = await switchMode\('worker'\);\s*if \(switched\) setCreateOpen\(false\);/);
   assert.match(tree, /switching=\{switching\}/);
 
-  // WORKER HOME IS UNTOUCHED: its pill, its dial and its switch stay.
+  // WORKER HOME WAS UNTOUCHED here — its pill, its dial and its switch stayed —
+  // until 2026-09-28 (LUX-LIST-64 #61): the "Switch to Customer" pill left
+  // Worker Home too, dial and all, and switching lives in Profile's mode row
+  // behind the same confirm (components/ModeSwitchRow.tsx → switchMode()).
   const worker = stripComments(read('screens/WorkerHomeScreen.tsx'));
-  assert.match(worker, /void switchMode\('customer'\)/);
-  assert.match(worker, /useDialNumber\('workerHome\.modeSwitch\.paddingX'\)/);
+  assert.doesNotMatch(worker, /modeSwitch|switchToCustomer|Switch to Customer|useMode\(/);
+  assert.doesNotMatch(worker, /workerHome\.modeSwitch\.paddingX/);
+  assert.match(stripComments(read('components/ModeSwitchRow.tsx')), /onPress=\{\(\) => void switchToOtherMode\(\)\}/);
 });
 
 /** A rung off `MASTER_SANS_CAPS`, recomputed here rather than trusted. */
@@ -1213,10 +1242,14 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
   // "Live Nearby" is the rung that was out by more than a rounding, and it is
   // the one the screen computes rather than states — in BOTH themes since the
   // 2026-08-22 parity pass (light's 22 is retired).
+  // 2026-09-27 (the Lux remake, ruling 4): the section title is the Lux
+  // EYEBROW now — one measure (lib/theme.ts EYEBROW_TYPE), the colour through
+  // the `eyebrow` role — so it is no longer a rung of the serif ladder; the
+  // ladder itself is untouched and still measured below.
   assert.match(
     flat,
-    /sectionTitle: \{ fontFamily: fonts\.display, fontSize: serifSize\(MASTER_SERIF_CAPS\.sectionTitle\),/,
-    'the section title must be COMPUTED from the ladder, not restated as a number'
+    /sectionTitle: \{ \.\.\.EYEBROW_TYPE, color: colors\.eyebrowGold, \}/ /* 2026-09-29 (LUX-LIST-2 #4): NEEDS YOUR ATTENTION and YOUR JOBS are two of the 25 kept-gold labels */,
+    'the section title is the one eyebrow, in both themes'
   );
   assert.doesNotMatch(flat, /sectionTitleDark/, 'one rung, both themes');
   // home(20/26): 16 -> 20. The replaced master's L measures a 30px cap
@@ -1379,21 +1412,26 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
   // scene at 400 x 351 of its own 853x1844 pixels — x 470..870, y 221..572 —
   // which converts at 393/853 and 852/1844 to 184.3 x 162.2 pt at (216.5, 102.1).
   // A band rather than a pin: a point either way is not a design change.
+  // 2026-09-29 (LUX-LIST-2 #5, the operator's pick "Lamp-lit", option c): the
+  // room is replaced by the operator's own CUT-OUTS, and a cut-out's box is its
+  // ink — 240..390 x 136..292 on the 393-pt screen as rendered and approved
+  // (.shots/refresh/blend/out/sheet-*.png, option c). The bands keep their width.
   assert.ok(
-    Math.abs(width - 184) <= 4,
-    `master 44's scene is 184.3pt wide at 393pt; this slot is ${width}pt`
+    Math.abs(width - 150) <= 4,
+    `option c's cut-out is 150pt wide at 393pt; this slot is ${width}pt`
   );
   assert.ok(
-    Math.abs(height - 162) <= 4,
-    `master 44's scene is 162.2pt tall at 393pt; this slot is ${height}pt`
+    Math.abs(height - 156) <= 4,
+    `option c's cut-out is 156pt tall at 393pt; this slot is ${height}pt`
   );
   // Master 44 started the scene 34.9pt below the content box's top; the tuning
   // pass dropped it to 70, and `top` is still measured from `intro`, which
   // starts there. The band stays 3, so the slot cannot drift off the approved
   // position either.
+  // 2026-09-29 (LUX-LIST-2 #5): option c's ink starts 74pt below the content top.
   assert.ok(
-    Math.abs(top - 70) <= 3,
-    `the approved slot starts the scene 70pt below the content top; this one starts at ${top}pt`
+    Math.abs(top - 74) <= 3,
+    `the approved slot starts the scene 74pt below the content top; this one starts at ${top}pt`
   );
 
   // IT OVERHANGS THE SCREEN, and by a measured amount. `right` is relative to
@@ -1403,16 +1441,21 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
   // puts it.
   const padding = Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
   const overhang = -right - padding;
+  // 2026-09-29 (LUX-LIST-2 #5): a cut-out has NOTHING to bleed — its edges are
+  // empty by definition, as this fence's own header says — so the approved box
+  // stops 3pt SHORT of the screen's right edge (the lamp's foot at 390): -3.
   assert.ok(
-    Math.abs(overhang - 13) <= 3,
-    `the approved slot runs the scene 13pt past the screen's right edge (master 44 ran 7.8); this ` +
-      `one runs ${overhang}pt`
+    Math.abs(overhang - -3) <= 3,
+    `the approved slot ends the cut-out 3pt short of the screen's right edge; this ` +
+      `one runs ${overhang}pt past it`
   );
 
   // The replaced scene carries alpha now -- a 9-row trim off its bottom edge --
   // but nothing is cut from its right, so `inkBounds` still reports a
   // full canvas — the box IS the art, and that is the correct answer here.
-  const ink = inkBounds(join(root, 'assets/prestige/hero_armchair_customer.png'));
+  // 2026-09-29 (LUX-LIST-2 #5): measured on the mounted cut-out's own master —
+  // its ink is cropped to the box and meets the right edge (the lamp's foot).
+  const ink = inkBounds(join(root, 'assets/prestige/hero_armchair_customer_lamp_dark.png'));
   assert.equal(
     ink.right,
     0,
@@ -1425,8 +1468,9 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
   // it is measured on the rows the headline occupies (the middle band of the
   // scene) rather than over the whole canvas.
   const declaredInk = constantOf(home, 'HERO_ART_INK_LEFT');
+  // 2026-09-29 (LUX-LIST-2 #5): the mounted dark master, not the retired room.
   const measuredInk = structuredLeftFraction(
-    join(root, 'assets/prestige/hero_armchair_customer.png'),
+    join(root, 'assets/prestige/hero_armchair_customer_lamp_dark.png'),
     0.53,
     0.75,
   );
@@ -1466,8 +1510,9 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
   // headline column is measured off HERO_ART_INK_LEFT and there is only one of
   // those. If a future light export moves the chair, this fails here rather
   // than silently running the headline under the artwork on light devices only.
+  // 2026-09-29 (LUX-LIST-2 #5): the mounted light master, not the retired room.
   const measuredInkLight = structuredLeftFraction(
-    join(root, 'assets/prestige/hero_armchair_customer_light.png'),
+    join(root, 'assets/prestige/hero_armchair_customer_lamp_light.png'),
     0.53,
     0.75,
   );
@@ -1553,9 +1598,11 @@ test('home(13) fence: the atmosphere carries a vignette, and it crops to fill', 
     'master 44 is being read as a flat ground; if that is now true the vignette is not owed'
   );
 
-  // Full-bleed wins over fitting: the layer covers both dimensions and crops.
+  // Full-bleed wins over fitting: the layer reaches every edge. 2026-09-27 (the
+  // Lux remake, ruling 9): it is a gradient View now, not an Image, so there is
+  // no resize mode to pin — the four edges below are the whole of the claim.
   const flat = flatten(read('components/HomeAtmosphere.tsx'));
-  assert.match(flat, /resizeMode="cover"/, 'contain would letterbox the ground back in');
+  assert.match(flat, /style=\{\[styles\.layer, \{ top: -insets\.top \}, screenGround\(palette, isDark\)\]\}/);
   assert.doesNotMatch(flat, /resizeMode="contain"/);
   assert.match(
     flat,
@@ -1575,7 +1622,8 @@ test('home(13) fence: the atmosphere carries a vignette, and it crops to fill', 
 // which is frozen.
 // ---------------------------------------------------------------------------
 test('home(5) fence: one dark ground in three places, light untouched', () => {
-  const DARK_GROUND = '#02110D';
+  // 2026-09-26 (the refresh): the Lux ground's middle stop, still ONE value in three places.
+  const DARK_GROUND = '#0A1A17';
 
   /** The slice of `source` between one `export const NAME = ` and the next. */
   const paletteBlock = (source, name, next) => {
@@ -1635,49 +1683,31 @@ test('home(5) fence: one dark ground in three places, light untouched', () => {
 // each other, so renaming or deleting either style fails the parse rather than
 // passing the comparison.
 // ---------------------------------------------------------------------------
-test('home(6) fence: the strip above the Post a Job footer matches the footer', () => {
+// 2026-09-28 (LUX-LIST-64 #32, #41) — THE SEAM HAS NO STRIP NOW. The photo
+// nudge that sat between the scroller and the footer is gone, and the footer is
+// the posting bar (components/PostJobBar.tsx), which paints its own ground. What
+// home(6) protected still holds: nothing unstyled-for sits on that seam — a NEW
+// element there must be given its own seam decision.
+test('home(6) fence: nothing sits between the Post a Job scroller and its bar', () => {
   const post = stripComments(read('screens/PostJobScreen.tsx'));
+  assert.doesNotMatch(post, /nudgeRow/, 'the nudge strip is gone with the nudge');
 
-  const backgroundOf = (style) => {
-    const block = new RegExp(`\n  ${style}: \{([^}]*)\}`).exec(post);
-    assert.ok(block, `PostJobScreen must keep a ${style} style object`);
-    const bg = /backgroundColor: colors\.(\w+),/.exec(block[1]);
-    assert.ok(bg, `${style} must paint its ground from a palette token`);
-    return bg[1];
-  };
-
-  const strip = backgroundOf('nudgeRow');
-  const footer = backgroundOf('footer');
-  assert.equal(
-    strip,
-    footer,
-    `the strip above the pinned footer paints colors.${strip} while the footer paints ` +
-      `colors.${footer} — they share an edge and must resolve to one token`
-  );
-  assert.equal(footer, 'surface', 'that shared token is `surface`, the pinned-chrome ground');
-
-  // It really is the only thing between the scroller and the footer — if
-  // something else is introduced there, this fence has to be revisited rather
-  // than silently continuing to guard the wrong element.
   const flat = flatten(read('screens/PostJobScreen.tsx'));
-  // home(7) took the inline clearance override off this footer, so it is a
-  // bare `style={styles.footer}` now. If an inline array comes back, this
-  // returns -1 and the assertion below says so rather than silently scanning
-  // the wrong region.
-  const footerAt = flat.indexOf('<View style={styles.footer');
-  assert.ok(footerAt > 0, 'the pinned footer must still follow the scroller');
-  // The LAST scroller to close before the footer — the screen nests horizontal
+  const barAt = flat.indexOf('<PostJobBar');
+  assert.ok(barAt > 0, 'the posting bar must still follow the scroller');
+  // The LAST scroller to close before the bar — the screen nests horizontal
   // scrollers inside its step content, so the first `</ScrollView>` is not the
   // main one.
-  const scrollEnd = flat.lastIndexOf('</ScrollView>', footerAt);
-  assert.notEqual(scrollEnd, -1, 'the footer must still sit below a scroller');
-  const between = flat.slice(scrollEnd, footerAt);
-  assert.match(between, /styles\.nudgeRow/, 'the nudge is the strip this fence is about');
+  const scrollEnd = flat.lastIndexOf('</ScrollView>', barAt);
+  assert.notEqual(scrollEnd, -1, 'the bar must still sit below a scroller');
+  const between = flat.slice(scrollEnd, barAt);
   assert.deepEqual(
     [...between.matchAll(/style=\{styles\.(\w+)\}/g)].map((m) => m[1]),
-    ['nudgeRow'],
-    'a NEW element between the scroller and the footer must be given its own seam decision'
+    [],
+    'a NEW element between the scroller and the bar must be given its own seam decision'
   );
+  // The bar's ground is its own palette role, in both themes.
+  assert.match(stripComments(read('components/PostJobBar.tsx')), /backgroundColor: colors\.barGround,/);
 });
 
 // ---------------------------------------------------------------------------
@@ -1773,10 +1803,15 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
     /createButtonDark: \{ backgroundColor: colors\.postPillGreen, borderColor: 'transparent', \}/,
     "the dark control declares NO ring — 'transparent', so no geometry forks with it"
   );
+  // 2026-09-27 (the Lux remake, the operator's Home picture): the Post-a-job
+  // pill is COLOURED AS THE SYSTEM CTA — the one mint, `primary` — while the
+  // bar's [ + ] keeps the green it was drawn in (the bar is frozen, ruling 1).
+  // The two controls part company here by ruling; the pill still declares no
+  // ring the same way.
   assert.match(
     flatten(read('screens/HomeScreen.tsx')),
-    /heroButtonDark: \{ backgroundColor: colors\.postPillGreen, borderColor: 'transparent' \}/,
-    'and it is the same spelling the dark Post-a-job pill uses, which is the control it matches'
+    /heroButtonDark: \{ backgroundColor: colors\.primary, borderColor: 'transparent' \}/,
+    'the dark pill is the system CTA and declares no ring'
   );
   // RUN H2 — THE COLOURS FORK PER THEME AGAIN AND THE GEOMETRY DOES NOT, which
   // is the split the parity pass was actually protecting. What these
@@ -1857,7 +1892,7 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   // still does not fork.
   assert.match(
     flat,
-    /const halo = glow\.halo\( withAlpha\( glowColorDial \?\? \(isDark \? colors\.postPillGreen : colors\.gold\), glowDial \?\? navBar\.createGlowAlpha \) \);/,
+    /const halo = glow\.halo\( withAlpha\( glowColorDial \?\? \(isDark \? colors\.postPillGreen : colors\.mark\), glowDial \?\? navBar\.createGlowAlpha \) \);/,
     "the control lifts with a glow the colour of its own fill, built from the shared glow shape"
   );
   const glowAlphaMatch = /createGlowAlpha: ([\d.]+),/.exec(stripComments(read('ui/tokens.ts')));
@@ -2177,8 +2212,11 @@ test('RUN H2 fence: the atmosphere docblock is re-derived from the file it mount
   // WxH is the stale-number failure wearing a new hat. Scoped to widths of
   // 1000 and up so the docblock can still name the 393x852 viewport the
   // harness renders at, which is a screen and not this raster.
+  // 2026-09-27 (the Lux remake, ruling 9): the layer mounts NO raster — it
+  // draws the Lux gradient — so its docblock may not describe one; a size
+  // that appears there is still held to the file it would be describing.
   const sizes = [...layer.matchAll(/(\d{4,5})x(\d{3,5})/g)];
-  assert.ok(sizes.length > 0, 'the docblock must state the raster it describes');
+  assert.doesNotMatch(layer, /require\(/, 'the layer mounts nothing');
   for (const hit of sizes) {
     assert.equal(
       `${hit[1]}x${hit[2]}`,
@@ -2230,10 +2268,11 @@ test('RUN H2 fence: the greeting name and the Post-a-job pill', () => {
     `the light ring is ${lightRing}, which is a GROUND — a ring in the page's own colour is invisible`
   );
   assert.match(pill[1], /minHeight: 48,/, 'the pill geometry is untouched');
+  // 2026-09-27 (the Lux remake): dark fills with the system CTA's mint.
   assert.match(
     home,
-    /heroButtonDark: \{ backgroundColor: colors\.postPillGreen, borderColor: 'transparent' \}/,
-    "dark fills with light's green and shows no ring"
+    /heroButtonDark: \{ backgroundColor: colors\.primary, borderColor: 'transparent' \}/,
+    'dark fills with the system CTA and shows no ring'
   );
   assert.doesNotMatch(
     home,
@@ -2294,7 +2333,9 @@ test('RUN H3 fence: the light [ + ] goes gold, the light pill goes cream, dark d
   // the content colour a green fill takes — the palette's `onForest`, the app's
   // cream, and the value the dark "Post a job" label is already set in.
   assert.equal(glyph[1], 'onForest', "the dark glyph is the app's cream on the pill's green");
-  assert.equal(glyph[2], 'gold', "the light glyph is the LIGHT palette's gold");
+  // 2026-09-28 (LUX-LIST-64 #47): light's gold plus left the gold; a green glyph would
+  // vanish on the green tile, so it is the white the approved light pages draw.
+  assert.equal(glyph[2], 'white', "the light glyph is the white of the approved light pages");
 
   // ---- C1, the ring -------------------------------------------------------
   const lightBranch = /createButtonLight: \{([^}]*)\}/.exec(bar);
@@ -2304,7 +2345,8 @@ test('RUN H3 fence: the light [ + ] goes gold, the light pill goes cream, dark d
     /backgroundColor: colors\.postPillGreen,/,
     'the FILL does not move — this is a glyph and a ring, which is why the gold fence stays quiet'
   );
-  assert.match(lightBranch[1], /borderColor: colors\.goldDeep,/, 'the ring follows the glyph, one shade down');
+  // 2026-09-28 (LUX-LIST-64 #47): the ring is the forest mark, no longer the gold.
+  assert.match(lightBranch[1], /borderColor: colors\.mark,/, 'the ring is the forest mark');
   assert.doesNotMatch(
     bar,
     /greetingSlateDeep/,
@@ -2410,58 +2452,63 @@ test('RUN H2 fence: the renamed sections, the unread marker and the offline dot'
     /WORKER_BAR_TABS: BottomNavTabKey\[\] = \['Home', 'Map', 'MyJobs', 'Messages', 'Profile'\]/
   );
 
-  // The unread marker: gold in dark, the reference coral in light. Never the
-  // live-state green it used to wear.
+  // The unread marker. H2 took it off the green (gold in dark, the coral in
+  // light). 2026-09-28 (LUX-LIST-64 #54) REVERSED, on the operator's approved
+  // clean list (docs/mockups/html/refs/inbox-clean-list.html, version 9): the
+  // mark is the COUNT beside the name, a 20pt round badge in the accent under
+  // its ink, and the time turns the accent with it — the reference's own. The
+  // count is counted, never made up: unread with nothing counted, the mark
+  // alone (a plain accent dot), and the number caps at 99+.
   const row = flatten(read('components/ConversationRow.tsx'));
-  assert.match(row, /dot: \{ width: 9, height: 9, borderRadius: 5, backgroundColor: colors\.gold, \}/);
-  assert.match(row, /dotLight: \{ backgroundColor: colors\.referenceCoral \}/);
-  assert.match(row, /<View style=\{\[styles\.dot, !isDark && styles\.dotLight\]\} \/>/);
-  assert.doesNotMatch(
-    row,
-    /dot: \{[^}]*colors\.emerald/,
-    'emerald is the live-state hue — an unread marker in it reads as one more status light'
-  );
+  assert.match(row, /badge: \{ minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: 10,/);
+  assert.match(row, /<View style=\{\[styles\.badge, \{ backgroundColor: colors\.emerald \}\]\}>/);
+  assert.match(row, /\{count > COUNT_CAP \? `\$\{COUNT_CAP\}\+` : count\}/);
+  assert.match(row, /const count = unread && unreadCount != null && unreadCount > 0 \? unreadCount : null;/);
+  assert.match(row, /timeUnread: \{ fontWeight: '600', color: colors\.emerald, \}/);
+  assert.doesNotMatch(row, /referenceCoral|colors\.gold/, 'the H2 gold/coral dot is retired from the row');
 
   // The coral is one value in both palettes, and it is the reference's own —
   // docs/mockups/'s manifest measures #D54C2C as the master set's only UI red.
   assert.match(read('ui/tokens.ts'), /referenceCoral: '#D54C2C'/);
 });
 
-test('RUN H2 fence: the all-services rows are cards, and the type did not move', () => {
+// 2026-09-28 (LUX-LIST-64 #13, #14) — THE CONSTANTS MOVED, THE FENCE DID NOT:
+// RUN H2's card rows (the page ground under a hairline, a mint icon tile, a
+// 19pt Ionicon, 15/600 labels, a 22 title) became sim.html's "All services"
+// list — a hairline BETWEEN rows and none around them, the service's own line
+// glyph bare at 22 (components/CategoryGlyph.tsx: the baked roller, bin and
+// drill where the operator named them), 16 labels, a 24/28 title. Each value
+// is still read from the one file and pinned.
+test('RUN H2 fence: the all-services rows are sim.html list rows, and the type is pinned', () => {
   const sheet = flatten(read('components/ServicePickerSheet.tsx'));
 
   const row = /row: \{([^}]*)\}/.exec(sheet);
   assert.ok(row, 'the sheet must keep a row style');
-  assert.match(row[1], /backgroundColor: colors\.background,/, 'the row gains a card fill');
-  assert.match(row[1], /borderWidth: 1, borderColor: colors\.border,/, 'and a hairline');
-  // The fill has to be the page ground, NOT `surface`: the row sits ON a
-  // `surface` sheet, so `surface` would be a card painted its backdrop's colour.
-  assert.doesNotMatch(
-    row[1],
-    /backgroundColor: colors\.surface/,
-    'a surface row on a surface sheet is invisible in both themes'
-  );
-
-  const tile = /rowIcon: \{([^}]*)\}/.exec(sheet);
-  assert.ok(tile, 'the sheet must keep an icon tile');
-  assert.match(tile[1], /borderWidth: 1, borderColor: colors\.mint2,/, 'the tile gains its edge');
+  // No card per row: no fill and no ring of its own — the list is the sheet's.
+  assert.doesNotMatch(row[1], /backgroundColor:/, 'a list row carries no card fill');
+  assert.doesNotMatch(row[1], /borderWidth:/, 'and no ring of its own');
   assert.match(
     sheet,
-    /<Ionicons name=\{service\.icon\} size=\{19\} color=\{colors\.emerald\} \/>/,
-    'the glyph is the brighter green in each palette'
+    /rowDivided: \{ borderTopWidth: StyleSheet\.hairlineWidth, borderTopColor: colors\.border, \}/,
+    'a hairline between rows'
   );
+  assert.match(sheet, /index > 0 && styles\.rowDivided/, 'and never above the first');
 
-  // TYPE AND RHYTHM ARE UNTOUCHED — this commit promised no size, weight,
-  // family or spacing change anywhere on this surface.
-  assert.match(sheet, /rowLabel: \{ flex: 1, fontSize: 15, fontWeight: '600', color: colors\.text, \}/);
+  assert.doesNotMatch(sheet, /rowIcon:/, 'the icon tile is gone with the cards');
   assert.match(
     sheet,
-    /title: \{ fontFamily: fonts\.display, fontSize: 22, fontWeight: '700', color: colors\.ink, \}/
+    /<CategoryGlyph name=\{service\.icon\} size=\{22\} color=\{colors\.emerald\} \/>/,
+    'the glyph is the service\'s own, bare, the brighter green in each palette'
   );
-  assert.match(sheet, /subtitle: \{ fontSize: 13, color: colors\.textMuted, \}/);
+
+  assert.match(sheet, /rowLabel: \{ flex: 1, fontSize: 16, color: colors\.ink, \}/);
+  assert.match(
+    sheet,
+    /title: \{ fontFamily: fonts\.display, fontSize: 24, lineHeight: 28, fontWeight: '700', color: colors\.ink, \}/
+  );
+  assert.match(sheet, /subtitle: \{ fontSize: 14, color: colors\.textMuted, \}/);
   assert.match(
     row[1],
-    /gap: spacing\.md, minHeight: 56, paddingHorizontal: spacing\.sm, paddingVertical: spacing\.sm,/
+    /gap: spacing\.md \+ 2, minHeight: 48, paddingHorizontal: spacing\.xs, paddingVertical: spacing\.md,/
   );
-  assert.match(tile[1], /width: 40, height: 40,/);
 });

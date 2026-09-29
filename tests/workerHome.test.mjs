@@ -101,18 +101,28 @@ test('the service row mirrors customer Home and lands on WorkerResults seeded', 
       /serviceRows:|serviceRow:|serviceChip:|compactServiceChip:|goldOutlineChip:|otherChip:/,
       `${path} must not keep a chip-row style — an entry that draws nothing is a lie`
     );
-    // Each screen's tap still lands on ITS OWN existing search, and "Other"
-    // still opens ITS OWN sheet — the row hands both taps back.
+    // Each screen's tap lands on ITS OWN action, and "Other" still opens ITS
+    // OWN sheet — the row hands both taps back. 2026-09-26 (the refresh,
+    // audit M-12): customer Home's action is a job draft in that category
+    // (Home is posting); worker Home's is still its search.
+    const action = path === 'screens/HomeScreen.tsx' ? 'startCategoryDraft' : 'searchCategory';
     const element = /<ServiceTileRow\b([\s\S]*?)\/>/.exec(source)?.[1];
     assert.ok(element, `${path}: the row element must close`);
-    assert.match(element, /onSelect=\{searchCategory\}/, `${path}: a tile runs the screen's search`);
+    assert.match(element, new RegExp(`onSelect=\\{${action}\\}`), `${path}: a tile runs the screen's ${action}`);
     assert.match(element, /onOther=\{\(\) => setMoreOpen\(true\)\}/, `${path}: Other opens the screen's sheet`);
     assert.match(source, /<ServicePickerSheet/);
-    assert.match(source, /services=\{MORE_SERVICES\}/);
+    // 2026-09-28 (LUX-LIST-64 #13): the customer Home's sheet is "All services"
+    // for real — every tile in the row's order, then Other (lib/skillCategories
+    // ALL_SERVICES), behind both "View all →" and the Other tile; worker Home's
+    // sheet keeps the eighteen.
     assert.match(
       source,
-      /onSelect=\{\(categoryKey\) => \{\s*setMoreOpen\(false\);\s*searchCategory\(categoryKey\);\s*\}\}/,
-      `${path}: the sheet's rows run the same search a tile does`
+      path === 'screens/HomeScreen.tsx' ? /services=\{ALL_SERVICES\}/ : /services=\{MORE_SERVICES\}/
+    );
+    assert.match(
+      source,
+      new RegExp(`onSelect=\\{\\(categoryKey\\) => \\{\\s*setMoreOpen\\(false\\);\\s*${action}\\(categoryKey\\);\\s*\\}\\}`),
+      `${path}: the sheet's rows run the same ${action} a tile does`
     );
   }
   const customerRow = /<ServiceTileRow\b([\s\S]*?)\/>/.exec(customer)[1];
@@ -163,17 +173,14 @@ test('the service row mirrors customer Home and lands on WorkerResults seeded', 
   // The tile draws the short label and announces the full name.
   assert.match(row, /\{service\.tileLabel\}/);
   assert.match(row, /accessibilityLabel=\{service\.label\}/);
-  // The heading is the customer Home's own section-title rung: re-derive it
-  // from the screen's ladder and compare, so the two cannot drift.
-  const ladder = customer;
-  const toDevice = /const MASTER_TO_DEVICE = (\d+) \/ (\d+);/.exec(ladder);
-  const capRatio = Number(/const GEORGIA_CAP_RATIO = ([\d.]+);/.exec(ladder)?.[1]);
-  const sectionCap = Number(/sectionTitle: (\d+),/.exec(ladder)?.[1]);
-  assert.ok(toDevice && capRatio && sectionCap, 'the customer Home ladder must stay readable');
-  const rung = Math.round((sectionCap * (Number(toDevice[1]) / Number(toDevice[2]))) / capRatio);
-  assert.equal(Number(/const HEADING_FONT_SIZE = (\d+);/.exec(row)?.[1]), rung);
-  assert.match(customer, /sectionTitle: \{\s*fontFamily: fonts\.display,\s*fontSize: serifSize\(MASTER_SERIF_CAPS\.sectionTitle\),\s*fontWeight: '700',\s*color: colors\.ink,/);
-  assert.match(row, /heading: \{\s*fontFamily: fonts\.display,\s*fontSize: HEADING_FONT_SIZE,\s*fontWeight: '700',\s*color: colors\.ink,/);
+  // The heading is the customer Home's own section heading, and both are the
+  // ONE eyebrow (2026-09-27, the Lux remake, ruling 4: every small section
+  // heading is the Lux eyebrow — gold in dark, emerald in light through the
+  // `eyebrow` role — one measure, lib/theme.ts EYEBROW_TYPE), so the two
+  // cannot drift.
+  assert.match(customer, /sectionTitle: \{\s*\.\.\.EYEBROW_TYPE,\s*(?:\/\/[^\n]*\s*)?color: colors\.eyebrowGold,/ /* 2026-09-29 (LUX-LIST-2 #4): Home's section titles are kept-gold labels */);
+  // 2026-09-29 (LUX-LIST-2 #4): POPULAR SERVICES is one of the 25 kept-gold labels.
+  assert.match(row, /heading: \{\s*\.\.\.EYEBROW_TYPE,\s*(?:\/\/[^\n]*\s*)?color: colors\.eyebrowGold,/);
 
   // 3. THE DISPATCH: the existing WorkerResults surface with a category seed —
   //    no new screen — and the seed is allow-listed against the category map,
@@ -190,13 +197,18 @@ test('the service row mirrors customer Home and lands on WorkerResults seeded', 
 test('the toggle is phase53 accepting_work through the existing profile path', () => {
   assert.match(code, /profile\?\.accepting_work \?\? true/);
   assert.match(code, /updateProfile\(user\.id, \{ accepting_work: next \}\)/);
-  // The status words are operator-authored 4D-6 copy rendered from the SAME
-  // availability fact. (The device-local presence hook was deleted in Batch F.)
-  assert.match(code, /\{accepting \? 'Online' : 'Offline'\}/);
+  // The status words render the SAME availability fact. 2026-09-26 (the
+  // refresh, audit M-13): 4D-6's "Online"/"Offline" and "Visible to
+  // customers" promised a consequence the flag never had — accepting_work is
+  // shown on the profile and never hides anyone — so the card now says what
+  // Services & availability says. (The device-local presence hook was
+  // deleted in Batch F.)
+  assert.match(code, /\{accepting \? 'Open' : 'Paused'\}/);
   assert.match(
     code,
-    /\{accepting \? 'Visible to customers' : 'Not visible to customers'\}/
+    /\{accepting \? 'Shown as available on your profile' : 'Offers still reach you'\}/
   );
+  assert.doesNotMatch(code, /Visible to customers|Not visible to customers|'Online'|'Offline'/, 'the untrue words stay gone');
   // The toggle keeps its accessible name — the heading it echoed is gone.
   assert.match(screen, /accessibilityLabel="Taking new work"/);
 });
@@ -209,12 +221,17 @@ test('every figure derives from an existing source, none is invented', () => {
   // The nearby check never prompts on mount — permission is only read.
   assert.match(code, /getForegroundPermissionsAsync\(\)/);
   // No placeholder marketplace data: the skill pill degrades to an honest
-  // instruction, not a fake count.
-  assert.match(screen, /Add skills to see matches/);
+  // instruction, not a fake count — and since 2026-09-26 (the refresh, audit
+  // M-29) that instruction opens the profile editor where skills are picked.
+  assert.match(screen, /: 'Add your skills';/);
+  assert.match(code, /: navigateAcrossTabs\('Profile', 'ProfileMain', \{ edit: true \}\)/);
 });
 
 test('mode changes only through switchMode(), and layout follows the tab rules', () => {
-  assert.match(code, /void switchMode\('customer'\)/);
+  // 2026-09-28 (LUX-LIST-64 #61): Worker Home no longer changes mode at all —
+  // its "Switch to Customer" pill left, and the way back is Profile's mode row,
+  // which confirms through switchMode() (tests/emeraldFences home(17)).
+  assert.doesNotMatch(code, /switchMode|useMode\(/);
   assert.doesNotMatch(code, /useModeTransition/);
   assert.match(code, /edges=\{\['top'\]\}/);
   assert.match(screen, /paddingBottom: 0/);
@@ -252,17 +269,21 @@ test('the hero headline and subtitle render, second sentence on the GREEN accent
   assert.doesNotMatch(code, /ImageBackground/);
 });
 
-test('the summary card: surface fill, gold hairline, divided halves, chips inside', () => {
-  // Surface + gold border — the e195012 construction. Nothing on this
-  // screen may fill with forest at all.
-  assert.match(code, /summaryCard: \{[^}]*borderColor: colors\.gold/s);
+test('the summary card: surface fill, card-rim hairline, divided halves, chips inside', () => {
+  // Surface + hairline — the e195012 construction. Nothing on this
+  // screen may fill with forest at all. 2026-09-27 (the Lux remake): the
+  // hairline is the card rim (`colors.border`), never the gold line — gold
+  // is for labels, eyebrows, money and the name in dark (ruling 4).
+  assert.match(code, /summaryCard: \{[^}]*borderColor: colors\.border/s);
   assert.match(code, /summaryCard: \{[^}]*backgroundColor: colors\.surface/s);
   assert.doesNotMatch(code, /backgroundColor: colors\.forest/);
   // The money figure is the green accent, the section label gold — both on
   // surface, both palette reads; money still formats only through
   // formatBudget().
-  assert.match(code, /earningsAmount: \{[^}]*color: colors\.emerald/s);
-  assert.match(code, /summaryEyebrow: \{[^}]*color: colors\.gold/s);
+  // 2026-09-28 (LUX-LIST-64 #40, #48): money is white (`money`); the label reads
+  // the eyebrow role (gold in dark, the antique gold #86641A in light).
+  assert.match(code, /earningsAmount: \{[^}]*color: colors\.money/s);
+  assert.match(code, /summaryEyebrow: \{[^}]*color: colors\.eyebrow/s);
   assert.match(code, /formatBudget\(potential\.cents\)/);
   // The divided row: two halves split by a vertical divider.
   const order = ['styles.summaryRow', 'styles.availabilityHalf', 'styles.summaryDivider', 'styles.earningsHalf']
@@ -296,10 +317,11 @@ test('the summary card: surface fill, gold hairline, divided halves, chips insid
   assert.match(screen, /within \$\{NEARBY_RADIUS_MILES\} miles|within \$\{NEARBY_RADIUS_MILES\}/);
 });
 
-test('the section heading reads Available Jobs with its feed dot; retired copy stays gone', () => {
+test('the section heading reads Available Jobs, with no dot; retired copy stays gone', () => {
   assert.match(screen, /<Text style=\{styles\.sectionTitle\}>Available Jobs<\/Text>/);
-  // The dot marks the jobs FEED and reads from the palette.
-  assert.match(code, /feedDot: \{[^}]*backgroundColor: colors\.emerald/s);
+  // 2026-09-28 (LUX-LIST-64 #51): the feed dot mockup 43 put before the heading
+  // is gone, style and all — the heading stands alone.
+  assert.doesNotMatch(code, /feedDot/);
   // 4D-6 removed the "Taking new work" HEADING and its explanatory
   // paragraph; neither may come back. The dot's caption is a different
   // thing — master 43 draws it as "Not visible to customers", so the guard
@@ -319,11 +341,12 @@ test('the section heading reads Available Jobs with its feed dot; retired copy s
 
 test('4D-6 left column: shared eyebrow, serif status word beside the toggle, pulse dot row', async () => {
   // One eyebrow style for both columns: 11/700/1.2, gold.
-  assert.match(screen, />AVAILABLE NOW<\/Text>/);
+  assert.match(screen, />TAKING NEW WORK<\/Text>/);
   assert.match(screen, />NEARBY DEMAND<\/Text>/);
   assert.match(
     code,
-    /summaryEyebrow: \{\s*fontSize: 11,\s*fontWeight: '700',\s*letterSpacing: 1\.2,\s*color: colors\.gold,\s*\}/
+    // 2026-09-28 (LUX-LIST-64 #48): the eyebrow role, gold in dark and #86641A in light.
+    /summaryEyebrow: \{\s*fontSize: 11,\s*fontWeight: '700',\s*letterSpacing: 1\.2,\s*color: colors\.eyebrow,\s*\}/
   );
   // Status word: serif, 30pt, primary ink — sharing one vertically centred
   // row with the SAME control contract (handler, state source, disabled gate
@@ -352,28 +375,38 @@ test('4D-6 left column: shared eyebrow, serif status word beside the toggle, pul
   // The continue-path floor is built in: 30pt auto-fits no lower than
   // 0.87 × 30 ≈ 26pt before the row could ever clip.
   assert.match(code, /adjustsFontSizeToFit\s*minimumFontScale=\{0\.87\}/);
-  // The dot row: the shared PulseDot, green when available, red when not —
-  // both palette reads — and PulseDot itself honours reduced motion.
+  // 2026-09-28 (LUX-LIST-64 #50): "Paused" is SET to fit — 24, 0.8 × 30, the
+  // 91pt the column leaves beside the 52pt toggle — so the word is whole
+  // without the platform's shrink (which web never runs, and a larger text size
+  // outgrew on the operator's phone), and it never scales past the toggle.
+  assert.match(code, /style=\{\[styles\.statusWord, !accepting && styles\.statusWordPaused\]\}/);
+  assert.match(code, /statusWordPaused: \{ fontSize: 24 \}/);
+  // The dot row: green when available, red when not — both palette reads.
   //
   // RUN H2 moved the OFFLINE half from `danger` to `referenceCoral`. It is the
   // same assertion with the recorded value updated, not a relaxed one: master
   // 43 draws this dot in #D54C2C — the master set's only UI red — and `danger`
   // was rendering it as a terracotta in light and a different red in dark. Both
   // branches are still palette reads and neither may be a hex here.
+  //
+  // 2026-09-28 (LUX-LIST-64 #50): the dot is the shared LiveDot — paused, it
+  // takes the Sonar (a ring travelling out every 2 s); open, it holds still —
+  // and LiveDot itself honours reduced motion: the still dot, nothing moving.
   assert.match(
     code,
-    /<PulseDot color=\{accepting \? colors\.emerald : colors\.referenceCoral\} \/>/
+    /<LiveDot\s+color=\{accepting \? colors\.emerald : colors\.referenceCoral\}\s+size=\{10\}\s+motion=\{accepting \? 'still' : 'sonar'\}\s+\/>/
   );
-  const pulseDot = stripComments(await read('components/PulseDot.tsx'));
-  assert.match(pulseDot, /useReducedMotion\(\)/);
-  assert.match(pulseDot, /if \(reducedMotion\) \{\s*pulse\.setValue\(0\);\s*return;/);
+  const liveDot = stripComments(await read('components/LiveDot.tsx'));
+  assert.match(liveDot, /useReducedMotion\(\)/);
+  assert.match(liveDot, /const moving = motion !== 'still' && reducedMotion === false;/);
   assert.match(code, /statusCaption: \{ fontSize: 13, color: colors\.textMuted \}/);
 });
 
 test('4D-6 right column: serif emerald amount via formatBudget, "across N jobs"', () => {
   assert.match(
     code,
-    /earningsAmount: \{\s*fontFamily: fonts\.display,\s*fontSize: 30,\s*fontWeight: '700',\s*color: colors\.emerald,\s*\}/
+    // 2026-09-28 (LUX-LIST-64 #40): money is white — the `money` role.
+    /earningsAmount: \{\s*fontFamily: fonts\.display,\s*fontSize: 30,\s*fontWeight: '700',\s*color: colors\.money,\s*\}/
   );
   assert.match(code, /formatBudget\(potential\.cents\)/);
   // "open" dropped from the caption; the count stays dynamic and singular
@@ -388,7 +421,8 @@ test('4D-6 right column: serif emerald amount via formatBudget, "across N jobs"'
 test('4D-6 card geometry: padding 14, 14pt row gap, 1pt divider at 14pt margins, 6pt columns', () => {
   assert.match(
     code,
-    /summaryCard: \{\s*padding: layout\.cardPadding,\s*borderWidth: 1,\s*borderColor: colors\.gold,\s*backgroundColor: colors\.surface,/
+    // 2026-09-27 (the Lux remake): the rim is `colors.border`, not gold.
+    /summaryCard: \{\s*padding: layout\.cardPadding,\s*borderWidth: 1,\s*borderColor: colors\.border,\s*backgroundColor: colors\.surface,/
   );
   // RUN T2 (C2): the row gap and the corner are now the operator's, so they
   // are spelled at the wearer instead of in the stylesheet — ONCE, as the
@@ -421,7 +455,7 @@ test('4D-6 pills: 40pt capsules, 12pt gap, two-tone counts, 44pt touch kept by s
   // 40pt visual height + 2pt slop each side = the 44pt floor (CLAUDE.md).
   assert.match(code, /hitSlop=\{\{ top: 2, bottom: 2 \}\}/);
   // The honest degraded labels survive; no count is ever invented.
-  assert.match(screen, /Add skills to see matches/);
+  assert.match(screen, /: 'Add your skills';/);
   assert.match(screen, /Enable location/);
 });
 
@@ -697,6 +731,10 @@ test('T7: the worker Home stack keeps its routes, in order, minus BrowseJobs', (
   ].map((m) => m[1]);
   assert.deepEqual(names, [
     'WorkerHome',
+    // 2026-09-26 (the refresh, audit M-24): the feed, from the bell.
+    'Notifications',
+    // 2026-09-29 (LUX-LIST-2 #8): the feed's header gear opens its settings.
+    'NotificationSettings',
     'WorkerResults',
     'JobDetail',
     'SubmitBid',

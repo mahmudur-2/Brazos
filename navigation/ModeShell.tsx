@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useMode } from '../modes';
 import { ShellGroundProvider, useShellGroundState } from '../lib/shellGround';
-import { useThemeColors } from '../lib/theme';
+import { screenGround, useThemeColors } from '../lib/theme';
 import { DesignStudioPanel } from '../components/DesignStudioPanel';
 import { ModeTreeLayoutSignal } from '../components/ModeTransitionOverlay';
 import { designStudioAvailable } from '../lib/designStudioGate';
@@ -93,12 +93,16 @@ import { WorkerRoot } from './WorkerRoot';
  */
 export function ModeShell() {
   const { mode, treeMode, ready, armResolution } = useMode();
-  const { palette } = useThemeColors();
+  const { palette, isDark } = useThemeColors();
   // Declared by whichever screen is focused; null until one does, and null
   // again the moment it blurs — so a screen that says nothing leaves this
   // exactly where it has always been.
   const { ground, setGround } = useShellGroundState();
   const treeGround = ground ? palette[ground] : palette.background;
+  // 2026-09-27 (the Lux remake, ruling 9): in dark the shell paints the Lux
+  // gradient over that flat ground, so the bar row and any screen that lets
+  // the shell show through sit on the one ground the screens draw themselves.
+  const luxGround = screenGround(palette, isDark);
 
   // Resolution starts here rather than when the session appears, because this
   // component mounts only after auth + legal + setup have all resolved — and
@@ -110,7 +114,7 @@ export function ModeShell() {
 
   if (!ready) {
     return (
-      <View style={[styles.loader, { backgroundColor: palette.background }]}>
+      <View style={[styles.loader, { backgroundColor: palette.background }, luxGround]}>
         <ActivityIndicator size="large" color={palette.primary} />
       </View>
     );
@@ -120,7 +124,7 @@ export function ModeShell() {
   // navigators unmount before the incoming ones exist. Ground only — the
   // switch overlay covers this frame entirely.
   if (treeMode !== mode) {
-    return <View style={[styles.tree, { backgroundColor: palette.background }]} />;
+    return <View style={[styles.tree, { backgroundColor: palette.background }, luxGround]} />;
   }
 
   // The provider sits OUTSIDE the painted View on purpose: the View is the
@@ -128,7 +132,7 @@ export function ModeShell() {
   // would need a second node to read the value it had just set.
   return (
     <ShellGroundProvider value={setGround}>
-      <View style={[styles.tree, { backgroundColor: treeGround }]}>
+      <View style={[styles.tree, { backgroundColor: treeGround }, luxGround]}>
         {treeMode === 'worker' ? <WorkerRoot /> : <CustomerRoot />}
         {/* 2026-09-21 — THE PAINT SIGNAL the mode switch's reveal waits for:
             keyed by the tree, so it lays out in the same pass as the incoming

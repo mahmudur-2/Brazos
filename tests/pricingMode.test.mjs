@@ -157,24 +157,43 @@ test('a4 · the draft round-trips the mode', () => {
   assert.match(draft, /JSON\.stringify\(draft\)/);
 });
 
-test('a4 · the dialog asks the question and hands both answers back', () => {
+test('M-7 · the review step asks the posting question; the dialog edits the amount for that mode', () => {
+  // 2026-09-26 (the refresh, audit M-7): the question moved out of the budget
+  // editor, two layers down, onto the review step above the amount.
+  // 2026-09-28 (LUX-LIST-64 #36, #37): the question and its amount are ONE
+  // component on the step — components/PriceDropdown.tsx — the EXISTING switch
+  // (now with its two glyphs) directly above the field it decides.
+  const drop = flatten(read('components/PriceDropdown.tsx'));
   const dialog = flatten(read('components/EditBudgetDialog.tsx'));
-  assert.match(dialog, /import \{ SegmentedControl \} from '\.\/SegmentedControl';/);
-  // The choice is the EXISTING control in its existing dress — no new one, and
-  // no new style: it sits in the same `field` wrapper the amount row uses.
+  assert.match(drop, /import \{ SegmentedControl \} from '\.\/SegmentedControl';/);
   assert.match(
-    dialog,
-    /<SegmentedControl<PricingMode> options=\{\[\.\.\.PRICING_MODE_OPTIONS\]\} value=\{draftMode\} onChange=\{setDraftMode\} palette=\{palette\} \/>/
+    drop,
+    /<SegmentedControl<PricingMode> options=\{PRICING_MODE_OPTIONS\.map\(\(option\) => \(\{ \.\.\.option, icon: MODE_ICONS\[option\.value\] \}\)\)\} value=\{mode\}/
   );
+  const control = drop.indexOf('<SegmentedControl<PricingMode>');
+  const amount = drop.indexOf('{priceFieldLabel(mode)}');
+  assert.ok(control > 0 && amount > control, 'the question sits above the amount');
+  // #37 — people for bids, a price tag for a set price; filled while chosen.
+  assert.match(drop, /open_bids: \{ on: 'people', off: 'people-outline' \}/);
+  assert.match(drop, /posted_price: \{ on: 'pricetag', off: 'pricetag-outline' \}/);
+  // The line under the amount follows the mode — and a set price that is still
+  // missing says so; with one, the module's own sentence.
+  assert.match(drop, /\? copy\.message : 'Pick a price to publish\.'/);
+
+  // The dialog no longer asks it, and never changes the mode it is handed.
+  assert.ok(!dialog.includes('SegmentedControl'), 'one place asks the question');
+  assert.ok(!dialog.includes('PRICING_MODE_OPTIONS'));
+  assert.ok(!dialog.includes('draftMode'), 'the dialog holds no mode of its own');
   // Every string comes from the shared module; the dialog writes none of them.
-  assert.match(dialog, /const copy = budgetEditorCopy\(draftMode\);/);
+  assert.match(dialog, /const copy = budgetEditorCopy\(mode\);/);
   assert.ok(
     !dialog.includes('Set the maximum amount workers can bid up to'),
     'the copy lives in lib/pricingMode.ts, not restated here'
   );
-  // The mode is a DRAFT: Save hands both halves back, Cancel discards both.
-  assert.match(dialog, /onSave\(draft\.trim\(\), draftMode\);/);
-  assert.match(dialog, /setDraft\(value\); setDraftMode\(mode\); setProblem\(null\);/);
+  // Save hands back the amount with the mode it was typed for; Cancel
+  // discards the amount.
+  assert.match(dialog, /onSave\(draft\.trim\(\), mode\);/);
+  assert.match(dialog, /setDraft\(value\); setProblem\(null\);/);
   // A posted price cannot be blank, and it says so in validateOfferAmount's
   // own sentence rather than a second one for the same fact.
   assert.match(
@@ -189,10 +208,9 @@ test('a4 · the dialog asks the question and hands both answers back', () => {
 test('a4 · the wizard sends the mode and writes one figure to the right column', () => {
   const screen = flatten(read('screens/PostJobScreen.tsx'));
   assert.match(screen, /mode=\{pricingMode\}/);
-  assert.match(
-    screen,
-    /onSave=\{\(next, mode\) => \{ setBudgetMax\(next\); setPricingMode\(mode\); setEditingBudget\(false\); \}\}/
-  );
+  // 2026-09-28 (LUX-LIST-64 #36): both halves of the one decision are written
+  // by the price field itself — the mode by its switch, the amount by its list.
+  assert.match(screen, /onModeChange=\{setPricingMode\} onAmountChange=\{setBudgetMax\}/);
 
   // ONE typed figure, written to whichever column the mode means — and the
   // range columns are both null for a posted price, which is what the server's
@@ -201,47 +219,57 @@ test('a4 · the wizard sends the mode and writes one figure to the right column'
     screen,
     /budgetCents: posted \? budgetMaxCents : null, budgetMinCents: null, budgetMaxCents: posted \? null : budgetMaxCents, pricingMode,/
   );
-  // Refused in the client before the RPC, naming the way out.
+  // Refused in the client before the RPC, naming the way out — and Publish
+  // itself waits for the price first (#36), so this is the written backstop.
   assert.match(
     screen,
-    /A posted price needs an amount\. Open Edit budget and enter one, or switch to Ask for bids\./
+    /A posted price needs an amount\. Choose one in Your price, or switch to Ask for bids\./
   );
+  assert.match(screen, /const priceMissing = !isHiring && postedPrice && validMax == null;/);
 
-  // The four labels the mode now decides.
-  assert.match(screen, /<FieldLabel palette=\{emeraldColors\}>\{priceFieldLabel\(pricingMode\)\}<\/FieldLabel>/);
-  assert.match(screen, /\{isHiring \? 'Offer' : priceRowLabel\(pricingMode\)\}/);
-  assert.match(screen, /\{priceRowLabel\(pricingModeFrom\(publishedJob\.pricing_mode\)\)\}/);
-  assert.match(screen, /validMax != null \? formatBudget\(validMax\) : postedPrice \? 'Price required' : 'No maximum'/);
+  // The labels the mode decides.
+  assert.match(flatten(read('components/PriceDropdown.tsx')), /<FieldLabel palette=\{palette\} tone="gold">\{priceFieldLabel\(mode\)\}<\/FieldLabel>/ /* 2026-09-29 (LUX-LIST-2 #4) */);
+  assert.match(screen, /budgetLabel=\{isHiring \? 'Offer' : priceRowLabel\(pricingMode\)\}/);
+  // The live page reads the mode back off the SAVED row.
+  assert.match(flatten(read('components/JobLivePage.tsx')), /const mode = pricingModeFrom\(job\.pricing_mode\);/);
+  assert.match(screen, /const summaryEmpty = isHiring \? 'Required before sending' : postedPrice \? 'Choose a price' : 'No maximum';/);
 
   // THE HIRE FLOW IS UNTOUCHED: a direct offer is one negotiated amount and
   // has no mode, so the posted-price guard cannot fire on it.
   assert.match(screen, /if \(!isHiring && posted &&/);
 });
 
-test('a4 · the money walk’s selectors are byte-identical in the default state', () => {
+test('a4 · the money walk’s selectors are the ones the app renders, in the default state', () => {
   const screen = read('screens/PostJobScreen.tsx');
+  const drop = read('components/PriceDropdown.tsx');
+  const live = read('components/JobLivePage.tsx');
   const modes = read('lib/pricingMode.ts');
 
   // Each of these is still the whole text or label of the element
   // .maestro/money-walk.yml finds, and the walk runs entirely in open bids.
-  for (const selector of [
-    'accessibilityLabel="Edit budget"',
-    'Publish',
-    'Back to Home',
-    'View job and bids',
+  // 2026-09-28 (LUX-LIST-64 #36, #42): the price field ("Edit budget") and its
+  // list's "Enter your own amount" and Done live in components/PriceDropdown.tsx;
+  // the live page's two actions in components/JobLivePage.tsx.
+  for (const [source, selector] of [
+    [drop, 'accessibilityLabel="Edit budget"'],
+    [drop, "'Enter your own amount'"],
+    [drop, 'accessibilityLabel="Done"'],
+    [screen, "'Publish'"],
+    [live, "'Back to Home'"],
+    [live, "'View job and bids'"],
+    [live, 'Your job is live.'],
   ]) {
-    assert.ok(screen.includes(selector), `${selector} is an E2E selector and must not move`);
+    assert.ok(source.includes(selector), `${selector} is an E2E selector and must not move`);
   }
   assert.ok(modes.includes("fieldLabel: 'Maximum budget in dollars'"), 'the field the walk types into');
-  assert.ok(modes.includes("title: 'Edit Budget'"), 'the title the walk and the harness wait on');
+  assert.match(drop, /accessibilityLabel=\{copy\.fieldLabel\}/, 'the $ entry carries it');
 
   // …and neither segment label shadows one of them.
   const walkStrings = [
     'Edit budget',
-    'Edit Budget',
+    'Enter your own amount',
     'Maximum budget in dollars',
-    'Save',
-    'Cancel',
+    'Done',
     'Publish',
     'STEP 4 OF 4',
     'Your job is live.',
@@ -254,11 +282,13 @@ test('a4 · the money walk’s selectors are byte-identical in the default state
     assert.ok(!walkStrings.includes(label), `the segment label ${label} must not shadow a selector`);
   }
 
-  // The flow itself is untouched — no selector was added to it for this run.
+  // The flow opens the field, picks "Enter your own amount", types, taps Done.
   const walk = read('.maestro/money-walk.yml');
   assert.ok(!walk.includes('Ask for bids') && !walk.includes('Set a price'));
-  assert.match(walk, /- tapOn: "Edit budget"/);
-  assert.match(walk, /- tapOn: "Maximum budget in dollars"/);
+  assert.match(
+    walk,
+    /- tapOn: "Edit budget"\n- tapOn: "Enter your own amount"\n- tapOn: "Maximum budget in dollars"\n- inputText: "50"\n- hideKeyboard:\n {4}optional: true\n- tapOn: "Done"\n- tapOn: "Publish"/
+  );
 });
 
 test('a4 · the worker side, the offer projection and the funnel are untouched', () => {

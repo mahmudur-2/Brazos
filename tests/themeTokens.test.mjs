@@ -183,7 +183,9 @@ test('ui/tokens light and dark carry identical key sets, light === colors', asyn
   // them; content on a forest fill is the cream ink in dark; and surfaces
   // stay darker than their content.
   assert.notEqual(dark.forest, dark.gold, 'v2: forest is green, gold is metal — never re-merged');
-  assert.equal(dark.onForest, dark.ink, 'cream ink reads on the deep-green fill');
+  // 2026-09-26 (the refresh): Emerald Lux Glass — forest is the Lux mint CTA, and
+  // the content on it is the Lux dark ink, not the cream.
+  assert.equal(dark.onForest, '#062018', 'the Lux dark ink reads on the mint fill');
   assert.notEqual(dark.bg, light.bg);
   assert.notEqual(dark.surface, light.surface);
 });
@@ -262,11 +264,22 @@ const HERO_FONT_FAMILY = /^fonts\.displayHero\b/;
  * docs/mockups/html/lux/signin-phone-ship-light.html draws the same
  * "Sign in to Brazos" in the same Georgia 34/38.
  */
+/*
+ * 2026-09-28 — THE POSTING FLOW'S SITES, BY THE OPERATOR'S LIST (LUX-LIST-64
+ * #38, #42): the job's own title where the flow shows it whole — the review
+ * summary's title (refs/job-summary.html `.title`, Georgia 25) and the
+ * published card's (refs/publish-moment.html `.jt`, Georgia 21) — and the live
+ * page's headline, "Your job is live." (`.lv-title`, Georgia 32), which is the
+ * hero headline of a screen like the four above. Same face, still no file, no
+ * loader; a naming anywhere else still fails here.
+ */
 const HERO_SITES = new Map([
   ['screens/HomeScreen.tsx', 1],
   ['screens/WelcomeScreen.tsx', 1],
   ['screens/EmailSignInScreen.tsx', 1],
   ['screens/SignInScreen.tsx', 1],
+  ['components/JobSummaryCard.tsx', 1],
+  ['components/JobLivePage.tsx', 2],
 ]);
 
 /** Family names that are serifs. Applied to font-family positions only — the
@@ -276,9 +289,9 @@ const SERIF_FAMILY = /playfair|georgia|times new roman|\bserif\b/i;
 
 /** The one quoted serif value each of these files may carry, and must. The
  *  token definition site is now the ONLY one — there is no registration. */
-const QUOTED_SERIF_ALLOWANCE = new Map([
-  ['lib/theme.ts', "'Georgia'"],
-]);
+// 2026-09-26 (the refresh): EMPTY — the operator: "change any font from everywhere
+// to this (default one i already have on the app)". No file may name a serif.
+const QUOTED_SERIF_ALLOWANCE = new Map([]);
 
 test('one-serif fence: the hero role alone is Georgia, and nothing else is a serif', async () => {
   const { type } = await tokensModule;
@@ -296,8 +309,8 @@ test('one-serif fence: the hero role alone is Georgia, and nothing else is a ser
   assert.equal(fonts.display, undefined, 'the shared heading voice stays the system sans');
   assert.equal(
     fonts.displayHero,
-    'Georgia',
-    'the hero face is the platform serif, named exactly — no stack, no Platform.select'
+    undefined,
+    'the hero role is the system sans like every other role (2026-09-26, one font everywhere)'
   );
 
   // --- half two: the weights ----------------------------------------------
@@ -596,7 +609,8 @@ const MATERIALS_AS_DISPATCHED = {
   // ground simply becomes the pure scrim ink rather than a wash of it).
   chrome: { blur: 0, scrimAlpha: 1, borderAlpha: 0.2, fallbackScrimAlpha: 1, radius: null, radiusTopOnly: false },
   sheet: { blur: 40, scrimAlpha: 0.72, borderAlpha: 0.16, fallbackScrimAlpha: 0.92, radius: 28, radiusTopOnly: true },
-  menu: { blur: 50, scrimAlpha: 0.82, borderAlpha: 0.14, fallbackScrimAlpha: 0.95, radius: 16, radiusTopOnly: false },
+  // 2026-09-29 (LUX-LIST-2 #9): the pop-ups' glass, frosted stronger and denser, solid where no blur draws.
+  menu: { blur: 80, scrimAlpha: 0.9, borderAlpha: 0.14, fallbackScrimAlpha: 1, radius: 16, radiusTopOnly: false },
 };
 
 /** WCAG relative luminance of a #RRGGBB hex. */
@@ -630,7 +644,11 @@ test('G1 materials: the table is as dispatched, worn from one scrim ink and the 
   // 2026-09-18: 'clear' is the fourth — the [+] create sheet's pane.
   // 2026-09-19: 'pane' is the fifth — the approved Map design's jobs and
   // Filters panes, asserted below.
-  assert.deepEqual(Object.keys(materials), ['chrome', 'sheet', 'menu', 'clear', 'pane']);
+  // 2026-09-27: 'card' is the sixth — the Lux remake's flat card (ruling 8 of
+  // docs/dispatch/LUX-REMAKE.md), asserted below.
+  // 2026-09-28: 'dropdown' is the seventh — the Inbox ••• menu's glass
+  // (LUX-LIST-64 #53, docs/mockups/html/refs/inbox-clean-list.html), asserted below.
+  assert.deepEqual(Object.keys(materials), ['chrome', 'sheet', 'menu', 'clear', 'pane', 'card', 'dropdown']);
   for (const [name, expected] of Object.entries(MATERIALS_AS_DISPATCHED)) {
     for (const [key, value] of Object.entries(expected)) {
       assert.equal(materials[name][key], value, `materials.${name}.${key} moved off the dispatched value`);
@@ -689,10 +707,13 @@ test('G1 materials: the table is as dispatched, worn from one scrim ink and the 
   // than 1pt; the glow is rings of PANE_HALO_RING points, no shadow.
   const { paneEdges, PANE_HALO_RING, dark } = await tokensModule;
   assert.equal(PANE_HALO_RING, 2);
+  // 2026-09-27 (the Lux remake, ruling 2): pinned to today's #5FAE81 as a
+  // literal — `dark.emerald` is the one mint now, and the map does not move.
   assert.deepEqual(paneEdges.search, {
-    rim: { color: dark.emerald, alpha: 0.7 },
-    halo: { color: dark.emerald, alphas: [0.12, 0.06, 0.03] },
+    rim: { color: '#5FAE81', alpha: 0.7 },
+    halo: { color: '#5FAE81', alphas: [0.12, 0.06, 0.03] },
   });
+  assert.notEqual(dark.emerald, '#5FAE81', 'the pin is a pin only while the palette has moved');
   assert.deepEqual(paneEdges.sheet, {
     rim: { color: '#7DE7A4', alpha: 0.6 },
     halo: { color: '#7DE7A4', alphas: [0.12, 0.06, 0.03] },
@@ -704,6 +725,79 @@ test('G1 materials: the table is as dispatched, worn from one scrim ink and the 
   for (const name of ['chrome', 'sheet', 'menu', 'pane']) {
     assert.equal(materials[name].light, undefined, `${name} must stay flat in light — no light recipe`);
   }
+  // CARD (2026-09-27, the Lux remake, ruling 8 — docs/mockups/html/lux/
+  // lux.build.mjs `.card`): the glass card FLAT — no blur — the fill
+  // rgba(12,44,38,.52), the rim rgba(200,255,230,.20), the WHITE specular edge
+  // at .16 (its own colour, not the rim's), the drop shadow 0 10px 30px black
+  // .35 (a native radius of 15), radius 22 on all four corners; the fallback
+  // draws it nearly opaque. Light: a white card, no visible rim, under the auth
+  // surface's soft card shadow — the one other material with a light block.
+  assert.equal(materials.card.blur, 0, 'flat: a blur adds nothing on a static ground');
+  // 2026-09-29 (LUX-LIST-2 #6) — THE LIT CARD, the operator's pick from .shots/refresh/depth/ ("B lit
+  // … a tiny bit lesser"): an OPAQUE wash #0F2E27 → #0B211C (the task card's lit wash at 70% of its
+  // lift) over the same #0B211C, the Lux rim .20, the white edge .16 drawn as an inset shadow (Surface),
+  // today's lift. Was #0C2C26 at .58 / rim .24 / a straight strip at .22 (2026-09-27, one notch past
+  // the Lux). Light: white falling to #F9F8F3 under the green rim .14 and the Lux light card's shadow.
+  assert.equal(materials.card.scrimColor, '#0B211C');
+  assert.equal(materials.card.scrimAlpha, 1);
+  assert.deepEqual(materials.card.wash, { top: '#0F2E27', bottom: '#0B211C' });
+  assert.equal(materials.card.borderColor, '#C8FFE6');
+  assert.equal(materials.card.borderAlpha, 0.2);
+  assert.equal(materials.card.highlightAlpha, 0.16);
+  assert.equal(materials.card.highlightColor, lightPalette.surface, 'the specular edge is white');
+  assert.equal(materials.card.fallbackScrimAlpha, 1);
+  assert.deepEqual(materials.card.shadow, { color: '#000000', alpha: 0.42, radius: 17, y: 12 });
+  assert.deepEqual([materials.card.radius, materials.card.radiusTopOnly], [22, false]);
+  assert.deepEqual(materials.card.light, {
+    blur: 0,
+    scrimColor: '#F9F8F3',
+    scrimAlpha: 1,
+    wash: { top: '#FFFFFF', bottom: '#F9F8F3' },
+    borderColor: '#0D6B52',
+    borderAlpha: 0.14,
+    fallbackScrimAlpha: 1,
+    highlightAlpha: 0,
+    shadow: { color: '#10261D', alpha: 0.105, radius: 15, y: 10 },
+  });
+  // DROPDOWN (2026-09-28, LUX-LIST-64 #53 — the approved clean list's `.menu`):
+  // blur 22 (intensity 44; web draws × 0.5), the Lux mint rim at .24, the white
+  // top edge at .14, `0 22px 48px rgba(0,0,0,.55)` (a native radius of 24),
+  // radius 18 on all four corners; its tint is the pane fill below, and where
+  // no blur draws, the gradient's mean nearly opaque. Glass in LIGHT too — the
+  // reference's frosted white under a green rim at .16 and a soft green shadow.
+  // 2026-09-29 (LUX-LIST-2 #9): frosted stronger and denser (blur 80, the gradient .86 → .92), and
+  // SOLID where no blur can draw (fallback 1).
+  assert.equal(materials.dropdown.blur, 80);
+  assert.equal(materials.dropdown.scrimColor, '#11362D');
+  assert.equal(materials.dropdown.borderColor, '#7EE2B4');
+  assert.equal(materials.dropdown.borderAlpha, 0.24);
+  assert.equal(materials.dropdown.highlightAlpha, 0.14);
+  assert.equal(materials.dropdown.highlightColor, lightPalette.surface, 'the top edge is white');
+  assert.equal(materials.dropdown.fallbackScrimAlpha, 1);
+  assert.deepEqual(materials.dropdown.shadow, { color: '#000000', alpha: 0.55, radius: 24, y: 22 });
+  assert.deepEqual([materials.dropdown.radius, materials.dropdown.radiusTopOnly], [18, false]);
+  assert.deepEqual(materials.dropdown.light, {
+    blur: 80,
+    scrimColor: lightPalette.surface,
+    scrimAlpha: 0.89,
+    borderColor: '#0E6B52',
+    borderAlpha: 0.16,
+    fallbackScrimAlpha: 1,
+    highlightAlpha: 0.9,
+    highlightColor: lightPalette.surface,
+    shadow: { color: '#102A1D', alpha: 0.18, radius: 22, y: 18 },
+  });
+  const { paneFills } = await tokensModule;
+  assert.deepEqual(paneFills.dropdown, {
+    angle: 160,
+    from: { color: '#1A4A3E', alpha: 0.86 },
+    to: { color: '#09221C', alpha: 0.92 },
+    light: {
+      angle: 160,
+      from: { color: lightPalette.surface, alpha: 0.86 },
+      to: { color: '#ECF4EF', alpha: 0.92 },
+    },
+  });
 });
 
 test('G1 materials: the web-fallback scrim on pure white keeps primary text ≥4.5:1 and secondary ≥3:1', async () => {

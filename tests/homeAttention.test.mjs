@@ -30,7 +30,7 @@ const lifecycleUrl = pathToFileURL(join(root, 'lib/jobLifecycle.ts')).href;
 const source = stripTypeScriptTypes(read('lib/homeAttention.ts'), { mode: 'strip' });
 const relativeImport = "from './jobLifecycle';";
 assert.ok(source.includes(relativeImport), 'the one runtime import must be jobLifecycle');
-const { attentionItems, ATTENTION_CAP } = await import(
+const { attentionItems, workerAttentionItems, ATTENTION_CAP } = await import(
   toDataUrl(source.replace(relativeImport, () => `from '${lifecycleUrl}';`))
 );
 const { myJobsNextAction } = await import(lifecycleUrl);
@@ -329,4 +329,53 @@ test('a2 · the selection rule lives in lib/homeAttention.ts and imports only th
   // The copy is never rewritten here — the line comes from the one implementation.
   assert.match(module, /myJobsNextAction\(\{/);
   assert.doesNotMatch(module, /bids to review|Approval needed|Leave a review/);
+});
+
+// ---------------------------------------------------------------------------
+// 2026-09-26 (the refresh, audit M-15) — the worker's "Needs you" strip.
+// ---------------------------------------------------------------------------
+
+test('M-15 · the worker strip ranks the worker’s own moves and skips what waits on the customer', () => {
+  const at = (h) => `2026-09-02T${String(h).padStart(2, '0')}:00:00.000Z`;
+  const hired = job({ status: 'assigned', assigned_worker_id: 'me' });
+  const unfunded = job({ status: 'assigned', assigned_worker_id: 'me' });
+  const onTheWay = job({ status: 'assigned', assigned_worker_id: 'me', en_route_at: at(9) });
+  const working = job({ status: 'in_progress', assigned_worker_id: 'me', en_route_at: at(9), arrived_at: at(10) });
+  const reported = job({ status: 'completed', assigned_worker_id: 'me', completed_at: at(12) });
+  const done = job({ status: 'completed', assigned_worker_id: 'me', completed_at: at(12) });
+  const payments = {
+    [hired.id]: held,
+    [onTheWay.id]: held,
+    [working.id]: held,
+    [reported.id]: held,
+    [done.id]: { status: 'released', release_requested_at: at(13), provider: 'stripe' },
+  };
+  const items = workerAttentionItems({
+    working: [done, working, unfunded, onTheWay, hired, reported],
+    payments,
+    openDisputeJobIds: new Set([reported.id]),
+    reviewedJobIds: new Set(),
+    nowMs: Date.parse('2026-09-02T14:00:00.000Z'),
+  });
+  assert.deepEqual(
+    items.map((item) => item.state),
+    ['disputed', 'confirmed', 'en_route', 'in_progress', 'completed'],
+    'issue first, then head out, arrive, finish, review — and the unfunded hire is not a move'
+  );
+  assert.ok(!items.some((item) => item.job.id === unfunded.id), 'waiting on payment protection is the customer’s move');
+  // Every line is the hub's own worker-perspective line, never retyped.
+  for (const item of items) {
+    assert.equal(
+      item.line,
+      myJobsNextAction({ perspective: 'worker', state: item.state, reviewedByMe: false, releaseDeadline: null, nowMs: Date.parse('2026-09-02T14:00:00.000Z') })
+    );
+  }
+  // A review already left closes the job.
+  const reviewed = workerAttentionItems({
+    working: [done],
+    payments,
+    openDisputeJobIds: new Set(),
+    reviewedJobIds: new Set([done.id]),
+  });
+  assert.deepEqual(reviewed, []);
 });

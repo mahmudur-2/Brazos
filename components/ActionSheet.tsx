@@ -1,3 +1,4 @@
+import { useModalPresence } from '../hooks/useModalPresence';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +16,7 @@ import {
 import { SCRIM_DARK_ALPHA } from '../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 import { BlurLayer } from '../lib/blur';
+import { SheetHeader } from '../ui/primitives/SheetHeader';
 import { Surface } from '../ui/primitives/Surface';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -60,6 +62,8 @@ export function ActionSheet({
   onClose,
 }: ActionSheetProps) {
   const { palette: colors, isDark } = useThemeColors();
+  // #64 (M-31): on screen or not — the one confirm engine never stacks a second modal on iOS.
+  useModalPresence(visible);
   const styles = stylesFor(colors);
   // ui/primitives/Sheet.tsx has always done this; this one never did.
   const insets = useSafeAreaInsets();
@@ -105,13 +109,14 @@ export function ActionSheet({
             via the radius prop. The backdrop above and every open/close
             mechanic are byte-identical. */}
         <Pressable accessible={false} onPress={() => {}}>
-          <Surface material="sheet" corners="all" radius={dialogRadius} style={[styles.sheet, sheetShadowDial != null && { shadowOpacity: sheetShadowDial }]}>
-          {(title || subtitle) && (
-            <View style={styles.header}>
-              {title ? <Text style={styles.title}>{title}</Text> : null}
-              {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-            </View>
-          )}
+          <Surface material="menu" corners="all" radius={dialogRadius} style={[styles.sheet, sheetShadowDial != null && { shadowOpacity: sheetShadowDial }]}>
+          {/* 2026-09-28 (LUX-LIST-64 #64, audit M-31) — the one sheet header:
+              the handle, the title (and its line), and "Close" on the right —
+              choosing a row is the action, closing only dismisses. The
+              bottom Cancel row is gone; the backdrop means Close. */}
+          <View style={styles.headerWrap}>
+            <SheetHeader title={title} subtitle={subtitle} dismissWord="Close" onDismiss={onClose} />
+          </View>
 
           {items.map((item) => (
             <Pressable
@@ -136,14 +141,6 @@ export function ActionSheet({
             </Pressable>
           ))}
 
-          <Pressable
-            style={({ pressed }) => [styles.cancel, pressed && styles.itemPressed]}
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
-          >
-            <Text style={styles.cancelText}>Cancel</Text>
-          </Pressable>
           </Surface>
         </Pressable>
       </Pressable>
@@ -171,22 +168,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     overflow: 'hidden',
     ...shadows.raised,
   },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    gap: 2,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: colors.textMuted,
+  // The one header's handle sits a little in from the card's top edge.
+  headerWrap: {
+    paddingTop: spacing.sm,
   },
   item: {
     flexDirection: 'row',
@@ -207,15 +191,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   destructive: {
     color: colors.danger,
-  },
-  cancel: {
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
-  },
-  cancelText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textMuted,
   },
   }),
 );

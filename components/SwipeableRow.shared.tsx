@@ -76,7 +76,7 @@ export function SwipeActionTiles({
               size={20}
               color={
                 action.tone === 'gold'
-                  ? colors.gold
+                  ? colors.mark
                   : action.destructive
                     ? colors.danger
                     : colors.text
@@ -106,6 +106,19 @@ export const stylesFor = themedStyles((colors: ColorPalette) =>
     container: {
       overflow: 'hidden',
     },
+    // #28 — the tiles' clip and the track inside it (SwipeableRow.motion120):
+    // pinned to the row's right edge, the clip cutting the tiles to the strip
+    // the row has uncovered.
+    tilesClip: {
+      position: 'absolute',
+      right: 0,
+      top: 0,
+      bottom: 0,
+      overflow: 'hidden',
+    },
+    tilesTrack: {
+      ...StyleSheet.absoluteFillObject,
+    },
     // The tiles sit BEHIND the row, pinned to its right edge, and the row
     // slides left off them. Absolute so revealing costs no relayout.
     actions: {
@@ -128,7 +141,7 @@ export const stylesFor = themedStyles((colors: ColorPalette) =>
       fontWeight: '600',
       color: colors.text,
     },
-    tileLabelGold: { color: colors.gold },
+    tileLabelGold: { color: colors.mark },
     tileLabelDestructive: { color: colors.danger },
   })
 );

@@ -395,7 +395,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     eyebrow: {
       fontSize: 11,
       fontWeight: '800',
-      color: colors.textMuted,
+      color: colors.eyebrow,
       letterSpacing: 0.8,
     },
     headline: {

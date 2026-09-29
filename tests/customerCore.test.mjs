@@ -53,22 +53,24 @@ test('Post Job is a guarded four-step presentation over the existing form state'
   assert.match(postJob, /if \(!user \|\| submittingRef\.current\) return/);
   assert.match(postJob, /sessionUploadsRef/);
   assert.match(postJob, /uploadsCommittedRef/);
-  assert.match(postJob, /usePreventRemove\(submitting \|\| \(step > 0 && !showSuccess\)/);
+  // 2026-09-28 (LUX-LIST-64 #41): "Save draft" leaves on purpose, so the guard
+  // steps aside for exactly that (`leaving`) and holds everywhere else.
+  assert.match(postJob, /usePreventRemove\(!leaving && \(submitting \|\| \(step > 0 && !showSuccess\)\)/);
   assert.match(postJob, /StackActions\.popToTop\(\)/);
   assert.match(postJob, /pop: true/);
   assert.match(postJob, /data: loc, error: locationError/);
-  // Screen 16 (Phase 4): the publish success is the SuccessScreen template
-  // with the atlas actions — "View job and bids" straight to the published
-  // job's own detail, and the secondary action home. The old "View my jobs"/
-  // "Back to home" pair was this assertion's previous target.
-  //
-  // RUN P1 RELABELLED THE SECOND ONE. "Keep browsing" said what you would be
-  // doing; "Back to Home" says where it lands, which is what the button
-  // actually does. Same handler, same destination — only the label moved.
-  assert.match(postJob, /'View job and bids'/i);
-  assert.match(postJob, /label: 'Back to Home',/);
-  assert.match(postJob, /onPress: \(\) => leaveAfterSuccess\(false\),/);
-  assert.match(postJob, /<SuccessScreen/);
+  // Screen 16 (Phase 4): the publish success offers "View job and bids"
+  // straight to the published job's own detail, and the secondary action home.
+  // RUN P1 relabelled the second one "Back to Home" — where it lands.
+  // 2026-09-28 (LUX-LIST-64 #42): the surface is the live page the Seal opens
+  // (components/JobLivePage.tsx), no longer the SuccessScreen template; its two
+  // actions are the same two handlers, in the posting bar's two places.
+  const live = codeOnly(await read('components/JobLivePage.tsx'));
+  assert.match(live, /label: 'View job and bids'/);
+  assert.match(live, /label: 'Back to Home'/);
+  assert.match(postJob, /<JobLivePage/);
+  assert.match(postJob, /onBackHome=\{\(\) => leaveAfterSuccess\(false\)\}/);
+  assert.match(postJob, /onViewJob=\{leaveToPublishedJob\}/);
   assert.doesNotMatch(postJob, /successTimeoutRef|setTimeout\(/);
 });
 

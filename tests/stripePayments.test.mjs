@@ -538,7 +538,12 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   assert.ok(releasedAt > 0 && requestedAt > releasedAt && legacyAt > requestedAt);
   assert.match(completed, /Work approved — payout on its way/);
   assert.match(completed, /shows as released when the transfer\s+lands/);
-  assert.match(completed, /title="Review"[\s\S]{0,120}navigation\.navigate\('ReviewAndTip'/);
+  // 2026-09-26 (the refresh, audit M-1): the review is the page's pinned primary,
+  // offered on a released OR requested row — the card keeps its copy.
+  assert.match(
+    code,
+    /case 'completed':\s*return payment && \(isReleased\(payment\) \|\| releaseRequested\)[\s\S]{0,200}navigation\.navigate\('ReviewAndTip'/
+  );
   // D14: the countdown reuses the one formatter; a closed window has no CTA
   // and a re-read.
   assert.match(code, /releaseCountdownLabel\(\s*fundingDueMs as number,\s*Date\.now\(\)\s*\)/);
@@ -548,7 +553,8 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   assert.match(closedCard, /title="Check again"/);
   assert.doesNotMatch(closedCard, /navigate\('Checkout'/);
   // D15: the checkout CTA is behind the kill switch.
-  assert.match(code, /\{paymentsEnabled \? \(\s*<Button\s+title="Protect payment in checkout"/);
+  // 2026-09-26: the checkout CTA is the pinned primary, still behind the kill switch.
+  assert.match(code, /canFundNow \? \(paymentsEnabled \? \{ label: 'Protect payment in checkout'/);
   // D16: mode-aware eyebrows; sandbox verbatim.
   assert.match(code, /paymentsMode === 'sandbox' \? 'PROTECTED PAYMENT · SANDBOX' : 'PROTECTED PAYMENT'/);
   assert.match(code, /'PAYMENT · SANDBOX'/);

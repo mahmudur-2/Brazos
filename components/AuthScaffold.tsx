@@ -17,7 +17,7 @@ import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { authSurface, fonts, useThemeColors, withAlpha } from '../lib/theme';
 import { backgroundImageStyle } from '../ui/primitives/LitSurface';
-import { AuthBackdrop, type AuthBackdropVariant } from './AuthBackdrop';
+import type { AuthBackdropVariant } from './AuthBackdrop';
 import { KeyboardRisingColumn } from './KeyboardRisingColumn';
 import { COLUMN_BOTTOM_PADDING } from './KeyboardRisingColumn.shared';
 
@@ -153,10 +153,10 @@ type AuthScaffoldProps = PropsWithChildren<{
   titleVariant?: 'default' | 'large';
   onBack?: () => void;
   /**
-   * Decorative contour art behind the content. Off by default so a screen has
-   * to opt in — `full` is Welcome's, `soft` is the corner-only version the
-   * form screens use to stay part of the same surface without adding noise
-   * behind their inputs.
+   * 2026-09-27 (the Lux remake, ruling 7): THE CORNER RINGS ARE GONE from every
+   * auth screen, both themes — "the contour arcs AuthBackdrop draws top-right
+   * leave every screen". The prop is kept so no caller has to move; it draws
+   * nothing. components/AuthBackdrop.tsx stays on disk, mounted by nothing.
    */
   backdrop?: AuthBackdropVariant;
   /**
@@ -218,7 +218,6 @@ export function AuthScaffold({
   title,
   titleVariant = 'default',
   onBack,
-  backdrop,
   themed = false,
   ground = false,
   footer,
@@ -251,8 +250,11 @@ export function AuthScaffold({
       : null;
   const surface = authSurface(palette, isDark);
   const lit = ground && themed;
+  // 2026-09-27 (the Lux remake, ruling 9): the Lux diagonal is the ground of
+  // EVERY themed dark screen — the auth flow included — not only Welcome's;
+  // Welcome alone keeps the three light layers below (`ground`).
   const groundBase =
-    lit && isDark
+    themed && isDark
       ? backgroundImageStyle(
           `linear-gradient(165deg, ${palette.authGroundTop} 0%, ${palette.authGroundMid} 55%, ${palette.authGroundBottom} 100%)`
         )
@@ -303,7 +305,6 @@ export function AuthScaffold({
           />
         </View>
       ) : null}
-      {backdrop ? <AuthBackdrop variant={backdrop} themed={themed} /> : null}
       {lit ? (
         <View
           style={[
@@ -449,7 +450,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: authSpacing.gutter,
   },
   topTitle: {
-    ...authType.navTitle,
+    ...authType.navTitleLarge,
     color: authColors.ink,
     flex: 1,
     textAlign: 'center',
@@ -458,9 +459,9 @@ const styles = StyleSheet.create({
     ...authType.navTitleLarge,
   },
   topTitleSerif: {
+    // 2026-09-28 (LUX-LIST-64 #27): the bar title is the app's one header size,
+    // 17/700 — the themed 21/600 display override is gone.
     fontFamily: fonts.display,
-    fontSize: 21,
-    fontWeight: '600',
   },
   contentContainer: {
     flexGrow: 1,

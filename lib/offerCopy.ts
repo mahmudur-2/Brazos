@@ -10,6 +10,15 @@
  * Every string an actionable card shows now comes from here, so the two
  * surfaces cannot disagree without this file changing.
  *
+ * 2026-09-28 (LUX-LIST-64 #64, audit M-17) — ONE NOUN PER AUDIENCE, in
+ * sentence case, on EVERY surface (the chat card, Job detail, Bid detail, the
+ * client's job page): the customer always reads "bid" for what a worker sent,
+ * and the worker always reads "offer" for what a customer sent. Each label
+ * takes `viewerIsWorker` — the viewer's side of THIS chain, decided by the
+ * caller from the offer row, the way offerResponseNote() already was — and
+ * every confirmation repeats its button's verb and noun exactly ("Accept bid"
+ * under "Accept bid ($110)").
+ *
  * Pure by design — no imports at all, so the node test suite executes it
  * directly (the jobLifecycle / errorMessage precedent). Amounts arrive
  * already formatted by formatBudget(); this module never re-implements money
@@ -19,11 +28,20 @@
 /** The amber "whose move" pill beside the heading. */
 export const YOUR_MOVE_BADGE_LABEL = 'Your move';
 
-/** Secondary action — the outlined counter control. */
-export const COUNTER_OFFER_ACTION_LABEL = 'Send Counter Offer';
+/** What the OTHER side sent, in this viewer's word: a worker reads "offer"
+ *  (from a customer), a customer reads "bid" (from a worker). */
+export function offerNoun(viewerIsWorker: boolean): 'offer' | 'bid' {
+  return viewerIsWorker ? 'offer' : 'bid';
+}
 
-/** Destructive action. */
-export const DECLINE_OFFER_ACTION_LABEL = 'Decline Offer';
+/** Secondary action — the outlined counter control, and its confirmation. The
+ *  viewer's own counter is a counter-offer on either side. */
+export const COUNTER_OFFER_ACTION_LABEL = 'Send counter-offer';
+
+/** Destructive action, and its confirmation's word. */
+export function declineOfferActionLabel(viewerIsWorker: boolean): string {
+  return `Decline ${offerNoun(viewerIsWorker)}`;
+}
 
 /** Shown in place of the counter control once this side's cap is spent.
  *  Mirrors components/OfferCard.tsx's long-standing sentence. */
@@ -43,8 +61,13 @@ export function firstNameOf(
 }
 
 /** Primary action. `amountLabel` is formatBudget()'s output, e.g. "$110". */
-export function acceptOfferActionLabel(amountLabel: string): string {
-  return `Accept Offer (${amountLabel})`;
+export function acceptOfferActionLabel(amountLabel: string, viewerIsWorker: boolean): string {
+  return `Accept ${offerNoun(viewerIsWorker)} (${amountLabel})`;
+}
+
+/** The accept confirmation's button: the action's verb and noun, exactly. */
+export function acceptOfferConfirmText(viewerIsWorker: boolean): string {
+  return `Accept ${offerNoun(viewerIsWorker)}`;
 }
 
 /**
@@ -54,11 +77,16 @@ export function acceptOfferActionLabel(amountLabel: string): string {
  */
 export function offerResponseHeading(
   senderFirstName: string,
-  isCounter: boolean
+  isCounter: boolean,
+  viewerIsWorker: boolean
 ): string {
-  return isCounter
-    ? `${senderFirstName} sent you a Counteroffer`
-    : `${senderFirstName} sent you an Offer`;
+  // A worker reads the customer's counter as a counter-offer (the word the
+  // counter's own notification uses); a customer reads a worker's counter as a
+  // new bid — "bid" is the one noun a customer sees for what a worker sent.
+  if (viewerIsWorker) {
+    return isCounter ? `${senderFirstName} sent you a counter-offer` : `${senderFirstName} sent you an offer`;
+  }
+  return isCounter ? `${senderFirstName} sent you a new bid` : `${senderFirstName} sent you a bid`;
 }
 
 /**
@@ -101,11 +129,11 @@ export function offerExpiryLabel(expiresAt: string | null | undefined): string |
 }
 
 /** Fix F — accept confirms with the exact amount, never a bare tap. */
-export function acceptOfferConfirmTitle(amountLabel: string): string {
-  return `Accept this offer for ${amountLabel}?`;
+export function acceptOfferConfirmTitle(amountLabel: string, viewerIsWorker: boolean): string {
+  return `Accept this ${offerNoun(viewerIsWorker)} for ${amountLabel}?`;
 }
 
 /** Fix F — decline confirms with the exact amount too. */
-export function declineOfferConfirmTitle(amountLabel: string): string {
-  return `Decline this ${amountLabel} offer?`;
+export function declineOfferConfirmTitle(amountLabel: string, viewerIsWorker: boolean): string {
+  return `Decline this ${amountLabel} ${offerNoun(viewerIsWorker)}?`;
 }

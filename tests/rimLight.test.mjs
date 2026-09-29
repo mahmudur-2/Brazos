@@ -191,7 +191,11 @@ test('[static] the Welcome screen is the ship page: its numbers, its wiring, the
   // The two-tone headline in the serif, the eyebrow and body on the roles.
   assert.match(welcome, /\{'Get it done\.\\n'\}\s*<Text style=\{\{ color: colors\.authAccent \}\}>\{'Work with\\nconfidence\.'\}<\/Text>/);
   assert.match(welcome, /fontFamily: fonts\.displayHero,\s*fontWeight: '700',\s*color: colors\.authInk,/);
-  assert.match(welcome, /color: colors\.authAccent,\s*\}/);
+  // 2026-09-27 (the Lux remake, ruling 4): the eyebrow is GOLD ("BRAZOS
+  // MARKETPLACE gold"); the headline's second tone above stays the accent.
+  // 2026-09-28 (LUX-LIST-64 #47, the operator's follow-up on the gold sheet):
+  // the eyebrow is the MARK — that gold in dark, #064C3B in light.
+  assert.match(welcome, /eyebrow: \{[^}]*color: colors\.mark,\s*\}/);
   assert.match(welcome, /color: colors\.authMuted,/);
   // The ground and the full backdrop are the scaffold's.
   assert.match(welcome, /<AuthScaffold backdrop="full" themed ground>/);
@@ -220,8 +224,12 @@ test('[static] the hero dress on AuthButton is opt-in and absent renders the con
   assert.match(button, /height: authSizes\.heroButton,\s*borderRadius: authRadius\.heroButton,/);
   assert.doesNotMatch(stripComments(button).replace(/authColors\.\w+/g, ''), /#[0-9a-fA-F]{6}\b/, 'no hex colour enters the button');
   const authTheme = await read('lib/authTheme.ts');
-  assert.match(authTheme, /heroButton: 58,/);
+  // 2026-09-28 (LUX-LIST-64 #6): every auth button is 52 tall and fully round (26).
+  // 2026-09-28 (LUX-LIST-2 #2, the operator's pick b): still 52 tall, the corner
+  // softened to 22 — the pill read too circular; one shape on every auth button.
+  assert.match(authTheme, /heroButton: 52,/);
   assert.match(authTheme, /heroButton: 22,/);
+  assert.match(authTheme, /\bbutton: 22,/);
   assert.match(authTheme, /heroLink: 44,/);
   assert.match(authTheme, /heroBadge: 42,/);
   assert.match(authTheme, /heroBadge: 20,/);
@@ -230,7 +238,9 @@ test('[static] the hero dress on AuthButton is opt-in and absent renders the con
 test('[static] the ground and the corner are the pages’; the roles are the pages’ numbers, both palettes', async () => {
   const scaffold = stripComments(await read('components/AuthScaffold.tsx'));
   assert.match(scaffold, /const lit = ground && themed;/);
-  assert.match(scaffold, /lit && isDark\s*\?\s*backgroundImageStyle\(/, 'the base gradient is dark only — light’s three stops are the ivory');
+  // 2026-09-27 (the Lux remake, ruling 9): the base gradient is the ground of
+  // EVERY themed dark screen, not Welcome's alone; still dark only.
+  assert.match(scaffold, /themed && isDark\s*\?\s*backgroundImageStyle\(/, 'the base gradient is dark only — light’s three stops are the ivory');
   assert.match(scaffold, /linear-gradient\(165deg, \$\{palette\.authGroundTop\} 0%, \$\{palette\.authGroundMid\} 55%, \$\{palette\.authGroundBottom\} 100%\)/);
   assert.match(scaffold, /glow: \{ rx: 0\.72, ry: 0\.46, cx: 0\.5, cy: 0\.36, dark: 0\.18, light: 0\.07, fade: 70 \}/);
   assert.match(scaffold, /corner: \{ radius: 300, dark: 0\.13, light: 0\.16 \}/);
@@ -244,7 +254,9 @@ test('[static] the ground and the corner are the pages’; the roles are the pag
   const light = /export const colors = \{([\s\S]*?)\} as const;/.exec(tokens)[1];
   const hex = (block, key) => new RegExp(`\\n\\s+${key}: '(#[0-9A-F]{6})',`).exec(block)?.[1];
   const expected = {
-    dark: { authInk: '#F3F1E8', authMuted: '#A9B8B1', authAccent: '#7EE2B4', authGold: '#E9C170', authGlintCore: '#FFE9B0', authGlintHalo: '#E9C170', authBadgeFill: '#0A2822', authShade: '#000000', authGroundTop: '#062421', authGroundMid: '#0A1A17', authGroundBottom: '#07110F', heroDiscTop: '#19553F', heroDiscMid: '#0F3B30', heroDiscBottom: '#0A2A23', authCtaTop: '#1C503F', authCtaBottom: '#0E3229' },
+    // 2026-09-27 (the Lux remake, rulings 4 and 5): the one mint #4FC58C is the
+    // accent; the gold is today's #D4A24C, and the glint's halo IS the gold.
+    dark: { authInk: '#F3F1E8', authMuted: '#A9B8B1', authAccent: '#4FC58C', authGold: '#D4A24C', authGlintCore: '#FFE9B0', authGlintHalo: '#D4A24C', authBadgeFill: '#0A2822', authShade: '#000000', authGroundTop: '#062421', authGroundMid: '#0A1A17', authGroundBottom: '#07110F', heroDiscTop: '#19553F', heroDiscMid: '#0F3B30', heroDiscBottom: '#0A2A23', authCtaTop: '#1C503F', authCtaBottom: '#0E3229' },
     light: { authInk: '#13201B', authMuted: '#6E7771', authAccent: '#0D6B52', authGold: '#C8A15B', authGlintCore: '#FFF6DE', authGlintHalo: '#E8C98C', authBadgeFill: '#FFFFFF', authShade: '#10261D', authGroundTop: '#F6F3EA', authGroundMid: '#F6F3EA', authGroundBottom: '#F6F3EA', heroDiscTop: '#F6F9F4', heroDiscMid: '#DEEBE1', heroDiscBottom: '#CDDCCF', authCtaTop: '#064C3B', authCtaBottom: '#064C3B' },
   };
   for (const [theme, block] of [['dark', dark], ['light', light]]) {

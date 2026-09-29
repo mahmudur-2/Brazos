@@ -126,7 +126,12 @@ test('the new surfaces are reachable from the Profile tab', async () => {
     read('screens/ProfileScreen.tsx'),
     read('screens/AccountSafetyScreen.tsx'),
   ]);
-  assert.ok(hub.includes(`navigate('AccountSafety')`), 'the hub must open account & safety');
+  // 2026-09-29 (LUX-LIST-2 #7): Account & safety is a row of the hub's table,
+  // like the others below, dispatched through the one shared navigate call.
+  assert.ok(
+    hub.includes(`route: 'AccountSafety'`) && hub.includes('navigation.navigate(row.route)'),
+    'the hub must open account & safety'
+  );
   const surface = hub + accountSafety;
   for (const route of ['ServicesPricing', 'SavedWorkers', 'PaymentMethods']) {
     // Either an explicit dispatch, or a row in the hub's settings table —

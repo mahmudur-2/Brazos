@@ -59,7 +59,10 @@ test('[static] the composer is three zones, and every glyph is bare', () => {
   assert.match(flat, /<Ionicons name="add" size=\{ICON_GLYPH_SIZE \+ 4\} color=\{colors\.ink\} \/>/);
   // ZONE 2 — the field, and it FLEXES: the row's whole point is that the
   // input gets the width the four old controls were taking.
-  assert.match(flat, /input: \{ flex: 1,/);
+  // 2026-09-28 (LUX-LIST-64 #8): the input glows while typing, so it sits in a
+  // wrapper that takes its place in the row — the WRAPPER flexes now.
+  assert.match(flat, /inputWrap: \{ flex: 1,/);
+  assert.match(flat, /wrapStyle=\{styles\.inputWrap\}/);
   // ZONE 3 — one fixed box holding two layers, so the row's width cannot
   // change as the text does.
   assert.match(flat, /morphSlot: \{ width: COMPOSER_CONTROL_SIZE, height: COMPOSER_CONTROL_SIZE,? \}/);
@@ -364,7 +367,8 @@ test('[static] the header carries the face on the left and one affordance on the
 
   // The chip is gone; the dots are gold LINE-WORK, not a filled pill.
   assert.doesNotMatch(chat, /hireAgainButton|hireAgainLabel/, 'the Hire Again chip is retired from the header');
-  assert.match(chat, /<Ionicons name="ellipsis-horizontal" size=\{22\} color=\{colors\.gold\} \/>/);
+  // 2026-09-28 (LUX-LIST-64 #47): the ⋯ is a MARK — gold in dark, the forest in light.
+  assert.match(chat, /<Ionicons name="ellipsis-horizontal" size=\{22\} color=\{colors\.mark\} \/>/);
   const dots = /headerDots: \{([^}]*)\}/.exec(chat.replace(/\s+/g, ' '));
   assert.ok(dots, 'the dots must stay a plain style');
   assert.doesNotMatch(dots[1], /backgroundColor|borderWidth/, 'gold is line-work here too');
@@ -844,21 +848,28 @@ test('[static] the inbox sheet holds an id, and re-reads the row it acts on', ()
   const screen = stripComments(read('screens/MessagesInboxScreen.tsx'));
 
   // The state is the identity only. The snapshot that carried the two mutable
-  // facts must not come back.
-  assert.match(screen, /const \[sheetUserId, setSheetUserId\] = useState<string \| null>\(null\)/);
-  assert.doesNotMatch(screen, /const \[sheetTarget, setSheetTarget\]/, 'the snapshot must not return');
+  // facts must not come back. 2026-09-28 (LUX-LIST-64 #53): the sheet is now
+  // the glass dropdown under the row's ••• — the same rule under the menu's
+  // names: it holds the person's id and reads the row again every render.
+  assert.match(screen, /const \[menuUserId, setMenuUserId\] = useState<string \| null>\(null\)/);
+  assert.doesNotMatch(screen, /const \[(sheet|menu)Target, set(Sheet|Menu)Target\]/, 'the snapshot must not return');
   assert.doesNotMatch(
     screen,
-    /setSheetUserId\(\{|setSheetTarget\(\{/,
-    'opening the sheet must pass an id, never a copy of the row',
+    /set(Sheet|Menu)UserId\(\{|set(Sheet|Menu)Target\(\{/,
+    'opening the menu must pass an id, never a copy of the row',
   );
-  assert.match(screen, /setSheetUserId\(item\.otherId\)/, 'the long press stores the id');
+  assert.match(screen, /openMenu\(item\.otherId\)/, 'the long press stores the id');
+  assert.match(
+    screen,
+    /function openMenu\(userId: string, delayMs = 0\) \{\s*setMenuDelay\(delayMs\);\s*setMenuUserId\(userId\);\s*\}/,
+    'the one way the menu opens stores the id and nothing else',
+  );
 
   // And the row is resolved live, from the rows the inbox just built.
   assert.match(
     screen,
-    /const sheetTarget = useMemo\(\(\) => resolveSheetTarget\(rows, sheetUserId\), \[rows, sheetUserId\]\)/,
-    'the sheet must re-read its row rather than remember it',
+    /const menuTarget = useMemo\(\(\) => resolveSheetTarget\(rows, menuUserId\), \[rows, menuUserId\]\)/,
+    'the menu must re-read its row rather than remember it',
   );
 });
 
@@ -1075,14 +1086,20 @@ test('[static] the filter pills measure themselves, not their scroller', () => {
   // changes two colours and nothing structural, so light is dark's palette
   // rather than a second design. `primarySoft` is the pale emerald in light
   // and the deep one in dark, which is the per-theme fill the row wants.
+  //
+  // 2026-09-28 (LUX-LIST-64 #55) — the approved clean list's chips: 14/600,
+  // the chosen words the bright mint (the pale in light), and the chosen fill
+  // the mint at .08 in dark and the pale sage in light — a colour per theme,
+  // set beside the style, still nothing structural.
   const label = /pillLabel: \{([^}]*)\}/.exec(screen)[1];
-  assert.match(label, /fontSize: 13/);
+  assert.match(label, /fontSize: 14/);
   assert.match(label, /fontWeight: '600'/);
-  assert.match(/pillLabelActive: \{([^}]*)\}/.exec(screen)[1], /color: colors\.emerald/);
+  assert.match(/pillLabelActive: \{([^}]*)\}/.exec(screen)[1], /color: colors\.emeraldBright/);
 
   const active = /pillActive: \{([^}]*)\}/.exec(screen)[1];
   assert.match(active, /borderColor: colors\.emerald/);
-  assert.match(active, /backgroundColor: colors\.primarySoft/);
+  assert.match(screen, /const pillOnFill = isDark \? withAlpha\(colors\.emerald, 0\.08\) : colors\.primarySoft;/);
+  assert.match(screen, /active && \[styles\.pillActive, \{ backgroundColor: pillOnFill \}\]/);
   assert.doesNotMatch(
     active,
     /height|padding|margin|borderWidth|borderRadius|shadow|elevation/,
@@ -1105,18 +1122,30 @@ test('[static] one action model, two entry mechanics, and no empty second sheet'
   assert.match(screen, /label: target\.muted \? 'Unmute' : 'Mute'/);
   assert.doesNotMatch(screen, /\bMUTE\b/, 'the retired MUTE flag must not come back');
 
-  // The PERMANENT block stays exactly where it lives today, in the first
-  // sheet. The timed variant is a separate, flagged row so shipping it cannot
-  // quietly change what the existing one does.
-  assert.match(screen, /key: 'block',\s*label: target\.blocking \? 'Unblock' : 'Block'/);
-  assert.match(screen, /if \(TIMED_BLOCK\) \{/);
-  assert.match(screen, /key: 'block-timed'/);
+  // 2026-09-26 (the refresh, audit M-11): ONE Block. The sheet's row is
+  // "Block…" (or "Unblock" when it applies) and opens one chooser whose FIRST
+  // row is the permanent block — the existing blockUser path, unchanged —
+  // and whose others are the timed durations, still behind TIMED_BLOCK so
+  // shipping them cannot quietly change what the permanent one does.
+  assert.match(screen, /key: 'block',\s*label: 'Unblock',/);
+  // 2026-09-28 (LUX-LIST-64 #53): the glass menu's words carry no "…".
+  assert.match(screen, /key: 'block',\s*label: 'Block',/);
+  assert.match(screen, /key: 'block-permanent',\s*label: 'Permanently',/);
+  assert.match(screen, /\.\.\.\(TIMED_BLOCK\s*\?\s*BLOCK_DURATIONS\.map/);
+  assert.ok(
+    screen.indexOf("key: 'block-permanent'") < screen.indexOf('...(TIMED_BLOCK'),
+    'the permanent block is the chooser’s first row'
+  );
 
-  // MORE renders only if it would have something in it — an empty second
-  // sheet behind a visible button is the dead control this repo refuses.
-  assert.match(screen, /\.\.\.\(moreItems\.length > 0/);
+  // No second sheet behind a visible button can be empty. 2026-09-28
+  // (LUX-LIST-64 #53): there is no clean-up sheet at all now — Clear chat and
+  // Delete chat are rows of the one menu, each under its own flag.
+  assert.doesNotMatch(screen, /clearOrDeleteItemsFor|Clear or delete chat/, 'the clean-up chooser is gone');
+  assert.match(screen, /key: 'clear-chat',\s*label: 'Clear chat',/);
+  assert.match(screen, /key: 'delete-chat',\s*label: 'Delete chat',/);
+  assert.doesNotMatch(screen, /key: 'more',\s*label: 'More',\s*icon: 'ellipsis-horizontal' as const/, 'no More row in the sheet');
   for (const flag of ['MARK_UNREAD', 'CLEAR_CHAT', 'ARCHIVE', 'DELETE_CHAT']) {
-    assert.ok(screen.includes(`if (${flag}) {`), `More must carry a ${flag} row`);
+    assert.ok(screen.includes(`if (${flag}) {`), `the sheet must carry a ${flag} row`);
   }
   // HIDDEN_CHATS carries a SECOND condition, and that is the point (W1 D3):
   // with no biometric or passcode enrolled the authentication prompt could
@@ -1258,7 +1287,7 @@ test('[static] the translate entries are flagged, text-only, and batch the conve
   // where their assemblies are guarded.
   assert.match(
     chat,
-    /import \{ LIVE_LOCATION, READ_TICKS, TRANSLATION \} from '\.\.\/lib\/featureFlags';/
+    /import \{ LIVE_LOCATION, READ_TICKS, TIMED_BLOCK, TRANSLATION \} from '\.\.\/lib\/featureFlags';/
   );
   // Behind the flag AND requiring content: there is nothing to translate in a
   // photo or a voice note.

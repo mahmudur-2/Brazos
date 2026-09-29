@@ -38,7 +38,7 @@ test('a1 · lib/appLinks.ts publishes the address and assembles the mailto in on
   assert.deepEqual([...code.matchAll(/^import .*$/gm)].map((m) => m[0]), []);
 });
 
-test('a1 · the Settings list carries Contact support as a sixth, last row that opens the mailto', () => {
+test('a1 · the Profile hub carries Contact support as a row that opens the mailto', () => {
   const code = stripComments(read('screens/ProfileScreen.tsx'));
 
   // The screen imports the address; it never retypes it.
@@ -61,34 +61,61 @@ test('a1 · the Settings list carries Contact support as a sixth, last row that 
   );
   assert.doesNotMatch(code, /Alert\.alert\(/);
 
-  // Six rows, in order, the new one last.
+  // Every row the hub opens, in one table.
   const start = code.indexOf('const HUB_SETTINGS: SettingsRow[] = [');
   assert.ok(start > 0, 'HUB_SETTINGS is typed SettingsRow[]');
   const block = code.slice(start, code.indexOf('\n];', start));
   const labels = [...block.matchAll(/label: '([^']+)'/g)].map((m) => m[1]);
+  // 2026-09-26 (the refresh, audits M-16/M-22/M-24): rows renamed so each
+  // names its destination ('Earnings & payouts'). 2026-09-29 (LUX-LIST-2 #7,
+  // the rebuilt hub): the two notification rows are ONE, 'Notifications' —
+  // the feed, the name its screen wears, whose header gear opens Notification
+  // settings — and Payment methods and Account & safety joined the table
+  // (Payment methods moved off Account & safety).
   assert.deepEqual(labels, [
-    'Notifications',
-    'Notification feed',
-    'Earnings',
-    'Services & availability',
     'Saved & past workers',
+    'Services & availability',
+    'Earnings & payouts',
+    'Payment methods',
+    'Notifications',
+    'Account & safety',
     'Contact support',
   ]);
+  // M-22, kept — each mode leads with its own rows (HUB_LAYOUT: YOUR PROFILE,
+  // MONEY) and puts the other mode's behind one row that opens in place; with
+  // NOTIFICATIONS and ACCOUNT, which both modes share, EVERY row is drawn
+  // exactly once in each mode, and Contact support is the ACCOUNT card's.
+  const layout = code.slice(code.indexOf('const HUB_LAYOUT'), code.indexOf('\n};', code.indexOf('const HUB_LAYOUT')));
+  const listOf = (text, name) => {
+    const at = text.indexOf(`${name}: [`);
+    assert.ok(at >= 0, `${name} is listed`);
+    return [...text.slice(at, text.indexOf(']', at)).matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  };
+  const notifications = [...code.slice(code.indexOf('const HUB_NOTIFICATIONS = ['), code.indexOf('];', code.indexOf('const HUB_NOTIFICATIONS = ['))).matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  const account = [...code.slice(code.indexOf('const HUB_ACCOUNT = ['), code.indexOf('];', code.indexOf('const HUB_ACCOUNT = ['))).matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  assert.deepEqual(notifications, ['Notifications']);
+  assert.deepEqual(account, ['Account & safety', 'Contact support']);
+  for (const mode of ['customer', 'worker']) {
+    const own = layout.slice(layout.indexOf(`${mode}: {`), layout.indexOf('},', layout.indexOf(`${mode}: {`)));
+    const drawn = [...listOf(own, 'profile'), ...listOf(own, 'money'), ...listOf(own, 'tools'), ...notifications, ...account];
+    assert.deepEqual([...drawn].sort(), [...labels].sort(), `${mode} draws every row exactly once`);
+  }
   assert.match(block, /mailto: true,\s*icon: 'mail-outline',\s*label: 'Contact support',/);
   assert.match(block, /sub: `Email \$\{SUPPORT_EMAIL\}`/);
 
-  // One map still draws all six, and the five routes still dispatch through it.
+  // One renderer still draws every row, and every route dispatches through it.
   assert.match(code, /key=\{row\.label\}/);
   assert.match(
     code,
     /onPress=\{\s*'route' in row\s*\?\s*\(\) => navigation\.navigate\(row\.route\)\s*:\s*\(\) => void openSupportMail\(\)\s*\}/
   );
   for (const route of [
-    'NotificationSettings',
     'Notifications',
     'Earnings',
     'ServicesPricing',
     'SavedWorkers',
+    'PaymentMethods',
+    'AccountSafety',
   ]) {
     assert.ok(block.includes(`route: '${route}'`), `${route} is still a row`);
   }

@@ -41,6 +41,7 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
 
@@ -205,9 +206,9 @@ export function ProfileReviewsScreen() {
   const total = summary?.total ?? 0;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader
-        title={firstName ? `${firstName}’s reviews` : 'Reviews'}
+        title={firstName ? `${firstName}’s Reviews` : 'Reviews'}
         onBack={goBackOrHome}
       />
 

@@ -1,5 +1,7 @@
+import { useModalPresence } from '../hooks/useModalPresence';
 import { useEffect, useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FocusRing } from './FocusRing';
 import { Button } from './Button';
 import { dollarsToCents } from '../lib/jobs';
 import {
@@ -42,7 +44,10 @@ export function AmountPrompt({
   onCancel,
   onSubmit,
 }: AmountPromptProps) {
+  const [focused, setFocused] = useState(false);
   const { palette: colors, isDark } = useThemeColors();
+  // #64 (M-31): on screen or not — the one confirm engine never stacks a second modal on iOS.
+  useModalPresence(visible);
   const styles = stylesFor(colors);
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -89,13 +94,15 @@ export function AmountPrompt({
             the material's hairline where the card had none (the parity rule
             keeps border weight shared between themes). Backdrop and
             mechanics untouched. */}
-        <Surface material="sheet" corners="all" radius={promptRadius} style={[styles.sheet, sheetShadowDial != null && { shadowOpacity: sheetShadowDial }]}>
+        <Surface material="menu" corners="all" radius={promptRadius} style={[styles.sheet, sheetShadowDial != null && { shadowOpacity: sheetShadowDial }]}>
           <Text style={styles.title}>{title}</Text>
           {message ? <Text style={styles.message}>{message}</Text> : null}
 
           <View style={styles.inputRow}>
             <Text style={styles.currency}>$</Text>
             <TextInput
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
               keyboardAppearance={isDark ? 'dark' : 'light'}
               style={styles.input}
               value={value}
@@ -108,6 +115,8 @@ export function AmountPrompt({
               keyboardType="numeric"
               autoFocus
             />
+            {/* 2026-09-28 (LUX-LIST-64 #8): the row glows while the amount has focus. */}
+            <FocusRing focused={focused} color={colors.emerald} radius={radius.md} />
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}

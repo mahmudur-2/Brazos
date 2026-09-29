@@ -1,3 +1,4 @@
+import type { Country } from './countries';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AppMode } from '../modes/types';
@@ -41,7 +42,12 @@ export type AuthStackParamList = {
   SignIn: undefined;
   EmailSignIn: undefined;
   CreateAccount: undefined;
-  EmailCreateAccount: undefined;
+  /** 2026-09-26 (the refresh, audit M-18): the phone form's "Use Email
+   *  Instead" hands over what was already typed, so the email form arrives
+   *  filled rather than blank. Every field is optional; Welcome passes none. */
+  EmailCreateAccount:
+    | { fullName?: string; phoneDigits?: string; country?: Country }
+    | undefined;
   VerifyPhone: VerifyPhoneParams;
 };
 
@@ -119,6 +125,12 @@ export type OnboardingStackNavigation = NativeStackNavigationProp<OnboardingStac
  */
 export type CustomerHomeStackParamList = {
   HomeMain: undefined;
+  /** 2026-09-26 (the refresh, audit M-24) — the feed, one tap from Home's
+   *  bell, pushed on THIS stack so Back returns to Home. The Profile stack
+   *  keeps its own registration for the hub's row. */
+  Notifications: undefined;
+  /** 2026-09-29 (LUX-LIST-2 #8) — the feed's settings gear, on the stack the feed sits on. */
+  NotificationSettings: undefined;
   /**
    * Doubles as the direct-offer flow: when hireWorkerId is present the form
    * sends a private job request. It creates no job until that worker accepts
@@ -197,6 +209,10 @@ export type DiscoverStackNavigation = NativeStackNavigationProp<DiscoverStackPar
  */
 export type WorkerHomeStackParamList = {
   WorkerHome: undefined;
+  /** M-24 — the feed from Worker Home's bell; see CustomerHomeStackParamList. */
+  Notifications: undefined;
+  /** 2026-09-29 (LUX-LIST-2 #8) — the feed's settings gear. */
+  NotificationSettings: undefined;
   JobDetail: { job: OpenJob };
   /** Phase 7 — pre-hire chat from the worker's own-bid card. Registered
    *  alongside JobDetail in every stack that mounts it (the SubmitBid rule):

@@ -104,8 +104,14 @@ const GOLD_FILL_ALLOWLIST = new Set([]);
  * DELETED here rather than kept "in case". `decision 3`'s "no gold fills
  * anywhere" is therefore unqualified again for every control in the tree, in
  * both themes, and the unread dot is the one remaining exception.
+ *
+ * 2026-09-28 (LUX-LIST-64 #54) — AND THE LAST ONE GOES THE SAME WAY. The
+ * operator's approved clean list marks unread with the COUNT beside the name,
+ * a badge in the accent, so the row draws no gold dot and its entry stopped
+ * matching anything. Deleted, not kept: "no gold fills" now holds everywhere,
+ * with no exception at all.
  */
-const GOLD_FILL_EXCEPTIONS = new Set(['components/ConversationRow.tsx::dot']);
+const GOLD_FILL_EXCEPTIONS = new Set([]);
 
 /**
  * The one shape decision 3's "no gold fills" was never about: the filled part
@@ -180,9 +186,13 @@ test('[static] the v2 dark palette keeps forest green and gold metal, distinct',
   // the forest and the gold by a step. The pins move with it; what they are
   // for is unchanged -- these are the two hues v1 had merged, and the ground
   // they sit on.
-  assert.equal(value('forest'), '#1B3527');
+  // 2026-09-26 (the refresh): Emerald Lux Glass — the mint CTA, the Lux gold for
+  // money, and the ground's middle stop.
+  // 2026-09-27 (the Lux remake, docs/dispatch/LUX-REMAKE.md rulings 4 and 5):
+  // ONE mint, #4FC58C, as the CTA; today's gold #D4A24C, never the Lux #E9C170.
+  assert.equal(value('forest'), '#4FC58C');
   assert.equal(value('gold'), '#D4A24C');
-  assert.equal(value('bg'), '#02110D');
+  assert.equal(value('bg'), '#0A1A17');
   assert.notEqual(value('forest'), value('gold'), 'v1 merged these; v2 must never re-merge them');
 });
 
@@ -290,28 +300,34 @@ function functionBody(source, declaration) {
  *  operator's own mockup and ruling — docs/DECISIONS.md 2026-09-19 records
  *  it as that sheet's exception, and the sheet's own fence pins the tint. */
 const D6_SURFACES = [
-  ['components/Chip.tsx', ['chosen.line', 'chosen.fill']],
-  ['components/SegmentedControl.tsx', ['activeLabel']],
+  // 2026-09-27 (the Lux remake, ruling 11): a chosen chip KEEPS its glass, so
+  // Chip reads the helper's line and not its fill.
+  ['components/Chip.tsx', ['chosen.line']],
+  // 2026-09-27 (the operator's review): a segmented control's chosen cell is
+  // FILLED with the one mint (the Lux `.seg2`), not gold-lined — so
+  // components/SegmentedControl.tsx and MyJobsHub's tabs, which are that
+  // control now, no longer resolve through selectedInDark.
   ['components/PortfolioPicker.tsx', ['categoryChipSelectedDark']],
   ['components/PastWork.tsx', ['tabActiveDark', 'tabTextActiveDark']],
   ['components/ReportDialog.tsx', ['reasonSelectedDark', 'reasonTextSelectedDark']],
   ['screens/ServicesPricingScreen.tsx', ['categoryChipActiveDark']],
   ['screens/ApproveOrDisputeScreen.tsx', ['reasonRowActiveDark', 'radioActiveDark']],
   ['screens/ReviewAndTipScreen.tsx', ['presetActiveDark', 'presetTextActiveDark']],
-  ['screens/MyJobsHubScreen.tsx', ['tabLabelSelectedDark']],
 ];
 
 test('[static] selection in dark resolves through ONE helper, everywhere', () => {
   const theme = stripComments(read('lib/theme.ts'));
 
-  // The helper exists and says what D6 says: full gold for the chosen option,
-  // NO fill (gold is line-work), and the hairline tier for the rest of the
-  // group so "chosen" is a step up rather than a different colour.
+  // The helper exists and says what D6 says: ONE full-strength line for the
+  // chosen option, NO fill, and the hairline tier for the rest of the group so
+  // "chosen" is a step up rather than a different colour. 2026-09-27 (the Lux
+  // remake, ruling 11): the line is the MINT, not the gold — "the icon and
+  // text turn #4FC58C and the rim lights mint"; the shape of the rule stands.
   assert.match(theme, /export function selectedInDark\(palette: ColorPalette\)/);
   const helper = functionBody(theme, 'export function selectedInDark');
-  assert.match(helper, /line: palette\.gold,/);
+  assert.match(helper, /line: palette\.emerald,/);
   assert.match(helper, /fill: 'transparent',/);
-  assert.match(helper, /idleLine: alpha\(palette\.gold, 0\.35\),/);
+  assert.match(helper, /idleLine: alpha\(palette\.emerald, 0\.3\),/);
   // Light is not expressed in it at all — no isDark, no second branch — which
   // is what keeps every Heritage selected state byte-identical.
   assert.doesNotMatch(helper, /isDark|\?/);
@@ -478,20 +494,23 @@ test('[static] master 26: an EMERALD glyph inside a GOLD ring, not both gold', (
   // The claim this fence makes is unchanged — a 1pt gold ring in dark — and it
   // got stronger, because the weight is now pinned for BOTH themes: light
   // draws the same ring in the hairline token, which is the parity rule.
-  assert.match(feed, /rowGlyph: \{[^}]*borderWidth: 1,/, 'the ring is one weight in both themes');
-  assert.match(feed, /rowGlyphDark: \{\s*borderColor: colors\.gold,/, 'and gold in dark');
-  assert.doesNotMatch(
-    feed,
-    /rowGlyphDark: \{[^}]*borderWidth/,
-    'the ring\'s weight belongs to both themes — a dark-only borderWidth is the fork this closed'
-  );
-  // The glyph inside it is emerald. Both being gold flattened the ring and its
-  // contents into one shape.
+  // 2026-09-29 (LUX-LIST-2 #8, the operator's "dff icons for each type" and "colour by kind"): the
+  // gold ring gave way to a ROUND WELL in the type's own colour — the colour at .14 in dark and .11
+  // in light — with the glyph in that colour at full strength. The principle this fence held is
+  // kept: the glyph never melts into its container (a tint behind a full-strength glyph), and the
+  // glyph never carries read state — the dot, the tint and the title's weight do.
+  assert.match(feed, /well: \{\s*width: 40,\s*height: 40,\s*borderRadius: 20,/, 'a 40pt round well');
   assert.match(
     feed,
-    /isDark\s*\?\s*colors\.emerald\s*:\s*!n\.read_at\s*\?\s*colors\.emerald\s*:\s*colors\.textSubtle/,
-    'the dark glyph must be emerald; light keeps its read/unread dimming'
+    /<View style=\{\[styles\.well, \{ backgroundColor: withAlpha\(tone, isDark \? 0\.14 : 0\.11\) \}\]\}>/,
+    'the well is the kind\'s colour, faint'
   );
+  assert.match(
+    feed,
+    /<Ionicons name=\{KIND_ICONS\[n\.type\] \?\? 'notifications-outline'\} size=\{20\} color=\{tone\} \/>/,
+    'the glyph is the kind\'s colour at full strength'
+  );
+  assert.doesNotMatch(feed, /read_at\s*\?\s*colors\./, 'read state never dims the glyph');
 });
 
 test('[static] master 22 and master 18 were already built', () => {

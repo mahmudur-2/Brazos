@@ -19,7 +19,7 @@ import {
   type RouteProp,
 } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { BrazosMonogram } from '../components/BrazosMonogram';
+import { CategoryGlyph } from '../components/CategoryGlyph';
 import { BrowseJobCard } from '../components/BrowseJobCard';
 import { Button } from '../components/Button';
 import { MarketJobPreview } from '../components/MarketJobPreview';
@@ -32,7 +32,9 @@ import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import {
+  acceptOfferConfirmText,
   acceptOfferConfirmTitle,
+  declineOfferActionLabel,
   declineOfferConfirmTitle,
   offerExpiryLabel,
   offerResponseNote,
@@ -85,11 +87,13 @@ import {
   radius,
   spacing,
   themedStyles,
+  litCardStyle,
   useThemeColors,
   withAlpha,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
-import { useScrollClearance } from '../ui/primitives';
+import { PINNED_FOOTER_BOTTOM_PADDING, useScrollClearance } from '../ui/primitives';
 
 /**
  * The worker's take on this job — "$45–$54" / "$54" — comes from
@@ -237,6 +241,9 @@ export function JobDetailScreen() {
   // even when the CUSTOMER authored it as a counter (AUD-P1-01). The RPCs
   // re-check both server-side; these only decide what to render.
   const viewerAuthoredBid = !!activeBid && !!user && activeBid.author_id === user.id;
+  // 2026-09-26 (the refresh, audit M-2 / M-4): the bid decision is pinned in a bar
+  // whenever the entry cards would render — the same condition, read once.
+  const showBidBar = !isOwnJob && !checking && !activeBid;
   const viewerOwesResponse =
     !!activeBid && !!user && !viewerAuthoredBid && activeBid.awaiting_id === user.id;
   const countersLeft = user ? countersRemaining(chain, user.id) : 0;
@@ -415,8 +422,8 @@ export function JobDetailScreen() {
    * allowed — job still open, not your own job, not blocked, no existing bid —
    * lives in create_bid(), so this only has to report what came back.
    */
-  async function placeBid(amountCents: number, pitch: string) {
-    if (!user) return false;
+  async function placeBid(amountCents: number, pitch: string): Promise<string | null> {
+    if (!user) return null;
 
     const { data: offerId, error } = await createMarketplaceOffer({
       jobId: job.id,
@@ -439,7 +446,7 @@ export function JobDetailScreen() {
       if (error.code === '23505') {
         await refreshMyOffer();
       }
-      return false;
+      return null;
     }
 
     // create_offer() returns the new offer's id, not the row — job_offers is
@@ -448,7 +455,7 @@ export function JobDetailScreen() {
     if (offerId) {
       await refreshMyOffer();
     }
-    return true;
+    return offerId ?? null;
   }
 
   /**
@@ -470,24 +477,27 @@ export function JobDetailScreen() {
     if (!user || job.budget_cents == null) return;
 
     setTakingListedPrice(true);
-    const sent = await placeBid(
-      job.budget_cents,
-      `I can do this for your listed budget of ${formatBudget(job.budget_cents)}.`
+    const amountCents = job.budget_cents;
+    const offerId = await placeBid(
+      amountCents,
+      `I can do this for your listed budget of ${formatBudget(amountCents)}.`
     );
     setTakingListedPrice(false);
     setConfirmBidVisible(false);
-    if (!sent) return;
+    if (!offerId) return;
 
-    await alertAsync(
-      'Offer sent',
-      'The client can see your offer and open your profile from it.'
-    );
-    await maybePromptForPush(
+    // 2026-09-26 (the refresh, audit M-2): both bid paths end on the same Bid
+    // sent screen SubmitBid lands on — the OS alert and the tab hop are gone.
+    // Fire-and-forget, as SubmitBid does: the prompt never holds the screen.
+    void maybePromptForPush(
       'Get told the moment this client accepts your offer — and when new jobs like this are posted.'
     );
-    // Through the guarded helper, not a hand-cast getParent() hop — MyJobs is
-    // a shared tab, but the helper is the one dispatch path.
-    navigateAcrossTabs('MyJobs');
+    (navigation as unknown as {
+      navigate: (
+        screen: 'BidSent',
+        params: { jobTitle: string; amountCents: number; offerId: string }
+      ) => void;
+    }).navigate('BidSent', { jobTitle: job.title, amountCents, offerId });
   }
 
   /**
@@ -577,8 +587,8 @@ export function JobDetailScreen() {
   // so beats leaving a bid form pointed at a row that no longer exists.
   if (missing) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <ScreenHeader title="Job details" onBack={goBackOrHome} />
+      <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
+        <ScreenHeader title="Job Details" onBack={goBackOrHome} />
         <View style={styles.missing}>
           <Ionicons name="alert-circle-outline" size={40} color={colors.textMuted} />
           <Text style={styles.missingTitle}>This job is no longer available</Text>
@@ -599,17 +609,22 @@ export function JobDetailScreen() {
     // (below); asking for the top edge as well would push the image down and
     // double-offset that button. Without photos the ScreenHeader IS the topmost
     // element, and omitting the inset is what rendered "Job details" on top of
-    // the system clock. The error branch above already had this right.
+    // the system clock. The error branch above already had this right. The
+    // bottom edge is the tab bar's (2026-09-26, the refresh): asking for it
+    // here too drew a blank band between the bid bar and the tabs.
     <SafeAreaView
       style={styles.safe}
-      edges={galleryPhotos.length > 0 ? ['bottom'] : ['top', 'bottom']}
+      edges={galleryPhotos.length > 0 ? [] : ['top']}
     >
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
+          contentContainerStyle={[
+            styles.content,
+            showBidBar ? { paddingBottom: spacing.xl } : { paddingBottom: navClearance },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -658,7 +673,7 @@ export function JobDetailScreen() {
               ) : null}
             </View>
           ) : (
-            <ScreenHeader title="Job details" onBack={goBackOrHome} />
+            <ScreenHeader title="Job Details" onBack={goBackOrHome} />
           )}
 
           <View style={[styles.detailContent, { gap: detailGap }]}>
@@ -673,13 +688,16 @@ export function JobDetailScreen() {
                 style={[
                   styles.iconCircle,
                   { width: iconCircleSize, height: iconCircleSize },
-                  isDark ? styles.iconCircleDark : { backgroundColor: accent.bg },
+                  // LUX-LIST-2 #6: the lit tile in dark; light keeps the category colour.
+                  isDark ? [styles.iconCircleDark, litCardStyle(true, 'tile')] : { backgroundColor: accent.bg },
                 ]}
               >
-                <Ionicons
+                <CategoryGlyph
                   name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                   size={22}
                   color={isDark ? colors.gold : accent.icon}
+                  filled
+                  bare
                 />
               </View>
               <View style={styles.jobHeaderText}>
@@ -792,6 +810,8 @@ export function JobDetailScreen() {
                     viewerIsWorker: true,
                     expiresLabel: offerExpiryLabel(activeBid.expires_at),
                   })}
+                  // Job detail is the worker's side of an open job.
+                  viewerIsWorker
                   // The control stays available while the form is open so the
                   // same button dismisses it.
                   canCounter={!(countersLeft === 0 && !showCounterForm)}
@@ -934,9 +954,17 @@ export function JobDetailScreen() {
                   from what the worker is actually paid. */}
               {payoutEstimateLabel(job) ? (
                 <Card style={[styles.payoutCard, styles.secondaryCard]}>
-                  {/* Master 10 sets the shield mark against this card's copy
-                      — decoration beside a claim the words already make. */}
-                  <BrazosMonogram variant="shield" size={64} style={styles.payoutMark} />
+                  {/* Master 10 sets a shield against this card's copy —
+                      decoration beside a claim the words already make. The
+                      refresh draws it as the plain shield-check the worker's
+                      own payment card wears; the B mark is Launch's alone. */}
+                  <View style={styles.payoutMark} pointerEvents="none">
+                    <Ionicons
+                      name="shield-checkmark-outline"
+                      size={54}
+                      color={isDark ? colors.gold : colors.emerald}
+                    />
+                  </View>
                   <Text style={styles.priceEyebrow}>
                     {payoutQuote === 'failed'
                       ? 'Stated budget'
@@ -949,10 +977,10 @@ export function JobDetailScreen() {
                     {payoutQuote === 'loading'
                       ? 'Working out what you’d receive…'
                       : payoutQuote === 'failed'
-                        ? 'Estimate only, from the customer’s stated budget. What you’d receive couldn’t be worked out right now.'
+                        ? 'Estimate only; your net couldn’t be worked out.'
                         : payoutQuote.fee
-                          ? 'Estimate only, from the customer’s stated budget with Brazos’s fee taken off — what you’d receive.'
-                          : 'Estimate only, from the customer’s stated budget — what you’d receive.'}
+                          ? 'Estimate: the stated budget less Brazos’s fee.'
+                          : 'Estimate: the customer’s stated budget.'}
                   </Text>
                 </Card>
               ) : null}
@@ -964,7 +992,7 @@ export function JobDetailScreen() {
                 <Card style={[styles.listedPriceCard, styles.secondaryCard]}>
                   <Text style={styles.priceEyebrow}>Take it at the listed price</Text>
                   <View style={styles.listedPriceInfo}>
-                    <View style={styles.priceIcon}>
+                    <View style={[styles.priceIcon, isDark && litCardStyle(true, 'tile')]}>
                       <Ionicons
                         name="cash-outline"
                         size={22}
@@ -976,21 +1004,10 @@ export function JobDetailScreen() {
                         You’ll offer {formatBudget(job.budget_cents)}
                       </Text>
                       <Text style={styles.quickBidText}>
-                        Sends the listed-price bid. The client still chooses who gets the job.
+                        The client still chooses.
                       </Text>
                     </View>
                   </View>
-                  {/* Master 10 draws this as the STANDARD control, not a
-                      conversion fill: the screen's one solid fill would be a
-                      claim this card is not making. */}
-                  <Button
-                    title={`I’ll do it for ${formatBudget(job.budget_cents)}`}
-                    variant="secondary"
-                    icon="sparkles"
-                    onPress={handleTakeListedPrice}
-                    loading={takingListedPrice}
-                    style={styles.quickBidAction}
-                  />
                 </Card>
               )}
 
@@ -1002,24 +1019,12 @@ export function JobDetailScreen() {
                   {job.budget_cents != null ? 'Or name your own price' : 'Place a bid'}
                 </Text>
                 <Text style={styles.quickBidText}>
-                  Set your own amount and tell the customer why you’re the right
-                  pick. You can withdraw a pending bid at any time.
+                  Your price, and why you’re the right pick.
                 </Text>
                 {/* Master 10 gives this a GOLD serif label — decision 3's
                     ghost. Its own hairline box in the master is the shape
                     decision 3 reserves for the standard control, so the ghost
                     ships bare inside the card that already frames it. */}
-                <Button
-                  title="Write a bid"
-                  variant="ghost"
-                  onPress={() =>
-                    (navigation as unknown as {
-                      navigate: (screen: 'SubmitBid', params: { job: OpenJob }) => void;
-                    }).navigate('SubmitBid', { job })
-                  }
-                  disabled={takingListedPrice}
-                  style={styles.quickBidAction}
-                />
               </Card>
             </>
           )}
@@ -1044,6 +1049,34 @@ export function JobDetailScreen() {
           )}
           </View>
         </ScrollView>
+        {showBidBar ? (
+          <View style={[styles.bidBar, { paddingBottom: PINNED_FOOTER_BOTTOM_PADDING }]}>
+            <View style={styles.bidBarRow}>
+              {job.budget_cents != null ? (
+                <Button
+                  title={`I’ll do it for ${formatBudget(job.budget_cents)}`}
+                  onPress={handleTakeListedPrice}
+                  loading={takingListedPrice}
+                  style={styles.bidBarPrimary}
+                />
+              ) : null}
+              <Button
+                title="Write a bid"
+                variant={job.budget_cents != null ? 'secondary' : 'primary'}
+                onPress={() =>
+                  (navigation as unknown as {
+                    navigate: (screen: 'SubmitBid', params: { job: OpenJob }) => void;
+                  }).navigate('SubmitBid', { job })
+                }
+                disabled={takingListedPrice}
+                style={job.budget_cents != null ? styles.bidBarSecondary : styles.bidBarPrimary}
+              />
+            </View>
+            <Text style={styles.bidBarNote}>
+              Questions go in your bid; chat opens once hired.
+            </Text>
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
 
       <PhotoViewer
@@ -1056,7 +1089,11 @@ export function JobDetailScreen() {
         <ConfirmDialog
           visible={confirmBidVisible}
           title={`Send a ${formatBudget(job.budget_cents)} bid?`}
-          message="The client will receive your bid and decide who gets the job."
+          message={
+            payoutQuote !== 'loading' && payoutQuote !== 'failed' && payoutQuote.min == null
+              ? `You’d receive ${formatBudget(payoutQuote.max)} after the fee. The client will receive your bid and decide who gets the job.`
+              : 'The client will receive your bid and decide who gets the job.'
+          }
           confirmText="Send bid"
           cancelText="Cancel"
           loading={takingListedPrice}
@@ -1078,9 +1115,9 @@ export function JobDetailScreen() {
 
       <ConfirmDialog
         visible={confirmResponse === 'accept'}
-        title={acceptOfferConfirmTitle(formatBudget(activeBid?.amount_cents ?? null))}
+        title={acceptOfferConfirmTitle(formatBudget(activeBid?.amount_cents ?? null), true)}
         message="This takes the job at the customer’s countered amount and closes the negotiation. The job is assigned to you and moves into My Jobs."
-        confirmText="Accept offer"
+        confirmText={acceptOfferConfirmText(true)}
         cancelText="Cancel"
         loading={responding === 'accept'}
         onConfirm={handleAcceptCounter}
@@ -1089,9 +1126,9 @@ export function JobDetailScreen() {
 
       <ConfirmDialog
         visible={confirmResponse === 'decline'}
-        title={declineOfferConfirmTitle(formatBudget(activeBid?.amount_cents ?? null))}
+        title={declineOfferConfirmTitle(formatBudget(activeBid?.amount_cents ?? null), true)}
         message="This closes the negotiation — the customer’s counter can’t be accepted afterwards. You can send a new bid unless the job is filled."
-        confirmText="Decline offer"
+        confirmText={declineOfferActionLabel(true)}
         cancelText="Cancel"
         loading={responding === 'decline'}
         onConfirm={handleDeclineCounter}
@@ -1299,7 +1336,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 38,
     lineHeight: 44,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.money,
   },
   payoutNote: {
     fontSize: 12,
@@ -1310,7 +1347,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   priceEyebrow: {
     fontSize: 13,
     fontWeight: '800',
-    color: colors.gold,
+    // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
+    color: colors.eyebrowGold,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
@@ -1352,7 +1390,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   similarTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: colors.gold,
+    color: colors.eyebrow,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
   },
@@ -1363,6 +1401,30 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 13,
     color: colors.textMuted,
     lineHeight: 19,
+  },
+  bidBar: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  bidBarRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  bidBarPrimary: {
+    flex: 1.4,
+  },
+  bidBarSecondary: {
+    flex: 1,
+  },
+  bidBarNote: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
   quickBidAction: {
     marginTop: spacing.xs,
@@ -1384,7 +1446,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   bidAmount: {
     fontSize: 24,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.money,
     marginTop: spacing.sm,
   },
   bidMessage: {

@@ -14,6 +14,7 @@ import {
   arrivalWindowLabel,
   fetchJobLocation,
   markWorkerArrival,
+  updateJobStatus,
   type JobPrivateLocation,
 } from '../lib/jobs';
 import {
@@ -21,7 +22,7 @@ import {
   JOB_LIFECYCLE_LABELS,
 } from '../lib/jobLifecycle';
 import type { MyJobsStackParamList } from '../lib/navigation';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { litCardStyle, radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screen 56 — Route & arrival (Phase 6, worker side).
@@ -34,7 +35,7 @@ import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from
  * screen 33 (TrackWorker).
  */
 export function RouteArrivalScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'RouteArrival'>>();
   const { user } = useAuth();
@@ -98,13 +99,26 @@ export function RouteArrivalScreen() {
     await refresh();
   }
 
+  const [starting, setStarting] = useState(false);
+  async function start() {
+    if (starting) return;
+    setStarting(true);
+    const { error: startError } = await updateJobStatus(params.jobId, 'in_progress');
+    setStarting(false);
+    if (startError) {
+      await alertAsync('Could not start job', userMessage(startError));
+      return;
+    }
+    goBackOrHome();
+  }
+
   const enRouteDone = !!job?.en_route_at;
   const arrivedDone = !!job?.arrived_at;
   const beforeStart = job?.status === 'assigned';
 
   return (
     <DetailScreen
-      title="Route & arrival"
+      title="Route & Arrival"
       subtitle={job?.title}
       onBack={goBackOrHome}
       state={state}
@@ -114,7 +128,7 @@ export function RouteArrivalScreen() {
           : [
               {
                 content: (
-                  <View style={styles.statusCard}>
+                  <View style={[styles.statusCard, litCardStyle(isDark)]}>
                     <Text style={styles.eyebrow}>WHERE THINGS STAND</Text>
                     <Text style={styles.statusLabel}>
                       {lifecycle ? JOB_LIFECYCLE_LABELS[lifecycle] : ''}
@@ -130,7 +144,7 @@ export function RouteArrivalScreen() {
               {
                 title: 'Getting there',
                 content: (
-                  <View style={styles.infoCard}>
+                  <View style={[styles.infoCard, litCardStyle(isDark)]}>
                     {location?.address_line ? (
                       <View style={styles.infoRow}>
                         <Ionicons name="location-outline" size={18} color={colors.emerald} />
@@ -139,7 +153,7 @@ export function RouteArrivalScreen() {
                             {location.address_line}
                           </Text>
                           <Text style={styles.infoCaption}>
-                            Exact address — shared with you because you were hired.
+                            Shared because you were hired.
                           </Text>
                         </View>
                       </View>
@@ -171,6 +185,7 @@ export function RouteArrivalScreen() {
               },
               {
                 title: 'Your status',
+                titleTone: 'gold',
                 content: (
                   <View style={styles.steps}>
                     <StepRow
@@ -214,11 +229,10 @@ export function RouteArrivalScreen() {
               disabled={marking !== null}
             />
           ) : (
-            <Button
-              title="Back to the job — start work there"
-              variant="secondary"
-              onPress={goBackOrHome}
-            />
+            // M-3 — arrived is one step from working, so the last button IS
+            // that step (the same transition Your Job makes), not a detour
+            // back to find it.
+            <Button title="Start job" onPress={() => void start()} loading={starting} />
           )
         ) : undefined
       }
@@ -263,7 +277,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
-    color: colors.emerald,
+    color: colors.eyebrow,
     letterSpacing: 0.8,
   },
   statusLabel: {

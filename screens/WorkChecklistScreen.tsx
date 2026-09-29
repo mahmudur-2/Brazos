@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { GlowTextInput } from '../components/GlowTextInput';
 import { FormScreen } from '../ui/templates/FormScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useAuth } from '../hooks/useAuth';
@@ -18,7 +19,7 @@ import {
 } from '../lib/checklist';
 import { deriveJobLifecycle } from '../lib/jobLifecycle';
 import type { MyJobsStackParamList } from '../lib/navigation';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { litCardStyle, radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screen 57 — Work checklist (Phase 6, worker side).
@@ -151,7 +152,7 @@ export function WorkChecklistScreen() {
 
   return (
     <FormScreen
-      title="Work checklist"
+      title="Work Checklist"
       subtitle={job?.title}
       onBack={goBackOrHome}
       state={state}
@@ -161,7 +162,8 @@ export function WorkChecklistScreen() {
       submitLoading={adding}
       footerNote={
         editable ? (
-          <TextInput
+          <GlowTextInput
+              glowRadius={radius.lg}
             keyboardAppearance={isDark ? 'dark' : 'light'}
             style={styles.input}
             value={draft}
@@ -190,7 +192,7 @@ export function WorkChecklistScreen() {
       </View>
 
       {items.length === 0 ? (
-        <View style={styles.emptyCard}>
+        <View style={[styles.emptyCard, litCardStyle(isDark)]}>
           <Ionicons name="list-outline" size={26} color={colors.emerald} />
           <Text style={styles.emptyTitle}>Plan the job in steps</Text>
           <Text style={styles.emptyText}>
@@ -201,7 +203,7 @@ export function WorkChecklistScreen() {
       ) : (
         <View style={styles.list}>
           {items.map((item) => (
-            <View key={item.id} style={styles.itemRow}>
+            <View key={item.id} style={[styles.itemRow, litCardStyle(isDark)]}>
               <Pressable
                 style={styles.itemMain}
                 onPress={editable ? () => toggleItem(item) : undefined}

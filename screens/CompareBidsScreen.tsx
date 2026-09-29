@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
-import { BrazosMonogram } from '../components/BrazosMonogram';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useJobOffers } from '../hooks/useJobOffers';
@@ -24,7 +23,7 @@ import { formatTimeAgo } from '../lib/time';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { useDialNumber } from '../lib/designOverrides';
 import {
-  fonts,
+  litCardStyle, fonts,
   radius,
   spacing,
   starColors,
@@ -114,7 +113,7 @@ export function CompareBidsScreen() {
 
   return (
     <DetailScreen
-      title="Compare bids"
+      title="Compare Bids"
       onBack={goBackOrHome}
       state={state}
       sections={[
@@ -124,11 +123,9 @@ export function CompareBidsScreen() {
               {/* §5.2 — master 46's framing: count, title, and the line. The
                   protection copy it draws is the closing card below, and it
                   states only mechanics this build has. */}
-              <View style={[styles.headerCard, isDark && styles.cardDark]}>
-                {/* Master 46's ghost B, behind the copy. */}
-                {isDark ? (
-                  <BrazosMonogram size={120} style={styles.headerMark} />
-                ) : null}
+              <View style={[styles.headerCard, litCardStyle(isDark)]}>
+                {/* 2026-09-26 (the refresh): master 46's ghost B is gone —
+                    the B mark belongs to the Launch screen only. */}
                 <View style={styles.headerTopRow}>
                   <Text style={styles.headerEyebrow} numberOfLines={1}>
                     {pending.length} {pending.length === 1 ? 'bid' : 'bids'} · {job.title}
@@ -175,7 +172,7 @@ export function CompareBidsScreen() {
           // gate before release — so it is configuration truth, not a claim
           // about any particular bid.
           content: (
-            <View style={[styles.protectsCard, isDark && styles.cardDark]}>
+            <View style={[styles.protectsCard, litCardStyle(isDark)]}>
               <View style={styles.protectsShield} pointerEvents="none">
                 <Ionicons
                   name="shield-checkmark-outline"
@@ -253,7 +250,7 @@ function CompareRow({
       style={({ pressed }) => [
         styles.row,
         { padding: rowPadding, borderRadius: rowRadius },
-        isDark && styles.cardDark,
+        litCardStyle(isDark),
         highestRated && styles.rowHighest,
         highestRated && { borderWidth: highestBorderWidth },
         pressed && styles.rowPressed,
@@ -351,11 +348,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  headerMark: {
-    position: 'absolute',
-    right: -8,
-    top: -14,
-  },
   headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -368,7 +360,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '800',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
-    color: colors.emerald,
+    color: colors.eyebrow,
   },
   // Master 46's gold-outline pill. Configuration truth, not a per-job claim.
   protectedPill: {
@@ -517,9 +509,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontFamily: fonts.display,
     fontSize: 26,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.money,
   },
-  rowAmountDark: { color: colors.emerald },
+  rowAmountDark: { color: colors.money },
   trustNew: {
     fontSize: 13,
     fontWeight: '600',

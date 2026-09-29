@@ -1,3 +1,4 @@
+import { useModalPresence } from '../hooks/useModalPresence';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { REACTION_EMOJIS } from '../lib/reactions';
 import {
@@ -28,6 +29,8 @@ export function ReactionPicker({
   onClose,
 }: ReactionPickerProps) {
   const { palette: colors, isDark } = useThemeColors();
+  // #64 (M-31): on screen or not — the one confirm engine never stacks a second modal on iOS.
+  useModalPresence(visible);
   const styles = stylesFor(colors);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

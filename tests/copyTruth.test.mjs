@@ -34,7 +34,9 @@ test('C5 · the brand is out of prose at the named sites', () => {
     assert.match(code(file), /poster\.full_name \?\? 'Customer'/, `${file}: the poster fallback is a plain word`);
     assert.doesNotMatch(code(file), /BRAZOS customer/);
   }
-  assert.match(code('screens/AccountSafetyScreen.tsx'), /sub: 'How your data is protected\.'/);
+  // 2026-09-29 (LUX-LIST-2 #7): the Privacy Policy row moved to the Profile hub's Legal dropdown,
+  // its line with it (the row's spoken hint).
+  assert.match(code('screens/ProfileScreen.tsx'), /hint: 'How your data is protected\.'/);
   assert.match(code('screens/DeleteAccountScreen.tsx'), /'Your account has been deleted\. Reviews you wrote or received stay on the marketplace/);
   // n5 (2026-09-04): Welcome leads with email and keeps phone second; both
   // create-account hints stay brand-free (tests/firstSession.test.mjs pins the order).
@@ -84,7 +86,9 @@ test('C6 · the unprovable claims are gone: verification, the photo statistic, "
   assert.doesNotMatch(welcome, /Verified workers/);
 
   const post = code('screens/PostJobScreen.tsx');
-  assert.match(post, /Add photos so workers can see the work\./);
+  // 2026-09-28 (LUX-LIST-64 #32): the photo nudge that carried the honest
+  // sentence is gone entirely — and the statistic stays gone with it.
+  assert.doesNotMatch(post, /Add photos so workers can see the work\./);
   assert.doesNotMatch(post, /Jobs with a photo get more bids/);
 
   const profile = code('screens/WorkerProfileScreen.tsx');

@@ -106,6 +106,22 @@ export function SwipeableRow({ children, actions, enabled = true }: SwipeableRow
     transform: [{ translateX: translateX.value }],
   }));
 
+  // 2026-09-28 (LUX-LIST-64 #28) — THE TILES SHOW ONLY WHERE THE ROW HAS MOVED
+  // OFF THEM. The rows are see-through now (the clean list: no card), and the
+  // tiles used to sit whole behind every row — Mute, Report and More read
+  // through the name and the message. A clip the tiles' width rides right by
+  // exactly what the row has NOT uncovered, and the tiles ride back left by the
+  // same inside it, so they hold still on screen while the clip opens over
+  // them: at rest the clip sits wholly past the row's right edge, where the
+  // container cuts it, and nothing of the tiles draws. Two transforms on the UI
+  // thread, no layout.
+  const clipStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: revealWidth + translateX.value }],
+  }));
+  const tilesStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -(revealWidth + translateX.value) }],
+  }));
+
   if (!enabled || actions.length === 0) return <>{children}</>;
 
   return (
@@ -113,7 +129,11 @@ export function SwipeableRow({ children, actions, enabled = true }: SwipeableRow
       {/* The tiles are ordinary Pressables on the JS thread — no worklet
           hop is needed to run an action, because a tap on a tile is not part
           of the gesture that revealed it. */}
-      <SwipeActionTiles actions={actions} onAction={runAction} />
+      <Animated.View style={[styles.tilesClip, { width: revealWidth }, clipStyle]}>
+        <Animated.View style={[styles.tilesTrack, tilesStyle]}>
+          <SwipeActionTiles actions={actions} onAction={runAction} />
+        </Animated.View>
+      </Animated.View>
       <GestureDetector gesture={pan}>
         <Animated.View style={rowStyle}>{children}</Animated.View>
       </GestureDetector>

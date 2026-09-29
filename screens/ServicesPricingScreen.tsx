@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { GlowTextInput } from '../components/GlowTextInput';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { Toggle } from '../ui/primitives';
 import { FormScreen } from '../ui/templates/FormScreen';
@@ -28,6 +29,7 @@ import {
   radius,
   spacing,
   themedStyles,
+  litCardStyle,
   useThemeColors,
   type ColorPalette,
   disabledControl,
@@ -195,17 +197,16 @@ export function ServicesPricingScreen() {
 
   return (
     <FormScreen
-      title="Services & availability"
+      title="Services & Availability"
       onBack={goBackOrHome}
       state={state}
     >
-      <View style={styles.card}>
+      <View style={[styles.card, litCardStyle(isDark)]}>
         <View style={styles.availabilityRow}>
           <View style={styles.availabilityCopy}>
             <Text style={styles.cardTitle}>Taking new work</Text>
             <Text style={styles.cardNote}>
-              Shown on your public profile. Turning it off doesn’t block offers
-              — it just tells customers what to expect.
+              On your profile. Off won’t block offers.
             </Text>
           </View>
           <Toggle
@@ -215,7 +216,8 @@ export function ServicesPricingScreen() {
             accessibilityLabel="Taking new work"
           />
         </View>
-        <TextInput
+        <GlowTextInput
+              glowRadius={radius.pill}
           keyboardAppearance={isDark ? 'dark' : 'light'}
           style={styles.input}
           value={note}
@@ -237,7 +239,7 @@ export function ServicesPricingScreen() {
       ) : (
         <View style={styles.list}>
           {services.map((service) => (
-            <View key={service.id} style={styles.serviceRow}>
+            <View key={service.id} style={[styles.serviceRow, litCardStyle(isDark)]}>
               <View style={styles.serviceCopy}>
                 <Text style={styles.serviceTitle} numberOfLines={1}>
                   {service.title}
@@ -252,7 +254,8 @@ export function ServicesPricingScreen() {
               <Pressable
                 onPress={() => togglePublished(service)}
                 disabled={busyId === service.id}
-                hitSlop={8}
+                // M-34 — a 20pt glyph + 12 + 12 = the 44pt floor.
+                hitSlop={12}
                 accessibilityRole="button"
                 accessibilityLabel={service.published ? 'Unpublish' : 'Publish'}
               >
@@ -265,7 +268,8 @@ export function ServicesPricingScreen() {
               <Pressable
                 onPress={() => deleteService(service)}
                 disabled={busyId === service.id}
-                hitSlop={8}
+                // M-34 — a 20pt glyph + 12 + 12 = the 44pt floor.
+                hitSlop={12}
                 accessibilityRole="button"
                 accessibilityLabel={`Remove ${service.title}`}
               >
@@ -276,9 +280,10 @@ export function ServicesPricingScreen() {
         </View>
       )}
 
-      <View style={styles.card}>
+      <View style={[styles.card, litCardStyle(isDark)]}>
         <Text style={styles.cardTitle}>Add a service</Text>
-        <TextInput
+        <GlowTextInput
+              glowRadius={radius.pill}
           keyboardAppearance={isDark ? 'dark' : 'light'}
           style={styles.input}
           value={title}
@@ -298,9 +303,11 @@ export function ServicesPricingScreen() {
         />
         {priceMode === 'flat' ? (
           <View style={styles.priceRow}>
-            <TextInput
+            <GlowTextInput
+              glowRadius={radius.pill}
+              wrapStyle={styles.priceInput}
               keyboardAppearance={isDark ? 'dark' : 'light'}
-              style={[styles.input, styles.priceInput]}
+              style={styles.input}
               value={price}
               onChangeText={setPrice}
               placeholder="Price in dollars"

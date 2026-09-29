@@ -82,24 +82,56 @@ function rankOf(state: JobLifecycleState, job: Job, reviewedByMe: boolean): numb
 }
 
 /**
- * Every posted job that needs the customer's move, most urgent first. Returns
- * ALL of them: the caller slices to ATTENTION_CAP and counts the remainder,
- * so "See all" can be shown from the true total.
- *
- * Within a rank the most recently posted job comes first, ties broken by id
- * ascending, so two renders of the same data draw the same order.
+ * 2026-09-26 (the refresh, audit M-15) — WHAT NEEDS THE WORKER'S MOVE, on
+ * Worker Home. The same shape as the customer's rule above, from the same
+ * batched hub read: an issue on one of the worker's jobs first, then the
+ * worker's own next step on a hired job (head out, arrive and start, finish),
+ * then a review to leave. Waiting on the customer — payment protection, the
+ * approval clock — is not the worker's move and never reaches the strip.
  */
-export function attentionItems(input: {
-  posted: readonly Job[];
+function workerRankOf(state: JobLifecycleState, reviewedByMe: boolean): number | null {
+  switch (state) {
+    case 'disputed':
+      return 0;
+    case 'confirmed':
+      return 1;
+    case 'en_route':
+    case 'arrived':
+      return 2;
+    case 'in_progress':
+      return 3;
+    case 'completed':
+      return reviewedByMe ? null : 4;
+    default:
+      // pending_payment and awaiting_approval wait on the customer; open,
+      // draft and cancelled are not a hired job; 'unknown' is never a prompt.
+      return null;
+  }
+}
+
+type RankInput = {
   payments: Record<string, PaymentStatusSummary>;
   openDisputeJobIds: ReadonlySet<string>;
   reviewedJobIds: ReadonlySet<string>;
   nowMs?: number;
-}): AttentionItem[] {
+};
+
+/**
+ * The one ranking loop both lists share: derive each job once, rank it with
+ * the perspective's rule, carry the hub card's own next-action line, and
+ * order by rank, then newest, then id — so two renders of the same data draw
+ * the same order.
+ */
+function rankJobs(
+  jobs: readonly Job[],
+  perspective: 'customer' | 'worker',
+  rank: (state: JobLifecycleState, job: Job, reviewedByMe: boolean) => number | null,
+  input: RankInput
+): AttentionItem[] {
   const nowMs = input.nowMs ?? Date.now();
   const ranked: { item: AttentionItem; rank: number; postedMs: number }[] = [];
 
-  for (const job of input.posted) {
+  for (const job of jobs) {
     const reviewedByMe = input.reviewedJobIds.has(job.id);
     const state = deriveJobLifecycle(
       {
@@ -109,17 +141,17 @@ export function attentionItems(input: {
       },
       nowMs
     );
-    const rank = rankOf(state, job, reviewedByMe);
-    if (rank === null) continue;
+    const r = rank(state, job, reviewedByMe);
+    if (r === null) continue;
     const postedMs = Date.parse(job.created_at);
     ranked.push({
-      rank,
+      rank: r,
       postedMs: Number.isFinite(postedMs) ? postedMs : 0,
       item: {
         job,
         state,
         line: myJobsNextAction({
-          perspective: 'customer',
+          perspective,
           state,
           bidCount: job.bid_count,
           reviewedByMe,
@@ -138,4 +170,25 @@ export function attentionItems(input: {
   });
 
   return ranked.map((entry) => entry.item);
+}
+
+/**
+ * Every posted job that needs the customer's move, most urgent first. Returns
+ * ALL of them: the caller slices to ATTENTION_CAP and counts the remainder,
+ * so "See all" can be shown from the true total.
+ *
+ * Within a rank the most recently posted job comes first, ties broken by id
+ * ascending, so two renders of the same data draw the same order.
+ */
+export function attentionItems(input: {
+  posted: readonly Job[];
+} & RankInput): AttentionItem[] {
+  return rankJobs(input.posted, 'customer', rankOf, input);
+}
+
+/** M-15 — every hired job that needs the worker's move, most urgent first. */
+export function workerAttentionItems(input: {
+  working: readonly Job[];
+} & RankInput): AttentionItem[] {
+  return rankJobs(input.working, 'worker', (state, _job, reviewedByMe) => workerRankOf(state, reviewedByMe), input);
 }

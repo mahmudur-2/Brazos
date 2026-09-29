@@ -5,6 +5,7 @@ type AvatarPressableProps = {
   name?: string | null;
   uri?: string | null;
   size?: number;
+  initialsSize?: number;
   /** Opens the photo full-screen — wire this to a PhotoViewer with
    *  allowShare={false} (a profile picture isn't something to hand
    *  save/forward on, just look at). */
@@ -25,13 +26,13 @@ type AvatarPressableProps = {
  * independently — the same pattern already proven for tap-vs-long-press on a
  * chat photo (ChatBubble) — so this never competes with the outer control.
  */
-export function AvatarPressable({ name, uri, size = 44, onLongPress }: AvatarPressableProps) {
+export function AvatarPressable({ name, uri, size = 44, initialsSize, onLongPress }: AvatarPressableProps) {
   if (!uri || !onLongPress) {
-    return <Avatar name={name} uri={uri} size={size} />;
+    return <Avatar name={name} uri={uri} size={size} initialsSize={initialsSize} />;
   }
   return (
     <Pressable onLongPress={onLongPress} delayLongPress={350} hitSlop={8}>
-      <Avatar name={name} uri={uri} size={size} />
+      <Avatar name={name} uri={uri} size={size} initialsSize={initialsSize} />
     </Pressable>
   );
 }

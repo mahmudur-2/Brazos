@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { RemoteImage } from '../components/RemoteImage';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { GlowTextInput } from '../components/GlowTextInput';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JobVideo } from '../components/JobVideo';
@@ -36,12 +37,14 @@ import {
 } from '../lib/disputes';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { completionPhotosOf, completionVideosOf, formatBudget } from '../lib/jobs';
+import { releaseCountdownLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import {
   radius,
   selectedInDark,
   spacing,
   themedStyles,
+  litCardStyle,
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
@@ -224,6 +227,9 @@ export function ApproveOrDisputeScreen() {
     setDispute(data && data.status === 'open' ? data : null);
   }
 
+  // 2026-09-26 (the refresh, audit M-6): the charge includes the protection fee,
+  // which the worker never receives — so the approve button names the act, and
+  // the dialog names the charge.
   // The pinned action follows the actual money state, in priority order:
   // an open report offers withdraw; a held payment offers approval (when the
   // mode and the kill switch allow it); a released — or approved, payout
@@ -234,7 +240,7 @@ export function ApproveOrDisputeScreen() {
       ? 'Withdraw report'
       : held
         ? releaseAllowed
-          ? `Approve & release ${formatBudget(payment ? customerChargeCents(payment) : null)}`
+          ? `Approve & release payment`
           : undefined
         : settled
           ? stripe
@@ -257,7 +263,7 @@ export function ApproveOrDisputeScreen() {
   return (
     <>
       <FormScreen
-        title="Finished work"
+        title="Finished Work"
         subtitle={job.title}
         onBack={() => (reporting ? setReporting(false) : goBackOrHome())}
         state={state}
@@ -301,7 +307,7 @@ export function ApproveOrDisputeScreen() {
         ) : null}
 
         {payment && !canFundNow ? (
-          <View style={styles.paymentCard}>
+          <View style={[styles.paymentCard, litCardStyle(isDark)]}>
             {/* D16: mode-aware copy. Sandbox keeps its wording verbatim;
                 stripe says the same money fact without the sandbox label.
                 MoneyText keeps the row's real status — held is still
@@ -321,6 +327,13 @@ export function ApproveOrDisputeScreen() {
             {/* Tier A (C2, D-4): the customer's held figure is the row's own
                 charge_amount_cents, in the card, the CTA and the dialog alike. */}
             <MoneyText cents={customerChargeCents(payment)} state={payment.status} size="lg" />
+            {held && releaseDeadlineMs(job) != null ? (
+              <Text style={styles.paymentNote}>
+                Releases automatically in{' '}
+                {releaseCountdownLabel(releaseDeadlineMs(job) as number, Date.now())} if you do
+                nothing.
+              </Text>
+            ) : null}
             <Text style={styles.paymentNote}>
               {paymentsMode === 'sandbox'
                 ? released
@@ -349,7 +362,7 @@ export function ApproveOrDisputeScreen() {
           // an empty or authorized-only ledger. Funding is offered from the
           // same one derivation ClientJobDetail uses; there is nothing to
           // release until the funds are protected first.
-          <View style={styles.paymentCard}>
+          <View style={[styles.paymentCard, litCardStyle(isDark)]}>
             <Text style={styles.eyebrow}>PAYMENT NOT PROTECTED YET</Text>
             <Text style={styles.paymentNote}>
               {payment?.status === 'authorized'
@@ -362,7 +375,7 @@ export function ApproveOrDisputeScreen() {
             />
           </View>
         ) : (
-          <View style={styles.paymentCard}>
+          <View style={[styles.paymentCard, litCardStyle(isDark)]}>
             <Text style={styles.eyebrow}>NO PAYMENT ON THIS JOB</Text>
             <Text style={styles.paymentNote}>
               This job finished without a protected payment, so there is
@@ -399,7 +412,8 @@ export function ApproveOrDisputeScreen() {
                 <Text style={styles.reasonLabel}>{DISPUTE_REASON_LABELS[r]}</Text>
               </Pressable>
             ))}
-            <TextInput
+            <GlowTextInput
+              glowRadius={radius.lg}
               keyboardAppearance={isDark ? 'dark' : 'light'}
               style={styles.detailsInput}
               value={details}
@@ -460,11 +474,12 @@ export function ApproveOrDisputeScreen() {
 
       <ConfirmDialog
         visible={confirmApprove}
-        title={`Release ${formatBudget(payment ? customerChargeCents(payment) : null)} to the worker?`}
+        title="Release the payment to the worker?"
         message={
-          paymentsMode === 'sandbox'
+          `Your card was charged ${formatBudget(payment ? customerChargeCents(payment) : null)} at checkout, including the protection fee — nothing more is charged.\n\n` +
+          (paymentsMode === 'sandbox'
             ? 'This approves the finished work and releases the held sandbox funds to the worker. It can’t be undone. No real money moves in this build.'
-            : 'This approves the finished work and releases the payment to the worker. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands.'
+            : 'This approves the finished work and releases the payment to the worker. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands.')
         }
         confirmText="Approve & release"
         cancelText="Not yet"
@@ -492,7 +507,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
-    color: colors.textMuted,
+    color: colors.eyebrow,
     letterSpacing: 0.8,
   },
   sectionTitle: {

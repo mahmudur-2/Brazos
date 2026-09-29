@@ -23,17 +23,20 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { Button } from '../components/Button';
+import { Card } from '../components/Card';
 import { Chip } from '../components/Chip';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { EditBudgetDialog } from '../components/EditBudgetDialog';
 import { EyeOffIcon } from '../components/EyeOffIcon';
+import { JobLivePage } from '../components/JobLivePage';
+import { JobSummaryCard, type SummaryTarget } from '../components/JobSummaryCard';
 import { OfferAmountField, validateOfferAmount } from '../components/OfferComposer';
 import { PhotoViewer } from '../components/PhotoViewer';
+import { POST_BAR_BUTTON, PostJobBar } from '../components/PostJobBar';
+import { PriceDropdown, type PriceDropdownHandle, type PriceViewport } from '../components/PriceDropdown';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { ServicePickerSheet } from '../components/ServicePickerSheet';
-import type { SkillCategory } from '../lib/skillCategories';
-import { SuccessMark } from '../components/SuccessMark';
+import { SealTransition, type SealFrom, type SealPhase } from '../components/SealTransition';
 import { FieldLabel, TextField } from '../components/TextField';
+import { UndoToast } from '../components/UndoToast';
 import { useAuth } from '../hooks/useAuth';
 import { useEntrance } from '../hooks/useEntrance';
 import { trackIntent } from '../lib/observability/analytics';
@@ -41,7 +44,6 @@ import { Sentry } from '../lib/observability/sentry';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   arrivalWindowLabel,
-  budgetRangeLabel,
   categoryAccent,
   createJob,
   dollarsToCents,
@@ -58,12 +60,12 @@ import {
 } from '../lib/jobs';
 import {
   clearPostJobDraft,
+  draftHasContent,
   loadPostJobDraft,
   savePostJobDraft,
 } from '../lib/postJobDraft';
 import {
   DEFAULT_PRICING_MODE,
-  priceFieldLabel,
   priceRowLabel,
   pricingModeFrom,
   type PricingMode,
@@ -83,25 +85,19 @@ import {
   uploadJobVideo,
 } from '../lib/storage';
 import type { PostJobRouteParamList } from '../lib/navigation';
-import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
+import { goBackOrHome, navigateAcrossTabs, originLabel } from '../lib/navigationRef';
 import { useDialNumber } from '../lib/designOverrides';
 import {
   emeraldColorsFor,
   fonts,
   radius,
-  shadows,
   spacing,
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
-import {
-  LitSurface,
-  MediaUploader,
-  MoneyText,
-  PINNED_FOOTER_BOTTOM_PADDING,
-} from '../ui/primitives';
-import { SuccessScreen } from '../ui/templates/SuccessScreen';
+import { MediaUploader } from '../ui/primitives';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 // Ten per the screen-13 spec; phase49 raised create_job's server cap to match.
@@ -141,6 +137,8 @@ const ARRIVAL_WINDOWS = [
 
 /** How many upcoming days the date picker row offers (Today first). */
 const SCHEDULE_DAYS = 14;
+/** The progress bar's crossfade into its next segment (2026-09-27, ruling 14). */
+const PROGRESS_FILL_MS = 220;
 
 function toLocalIsoDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
@@ -162,86 +160,49 @@ function upcomingDates(): { iso: string; label: string }[] {
   });
 }
 
-/**
- * D18 — the summary card's MEDIA row.
- *
- * Each side pluralises on its own count, so "1 photo • 2 videos" is as
- * possible as "3 photos • 1 video". A kind with nothing attached is OMITTED
- * rather than written as a zero: "0 videos" is noise on a review screen, and
- * reading it as a fact about the posting takes a beat longer than reading the
- * photos it actually has. Nothing at all reads as "None", which is the
- * accurate answer and not a placeholder.
- *
- * "video", never "clip" — one word for one thing, everywhere in the flow.
- */
-function mediaSummary(photoCount: number, videoCount: number): string {
-  const parts: string[] = [];
-  if (photoCount > 0) parts.push(`${photoCount} ${photoCount === 1 ? 'photo' : 'photos'}`);
-  if (videoCount > 0) parts.push(`${videoCount} ${videoCount === 1 ? 'video' : 'videos'}`);
-  return parts.length > 0 ? parts.join(' • ') : 'None';
-}
+// D18 — the summary's media count moved with the summary: it is
+// components/JobSummaryCard.tsx's `mediaCountText` now (2026-09-28, LUX-LIST-64
+// #38), still pluralising each side and omitting an empty one.
 
 const POST_STEPS = [
   {
     label: 'Describe',
     title: 'What needs doing?',
-    subtitle: 'A clear title and a few useful details help workers decide quickly.',
+    // 2026-09-27 (the Lux remake, ruling 10): every subtitle on ONE line at
+    // 393 wide — nothing on two lines when one line says it.
+    subtitle: 'A clear title and a few details help workers decide.',
   },
   {
     label: 'Media',
     title: 'Show the task',
-    subtitle: 'Photos and short clips are optional, but they can make the task clearer.',
+    subtitle: 'Photos and clips are optional, but they help workers.',
   },
   {
     label: 'Location',
     title: 'Where and when?',
-    subtitle:
-      'Workers browsing see only the area. The exact address stays private until you hire someone.',
+    subtitle: 'Workers see only the area until you hire someone.',
   },
   {
     label: 'Review',
     title: 'Review and publish',
-    subtitle: 'Check the details below. You can still go back without losing your work.',
+    subtitle: 'Check the details. You can still go back.',
   },
 ] as const;
 
 /**
- * RUN PUBLISH1 (C1) — the publish surface's cards carry Home's wash.
- *
- * COPIED, NOT CHOSEN: 0.04 is `CARD_LIFT_ALPHA` in screens/HomeScreen.tsx, the
- * value the lit promo card ships with. There is no master for the publish
- * screen, so the design authority is the language already on Home, and a
- * second alpha here would be a second decision about the same wash.
- */
-const PUBLISH_CARD_LIFT_ALPHA = 0.04;
-
-/**
- * RUN PJ1 (C3) — THE "OTHER" PILL'S SHEET ROWS.
- *
- * Home's "Other services" sheet (components/ServicePickerSheet.tsx) is reused
- * verbatim — no prop was added and no caller changed. What differs is the
- * list: Home browses WORKERS, so its rows come from lib/skillCategories'
- * search entry points; this screen writes a JOB, whose category must be a
- * value the `job_category` enum accepts — so the rows are JOB_CATEGORIES,
- * the one source create_job() is typed against, each with the label and
- * glyph the pills themselves draw. "Other" is itself a row, so choosing it
- * selects the Other category.
- */
-/**
  * Tier A (C7) — THE ONE FILTER SITE of the launch posting allowlist. Every
- * enumeration on this screen (the pills, their measurement pass, the packing,
- * the Other sheet's rows and its pick) reads this list; the shared map is
- * untouched and every other surface keeps reading it whole.
+ * enumeration on this screen (the pills, their measurement pass and the
+ * packing) reads this list; the shared map is untouched and every other
+ * surface keeps reading it whole.
+ *
+ * 2026-09-26 (the refresh, audit M-7) — the "Other" pill no longer opens a
+ * sheet. The sheet listed exactly these categories again, so it was a second
+ * tap to reach what the pills already offer; "Other" is now an ordinary pill
+ * that selects the Other category.
  */
 const POSTABLE_CATEGORIES: readonly JobCategory[] = JOB_CATEGORIES.filter(
   (c) => !LAUNCH_EXCLUDED_CATEGORIES.includes(c)
 );
-
-const OTHER_SHEET_SERVICES: SkillCategory[] = POSTABLE_CATEGORIES.map((c) => ({
-  key: c,
-  label: JOB_CATEGORY_LABELS[c],
-  icon: JOB_CATEGORY_ICONS[c],
-}));
 
 /**
  * RUN PJ1 (C2b) — FIRST-FIT-DECREASING PACKING OF THE CATEGORY PILLS.
@@ -251,7 +212,7 @@ const OTHER_SHEET_SERVICES: SkillCategory[] = POSTABLE_CATEGORIES.map((c) => ({
  * first-fit-decreasing gets it instead of leaving large dead ends. Computed
  * once from real measured widths, deterministic (widths sort descending with
  * the source order as the tiebreak). "Other" never participates — it renders
- * last regardless of fit, because C3 gives it the category sheet.
+ * last regardless of fit, as the catch-all after every named category.
  *
  * Flattening the packed rows re-wraps identically under flexWrap: every
  * row's prefix fits by construction, and a row's first item was placed there
@@ -425,13 +386,40 @@ export function PostJobScreen() {
   // edit/hire-again success doesn't reference a newly created job.
   const [publishedJob, setPublishedJob] = useState<Job | null>(null);
   const [step, setStep] = useState(0);
-  // §3.4 photo nudge — dismissal is part of the draft, never a global setting.
-  const [photoNudgeDismissed, setPhotoNudgeDismissed] = useState(false);
-  // D13 — the budget editor's open state, and the successor to the old
-  // per-field focus flag: the typical-range guidance still steps aside while
-  // an amount is actually being typed (§3.2), it is just one editor doing the
-  // typing now instead of two inline fields.
+  // 2026-09-28 (LUX-LIST-64 #32): the §3.4 photo nudge ("Add photos so workers
+  // can see the work.") is gone, with its dismissal state and its draft field.
+  // D13 — whether an amount is being typed: since 2026-09-28 (LUX-LIST-64 #36)
+  // the price list's own-amount entry being open. The typical-range guidance
+  // still steps aside while it is (§3.2).
   const [editingBudget, setEditingBudget] = useState(false);
+  // #36 — the price list, opened from the summary's BUDGET cell too. It drops
+  // down inside the scroller's band (under the header, above the bar), which
+  // it reads from the scroller's frame and the first thing it scrolls.
+  const priceRef = useRef<PriceDropdownHandle>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const bandRef = useRef<View>(null);
+  const introRef = useRef<View>(null);
+  const priceViewport: PriceViewport = {
+    measure: (done) => {
+      bandRef.current?.measureInWindow((_x, top, _width, height) => {
+        introRef.current?.measureInWindow((_ix, introTop) => {
+          // The intro opens the content, under its top padding.
+          done({ top, bottom: top + height, scrollY: Math.max(0, top + spacing.sm - introTop) });
+        });
+      });
+    },
+    scrollTo: (y) => scrollRef.current?.scrollTo({ y, animated: reducedMotion === false }),
+  };
+  // #38 — uploads the summary card has in flight (Publish reads "Uploading…"),
+  // and the note it floats ("Photo removed · Undo").
+  const [summaryUploading, setSummaryUploading] = useState(false);
+  const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null);
+  // #41 — Save draft leaves for Home; the exit guard steps aside for it.
+  const [leaving, setLeaving] = useState(false);
+  // #42 — the Seal: where Publish stood, and how far the save has got.
+  const primarySlotRef = useRef<View>(null);
+  const [seal, setSeal] = useState<{ from: SealFrom; phase: SealPhase } | null>(null);
+  const liveFade = useRef(new Animated.Value(1)).current;
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   // The amount an offer is about to be sent at, held while the confirmation
   // is open. Null means nothing is pending.
@@ -446,8 +434,6 @@ export function PostJobScreen() {
   const [chipMeasureCount, setChipMeasureCount] = useState(0);
   const [chipsWidth, setChipsWidth] = useState(0);
   const [chipOrder, setChipOrder] = useState<readonly JobCategory[] | null>(null);
-  // C3 — the "Other" pill's category sheet. Dismissing changes nothing.
-  const [otherSheetOpen, setOtherSheetOpen] = useState(false);
 
   useEffect(() => {
     if (chipOrder != null || chipsWidth <= 0) return;
@@ -457,6 +443,26 @@ export function PostJobScreen() {
 
   const successScale = useRef(new Animated.Value(0.4)).current;
   const reducedMotion = useReducedMotion();
+  // 2026-09-27 (the Lux remake, ruling 14): the progress bar fills its next
+  // segment with a short native-driver crossfade instead of snapping — one
+  // opacity per segment, the fill drawn over the track; reduced motion jumps.
+  const segmentFills = useRef(
+    POST_STEPS.map((_, index) => new Animated.Value(index <= step ? 1 : 0)),
+  ).current;
+  useEffect(() => {
+    segmentFills.forEach((fill, index) => {
+      const toValue = index <= step ? 1 : 0;
+      if (reducedMotion !== false) {
+        fill.setValue(toValue);
+        return;
+      }
+      Animated.timing(fill, {
+        toValue,
+        duration: PROGRESS_FILL_MS,
+        useNativeDriver: USE_NATIVE_DRIVER,
+      }).start();
+    });
+  }, [segmentFills, step, reducedMotion]);
   // Render-state disabling is useful feedback, but the ref is the actual
   // guard against two fast taps entering an async write before React paints.
   const submittingRef = useRef(false);
@@ -465,6 +471,10 @@ export function PostJobScreen() {
   const sessionUploadsRef = useRef<Set<string>>(new Set());
   const uploadsCommittedRef = useRef(false);
   const screenMountedRef = useRef(true);
+  // M-7 — whether the last autosaved draft had anything in it. The unmount
+  // cleanup below closes over the first render's state, so it reads this ref
+  // (written beside every autosave) to decide keep-or-discard.
+  const draftHasContentRef = useRef(false);
 
   function cleanupSessionUploads() {
     for (const url of sessionUploadsRef.current) {
@@ -485,15 +495,22 @@ export function PostJobScreen() {
       // commit. The async write paths clean these up after a failed result if
       // the screen was removed while the request was in flight.
       if (!uploadsCommittedRef.current && !submittingRef.current) {
-        cleanupSessionUploads();
-        // A graceful unmount (Back out of the wizard) is a deliberate
-        // abandonment, same as it always was — and now that a draft can
-        // persist, the abandoned draft must go with it, or a later "Post a
-        // job" would restore text pointing at photos this just deleted. An
-        // app KILL never reaches this line at all (the process is gone
-        // before any unmount effect runs), which is exactly what leaves the
-        // persisted draft in place for the Phase 4 DoD.
-        if (isFreshPost && draftUserId) void clearPostJobDraft(draftUserId);
+        // M-7 — BACKING OUT KEEPS A FRESH POST THAT HAS SOMETHING IN IT.
+        // It used to delete the draft and its uploads, so one stray Back
+        // threw away typed text and uploaded photos. Now the draft and its
+        // media stay together — My Jobs shows it as a "Not published yet"
+        // card that resumes it, and that card's "Discard draft" is the one
+        // explicit delete (screens/MyJobsHubScreen.tsx). An empty
+        // form, an edit and a hire request are abandoned exactly as before:
+        // their session uploads are deleted, and an empty fresh draft is
+        // cleared. An app KILL never reaches this line at all (the process
+        // is gone before any unmount effect runs), which leaves the persisted
+        // draft in place either way.
+        const keepDraft = isFreshPost && !!draftUserId && draftHasContentRef.current;
+        if (!keepDraft) {
+          cleanupSessionUploads();
+          if (isFreshPost && draftUserId) void clearPostJobDraft(draftUserId);
+        }
       }
       successScale.stopAnimation();
     };
@@ -602,7 +619,6 @@ export function PostJobScreen() {
         setPhotos(draft.photos);
         setVideos(draft.videos);
         setStep(Math.min(draft.step, POST_STEPS.length - 1));
-        setPhotoNudgeDismissed(draft.photoNudgeDismissed);
         // A restored draft's media belongs to no saved job (the job does not
         // exist yet), so it follows the same rule as a photo added this
         // session: removing it — or abandoning the draft again — deletes it
@@ -624,7 +640,7 @@ export function PostJobScreen() {
   // only; edit/hire never read or write this key.
   useEffect(() => {
     if (!isFreshPost || !draftReady || !draftUserId) return;
-    void savePostJobDraft(draftUserId, {
+    const draft = {
       title,
       description,
       category,
@@ -640,16 +656,32 @@ export function PostJobScreen() {
       photos,
       videos,
       step,
-      photoNudgeDismissed,
-    });
-  }, [isFreshPost, draftReady, draftUserId, title, description, category, location, coords, budgetMin, budgetMax, pricingMode, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, step, photoNudgeDismissed]);
+    };
+    draftHasContentRef.current = draftHasContent(draft);
+    void savePostJobDraft(draftUserId, draft);
+  }, [isFreshPost, draftReady, draftUserId, title, description, category, location, coords, budgetMin, budgetMax, pricingMode, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, step]);
 
   // Header Back, Android Back, and the iOS edge gesture all mean the same
   // thing inside the wizard: move back one step. A write in flight cannot be
   // removed from the stack, which also protects its referenced uploads.
-  usePreventRemove(submitting || (step > 0 && !showSuccess), () => {
+  // 2026-09-28 (LUX-LIST-64 #41): "Save draft" leaves on purpose, so while it
+  // does the guard steps aside — the draft is already kept (see the unmount).
+  usePreventRemove(!leaving && (submitting || (step > 0 && !showSuccess)), () => {
     if (!submitting) setStep((current) => Math.max(0, current - 1));
   });
+
+  // #41 — Save draft: the autosave above already holds every field, photo and
+  // clip, so what is left is to keep it on the way out and land on Home, where
+  // the draft is the first card (#17). Uploads in flight hold the button (they
+  // would otherwise be lost to the unmount).
+  useEffect(() => {
+    if (!leaving) return;
+    navigation.dispatch(StackActions.popToTop());
+    navigateAcrossTabs('Home', 'HomeMain', undefined, { pop: true, fallbackToTabRoot: true });
+    // One trip — `leaving` is set once and the screen goes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leaving]);
+
 
   // Photo URLs this job already had saved when editing started. Removing one
   // of these from the picker is a draft change — the underlying file must
@@ -750,6 +782,12 @@ export function PostJobScreen() {
    */
   function playSuccess() {
     successScale.setValue(reducedMotion ? 1 : 0.4);
+    // #42 — with Reduce Motion there is no Seal: the live page arrives on a
+    // short fade (its own content wrapper, never the overlay node — D0).
+    if (reducedMotion !== false) {
+      liveFade.setValue(0);
+      Animated.timing(liveFade, { toValue: 1, duration: 200, useNativeDriver: USE_NATIVE_DRIVER }).start();
+    }
     setShowSuccess(true);
     if (reducedMotion) return;
     Animated.spring(successScale, {
@@ -938,7 +976,12 @@ export function PostJobScreen() {
     playSuccess();
   }
 
-  async function handleSubmit() {
+  /**
+   * `onSaving` runs once the form has passed every check and the write is about
+   * to go — the Seal starts there (#42), so a refusal in writing never leaves a
+   * half-played transition on the screen.
+   */
+  async function handleSubmit(onSaving?: () => void) {
     if (!user || submittingRef.current) return;
 
     if (!title.trim() || !description.trim() || !category || !location.trim()) {
@@ -981,9 +1024,11 @@ export function PostJobScreen() {
     // here, in the sentence that names the way out, rather than letting the
     // server's own "A posted price needs an amount" arrive as an alert.
     if (!isHiring && posted && (budgetMaxCents == null || Number.isNaN(budgetMaxCents))) {
+      // 2026-09-28 (#36): Publish already waits for a price; this is the
+      // written backstop, naming the field that takes it.
       await alertAsync(
         'Set your price',
-        'A posted price needs an amount. Open Edit budget and enter one, or switch to Ask for bids.'
+        'A posted price needs an amount. Choose one in Your price, or switch to Ask for bids.'
       );
       return;
     }
@@ -998,6 +1043,7 @@ export function PostJobScreen() {
 
     submittingRef.current = true;
     setSubmitting(true);
+    onSaving?.();
     // The server mirrors the range's ceiling into the legacy single
     // budget_cents, so nothing is passed for it here — one writer, one rule.
     const jobInput = {
@@ -1036,6 +1082,11 @@ export function PostJobScreen() {
         return;
       }
       setSubmitting(false);
+      // #42 — the Seal undoes itself: no tick is drawn for a save that failed.
+      if (sealActiveRef.current) {
+        sealResultRef.current = 'failed';
+        setSeal((current) => (current ? { ...current, phase: 'failed' } : current));
+      }
       await alertAsync(
         isEditing ? 'Could not save changes' : 'Could not post job',
         userMessage(error)
@@ -1100,7 +1151,67 @@ export function PostJobScreen() {
       if (draftUserId) void clearPostJobDraft(draftUserId);
     }
 
+    // #42 — THE SERVER HAS CONFIRMED: only now may the Seal's tick draw; the
+    // live page opens from it (SealTransition calls back). Without a Seal (Reduce
+    // Motion, an edit, a hire) the surface arrives as it always has.
+    if (sealActiveRef.current) {
+      sealResultRef.current = 'saved';
+      setSeal((current) => (current ? { ...current, phase: 'saved' } : current));
+      return;
+    }
     playSuccess();
+  }
+
+  // Whether this save runs under a Seal, and — for the one frame where the
+  // server answers before the pill has been measured — what it answered.
+  const sealActiveRef = useRef(false);
+  const sealResultRef = useRef<SealPhase | null>(null);
+
+  /**
+   * #42 — PUBLISH. A fresh post, with motion allowed, publishes under the Seal:
+   * the pill's box is measured where it stands and the transition runs while
+   * the job saves. Everything else — an edit, a hire, Reduce Motion — saves as
+   * before; with Reduce Motion the live page arrives on a short fade.
+   */
+  function onPublish() {
+    if (isFreshPost && reducedMotion === false) {
+      void handleSubmit(() => {
+        sealActiveRef.current = true;
+        sealResultRef.current = null;
+        primarySlotRef.current?.measureInWindow((x, y, width, height) => {
+          setSeal({ from: { x, y, width, height }, phase: sealResultRef.current ?? 'saving' });
+        });
+      });
+      return;
+    }
+    void handleSubmit();
+  }
+
+  /** The Seal has covered the screen from its tick: the live page takes it. */
+  function onSealOpened() {
+    setSeal(null);
+    sealActiveRef.current = false;
+    playSuccess();
+  }
+
+  /** A failed save has undone the Seal: the bar is the user's again. */
+  function onSealUndone() {
+    setSeal(null);
+    sealActiveRef.current = false;
+  }
+
+  /** #38 — a summary detail opens the step it came from; BUDGET opens the list. */
+  function onSummaryEdit(target: SummaryTarget) {
+    if (target === 'describe' || target === 'category') {
+      setStep(0);
+      return;
+    }
+    if (target === 'area' || target === 'timing' || target === 'address') {
+      setStep(2);
+      return;
+    }
+    // The list brings its field back under the header, then drops down.
+    priceRef.current?.open();
   }
 
   async function handleContinue() {
@@ -1138,42 +1249,28 @@ export function PostJobScreen() {
       : currentStep.title;
   const currentStepSubtitle =
     step === 1 && isHiring
-      ? 'Photos and short clips are optional, but they can make your request clearer.'
+      ? 'Photos and clips are optional, but they help.'
       : step === POST_STEPS.length - 1 && (isEditing || isHiring)
-        ? 'Check the details below. You can still go back without losing your work.'
+        ? 'Check the details. You can still go back.'
         : currentStep.subtitle;
   const reviewBudgetCents = dollarsToCents(budget);
   const reviewMaxCents = dollarsToCents(budgetMax);
   const validMax =
     reviewMaxCents != null && !Number.isNaN(reviewMaxCents) ? reviewMaxCents : null;
   const postedPrice = pricingMode === 'posted_price';
-  const reviewBudget = isHiring
+  // #38 — THE SUMMARY'S BUDGET CELL, from the SAME resolved cents the price
+  // field shows, so the two can never disagree: a direct offer's one amount, a
+  // posted price, or an open-bids maximum written "Up to $X" — one figure,
+  // never a minimum (D16). An empty posted price is a missing one ("Choose a
+  // price"), not an open budget.
+  const summaryCents = isHiring
     ? reviewBudgetCents != null && !Number.isNaN(reviewBudgetCents)
-      ? formatBudget(reviewBudgetCents)
-      : 'Required before sending'
-    : validMax != null
-      ? // a4 — a posted price is ONE figure, so it is written as one. Open bids
-        // keeps the shared range label, which is the only place two figures
-        // know how to be written together.
-        postedPrice
-        ? formatBudget(validMax)
-        : budgetRangeLabel({
-            budget_cents: null,
-            // D16: this screen writes no minimum, so the label it derives must
-            // not claim one either.
-            budget_min_cents: null,
-            budget_max_cents: validMax,
-          })
-      : // Master 35 is the poster's own view of an unset-budget job and it
-        // reads "No budget set" — the same string `formatBudget` returns.
-        'No budget set';
-  // D13 — what the display pill shows. The SAME resolved cents the summary
-  // row reads, so the pill and the row can never disagree about the amount.
-  // a4 — an empty posted price is not an open budget, it is a missing one, and
-  // the pill says which rather than offering "No maximum" as though it were a
-  // legal state of this mode.
-  const maxBudgetDisplay =
-    validMax != null ? formatBudget(validMax) : postedPrice ? 'Price required' : 'No maximum';
+      ? reviewBudgetCents
+      : null
+    : validMax;
+  const summaryEmpty = isHiring ? 'Required before sending' : postedPrice ? 'Choose a price' : 'No maximum';
+  // #36 — a posted price with no amount cannot publish; Publish waits for one.
+  const priceMissing = !isHiring && postedPrice && validMax == null;
   const reviewTiming =
     arrivalWindowLabel({
       scheduled_date: scheduledDate,
@@ -1191,8 +1288,6 @@ export function PostJobScreen() {
   const guidanceLines = isFreshPost && PRICE_GUIDANCE ? priceGuidanceLines(category) : null;
   const bothBudgetsEmpty = !budgetMin.trim() && !budgetMax.trim();
   const showPriceGuidance = !!guidanceLines && (bothBudgetsEmpty || !editingBudget);
-  const showPhotoNudge =
-    isFreshPost && step === 1 && photos.length === 0 && !photoNudgeDismissed;
 
   // D1-D4 — NAVIGATION LIVES IN THE HEADER NOW, derived from the step list so
   // the two links can never name a step the wizard does not have. Leaving the
@@ -1201,7 +1296,12 @@ export function PostJobScreen() {
   // step has no right link at all — its forward action is Publish, which is a
   // commitment and belongs on a pinned button, not on a chevron.
   const isLastStep = step === POST_STEPS.length - 1;
-  const backLabel = step === 0 ? 'Home' : POST_STEPS[step - 1].label;
+  // M-7 — the first step's back is a plain chevron, like every other pushed
+  // screen: the wizard opens from Home, My Jobs, a worker's profile and
+  // discovery, and "Home" named only one of those.
+  // 2026-09-28 (LUX-LIST-64 #30): step 1 names where the flow was opened from
+  // ("‹ Home"); every later step names the step behind it.
+  const backLabel = step === 0 ? originLabel(navigation.getState()) : POST_STEPS[step - 1].label;
   const advanceLabel = isLastStep ? undefined : POST_STEPS[step + 1].label;
   // D3 — THE FLOOR'S RULE, WRITTEN ONCE. This is the expression the Continue
   // button carried before the footers came off steps 1-3: the description
@@ -1210,16 +1310,66 @@ export function PostJobScreen() {
   // controls cannot drift into two rules (P3-31).
   const advanceDisabled =
     uploadingPhoto || uploadingVideo || (step === 0 && descNeeded > 0);
+  // M-7 — WHAT STANDS BETWEEN THIS STEP AND THE NEXT, SAID BEFORE THE TAP.
+  // handleContinue's alerts answered after a tap; the pinned footer now names
+  // the one missing thing directly above a disabled Continue, and the header
+  // link reads the same answer. Null when the step can advance. The last step
+  // has no blocker of its own — Publish keeps its own guards.
+  // 2026-09-27 (the Lux remake, the operator's Post-a-job pictures): the
+  // reason sits UNDER THE FIELD THAT BLOCKS the step, in as few words as say
+  // it ("6 more characters", "Pick a category"); the header's forward link
+  // greys out on the same answer. `blockedField` names where it is drawn.
+  const blockedField: 'title' | 'description' | 'category' | 'area' | null =
+    step === 0
+      ? !title.trim()
+        ? 'title'
+        : !description.trim() || descNeeded > 0
+          ? 'description'
+          : !category
+            ? 'category'
+            : null
+      : step === 2 && !location.trim()
+        ? 'area'
+        : null;
+  const stepBlocker =
+    blockedField === 'title'
+      ? 'Add a title'
+      : blockedField === 'description'
+        ? !description.trim()
+          ? 'Add a description'
+          : `${descNeeded} more ${descNeeded === 1 ? 'character' : 'characters'}`
+        : blockedField === 'category'
+          ? 'Pick a category'
+          : blockedField === 'area'
+            ? 'Add an area'
+            : null;
+  const reasonUnder = (field: typeof blockedField) =>
+    blockedField === field && stepBlocker ? (
+      <Text style={styles.fieldReason} accessibilityLiveRegion="polite">
+        {stepBlocker}
+      </Text>
+    ) : null;
+  // 2026-09-28 (LUX-LIST-64 #38, #41): the last step's footer note is gone with
+  // the footer — an upload in flight is said on Publish itself ("Uploading…"),
+  // the one place it waits, and the blocker lines sit under their fields.
+  const uploadingNow = advanceDisabled || summaryUploading;
+  const primaryLabel = uploadingNow
+    ? 'Uploading…'
+    : isEditing
+      ? 'Save changes'
+      : isHiring
+        ? 'Send request'
+        : 'Publish';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader
         title={isEditing ? 'Edit Job' : isHiring ? 'Send an Offer' : 'Post a Job'}
         onBack={handleBack}
         backLabel={backLabel}
         rightLabel={advanceLabel}
         onPressRight={handleContinue}
-        rightDisabled={advanceDisabled}
+        rightDisabled={advanceDisabled || stepBlocker != null}
         centerTitle
         palette={emeraldColors}
       />
@@ -1233,16 +1383,20 @@ export function PostJobScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        <View ref={bandRef} collapsable={false} style={styles.flex}>
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={[
             styles.content,
             { paddingHorizontal: contentPaddingX, gap: contentGap },
+            // Only the last step has a footer to clear (no footer padding on
+            // steps 1-3 — the operator's "no pinned Continue, no footer padding").
             isLastStep && styles.contentWithFooter,
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.stepIntro}>
+          <View ref={introRef} collapsable={false} style={styles.stepIntro}>
             {/* C1 — keyed by step, so the heading trio re-enters with the
                 step it introduces. The progress row below stays put: it is
                 the wizard's persistent chrome, not the step's content. */}
@@ -1263,13 +1417,11 @@ export function PostJobScreen() {
             >
               {POST_STEPS.map((item, index) => (
                 <View key={item.label} style={styles.progressItem}>
-                  <View
-                    style={[
-                      styles.progressSegment,
-                      { height: progressHeight },
-                      index <= step && styles.progressSegmentActive,
-                    ]}
-                  />
+                  <View style={[styles.progressSegment, { height: progressHeight }]}>
+                    <Animated.View
+                      style={[styles.progressSegmentActive, { opacity: segmentFills[index] }]}
+                    />
+                  </View>
                   {/* D6 — the active step must be the BRIGHTEST label in the
                       row. It was `forest`, which under Prestige is a fill
                       colour, so the step you are on read dimmer than the ones
@@ -1306,23 +1458,31 @@ export function PostJobScreen() {
 
           {step === 0 && (
             <View style={[styles.stepFields, { gap: stepFieldsGap }]}>
+              {/* 2026-09-27 (the operator's review, the Lux post pages): the
+                  title and the description sit in ONE pop-out card, and the
+                  category chips under it on the ground — the reference's
+                  grouping, nothing else moved. */}
+              <Card style={[styles.fieldCard, { gap: stepFieldsGap }]}>
               <TextField
                 palette={emeraldColors}
                 label="Title"
                 value={title}
                 onChangeText={setTitle}
-                hint={`${title.length}/${MAX_TITLE_LENGTH}`}
+                // M-7 — a required field says so, in the slot its count
+                // already sits in.
+                hint={`Required · ${title.length}/${MAX_TITLE_LENGTH}`}
                 maxLength={MAX_TITLE_LENGTH}
-                placeholder="e.g. Walk my dog on weekday mornings"
+                placeholder="e.g. Walk my dog on weekdays"
                 autoCapitalize="sentences"
               />
+              {reasonUnder('title')}
 
               <TextField
                 palette={emeraldColors}
                 label="Description"
                 value={description}
                 onChangeText={setDescription}
-                hint={`${description.length}/${MAX_DESCRIPTION_LENGTH}`}
+                hint={`Required · ${description.length}/${MAX_DESCRIPTION_LENGTH}`}
                 maxLength={MAX_DESCRIPTION_LENGTH}
                 placeholder="Describe what you need done…"
                 autoCapitalize="sentences"
@@ -1330,20 +1490,22 @@ export function PostJobScreen() {
                 numberOfLines={4}
                 style={[styles.multiline, { height: descriptionHeight }]}
               />
-              {/* §3.3 — the floor is a disabled Continue plus this written
-                  count, never a raw error and never a silently dead button. */}
-              {descNeeded > 0 ? (
-                <Text style={styles.floorHint}>
-                  {descNeeded} more {descNeeded === 1 ? 'character' : 'characters'} needed
-                  before you can continue.
-                </Text>
-              ) : null}
+              {/* §3.3 — the floor is a greyed forward link plus its written
+                  count, never a raw error and never a silently dead control.
+                  2026-09-27: the count sits under the description it counts. */}
+              {reasonUnder('description')}
+              </Card>
             </View>
           )}
 
           {step === 0 && (
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Category</Text>
+              {/* M-7 — the shared field label, so Category reads like Title
+                  and Description above it, with its Required mark. */}
+              <View style={styles.labelRow}>
+                <FieldLabel palette={emeraldColors}>Category</FieldLabel>
+                <Text style={styles.requiredHint}>Required</Text>
+              </View>
               <View
                 style={[styles.chips, chipOrder == null && styles.chipsMeasuring]}
                 onLayout={(event) => setChipsWidth(event.nativeEvent.layout.width)}
@@ -1351,12 +1513,11 @@ export function PostJobScreen() {
                 {/* D2: the saturated per-category palette is retired in dark
                     wherever a category is drawn. Light keeps it. */}
                 {/* C2a — tapping the selected pill again deselects it, back to
-                    the pristine no-category state (Continue then refuses with
-                    the same "Complete this step" alert it always used). C2b —
-                    the packed order once measured; source order, invisible,
-                    for the frame or two before. C3 — the Other pill opens the
-                    category sheet instead of toggling; it still shows
-                    selected when the sheet (or a row in it) chose 'other'. */}
+                    the pristine no-category state (the footer then says
+                    "Pick a category to continue"). C2b — the packed order once
+                    measured; source order, invisible, for the frame or two
+                    before. M-7 — Other is an ordinary pill: it selects the
+                    Other category, one tap like every other. */}
                 {(chipOrder ?? POSTABLE_CATEGORIES).map((c) => (
                   <Chip
                     key={c}
@@ -1365,17 +1526,11 @@ export function PostJobScreen() {
                     accentColor={isDark ? colors.gold : categoryAccent(c).bg}
                     variant="filter"
                     selected={category === c}
-                    onPress={
-                      c === 'other'
-                        ? () => setOtherSheetOpen(true)
-                        : () => setCategory(category === c ? null : c)
-                    }
-                    accessibilityHint={
-                      c === 'other' ? 'Opens the full list of categories' : undefined
-                    }
+                    onPress={() => setCategory(category === c ? null : c)}
                   />
                 ))}
               </View>
+              {reasonUnder('category')}
               {chipOrder == null && (
                 /* C2b — the measurement pass: absolute, invisible, inert, one
                    column of naturally-sized copies. Unmounts the moment the
@@ -1417,17 +1572,19 @@ export function PostJobScreen() {
                   padding (measured: the text column is ~259pt and the
                   sentence needs ≥246 before it takes a third line), so no
                   padding moved. */}
-              <View style={[styles.infoCard, isDark && styles.infoCardDark]}>
+              {/* 2026-09-28 (LUX-LIST-64 #31): the operator's sentence, two lines
+                  at most at 393 wide, and the crossed-out eye in the error red —
+                  #D8604B in dark, the light palette's own red in light. */}
+              <Card style={styles.infoCard}>
                 <View style={styles.infoIcon}>
                   {/* C6 — the "not visible" eye, replacing the shield: this
-                      notice is about what must not be SEEN. Defaults match
-                      the shield's old footprint. */}
-                  <EyeOffIcon />
+                      notice is about what must not be SEEN. */}
+                  <EyeOffIcon color={colors.danger} />
                 </View>
                 <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
-                  Avoid faces, documents, license plates, addresses, or any other personal information
+                  Avoid faces, documents, plates, addresses and personal details. Just show the job.
                 </Text>
-              </View>
+              </Card>
 
               {/* The one canonical MediaUploader primitive (§O never-duplicate
                   list; §N risk 9). It owns the pick + append-only-on-success
@@ -1456,12 +1613,12 @@ export function PostJobScreen() {
                 <MediaUploader
                   kind="video"
                   label="Video (optional)"
-                  // PJ1 (C5) — same 20% scale as the photos above it, and the
-                  // one clip tile widens to twice its post-scale width
-                  // (202pt in a 345pt content column — no overflow, so the
-                  // full 2x is achieved).
+                  // PJ1 (C5) — same 20% scale as the photos above it. The one
+                  // clip tile was twice its post-scale width (202pt); 2026-09-28
+                  // (LUX-LIST-64 #33) it narrows to the operator's line, ~164pt
+                  // (1.63 × the 101pt tile height), its camera glyph centred.
                   scale={1.2}
-                  tileAspect={2}
+                  tileAspect={1.63}
                   maxItems={MAX_VIDEOS}
                   items={videos}
                   onItemsChange={setVideos}
@@ -1485,7 +1642,7 @@ export function PostJobScreen() {
                     tightened (measured 351), so the caption stops at 13pt
                     with -0.3 tracking (330 of 345). */}
                 <Text style={styles.videoHint}>
-                  A short clip explains an awkward job faster than a paragraph.
+                  A short clip explains an awkward job fast.
                 </Text>
               </View>
             </View>
@@ -1493,18 +1650,23 @@ export function PostJobScreen() {
 
           {step === 2 && (
             <View style={[styles.stepFields, { gap: stepFieldsGap }]}>
+              {/* 2026-09-27 (the operator's review, the Lux "Where and when"
+                  page): the area, the locate disc and the private address in
+                  ONE pop-out card; the day and the arrival window under it. */}
+              <Card style={[styles.fieldCard, { gap: stepFieldsGap }]}>
               <View style={styles.locationRow}>
                 <View style={styles.locationField}>
                   <TextField
                     palette={emeraldColors}
                     label="Area or neighborhood"
+                    hint="Required"
                     value={location}
                     onChangeText={(text) => {
                       setLocation(text);
                       // Typing over a resolved place invalidates its coordinates.
                       if (coords) setCoords(null);
                     }}
-                    placeholder="e.g. Sheepshead Bay, Brooklyn"
+                    placeholder="e.g. Sheepshead Bay"
                     autoCapitalize="words"
                   />
                 </View>
@@ -1518,13 +1680,16 @@ export function PostJobScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Use my current location"
                 >
+                  {/* 2026-09-28 (LUX-LIST-64 #34): the pin 25% bigger (20 → 25),
+                      centred in its square. */}
                   {locating ? (
                     <ActivityIndicator size="small" color={colors.onForest} />
                   ) : (
-                    <Ionicons name="location" size={20} color={colors.onForest} />
+                    <Ionicons name="location" size={25} color={colors.onForest} />
                   )}
                 </Pressable>
               </View>
+              {reasonUnder('area')}
 
               {/* PJ1 (C7) — the approximate-area info card is deleted. The
                   privacy fact still reads twice on this same step: the step
@@ -1536,19 +1701,23 @@ export function PostJobScreen() {
               {/* The exact address and timing are meaningless for a direct
                   offer (the negotiation carries its own terms — Phase 5's
                   surface), so hire mode keeps the plain location step. */}
+              {/* D12 — THE CAPTION CAME OUT OF THE LABEL ROW. TextField
+                  lays a `hint` beside the label, which works for a two-
+                  word character count and not for a sentence: this label
+                  is the longest in the app and the sentence ran off the
+                  right edge on top of it. Below the field it is a plain
+                  caption with the whole width, and the label owns its
+                  row alone. */}
               {!isHiring && (
-                <>
-                  {/* D12 — THE CAPTION CAME OUT OF THE LABEL ROW. TextField
-                      lays a `hint` beside the label, which works for a two-
-                      word character count and not for a sentence: this label
-                      is the longest in the app and the sentence ran off the
-                      right edge on top of it. Below the field it is a plain
-                      caption with the whole width, and the label owns its
-                      row alone. */}
                   <View style={styles.field}>
+                    {/* 2026-09-28 (LUX-LIST-64 #34): "SERVICE ADDRESS" stays the
+                        gold eyebrow; "(private, optional)" moves beside it in the
+                        same quiet grey as "Required", not bold — the label is short
+                        enough now for the hint to share its row. */}
                     <TextField
                       palette={emeraldColors}
-                      label="Service address (private, optional)"
+                      label="Service address"
+                      hint="(private, optional)"
                       value={address}
                       onChangeText={setAddress}
                       placeholder="e.g. 2410 Emmons Ave, Apt 3B"
@@ -1558,7 +1727,11 @@ export function PostJobScreen() {
                       Never shown until you hire — can see after job is accepted.
                     </Text>
                   </View>
+              )}
+              </Card>
 
+              {!isHiring && (
+                <>
                   <View style={styles.field}>
                     <Text style={styles.fieldLabel}>Which day?</Text>
                     <ScrollView
@@ -1618,6 +1791,11 @@ export function PostJobScreen() {
 
           {step === 3 && (
             <View style={[styles.stepFields, { gap: stepFieldsGap }]}>
+              {/* 2026-09-28 (LUX-LIST-64 #36, #37) — THE PRICE FIRST, right under
+                  the step bars and above the summary: "Ask for bids | Set a
+                  price" (with its two glyphs) and the one field that opens the
+                  price list (components/PriceDropdown.tsx) — the pencil and its
+                  budget dialog are gone. A direct offer keeps its own amount. */}
               {isHiring ? (
                 // The direct-offer terms field is OfferComposer's shared one
                 // (Phase 5): bids, counters and this hire request present and
@@ -1631,6 +1809,16 @@ export function PostJobScreen() {
                 />
               ) : (
                 <View style={styles.field}>
+                  <PriceDropdown
+                    ref={priceRef}
+                    mode={pricingMode}
+                    amount={budgetMax}
+                    onModeChange={setPricingMode}
+                    onAmountChange={setBudgetMax}
+                    onEditingChange={setEditingBudget}
+                    viewport={priceViewport}
+                    palette={emeraldColors}
+                  />
                   {/* §3.2 — static typical range for the chosen category.
                       Steps aside while an amount is being typed; categories
                       with no seeded range render nothing. No locality claim:
@@ -1643,128 +1831,55 @@ export function PostJobScreen() {
                       <Text style={styles.guidanceNote}>{guidanceLines[1]}</Text>
                     </View>
                   ) : null}
-                  {/* D13/D14 — ONE AMOUNT, SHOWN NOT TYPED. The min field is
-                      gone; what is left is a DISPLAY of the maximum, in the
-                      same left-aligned label treatment Title and Description
-                      carry on step 1. The pill itself is inert — it is not a
-                      text input and it is not a touch target. The pencil is
-                      the only thing here that can be pressed, and it opens
-                      the one editor. No slider, no track, no second pill. */}
-                  <FieldLabel palette={emeraldColors}>{priceFieldLabel(pricingMode)}</FieldLabel>
-                  <View style={styles.budgetPill}>
-                    <Text style={styles.budgetPillValue} numberOfLines={1}>
-                      {maxBudgetDisplay}
-                    </Text>
-                    <Pressable
-                      onPress={() => setEditingBudget(true)}
-                      hitSlop={12}
-                      style={styles.budgetPencil}
-                      accessibilityRole="button"
-                      accessibilityLabel="Edit budget"
-                    >
-                      <Ionicons name="pencil" size={18} color={colors.emerald} />
-                    </Pressable>
-                  </View>
-                  {/* D15a — the sentence about ranges was true of two fields
-                      and is false of one, so it is deleted rather than
-                      reworded. */}
-                  <Text style={styles.fieldHint}>
-                    Optional — leave blank if you want workers to propose a price.
-                  </Text>
                 </View>
               )}
 
-              <View style={[styles.reviewCard, { borderRadius: reviewCardRadius }, isDark && shadows.cardDark]}>
-                <Text style={styles.reviewEyebrow}>JOB SUMMARY</Text>
-                <Text style={styles.reviewTitle}>{title.trim()}</Text>
-                <Text style={styles.reviewDescription} numberOfLines={4}>
-                  {description.trim()}
-                </Text>
+              {/* #38 — the summary, rebuilt from refs/job-summary.html: every
+                  detail opens its own step, the media are managed in place,
+                  and BUDGET opens the price list above. */}
+              <JobSummaryCard
+                title={title.trim()}
+                description={description.trim()}
+                categoryLabel={category ? JOB_CATEGORY_LABELS[category] : null}
+                area={location.trim()}
+                timing={reviewTiming}
+                address={address.trim()}
+                showSchedule={!isHiring}
+                budgetLabel={isHiring ? 'Offer' : priceRowLabel(pricingMode)}
+                budgetCents={summaryCents}
+                budgetUpTo={!isHiring && !postedPrice}
+                budgetEmpty={summaryEmpty}
+                photos={photos}
+                videos={videos}
+                setPhotos={setPhotos}
+                setVideos={setVideos}
+                // A hire request goes through create_offer(), whose server cap
+                // is still 5; a posting's create_job() takes 10 (phase49).
+                maxPhotos={isHiring ? 5 : MAX_PHOTOS}
+                maxVideos={MAX_VIDEOS}
+                uploadPhoto={handleUploadPhoto}
+                uploadVideo={handleUploadVideo}
+                deleteMedia={handleDeleteMedia}
+                shouldDeleteOnRemove={(url) => !originalPhotosRef.current.has(url) && !originalVideosRef.current.has(url)}
+                validateVideo={(asset) =>
+                  rejectionForPickedVideo(asset, {
+                    maxDurationMs: MAX_VIDEO_DURATION_MS,
+                    maxBytes: MAX_VIDEO_BYTES,
+                  })
+                }
+                videoMaxDurationSec={MAX_VIDEO_DURATION_MS / 1000}
+                onUploadingChange={setSummaryUploading}
+                onUploadError={(message) => void alertAsync('Upload failed', message)}
+                onToast={setToast}
+                onEdit={onSummaryEdit}
+                disabled={submitting || !user}
+                cornerRadius={reviewCardRadius}
+              />
 
-                <View style={styles.reviewDivider} />
-
-                <View style={styles.reviewRow}>
-                  <View style={styles.reviewIcon}>
-                    <Ionicons name="grid-outline" size={18} color={colors.emerald} />
-                  </View>
-                  <View style={styles.reviewText}>
-                    <Text style={styles.reviewLabel}>Category</Text>
-                    <Text style={styles.reviewValue} numberOfLines={1}>
-                      {category ? JOB_CATEGORY_LABELS[category] : 'Not selected'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.reviewRow}>
-                  <View style={styles.reviewIcon}>
-                    <Ionicons name="location-outline" size={19} color={colors.emerald} />
-                  </View>
-                  <View style={styles.reviewText}>
-                    <Text style={styles.reviewLabel}>Area</Text>
-                    <Text style={styles.reviewValue} numberOfLines={2}>
-                      {location.trim()}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.reviewRow}>
-                  <View style={styles.reviewIcon}>
-                    <Ionicons name="images-outline" size={18} color={colors.emerald} />
-                  </View>
-                  <View style={styles.reviewText}>
-                    <Text style={styles.reviewLabel}>Media</Text>
-                    <Text style={styles.reviewValue}>
-                      {mediaSummary(photos.length, videos.length)}
-                    </Text>
-                  </View>
-                </View>
-
-                {!isHiring && (
-                  <View style={styles.reviewRow}>
-                    <View style={styles.reviewIcon}>
-                      <Ionicons name="time-outline" size={18} color={colors.emerald} />
-                    </View>
-                    <View style={styles.reviewText}>
-                      <Text style={styles.reviewLabel}>Timing</Text>
-                      <Text style={styles.reviewValue} numberOfLines={2}>
-                        {reviewTiming}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                {/* D17 — the row stays whether or not an address was given.
-                    On a REVIEW screen a missing private address is a fact
-                    worth reading, and a row that appears and disappears
-                    reshuffles the card between visits. */}
-                {!isHiring && (
-                  <View style={styles.reviewRow}>
-                    <View style={styles.reviewIcon}>
-                      <Ionicons name="lock-closed-outline" size={18} color={colors.emerald} />
-                    </View>
-                    <View style={styles.reviewText}>
-                      <Text style={styles.reviewLabel}>Address (private)</Text>
-                      <Text style={styles.reviewValue} numberOfLines={2}>
-                        {address.trim() || 'Not added'}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                <View style={styles.reviewRow}>
-                  <View style={styles.reviewIcon}>
-                    <Ionicons name="wallet-outline" size={18} color={colors.emerald} />
-                  </View>
-                  <View style={styles.reviewText}>
-                    <Text style={styles.reviewLabel}>{isHiring ? 'Offer' : priceRowLabel(pricingMode)}</Text>
-                    <Text style={styles.reviewValue}>{reviewBudget}</Text>
-                  </View>
-                </View>
-              </View>
-
+              {/* #41 — above the bar, one line: what Publish does. */}
               <View style={styles.publishNotice}>
-                <Ionicons name="checkmark-circle-outline" size={20} color={colors.emerald} />
-                <Text style={styles.publishNoticeText}>
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.emerald} />
+                <Text style={styles.publishNoticeText} numberOfLines={1}>
                   {isHiring
                     ? `Only ${hireWorkerName} receives this request.`
                     : isEditing
@@ -1778,48 +1893,31 @@ export function PostJobScreen() {
           </StepPane>
 
         </ScrollView>
-
-        {/* §3.4 — a nudge, not a gate: it never touches the footer button's
-            disabled state, and dismissing it is remembered on this draft only. */}
-        {showPhotoNudge ? (
-          <View style={styles.nudgeRow}>
-            <Ionicons name="image-outline" size={18} color={colors.emerald} />
-            <Text style={[styles.nudgeText, isDark && styles.nudgeTextDark]}>
-              Add photos so workers can see the work.
-            </Text>
-            <Pressable
-              onPress={() => setPhotoNudgeDismissed(true)}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss photo tip"
-            >
-              <Ionicons name="close" size={18} color={colors.textMuted} />
-            </Pressable>
-          </View>
-        ) : null}
-
-        {/* D2/D4 — ONE footer, on the last step only. Steps 1-3 carry no
-            footer button at all: their Back and Continue are the header's two
-            links, so a step that is only navigation has no pinned chrome to
-            hold. The last step is not navigation — it commits — and a
-            commitment gets a full-width button. */}
-        {isLastStep && (
-        <View style={styles.footer}>
-          <Button
-            // "Send request", not "Hire": the worker still has to agree.
-            title={isEditing ? 'Save changes' : isHiring ? 'Send request' : 'Publish'}
-            onPress={handleSubmit}
-            palette={emeraldColors}
-            loading={submitting}
-            // The same one rule the header's advance link reads — see
-            // `advanceDisabled`. On this step the floor term is already
-            // false, so what is left is "no upload in flight". The photo
-            // nudge deliberately has no place in it.
-            disabled={advanceDisabled}
-            style={styles.footerPrimary}
-          />
         </View>
-        )}
+
+        {/* 2026-09-27 (the Lux remake, ruling 13): NO pinned Continue on steps
+            1-3 — the way forward is the header's link. 2026-09-28 (LUX-LIST-64
+            #41) — THE LAST STEP'S BAR (components/PostJobBar.tsx), right above
+            the tab bar: "Save draft" (a fresh post's) beside the commitment —
+            Publish with its rocket, "Save changes", "Send request". Publish
+            waits, grey on the deep green, while a file uploads ("Uploading…")
+            or a set price is still missing. */}
+        {isLastStep && !showSuccess ? (
+          <PostJobBar
+            secondary={
+              isFreshPost
+                ? { label: 'Save draft', onPress: () => setLeaving(true), accessibilityLabel: 'Save draft and go Home' }
+                : undefined
+            }
+            secondaryIcon="save-outline"
+            primary={{ label: primaryLabel, onPress: onPublish }}
+            primaryIcon={isFreshPost && !uploadingNow ? 'rocket-outline' : undefined}
+            primaryDisabled={uploadingNow || priceMissing || submitting}
+            primaryRef={primarySlotRef}
+            hidePrimary={seal != null}
+            hideSecondary={seal != null || uploadingNow}
+          />
+        ) : null}
       </KeyboardAvoidingView>
       )}
 
@@ -1828,173 +1926,30 @@ export function PostJobScreen() {
            whole surface over the form — see playSuccess(). */
         <View style={styles.successOverlay} accessibilityViewIsModal>
           {!isEditing && !isHiring ? (
-            /* Screen 16 (JobPublished) — the SuccessScreen template, configured
-               rather than reimplemented. The body explains what happens next
-               without inventing certainty: bidding produces real bids as
-               workers respond, and right now there are none. */
-            <SuccessScreen
-              // PUBLISH1 (C1): this surface is inside `successOverlay`, which
-              // is bounded by the tab SCENE — and PostJob is not one of the two
-              // routes where the bar floats, so the scene already ends at the
-              // pill's top edge. Reserving the pill's footprint a second time
-              // inside it is what pushed "Back to Home" off the bottom. The
-              // template still owns only the top safe-area edge.
-              clearsFloatingNav={false}
-              // C1: one row, so both actions land above the pill — see the
-              // prop's docblock for the measurement that forced it.
-              actionsLayout="row"
-              title="Your job is live."
-              body="Workers can now see your job. Bids appear as workers respond, and you choose who gets it."
-              // D23-D26 — the mark, and the only thing on this surface that
-              // moves. It animates once on entry and then holds; a build
-              // without worklets, and anyone who has asked for reduced
-              // motion, gets the same artwork standing still.
-              mark={<SuccessMark accessibilityLabel="Your job is published" />}
-              details={
-                <View style={styles.publishDetails}>
-                {publishedJob ? (
-                  // PUBLISH1 (C1) — THE PUBLISH CARD SPEAKS HOME'S LANGUAGE.
-                  //
-                  // There is no master for this surface, so nothing here is
-                  // designed: every part of it is copied from the language
-                  // already shipping on customer Home. The card is a LitSurface
-                  // with the same diagonal wash the promo card carries, over
-                  // the dark shadow token, at Home's own 22pt radius; the row
-                  // labels are Home's gold eyebrow; the category reads as one
-                  // of Home's sage service chips; and the money is MoneyText,
-                  // which is emerald in dark like every other amount in the app.
-                  <LitSurface
-                    style={[styles.reviewCard, { borderRadius: reviewCardRadius }, isDark && shadows.cardDark]}
-                    surface={colors.surface}
-                    lift={colors.emerald}
-                    liftAlpha={PUBLISH_CARD_LIFT_ALPHA}
-                    flat={!isDark}
-                  >
-                    <Text style={styles.reviewEyebrow}>PUBLISHED</Text>
-                    <Text style={styles.reviewTitle} numberOfLines={2}>
-                      {publishedJob.title}
-                    </Text>
-
-                    <View style={styles.reviewDivider} />
-
-                    <View style={styles.reviewRow}>
-                      <View style={styles.reviewIcon}>
-                        <Ionicons name="grid-outline" size={18} color={colors.emerald} />
-                      </View>
-                      <View style={styles.reviewText}>
-                        <Text style={styles.reviewLabel}>Category</Text>
-                        {/* Home's service chip, in Home's `service` variant —
-                            the same sage pill, not a second one drawn here. */}
-                        <View style={styles.reviewChipRow}>
-                          <Chip
-                            label={JOB_CATEGORY_LABELS[publishedJob.category]}
-                            variant="service"
-                            size="sm"
-                          />
-                        </View>
-                      </View>
-                    </View>
-
-                    {publishedJob.location ? (
-                      <View style={styles.reviewRow}>
-                        <View style={styles.reviewIcon}>
-                          <Ionicons name="location-outline" size={19} color={colors.emerald} />
-                        </View>
-                        <View style={styles.reviewText}>
-                          <Text style={styles.reviewLabel}>Area</Text>
-                          <Text style={styles.reviewValue} numberOfLines={2}>
-                            {publishedJob.location}
-                          </Text>
-                        </View>
-                      </View>
-                    ) : null}
-
-                    {arrivalWindowLabel(publishedJob) ? (
-                      <View style={styles.reviewRow}>
-                        <View style={styles.reviewIcon}>
-                          <Ionicons name="time-outline" size={18} color={colors.emerald} />
-                        </View>
-                        <View style={styles.reviewText}>
-                          <Text style={styles.reviewLabel}>Timing</Text>
-                          <Text style={styles.reviewValue} numberOfLines={2}>
-                            {arrivalWindowLabel(publishedJob)}
-                          </Text>
-                        </View>
-                      </View>
-                    ) : null}
-
-                    <View style={styles.reviewRow}>
-                      <View style={styles.reviewIcon}>
-                        {/* D19 — a wallet is where money is kept; this row is
-                            an amount. The glyph says amount. */}
-                        <Text style={styles.reviewIconGlyph}>$</Text>
-                      </View>
-                      <View style={styles.reviewText}>
-                        {/* a4 — the PUBLISHED row names what was actually
-                            saved, read back off the row rather than off the
-                            form state, so an edit that failed cannot leave the
-                            card claiming a mode the database does not hold. */}
-                        <Text style={styles.reviewLabel}>
-                          {priceRowLabel(pricingModeFrom(publishedJob.pricing_mode))}
-                        </Text>
-                        {/* C1: MoneyText with NO state — this is an amount, not
-                            a payment. A state would attach a caption from the
-                            payment machine to a job that has not been paid for
-                            and is not meant to look as though it has. A RANGE
-                            still falls back to the shared label: MoneyText
-                            renders one figure, and budgetRangeLabel is the one
-                            place that knows how two are written. */}
-                        {publishedJob.budget_cents != null ? (
-                          <MoneyText cents={publishedJob.budget_cents} />
-                        ) : (
-                          <Text style={styles.reviewValue}>
-                            {publishedJob.budget_min_cents != null
-                              ? budgetRangeLabel(publishedJob)
-                              : 'No budget set'}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  </LitSurface>
-                ) : null}
-
-                {/* D22 — VERIFIED BEFORE IT WAS WRITTEN. phase20 enqueues
-                    'bid_received' to the job's owner from notify_on_bid(), a
-                    trigger on `bids`, which phase47's projection writes on
-                    every marketplace offer chain's root; and
-                    notification_prefs.bids is `not null default true`. Both
-                    halves are live, so this card promises something the app
-                    actually does. */}
-                <LitSurface
-                  style={[styles.bidsCard, isDark && styles.bidsCardDark, isDark && shadows.cardDark]}
-                  surface={isDark ? colors.surface : colors.mint}
-                  lift={colors.emerald}
-                  liftAlpha={PUBLISH_CARD_LIFT_ALPHA}
-                  flat={!isDark}
-                >
-                  <Ionicons name="notifications-outline" size={20} color={colors.emerald} />
-                  <View style={styles.bidsCardText}>
-                    <Text style={[styles.bidsCardTitle, isDark && styles.bidsCardTitleDark]}>
-                      Expect the first bids soon
-                    </Text>
-                    <Text style={styles.bidsCardBody}>
-                      You&apos;ll be notified when a worker bids on this job.
-                    </Text>
-                  </View>
-                </LitSurface>
-                </View>
-              }
-              actions={[
-                { label: 'View job and bids', onPress: leaveToPublishedJob },
-                {
-                  // D21 — the label says where it goes; the action is
-                  // unchanged.
-                  label: 'Back to Home',
-                  onPress: () => leaveAfterSuccess(false),
-                  variant: 'secondary',
-                },
-              ]}
-            />
+            /* 2026-09-28 (LUX-LIST-64 #42) — THE LIVE PAGE (components/
+               JobLivePage.tsx), which the Seal opens from its tick. It reads
+               the SAVED row; if the save returned none, what was sent. With
+               Reduce Motion it arrives on a short fade — on its own wrapper,
+               never on this overlay node (D0). */
+            <Animated.View style={[styles.flex, { opacity: liveFade }]}>
+              <JobLivePage
+                job={
+                  publishedJob ?? {
+                    title: title.trim(),
+                    category: category ?? 'other',
+                    location: location.trim(),
+                    pricing_mode: pricingMode,
+                    budget_cents: postedPrice ? validMax : null,
+                    budget_max_cents: postedPrice ? null : validMax,
+                    scheduled_date: scheduledDate,
+                    arrival_start_hour: arrivalStartHour,
+                    arrival_end_hour: arrivalEndHour,
+                  }
+                }
+                onBackHome={() => leaveAfterSuccess(false)}
+                onViewJob={leaveToPublishedJob}
+              />
+            </Animated.View>
           ) : (
             <ScrollView
               contentContainerStyle={styles.successScrollContent}
@@ -2036,39 +1991,23 @@ export function PostJobScreen() {
         onClose={() => setViewerUri(null)}
       />
 
-      {/* C3 — Home's "Other services" sheet, reused unchanged, listing the
-          job categories create_job() actually accepts. Selecting a row
-          selects it on step 1 and closes; dismissing changes nothing. */}
-      <ServicePickerSheet
-        visible={otherSheetOpen}
-        title="All categories"
-        subtitle="Pick what the job is about"
-        services={OTHER_SHEET_SERVICES}
-        onSelect={(categoryKey) => {
-          setOtherSheetOpen(false);
-          const chosen = POSTABLE_CATEGORIES.find((c) => c === categoryKey);
-          if (chosen) setCategory(chosen);
-        }}
-        onClose={() => setOtherSheetOpen(false)}
+      {/* 2026-09-28 (LUX-LIST-64 #36): the budget dialog behind the pencil is
+          gone — the price list on the step is the one way to set the amount. */}
+
+      {/* #38 — the summary's note ("Photo removed · Undo"), above the bar. */}
+      {/* It floats over the bar — its button and its 1pt line — with the
+          column's own breathing room, read at use time (T1). */}
+      <UndoToast
+        message={toast?.message ?? null}
+        onUndo={toast?.undo}
+        onExpire={() => setToast(null)}
+        bottom={POST_BAR_BUTTON + 1 + spacing.md}
       />
 
-      {/* D15 — the one budget editor, and since a4 the one place the posting
-          choice is made. Cancel discards both the amount and the mode, Save
-          writes both and closes, and an empty field saves as "no maximum"
-          where the mode allows it. The ceiling refuses in writing inside the
-          dialog, before anything reaches createJob. */}
-      <EditBudgetDialog
-        visible={editingBudget}
-        value={budgetMax}
-        mode={pricingMode}
-        palette={emeraldColors}
-        onSave={(next, mode) => {
-          setBudgetMax(next);
-          setPricingMode(mode);
-          setEditingBudget(false);
-        }}
-        onCancel={() => setEditingBudget(false)}
-      />
+      {/* #42 — the Seal, over everything while it runs. */}
+      {seal ? (
+        <SealTransition from={seal.from} phase={seal.phase} onOpened={onSealOpened} onUndone={onSealUndone} />
+      ) : null}
 
       <ConfirmDialog
         visible={confirmOfferCents != null}
@@ -2107,14 +2046,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
   },
-  // D5 — THE LAST STEP'S SCROLLER CLEARS ITS OWN FOOTER. Only the last step
-  // has one, and the summary card is the tallest thing on the screen: without
-  // this the card's final row ends flush against the footer's top edge and
-  // reads as clipped. It is `content`'s own bottom padding plus the footer's
-  // breathing room — the SAME constant the footer applies, so the gap above
-  // the button and the gap below the card are one number, not two.
+  // D5 — THE LAST STEP'S SCROLLER ENDS ABOVE ITS BAR. 2026-09-28 (LUX-LIST-64
+  // #41): the bar sits in the column under the scroller (it never covers it)
+  // with no padding of its own, so the publish line keeps the reference's 16
+  // above the bar (refs/bottom-bar.html `.above`).
   contentWithFooter: {
-    paddingBottom: spacing.xl + PINNED_FOOTER_BOTTOM_PADDING,
+    paddingBottom: spacing.lg,
   },
   stepIntro: {
     gap: spacing.sm,
@@ -2132,9 +2069,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1.4,
-    color: colors.emerald,
+    color: colors.eyebrow,
   },
-  stepEyebrowDark: { color: colors.gold },
+  stepEyebrowDark: { color: colors.eyebrow },
   // Decision 9: a display heading speaks the serif, in both themes — the same
   // treatment every converted screen's hero title already carries.
   stepTitle: {
@@ -2163,8 +2100,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.pill,
     backgroundColor: colors.mint2,
   },
+  // 2026-09-27 (the Lux remake, ruling 6): the bar keeps today's thickness and
+  // today's green (#5FAE81 in dark) through its own role, not the moved mint.
+  // The fill, drawn over the track and crossfaded in (see `segmentFills`).
   progressSegmentActive: {
-    backgroundColor: colors.emerald,
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radius.pill,
+    backgroundColor: colors.wizardProgress,
   },
   progressLabel: {
     fontSize: 11,
@@ -2210,6 +2152,26 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '700',
     color: colors.ink,
   },
+  // M-7 — a label row that is not a TextField (Category) carries its Required
+  // mark where TextField puts a hint: the right end of the label's own row.
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.sm,
+  },
+  requiredHint: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  // 2026-09-27 (the Lux remake): the reason a step cannot advance, under the
+  // field that blocks it — the pinned footer that carried it is gone.
+  fieldReason: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginTop: -spacing.sm,
+  },
   fieldHint: {
     fontSize: 12,
     color: colors.textMuted,
@@ -2224,12 +2186,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     letterSpacing: -0.3,
     color: colors.textMuted,
     marginTop: -spacing.xs,
-  },
-  floorHint: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.textMuted,
-    marginTop: -spacing.sm,
   },
   guidanceCard: {
     gap: spacing.xs,
@@ -2249,72 +2205,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 12,
     lineHeight: 17,
     color: colors.textMuted,
-  },
-  // home(6) — THE SEAM ABOVE THE PINNED FOOTER.
-  //
-  // This is the only element that sits between the scroller and the pinned
-  // footer (step 2, a fresh post with no photos yet), so it is the strip the
-  // footer shares its top edge with. It was `mint` — #11241C in dark, six
-  // levels off the footer's `surface` #0E1D17, and neither the page's `bg` nor
-  // any surface token the rest of that stack uses. The origin was a STRAY
-  // TOKEN, not a raw literal and not an alpha composite: every dark value and
-  // every alpha step over bg and surface was searched, and `mint` is the only
-  // one that lands there.
-  //
-  // Resolved to `surface`, the token the footer directly below it already
-  // uses, so the two agree. The mint2 hairline stays and now matches the
-  // footer's own borderTopColor. The mint family it left is the family of
-  // cards INSIDE the scroller (infoCard, guidanceCard, hireBanner) — none of
-  // those ever shares an edge with the footer.
-  nudgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
-  },
-  nudgeText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.forest,
-  },
-  nudgeTextDark: { color: colors.ink },
-  // D13/D14 — A DISPLAY, NOT A CONTROL. The pill is a View with a Text in it:
-  // no Pressable wraps it, no TextInput sits in it, and there is no slider or
-  // track anywhere near it. Its ONE touch target is the pencil, which is why
-  // the pencil is the only Pressable in the block.
-  budgetPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    minHeight: 50,
-    paddingLeft: spacing.md + 2,
-    paddingRight: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
-  },
-  budgetPillValue: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  // >= 44pt, because it is the only way into the editor (CLAUDE.md).
-  budgetPencil: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   chipRow: {
     flexDirection: 'row',
@@ -2357,17 +2247,19 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   locationBtnPressed: {
     opacity: 0.82,
   },
+  // 2026-09-27 (the operator's review): the notice is a pop-out card row
+  // (components/Card.tsx) — the material draws the fill, the rim and the
+  // shadow; this only lays out the row.
   infoCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.mint,
+    padding: spacing.md,
   },
-  infoCardDark: { borderColor: colors.border },
+  // The Lux step cards: the field group in one pop-out, 14pt of padding.
+  fieldCard: {
+    padding: 14,
+  },
   infoIcon: {
     width: 40,
     height: 40,
@@ -2383,162 +2275,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.forest,
   },
   infoTextDark: { color: colors.ink },
-  reviewCard: {
-    gap: spacing.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
-    ...shadows.card,
-  },
-  reviewEyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-    color: colors.emerald,
-  },
-  reviewTitle: {
-    fontSize: 20,
-    lineHeight: 25,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  reviewDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textMuted,
-  },
-  reviewDivider: {
-    height: 1,
-    backgroundColor: colors.mint2,
-  },
-  reviewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  reviewIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.md,
-    backgroundColor: colors.mint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // D19 — the amount's own sign, sized and weighted to sit where a 18pt glyph
-  // sat. A Text, not an Ionicon: there is no dollar glyph in the set that
-  // reads as a currency mark rather than a badge.
-  reviewIconGlyph: {
-    fontSize: 19,
-    lineHeight: 22,
-    fontWeight: '800',
-    color: colors.emerald,
-  },
-  reviewText: {
-    flex: 1,
-    gap: 2,
-  },
-  // PUBLISH1 (C1) — AND THE ONE PLACE HOME'S RHYTHM IS DELIBERATELY NOT TAKEN,
-  // measured rather than argued.
-  //
-  // Home gives every page SECTION 20 (`sectionGap`), and taking that here was
-  // tried: it moved the whole stack down 8pt and pushed "Back to Home" from
-  // partly clipped to entirely below the fold. These two are not two sections
-  // — they are one detail block inside the template's own `spacing.xl` (20)
-  // rhythm, which IS Home's number and is already applied between the mark,
-  // the copy, this block and the actions. So the block keeps its 12 and the
-  // surface keeps the 20 where Home puts it.
-  //
-  // Everything else here already matched: the card padding is `spacing.lg`
-  // (16), which is `heroBody`'s padding on Home's promo card.
-  publishDetails: {
-    width: '100%',
-    gap: spacing.md,
-  },
-  // D22 — what happens next, and it is a thing the app really does: phase20's
-  // `bid_received` fires to the job's owner and `notification_prefs.bids`
-  // defaults to true.
-  bidsCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.mint,
-  },
-  bidsCardDark: { borderColor: colors.border },
-  bidsCardText: {
-    flex: 1,
-    gap: 2,
-  },
-  bidsCardTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.forest,
-  },
-  bidsCardTitleDark: { color: colors.ink },
-  bidsCardBody: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.textMuted,
-  },
-  // PUBLISH1 (C1) — the row label IS Home's eyebrow, and now says so in gold.
-  // `heroEyebrow` in screens/HomeScreen.tsx is 12/700 at letterSpacing 1.1 in
-  // `colors.gold`; this keeps its own 11pt because it labels a row rather than
-  // a card, and takes the tracking and the colour, which are what make an
-  // eyebrow read as one. `textMuted` was a caption's colour on a label that is
-  // structure — the eyebrow law (decision 6): structure is gold, money is
-  // emerald.
-  reviewLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-    color: colors.gold,
-  },
-  // The category chip sits on its own line under the eyebrow, left-aligned:
-  // a chip stretched to the row's width would read as a button.
-  reviewChipRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  reviewValue: {
-    fontSize: 14,
-    lineHeight: 19,
-    fontWeight: '700',
-    color: colors.ink,
-  },
+  // refs/bottom-bar.html `.note`: the tick 11 from its one 13pt line.
   publishNotice: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.sm + 3,
   },
   publishNoticeText: {
     flex: 1,
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 18,
     color: colors.textMuted,
-  },
-  footer: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    // home(7): the pinned footer's own breathing room, shared with
-    // FormScreen's footer and DetailScreen's action bar — not the scroll
-    // clearance, which this footer does not travel under.
-    paddingBottom: PINNED_FOOTER_BOTTOM_PADDING,
-    borderTopWidth: 1,
-    borderTopColor: colors.mint2,
-    backgroundColor: colors.surface,
-  },
-  // D4 — one full-width pill. There is no second footer control any more, so
-  // there is no `footerBack` beside it to leave room for.
-  footerPrimary: {
-    flex: 1,
-    borderRadius: radius.pill,
   },
   // D0 — OPAQUE GROUND, AND NO OPACITY ON THIS NODE. Both halves matter and
   // they fail the same way: the form stays mounted underneath, so a
@@ -2575,7 +2322,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1.1,
-    color: colors.emerald,
+    color: colors.eyebrow,
   },
   successTitle: {
     fontFamily: fonts.display,

@@ -192,7 +192,9 @@ export function PastWork({
                       <Pressable
                         style={styles.removeBtn}
                         onPress={() => handleRemove(item)}
-                        hitSlop={6}
+                        // M-34 — 24 + 10 + 10 = the 44pt floor.
+                        hitSlop={10}
+                        accessibilityRole="button"
                         accessibilityLabel="Remove from portfolio"
                       >
                         <Ionicons name="close" size={14} color={colors.onPrimary} />
@@ -369,7 +371,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   tileCategory: {
     fontSize: 11,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.eyebrow,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
     marginTop: spacing.xs,

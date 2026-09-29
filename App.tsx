@@ -11,10 +11,19 @@ import { usePushNotifications } from './hooks/usePushNotifications';
 import { useThemeColors } from './hooks/useThemeColors';
 import { configurePushHandling } from './lib/pushNotifications';
 import { handleAppLink } from './lib/navigation';
+import {
+  beginRecovery,
+  isRecoveryPending,
+  parseRecoveryLink,
+  setRecoveryPending,
+  subscribeRecovery,
+} from './lib/passwordReset';
+import { ResetPasswordScreen } from './screens/ResetPasswordScreen';
 import { flushPendingNavigation, navigationRef } from './lib/navigationRef';
 import { ThemeProvider } from './lib/ThemeContext';
 import { LaunchCompleteContext } from './lib/launchContext';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
+import { ConfirmHost } from './components/ConfirmHost';
 import { ModeTransitionProvider } from './components/ModeTransitionOverlay';
 import { ModeProvider } from './modes';
 import { MotionRoot } from './lib/motion120';
@@ -77,12 +86,25 @@ function RootNavigator() {
   // and parked through navigateWhenReady; a warm arrival comes through the
   // 'url' event. Unknown brazos:// paths are ignored silently.
   const linkBridge = useNotificationModeBridge();
+  const [recoveryPending, setRecoveryPendingState] = useState(isRecoveryPending());
+  useEffect(() => subscribeRecovery(setRecoveryPendingState), []);
   const handledInitialUrl = useRef(false);
   useEffect(() => {
     if (Platform.OS === 'web') return;
     let active = true;
     const dispatch = (url: string | null) => {
-      if (active && url) void handleAppLink(url, linkBridge);
+      if (!active || !url) return;
+      // 2026-09-26 (the refresh, audit M-21): the reset email's link signs in
+      // with its own recovery session, then the new-password screen opens.
+      const recovery = parseRecoveryLink(url);
+      if (recovery) {
+        void beginRecovery(recovery).then(({ error }) => {
+          if (error) console.error('[link] password recovery failed', error.message);
+          else setRecoveryPending(true);
+        });
+        return;
+      }
+      void handleAppLink(url, linkBridge);
     };
     if (!handledInitialUrl.current) {
       handledInitialUrl.current = true;
@@ -110,6 +132,8 @@ function RootNavigator() {
       </View>
     );
   }
+
+  if (user && recoveryPending) return <ResetPasswordScreen />;
 
   if (!user) return <AuthFlow />;
 
@@ -257,6 +281,11 @@ function ThemedNavigation() {
           </AppErrorBoundary>
           <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={palette.background} />
         </NavigationContainer>
+        {/* 2026-09-28 (LUX-LIST-64 #64, audit M-31) — THE ONE CONFIRM ENGINE:
+            every confirmAsync(), the mode switch's included, draws the app's
+            own ConfirmDialog through this host (lib/dialog.ts). Inside the
+            theme and the mode provider, beside the navigator. */}
+        <ConfirmHost />
       </ModeProvider>
     </ModeTransitionProvider>
   );

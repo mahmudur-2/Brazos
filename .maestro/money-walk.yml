@@ -35,7 +35,7 @@ appId: app.brazos.mobile.preview
 # centre, which the multiline description swallows; the eyebrow is static text
 # in the step's own ScrollView (keyboardShouldPersistTaps="handled"), and React
 # Native blurs the focused input on a tap that no child handles.
-- tapOn: "e.g. Walk my dog on weekday mornings"
+- tapOn: "e.g. Walk my dog on weekdays"
 - inputText: ${output.title}
 - tapOn: "Describe what you need done…"
 - inputText: "Cleaning of a two bedroom apartment for the end to end money walk."
@@ -57,7 +57,7 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "STEP 3 OF 4"
     timeout: 30000
-- tapOn: "e.g. Sheepshead Bay, Brooklyn"
+- tapOn: "e.g. Sheepshead Bay"
 - inputText: "Sheepshead Bay, Brooklyn"
 - hideKeyboard:
     optional: true
@@ -100,12 +100,17 @@ appId: app.brazos.mobile.preview
       text: "Edit budget"
     direction: DOWN
     timeout: 20000
+# 2026-09-28 (LUX-LIST-64 #36): the amount is the price field under the step
+# bars — "Edit budget" is its label — which opens the price list; "Enter your
+# own amount" turns it into the $ entry ("Maximum budget in dollars"), and its
+# Done pill sets it. The pencil and its dialog are gone.
 - tapOn: "Edit budget"
+- tapOn: "Enter your own amount"
 - tapOn: "Maximum budget in dollars"
 - inputText: "50"
 - hideKeyboard:
     optional: true
-- tapOn: "Save"
+- tapOn: "Done"
 - tapOn: "Publish"
 # The screen fires the push pre-prompt without awaiting it, so it can land
 # over the success overlay; declining is remembered only until the next

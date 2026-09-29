@@ -8,7 +8,9 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { CategoryGlyph } from './CategoryGlyph';
 import type { ComponentProps } from 'react';
+import { ChipCheck } from './ChipCheck';
 import {
   glow,
   radius,
@@ -66,6 +68,9 @@ type ChipProps = {
   onLayout?: (event: LayoutChangeEvent) => void;
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  /** #35 — false for a chip that opens something rather than choosing (the
+   *  Filters chip): its `selected` means "has a value", and it keeps its glyph. */
+  check?: boolean;
 };
 
 export function Chip({
@@ -80,6 +85,7 @@ export function Chip({
   onLayout,
   accessibilityLabel,
   accessibilityHint,
+  check = true,
 }: ChipProps) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -123,17 +129,45 @@ export function Chip({
             ? colors.ink
             : colors.textMuted;
 
-  const content = (
-    <>
-      {icon && <Ionicons name={icon} size={small ? 13 : 16} color={iconColor} />}
-      <Text
-        style={[styles.label, small && styles.labelSmall, { color: labelColor }]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-    </>
+  // 2026-09-27 (the Lux remake, ruling 11) — a chosen chip keeps its own glyph:
+  // "the icon and text turn #4FC58C and the rim lights mint", and the refresh's
+  // leading check (M-35) was withdrawn by that ruling.
+  // 2026-09-28 (LUX-LIST-64 #35) — THE CHECK IS BACK, by the operator's list: a
+  // chosen CHOICE chip (one with a handler) carries a small check at its left,
+  // inside the pill, and loses it when unchosen. A chip with its own glyph swaps
+  // the glyph for the check in the same box — no width change; a chip without
+  // one grows by the check and GLIDES to its new width, its neighbours with it
+  // (components/ChipCheck.tsx — a slot that opens on the UI thread through the
+  // motion boundary; RN's LayoutAnimation is banned here). A tag (no handler)
+  // never carries it, nor does a chip that is a door rather than a choice
+  // (`check={false}`: the Filters chip). The Inbox filter pills are not Chips,
+  // so #55's exception holds by construction.
+  const checked = selected && !!onPress && check;
+  const leadingGlyph: IoniconName | undefined = checked ? 'checkmark' : icon;
+  const glyphSize = small ? 13 : 16;
+  const labelText = (
+    <Text
+      style={[styles.label, small && styles.labelSmall, { color: labelColor }]}
+      numberOfLines={1}
+    >
+      {label}
+    </Text>
   );
+  const content =
+    icon || !onPress || !check ? (
+      <>
+        {/* #14: a category's roller, bin or drill, solid like its neighbours. */}
+        {leadingGlyph && <CategoryGlyph name={leadingGlyph} size={glyphSize} color={iconColor} filled bare />}
+        {labelText}
+      </>
+    ) : (
+      // A glyph-less choice chip: the check's slot carries its own gap, so the
+      // label sits exactly where it always did while the chip is unchosen.
+      <View style={styles.checkRow}>
+        <ChipCheck shown={checked} size={glyphSize} color={iconColor} />
+        {labelText}
+      </View>
+    );
 
   // RUN S2 (C8) — the chip geometry dials; colours stay each variant's own.
   const padXDial = useOverrideNumber('chip.paddingX');
@@ -181,7 +215,13 @@ export function Chip({
     // chip reads as a step up from its neighbours rather than as a different
     // colour. Applied last so it wins over every variant's own selected fill;
     // light keeps each variant's Heritage pair untouched.
-    goldSelected && { backgroundColor: chosen.fill, borderColor: chosen.line },
+    // 2026-09-27 (the Lux remake, ruling 11): the chosen chip KEEPS its dark
+    // glass — the variant's own unselected fill — under the mint rim; the
+    // helper's `fill` is for the controls that never had a glass to keep.
+    goldSelected && {
+      backgroundColor: isFilter || variant === 'soft' ? colors.mint : colors.surface,
+      borderColor: chosen.line,
+    },
     selectionGlow,
     style,
   ];
@@ -199,6 +239,7 @@ export function Chip({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
+      accessibilityState={{ selected }}
     >
       {content}
     </Pressable>
@@ -257,6 +298,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 14,
     fontWeight: '600',
     color: colors.textMuted,
+  },
+  // #35 — the check's slot and the label, with no gap between: the slot has its own.
+  checkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   labelSmall: {
     fontSize: 12,

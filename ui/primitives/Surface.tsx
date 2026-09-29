@@ -50,9 +50,10 @@ import { backgroundImageStyle } from './LitSurface';
  * tests/themeTokens.test.mjs enforces tree-wide.
  *
  * THE FIFTH LAYER, OPTIONAL: a 1pt bright inner edge along the top
- * (`highlightAlpha`), the specular line a lit pane shows. It is inset by
- * the corner radius so it never crosses the arcs, and sits just under the
- * hairline — the mockup's `inset 0 1px 0`.
+ * (`highlightAlpha`), the specular line a lit pane shows — the mockup's own
+ * `inset 0 1px 0`, drawn AS that inset shadow (2026-09-29, LUX-LIST-2 #6), so it
+ * follows the corner arcs and fades into the sides. It was a straight 1pt strip,
+ * which crossed into the arcs and read as "a weird overlapping line on top".
  */
 
 export type SurfaceProps = PropsWithChildren<{
@@ -171,8 +172,10 @@ export function Surface({
   const scrimAlpha = glass ? (flat ? glass.fallbackScrimAlpha : glass.scrimAlpha) : 1;
   // The pane's own gradient replaces the scrim where the glass draws; the
   // scrim is transparent under it so the blurred page shows through the
-  // gradient's own alpha, as it does through the reference's.
-  const gradient = fillSpec && glass && isDark && !flat ? fillSpec : null;
+  // gradient's own alpha, as it does through the reference's. 2026-09-28
+  // (LUX-LIST-64 #53): a fill may carry its own LIGHT gradient, drawn only
+  // where the material is glass in light too (the ••• dropdown's frost).
+  const gradient = fillSpec && glass && !flat ? (isDark ? fillSpec : fillSpec.light ?? null) : null;
 
   const fill = glass
     ? {
@@ -190,10 +193,25 @@ export function Surface({
   const sheen = isDark && !flat && !gradient && spec.sheen ? spec.sheen : null;
   const sheenColor = sheen?.color ?? colors.white;
 
-  const halo =
-    glowColor && isDark
-      ? glow.halo(withAlpha(glowColor, overrides.glowAlpha ?? SURFACE_GLOW_ALPHA))
-      : null;
+  const haloColor = glowColor && isDark ? withAlpha(glowColor, overrides.glowAlpha ?? SURFACE_GLOW_ALPHA) : null;
+  // Native keeps the halo on the legacy shadow props; on web it joins the one boxShadow below.
+  const halo = haloColor && Platform.OS !== 'web' ? glow.halo(haloColor) : null;
+  // 2026-09-27 (the Lux remake) — the flat card's drop shadow, from the
+  // material's own numbers (dark: the Lux 0 10px 30px black .35; light: the
+  // auth surface's soft card shadow). Only the `card` material carries one:
+  // a blurred pane that moves under a finger would re-rasterise it per frame.
+  // 2026-09-29 (LUX-LIST-2 #6) — ONE boxShadow: the inset top edge, the material's lift and (web) the
+  // glow, the way the reference writes `.card`. React Native 0.81 draws `boxShadow` natively
+  // (inset included) on the new architecture; the web draws the same CSS.
+  const edge = glass && highlightAlpha > 0 ? withAlpha(glass.highlightColor ?? glass.borderColor, highlightAlpha) : null;
+  const shadowParts = [
+    edge ? `inset 0 1px 0 ${edge}` : null,
+    glass?.shadow ? `0 ${glass.shadow.y}px ${glass.shadow.radius * 2}px ${withAlpha(glass.shadow.color, glass.shadow.alpha)}` : null,
+    haloColor && Platform.OS === 'web' ? `0 0 14px ${haloColor}` : null,
+  ].filter(Boolean);
+  const shadow: ViewStyle | null = shadowParts.length ? ({ boxShadow: shadowParts.join(', ') } as ViewStyle) : null;
+  // The material's lit wash (the card's), in whichever theme it is drawn.
+  const wash = glass?.wash ? backgroundImageStyle(`linear-gradient(180deg, ${glass.wash.top} 0%, ${glass.wash.bottom} 100%)`) : null;
   // The glow rings, outside the rim, dark glass only: ring i sits
   // (i + 1) rings out, with corners that grow by the same amount so the
   // arcs stay concentric with the pane's.
@@ -220,7 +238,7 @@ export function Surface({
       : null;
 
   return (
-    <View style={[corner, hairline, fill, halo, style]}>
+    <View style={[corner, hairline, fill, wash, halo, shadow, style]}>
       {rings}
       {/* RUN S3 (D11) — THE BLUR MOUNTS ONLY WHERE IT CAN BE SEEN. A material
           with no blur, or with an opaque scrim over it, renders an expo-blur
@@ -257,19 +275,6 @@ export function Surface({
           ]}
         />
       ) : null}
-      {glass && highlightAlpha > 0 ? (
-        <View
-          pointerEvents="none"
-          style={[
-            styles.highlight,
-            {
-              left: cornerRadius,
-              right: cornerRadius,
-              backgroundColor: withAlpha(glass.borderColor, highlightAlpha),
-            },
-          ]}
-        />
-      ) : null}
       {children}
     </View>
   );
@@ -280,9 +285,6 @@ const stylesFor = metricStyles(() => StyleSheet.create({
   // view's own background, which already respects its radius. Clipping the
   // OUTER view instead would cancel the optional glow on iOS.
   clip: { overflow: 'hidden' },
-  // The specular top edge: 1pt, just under the hairline, inset by the radius
-  // at render so it stops where the arcs begin.
-  highlight: { position: 'absolute', top: 0, height: 1 },
   // A glow ring: a bordered box outside the pane, no fill of its own.
   ring: { position: 'absolute', backgroundColor: 'transparent' },
 }));

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import {
   Animated,
   Easing,
@@ -85,6 +85,11 @@ export type PickerOption<V> = {
   /** Drawn grey — a row that clears rather than chooses (the Sort popup's
    *  Reset). Ticked, its tick is still the chosen green; the label stays grey. */
   muted?: boolean;
+  /** 2026-09-28 (LUX-LIST-64 #36) — an ACTION row rather than a value (Post a
+   *  Job's "Enter your own amount"): a small glyph before the label, both in the
+   *  mint, never ticked. */
+  icon?: ComponentProps<typeof Ionicons>['name'];
+  accent?: boolean;
 };
 
 /** Where the pill is, in window points — from `measureInWindow`. */
@@ -262,6 +267,9 @@ export function PickerPopover<V>({
                   <View style={styles.tick}>
                     {on ? <Ionicons name="checkmark" size={16} color={colors.emeraldBright} /> : null}
                   </View>
+                  {item.icon ? (
+                    <Ionicons name={item.icon} size={18} color={item.accent ? colors.emeraldBright : colors.textMuted} />
+                  ) : null}
                   {item.dayNumber != null ? (
                     <View style={styles.calendar}>
                       <View style={styles.calendarBar} />
@@ -270,7 +278,7 @@ export function PickerPopover<V>({
                   ) : null}
                   <View style={centred ? styles.textCentred : styles.text}>
                     <Text
-                      style={[styles.label, centred && styles.centredType, on && styles.labelOn, item.muted && styles.labelMuted]}
+                      style={[styles.label, centred && styles.centredType, on && styles.labelOn, item.muted && styles.labelMuted, item.accent && styles.labelAccent]}
                       numberOfLines={1}
                     >
                       {item.label}
@@ -357,6 +365,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       color: colors.ink,
     },
     labelOn: {
+      fontWeight: '600',
+      color: colors.emeraldBright,
+    },
+    // #36 — an action row ("Enter your own amount"): the mint, at the row's weight.
+    labelAccent: {
       fontWeight: '600',
       color: colors.emeraldBright,
     },

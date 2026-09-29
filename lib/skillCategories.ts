@@ -156,6 +156,18 @@ export const HOME_SERVICE_TILES: ServiceTile[] = [...HOME_QUICK_SERVICES, ...MOR
   (service) => ({ ...service, tileLabel: TILE_LABELS[service.label] ?? service.label })
 );
 
+/**
+ * 2026-09-28 (LUX-LIST-64 #13) — THE CUSTOMER HOME'S "ALL SERVICES" LIST, behind
+ * both "View all →" and the row's "Other" tile: every tile in the row's own
+ * order (the six shortcuts, then the eighteen), each under its full name, then
+ * Other — the job category for anything the list does not name. Built from the
+ * tile list, never retyped, so the sheet and the row cannot drift apart.
+ */
+export const ALL_SERVICES: SkillCategory[] = [
+  ...HOME_SERVICE_TILES.map(({ key, label, icon }) => ({ key, label, icon })),
+  { key: 'other', label: 'Other', icon: 'ellipsis-horizontal' },
+];
+
 const BY_KEY = new Map(SKILL_CATEGORIES.map((c) => [c.key, c]));
 
 /** Display label for a key, falling back to the raw value for custom "Other" entries. */

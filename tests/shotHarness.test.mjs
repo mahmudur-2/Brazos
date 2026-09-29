@@ -243,11 +243,13 @@ test('a tapped category reaches the search, not just the destination state', asy
     read('lib/workerSearch.ts'),
   ]);
 
-  // Home hands the key over under the name the destination reads.
-  assert.match(
-    codeOnly(home),
-    /function searchCategory\(categoryKey: string\) \{\s*navigation\.navigate\('WorkerSearch', \{ category: categoryKey \}\);/
-  );
+  // 2026-09-26 (the refresh, audit M-12): Home's tiles start a job draft
+  // now. 2026-09-27 (the Lux remake, ruling 13): the "Browse workers" route
+  // left Home with its line — nothing on Home opens worker search; the
+  // category param stays the destination's contract for every other caller.
+  assert.doesNotMatch(codeOnly(home), /navigate\('WorkerSearch'/);
+  // …and a tile hands its category to the wizard under the name IT reads.
+  assert.match(codeOnly(home), /navigation\.navigate\('PostJob', \{\s*initialCategory: category,/);
 
   // All three param lists that mount this route declare it — the customer Home
   // stack, the Discover tab, and the screen's own standalone route type. A
@@ -436,7 +438,8 @@ test('the auth and setup targets are listed, both schemes, and reach their trees
   assert.match(codeOnly(welcome), /title="I already have an account"/);
   assert.match(codeOnly(signIn), /title="Use Email Instead"/);
   assert.match(codeOnly(createAccount), /title="Use Email Instead"/);
-  assert.match(codeOnly(setup), />FINAL SETUP</);
+  // 2026-09-28 (LUX-LIST-64 #9): the FINAL SETUP eyebrow is gone; the headline proves arrival.
+  assert.match(codeOnly(setup), /Set up your experience/);
 });
 
 // RUN n5 — SUBMIT BID, THE COMPOSER'S HOST, AND THE ONE-ROW READ THAT KEEPS
@@ -521,11 +524,11 @@ test('the state variants are listed, both schemes, each proven by text only its 
   // OFFLINE the same way.
   const online = entryOf('worker-home-online');
   assert.match(online, /mode: 'worker',/);
-  assert.match(online, /wait: 'Online',/);
+  assert.match(online, /wait: 'Shown as available on your profile',/);
   assert.doesNotMatch(online, /jobs: true/);
-  assert.match(code, /name: 'worker-home-dark', mode: 'worker', colorScheme: 'dark', wait: 'Offline'/);
+  assert.match(code, /name: 'worker-home-dark', mode: 'worker', colorScheme: 'dark', wait: 'Offers still reach you'/);
   const workerHome = codeOnly(await read('screens/WorkerHomeScreen.tsx'));
-  assert.match(workerHome, /\{accepting \? 'Online' : 'Offline'\}/);
+  assert.match(workerHome, /\{accepting \? 'Shown as available on your profile' : 'Offers still reach you'\}/);
   assert.match(workerHome, /const accepting = profile\?\.accepting_work \?\? true;/);
   assert.match(workerHome, /const PREVIEW_COUNT = 3;/);
 

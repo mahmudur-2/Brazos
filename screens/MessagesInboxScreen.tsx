@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { ConversationRow } from '../components/ConversationRow';
+import { GlassDropdown, type GlassDropdownItem, type GlassDropdownRequest } from '../components/GlassDropdown';
 import { SwipeableRow, type SwipeAction } from '../components/SwipeableRow';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ReportDialog } from '../components/ReportDialog';
@@ -48,6 +49,9 @@ import {
   type ActiveJobCandidate,
 } from '../lib/conversationResolver';
 import { fetchMyPendingOffers } from '../lib/offers';
+import { fetchJobLifecycleStates } from '../lib/inboxStages';
+import type { JobLifecycleState } from '../lib/jobLifecycle';
+import { inboxStage } from '../lib/liveJobStatus';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import {
@@ -81,7 +85,9 @@ import {
   spacing,
   themedStyles,
   useThemeColors,
+  withAlpha,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 
 /**
@@ -101,8 +107,13 @@ import {
  * `filterRow` centres instead of stretching) — this constant is what the pill
  * measures once the stretch is gone, not a cap hiding it. `radius.pill` is
  * 999, so the corner is half the height at whatever this says.
+ *
+ * 2026-09-28 (LUX-LIST-64 #55): 34, the approved clean list's own chip.
  */
-const FILTER_PILL_HEIGHT = 36;
+const FILTER_PILL_HEIGHT = 34;
+
+/** A row swiped open springs shut before its More tile's menu measures the •••. */
+const SWIPE_SETTLE_MS = 320;
 
 /**
  * What the sheets act on. `jobId` is null in a direct thread (phase36), so
@@ -126,8 +137,9 @@ export function MessagesInboxScreen() {
   // `spacing.sm`, 8). The gap stopped inheriting because 10 is not on the
   // theme scale and an inheriting dial has to ship at its parent's value.
   const filterPillHeight = useDialNumber('messages.filterPill.height') ?? FILTER_PILL_HEIGHT;
-  const filterRowGap = useDialNumber('messages.filterRow.gap') ?? 10;
-  const listGap = useDialNumber('messages.list.gap') ?? spacing.md;
+  // 2026-09-28 (LUX-LIST-64 #54, #55): the pills 8 apart, the reference's; the
+  // rows carry no gap of their own — a hairline parts them — so its dial went.
+  const filterRowGap = useDialNumber('messages.filterRow.gap') ?? spacing.sm;
   const listPaddingX = useDialNumber('messages.list.paddingX') ?? spacing.lg;
   const navigation = useNavigation<MessagesStackNavigation>();
   const { user } = useAuth();
@@ -138,6 +150,7 @@ export function MessagesInboxScreen() {
     profiles,
     lastMessageReactions,
     moderation,
+    unseenByKey,
     loading,
     error,
     refresh,
@@ -149,13 +162,14 @@ export function MessagesInboxScreen() {
   // sheet was open left that copy behind, and the tap then inverted the user's
   // intent: the row read "Mute", the person was already muted, and tapping
   // unmuted them. The id cannot go stale; the row is re-read below.
-  const [sheetUserId, setSheetUserId] = useState<string | null>(null);
-  // THE SAME IDENTITY-NOT-SNAPSHOT RULE, now that More has live actions too.
-  // It held a copied row while every one of its entries was a no-op; the
-  // moment Archive/Unarchive and Hide/Unhide read state to choose their label
-  // AND their call, a stale copy could invert the user's intent exactly the
-  // way F2 did in the first sheet.
-  const [moreUserId, setMoreUserId] = useState<string | null>(null);
+  //
+  // 2026-09-28 (LUX-LIST-64 #53): the ONE menu — the glass dropdown under the
+  // row's ••• — keeps that rule: it holds the person's id, and the row is read
+  // again below on every render.
+  const [menuUserId, setMenuUserId] = useState<string | null>(null);
+  const [menuDelay, setMenuDelay] = useState(0);
+  // Each row's •••, which the dropdown opens under.
+  const moreRefs = useRef(new Map<string, View | null>());
   const [blockDurationUserId, setBlockDurationUserId] = useState<string | null>(null);
   const [reportTarget, setReportTarget] = useState<SheetTarget | null>(null);
   // Whether this device can put a conversation behind an authentication prompt
@@ -183,6 +197,11 @@ export function MessagesInboxScreen() {
   // job their next message would go to — the inbox must never name one job
   // while sends route to another.
   const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([]);
+  // 2026-09-28 (LUX-LIST-64 #54) — where each job a row names stands, for its
+  // job chip, keyed by job id: read and DERIVED in the data layer
+  // (lib/inboxStages.ts) — this screen holds no idea of its own about it.
+  const [stageByJob, setStageByJob] = useState<Record<string, JobLifecycleState>>({});
+  const [stageTick, setStageTick] = useState(0);
 
   const loadActiveJobs = useCallback(async () => {
     if (!user?.id) return;
@@ -195,6 +214,16 @@ export function MessagesInboxScreen() {
     }
     setActiveJobs(data);
   }, [user?.id]);
+
+  const loadStages = useCallback(async (jobIds: string[]) => {
+    const { data, error } = await fetchJobLifecycleStates(jobIds);
+    if (error) {
+      // Keep the last known stages: a failed read must not strip every chip.
+      console.warn('[MessagesInbox] stage refresh failed', error.message);
+      return;
+    }
+    setStageByJob(data);
+  }, []);
 
   const loadPending = useCallback(async () => {
     if (!user?.id) return;
@@ -221,8 +250,21 @@ export function MessagesInboxScreen() {
       refresh();
       loadPending();
       loadActiveJobs();
+      setStageTick((tick) => tick + 1);
     }, [refresh, loadPending, loadActiveJobs])
   );
+
+  // The jobs the rows can name — every job thread's and every active job's —
+  // read again when that set changes and on every visit to the screen.
+  const chipJobKey = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of conversations) if (c.job_id) ids.add(c.job_id);
+    for (const job of activeJobs) ids.add(job.id);
+    return [...ids].sort().join(',');
+  }, [conversations, activeJobs]);
+  useEffect(() => {
+    void loadStages(chipJobKey ? chipJobKey.split(',') : []);
+  }, [chipJobKey, stageTick, loadStages]);
 
   // Asked ONCE, on mount: the answer is a property of the device, not of the
   // session. A throw is the same answer as false — a platform where the module
@@ -249,6 +291,7 @@ export function MessagesInboxScreen() {
   async function onRefresh() {
     setRefreshing(true);
     await Promise.all([refresh(), loadActiveJobs()]);
+    setStageTick((tick) => tick + 1);
     setRefreshing(false);
   }
 
@@ -342,6 +385,28 @@ export function MessagesInboxScreen() {
         }));
       const activeJob = resolveActiveJob(candidates);
 
+      // 2026-09-28 (LUX-LIST-64 #54) — THE JOB THE ROW'S CHIP NAMES: the active
+      // job — the one a message from here goes to — else the conversation's
+      // most recent job, finished or not. Its stage shows only while it is hired
+      // and underway; a finished job's chip is its title alone.
+      const latestJobThread = person.threads.reduce<Conversation | null>(
+        (best, thread) =>
+          thread.job_id && (!best || thread.last_message_at > best.last_message_at) ? thread : best,
+        null
+      );
+      const chipJob = activeJob
+        ? { id: activeJob.id, title: activeJob.title }
+        : latestJobThread?.job_id && latestJobThread.job_title
+          ? { id: latestJobThread.job_id, title: latestJobThread.job_title }
+          : null;
+      const chipState = chipJob ? stageByJob[chipJob.id] : undefined;
+
+      // The count beside the name: the unseen messages of the unread threads,
+      // as counted (hooks/useConversations). None counted: no number.
+      const unreadCount = liveThreads
+        .filter(unreadInThread)
+        .reduce((sum, thread) => sum + (unseenByKey[conversationKey(thread)] ?? 0), 0);
+
       const baseName = other?.full_name ?? 'Someone';
 
       return {
@@ -358,10 +423,12 @@ export function MessagesInboxScreen() {
         // D7's inbox reading: deleted AND quiet since. One newer message and
         // this is false again, with nothing un-set anywhere.
         deleted: state.deleted,
-        // No active job means no job to name. A neutral placeholder here is
-        // what produced "N conversations together" — the line stays empty
-        // instead of saying something that isn't about anything.
-        subtitle: isSelf ? null : activeJob?.title ?? null,
+        // A real job or none: a neutral placeholder is what once produced "N
+        // conversations together", so a pair with no job has no chip at all.
+        job:
+          isSelf || !chipJob
+            ? null
+            : { title: chipJob.title, stage: chipState ? inboxStage(chipState) : null },
         name: isSelf ? `${baseName} (You)` : baseName,
         rawName: baseName,
         avatarUrl: other?.avatar_url ?? null,
@@ -370,6 +437,7 @@ export function MessagesInboxScreen() {
         // Only the threads still in this user's copy can be unread; a thread
         // they cleared has nothing left to have missed.
         unread: liveThreads.some(unreadInThread),
+        unreadCount: unreadCount > 0 ? unreadCount : null,
         muted: isMuted,
         blocking: moderation.blocking.has(otherId),
         // Over ALL threads, cleared ones included: an offer waiting on this
@@ -387,6 +455,8 @@ export function MessagesInboxScreen() {
     user,
     pendingByThread,
     activeJobs,
+    stageByJob,
+    unseenByKey,
   ]);
 
   /**
@@ -413,7 +483,7 @@ export function MessagesInboxScreen() {
 
   async function toggleBlock(target: SheetTarget) {
     if (!user) return;
-    setSheetUserId(null);
+    setMenuUserId(null);
 
     if (target.blocking) {
       const { error } = await unblockUser(user.id, target.userId);
@@ -439,7 +509,7 @@ export function MessagesInboxScreen() {
 
   async function toggleMute(target: SheetTarget) {
     if (!user) return;
-    setSheetUserId(null);
+    setMenuUserId(null);
     const { error } = target.muted
       ? await unmuteUser(user.id, target.userId)
       : await muteUser(user.id, target.userId);
@@ -466,7 +536,7 @@ export function MessagesInboxScreen() {
     patch: ConversationStatePatch,
     failureTitle: string
   ) {
-    setMoreUserId(null);
+    setMenuUserId(null);
     const { error: stateError } = await setConversationStateForAll(target.targets, patch);
     if (stateError) await alertAsync(failureTitle, userMessage(stateError));
     await refresh();
@@ -490,7 +560,7 @@ export function MessagesInboxScreen() {
 
   async function markUnread(target: SheetTarget) {
     if (!user) return;
-    setMoreUserId(null);
+    setMenuUserId(null);
     const { error: unreadError } = await markConversationUnreadForAll(
       target.targets,
       user.id
@@ -528,111 +598,6 @@ export function MessagesInboxScreen() {
   }
 
   /**
-   * THE SECOND SHEET. Six rows, each gated by the flag that owns it, each with
-   * a real handler behind it — a flipped flag over a no-op row is the dead
-   * control lib/featureFlags.ts exists to prevent.
-   *
-   * The permanent block is deliberately NOT here: it is in the first sheet,
-   * where it already was. TIMED_BLOCK is the variant that needed an expiry
-   * column, and it is a different row precisely so shipping it cannot quietly
-   * change what the existing one does.
-   *
-   * FOUR OF THE SIX READ STATE TO CHOOSE THEIR LABEL, so they are built from
-   * the LIVE target rather than a copy — the same rule the first sheet's Mute
-   * and Block follow, for the same reason (F2): a label and the call it makes
-   * must be the same fact.
-   */
-  function moreItemsFor(target: SheetTarget | null): ActionSheetItem[] {
-    if (!target) return [];
-    const items: ActionSheetItem[] = [];
-    if (TIMED_BLOCK) {
-      items.push({
-        key: 'block-timed',
-        label: 'Block for a while',
-        icon: 'time-outline',
-        destructive: true,
-        onPress: () => {
-          setMoreUserId(null);
-          setBlockDurationUserId(target.userId);
-        },
-      });
-    }
-    if (MARK_UNREAD) {
-      items.push({
-        key: 'mark-unread',
-        label: 'Mark as Unread',
-        icon: 'mail-unread-outline',
-        onPress: () => markUnread(target),
-      });
-    }
-    if (CLEAR_CHAT) {
-      items.push({
-        key: 'clear-chat',
-        label: 'Clear Chat',
-        icon: 'trash-bin-outline',
-        destructive: true,
-        onPress: () =>
-          confirmThen(
-            {
-              title: `Clear this chat with ${target.name}?`,
-              message:
-                'The messages leave your copy of the conversation. Their copy is untouched, and new messages still arrive here.',
-              confirmText: 'Clear',
-            },
-            () => applyConversationState(target, { clear: true }, 'Could not clear chat')
-          ),
-      });
-    }
-    // D3 — the row does not exist on a device with nothing enrolled, because
-    // the prompt that guards the list could never be shown.
-    if (HIDDEN_CHATS && deviceAuthReady) {
-      items.push({
-        key: 'hide',
-        label: target.hidden ? 'Unhide' : 'Mark as Hidden 🔒',
-        icon: target.hidden ? 'lock-open-outline' : 'lock-closed-outline',
-        onPress: () =>
-          applyConversationState(
-            target,
-            { hidden: !target.hidden },
-            target.hidden ? 'Could not unhide' : 'Could not hide'
-          ),
-      });
-    }
-    if (ARCHIVE) {
-      items.push({
-        key: 'archive',
-        label: target.archived ? 'Unarchive' : 'Archive',
-        icon: target.archived ? 'file-tray-outline' : 'archive-outline',
-        onPress: () =>
-          applyConversationState(
-            target,
-            { archived: !target.archived },
-            target.archived ? 'Could not unarchive' : 'Could not archive'
-          ),
-      });
-    }
-    if (DELETE_CHAT) {
-      items.push({
-        key: 'delete-chat',
-        label: 'Delete Chat',
-        icon: 'close-circle-outline',
-        destructive: true,
-        onPress: () =>
-          confirmThen(
-            {
-              title: `Delete this chat with ${target.name}?`,
-              message:
-                'It leaves your inbox and its messages leave your copy. Their copy is untouched, and the conversation returns if they write again.',
-              confirmText: 'Delete',
-            },
-            () => applyConversationState(target, { delete: true }, 'Could not delete chat')
-          ),
-      });
-    }
-    return items;
-  }
-
-  /**
    * ONE ACTION MODEL, TWO ENTRY MECHANICS.
    *
    * The dispatch specifies a swipe-left revealing Mute · Report · More on a
@@ -655,12 +620,11 @@ export function MessagesInboxScreen() {
   // with it, so the label and the call it makes are the same fact. A row that
   // has gone resolves to null, which closes the sheet rather than acting on a
   // conversation that is no longer there.
-  const sheetTarget = useMemo(() => resolveSheetTarget(rows, sheetUserId), [rows, sheetUserId]);
-  // Both later sheets resolve the same way and for the same reason. A row that
+  const menuTarget = useMemo(() => resolveSheetTarget(rows, menuUserId), [rows, menuUserId]);
+  // The block chooser resolves the same way and for the same reason. A row that
   // has GONE — deleted from another device, or archived out of this list —
-  // resolves to null, which closes the sheet rather than acting on a
+  // resolves to null, which closes the chooser rather than acting on a
   // conversation that is no longer there.
-  const moreTarget = useMemo(() => resolveSheetTarget(rows, moreUserId), [rows, moreUserId]);
   const blockDurationTarget = useMemo(
     () => resolveSheetTarget(rows, blockDurationUserId),
     [rows, blockDurationUserId]
@@ -675,36 +639,134 @@ export function MessagesInboxScreen() {
    * the other, or behaving differently depending on how it was reached, is two
    * apps rather than one with two mechanics.
    */
+  //
+  // 2026-09-26 (the refresh, audit M-11) — ONE SHEET, two groups, no nesting
+  // for the daily actions. 2026-09-28 (LUX-LIST-64 #53) — the sheet is now the
+  // GLASS DROPDOWN under the row's •••, and its words carry no "…": everyday
+  // first, none of which confirms — Mute, Mark as Unread, Archive (and Hide
+  // where the phone can guard it); then, in red, Block (its one chooser:
+  // permanently, or for a time), Report, Clear chat (the messages leave YOUR
+  // copy) and Delete chat (the conversation leaves your inbox until they
+  // write again) — both clean-ups behind their own confirmation.
   const actionsFor = useCallback(
-    (target: SheetTarget): ActionSheetItem[] => [
-      {
-        key: 'mute',
-        label: target.muted ? 'Unmute' : 'Mute',
-        icon: target.muted ? 'notifications' : 'notifications-off-outline',
-        onPress: () => toggleMute(target),
-      },
-      {
-        key: 'block',
-        label: target.blocking ? 'Unblock' : 'Block',
-        icon: target.blocking ? 'lock-open-outline' : 'ban-outline',
-        destructive: !target.blocking,
-        onPress: () => toggleBlock(target),
-      },
-      {
-        key: 'report',
-        label: 'Report',
-        icon: 'flag-outline',
-        destructive: true,
-        onPress: () => {
-          setSheetUserId(null);
-          setReportTarget(target);
+    (target: SheetTarget): { everyday: GlassDropdownItem[]; safety: GlassDropdownItem[] } => {
+      const items: GlassDropdownItem[] = [
+        {
+          key: 'mute',
+          label: target.muted ? 'Unmute' : 'Mute',
+          icon: target.muted ? 'notifications' : 'notifications-off-outline',
+          onPress: () => toggleMute(target),
         },
-      },
-    ],
-    // toggleMute/toggleBlock are declared below as plain functions and are
-    // stable for a render; the target carries everything else they read.
+      ];
+      if (MARK_UNREAD) {
+        items.push({
+          key: 'mark-unread',
+          label: 'Mark as Unread',
+          icon: 'mail-unread-outline',
+          onPress: () => markUnread(target),
+        });
+      }
+      if (ARCHIVE) {
+        items.push({
+          key: 'archive',
+          label: target.archived ? 'Unarchive' : 'Archive',
+          icon: target.archived ? 'file-tray-outline' : 'archive-outline',
+          onPress: () =>
+            applyConversationState(
+              target,
+              { archived: !target.archived },
+              target.archived ? 'Could not unarchive' : 'Could not archive'
+            ),
+        });
+      }
+      // D3 — the row does not exist on a device with nothing enrolled, because
+      // the prompt that guards the list could never be shown.
+      if (HIDDEN_CHATS && deviceAuthReady) {
+        items.push({
+          key: 'hide',
+          label: target.hidden ? 'Unhide' : 'Hide',
+          icon: target.hidden ? 'lock-open-outline' : 'lock-closed-outline',
+          onPress: () =>
+            applyConversationState(
+              target,
+              { hidden: !target.hidden },
+              target.hidden ? 'Could not unhide' : 'Could not hide'
+            ),
+        });
+      }
+      const safety: GlassDropdownItem[] = [];
+      safety.push(
+        target.blocking
+          ? {
+              key: 'block',
+              label: 'Unblock',
+              icon: 'lock-open-outline',
+              onPress: () => toggleBlock(target),
+            }
+          : {
+              key: 'block',
+              label: 'Block',
+              icon: 'ban-outline',
+              destructive: true,
+              onPress: () => {
+                setMenuUserId(null);
+                setBlockDurationUserId(target.userId);
+              },
+            },
+        {
+          key: 'report',
+          label: 'Report',
+          icon: 'flag-outline',
+          destructive: true,
+          onPress: () => {
+            setMenuUserId(null);
+            setReportTarget(target);
+          },
+        }
+      );
+      if (CLEAR_CHAT) {
+        safety.push({
+          key: 'clear-chat',
+          label: 'Clear chat',
+          icon: 'trash-bin-outline',
+          destructive: true,
+          onPress: () =>
+            confirmThen(
+              {
+                title: `Clear this chat with ${target.name}?`,
+                message:
+                  'The messages leave your copy of the conversation. Their copy is untouched, and new messages still arrive here.',
+                confirmText: 'Clear',
+              },
+              () => applyConversationState(target, { clear: true }, 'Could not clear chat')
+            ),
+        });
+      }
+      if (DELETE_CHAT) {
+        safety.push({
+          key: 'delete-chat',
+          label: 'Delete chat',
+          icon: 'trash-outline',
+          destructive: true,
+          onPress: () =>
+            confirmThen(
+              {
+                title: `Delete this chat with ${target.name}?`,
+                message:
+                  'It leaves your inbox and its messages leave your copy. Their copy is untouched, and the conversation returns if they write again.',
+                confirmText: 'Delete',
+              },
+              () => applyConversationState(target, { delete: true }, 'Could not delete chat')
+            ),
+        });
+      }
+      return { everyday: items, safety };
+    },
+    // The handlers are declared as plain functions and are stable for a
+    // render; the target carries everything else they read. deviceAuthReady
+    // decides whether Hide exists, so the model rebuilds when it resolves.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [deviceAuthReady]
   );
 
   /**
@@ -720,7 +782,8 @@ export function MessagesInboxScreen() {
     (userId: string): SwipeAction[] => {
       const target = resolveSheetTarget(rows, userId);
       if (!target) return [];
-      const model = actionsFor(target);
+      const { everyday, safety } = actionsFor(target);
+      const model = [...everyday, ...safety];
       const byKey = (key: string) => model.find((item) => item.key === key);
       const mute = byKey('mute');
       const report = byKey('report');
@@ -732,61 +795,82 @@ export function MessagesInboxScreen() {
         label: 'More',
         icon: 'ellipsis-horizontal',
         tone: 'gold',
-        // The SAME sheet the long press opens, on the same live target.
-        onPress: () => setSheetUserId(userId),
+        // The SAME menu the ••• and the long press open, on the same live
+        // target — once the row has sprung shut under it.
+        onPress: () => openMenu(userId, SWIPE_SETTLE_MS),
       });
       return tiles;
     },
+    // openMenu is a plain function, stable for a render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, actionsFor]
   );
 
-  // The rows the second sheet would hold RIGHT NOW: for the sheet that is open
-  // if one is, and otherwise for the first sheet's target, which is what
-  // decides whether the "More" row appears at all.
-  const moreItems: ActionSheetItem[] = moreItemsFor(moreTarget ?? sheetTarget);
+  /** #53 — the menu, opened under a row's ••• (after `delayMs`, for a swiped row). */
+  function openMenu(userId: string, delayMs = 0) {
+    setMenuDelay(delayMs);
+    setMenuUserId(userId);
+  }
 
-  const sheetItems: ActionSheetItem[] = sheetTarget
+  const menuGroups: GlassDropdownItem[][] = menuTarget
+    ? (({ everyday, safety }) => [everyday, safety])(actionsFor(menuTarget))
+    : [];
+  const menuRequest: GlassDropdownRequest | null = menuTarget
+    ? {
+        key: menuTarget.userId,
+        delayMs: menuDelay,
+        measure: (done) => {
+          const more = moreRefs.current.get(menuTarget.userId);
+          // A row that has scrolled away has no ••• to open under: the menu stays shut.
+          if (!more) {
+            setMenuUserId(null);
+            return;
+          }
+          more.measureInWindow((x, y, width, height) => done({ x, y, width, height }));
+        },
+      }
+    : null;
+
+  /** M-11 — Block's ONE chooser: permanently first (the existing block,
+   *  which confirms), then each timed duration where TIMED_BLOCK is on. */
+  const blockDurationItems: ActionSheetItem[] = blockDurationTarget
     ? [
-        ...actionsFor(sheetTarget),
-        // MORE renders only if it would have something in it. Before phase77
-        // every row it holds was flag-gated and every flag was false, so it did
-        // not render at all — an empty second sheet behind a visible button is
-        // exactly the dead control this repo refuses to ship. The condition
-        // stays for the same reason: HIDDEN_CHATS drops out on a device with
-        // nothing enrolled, so this can still legitimately be empty.
-        ...(moreItems.length > 0
-          ? [
-              {
-                key: 'more',
-                label: 'More',
-                icon: 'ellipsis-horizontal' as const,
-                onPress: () => {
-                  const target = sheetTarget;
-                  setSheetUserId(null);
-                  setMoreUserId(target.userId);
-                },
-              },
-            ]
+        {
+          key: 'block-permanent',
+          label: 'Permanently',
+          icon: 'ban-outline' as const,
+          destructive: true,
+          onPress: () => {
+            const target = blockDurationTarget;
+            setBlockDurationUserId(null);
+            void toggleBlock(target);
+          },
+        },
+        ...(TIMED_BLOCK
+          ? BLOCK_DURATIONS.map((duration) => ({
+              key: duration.key,
+              label: duration.label,
+              icon: 'time-outline' as const,
+              onPress: () => blockFor(blockDurationTarget, duration),
+            }))
           : []),
       ]
-    : [];
-
-  /** The timed block's three durations, each one tap from its confirmation. */
-  const blockDurationItems: ActionSheetItem[] = blockDurationTarget
-    ? BLOCK_DURATIONS.map((duration) => ({
-        key: duration.key,
-        label: duration.label,
-        icon: 'time-outline' as const,
-        onPress: () => blockFor(blockDurationTarget, duration),
-      }))
     : [];
 
   // The pill's slice of the list, and the ONLY thing the pills change. They
   // are a view over the rows the inbox already built, never a second fetch.
   const visibleRows = useMemo(() => filterRows(rows, filter), [rows, filter]);
 
+  // #55 — the resting pill: a faint mint-white rim in dark, the warm line in
+  // light; its words the ink at .85. Chosen: styles.pillActive.
+  const pillRim = isDark ? withAlpha(colors.inboxRule, 0.18) : colors.border;
+  const pillInk = withAlpha(colors.ink, 0.85);
+  // Chosen: the mint rim (styles.pillActive) over the soft tint — the mint at
+  // .08 in dark, the pale sage in light.
+  const pillOnFill = isDark ? withAlpha(colors.emerald, 0.08) : colors.primarySoft;
+
   // Which mechanic reveals the row actions on THIS build. The action list is
-  // the same either way (see sheetItems); this only decides what the row tells
+  // the same either way (see menuGroups); this only decides what the row tells
   // a screen reader it can do, which is the one place the difference is
   // user-visible today.
   const rowActionHint = canSwipe()
@@ -831,8 +915,11 @@ export function MessagesInboxScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Messages" />
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
+      {/* 2026-09-26 (the refresh, audit M-16): the tab says Inbox, so the
+          screen it opens says Inbox. */}
+      {/* 2026-09-28 (LUX-LIST-64 #27): a tab root's big left title, 34. */}
+      <ScreenHeader title="Inbox" largeTitle />
 
       {/* THE FILTER ROW (2026-08-23). Deliberately small and quiet — it is a
           navigation aid above a list, not a set of tabs — and horizontal so a
@@ -841,6 +928,10 @@ export function MessagesInboxScreen() {
           which is why each has its own empty state rather than sharing one.
           This row SUPERSEDES the never-built master-34 All/Jobs/Offers/Support
           tabs; those are not being built. */}
+      {/* 2026-09-28 (LUX-LIST-64 #55): the approved clean list's chips — 34
+          tall, 14 either side, 14/600, 8 apart; a faint rim at rest and, when
+          chosen, the mint rim over a soft tint. NO check: the one exception to
+          #35's chosen-chip tick. */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -856,15 +947,15 @@ export function MessagesInboxScreen() {
               onPress={() => setFilter(pill.key)}
               style={({ pressed }) => [
                 styles.pill,
-                { height: filterPillHeight },
-                active && styles.pillActive,
+                { height: filterPillHeight, borderColor: pillRim },
+                active && [styles.pillActive, { backgroundColor: pillOnFill }],
                 pressed && styles.pillPressed,
               ]}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
               accessibilityLabel={`${pill.label} conversations`}
             >
-              <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>
+              <Text style={[styles.pillLabel, { color: pillInk }, active && styles.pillLabelActive]}>
                 {pill.label}
               </Text>
             </Pressable>
@@ -895,10 +986,11 @@ export function MessagesInboxScreen() {
             <ConversationRow
               name={item.name}
               avatarUrl={item.avatarUrl}
-              subtitle={item.subtitle}
+              job={item.job}
               preview={item.preview}
               lastMessageAt={item.lastMessageAt}
               unread={item.unread}
+              unreadCount={item.unreadCount}
               muted={item.muted}
               blocked={item.blocking}
               awaitingRequest={item.awaitingRequest}
@@ -912,26 +1004,32 @@ export function MessagesInboxScreen() {
                       // The ID ONLY. Copying `blocking`/`muted` out of the row
                       // here is what F2 was: the sheet then had a second copy
                       // of two facts that a realtime refresh could move.
-                      setSheetUserId(item.otherId)
+                      openMenu(item.otherId)
               }
               onLongPressAvatar={
                 item.avatarUrl ? () => setAvatarUri(item.avatarUrl) : undefined
               }
+              // M-10 — the same menu, one visible tap away; #53 — it opens
+              // right under this •••.
+              onMore={item.isSelf ? undefined : () => openMenu(item.otherId)}
+              moreRef={(node) => {
+                if (node) moreRefs.current.set(item.otherId, node);
+                else moreRefs.current.delete(item.otherId);
+              }}
               accessibilityHint={item.isSelf ? undefined : rowActionHint}
             />
             </SwipeableRow>
           )}
+          // 2026-09-28 (LUX-LIST-64 #54) — THE CLEAN LIST: no cards, a hairline
+          // between rows, the same 16 either side and 18 under the pills at any
+          // length (the "sparse" roomier variant went with the cards).
+          ItemSeparatorComponent={() => (
+            <View style={[styles.rowRule, { backgroundColor: withAlpha(colors.inboxRule, isDark ? 0.11 : 1) }]} />
+          )}
           contentContainerStyle={
             visibleRows.length === 0
               ? styles.emptyContainer
-              : // A handful of rows with the default padding left most of the
-                // screen bare below them — reads as broken, not "caught up".
-                // Roomier padding/gap between rows (not centering the group —
-                // that read as an empty/broken state instead of a real,
-                // short list) makes it read as deliberately minimal.
-              visibleRows.length <= 3
-              ? styles.sparseContent
-              : [styles.listContent, { gap: listGap, paddingHorizontal: listPaddingX }]
+              : [styles.listContent, { paddingHorizontal: listPaddingX }]
           }
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -954,7 +1052,8 @@ export function MessagesInboxScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <View style={styles.emptyIcon}>
-                <Ionicons name="chatbubbles-outline" size={32} color={isDark ? colors.gold : colors.primary} />
+                {/* #26 — the Inbox's empty screens only: the bubble is grey. */}
+                <Ionicons name="chatbubbles-outline" size={32} color={colors.grey} />
               </View>
               {/* Per-pill, because "no messages yet" under the Archived pill
                   would be a different and untrue statement. */}
@@ -965,26 +1064,17 @@ export function MessagesInboxScreen() {
         />
       )}
 
-      <ActionSheet
-        visible={!!sheetTarget}
-        title={sheetTarget?.name}
-        subtitle="Manage this conversation"
-        items={sheetItems}
-        onClose={() => setSheetUserId(null)}
-      />
-
-      <ActionSheet
-        visible={!!moreTarget}
-        title={moreTarget?.name}
-        subtitle="More actions"
-        items={moreItems}
-        onClose={() => setMoreUserId(null)}
+      <GlassDropdown
+        request={menuRequest}
+        groups={menuGroups}
+        onClose={() => setMenuUserId(null)}
+        accessibilityLabel={menuTarget ? `Manage conversation with ${menuTarget.name}` : 'Manage conversation'}
       />
 
       <ActionSheet
         visible={!!blockDurationTarget}
         title={blockDurationTarget?.name}
-        subtitle="Block for how long?"
+        subtitle="Block — for how long?"
         items={blockDurationItems}
         onClose={() => setBlockDurationUserId(null)}
       />
@@ -1031,22 +1121,19 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // measure itself instead of its container.
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
   },
   // Small and quiet: a filter above a list, not a tab bar. The resting pill
   // is a hairline on the page ground so the ACTIVE one is the only filled
   // thing in the row.
   pill: {
     justifyContent: 'center',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 14,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: 'transparent',
   },
   pillActive: {
     borderColor: colors.emerald,
-    backgroundColor: colors.primarySoft,
   },
   pillPressed: {
     opacity: 0.7,
@@ -1075,12 +1162,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.textMuted,
   },
   pillLabel: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
-    color: colors.textMuted,
   },
   pillLabelActive: {
-    color: colors.emerald,
+    color: colors.emeraldBright,
   },
   center: {
     flex: 1,
@@ -1088,18 +1174,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
   },
   listContent: {
-    paddingTop: spacing.lg,
+    paddingTop: 18,
     paddingBottom: 0,
   },
-  sparseContent: {
-    // No flexGrow/justifyContent — that centered the row group as a block,
-    // which reads as an empty/broken state, not a short real list. Rows stay
-    // top-anchored under the header; the "generous" part is just more
-    // padding/gap than the normal listContent uses.
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
-    paddingBottom: 0,
-    gap: spacing.lg,
+  // #54 — the hairline between two rows (colour set per theme at the list).
+  rowRule: {
+    height: 1,
   },
   emptyContainer: {
     flexGrow: 1,

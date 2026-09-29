@@ -44,8 +44,9 @@ test('Home Design Studio defaults preserve the current Home geometry and control
     // the geometry the screen ships — is unchanged.
     // 2026-09-21: 44 -> 56 and 17 -> 20 — the operator's pick b on the
     // reference ("way too small"), the corner one notch up.
-    'searchHeight: 56',
-    'searchRadius: 20',
+    // 2026-09-28 (LUX-LIST-64 #15): 56 -> 54 and 20 -> 27, the Lux Home field.
+    'searchHeight: 54',
+    'searchRadius: 27',
     'ctaHeight: 48',
     'ctaRadius: 24',
     // 2026-09-17: `jobCardRadius: 20` left this list with the setting. It

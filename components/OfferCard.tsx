@@ -15,8 +15,10 @@ import {
   type ColorPalette,
 } from '../lib/theme';
 import {
+  acceptOfferConfirmText,
   firstNameOf,
   offerExpiryLabel,
+  offerNoun,
   offerResponseNote,
 } from '../lib/offerCopy';
 import { formatBudget, JOB_CATEGORY_LABELS } from '../lib/jobs';
@@ -67,6 +69,10 @@ type ListProps = {
    *  absent is UNKNOWN: the rating line renders nothing — never a zero, never
    *  a number from the profile's legacy mixed aggregate. */
   summary?: ProfileReviewSummaryRow | null;
+  /** 2026-09-26 (the refresh, audit M-5): what the customer would pay all-in
+   *  for this bid — quote_job_price()'s total, from the host. Null or absent
+   *  while unanswered: the line is simply not drawn. */
+  allInCents?: number | null;
   canAccept: boolean;
   accepting?: boolean;
   disabled?: boolean;
@@ -133,6 +139,7 @@ export function OfferCard(props: OfferCardProps) {
 function OfferListCard({
   offer,
   summary = null,
+  allInCents = null,
   canAccept,
   accepting = false,
   disabled = false,
@@ -187,7 +194,8 @@ function OfferListCard({
           />
           <View style={styles.headerText}>
             <View style={styles.nameRow}>
-              <Text style={styles.name} numberOfLines={1}>
+              {/* 2026-09-29 (LUX-LIST-2 run): two lines, never "Priya Na…" — the name is who you'd hire. */}
+              <Text style={styles.name} numberOfLines={2}>
                 {name}
               </Text>
               {onViewProfile && (
@@ -217,8 +225,13 @@ function OfferListCard({
         <View style={styles.priceBlock}>
           {/* This card only ever renders on the job owner's own screen, so the
               label is the price they would pay — never worker payout wording. */}
-          <Text style={styles.priceLabel}>OFFER</Text>
-          <Text style={styles.price}>{formatBudget(offer.amount_cents)}</Text>
+          <Text style={styles.priceLabel}>{offerNoun(false).toUpperCase()}</Text>
+          <Text style={styles.price}>
+            {formatBudget(offer.amount_cents)}
+          </Text>
+          {allInCents != null ? (
+            <Text style={styles.allIn}>You’d pay {formatBudget(allInCents)} all-in</Text>
+          ) : null}
         </View>
       </View>
 
@@ -254,7 +267,7 @@ function OfferListCard({
             />
           ) : null}
           <Button
-            title="Accept offer"
+            title={acceptOfferConfirmText(false)}
             onPress={onAccept}
             palette={palette}
             loading={accepting}
@@ -494,6 +507,7 @@ function OfferThreadCard({
               viewerIsWorker: currentUserId === offer.worker_id,
               expiresLabel: offerExpiryLabel(offer.expires_at),
             })}
+            viewerIsWorker={currentUserId === offer.worker_id}
             canCounter={canCounter}
             busy={busy}
             onAccept={onAccept}
@@ -590,14 +604,19 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   priceLabel: {
     fontSize: 10,
-    color: colors.emerald,
+    color: colors.eyebrow,
     fontWeight: '800',
     letterSpacing: 0.8,
   },
   price: {
     fontSize: 24,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.money,
+  },
+  allIn: {
+    marginTop: 2,
+    fontSize: 12,
+    color: colors.textMuted,
   },
   actionRow: {
     flexDirection: 'row',
@@ -684,7 +703,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flex: 1,
     fontSize: 11,
     fontWeight: '800',
-    color: colors.primary,
+    color: colors.eyebrow,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
@@ -704,7 +723,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   amount: {
     fontSize: 20,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.money,
     marginTop: spacing.xs,
   },
   amountNote: {

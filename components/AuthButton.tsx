@@ -64,7 +64,7 @@ type AuthButtonProps = {
    * The shipped Welcome page's dress (HERO above). Every one is optional and
    * absent changes nothing, so the other auth screens keep their control.
    *
-   * `hero`: the page's boxed control — 58 tall at radius 22, the gold
+   * `hero`: the page's boxed control — 52 tall at radius 22, the gold
    * hairline, the 17/600 label; on a ghost, the page's TEXT LINK instead (44
    * tall, no box, 16/600). `lit`: the lead action's fill between the two
    * `authCta*` stops (flat forest in light) with its specular edge and depth.
@@ -77,6 +77,12 @@ type AuthButtonProps = {
   icon?: ComponentProps<typeof Ionicons>['name'];
   chevron?: boolean;
   light?: ReactNode;
+  /**
+   * 2026-09-28 (LUX-LIST-64 #10) — THE ACCENT CTA: the one mint (the light
+   * token's green in light) whenever it can be tapped, and while it cannot, the
+   * waiting look — #909594 on #073328 — rather than a faded copy of itself.
+   */
+  accent?: boolean;
 };
 
 /**
@@ -103,6 +109,7 @@ export function AuthButton({
   icon,
   chevron = false,
   light,
+  accent = false,
 }: AuthButtonProps) {
   const scale = useRef(new Animated.Value(1)).current;
   const { palette, isDark } = useThemeColors();
@@ -166,7 +173,21 @@ export function AuthButton({
             : `inset 0 1px 0 ${withAlpha(palette.white, HERO.specularAlpha)}`,
         }
       : null;
-  const labelTint = hero ? heroInk : tint;
+  const accentShape: ViewStyle | null = accent
+    ? {
+        backgroundColor: isDisabled && !loading ? palette.waitingFill : isDark ? palette.primary : palette.emerald,
+        borderColor: 'transparent',
+      }
+    : null;
+  const labelTint = accent
+    ? isDisabled && !loading
+      ? palette.waitingInk
+      : isDark
+        ? palette.onPrimary
+        : palette.white
+    : hero
+      ? heroInk
+      : tint;
 
   const animate = (to: number, duration: number) =>
     Animated.timing(scale, {
@@ -193,9 +214,11 @@ export function AuthButton({
           heroShape,
           heroFill,
           heroDepth,
+          accentShape,
           // Dimmed, but still clearly the same control — the reference's
-          // hierarchy has to survive the disabled state.
-          isDisabled && styles.disabled,
+          // hierarchy has to survive the disabled state. The accent tone waits
+          // in its own colours instead (#10).
+          isDisabled && !accent && styles.disabled,
         ]}
       >
         {light ?? null}

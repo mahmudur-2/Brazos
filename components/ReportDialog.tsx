@@ -1,3 +1,4 @@
+import { useModalPresence } from '../hooks/useModalPresence';
 import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -52,6 +53,8 @@ export function ReportDialog({
   onSubmitted,
 }: ReportDialogProps) {
   const { palette: colors, isDark } = useThemeColors();
+  // #64 (M-31): on screen or not — the one confirm engine never stacks a second modal on iOS.
+  useModalPresence(visible);
   const styles = stylesFor(colors);
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [description, setDescription] = useState('');
@@ -160,7 +163,7 @@ export function ReportDialog({
             <>
             <Text style={styles.title}>Report {reportedName}</Text>
             <Text style={styles.subtitle}>
-              This goes to the Brazos team. They won't be told who reported them.
+              Sent to the Brazos team — anonymously.
             </Text>
 
             <ScrollView
@@ -212,8 +215,7 @@ export function ReportDialog({
                 <View style={styles.blockCopy}>
                   <Text style={styles.blockLabel}>Also block this person</Text>
                   <Text style={styles.blockNote}>
-                    They won't be able to message you. You can undo this later from
-                    the conversation.
+                    They can’t message you.
                   </Text>
                 </View>
                 <Toggle

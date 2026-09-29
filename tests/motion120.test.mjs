@@ -434,10 +434,11 @@ test('[static] MotionRoot is a Fragment without its vendors, and App wraps its t
  * A new entry here is a claim that something else cannot be driven natively.
  * Transform and opacity always can, so that claim is almost always wrong.
  */
-const JS_DRIVER_SITES = new Map([
-  ['components/AuthField.tsx', 'the field hairline interpolating between palette colours on focus'],
-  ['components/PhoneNumberInput.tsx', 'the same hairline on the phone field'],
-]);
+// 2026-09-28 (LUX-LIST-64 #8): EMPTY. The two sites that were here — the auth
+// field's and the phone field's focus hairline, colour tweens on the JS driver —
+// became the focus glow (components/FocusRing.tsx): two outlines faded as one
+// OPACITY on the native driver. Nothing in the tree needs the JS driver now.
+const JS_DRIVER_SITES = new Map([]);
 
 test('[static] JS-driven motion is colour-only, and no layout animation exists at all', () => {
   const files = appSources();
@@ -1051,6 +1052,18 @@ const SIBLINGS = [
     shared: 'components/RimLight.shared.tsx',
     needs: 'reanimated',
   },
+  {
+    // 2026-09-28 (LUX-LIST-64 #35) — a chosen choice chip's check: its slot
+    // opens from nothing to the check and its gap, so a glyph-less chip
+    // "widens smoothly" and its neighbours make room. Worklets alone, like the
+    // mark; RN's LayoutAnimation stays banned (the test above), and the
+    // fallback simply places the slot.
+    name: 'ChipCheck',
+    fallback: 'components/ChipCheck.tsx',
+    fast: 'components/ChipCheck.motion120.tsx',
+    shared: 'components/ChipCheck.shared.tsx',
+    needs: 'reanimated',
+  },
 ];
 
 test('[executed] every sibling is taken when its native is present and skipped when it is absent', () => {
@@ -1329,12 +1342,18 @@ test('[static] the inbox swipe and its long press share ONE action model', () =>
   const screen = stripComments(read('screens/MessagesInboxScreen.tsx'));
 
   assert.match(screen, /const actionsFor = useCallback\(/, 'the action model is built once');
+  // 2026-09-28 (LUX-LIST-64 #53): the long-press sheet is the glass dropdown
+  // under the row's •••, rendering the same model in its two groups.
   assert.match(
     screen,
-    /const sheetItems: ActionSheetItem\[\] = sheetTarget[\s\S]{0,40}\.\.\.actionsFor\(sheetTarget\),/,
-    'the long-press sheet renders the shared model'
+    /const menuGroups: GlassDropdownItem\[\]\[\] = menuTarget\s*\?\s*\(\(\{ everyday, safety \}\) => \[everyday, safety\]\)\(actionsFor\(menuTarget\)\)/,
+    'the long-press menu renders the shared model'
   );
-  assert.match(screen, /const model = actionsFor\(target\);/, 'the swipe reads the same model');
+  assert.match(
+    screen,
+    /const \{ everyday, safety \} = actionsFor\(target\);\s*const model = \[\.\.\.everyday, \.\.\.safety\];/,
+    'the swipe reads the same model'
+  );
   assert.match(
     screen,
     /<SwipeableRow actions=\{swipeActionsFor\(item\.otherId\)\} enabled=\{!item\.isSelf\}>/,
@@ -1350,13 +1369,19 @@ test('[static] the inbox swipe and its long press share ONE action model', () =>
   assert.match(screen, /tone: 'gold'/, 'the overflow tile is the gold one');
   assert.match(
     screen,
-    /onPress: \(\) => setSheetUserId\(userId\)/,
-    'the More tile opens the very sheet the long press opens'
+    /onPress: \(\) => openMenu\(userId, SWIPE_SETTLE_MS\)/,
+    'the More tile opens the very menu the long press opens'
   );
 
   // Flag-gated rows still do not render, and the swipe inherits that because
   // it renders entries of the same array rather than a list of its own.
-  assert.match(screen, /\.\.\.\(moreItems\.length > 0/);
+  // 2026-09-26 (the refresh, audit M-11): the flagged rows live IN the one
+  // model now, each behind its own flag, rather than behind a More row.
+  assert.match(screen, /if \(MARK_UNREAD\) \{\s*items\.push\(/);
+  // 2026-09-28 (#53): Clear chat and Delete chat are two rows of the menu's
+  // red group, each behind its own flag.
+  assert.match(screen, /if \(CLEAR_CHAT\) \{\s*safety\.push\(/);
+  assert.match(screen, /if \(DELETE_CHAT\) \{\s*safety\.push\(/);
 });
 
 // ===========================================================================
@@ -2156,6 +2181,10 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
   assert.deepEqual(
     fastPaths,
     [
+      // 2026-09-28 (LUX-LIST-64 #35) — the chosen chip's check slot: one shared
+      // value, 0 → 1, the slot's width and the check's opacity computed from it
+      // on the UI thread.
+      'components/ChipCheck.motion120.tsx',
       'components/DropMenu.motion120.tsx',
       'components/KeyboardRisingColumn.motion120.tsx',
       // 2026-09-21 — the mode switch's glass wipe, the operator's pick from

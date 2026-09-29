@@ -13,6 +13,7 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  screenGround,
 } from '../lib/theme';
 
 /**
@@ -58,7 +59,7 @@ type LoadState =
   | { status: 'unavailable' };
 
 export function PublicProfileScreen({ userId }: PublicProfileScreenProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   // R8b-c: the per-role revealed summaries, signed-in path only — the
@@ -102,7 +103,7 @@ export function PublicProfileScreen({ userId }: PublicProfileScreenProps) {
     pickShown(roleSummaries?.worker ?? null) ?? pickShown(roleSummaries?.customer ?? null);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.wordmark}>BRAZOS</Text>
 

@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
-import { metricStyles, radius, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
+import { metricStyles, radius, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import { FocusRing } from './FocusRing';
 
 type TextFieldProps = {
   label: string;
@@ -13,6 +15,10 @@ type TextFieldProps = {
   /** Customer/Map surfaces can opt into their palette without changing the
    * shared default used by the rest of the app. */
   palette?: ColorPalette;
+  /** 2026-09-28 (LUX-LIST-64 #2): `accent` paints the caption the mint (the
+   *  light token's green) — "Phone number" is said that way everywhere. */
+  /** 2026-09-29 (LUX-LIST-2 #4): 'gold' — the kept-gold labels (light #86641A). */
+  labelTone?: 'eyebrow' | 'accent' | 'gold';
 } & TextInputProps;
 
 /**
@@ -36,15 +42,19 @@ type TextFieldProps = {
 export function FieldLabel({
   children,
   palette: paletteProp,
+  tone = 'eyebrow',
 }: {
   children: string;
   palette?: ColorPalette;
+  tone?: 'eyebrow' | 'accent' | 'gold';
 }) {
   const styles = stylesFor();
-  const { palette: colors, isDark } = useThemeColors();
+  const { palette: colors } = useThemeColors();
   const palette = paletteProp ?? colors;
   return (
-    <Text style={[styles.label, { color: isDark ? palette.gold : palette.text }]}>
+    // 2026-09-27 (the Lux remake, ruling 4): gold in dark. 2026-09-28 (LUX-LIST-64
+    // #48): the antique gold #86641A in light — the one eyebrow role.
+    <Text style={[styles.label, { color: tone === 'accent' ? palette.emerald : tone === 'gold' ? palette.eyebrowGold : palette.eyebrow }]}>
       {children}
     </Text>
   );
@@ -55,22 +65,38 @@ export function TextField({
   error,
   hint,
   palette: paletteProp,
+  labelTone = 'eyebrow',
   style,
   multiline,
+  onFocus,
+  onBlur,
   ...rest
 }: TextFieldProps) {
   const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
+  // 2026-09-28 (LUX-LIST-64 #8): the field you are typing in glows.
+  const [focused, setFocused] = useState(false);
   return (
     <View style={styles.container}>
       <View style={styles.labelRow}>
-        <FieldLabel palette={palette}>{label}</FieldLabel>
+        <FieldLabel palette={palette} tone={labelTone}>
+          {label}
+        </FieldLabel>
         {hint ? <Text style={[styles.hint, { color: palette.textMuted }]}>{hint}</Text> : null}
       </View>
+      <View style={styles.inputWrap}>
       <TextInput
         keyboardAppearance={isDark ? 'dark' : 'light'}
         multiline={multiline}
+        onFocus={(event) => {
+          setFocused(true);
+          onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          onBlur?.(event);
+        }}
         style={[
           styles.input,
           // D5: a pill is the shape of a ONE-LINE field. A textarea that
@@ -80,7 +106,9 @@ export function TextField({
           multiline && styles.inputMultiline,
           {
             color: palette.text,
-            backgroundColor: palette.surface,
+            // 2026-09-27 (the Lux remake): the input is the Lux well — white
+            // at .06 — inside the card it sits in; light keeps the white field.
+            backgroundColor: isDark ? withAlpha(palette.white, 0.06) : palette.surface,
             borderColor: palette.border,
           },
           error && { borderColor: palette.danger },
@@ -90,6 +118,12 @@ export function TextField({
         autoCapitalize="none"
         {...rest}
       />
+      <FocusRing
+        focused={focused}
+        color={error ? palette.danger : palette.emerald}
+        radius={multiline ? radius.lg : radius.pill}
+      />
+      </View>
       {error ? <Text style={[styles.error, { color: palette.danger }]}>{error}</Text> : null}
     </View>
   );
@@ -99,10 +133,16 @@ const stylesFor = metricStyles(() => StyleSheet.create({
   container: {
     gap: spacing.xs + 2,
   },
+  // The glow is laid over the input, so the input sits in a box of its own.
+  inputWrap: {
+    position: 'relative',
+  },
+  // 2026-09-27 (the Lux remake, the operator's Post-a-job picture): the hint
+  // ("Required · 0/80") sits right beside the label, not at the far right.
   labelRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    gap: spacing.sm,
   },
   label: {
     fontSize: 11,

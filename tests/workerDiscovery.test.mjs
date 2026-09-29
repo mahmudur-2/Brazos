@@ -299,7 +299,10 @@ test('[static] B2 · the full worker card carries distance and the arrival windo
   assert.match(card, /label=\{fullFits === false \? shortLabel : fullLabel\}/);
   assert.match(card, /const fullLabel = JOB_CATEGORY_LABELS\[job\.category\] \?\? job\.category;/);
   assert.match(card, /const shortLabel = JOB_CATEGORY_CHIP_LABELS\[job\.category\] \?\? job\.category;/);
-  assert.match(card, /setFullFits\(chipWidth <= chipRowWidth - payClear\);/);
+  // 2026-09-29 (LUX-LIST-2 run): the fit counts the poster's own "Your job" chip and its gap too — it was
+  // left out and ran under the pay block — and the row wraps only as the last resort.
+  assert.match(card, /const own = isOwn && ownWidth !== null \? chipGap\(\) \+ ownWidth : 0;/);
+  assert.match(card, /setFullFits\(chipWidth \+ own <= chipRowWidth - payClear\);/);
   assert.match(card, /fullFits === null && styles\.chipUnmeasured/);
   assert.match(card, /chipUnmeasured: \{\s*opacity: 0,\s*\}/);
   assert.doesNotMatch(card, /\.length \* \d|charWidth/, 'the fit is measured, not estimated from characters');
