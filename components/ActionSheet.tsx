@@ -1,5 +1,5 @@
 import { useModalPresence } from '../hooks/useModalPresence';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
@@ -15,7 +15,7 @@ import {
 } from '../lib/theme';
 import { SCRIM_DARK_ALPHA } from '../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
-import { BlurLayer } from '../lib/blur';
+import { PopModal } from './PopModal';
 import { SheetHeader } from '../ui/primitives/SheetHeader';
 import { Surface } from '../ui/primitives/Surface';
 
@@ -83,26 +83,21 @@ export function ActionSheet({
         }
       : null;
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        style={[
-          styles.backdrop,
-          isDark && styles.backdropDark,
-          backdropDial,
-          { paddingBottom: insets.bottom + spacing.lg },
-        ]}
-        onPress={onClose}
-        // E2E5: a Pressable is accessible by default, and on iOS an accessible
-        // view is ONE element that folds its children's text and hides them —
-        // so the backdrop and card below folded the whole sheet into a single
-        // element with no reachable row (EAS run 01a064ef, "Element not found:
-        // Text matching regex: My jobs"). Neither container is a control.
-        accessible={false}
-      >
-        {/* MOTION1 (C3): the frosted layer sits over the scrim this backdrop
-            already paints, and under the sheet. Absent on web and on any
-            binary without expo-blur, where the scrim alone is the backdrop. */}
-        <BlurLayer />
+    // 2026-09-30 (the smoothness pass): PopModal — the dim and its frost at once, the sheet rising
+    // in at full opacity (components/PopModal.shared.tsx). A tap on the backdrop still closes; the
+    // backdrop stays accessible={false} (E2E5 — an accessible container folds its rows away).
+    <PopModal
+      visible={visible}
+      onRequestClose={onClose}
+      onBackdropPress={onClose}
+      motion="rise"
+      backdropStyle={[
+        styles.backdrop,
+        isDark && styles.backdropDark,
+        backdropDial,
+        { paddingBottom: insets.bottom + spacing.lg },
+      ]}
+    >
         {/* Empty onPress absorbs taps so they don't dismiss the sheet.
             G1 (C5): the card SURFACE wears the sheet material — fill,
             hairline and blur from ui/tokens.ts's table, geometry unchanged
@@ -143,8 +138,7 @@ export function ActionSheet({
 
           </Surface>
         </Pressable>
-      </Pressable>
-    </Modal>
+    </PopModal>
   );
 }
 

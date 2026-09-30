@@ -1,7 +1,8 @@
 import { useModalPresence } from '../hooks/useModalPresence';
 import { useSheetPresence } from '../hooks/useSheetPresence';
+import { SheetCard } from './SheetCard';
 import { useEffect, useMemo, type ComponentProps } from 'react';
-import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CategoryGlyph } from './CategoryGlyph';
@@ -135,7 +136,7 @@ export function CreateSheet({
             accessibilityLabel="Close"
           />
         ) : null}
-        <Animated.View style={presence.cardStyle}>
+        <SheetCard visible={visible} onClosed={presence.onClosed}>
         <Surface
           material="clear"
           corners="top"
@@ -190,7 +191,7 @@ export function CreateSheet({
             <Text style={[styles.hint, isDark && styles.hintDark]}>confirms first</Text>
           </Pressable>
         </Surface>
-        </Animated.View>
+        </SheetCard>
         {/* #64 (M-31): the switch is asked with this sheet still up (M-38), so
             its confirm is hosted here, over the sheet — iOS presents a Modal
             from the screen that owns it. */}

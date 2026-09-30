@@ -128,10 +128,12 @@ test('[static] lib/blur is the only file in the tree that names expo-blur', () =
   // decision is that it stays opaque dim.
   assert.deepEqual(
     callers.sort(),
+    // 2026-09-30 (the build run, the smoothness pass): the three frosted dialogs present through
+    // components/PopModal.tsx, which draws their frost for them (both of its paths), so the blur's
+    // callers are PopModal, the docked Sheet and the Surface primitive.
     [
-      'components/ActionSheet.tsx',
-      'components/AmountPrompt.tsx',
-      'components/ConfirmDialog.tsx',
+      'components/PopModal.motion120.tsx',
+      'components/PopModal.tsx',
       'ui/primitives/Sheet.tsx',
       'ui/primitives/Surface.tsx',
     ],
@@ -212,10 +214,20 @@ test('[static] every backdrop paints its scrim BEFORE the blur goes over it', ()
   // surface, the blur is a layer on top of it, and a binary without the native
   // module simply loses the layer. A blur rendered under the scrim, or in
   // place of it, would leave nothing behind on such a build.
+  // 2026-09-30: the three frosted dialogs hand their backdrop to PopModal, which paints it and
+  // lays the frost over it; the rule is held on both ends below.
+  for (const path of ['components/ActionSheet.tsx', 'components/AmountPrompt.tsx', 'components/ConfirmDialog.tsx']) {
+    const flat = flatten(read(path));
+    assert.match(flat, /<PopModal[\s\S]*?backdropStyle=\{\[\s*styles\.backdrop/, path + ' must hand its backdrop to PopModal');
+    assert.match(flat, /backdrop: \{[^}]*backgroundColor|backdropDark: \{ backgroundColor/, path + ': the backdrop must still paint an opaque fallback');
+  }
+  for (const path of ['components/PopModal.tsx', 'components/PopModal.motion120.tsx']) {
+    const flat = flatten(read(path));
+    const scrim = flat.indexOf('<View style={[StyleSheet.absoluteFill, backdropStyle]}');
+    const frost = flat.indexOf('<BlurLayer />');
+    assert.ok(scrim > -1 && frost > scrim, path + ': the scrim is painted, then the frost goes over it');
+  }
   for (const path of [
-    'components/ActionSheet.tsx',
-    'components/AmountPrompt.tsx',
-    'components/ConfirmDialog.tsx',
     'ui/primitives/Sheet.tsx',
   ]) {
     const flat = flatten(read(path));

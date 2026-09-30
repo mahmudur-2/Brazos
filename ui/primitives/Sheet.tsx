@@ -1,6 +1,7 @@
 import { useModalPresence } from '../../hooks/useModalPresence';
 import { useSheetPresence } from '../../hooks/useSheetPresence';
-import { Animated, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { SheetCard } from '../../components/SheetCard';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { PropsWithChildren, ReactNode } from 'react';
 import {
@@ -182,11 +183,12 @@ export function Sheet({
         ) : null}
         {/* The card's frame carries the height cap now (a percentage of the screen), so the card
             inside can shrink to it while the frame moves. */}
-        <Animated.View
+        <SheetCard
+          visible={visible}
+          onClosed={presence.onClosed}
           style={[
             styles.cardFrame,
             maxHeightPct != null ? { maxHeight: `${maxHeightPct}%` as `${number}%` } : null,
-            presence.cardStyle,
           ]}
         >
         {/* G1 (C5): the docked card wears the sheet material — the top
@@ -239,7 +241,7 @@ export function Sheet({
           </ScrollView>
           {footer ? <View style={[styles.footer, footerHairline]}>{footer}</View> : null}
         </Surface>
-        </Animated.View>
+        </SheetCard>
         {overlay ? (
           <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
             {overlay}

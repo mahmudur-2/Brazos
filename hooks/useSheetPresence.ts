@@ -1,71 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, useWindowDimensions, type ViewStyle } from 'react-native';
-import { USE_NATIVE_DRIVER } from '../lib/motion';
-import { useReducedMotion } from './useReducedMotion';
-
-/** How long the card takes to rise and to fall. */
-export const SHEET_OPEN_MS = 300;
-export const SHEET_CLOSE_MS = 240;
+import { useCallback, useEffect, useState } from 'react';
 
 /**
- * 2026-09-29 (LUX-LIST-2 #3) — THE ONE WAY A SLIDE-UP SHEET PRESENTS.
+ * A DOCKED SHEET'S PRESENCE — whether its Modal is mounted, and whether its dim shows.
  *
- * The operator, on "View all" beside POPULAR SERVICES: "it animates by bringing the shadow up while it
- * goes up... it looks off.. i want the shadow to be instant the second you click". Every slide-up
- * sheet was a `<Modal animationType="slide">` with its dim INSIDE the sliding content, so the dim
- * travelled up the screen with the card. Now the Modal does not animate (`animationType="none"`):
- *
- * - OPENING: the dim covers the whole screen from the first frame (`dimVisible`), and only the card
- *   rises (`cardStyle`).
- * - CLOSING: the dim goes the moment the close begins (`dimVisible` false), the card falls, and only
- *   then does the Modal unmount (`mounted` false).
- * - REDUCE MOTION: the card fades in and out instead of sliding; the dim is instant either way.
- *
- * The card's motion is a transform or an opacity on the native driver — nothing runs on the JS thread
- * per frame (120 Hz). One hook, three callers (ServicePickerSheet, CreateSheet, ui/primitives/Sheet):
- * one implementation, never three copies (P3-31).
+ * The dim covers the screen at once and leaves at once (LUX-LIST-2 #3); only the card moves, and
+ * since 2026-09-30 (the build run, the smoothness pass) the card's motion is its own component,
+ * components/SheetCard.tsx, on the 120 Hz path where the binary has it. So this hook is the state
+ * machine alone: `mounted` turns true when the sheet opens and false only when the card says its
+ * close has finished (`onClosed`), so the card is never unmounted mid-slide.
  */
 export function useSheetPresence(visible: boolean): {
   mounted: boolean;
   dimVisible: boolean;
-  cardStyle: Animated.WithAnimatedValue<ViewStyle>;
+  onClosed: () => void;
 } {
-  const { height } = useWindowDimensions();
-  const reduced = useReducedMotion() === true;
   const [mounted, setMounted] = useState(visible);
-  const progress = useRef(new Animated.Value(0)).current;
-  const mountedRef = useRef(mounted);
-  mountedRef.current = mounted;
-
   useEffect(() => {
-    if (visible) {
-      setMounted(true);
-      progress.stopAnimation();
-      progress.setValue(0);
-      Animated.timing(progress, {
-        toValue: 1,
-        duration: reduced ? 160 : SHEET_OPEN_MS,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }).start();
-      return;
-    }
-    if (!mountedRef.current) return;
-    Animated.timing(progress, {
-      toValue: 0,
-      duration: reduced ? 140 : SHEET_CLOSE_MS,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: USE_NATIVE_DRIVER,
-    }).start(({ finished }) => {
-      if (finished) setMounted(false);
-    });
-    // `reduced` is read at the moment of each transition; a change mid-flight waits for the next one.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (visible) setMounted(true);
   }, [visible]);
-
-  const cardStyle: Animated.WithAnimatedValue<ViewStyle> = reduced
-    ? { opacity: progress }
-    : { transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [height, 0] }) }] };
-
-  return { mounted, dimVisible: visible, cardStyle };
+  const onClosed = useCallback(() => setMounted(false), []);
+  return { mounted, dimVisible: visible, onClosed };
 }

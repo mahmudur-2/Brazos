@@ -38,7 +38,7 @@ import { SealTransition, type SealFrom, type SealPhase } from '../components/Sea
 import { FieldLabel, TextField } from '../components/TextField';
 import { UndoToast } from '../components/UndoToast';
 import { useAuth } from '../hooks/useAuth';
-import { useEntrance } from '../hooks/useEntrance';
+import { EntranceView } from '../components/EntranceView';
 import { trackIntent } from '../lib/observability/analytics';
 import { Sentry } from '../lib/observability/sentry';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -270,8 +270,11 @@ function StepPane({
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
-  const entrance = useEntrance(index);
-  return <Animated.View style={[style, entrance]}>{children}</Animated.View>;
+  return (
+    <EntranceView index={index} style={style}>
+      {children}
+    </EntranceView>
+  );
 }
 
 export function PostJobScreen() {

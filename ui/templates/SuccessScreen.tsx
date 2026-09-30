@@ -1,4 +1,4 @@
-import { Animated, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, type ComponentProps, type ReactNode } from 'react';
@@ -13,7 +13,7 @@ import {
   type as typeScale,
 } from '../tokens';
 import { screenGround, themedStyles, useThemeColors } from '../../lib/theme';
-import { useEntrance } from '../../hooks/useEntrance';
+import { EntranceView } from '../../components/EntranceView';
 import { confirm } from '../../lib/haptics';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -121,10 +121,6 @@ export function SuccessScreen({
   // itself: the default glyph, the copy, the detail slot and the actions.
   // Extending that arrangement rather than replacing it is the whole point —
   // two entrances on one mark would be two claims about the same arrival.
-  const glyphEntrance = useEntrance(0);
-  const copyEntrance = useEntrance(1);
-  const detailsEntrance = useEntrance(2);
-  const actionsEntrance = useEntrance(3);
 
   // The success NOTIFICATION haptic, not the light press tap — an action
   // completed. Empty deps: it fires when the surface mounts and never on a
@@ -148,21 +144,23 @@ export function SuccessScreen({
             keeps the disc and gains the masters' gold ring, with the glyph in
             the live-state emerald (the "green check circle" of 15/19/40). */}
         {mark ?? (
-          <Animated.View style={[styles.glyph, isDark && styles.glyphDark, glyphEntrance]}>
+          <EntranceView index={0} style={[styles.glyph, isDark && styles.glyphDark]}>
             <Ionicons name={icon} size={44} color={isDark ? colors.emerald : colors.forest} />
-          </Animated.View>
+          </EntranceView>
         )}
 
-        <Animated.View style={[styles.copy, copyEntrance]}>
+        <EntranceView index={1} style={styles.copy}>
           <Text style={styles.title}>{title}</Text>
           {body ? <Text style={styles.body}>{body}</Text> : null}
-        </Animated.View>
+        </EntranceView>
 
-        {details ? <Animated.View style={[styles.details, detailsEntrance]}>{details}</Animated.View> : null}
+        {details ? (
+          <EntranceView index={2} style={styles.details}>
+            {details}
+          </EntranceView>
+        ) : null}
 
-        <Animated.View
-          style={[styles.actions, actionsLayout === 'row' && styles.actionsRow, actionsEntrance]}
-        >
+        <EntranceView index={3} style={[styles.actions, actionsLayout === 'row' && styles.actionsRow]}>
           {actions.map((action) => {
             const secondary = action.variant === 'secondary';
             return (
@@ -196,7 +194,7 @@ export function SuccessScreen({
               </Pressable>
             );
           })}
-        </Animated.View>
+        </EntranceView>
       </ScrollView>
     </SafeAreaView>
   );

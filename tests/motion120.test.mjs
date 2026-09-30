@@ -1019,6 +1019,38 @@ const SIBLINGS = [
     shared: 'components/RimLight.shared.tsx',
     needs: 'reanimated',
   },
+  // 2026-09-30 (the build run, the smoothness pass) — the shared motions most screens move
+  // through, each a Reanimated timing or spring on the UI thread beside its native-driver twin: a
+  // docked sheet's card (started at its first layout), a frosted pop-up (an instant dim, the card
+  // moving at full opacity), a screen section's entrance, and a row that opens in place.
+  {
+    name: 'SheetCard',
+    fallback: 'components/SheetCard.tsx',
+    fast: 'components/SheetCard.motion120.tsx',
+    shared: 'components/SheetCard.shared.tsx',
+    needs: 'reanimated',
+  },
+  {
+    name: 'PopModal',
+    fallback: 'components/PopModal.tsx',
+    fast: 'components/PopModal.motion120.tsx',
+    shared: 'components/PopModal.shared.tsx',
+    needs: 'reanimated',
+  },
+  {
+    name: 'EntranceView',
+    fallback: 'components/EntranceView.tsx',
+    fast: 'components/EntranceView.motion120.tsx',
+    shared: 'components/EntranceView.shared.tsx',
+    needs: 'reanimated',
+  },
+  {
+    name: 'DropdownReveal',
+    fallback: 'components/DropdownReveal.tsx',
+    fast: 'components/DropdownReveal.motion120.tsx',
+    shared: 'components/DropdownReveal.shared.tsx',
+    needs: 'reanimated',
+  },
   {
     // 2026-09-28 (LUX-LIST-64 #35) — a chosen choice chip's check: its slot
     // opens from nothing to the check and its gap, so a glyph-less chip
@@ -2153,6 +2185,9 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       // on the UI thread.
       'components/ChipCheck.motion120.tsx',
       'components/DropMenu.motion120.tsx',
+      // 2026-09-30 — the smoothness pass's four (SheetCard, PopModal, EntranceView, DropdownReveal).
+      'components/DropdownReveal.motion120.tsx',
+      'components/EntranceView.motion120.tsx',
       'components/KeyboardRisingColumn.motion120.tsx',
       // 2026-09-30 — the Melt-through tab bar (docs/dispatch/MELT-TAB-BAR.md): one frame loop
       // stepping every spring, and a Pan; the geometry it calls is lib/meltBarGeometry.ts, every
@@ -2163,11 +2198,13 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       // capsule's translateY), each ending in a runOnJS hop to the sequence.
       'components/ModeTransitionOverlay.motion120.tsx',
       'components/PeekSheet.motion120.tsx',
+      'components/PopModal.motion120.tsx',
       // 2026-09-21 — the Welcome hero button's rim light, the operator's pick
       // (f) from six rendered motions; one shared value, the lap's progress,
       // and `rimPoint` — a 'worklet' in RimLight.shared.tsx — computing the
       // light's translate and rotate on the UI thread.
       'components/RimLight.motion120.tsx',
+      'components/SheetCard.motion120.tsx',
       'components/SuccessMark.motion120.tsx',
       'components/SwipeableRow.motion120.tsx',
     ],

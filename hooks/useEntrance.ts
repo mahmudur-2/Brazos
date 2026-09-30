@@ -36,14 +36,14 @@ import { useReducedMotion } from './useReducedMotion';
 export const STAGGER_MS = 70;
 
 /** How far a section rises into place. */
-const ENTRANCE_LIFT = 10;
+export const ENTRANCE_LIFT = 10;
 
 /**
  * Soft but not slack: about 320ms to rest, no overshoot worth seeing. The last
  * section in a four-deep stagger is finished inside 550ms, which is well under
  * the harness's 2500ms settle window even if reduced motion were ever off.
  */
-const ENTRANCE_SPRING = {
+export const ENTRANCE_SPRING = {
   stiffness: 140,
   damping: 20,
   mass: 0.9,

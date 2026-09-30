@@ -83,7 +83,9 @@ test('[static] M-31 — one confirm engine: confirmAsync draws the host, the sys
     'ui/primitives/Sheet.tsx',
   ]) {
     const source = stripComments(read(file));
-    assert.ok(source.includes('<Modal'), `${file} renders a Modal`);
+    // 2026-09-30: a frosted dialog's Modal is drawn by components/PopModal.tsx; the dialog still
+    // reports it.
+    assert.ok(source.includes('<Modal') || source.includes('<PopModal'), `${file} renders a Modal`);
     assert.match(source, /useModalPresence\(/, `${file} must report its Modal`);
   }
 });

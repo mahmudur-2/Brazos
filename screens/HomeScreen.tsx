@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
-  Animated,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -51,7 +50,7 @@ import type { CustomerHomeStackNavigation } from '../lib/navigation';
 import { useHomeDesignSettings } from '../lib/homeDesignStudio';
 import { useDialNumber } from '../lib/designOverrides';
 import { useShellGround } from '../lib/shellGround';
-import { useEntrance } from '../hooks/useEntrance';
+import { EntranceView } from '../components/EntranceView';
 import {
   litCardStyle, EYEBROW_TYPE,
   fonts,
@@ -408,9 +407,6 @@ export function HomeScreen() {
   // hero and the tile row under it, so the indices follow the new order —
   // the card first (1), the row second (2), the job section last (3). Three
   // entrances, as before; only their order moved, with the sections.
-  const cardEntrance = useEntrance(1);
-  const rowEntrance = useEntrance(2);
-  const sectionEntrance = useEntrance(3);
 
   // home(23): the dark headline's column ends where the hero artwork's INK
   // starts, not where its box does and not at a share of the screen. Derived
@@ -732,7 +728,8 @@ export function HomeScreen() {
               Native drops from the array — no key, no pixel. The node is the
               plain Animated.View a LitSurface is underneath, so the entrance
               style rides it exactly as it rode the promo card. */}
-          <Animated.View
+          <EntranceView
+            index={1}
             style={[
               styles.taskCard,
               { borderRadius: taskCardRadius },
@@ -745,7 +742,6 @@ export function HomeScreen() {
               // shadow in dark, added under the light shadow the style carries.
               // 2026-09-29 (LUX-LIST-2 #6): the lit card — the wash, rim, top edge and lift, both themes.
               litCardStyle(isDark),
-              cardEntrance,
             ]}
           >
             <Text style={styles.taskCardTitle} maxFontSizeMultiplier={1.3}>
@@ -847,7 +843,7 @@ export function HomeScreen() {
                 })
               }
             />
-          </Animated.View>
+          </EntranceView>
 
           {/* 2026-09-17 — THE SERVICE ROW: one sliding row of every service,
               shared with worker Home (components/ServiceTileRow.tsx). The row
@@ -858,7 +854,7 @@ export function HomeScreen() {
               edge and its first tile sits on the column. 2026-09-18: the row
               sits directly under the task card — it moved up with the card's
               arrival and nothing about the row itself changed. */}
-          <Animated.View style={rowEntrance}>
+          <EntranceView index={2}>
             <ServiceTileRow
               heading="Popular services"
               inset={design.screenPadding}
@@ -866,7 +862,7 @@ export function HomeScreen() {
               onOther={() => setMoreOpen(true)}
               onViewAll={() => setMoreOpen(true)}
             />
-          </Animated.View>
+          </EntranceView>
 
           {/* 2026-09-28 (LUX-LIST-64 #16) — HOW BRAZOS WORKS, for a new customer:
               from setup until they close it or post a first job. Drawn only
@@ -980,7 +976,7 @@ export function HomeScreen() {
 
               ALWAYS PRESENT, populated or empty — a customer who has posted
               nothing still learns that this is where their jobs will be. */}
-          <Animated.View style={[styles.section, sectionEntrance]}>
+          <EntranceView index={3} style={styles.section}>
             <View style={styles.liveNearbyHeader}>
               <Text style={styles.sectionTitle}>Your jobs</Text>
               <Pressable
@@ -1052,7 +1048,7 @@ export function HomeScreen() {
                 <Text style={styles.emptyTitle}>You haven't posted any jobs yet</Text>
               </View>
             )}
-          </Animated.View>
+          </EntranceView>
         </ScrollView>
       </KeyboardAvoidingView>
 

@@ -1,6 +1,6 @@
 import { useModalPresence } from '../hooks/useModalPresence';
 import { useEffect, useState } from 'react';
-import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { FocusRing } from './FocusRing';
 import { Button } from './Button';
 import { dollarsToCents } from '../lib/jobs';
@@ -15,7 +15,7 @@ import {
   SCRIM_DARK_ALPHA,
 } from '../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
-import { BlurLayer } from '../lib/blur';
+import { PopModal } from './PopModal';
 import { Surface } from '../ui/primitives/Surface';
 
 type AmountPromptProps = {
@@ -86,10 +86,9 @@ export function AmountPrompt({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={[styles.backdrop, isDark && styles.backdropDark, backdropDial]}>
-        {/* MOTION1 (C3): frosted over the scrim, under the panel. */}
-        <BlurLayer />
+    // 2026-09-30 (the smoothness pass): PopModal — the dim and its frost at once, the card moving
+    // in at full opacity (components/PopModal.shared.tsx).
+    <PopModal visible={visible} onRequestClose={onCancel} backdropStyle={[styles.backdrop, isDark && styles.backdropDark, backdropDial]}>
         {/* G1 (C5): the card wears the sheet material — in light this adds
             the material's hairline where the card had none (the parity rule
             keeps border weight shared between themes). Backdrop and
@@ -131,8 +130,7 @@ export function AmountPrompt({
             <Button title={confirmText} onPress={handleSubmit} style={styles.btn} />
           </View>
         </Surface>
-      </View>
-    </Modal>
+    </PopModal>
   );
 }
 

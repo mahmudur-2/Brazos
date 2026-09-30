@@ -1,6 +1,7 @@
 import { useModalPresence } from '../hooks/useModalPresence';
 import { useEffect, useState } from 'react';
-import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { PopModal } from './PopModal';
 import { Button } from './Button';
 import { validateOfferAmount } from './OfferComposer';
 import { dollarsToCents } from '../lib/jobs';
@@ -113,13 +114,14 @@ export function EditBudgetDialog({
   }
 
   return (
-    <Modal
+    // 2026-09-30 (the smoothness pass): ConfirmDialog's presentation, PopModal — the dim at once,
+    // the card moving in at full opacity. This dialog carries no frost of its own.
+    <PopModal
       visible={visible}
-      transparent
-      animationType="fade"
       onRequestClose={onCancel}
+      blur={false}
+      backdropStyle={[styles.backdrop, isDark && styles.backdropDark]}
     >
-      <View style={[styles.backdrop, isDark && styles.backdropDark]}>
         <View style={styles.centerWrap}>
           <LitSurface
             style={[styles.sheet, isDark && shadows.cardDark]}
@@ -185,8 +187,7 @@ export function EditBudgetDialog({
             </View>
           </LitSurface>
         </View>
-      </View>
-    </Modal>
+    </PopModal>
   );
 }
 

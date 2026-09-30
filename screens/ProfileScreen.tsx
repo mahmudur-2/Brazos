@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useScrollClearance } from '../ui/primitives';
 import {
   ActivityIndicator,
-  Animated,
   Linking,
   Pressable,
   ScrollView,
@@ -32,7 +31,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
-import { useDropdownPresence } from '../hooks/useDropdownPresence';
+import { DropdownBody, DropdownChevron } from '../components/DropdownReveal';
 import { useProfile } from '../hooks/useProfile';
 import { useUnreadNotificationCount } from '../hooks/useUnreadNotificationCount';
 import { paymentsMode } from '../lib/adapters/payments';
@@ -321,8 +320,6 @@ export function ProfileScreen() {
   // Notifications row carries (the bell's own read), and Sign out.
   const [legalOpen, setLegalOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
-  const legal = useDropdownPresence(legalOpen);
-  const tools = useDropdownPresence(toolsOpen);
   const [rehirePeople, setRehirePeople] = useState<RehirePerson[]>([]);
   const [signingOut, setSigningOut] = useState(false);
   const unread = useUnreadNotificationCount();
@@ -1186,12 +1183,11 @@ export function ProfileScreen() {
                         {LEGAL_ROWS.map((doc) => doc.label).join(' · ')}
                       </Text>
                     </View>
-                    <Animated.View style={legal.chevronStyle}>
+                    <DropdownChevron open={legalOpen}>
                       <Ionicons name="chevron-down" size={18} color={colors.textSubtle} />
-                    </Animated.View>
+                    </DropdownChevron>
                   </Pressable>
-                  {legal.mounted ? (
-                    <Animated.View style={legal.bodyStyle}>
+                  <DropdownBody open={legalOpen}>
                       {LEGAL_ROWS.map((doc) => (
                         <Pressable
                           key={doc.document}
@@ -1205,8 +1201,7 @@ export function ProfileScreen() {
                           <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
                         </Pressable>
                       ))}
-                    </Animated.View>
-                  ) : null}
+                  </DropdownBody>
 
                   {rowsOf(HUB_ACCOUNT.slice(1)).map((row) => renderRow(row, true))}
 
@@ -1225,15 +1220,13 @@ export function ProfileScreen() {
                         {toolsRows.map((row) => row.label).join(' · ')}
                       </Text>
                     </View>
-                    <Animated.View style={tools.chevronStyle}>
+                    <DropdownChevron open={toolsOpen}>
                       <Ionicons name="chevron-down" size={18} color={colors.textSubtle} />
-                    </Animated.View>
+                    </DropdownChevron>
                   </Pressable>
-                  {tools.mounted ? (
-                    <Animated.View style={tools.bodyStyle}>
+                  <DropdownBody open={toolsOpen}>
                       {toolsRows.map((row) => renderRow(row, true))}
-                    </Animated.View>
-                  ) : null}
+                  </DropdownBody>
                 </>
               )}
 

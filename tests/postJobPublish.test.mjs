@@ -734,7 +734,9 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
 
   // ConfirmDialog's structure: the same Modal, scrim, centred wrap.
   for (const shared of [
-    /<Modal visible=\{visible\} transparent animationType="fade"/,
+    // 2026-09-30 (the smoothness pass): both present through PopModal — an instant dim, the card
+    // moving in at full opacity (components/PopModal.shared.tsx).
+    /<PopModal visible=\{visible\}/,
     /backdrop: \{ flex: 1,/,
     /centerWrap: \{ flex: 1, justifyContent: 'center', paddingHorizontal: spacing\.lg, \}/,
   ]) {
@@ -1190,7 +1192,8 @@ test('D25/D26 · the boundary holds, and reduced motion gets the still artwork',
   // mark brings its own entrance through the motion120 boundary above.
   assert.match(
     flatten(read('ui/templates/SuccessScreen.tsx')),
-    /\{mark \?\? \( <Animated\.View style=\{\[styles\.glyph, isDark && styles\.glyphDark, glyphEntrance\]\}>/,
+    // 2026-09-30 (the smoothness pass): the template's own glyph enters through EntranceView.
+    /\{mark \?\? \( <EntranceView index=\{0\} style=\{\[styles\.glyph, isDark && styles\.glyphDark\]\}>/,
     'the mark REPLACES the default glyph rather than joining it'
   );
   // And the mark is never given a SECOND entrance by the template.

@@ -1,7 +1,7 @@
 import { useModalPresence } from '../hooks/useModalPresence';
 import { useSheetPresence } from '../hooks/useSheetPresence';
+import { SheetCard } from './SheetCard';
 import {
-  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -87,7 +87,7 @@ export function ServicePickerSheet({
             accessibilityLabel="Close"
           />
         ) : null}
-        <Animated.View style={presence.cardStyle}>
+        <SheetCard visible={visible} onClosed={presence.onClosed}>
         <Pressable
           style={[styles.sheet, { maxHeight, paddingBottom: insets.bottom + spacing.sm }]}
           // Absorbs taps so a press inside the sheet can't reach the backdrop.
@@ -130,7 +130,7 @@ export function ServicePickerSheet({
             ))}
           </ScrollView>
         </Pressable>
-        </Animated.View>
+        </SheetCard>
       </View>
     </Modal>
   );

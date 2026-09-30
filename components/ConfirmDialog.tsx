@@ -1,5 +1,5 @@
 import { useModalPresence } from '../hooks/useModalPresence';
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Button } from './Button';
 import {
   radius,
@@ -13,7 +13,7 @@ import {
   SCRIM_DARK_ALPHA,
 } from '../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
-import { BlurLayer } from '../lib/blur';
+import { PopModal } from './PopModal';
 import { Surface } from '../ui/primitives/Surface';
 
 type ConfirmDialogProps = {
@@ -76,10 +76,10 @@ export function ConfirmDialog({
         }
       : null;
   return (
-    <Modal
+    // 2026-09-30 (the smoothness pass): PopModal — the dim and its frost at once, the card moving
+    // in at full opacity, never a fade of the blur (components/PopModal.shared.tsx).
+    <PopModal
       visible={visible}
-      transparent
-      animationType="fade"
       onShow={onShow}
       // Hardware back on Android maps to the same request-close event Modal
       // already uses on iOS swipe-to-dismiss gestures — only honored while
@@ -88,10 +88,8 @@ export function ConfirmDialog({
       onRequestClose={() => {
         if (!loading) onCancel();
       }}
+      backdropStyle={[styles.backdrop, isDark && styles.backdropDark, backdropDial]}
     >
-      <View style={[styles.backdrop, isDark && styles.backdropDark, backdropDial]}>
-        {/* MOTION1 (C3): frosted over the scrim, under the panel. */}
-        <BlurLayer />
         <View style={styles.centerWrap}>
           {/* G1 (C5): the card wears the sheet material — geometry (xl
               radius, hairline weight) is unchanged via the props, and the
@@ -130,8 +128,7 @@ export function ConfirmDialog({
             </View>
           </Surface>
         </View>
-      </View>
-    </Modal>
+    </PopModal>
   );
 }
 

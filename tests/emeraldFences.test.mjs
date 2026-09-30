@@ -519,7 +519,9 @@ test('home(2) fence: the task card holds the title, the field and the pill, and 
   // 2026-09-27 (the Lux remake, ruling 8): the card is a POP-OUT — the dark
   // card shadow rides the same node, after the lit fill and before the entrance.
   const card =
-    /<Animated\.View style=\{\[ styles\.taskCard, \{ borderRadius: taskCardRadius \}, litBetween\(\{ top: colors\.taskCardLitTop, bottom: colors\.taskCardLitBottom, flat: !isDark, \}\), litCardStyle\(isDark\), cardEntrance, \]\} >([\s\S]*?)<\/Animated\.View>/.exec(
+    // 2026-09-30 (the smoothness pass): the node is an EntranceView — the entrance rides it as a
+    // component (the 120 Hz path where the binary has it) rather than as a style in the array.
+    /<EntranceView index=\{1\} style=\{\[ styles\.taskCard, \{ borderRadius: taskCardRadius \}, litBetween\(\{ top: colors\.taskCardLitTop, bottom: colors\.taskCardLitBottom, flat: !isDark, \}\), litCardStyle\(isDark\), \]\} >([\s\S]*?)<\/EntranceView>/.exec(
       flat
     );
   assert.ok(card, 'the task card must be one Animated.View lit between the two palette stops');
