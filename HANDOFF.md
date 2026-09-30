@@ -10,6 +10,39 @@ before them, unchanged).
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
 
+## DESIGN LOOP — in progress (2026-09-29, the loop session; docs only, nothing in the app changed)
+
+**What is happening.** `docs/dispatch/DESIGN-LOOP.md` is being run: the ten candidates (A–J) were
+verified against the code at `c71a5e1` and recorded with evidence in `docs/dispatch/LUX-LIST-3.md`
+§3 — A, B, C, E, G, H, J are DONE (B stripe-mode only; C except the button label), D is PART, F is
+NEW, and I was DROPPED by the audit (`synthesis.json` M-30: the sign-up phone is the only
+ban-by-phone check). Board 1 (A, B, C) is published — `https://claude.ai/artifact/6LhcHquAZjWMVkaKwefyct`,
+source `.shots/refresh/boards/board-1.html`, the Now PNGs from `.shots/refresh/shots/` (the After
+export = the app) — and an ideas board with seventeen numbered ideas —
+`https://claude.ai/artifact/JH7z7vvYqxcmdfCheJTTA9`, `.shots/refresh/boards/ideas.html`. The
+operator's answers went into `LUX-LIST-3.md` §4 the moment they were tapped. Boards 2 and 3 followed
+(`https://claude.ai/artifact/4hydJgq6dFGP6FTTtwjwXt`, `https://claude.ai/artifact/3LqsNGzgduDRriPX4zWHNg`).
+**The list is complete**: eight items kept as built (A, B, D, E, G, H, J, and I closed as "leave the
+phone at sign-up"), two changes to build — C (the accept dialog's button reads "Accept & pay $TOTAL"
+when a quote exists) and F (Terms + Privacy in ONE scroll, everything else in sign-up untouched; 4
+taps instead of 5). **STANDING RULE (the operator, 2026-09-29): nothing is built, applied or sent
+OTA until they say so in so many words** — "No don't build anything yet until I specifically tell
+you to build and it publish OTA... I have alot of changes left... I dont wanna make this too long of
+a process anymore". C and F sit in `LUX-LIST-3.md` §4 as confirmed-not-built. From the ideas board
+the operator picked 1, 2 (after a picture), 3, 4, 5, 6, 7, 8 (show the email format), 9 (show it
+visually), 10, 12, 14 for the next list, and asked for a better second round; `LUX-LIST-3.md` §7.
+`npm run verify` exit 0 (`.shots/refresh/boards/_verify.log`, 40 s) before the record commit.
+
+**Recipes that worked.** The `.txt` beside each shot is an element map in 1x CSS px (`top x left
+w×h text {style}`), enough to place overlays without opening the PNG; `boards/sample.mjs` (pngjs)
+samples exact colours; `boards/look.mjs` renders a board from disk with the harness's playwright and
+writes `_look-*.png` (the local file view in the app's browser pane is a data: snapshot with no
+images, and the published page needs a claude.ai sign-in the pane does not have). `boards/shots` is a
+junction to `../shots` so relative image paths work locally and as the Artifact's `files` root.
+
+**Not done here.** The commit of `LUX-LIST-3.md`, `DESIGN-LOOP.md` and this section waits for the
+sitting to reach a stopping point; the untracked lux mockup files in the tree predate this session.
+
 ## BUILD IT — the After IS the app now: LUX-LIST-64 and LUX-LIST-2 applied, verified, pushed and on the Beta (2026-09-29, the build run)
 
 **What just happened.** The operator said "build it" (and: "build it with fable and use opus 5.5
