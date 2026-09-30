@@ -1370,6 +1370,7 @@ export type Database = {
           last_error: string | null
           read_at: string | null
           recipient_id: string
+          send_after: string | null
           sent_at: string | null
           status: string
           title: string
@@ -1386,6 +1387,7 @@ export type Database = {
           last_error?: string | null
           read_at?: string | null
           recipient_id: string
+          send_after?: string | null
           sent_at?: string | null
           status?: string
           title: string
@@ -1402,6 +1404,7 @@ export type Database = {
           last_error?: string | null
           read_at?: string | null
           recipient_id?: string
+          send_after?: string | null
           sent_at?: string | null
           status?: string
           title?: string
@@ -1427,6 +1430,8 @@ export type Database = {
           messages: boolean
           nearby_jobs: boolean
           nearby_radius_miles: number
+          quiet_hours: boolean
+          quiet_tz: string | null
           updated_at: string
           user_id: string
         }
@@ -1439,6 +1444,8 @@ export type Database = {
           messages?: boolean
           nearby_jobs?: boolean
           nearby_radius_miles?: number
+          quiet_hours?: boolean
+          quiet_tz?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1451,6 +1458,8 @@ export type Database = {
           messages?: boolean
           nearby_jobs?: boolean
           nearby_radius_miles?: number
+          quiet_hours?: boolean
+          quiet_tz?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -3395,6 +3404,7 @@ export type Database = {
       }
       push_notifications_enabled: { Args: never; Returns: boolean }
       push_scheduler_enabled: { Args: never; Returns: boolean }
+      quiet_hours_until: { Args: { p_recipient: string }; Returns: string }
       quote_job_price: {
         Args: { p_amount_cents: number; p_at?: string }
         Returns: {

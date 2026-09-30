@@ -28,6 +28,7 @@ import {
   type NotificationPrefs,
   type NotificationToggleKey,
 } from '../lib/notificationPrefs';
+import { deviceTimeZone, QUIET_HOURS_HINT, QUIET_HOURS_LABEL } from '../lib/quietHours';
 import {
   getProjectId,
   isExpoGo,
@@ -90,6 +91,14 @@ export function NotificationSettingsScreen() {
     }
     setPrefs(data);
     setLoading(false);
+    // Idea 7: quiet hours follow the phone's clock — a changed zone (travel, a new phone) is sent
+    // quietly, so midnight stays the person's own.
+    const zone = deviceTimeZone();
+    if (data?.quiet_hours && zone && data.quiet_tz !== zone) {
+      void updateNotificationPrefs(user.id, { quiet_tz: zone }).then(({ data: synced }) => {
+        if (synced) setPrefs(synced);
+      });
+    }
   }, [user?.id]);
 
   useEffect(() => {
@@ -266,6 +275,33 @@ export function NotificationSettingsScreen() {
               );
             })}
           </Card>
+
+          {/* 2026-09-30 (idea 7): QUIET HOURS — midnight to 6 am, off until switched on; only the
+              nearby alerts wait, so it sits with them. The phone's zone goes with the switch. */}
+          {prefs?.nearby_jobs && (
+            <Card>
+              <View style={styles.row}>
+                <View style={[styles.rowGlyph, isDark && styles.rowGlyphDark]}>
+                  <Ionicons name="moon-outline" size={18} color={isDark ? colors.gold : colors.primary} />
+                </View>
+                <View style={styles.rowText}>
+                  <Text style={styles.rowLabel}>{QUIET_HOURS_LABEL}</Text>
+                  <Text style={styles.rowHint}>{QUIET_HOURS_HINT}</Text>
+                </View>
+                {busyKey === 'quiet_hours' ? (
+                  <ActivityIndicator color={colors.primary} />
+                ) : (
+                  <Toggle
+                    value={prefs.quiet_hours}
+                    onValueChange={(next) =>
+                      persist(next ? { quiet_hours: true, quiet_tz: deviceTimeZone() } : { quiet_hours: false }, 'quiet_hours')
+                    }
+                    accessibilityLabel={QUIET_HOURS_LABEL}
+                  />
+                )}
+              </View>
+            </Card>
+          )}
 
           {prefs?.nearby_jobs && (
             <Card>

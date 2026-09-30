@@ -15,6 +15,10 @@ export type NotificationPrefs = {
   nearby_radius_miles: number;
   home_lat: number | null;
   home_lng: number | null;
+  /** 2026-09-30 (idea 7, migration 20260930000800): quiet hours, midnight to 6 am on the phone's
+   *  own clock — nearby alerts wait until 6 am. Off until switched on; quiet_tz is the zone. */
+  quiet_hours: boolean;
+  quiet_tz: string | null;
 };
 
 /** The five switches shown in Profile, in display order. */
@@ -61,6 +65,8 @@ export const DEFAULT_PREFS: Omit<NotificationPrefs, 'user_id'> = {
   nearby_radius_miles: 5,
   home_lat: null,
   home_lng: null,
+  quiet_hours: false,
+  quiet_tz: null,
 };
 
 /**
@@ -72,7 +78,7 @@ export const DEFAULT_PREFS: Omit<NotificationPrefs, 'user_id'> = {
 // Explicit projection — exactly the NotificationPrefs type above, pinned by
 // tests/projections.test.mjs so the list and the type cannot drift apart.
 const NOTIFICATION_PREFS_COLUMNS =
-  'user_id, messages, bids, job_updates, hire_requests, nearby_jobs, nearby_radius_miles, home_lat, home_lng';
+  'user_id, messages, bids, job_updates, hire_requests, nearby_jobs, nearby_radius_miles, home_lat, home_lng, quiet_hours, quiet_tz';
 
 export async function fetchNotificationPrefs(userId: string) {
   const { data, error } = await supabase
@@ -106,6 +112,8 @@ export type NotificationPrefsPatch = Partial<
     | 'nearby_radius_miles'
     | 'home_lat'
     | 'home_lng'
+    | 'quiet_hours'
+    | 'quiet_tz'
   >
 >;
 
