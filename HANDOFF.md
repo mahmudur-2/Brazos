@@ -1,14 +1,54 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-29 (BUILD IT — the After applied to the app and shipped to the Beta; its section,
-the first below — then the LUX-LIST-2 run's, LUX-LIST-64's, the NEXT SESSION primer of 2026-09-27
-(the pipeline, the fences and the traps), THE OPERATOR'S REVIEW OF THE LUX AFTER, THE LUX REMAKE,
-the brief's own section, THE REFRESH (2026-09-26), the sign-in records, the WebP run's, the
-Welcome records, the mode switch's, the Lux drawing run's, the eighteen-item run's and the sittings
-before them, unchanged).
+WRITTEN: 2026-09-30 (THE VIEWER'S PREP FIXED, AND THE TAB BAR EXPLORED — a one-line run and this
+session's side work; its section, the first below — then the DESIGN LOOP section, still the current
+design work and the next session's start, BUILD IT, the LUX-LIST-2 run's, LUX-LIST-64's, the NEXT
+SESSION primer of 2026-09-27 (the pipeline, the fences and the traps), THE OPERATOR'S REVIEW OF THE
+LUX AFTER, THE LUX REMAKE, the brief's own section, THE REFRESH (2026-09-26), the sign-in records,
+the WebP run's, the Welcome records, the mode switch's, the Lux drawing run's, the eighteen-item
+run's and the sittings before them, unchanged).
 
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
+
+## THE VIEWER'S PREP FIXED, AND THE TAB BAR EXPLORED (2026-09-30, one session; nothing in the app changed)
+
+**Start from the DESIGN LOOP section below.** It is still the current design work: the list waits
+for item 8, and its standing rule holds — nothing is built, applied or sent OTA until the operator
+says so in so many words. This section is a side run.
+
+**What just happened.** `node docs/mockups/refresh/prepare.mjs` threw ENOENT before preparing
+anything: its shared step copied `assets/prestige/hero_armchair_customer.webp` (the viewer's
+stand-in job photo, `armchair.webp`), which `c508b09` deleted. `61f9525` points that one line at
+`hero_armchair_customer_lamp_dark.webp`; the other two samples still exist.
+
+**Verification.** `node docs/mockups/refresh/prepare.mjs before` exit 0 ("prepared before"); the
+copied `armchair.webp` is byte-identical to the lamp-dark file; `npm run verify` exit 0, 1415 / 1415
+(`.shots/refresh/armchair-verify.log`, 40 s), before the commit.
+
+**The viewer's Before is today's app now.** For the tab-bar pages this session ran
+`node docs/mockups/refresh/export.mjs before` on the real tree at `356a1b9` (2026-09-30), so the
+viewer's Before and After both show the built app, and BUILD IT's "the viewer's Before is now the
+OLD app" no longer holds. The old app's export is gone (`.shots/` is gitignored); it comes back only
+by exporting a checkout from before `c508b09`.
+
+**Still stale, not fixed (outside this run).** Three more scripts name armchair files that
+`c508b09` deleted, and would throw ENOENT if run: `scripts/home-ground-blend.mjs:53` (`HERO`),
+`docs/mockups/html/map-explore.build.mjs:213`, and `docs/mockups/html/lux/lux.build.mjs:32` — the
+operator's file, carrying their uncommitted changes, so it was not touched.
+
+**The tab bar exploration (no repo change).** The operator explored a new bottom tab bar and
+settled on the "Melt-through" bar: a floating pill in the lit-card material, the chosen tab a flat
+mint bubble that melts from tab to tab, tab names under the unchosen icons, and Home without its
+chimney. NOT BUILT. The handoff page — today's app in both modes with only the bar replaced, how it
+works, and a copyable build brief — is `https://claude.ai/artifact/YQFnLDZqmEWDwc6K1CQCMX`; the
+brief is also `.shots/refresh/navbar/handoff-brief.full.md` (local). The option pages: the lifted
+bar `https://claude.ai/artifact/5kmraW46VRPv8TKUaJdTjb` and the glowing-bubble variant
+`https://claude.ai/artifact/DCyY66fjBPPXEBYTHckxeK`. Every source and scratch script is in
+`.shots/refresh/navbar/`. For the build: no new dependency; the melt runs through `lib/motion120`
+and needs Reanimated's and gesture-handler's native parts in the installed binary
+(`lib/motion120/vendor.ts` detects them at run time); without them the brief's fallback is a
+plain slide. The feel is a device check only the operator can make.
 
 ## DESIGN LOOP — in progress (2026-09-29, the loop session; docs only, nothing in the app changed)
 
