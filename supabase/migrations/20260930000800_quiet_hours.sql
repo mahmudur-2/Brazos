@@ -28,6 +28,10 @@
 --       so its ACL is restated as the baseline set it (revoked from public; now explicitly from anon
 --       and authenticated too: it is only ever called from SECURITY DEFINER functions).
 --   (5) claim_notification_batch(): the same claim, skipping a row whose send_after is still ahead.
+--       A held nearby alert is checked AGAIN when its morning comes, before it can be claimed: the job
+--       it names must still be open and should_notify() must still pass for its customer (the
+--       recipient's switch, a block, a mute, a ban may all have changed overnight) — otherwise the row
+--       is resolved 'skipped', never sent late. Rows that never waited are claimed exactly as before.
 --       Its ACL restated as the baseline set it: EXECUTE to service_role (the send-push drain) only.
 --   The auto-release "told" gate (20260930000100) reads job_completed rows, category 'jobs' — never
 --   delayed here — so no money clock moves.
@@ -134,6 +138,24 @@ language plpgsql security definer
 set search_path = public, pg_temp
 as $$
 begin
+  -- Idea 7, the group 3 review: an alert that waited out quiet hours may have gone stale — the job
+  -- hired or withdrawn, the customer blocked or muted, nearby alerts switched off. Re-checked now,
+  -- once, before it can leave; a stale one is resolved as skipped.
+  update public.notification_outbox o
+     set status = 'skipped',
+         last_error = 'quiet hours: stale by morning'
+   where o.status = 'pending'
+     and o.category = 'nearby_jobs'
+     and o.send_after is not null
+     and o.send_after <= now()
+     and not exists (
+       select 1
+       from public.jobs j
+       where j.id::text = o.data ->> 'jobId'
+         and j.status = 'open'
+         and public.should_notify(o.recipient_id, j.client_id, 'nearby_jobs')
+     );
+
   return query
   with claimed as (
     select o.id

@@ -1,5 +1,5 @@
 -- 160_quiet_hours.sql — idea 7's proofs: 20260930000800_quiet_hours.sql proven on the local stack
--- before the pipeline applies it anywhere. Fifteen assertions in seven numbered groups; each says
+-- before the pipeline applies it anywhere. Eighteen assertions in eight numbered groups; each says
 -- what it proves.
 --
 -- THE CAST: a worker (nearby alerts on, a home point), a customer (posts), and the runner — the
@@ -15,10 +15,11 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(15);
+select plan(18);
 
 select tests.create_user('i7.worker@brazos.test', 'Quinn Quiet') as worker \gset
 select tests.create_user('i7.customer@brazos.test', 'Cora Customer') as customer \gset
+select tests.create_user('i7.blocked@brazos.test', 'Bram Blocked') as blocked_customer \gset
 update public.notification_prefs set home_lat = 40.6860, home_lng = -73.9780 where user_id = :'worker';
 
 select 'Etc/GMT' || case when k > 0 then '-' || k::text when k < 0 then '+' || (-k)::text else '' end as night_tz
@@ -97,6 +98,49 @@ select is(
 select ok(
   not exists (select 1 from public.claim_notification_batch(100) c where c.outbox_id = (select id from public.notification_outbox where dedupe_key = 'job_nearby:' || :'quiet_job' || ':' || :'worker')),
   '5: claim_notification_batch skips the row still waiting for 6 am'
+);
+
+-- ---------------------------------------------------------------------------
+-- 8. The morning (the group 3 review): a held alert is checked again before it leaves. Three held
+--    rows reach 6 am: one for a job still open from a customer the worker still hears from (sent),
+--    one for a job hired or withdrawn overnight, one from a customer the worker blocked overnight
+--    (both resolved skipped, never sent late).
+-- ---------------------------------------------------------------------------
+select tests.authenticate_as(:'customer');
+select (public.create_job(
+  p_title := 'I7 gone by morning', p_description := 'probe row, rolled back',
+  p_category := 'other', p_location := 'Park Slope',
+  p_budget_cents := 5000, p_lat := 40.6720, p_lng := -73.9780
+)).id as gone_job \gset
+select tests.authenticate_as(:'blocked_customer');
+select (public.create_job(
+  p_title := 'I7 blocked by morning', p_description := 'probe row, rolled back',
+  p_category := 'other', p_location := 'Park Slope',
+  p_budget_cents := 5000, p_lat := 40.6720, p_lng := -73.9780
+)).id as blocked_job \gset
+select tests.clear_auth();
+update public.jobs set status = 'cancelled' where id = :'gone_job';
+insert into public.blocks (blocker_id, blocked_id) values (:'worker', :'blocked_customer');
+update public.notification_outbox set send_after = now() - interval '1 minute'
+ where dedupe_key in (
+   'job_nearby:' || :'quiet_job' || ':' || :'worker',
+   'job_nearby:' || :'gone_job' || ':' || :'worker',
+   'job_nearby:' || :'blocked_job' || ':' || :'worker'
+ );
+create temp table i7_claimed as select c.outbox_id from public.claim_notification_batch(100) c;
+select ok(
+  exists (select 1 from i7_claimed c where c.outbox_id = (select id from public.notification_outbox where dedupe_key = 'job_nearby:' || :'quiet_job' || ':' || :'worker')),
+  '8a: at 6 am the alert for a job still open, from a customer still heard from, is claimed and sent'
+);
+select is(
+  (select status from public.notification_outbox where dedupe_key = 'job_nearby:' || :'gone_job' || ':' || :'worker'),
+  'skipped',
+  '8b: an alert for a job no longer open by morning is resolved skipped, never sent late'
+);
+select is(
+  (select status from public.notification_outbox where dedupe_key = 'job_nearby:' || :'blocked_job' || ':' || :'worker'),
+  'skipped',
+  '8c: an alert from a customer blocked overnight is resolved skipped - no block bypass at 6 am'
 );
 
 -- ---------------------------------------------------------------------------

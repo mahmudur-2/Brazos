@@ -888,6 +888,7 @@ export function arrivalWindowLabel(job: {
   /** Idea 5: a hired worker running late moves the window until they arrive (lib/runningLate.ts). */
   late_minutes?: number | null;
   arrived_at?: string | null;
+  status?: string | null;
 }): string | null {
   let dateLabel: string | null = null;
   if (job.scheduled_date) {

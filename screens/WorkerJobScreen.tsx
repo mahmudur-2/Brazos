@@ -25,7 +25,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Chip } from '../components/Chip';
-import { LATE_CHOICES } from '../lib/runningLate';
+import { LATE_CHOICES, isLateDay } from '../lib/runningLate';
 import { HeldPulse, ReleasedTick } from '../components/MoneyMoment';
 import { JobProgress } from '../components/JobProgress';
 import { JobVideo } from '../components/JobVideo';
@@ -169,7 +169,7 @@ export function WorkerJobScreen() {
   const isWorker = !!user && job?.assigned_worker_id === user.id;
   const clientName = client?.full_name ?? 'the client';
   // Idea 5's "Dana was told ✓" — the first name, as a person would say it.
-  const clientFirstName = client?.full_name?.trim().split(/\s+/)[0] || 'They';
+  const clientFirstName = client?.full_name?.trim().split(/\s+/)[0] || 'Your customer';
 
   // The job's sandbox ledger row: the hired worker is the payee, so RLS
   // grants this read, and the card below shows the honest §H.3 state — held
@@ -497,12 +497,12 @@ export function WorkerJobScreen() {
   // Idea 6: arriving from the reminder's Route button, the directions open once the address is known.
   const routedRef = useRef(false);
   useEffect(() => {
-    if (params.intent !== 'route' || routedRef.current || !addressLine) return;
+    if (params.intent !== 'route' || routedRef.current || !addressLine || job?.id !== params.jobId) return;
     routedRef.current = true;
     void openDirections(addressLine);
     // Once per visit; openDirections is this screen's own.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.intent, addressLine]);
+  }, [params.intent, addressLine, job?.id]);
   const windowLabel = job ? arrivalWindowLabel(job) : null;
   const STAGES = ['On my way', 'Arrived', 'Started', 'Finished'];
   // 2026-09-27 (the Lux remake, ruling 14): the stepper's dots and connectors
@@ -843,7 +843,7 @@ export function WorkerJobScreen() {
                 </View>
                 {/* 2026-09-30 (idea 5): before arriving, three chips say how late — one tap tells the
                     customer and moves the arrival time; the words then say they were told. */}
-                {job.status === 'assigned' && !job.arrived_at && !awaitingProtection ? (
+                {job.status === 'assigned' && !job.arrived_at && !awaitingProtection && isLateDay(job.scheduled_date) ? (
                   <View style={styles.lateBlock}>
                     <Text style={[styles.lateLabel, job.late_minutes != null && styles.lateLabelTold]} numberOfLines={1}>
                       {job.late_minutes != null ? `${clientFirstName} was told ✓` : 'Running late?'}

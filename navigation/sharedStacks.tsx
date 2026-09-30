@@ -78,8 +78,11 @@ export function MyJobsStackNavigator() {
   return (
     <MyJobsStack.Navigator screenOptions={{ headerShown: false }}>
       <MyJobsStack.Screen name="MyJobsHub" component={MyJobsHubScreen} />
-      <MyJobsStack.Screen name="ClientJobDetail" component={ClientJobDetailScreen} />
-      <MyJobsStack.Screen name="WorkerJob" component={WorkerJobScreen} />
+      {/* One screen per job (the build run's group 3 review): a push for another job — a reminder's
+          Route, a repeat visit's Confirm — opens that job's own screen instead of reusing this one's
+          state (its address, its one-shot intent). */}
+      <MyJobsStack.Screen name="ClientJobDetail" component={ClientJobDetailScreen} getId={({ params }) => params?.job?.id} />
+      <MyJobsStack.Screen name="WorkerJob" component={WorkerJobScreen} getId={({ params }) => params?.jobId} />
       <MyJobsStack.Screen name="JobDetail" component={JobDetailScreen} />
       {/* Phase 5 — worker bid entry rides along wherever JobDetail is mounted
           (the PostJob/WorkerHomeStack gap is the failure mode this avoids). */}

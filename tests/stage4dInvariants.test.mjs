@@ -68,10 +68,12 @@ test('4D-B2 · date + window renders "Day, Mon D · H AM–H AM"', async () => {
 
 test('4D-B2 · idea 5: running late moves the window until the worker arrives', async () => {
   const { arrivalWindowLabel } = await formattersModule;
-  const base = { scheduled_date: '2026-09-30', arrival_start_hour: 18, arrival_end_hour: 20 };
+  const base = { scheduled_date: '2026-09-30', arrival_start_hour: 18, arrival_end_hour: 20, status: 'assigned' };
   assert.match(arrivalWindowLabel({ ...base, late_minutes: 20 }), / · 6:20 PM–8:20 PM$/);
   assert.match(arrivalWindowLabel({ ...base, late_minutes: 20, arrived_at: '2026-09-30T22:10:00Z' }), / · 6 PM–8 PM$/);
-  assert.match(arrivalWindowLabel({ scheduled_date: '2026-09-30', late_minutes: 10 }), / · 10 min late$/);
+  // The group 3 review: started without an arrival tap, the booked window is history again.
+  assert.match(arrivalWindowLabel({ ...base, status: 'in_progress', late_minutes: 20 }), / · 6 PM–8 PM$/);
+  assert.match(arrivalWindowLabel({ scheduled_date: '2026-09-30', late_minutes: 10, status: 'assigned' }), / · 10 min late$/);
 });
 
 test('4D-B2 · the window is both-or-neither: half an hour pair renders no window', async () => {

@@ -95,6 +95,7 @@ export function bookedWindow(
     /** Idea 5: running late moves the window until the worker arrives (lib/runningLate.ts). */
     late_minutes?: number | null;
     arrived_at?: string | null;
+    status?: string | null;
   },
   nowMs: number
 ): string | null {
@@ -164,6 +165,9 @@ export function liveJobStatus(input: {
   const tone = liveTone(state);
   if (!tone) return null;
   const window = bookedWindow(job, nowMs);
+  // Idea 5: a flexible day has no window, so a delay is said as itself — "running 20 min late" — rather
+  // than as a booked time ("booked 20 min late").
+  const lateOnly = job.arrival_start_hour == null && lateShiftMinutes(job) > 0;
   switch (state) {
     case 'pending_payment':
     case 'confirmed':
@@ -171,7 +175,7 @@ export function liveJobStatus(input: {
         step: 0,
         fills: [0.55, 0, 0, 0],
         head: 'Hired',
-        detail: window ? `starts ${window}` : 'time to agree in chat',
+        detail: lateOnly ? `running ${window}` : window ? `starts ${window}` : 'time to agree in chat',
         live: false,
         tone,
       };
@@ -188,7 +192,9 @@ export function liveJobStatus(input: {
             : window
               ? surface === 'bar'
                 ? window
-                : `booked ${window}`
+                : lateOnly
+                  ? `running ${window}`
+                  : `booked ${window}`
               : 'heading to you',
         live: true,
         tone,

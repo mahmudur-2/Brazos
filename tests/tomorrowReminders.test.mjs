@@ -51,5 +51,9 @@ test('[static] the app: the buttons registered, both tap paths honour them, Rout
   const routes = read('lib/notificationRoutes.ts');
   assert.match(routes, /const intent = data\.screen === 'WorkerJob' && data\.intent === 'route' \? \{ intent: 'route' as const \} : \{\};/);
   const screen = flat(read('screens/WorkerJobScreen.tsx'));
-  assert.match(screen, /if \(params\.intent !== 'route' \|\| routedRef\.current \|\| !addressLine\) return; routedRef\.current = true; void openDirections\(addressLine\);/);
+  assert.match(screen, /if \(params\.intent !== 'route' \|\| routedRef\.current \|\| !addressLine \|\| job\?\.id !== params\.jobId\) return; routedRef\.current = true; void openDirections\(addressLine\);/);
+  // The group 3 review: one screen per job, so tomorrow's Route never reuses today's address.
+  const stacks = read('navigation/sharedStacks.tsx');
+  assert.match(stacks, /name="WorkerJob" component=\{WorkerJobScreen\} getId=\{\(\{ params \}\) => params\?\.jobId\}/);
+  assert.match(stacks, /name="ClientJobDetail" component=\{ClientJobDetailScreen\} getId=\{\(\{ params \}\) => params\?\.job\?\.id\}/);
 });

@@ -21,10 +21,14 @@
 --       arrive (mark_worker_arrival()'s own window). It sets the delay (the latest tap wins — not
 --       cumulative) and enqueues ONE notification to the customer under 'job_updates' (their own
 --       switch, through should_notify: ban, block, mute, preference): "<worker> is running 20 min
---       late", the body the job and, when the job has an arrival window, the moved one. The dedupe
---       key carries the minutes, so a second tap of the same chip sends nothing new and a different
---       chip sends its own. Revoked from public and anon; EXECUTE to authenticated — the one role
---       the call-site inventory names (lib/jobs.ts reportRunningLate, through supabase.rpc).
+--       late", the body the job and, when the job has an arrival window, the moved one. A tap of the
+--       delay already recorded changes nothing and tells nobody twice; any other delay — back to an
+--       earlier one included — is a new report with its own push (the dedupe key carries the report's
+--       instant, so a return to 20 after 30 is never swallowed). Only on the job's own day, in the
+--       market's zone (America/New_York), or on any day for a job with none set: a delay is about
+--       today's arrival, never tomorrow's. Revoked from public and anon; EXECUTE to authenticated —
+--       the one role the call-site inventory names (lib/jobs.ts reportRunningLate, through
+--       supabase.rpc).
 --
 -- WHAT THIS FILE DOES NOT TOUCH: status (transition_job_status() stays the only status mover),
 -- assignment, mark_worker_arrival(), every payments / ledger / settlement object. NOT destructive
@@ -69,6 +73,15 @@ begin
   if v_job.status <> 'assigned' or v_job.arrived_at is not null then
     raise exception 'Running late can only be said before you arrive';
   end if;
+  -- A delay is about today's arrival: the job's own day in the market's zone, or a job with none.
+  if v_job.scheduled_date is not null
+     and v_job.scheduled_date <> (now() at time zone 'America/New_York')::date then
+    raise exception 'Running late is for the day of the job';
+  end if;
+  -- The delay already told: nothing changes, nobody is told twice.
+  if v_job.late_minutes is not distinct from p_minutes then
+    return v_job;
+  end if;
 
   update public.jobs
      set late_minutes = p_minutes,
@@ -92,7 +105,10 @@ begin
     coalesce(public.notify_display_name(v_user), 'Your worker') || ' is running ' || p_minutes::text || ' min late',
     left(v_job.title, 80) || coalesce(' · now ' || v_window, ''),
     jsonb_build_object('screen', 'ClientJobDetail', 'jobId', v_job.id::text),
-    'job_running_late:' || v_job.id::text || ':' || p_minutes::text
+    -- One key per report: a return to an earlier delay is news again (20, then 30, then 20). The
+    -- wall clock, not the transaction's, so two reports can never share an instant.
+    'job_running_late:' || v_job.id::text || ':' || p_minutes::text || ':'
+      || (extract(epoch from clock_timestamp()) * 1000000)::bigint::text
   );
 
   return v_job;
@@ -103,6 +119,6 @@ revoke all on function public.report_running_late(uuid, integer) from public, an
 grant execute on function public.report_running_late(uuid, integer) to authenticated;
 
 comment on function public.report_running_late(uuid, integer) is
-  'Idea 5 (2026-09-30, docs/DECISIONS.md entry (1)): the job''s assigned worker says they are running 10, 20 or 30 minutes late, while the job is assigned and before they arrive. Sets jobs.late_minutes / late_reported_at (the latest tap wins) and enqueues one job_updates notification to the customer. SECURITY DEFINER; authenticated only.';
+  'Idea 5 (2026-09-30, docs/DECISIONS.md entry (1)): the job''s assigned worker says they are running 10, 20 or 30 minutes late, while the job is assigned, before they arrive, on the job''s own day (America/New_York) or any day for a job with none. Sets jobs.late_minutes / late_reported_at (the latest tap wins) and enqueues one job_updates notification to the customer per change of delay; the delay already recorded is a no-op. SECURITY DEFINER; authenticated only.';
 
 commit;

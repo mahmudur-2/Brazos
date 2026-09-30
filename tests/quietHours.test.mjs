@@ -30,10 +30,14 @@ test('[static] the server: off by default, only nearby alerts wait, the drain wa
   assert.match(sql, /exception when others then\s*-- A zone the server does not know never holds an alert back\.\s*return null;/);
   assert.match(sql, /case when p_category = 'nearby_jobs' then public\.quiet_hours_until\(p_recipient\) end/);
   assert.match(sql, /and \(o\.send_after is null or o\.send_after <= now\(\)\)/);
+  // The group 3 review: a held alert is checked again at its morning — the job still open and
+  // should_notify still passing — or resolved skipped, never sent late.
+  assert.match(sql, /set status = 'skipped',\s*last_error = 'quiet hours: stale by morning'/);
+  assert.match(sql, /where j\.id::text = o\.data ->> 'jobId'\s*and j\.status = 'open'\s*and public\.should_notify\(o\.recipient_id, j\.client_id, 'nearby_jobs'\)/);
   assert.match(sql, /revoke all on function public\.quiet_hours_until\(uuid\) from public, anon, authenticated;/);
   assert.match(sql, /grant execute on function public\.claim_notification_batch\(integer\) to service_role;/);
   assert.doesNotMatch(sql, /function public\.should_notify/, 'the gate is untouched');
-  assert.match(read('supabase/tests/160_quiet_hours.sql'), /select plan\(15\);/);
+  assert.match(read('supabase/tests/160_quiet_hours.sql'), /select plan\(18\);/);
 });
 
 test('[static] the app: the row sits with the nearby alerts, and the phone\'s zone goes with the switch', () => {
