@@ -116,13 +116,19 @@ test('[static] the app: the Review row, the start after publishing, each visit\'
   const client = flat(read('screens/ClientJobDetailScreen.tsx'));
   assert.match(client, /<RepeatNote series=\{series\} perspective="customer" busy=\{stoppingSeries\} onEnd=\{\(\) => void handleStopSeries\(\)\} \/>/);
   // The group 4 review: the jump waits for the ledger AND the payment settings.
-  assert.match(client, /if \(params\.intent !== 'checkout' \|\| checkoutIntentRef\.current \|\| !paymentRead \|\| !configRead\) return; checkoutIntentRef\.current = true; if \(canFundNow && paymentsEnabled\) navigation\.navigate\('Checkout', \{ job \}\);/);
+  // Idea 20 widened the intent to its Confirm button ('pay'), which pays with the saved card there.
+  assert.match(client, /if \(\(params\.intent !== 'checkout' && params\.intent !== 'pay'\) \|\| checkoutIntentRef\.current \|\| !paymentRead \|\| !configRead\) return; checkoutIntentRef\.current = true; if \(canFundNow && paymentsEnabled\) navigation\.navigate\('Checkout', \{ job, oneTap: params\.intent === 'pay' \}\);/);
   assert.match(client, /title: 'Stop repeating\?',/);
   const worker = flat(read('screens/WorkerJobScreen.tsx'));
   assert.match(worker, /<RepeatNote series=\{series\} perspective="worker" busy=\{droppingSeries\} onEnd=\{\(\) => void handleDropSeries\(\)\} \/>/);
   assert.match(worker, /title: 'Drop future visits\?',/);
   const routes = read('lib/notificationRoutes.ts');
-  assert.match(routes, /const intent = data\.screen === 'ClientJobDetail' && data\.intent === 'checkout' \? \{ intent: 'checkout' as const \} : \{\};/, 'an allow-list of one');
+  // Idea 20 grew the allow-list to three: checkout, pay, and accept — the last only with its offer.
+  assert.match(
+    routes,
+    /const onClientJob = data\.screen === 'ClientJobDetail';\s*const intent =\s*onClientJob && \(data\.intent === 'checkout' \|\| data\.intent === 'pay'\)\s*\? \{ intent: data\.intent === 'pay' \? \('pay' as const\) : \('checkout' as const\) \}\s*: onClientJob && data\.intent === 'accept' && data\.offerId\s*\? \{ intent: 'accept' as const, offerId: data\.offerId \}\s*: \{\};/,
+    'an allow-list: checkout, pay, and accept with its offer'
+  );
   const jobs = read('lib/jobs.ts');
   assert.match(jobs, /series_id: row\.series_id \?\? null,/);
   assert.match(read('lib/jobSeries.ts'), /supabase\.rpc\('start_job_series', \{ p_job_id: jobId, p_cadence: cadence \}\)/);

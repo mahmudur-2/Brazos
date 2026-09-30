@@ -20,7 +20,9 @@ import {
   type JobPriceQuote,
   type Payment,
 } from '../lib/payments';
-import { presentCheckoutSheet, stripeReady, STRIPE_UNAVAILABLE_MESSAGE } from '../lib/payments/stripe';
+import { confirmWithSavedCard, presentCheckoutSheet, stripeReady, STRIPE_UNAVAILABLE_MESSAGE } from '../lib/payments/stripe';
+import { cardLabel, listSavedCards, type SavedCard } from '../lib/paymentMethods';
+import { Toggle } from '../ui/primitives';
 import {
   CHECKOUT_POLL_INTERVAL_MS,
   CHECKOUT_POLL_TIMEOUT_MS,
@@ -93,6 +95,13 @@ export function CheckoutScreen() {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [funding, setFunding] = useState(false);
   const fundingRef = useRef(false);
+  // 2026-09-30 (idea 20) — the card the customer saved for one-tap hiring (read at the provider, stripe
+  // only), which of the two ways the confirm pays, and the opt-in to save the card the sheet takes.
+  const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
+  const [cardsRead, setCardsRead] = useState(false);
+  const [dialogPath, setDialogPath] = useState<'saved' | 'sheet'>('sheet');
+  const [saveCard, setSaveCard] = useState(false);
+  const oneTapRef = useRef(false);
   // The pre-row price (D22) — stripe only; sandbox never asks for it.
   const [quote, setQuote] = useState<JobPriceQuote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -167,6 +176,25 @@ export function CheckoutScreen() {
         active = false;
       };
     }, [loadPayment, loadQuote])
+  );
+
+  // Idea 20: the saved card, read once per visit (stripe only — sandbox never holds a card).
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (!stripe) {
+        setCardsRead(true);
+        return;
+      }
+      listSavedCards().then(({ data }) => {
+        if (!active) return;
+        setSavedCard(data[0] ?? null);
+        setCardsRead(true);
+      });
+      return () => {
+        active = false;
+      };
+    }, [])
   );
 
   useFocusEffect(
@@ -361,6 +389,46 @@ export function CheckoutScreen() {
     if (activeRef.current) setPhase('timeout');
   }
 
+  /**
+   * 2026-09-30 (idea 20) — PAY WITH THE SAVED CARD: create-payment confirms the same intent off-session
+   * with the card the customer saved for one-tap hiring — no sheet — and the screen then watches the
+   * ledger reach held exactly as after the sheet (D7). A declined card leaves everything as it was
+   * and the sheet one tap away.
+   */
+  async function fundBySavedCard() {
+    if (fundingRef.current || !savedCard) return;
+    fundingRef.current = true;
+    setFunding(true);
+    setConfirmVisible(false);
+    try {
+      const result = await confirmWithSavedCard(job.id);
+      if (result.confirmed) {
+        await confirmPayment();
+        return;
+      }
+      if (result.noSavedCard) setSavedCard(null);
+      await alertAsync(
+        result.declined ? 'Your card was declined' : 'Could not pay with your saved card',
+        `${userMessage(result.error, 'The card could not be charged.')}\n\nYour accepted offer is unchanged — pay with another card below.`
+      );
+      await loadPayment();
+    } finally {
+      fundingRef.current = false;
+      setFunding(false);
+    }
+  }
+
+  // Idea 20: arriving from "Accept & pay" or a push's Confirm — the confirmation already given — the
+  // saved card pays at once. Without one, this is ordinary Checkout.
+  useEffect(() => {
+    if (!params.oneTap || oneTapRef.current || !stripe || !cardsRead || !savedCard) return;
+    if (!canFund || !figures || !paymentsEnabled || phase !== 'idle' || funding) return;
+    oneTapRef.current = true;
+    void fundBySavedCard();
+    // fundBySavedCard is this render's own; the gate above is what the effect waits on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.oneTap, cardsRead, savedCard, canFund, figures, paymentsEnabled, phase, funding]);
+
   /** The stripe funding action (D5): create-payment → sheet → poll. */
   async function fundByCard() {
     if (fundingRef.current) return;
@@ -368,7 +436,8 @@ export function CheckoutScreen() {
     setFunding(true);
     setConfirmVisible(false);
     try {
-      const session = await paymentProvider.beginJobCheckout(job.id);
+      // Idea 20: the customer's own opt-in — the card the sheet takes is kept for one-tap hiring.
+      const session = await paymentProvider.beginJobCheckout(job.id, { saveCard: saveCard && !savedCard });
       if (session.error || !session.data) {
         await alertAsync(
           'Could not start the payment',
@@ -439,10 +508,35 @@ export function CheckoutScreen() {
     />
   ) : phase === 'timeout' || windowClosed ? (
     <Button title="Check again" onPress={() => void recheck()} disabled={funding} />
+  ) : canFund && savedCard && figures ? (
+    // Idea 20: the saved card first; another card, through the sheet, one tap away.
+    <View style={styles.cardActions}>
+      <Button
+        title={`Pay ${formatBudget(figures.total)} with ${cardLabel(savedCard)}`}
+        onPress={() => {
+          setDialogPath('saved');
+          setConfirmVisible(true);
+        }}
+        loading={funding}
+        disabled={funding || state.kind !== 'ready'}
+      />
+      <Button
+        title="Use another card"
+        variant="ghost"
+        onPress={() => {
+          setDialogPath('sheet');
+          setConfirmVisible(true);
+        }}
+        disabled={funding || state.kind !== 'ready'}
+      />
+    </View>
   ) : canFund ? (
     <Button
       title={stripeCtaTitle}
-      onPress={() => setConfirmVisible(true)}
+      onPress={() => {
+        setDialogPath('sheet');
+        setConfirmVisible(true);
+      }}
       loading={funding}
       disabled={funding || !figures || state.kind !== 'ready'}
     />
@@ -619,6 +713,24 @@ export function CheckoutScreen() {
               </View>
             ),
           },
+          // Idea 20: the opt-in, off by default — only while no card is saved and the sheet is the way.
+          ...(stripe && cardsRead && !savedCard && canFund && !held
+            ? [
+                {
+                  content: (
+                    <View style={styles.saveRow}>
+                      <View style={styles.saveCopy}>
+                        <Text style={styles.saveTitle}>Save this card for one-tap hiring</Text>
+                        <Text style={styles.explainText}>
+                          Next time, accept and pay from a bid’s notification. Remove it any time in Payment methods.
+                        </Text>
+                      </View>
+                      <Toggle value={saveCard} onValueChange={setSaveCard} accessibilityLabel="Save this card for one-tap hiring" />
+                    </View>
+                  ),
+                },
+              ]
+            : []),
           {
             title: 'How protection works',
             content: (
@@ -627,7 +739,11 @@ export function CheckoutScreen() {
                   <ExplainRow
                     icon="card-outline"
                     strong="Pay by card"
-                    text="charges the all-in total shown above through the secure payment sheet. Nothing is charged until you confirm in the sheet."
+                    text={
+                      savedCard
+                        ? `charges the all-in total shown above to ${cardLabel(savedCard)} when you confirm, or to another card through the secure payment sheet.`
+                        : 'charges the all-in total shown above through the secure payment sheet. Nothing is charged until you confirm in the sheet.'
+                    }
                   />
                 ) : (
                   <ExplainRow
@@ -671,18 +787,20 @@ export function CheckoutScreen() {
         visible={confirmVisible}
         title={
           stripe
-            ? `Charge ${formatBudget(figures?.total ?? null)} to your card?`
+            ? `Charge ${formatBudget(figures?.total ?? null)} to ${dialogPath === 'saved' && savedCard ? cardLabel(savedCard) : 'your card'}?`
             : `Protect ${formatBudget(amountCents)} for this job?`
         }
         message={
           stripe
-            ? 'Your card is charged the all-in total now, through the secure payment sheet. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
+            ? dialogPath === 'saved' && savedCard
+              ? `${cardLabel(savedCard)} is charged the all-in total now. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done.`
+              : 'Your card is charged the all-in total now, through the secure payment sheet. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
             : 'This authorizes the sandbox amount and places it in protected/held state. No real money is being charged — this is sandbox. Funds stay held until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
         }
         confirmText={stripe ? 'Pay & protect' : 'Authorize & protect'}
         cancelText="Not now"
         loading={funding}
-        onConfirm={stripe ? fundByCard : fundProtection}
+        onConfirm={stripe ? (dialogPath === 'saved' && savedCard ? fundBySavedCard : fundByCard) : fundProtection}
         onCancel={() => setConfirmVisible(false)}
       />
     </>
@@ -793,6 +911,29 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderWidth: 1,
     borderColor: colors.mint2,
     backgroundColor: colors.surface,
+  },
+  // Idea 20: the saved card's two buttons, and the opt-in row.
+  cardActions: {
+    gap: spacing.xs,
+  },
+  saveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.mint2,
+    backgroundColor: colors.surface,
+  },
+  saveCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  saveTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.ink,
   },
   }),
 );

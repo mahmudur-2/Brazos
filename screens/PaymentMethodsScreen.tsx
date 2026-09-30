@@ -1,5 +1,12 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { Button } from '../components/Button';
+import { alertAsync, confirmAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
+import { cardLabel, listSavedCards, removeSavedCard, startCardSetup, type SavedCard } from '../lib/paymentMethods';
+import { presentCardSetupSheet } from '../lib/payments/stripe';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import { paymentsMode } from '../lib/adapters/payments';
 import { goBackOrHome } from '../lib/navigationRef';
@@ -14,18 +21,77 @@ import {
 
 /**
  * Screen 45 (Phase 9) — Payment methods, told honestly. There is no card
- * vault and no stored payment method at any layer of this app — so the
- * screen SAYS that instead of rendering a fake card list. What it can
- * truthfully show: which payment mode the build runs (sandbox / stripe /
- * disabled — D16, D18) and what that mode actually does with money states.
- * On the card path, cards are entered in the provider's payment sheet at
- * checkout and never stored here.
+ * vault in this app — so the screen SAYS what it can truthfully show: which
+ * payment mode the build runs (sandbox / stripe / disabled — D16, D18) and what
+ * that mode actually does with money states.
+ *
+ * 2026-09-30 (idea 20): on the card path a customer may SAVE a card for
+ * one-tap hiring — kept by the payment provider on their customer, never by
+ * Brazos — and this screen lists it (brand and last four, from the provider),
+ * removes it, or adds one in the provider's own sheet. Nothing here charges.
  */
 export function PaymentMethodsScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const sandbox = paymentsMode === 'sandbox';
   const stripe = paymentsMode === 'stripe';
+
+  // Idea 20: the saved card, read at the provider on every visit (stripe only).
+  const [cards, setCards] = useState<SavedCard[] | null>(stripe ? null : []);
+  const [cardsError, setCardsError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const loadCards = useCallback(async () => {
+    if (!stripe) return;
+    setCardsError(null);
+    const { data, error } = await listSavedCards();
+    if (error) {
+      setCardsError(userMessage(error, 'Could not reach your cards right now.'));
+      setCards([]);
+      return;
+    }
+    setCards(data);
+  }, [stripe]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadCards();
+    }, [loadCards])
+  );
+
+  async function remove(card: SavedCard) {
+    const ok = await confirmAsync({
+      title: `Remove ${cardLabel(card)}?`,
+      message: 'One-tap hiring stops until you save a card again. Nothing already paid changes.',
+      confirmText: 'Remove',
+      cancelText: 'Keep it',
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    const { error } = await removeSavedCard(card.id);
+    setBusy(false);
+    if (error) {
+      await alertAsync('Could not remove the card', userMessage(error, 'Try again in a moment.'));
+      return;
+    }
+    await loadCards();
+  }
+
+  async function addCard() {
+    setBusy(true);
+    const session = await startCardSetup();
+    if (session.error || !session.data) {
+      setBusy(false);
+      await alertAsync('Could not add a card', userMessage(session.error, 'Try again in a moment.'));
+      return;
+    }
+    const sheet = await presentCardSetupSheet(session.data);
+    setBusy(false);
+    if (sheet.outcome === 'failed') {
+      await alertAsync('The card was not saved', userMessage(sheet.error, 'Try again in a moment.'));
+      return;
+    }
+    if (sheet.outcome === 'saved') await loadCards();
+  }
 
   return (
     <DetailScreen
@@ -86,12 +152,58 @@ export function PaymentMethodsScreen() {
           content: (
             <View style={[styles.sectionCard, litCardStyle(isDark)]}>
               <Text style={styles.eyebrow}>FUNDING SOURCE</Text>
-              <Text style={styles.sectionTitle}>No stored payment methods</Text>
-              <Text style={styles.bodyText}>
-                {stripe
-                  ? 'Brazos doesn’t store your card. You enter it in the provider’s secure payment sheet at checkout, and any saved card lives with the provider, not in this app.'
-                  : 'Brazos doesn’t store any card, bank account or wallet in this build — there is no payment provider connected yet. When a real provider arrives, the methods you add will appear here.'}
-              </Text>
+              {stripe ? (
+                // Idea 20: the card saved for one-tap hiring — kept by the provider, never by Brazos.
+                cards === null ? (
+                  <ActivityIndicator color={colors.emerald} />
+                ) : cards.length > 0 ? (
+                  <>
+                    <Text style={styles.sectionTitle}>Saved for one-tap hiring</Text>
+                    {cards.map((card) => (
+                      <View key={card.id} style={styles.cardRow}>
+                        <Ionicons name="card-outline" size={20} color={colors.emerald} />
+                        <View style={styles.cardCopy}>
+                          <Text style={styles.cardText}>{cardLabel(card)}</Text>
+                          {card.expMonth && card.expYear ? (
+                            <Text style={styles.bodyText}>
+                              {`Expires ${String(card.expMonth).padStart(2, '0')}/${String(card.expYear).slice(-2)}`}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Pressable
+                          onPress={() => void remove(card)}
+                          disabled={busy}
+                          // A 44-point target around the short word.
+                          hitSlop={{ top: 14, bottom: 14, left: 12, right: 12 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove ${cardLabel(card)}`}
+                        >
+                          <Text style={styles.removeText}>Remove</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                    <Text style={styles.bodyText}>
+                      Accept and pay from a bid’s notification with this card. The provider keeps it — Brazos never sees the number.
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.sectionTitle}>No card saved</Text>
+                    <Text style={styles.bodyText}>
+                      {cardsError ??
+                        'Save a card for one-tap hiring: accept and pay from a bid’s notification. The provider keeps it — Brazos never sees the number.'}
+                    </Text>
+                    <Button title="Add a card" variant="secondary" onPress={() => void addCard()} loading={busy} disabled={busy} />
+                  </>
+                )
+              ) : (
+                <>
+                  <Text style={styles.sectionTitle}>No stored payment methods</Text>
+                  <Text style={styles.bodyText}>
+                    Brazos doesn’t store any card, bank account or wallet in this build — there is no payment provider connected yet. When a real provider arrives, the methods you add will appear here.
+                  </Text>
+                </>
+              )}
             </View>
           ),
         },
@@ -141,6 +253,27 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     overflow: 'hidden',
   },
   cardDark: { borderColor: colors.border },
+  // Idea 20: one saved card's row.
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 44,
+  },
+  cardCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  cardText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  removeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.danger,
+  },
   // Master 40 sets its card eyebrows GREEN, not gold (B-11): every one of
   // them states what the build's payment mode currently IS.
   eyebrow: {

@@ -35,6 +35,8 @@ export type NotificationData = {
   outboxId?: string;
   /** Idea 6: the reminder's Route button — the worker's job opens and asks for directions. */
   intent?: string;
+  /** Idea 20: the offer a bid push's Accept & pay opens the confirm for. */
+  offerId?: string;
 };
 
 /** Tab that owns each destination, for the nested navigate() call. */
@@ -118,6 +120,7 @@ function toNotificationData(raw: unknown): NotificationData | null {
     type: typeof data.type === 'string' ? data.type : undefined,
     outboxId: typeof data.outboxId === 'string' ? data.outboxId : undefined,
     intent: typeof data.intent === 'string' ? data.intent : undefined,
+    offerId: typeof data.offerId === 'string' ? data.offerId : undefined,
   };
 }
 
@@ -138,8 +141,10 @@ type RouteTarget =
       screen: 'ClientJobDetail' | 'JobDetail';
       jobId: string;
       mode: AppMode | null;
-      /** Idea 14: a repeat visit's "Confirm $X" opens Checkout on arrival. */
-      intent?: 'checkout';
+      /** Idea 14: a repeat visit's "Confirm $X" opens Checkout on arrival; idea 20 its Confirm button
+       *  pays with the saved card there, and a bid's Accept & pay opens that offer's confirm. */
+      intent?: 'checkout' | 'pay' | 'accept';
+      offerId?: string;
     };
 
 /** Pure: reads the payload, touches neither the network nor the navigator. */
@@ -180,8 +185,16 @@ function resolveTarget(data: NotificationData | null): RouteTarget | null {
 
   // ClientJobDetail / JobDetail need the job row itself.
   if (data.screen === 'ClientJobDetail' || data.screen === 'JobDetail') {
-    // Idea 14: only the customer's job takes the checkout intent — an allow-list of one.
-    const intent = data.screen === 'ClientJobDetail' && data.intent === 'checkout' ? { intent: 'checkout' as const } : {};
+    // Only the customer's job takes an intent — an allow-list: Checkout (idea 14), Checkout paying with
+    // the saved card (idea 20's Confirm), and an offer's confirm (idea 20's Accept & pay, which needs
+    // the offer).
+    const onClientJob = data.screen === 'ClientJobDetail';
+    const intent =
+      onClientJob && (data.intent === 'checkout' || data.intent === 'pay')
+        ? { intent: data.intent === 'pay' ? ('pay' as const) : ('checkout' as const) }
+        : onClientJob && data.intent === 'accept' && data.offerId
+          ? { intent: 'accept' as const, offerId: data.offerId }
+          : {};
     return { kind: 'job', tab, screen: data.screen, jobId: data.jobId, mode, ...intent };
   }
 
@@ -294,7 +307,11 @@ export async function handleNotificationData(
   }
 
   if (target.screen === 'ClientJobDetail') {
-    navigateChecked('MyJobs', 'ClientJobDetail', { job, ...(target.intent ? { intent: target.intent } : {}) });
+    navigateChecked('MyJobs', 'ClientJobDetail', {
+      job,
+      ...(target.intent ? { intent: target.intent } : {}),
+      ...(target.offerId ? { offerId: target.offerId } : {}),
+    });
     return;
   }
 

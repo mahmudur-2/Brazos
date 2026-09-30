@@ -260,10 +260,23 @@ export function ClientJobDetailScreen() {
   // still be funded (a visit already paid, or a closed funding window, stays here).
   const checkoutIntentRef = useRef(false);
   useEffect(() => {
-    if (params.intent !== 'checkout' || checkoutIntentRef.current || !paymentRead || !configRead) return;
+    if ((params.intent !== 'checkout' && params.intent !== 'pay') || checkoutIntentRef.current || !paymentRead || !configRead) return;
     checkoutIntentRef.current = true;
-    if (canFundNow && paymentsEnabled) navigation.navigate('Checkout', { job });
+    if (canFundNow && paymentsEnabled) navigation.navigate('Checkout', { job, oneTap: params.intent === 'pay' });
   }, [params.intent, paymentRead, configRead, canFundNow, paymentsEnabled, job, navigation]);
+
+  // Idea 20: a bid push's Accept & pay — that offer's own confirm opens as soon as the bids are read
+  // ("Accept & pay $X": money and hiring keep their confirm). Once per visit; an offer no longer open
+  // simply leaves the screen as it is.
+  const acceptIntentRef = useRef(false);
+  useEffect(() => {
+    if (params.intent !== 'accept' || !params.offerId || acceptIntentRef.current || loading || !canAccept) return;
+    acceptIntentRef.current = true;
+    const bid = bids.find((offer) => offer.id === params.offerId);
+    if (bid) confirmAccept(bid);
+    // confirmAccept is this render's own; the gate above is what the effect waits on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.intent, params.offerId, loading, canAccept, bids]);
 
   async function handleStopSeries() {
     if (!series || stoppingSeries) return;
@@ -534,7 +547,8 @@ export function ClientJobDetailScreen() {
    * which re-reads the job canonically and shows the truthful payment state.
    */
   function proceedToCheckout() {
-    navigation.navigate('Checkout', { job });
+    // Idea 20: the accept's own confirm said "Accept & pay" — with a saved card, Checkout pays at once.
+    navigation.navigate('Checkout', { job, oneTap: true });
   }
 
   /**

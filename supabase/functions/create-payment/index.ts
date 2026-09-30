@@ -62,6 +62,24 @@
 // own charge_amount_cents under brazos-intent-<its own id>, the provider ref,
 // and the same four-string response. A body without the field is the job
 // path, byte for byte. A malformed tip amount is a 400 before any RPC call.
+//
+// ---------------------------------------------------------------------------
+// IDEA 20 (2026-09-30) — THE SAVED CARD, two more body fields on the job path
+// ---------------------------------------------------------------------------
+// `saveCard: true` is the customer's own opt-in at Checkout ("Save this card
+// for one-tap hiring", off by default): the intent carries
+// setup_future_usage=off_session, so the card the sheet takes is kept on the
+// provider's customer for later. `saveCard: false` clears it again on an
+// intent that already carries it.
+//
+// `useSavedCard: true` is Confirm on a one-tap hire: the same intent the sheet
+// would have used (created or reused under the same idempotency key, with the
+// same fields, so Checkout can still take the job over afterwards), confirmed
+// off-session with the customer's most recently saved card — no sheet. The
+// ledger decides nothing new: begin_job_payment() still decides, as the
+// caller, and the webhook still marks the row held. A decline — or a card that
+// needs the customer present — answers 402 with `declined: true` and sends the
+// customer the push that opens Checkout (enqueue_payment_declined).
 // ============================================================================
 
 const STRIPE_API = 'https://api.stripe.com';
@@ -132,6 +150,22 @@ async function stripe(
   return { ok: res.ok, status: res.status, body };
 }
 
+/** A provider read (idea 20): the customer's saved cards. */
+async function stripeGet(path: string): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
+  const res = await fetch(`${STRIPE_API}${path}`, {
+    headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },
+  });
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  return { ok: res.ok, status: res.status, body };
+}
+
+/** The customer's most recently saved card, or null (idea 20). */
+async function latestSavedCard(customerId: string): Promise<string | null> {
+  const listed = await stripeGet(`/v1/customers/${encodeURIComponent(customerId)}/payment_methods?type=card&limit=1`);
+  const data = listed.ok && Array.isArray(listed.body.data) ? (listed.body.data as Array<{ id?: unknown }>) : [];
+  return typeof data[0]?.id === 'string' ? data[0].id : null;
+}
+
 Deno.serve(async (req) => {
   if (!SUPABASE_URL || !ANON_KEY || !SERVICE_KEY || !STRIPE_SECRET_KEY) {
     console.error('create-payment: SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY / STRIPE_SECRET_KEY not set');
@@ -147,14 +181,21 @@ Deno.serve(async (req) => {
   // R6c (D4): present → a tip; absent → the job payment. Validated before any
   // RPC call; the database, not this function, decides everything else.
   let tipAmountCents: number | null = null;
+  // Idea 20: the opt-in (true / false / absent = leave the intent as it is) and Confirm.
+  let saveCard: boolean | null = null;
+  let useSavedCard = false;
   try {
     const body = (await req.json()) as {
       jobId?: string;
       job_id?: string;
       tipAmountCents?: unknown;
       tip_amount_cents?: unknown;
+      saveCard?: unknown;
+      useSavedCard?: unknown;
     };
     jobId = body.jobId ?? body.job_id ?? '';
+    saveCard = typeof body.saveCard === 'boolean' ? body.saveCard : null;
+    useSavedCard = body.useSavedCard === true;
     const rawTip = body.tipAmountCents ?? body.tip_amount_cents;
     if (rawTip !== undefined && rawTip !== null) {
       if (typeof rawTip !== 'number' || !Number.isInteger(rawTip) || rawTip <= 0) {
@@ -166,6 +207,9 @@ Deno.serve(async (req) => {
     return json({ error: 'Malformed request.' }, 400);
   }
   if (!jobId) return json({ error: 'A job is required.' }, 400);
+  if (tipAmountCents != null && (saveCard != null || useSavedCard)) {
+    return json({ error: 'A tip is paid in the sheet.' }, 400);
+  }
 
   try {
     // --- 1. The database decides, as the caller ------------------------------
@@ -286,6 +330,44 @@ Deno.serve(async (req) => {
     });
     if (!attached.ok) {
       throw new Error(`attach_provider_ref failed: ${attached.status} ${(await attached.text()).slice(0, 200)}`);
+    }
+    // The ledger's own intent when it already names one (attach_provider_ref never overwrites).
+    const intentId = typeof payment.provider_ref === 'string' && payment.provider_ref ? payment.provider_ref : intent.body.id;
+
+    // --- 6. Idea 20: the opt-in, and Confirm with the saved card -------------
+    if (saveCard !== null && !useSavedCard) {
+      const wanted = saveCard ? 'off_session' : '';
+      const current = typeof intent.body.setup_future_usage === 'string' ? intent.body.setup_future_usage : '';
+      if (current !== wanted) {
+        // An empty string clears it: the customer turned the opt-in off again.
+        const updated = await stripe(`/v1/payment_intents/${encodeURIComponent(intentId)}`, { setup_future_usage: wanted });
+        if (!updated.ok) {
+          console.error(`create-payment: setup_future_usage ${updated.status}: ${JSON.stringify(updated.body).slice(0, 300)}`);
+          return json({ error: 'The payment provider is unavailable right now.' }, 502);
+        }
+      }
+    }
+    if (useSavedCard) {
+      const card = await latestSavedCard(customerId);
+      if (!card) {
+        return json({ error: 'No saved card. Protect the payment in Checkout.', code: 'no_saved_card' }, 409);
+      }
+      const confirmed = await stripe(
+        `/v1/payment_intents/${encodeURIComponent(intentId)}/confirm`,
+        { payment_method: card, off_session: 'true' },
+        `brazos-offsession-${paymentId}-${card}`
+      );
+      const status = confirmed.body.status;
+      if (confirmed.ok && (status === 'succeeded' || status === 'processing' || status === 'requires_capture')) {
+        // The webhook marks the row held, exactly as after the sheet; the app watches the ledger.
+        return json({ paymentId, confirmed: true });
+      }
+      // Declined, or the bank wants the customer present: Checkout takes it from here, and the push
+      // that opens it goes out in case the customer has already left the app.
+      const failure = confirmed.body.error as { code?: string; decline_code?: string } | undefined;
+      console.error(`create-payment: off-session confirm ${confirmed.status}: ${failure?.code ?? String(status)}`);
+      await serviceRpc('enqueue_payment_declined', { p_payment_id: paymentId }).catch(() => null);
+      return json({ error: 'Your card was declined. Protect the payment in Checkout.', declined: true }, 402);
     }
 
     // Only what the client needs. Never the API key, never the whole intent,

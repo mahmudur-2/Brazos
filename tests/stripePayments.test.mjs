@@ -356,13 +356,14 @@ test('[static] the adapter selects three ways, and the stripe provider refuses w
   assert.match(flat, /resolution\.mode === 'sandbox' \? createSandboxPaymentProvider\(\) : resolution\.mode === 'stripe' \? createStripePaymentProvider\(\) : createDisabledPaymentProvider\(/);
   assert.match(adapter, /configured: process\.env\.EXPO_PUBLIC_PAYMENTS_MODE/);
   // D4: the interface gained beginJobCheckout, and every provider answers it.
-  assert.match(adapter, /beginJobCheckout\(jobId: string\): Promise<CheckoutSessionResult>;/);
+  // Idea 20: the customer's opt-in to save the card rides along.
+  assert.match(adapter, /beginJobCheckout\(jobId: string, options\?: \{ saveCard\?: boolean \}\): Promise<CheckoutSessionResult>;/);
   assert.equal((adapter.match(/beginJobCheckout: async/g) ?? []).length, 3, 'sandbox, stripe and disabled each carry an arm');
   // The stripe provider reaches the card path through the one boundary and
   // never names the SDK itself.
   assert.match(adapter, /from '\.\.\/payments\/stripe'/);
   assert.doesNotMatch(adapter, /stripe-react-native/);
-  assert.match(adapter, /return createPaymentSession\(jobId\);/);
+  assert.match(adapter, /return createPaymentSession\(jobId, \{ saveCard: options\?\.saveCard === true \}\);/);
   // Stripe release is release_job_payment; the sandbox pair is untouched.
   assert.match(adapter, /rpc\('release_job_payment', \{ p_job_id: jobId \}\)/);
   assert.match(adapter, /sandbox_release_job_payment/);
@@ -411,12 +412,13 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
   assert.match(code, /stripe && !stripeReady\(\)[\s\S]{0,300}kind: 'permissionDenied'[\s\S]{0,200}STRIPE_UNAVAILABLE_MESSAGE/);
   // D5: create-payment through the adapter, the sheet through the boundary,
   // then the poll; the sandbox two-step is never called in stripe mode.
-  assert.match(code, /paymentProvider\.beginJobCheckout\(job\.id\)/);
+  assert.match(code, /paymentProvider\.beginJobCheckout\(job\.id, \{ saveCard: saveCard && !savedCard \}\)/);
   assert.match(code, /presentCheckoutSheet\(session\.data\)/);
   assert.match(code, /from '\.\.\/lib\/payments\/stripe'/);
   assert.doesNotMatch(code, /stripe-react-native/);
   assert.doesNotMatch(code, /\.rpc\(|\.from\(|functions\.invoke/);
-  assert.match(code, /onConfirm=\{stripe \? fundByCard : fundProtection\}/);
+  // Idea 20: the confirm pays with the saved card only on the path that named it.
+  assert.match(code, /onConfirm=\{stripe \? \(dialogPath === 'saved' && savedCard \? fundBySavedCard : fundByCard\) : fundProtection\}/);
   // A dismissed sheet: no alert, no poll, one re-read.
   assert.match(code, /sheet\.outcome === 'dismissed'[\s\S]{0,200}await loadPayment\(\);\s*return;/);
   assert.doesNotMatch(code, /dismissed'[\s\S]{0,120}alertAsync/);
@@ -451,7 +453,8 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
   assert.match(code, /total: quote\.total_cents/);
   assert.match(code, /Total charged to your card/);
   assert.match(code, /`Protect \$\{formatBudget\(figures\.total\)\} by card`/);
-  assert.match(code, /`Charge \$\{formatBudget\(figures\?\.total \?\? null\)\} to your card\?`/);
+  // Idea 20: the confirm names the saved card when that is the path; otherwise "your card".
+  assert.match(code, /`Charge \$\{formatBudget\(figures\?\.total \?\? null\)\} to \$\{dialogPath === 'saved' && savedCard \? cardLabel\(savedCard\) : 'your card'\}\?`/);
   assert.match(code, /disabled=\{funding \|\| !figures \|\| state\.kind !== 'ready'\}/);
   assert.match(code, /quoteError && !figures/);
   // D10: no client-side fee arithmetic — the sandbox fee row reads the ledger.

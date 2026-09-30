@@ -108,7 +108,8 @@ test('notificationRoutes still owns the screen→tab contract', async () => {
   assert.match(routes, /ClientJobDetail: 'MyJobs'/);
   assert.match(routes, /JobDetail: 'MyJobs'/);
   // 2026-09-30 (idea 14): the job may carry a repeat visit's checkout intent beside it.
-  assert.match(routes, /navigateChecked\('MyJobs', 'ClientJobDetail', \{ job(?:, \.\.\.\(target\.intent \? \{ intent: target\.intent \} : \{\}\))? \}\)/);
+  // The job rides along with its allow-listed intent (idea 14) and, for Accept & pay, its offer (idea 20).
+  assert.match(routes, /navigateChecked\('MyJobs', 'ClientJobDetail', \{\s*job,\s*\.\.\.\(target\.intent \? \{ intent: target\.intent \} : \{\}\),\s*\.\.\.\(target\.offerId \? \{ offerId: target\.offerId \} : \{\}\),\s*\}\)/);
 });
 
 // ---------------------------------------------------------------------------

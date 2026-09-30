@@ -76,7 +76,8 @@ export type PaymentProvider = {
    * The row is `unfunded` until the webhook lands — nothing here is held.
    * Sandbox and disabled refuse it.
    */
-  beginJobCheckout(jobId: string): Promise<CheckoutSessionResult>;
+  /** Idea 20: `saveCard` is the customer's own opt-in to keep the card for one-tap hiring. */
+  beginJobCheckout(jobId: string, options?: { saveCard?: boolean }): Promise<CheckoutSessionResult>;
   /**
    * The customer's approval: move the held payment toward `released`. The
    * server enforces ownership, completed status, the dispute freeze, and
@@ -192,9 +193,9 @@ function createStripePaymentProvider(): PaymentProvider {
       stripeReady() ? refuse(STRIPE_NO_TWO_STEP_MESSAGE) : unavailable(),
     protectJobPayment: async () =>
       stripeReady() ? refuse(STRIPE_NO_TWO_STEP_MESSAGE) : unavailable(),
-    beginJobCheckout: async (jobId) => {
+    beginJobCheckout: async (jobId, options) => {
       if (!stripeReady()) return { data: null, error: { message: STRIPE_UNAVAILABLE_MESSAGE } };
-      return createPaymentSession(jobId);
+      return createPaymentSession(jobId, { saveCard: options?.saveCard === true });
     },
     releaseJobPayment: async (jobId) => {
       if (!stripeReady()) return unavailable();

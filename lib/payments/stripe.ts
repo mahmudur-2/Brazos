@@ -65,6 +65,8 @@ type StripeModule = {
     customerId?: string;
     customerEphemeralKeySecret?: string;
     paymentIntentClientSecret?: string;
+    /** Idea 20: the sheet in setup mode — a card saved for later, nothing charged. */
+    setupIntentClientSecret?: string;
   }) => Promise<{ error?: SheetError }>;
   presentPaymentSheet: () => Promise<{ error?: SheetError }>;
 };
@@ -169,13 +171,19 @@ async function readInvokeErrorBody(error: unknown): Promise<string | null> {
  */
 export async function createPaymentSession(
   jobId: string,
-  options?: { tipAmountCents?: number }
+  options?: { tipAmountCents?: number; saveCard?: boolean }
 ): Promise<CheckoutSessionResult> {
   const tipAmountCents = options?.tipAmountCents;
   let invoked: { data: unknown; error: unknown };
   try {
     invoked = await supabase.functions.invoke('create-payment', {
-      body: tipAmountCents != null ? { jobId, tipAmountCents } : { jobId },
+      body:
+        tipAmountCents != null
+          ? { jobId, tipAmountCents }
+          : // Idea 20: the customer's "Save this card for one-tap hiring", sent only when it is on.
+            options?.saveCard
+            ? { jobId, saveCard: true }
+            : { jobId },
     });
   } catch (error) {
     invoked = { data: null, error };
@@ -326,6 +334,79 @@ export type SheetOutcome =
  * retry gets a new id and its own started/result pair rather than being lost.
  */
 const jobCheckoutPaymentIds = new Set<string>();
+
+/**
+ * 2026-09-30 (idea 20) — CONFIRM WITH THE SAVED CARD: create-payment, as the caller, with
+ * useSavedCard — the same intent the sheet would have used, confirmed off-session with the card the
+ * customer saved for one-tap hiring. `confirmed` means the provider took it; the screen then watches
+ * the ledger reach held exactly as after the sheet. A decline (or a bank that wants the customer
+ * present) comes back `declined`; no saved card, `noSavedCard` — either way Checkout takes over.
+ */
+export async function confirmWithSavedCard(jobId: string): Promise<{
+  confirmed: boolean;
+  declined: boolean;
+  noSavedCard: boolean;
+  error: { message: string } | null;
+}> {
+  let invoked: { data: unknown; error: unknown };
+  try {
+    invoked = await supabase.functions.invoke('create-payment', { body: { jobId, useSavedCard: true } });
+  } catch (error) {
+    invoked = { data: null, error };
+  }
+  if (invoked.error) {
+    const body = await readInvokeErrorBody(invoked.error);
+    const { message } = extractInvokeError(invoked.error as InvokeErrorLike, body);
+    let parsed: { declined?: unknown; code?: unknown } = {};
+    try {
+      parsed = body ? (JSON.parse(body) as typeof parsed) : {};
+    } catch {
+      parsed = {};
+    }
+    return {
+      confirmed: false,
+      declined: parsed.declined === true,
+      noSavedCard: parsed.code === 'no_saved_card',
+      error: { message: userMessage(message) },
+    };
+  }
+  const confirmed = (invoked.data as { confirmed?: unknown } | null)?.confirmed === true;
+  return confirmed
+    ? { confirmed: true, declined: false, noSavedCard: false, error: null }
+    : { confirmed: false, declined: false, noSavedCard: false, error: { message: 'The payment could not be confirmed.' } };
+}
+
+/**
+ * 2026-09-30 (idea 20) — SAVE A CARD FOR LATER, in the provider's own sheet (setup mode, from
+ * Payment methods). Nothing is charged; `saved` means the provider kept the card on the customer.
+ */
+export async function presentCardSetupSheet(session: {
+  customerId: string;
+  setupIntentClientSecret: string;
+  ephemeralKeySecret: string;
+}): Promise<{ outcome: 'saved' | 'dismissed' | 'failed'; error: { message: string } | null }> {
+  if (!stripe || !(await ensureInitialised())) {
+    return { outcome: 'failed', error: { message: STRIPE_UNAVAILABLE_MESSAGE } };
+  }
+  try {
+    const initialised = await stripe.initPaymentSheet({
+      merchantDisplayName: STRIPE_MERCHANT_DISPLAY_NAME,
+      customerId: session.customerId,
+      customerEphemeralKeySecret: session.ephemeralKeySecret,
+      setupIntentClientSecret: session.setupIntentClientSecret,
+    });
+    const first = initialised.error ?? (await stripe.presentPaymentSheet()).error;
+    if (first) {
+      const classified = classifySheetError(first);
+      return classified.outcome === 'dismissed'
+        ? { outcome: 'dismissed', error: null }
+        : { outcome: 'failed', error: { message: userMessage(classified.message) } };
+    }
+    return { outcome: 'saved', error: null };
+  } catch {
+    return { outcome: 'failed', error: { message: SHEET_UNSHOWN_MESSAGE } };
+  }
+}
 
 /**
  * D5 steps two and three: initialise the payment sheet with the session

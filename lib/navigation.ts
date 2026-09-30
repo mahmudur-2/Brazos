@@ -294,7 +294,9 @@ export type MyJobsStackParamList = {
   MyJobsHub: undefined;
   /** Idea 14: `intent: 'checkout'` — a repeat visit's "Confirm $X" push — opens Checkout once, when
    *  the ledger says the visit still waits for its payment. */
-  ClientJobDetail: { job: Job; intent?: 'checkout' };
+  /** Idea 20: `intent: 'accept'` with `offerId` — a bid push's Accept & pay — opens that offer's own
+   *  confirm; `intent: 'pay'` — a Confirm button — goes to Checkout to pay with the saved card. */
+  ClientJobDetail: { job: Job; intent?: 'checkout' | 'accept' | 'pay'; offerId?: string };
   /** Idea 6: `intent: 'route'` — the reminder's Route button — opens directions once on arrival. */
   WorkerJob: { jobId: string; intent?: 'route' };
   JobDetail: { job: OpenJob };
@@ -313,7 +315,8 @@ export type MyJobsStackParamList = {
     countersRemaining: number;
   };
   /** Screen 31 — sandbox protected checkout for an assigned, unfunded job. */
-  Checkout: { job: Job };
+  /** Idea 20: `oneTap` — after "Accept & pay" or a push's Confirm, the saved card pays at once. */
+  Checkout: { job: Job; oneTap?: boolean };
   /** Screen 32 — rendered only after funds are genuinely held. */
   JobConfirmed: { job: Job };
   /** Screen 56 — the worker's static arrival declarations (Phase 6). No live

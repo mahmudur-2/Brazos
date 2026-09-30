@@ -441,6 +441,13 @@ verify_jwt = true
 # shape, same reason.
 verify_jwt = true
 
+[functions.payment-methods]
+# Idea 20 (2026-09-30): lists, adds and removes the CALLER's saved cards at the
+# provider. Written explicitly, as create-payment's is: its first act is to ask
+# the auth service who the caller's own token belongs to, and it acts only on
+# that user's cards.
+verify_jwt = true
+
 [functions.connect-return]
 # THE PROVIDER'S HOSTED ONBOARDING SENDS THE BROWSER HERE, WITH NO SUPABASE
 # JWT — as return_url and as refresh_url. Without this line the platform

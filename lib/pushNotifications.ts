@@ -1,4 +1,12 @@
-import { ACTION_MESSAGE, ACTION_ROUTE, REMINDER_CATEGORIES } from './notificationActions';
+import {
+  ACTION_ACCEPT_PAY,
+  ACTION_CONFIRM,
+  ACTION_MESSAGE,
+  ACTION_ROUTE,
+  ACTION_VIEW,
+  HIRE_CATEGORIES,
+  REMINDER_CATEGORIES,
+} from './notificationActions';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
@@ -85,6 +93,15 @@ export async function configurePushHandling(): Promise<void> {
     ]);
     await Notifications.setNotificationCategoryAsync(REMINDER_CATEGORIES.customer, [
       { identifier: ACTION_MESSAGE, buttonTitle: 'Message', options: { opensAppToForeground: true } },
+    ]);
+    // Idea 20: a bid's View and Accept & pay; a repeat visit's Confirm. On iPhone a button runs the
+    // app's code only by opening it, so each opens the app — to the confirm, or to Checkout paying.
+    await Notifications.setNotificationCategoryAsync(HIRE_CATEGORIES.bid, [
+      { identifier: ACTION_VIEW, buttonTitle: 'View', options: { opensAppToForeground: true } },
+      { identifier: ACTION_ACCEPT_PAY, buttonTitle: 'Accept & pay', options: { opensAppToForeground: true } },
+    ]);
+    await Notifications.setNotificationCategoryAsync(HIRE_CATEGORIES.series, [
+      { identifier: ACTION_CONFIRM, buttonTitle: 'Confirm', options: { opensAppToForeground: true } },
     ]);
   } catch (err) {
     // A push without its buttons still opens the job — never let this take down app startup.
