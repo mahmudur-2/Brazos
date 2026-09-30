@@ -17,6 +17,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { ConversationRow } from '../components/ConversationRow';
 import { GlassDropdown, type GlassDropdownItem, type GlassDropdownRequest } from '../components/GlassDropdown';
+import { UndoToast } from '../components/UndoToast';
 import { SwipeableRow, type SwipeAction } from '../components/SwipeableRow';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ReportDialog } from '../components/ReportDialog';
@@ -29,6 +30,7 @@ import {
   conversationPreviewText,
   conversationTarget,
   fetchActiveJobs,
+  markConversationRead,
   resolveOtherId,
   threadUnread,
   type ActiveJob,
@@ -91,6 +93,9 @@ import {
   screenGround,
 } from '../lib/theme';
 
+/** Idea 4: how long an everyday action's Undo stands. */
+const UNDO_MS = 5000;
+
 /**
  * The filter pill's height in points, and the ONLY place it is stated.
  *
@@ -129,6 +134,17 @@ type SheetTarget = ResolvedSheetTarget;
 export function MessagesInboxScreen() {
   // 2026-09-30: the tab bar floats over this screen; the list ends above the pill.
   const navClearance = useScrollClearance();
+  // 2026-09-30 (idea 4, DECISIONS 2026-09-30 (1)): archive, mute and mark-unread happen at once and
+  // offer a five-second Undo; money and hiring keep their confirmation.
+  const [undo, setUndo] = useState<{ id: number; message: string; revert: () => Promise<void> } | null>(null);
+  useEffect(() => {
+    if (!undo) return;
+    const timer = setTimeout(() => setUndo((current) => (current?.id === undo.id ? null : current)), UNDO_MS);
+    return () => clearTimeout(timer);
+  }, [undo]);
+  function offerUndo(message: string, revert: () => Promise<void>) {
+    setUndo({ id: Date.now(), message, revert });
+  }
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // RUN T2 (C6) — THE INBOX'S OWN FOUR. The filter pill's height keeps the
@@ -518,6 +534,14 @@ export function MessagesInboxScreen() {
       : await muteUser(user.id, target.userId);
     if (error) {
       await alertAsync(target.muted ? 'Could not unmute' : 'Could not mute', userMessage(error));
+    } else {
+      offerUndo(target.muted ? `Unmuted ${target.name}` : `Muted ${target.name}`, async () => {
+        const { error: undoError } = target.muted
+          ? await muteUser(user.id, target.userId)
+          : await unmuteUser(user.id, target.userId);
+        if (undoError) await alertAsync('Could not undo', userMessage(undoError));
+        await refresh();
+      });
     }
     await refresh();
   }
@@ -537,11 +561,20 @@ export function MessagesInboxScreen() {
   async function applyConversationState(
     target: SheetTarget,
     patch: ConversationStatePatch,
-    failureTitle: string
+    failureTitle: string,
+    undoable?: { message: string; revert: ConversationStatePatch }
   ) {
     setMenuUserId(null);
     const { error: stateError } = await setConversationStateForAll(target.targets, patch);
-    if (stateError) await alertAsync(failureTitle, userMessage(stateError));
+    if (stateError) {
+      await alertAsync(failureTitle, userMessage(stateError));
+    } else if (undoable) {
+      offerUndo(undoable.message, async () => {
+        const { error: undoError } = await setConversationStateForAll(target.targets, undoable.revert);
+        if (undoError) await alertAsync('Could not undo', userMessage(undoError));
+        await refresh();
+      });
+    }
     await refresh();
   }
 
@@ -568,7 +601,16 @@ export function MessagesInboxScreen() {
       target.targets,
       user.id
     );
-    if (unreadError) await alertAsync('Could not mark as unread', userMessage(unreadError));
+    if (unreadError) {
+      await alertAsync('Could not mark as unread', userMessage(unreadError));
+    } else {
+      offerUndo('Marked as unread', async () => {
+        const results = await Promise.all(target.targets.map((thread) => markConversationRead(thread, user.id)));
+        const undoError = results.find((result) => result.error)?.error;
+        if (undoError) await alertAsync('Could not undo', userMessage(undoError));
+        await refresh();
+      });
+    }
     await refresh();
   }
 
@@ -678,7 +720,8 @@ export function MessagesInboxScreen() {
             applyConversationState(
               target,
               { archived: !target.archived },
-              target.archived ? 'Could not unarchive' : 'Could not archive'
+              target.archived ? 'Could not unarchive' : 'Could not archive',
+              { message: target.archived ? 'Unarchived' : 'Archived', revert: { archived: target.archived } }
             ),
         });
       }
@@ -1099,6 +1142,20 @@ export function MessagesInboxScreen() {
         uri={avatarUri}
         onClose={() => setAvatarUri(null)}
         allowShare={false}
+      />
+
+      <UndoToast
+        message={undo?.message ?? null}
+        onUndo={
+          undo
+            ? () => {
+                const current = undo;
+                setUndo(null);
+                void current.revert();
+              }
+            : undefined
+        }
+        bottom={navClearance}
       />
     </SafeAreaView>
   );
