@@ -1,15 +1,103 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-30 (BUILD RUN — planned, waiting for "build"; its section, the first below, is the
-next session's start — then THE VIEWER'S PREP FIXED, AND THE TAB BAR EXPLORED, a one-line run and
-side work from another session the same day — then the DESIGN LOOP section, BUILD IT, the LUX-LIST-2 run's, LUX-LIST-64's, the NEXT
-SESSION primer of 2026-09-27 (the pipeline, the fences and the traps), THE OPERATOR'S REVIEW OF THE
-LUX AFTER, THE LUX REMAKE, the brief's own section, THE REFRESH (2026-09-26), the sign-in records,
-the WebP run's, the Welcome records, the mode switch's, the Lux drawing run's, the eighteen-item
-run's and the sittings before them, unchanged).
+WRITTEN: 2026-09-30 (BUILD RUN — DONE; its section, the first below, is the next session's start —
+then the BUILD RUN's planning section as it was written before "build", superseded by the first —
+then THE VIEWER'S PREP FIXED, AND THE TAB BAR EXPLORED, the DESIGN LOOP section, BUILD IT, the
+LUX-LIST-2 run's, LUX-LIST-64's, the NEXT SESSION primer of 2026-09-27 (the pipeline, the fences and
+the traps), THE OPERATOR'S REVIEW OF THE LUX AFTER, THE LUX REMAKE, the brief's own section, THE
+REFRESH (2026-09-26), the sign-in records, the WebP run's, the Welcome records, the mode switch's,
+the Lux drawing run's, the eighteen-item run's and the sittings before them, unchanged).
 
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
+
+## BUILD RUN — DONE: every pick built, reviewed and shipped; the lock-screen card waits on one install (2026-09-30, the build run, "build" at 03:22)
+
+**Start here.** The run built all of `docs/dispatch/BUILD-RUN.md` in six groups. Each group had a
+fresh-eyes review whose findings were fixed, and a Fable smoothness review ran before each ship. Git
+owns the live state; this is the record.
+
+**Landed** (mainexpo, in order): the Melt-through tab bar `b096155`; the smoothness pass `e84a0de`;
+the total on the accept button and the money moments (C, 10) `b8f5464`; Terms and Privacy in one
+scroll (F) `5033e3c`; Undo instead of "Are you sure?" (4) `3860e0a`; group 1's review `28bde2f`;
+group 0's review `dae99cf`; category tiles first (23) `d19d80c`; the two mics (18) `c47dd8c`;
+reuse a past job (2) `368919b`; Need it today (12) `6dc2251`; group 2's review `63995ab`; running
+late, one tap (5) `d8372d8`; quiet hours (7) `8aa5970`; tomorrow's reminder (6) `6a2aaf0`; group
+3's review `3439a53`; repeat jobs (14) `f671f62`; the receipt (8) `10965a6`; the Fable review of
+groups 0–4 and group 4's review `bbe34ce`; hire from the push (20) `6dc669a`; the lock-screen card
+(9) `c1c0a7d`; group 5's two reviews `a2df60c`; the run's own rulings, `docs/DECISIONS.md`
+2026-09-30 "THE BUILD RUN'S OWN RULINGS", `8faf780`.
+
+**Shipped.**
+- OTA 1 (groups 0–4), after staging run 36713478016 went green: update group `6923b50f`, iOS
+  update `01a0f241-e13a-77d0-a68a-68b8b5ebc386`.
+- OTA 2 (group 5), after staging run 36721757837 went green (the tests; migrations `001200` and
+  `001300` applied; every function deployed, `payment-methods` and `send-live-cards` included):
+  update group `b6bcebf1-a89c-4141-a80b-b935d80d91ae`, iOS update
+  `01a0f283-9a45-79e2-9861-0a759d32f601`.
+- The new Beta build, started by the run: EAS build `070d364d-abd2-4bbc-a33b-ed66f6d0acfb` FINISHED at 09:39 (build number 3, version and runtime 1.0.0, commit `8faf780`, channel preview; the existing Beta credentials, no prompt). Install it from its page, https://expo.dev/accounts/mah_r2/projects/BRAZOS/builds/070d364d-abd2-4bbc-a33b-ed66f6d0acfb — its own bundle is `8faf780`, the same code as OTA 2.
+- The build carries the run's one native change: the microphone and speech wording, which now
+  names dictation (`app.config.ts`, idea 18). It does NOT carry the lock-screen card's add-on
+  (see below).
+
+**Verified.**
+- `npm run verify` exit 0 at `8faf780`: lint clean, 1476/1476 tests.
+- `npm run db:reset` then `npm run db:test` on the local stack: Files=24, Tests=1764, PASS.
+- `scripts/staging-scan.sh` found nothing destructive in `001200` or `001300`.
+- Staging run 36721757837 and CI run 36721757725 both green.
+- The preview harness validated 79/79 targets.
+- The card path was walked in a scratch card-mode copy of the preview
+  (`.shots/refresh/build-run/g5/stripe-look.mjs`: stripe mode, `stripeReady()` forced true, a
+  saved-card mock). An accept with a saved card went confirm → one-tap → "Funds held in protection".
+  Without a saved card it opened ordinary Checkout with the opt-in. Payment methods showed list,
+  remove and add.
+
+**Not verified** (the operator's):
+- A real off-session charge in Stripe test mode.
+- Any device.
+- The lock-screen card itself (it needs the add-on).
+- A receipt email (it needs the email key).
+
+**Waiting on the operator.**
+1. The lock-screen card (9). The run's guard refused the add-on's install, since a dependency change
+   is the operator's (`docs/DECISIONS.md` 2026-09-30, the build run's rulings (4)). To turn it on:
+   - `npm install expo-live-activity@0.4.2`.
+   - Add `['expo-live-activity', { enablePushNotifications: true }]` to `plugins` in
+     `app.config.ts`. `tests/liveCard.test.mjs` requires the package and the plugin line together.
+   - Place Apple's push key on staging's edge functions: `APNS_KEY_P8`, `APNS_KEY_ID` and
+     `APNS_TEAM_ID`. `APNS_TOPIC` defaults to the Beta's bundle id.
+   - Build. The add-on adds a widget extension, so the first build may ask interactively for its
+     credentials.
+
+   Until then the card is inert: `lib/liveCard.ts` finds no module and does nothing, and
+   `send-live-cards` resolves every row "skipped".
+2. The receipt (8). Place `RESEND_API_KEY` and `RECEIPT_FROM` on staging. `RECEIPT_REPLY_TO` and
+   `RECEIPT_TEST_TO` are optional; the test address sends every receipt to one inbox. Until then
+   each receipt is resolved "skipped" with its reason.
+3. PRODUCTION. Migrations `20260930000600` through `20260930001300` must be applied by hand before
+   any production build or OTA. The app now reads the jobs columns `needed_today`, `late_minutes`,
+   `late_reported_at` and `series_id`, and calls the new functions. Staging has them (the pipeline).
+4. A device walk on the Beta, in Stripe test mode:
+   - The tab bar and the motion.
+   - Posting: the tiles, the two mics, reuse and Need it today.
+   - Running late; quiet hours.
+   - A repeat job's first refusal and Confirm.
+   - A bid's Accept & pay with a saved card (4242). Then the decline path: card
+     4000 0000 0000 0341 saves but declines when charged.
+   - Payment methods: add and remove a card.
+   - The Profile row on the card path reads "Cards and one-tap hiring."
+5. The watchdog `brazos-build-watchdog` is paused (disabled), not deleted.
+
+**Seen, not changed (out of scope, each offered as its own task):**
+- `authenticated` holds TRUNCATE, TRIGGER and MAINTAIN on many public tables, from the baseline
+  (`20260901000000_baseline.sql:7813`, `:7828`, …). It is not reachable through the API.
+- `tests/notificationFeed.test.mjs` scans only `supabase/archive/phases/`, so eleven kinds written by
+  newer migrations have no feed icon. Nine are this run's; two are older.
+- `cancel_job()`'s 15-minute free window also applies to a repeat visit the schedule hired.
+
+**Notes.**
+- The regular preview runs with payments off; only the scratch copy above shows the card path.
+- The operator's uncommitted lux mockup files are untouched.
 
 ## BUILD RUN — planned, waiting for the word "build" (2026-09-30, the DESIGN-LOOP-2 sitting; docs only, nothing in the app changed)
 
