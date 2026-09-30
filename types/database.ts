@@ -990,6 +990,7 @@ export type Database = {
           en_route_at: string | null
           final_amount_cents: number | null
           id: string
+          job_number: number
           late_minutes: number | null
           late_reported_at: string | null
           location: string | null
@@ -1031,6 +1032,7 @@ export type Database = {
           en_route_at?: string | null
           final_amount_cents?: number | null
           id?: string
+          job_number?: number
           late_minutes?: number | null
           late_reported_at?: string | null
           location?: string | null
@@ -1072,6 +1074,7 @@ export type Database = {
           en_route_at?: string | null
           final_amount_cents?: number | null
           id?: string
+          job_number?: number
           late_minutes?: number | null
           late_reported_at?: string | null
           location?: string | null
@@ -2047,6 +2050,84 @@ export type Database = {
           },
         ]
       }
+      receipt_outbox: {
+        Row: {
+          attempts: number
+          created_at: string
+          id: string
+          job_id: string
+          last_error: string | null
+          payment_id: string
+          provider_ref: string | null
+          recipient_id: string
+          role: string
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          job_id: string
+          last_error?: string | null
+          payment_id: string
+          provider_ref?: string | null
+          recipient_id: string
+          role: string
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          job_id?: string
+          last_error?: string | null
+          payment_id?: string
+          provider_ref?: string | null
+          recipient_id?: string
+          role?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receipt_outbox_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipt_outbox_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipt_outbox_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "refunds_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipt_outbox_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "transfers_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipt_outbox_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reports: {
         Row: {
           created_at: string
@@ -2809,6 +2890,7 @@ export type Database = {
           en_route_at: string | null
           final_amount_cents: number | null
           id: string
+          job_number: number
           late_minutes: number | null
           late_reported_at: string | null
           location: string | null
@@ -2847,6 +2929,28 @@ export type Database = {
           tokens: string[]
           type: string
         }[]
+      }
+      claim_receipt_batch: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          id: string
+          job_id: string
+          last_error: string | null
+          payment_id: string
+          provider_ref: string | null
+          recipient_id: string
+          role: string
+          sent_at: string | null
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "receipt_outbox"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       client_job_stats: {
         Args: { p_client_id: string }
@@ -2935,6 +3039,7 @@ export type Database = {
           en_route_at: string | null
           final_amount_cents: number | null
           id: string
+          job_number: number
           late_minutes: number | null
           late_reported_at: string | null
           location: string | null
@@ -3043,6 +3148,7 @@ export type Database = {
       delete_my_account: { Args: never; Returns: undefined }
       direct_thread_notifications_enabled: { Args: never; Returns: boolean }
       drain_notification_outbox: { Args: never; Returns: number }
+      drain_receipts: { Args: never; Returns: number }
       drain_settlements: { Args: never; Returns: number }
       drop_series_worker: { Args: { p_series_id: string }; Returns: undefined }
       enqueue_notification: {
@@ -3155,6 +3261,7 @@ export type Database = {
       get_payment_account: { Args: { p_user_id: string }; Returns: string }
       get_payment_customer: { Args: { p_user_id: string }; Returns: string }
       hardening_fixes_enabled: { Args: never; Returns: boolean }
+      install_receipt_schedule: { Args: never; Returns: string }
       install_reminder_schedule: { Args: never; Returns: string }
       install_series_schedule: { Args: never; Returns: string }
       install_settlement_schedules: { Args: never; Returns: string }
@@ -3324,6 +3431,7 @@ export type Database = {
           en_route_at: string | null
           final_amount_cents: number | null
           id: string
+          job_number: number
           late_minutes: number | null
           late_reported_at: string | null
           location: string | null
@@ -3531,6 +3639,7 @@ export type Database = {
           worker_receives_cents: number
         }[]
       }
+      receipt_details: { Args: { p_payment_id: string }; Returns: Json }
       record_settlement_attempt: {
         Args: {
           p_error: string
@@ -3623,6 +3732,7 @@ export type Database = {
           en_route_at: string | null
           final_amount_cents: number | null
           id: string
+          job_number: number
           late_minutes: number | null
           late_reported_at: string | null
           location: string | null
@@ -3696,6 +3806,15 @@ export type Database = {
       }
       resolve_notification: {
         Args: { p_error?: string; p_outbox_id: string; p_status: string }
+        Returns: undefined
+      }
+      resolve_receipt: {
+        Args: {
+          p_error?: string
+          p_id: string
+          p_provider_ref?: string
+          p_status: string
+        }
         Returns: undefined
       }
       respond_job_request: {
@@ -4129,6 +4248,7 @@ export type Database = {
           en_route_at: string | null
           final_amount_cents: number | null
           id: string
+          job_number: number
           late_minutes: number | null
           late_reported_at: string | null
           location: string | null
@@ -4199,6 +4319,7 @@ export type Database = {
           en_route_at: string | null
           final_amount_cents: number | null
           id: string
+          job_number: number
           late_minutes: number | null
           late_reported_at: string | null
           location: string | null
