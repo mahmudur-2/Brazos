@@ -406,7 +406,8 @@ deno_version = 2
 # first statement compares that token to the service-role key regardless.
 # send-receipts (idea 8, 2026-09-30) is the same shape: woken by pg_cron through
 # drain_receipts() with the service-role key, first statement the same comparison,
-# so it too has no entry here.
+# so it too has no entry here. send-live-cards (idea 9, 2026-09-30) is that shape
+# again, woken through drain_live_cards(), and has none either.
 # translate is listed only to be DISABLED (`enabled = false`, at the end of
 # this block): drafted, deliberately never deployed — docs/SCOPE.md,
 # TRANSLATION is DARK.

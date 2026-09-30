@@ -8,6 +8,7 @@ import { AuthProvider } from './lib/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import { useNotificationModeBridge } from './hooks/useNotificationModeBridge';
 import { usePushNotifications } from './hooks/usePushNotifications';
+import { useLiveJobCard } from './hooks/useLiveJobCard';
 import { useThemeColors } from './hooks/useThemeColors';
 import { configurePushHandling } from './lib/pushNotifications';
 import { handleAppLink } from './lib/navigation';
@@ -78,6 +79,9 @@ function RootNavigator() {
   // Lives inside NavigationContainer so a tapped notification always has a
   // mounted container to route through.
   usePushNotifications();
+  // Idea 9: the customer's lock-screen card follows their live jobs — whichever mode is on screen, and
+  // nothing at all on a binary without the Live Activities add-on.
+  useLiveJobCard(user?.id);
 
   // R6c (D2): the app-scheme deep link — brazos://payouts?from=return|refresh,
   // the bounce connect-return serves after the provider's hosted onboarding.

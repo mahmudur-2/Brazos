@@ -1175,6 +1175,83 @@ export type Database = {
           },
         ]
       }
+      live_activity_tokens: {
+        Row: {
+          activity_id: string
+          job_id: string
+          push_token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activity_id: string
+          job_id: string
+          push_token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activity_id?: string
+          job_id?: string
+          push_token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_activity_tokens_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_activity_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      live_card_outbox: {
+        Row: {
+          attempts: number
+          created_at: string
+          id: string
+          job_id: string
+          last_error: string | null
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          job_id: string
+          last_error?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          job_id?: string
+          last_error?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_card_outbox_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       live_location_shares: {
         Row: {
           direct_thread_id: string | null
@@ -2914,6 +2991,15 @@ export type Database = {
         Args: { p_amount_cents: number; p_job_id: string }
         Returns: number
       }
+      claim_live_card_batch: {
+        Args: { p_limit?: number }
+        Returns: {
+          job_id: string
+          outbox_id: string
+          state: Json
+          tokens: string[]
+        }[]
+      }
       claim_notification_batch: {
         Args: { p_limit?: number }
         Returns: {
@@ -2961,6 +3047,7 @@ export type Database = {
           would_again_yes: number
         }[]
       }
+      clock_label: { Args: { p_minutes: number }; Returns: string }
       connect_onboarding_enabled: { Args: never; Returns: boolean }
       conversation_parties: {
         Args: { p_direct_thread_id: string; p_job_id: string }
@@ -3144,6 +3231,7 @@ export type Database = {
       decline_offer: { Args: { p_offer_id: string }; Returns: undefined }
       delete_my_account: { Args: never; Returns: undefined }
       direct_thread_notifications_enabled: { Args: never; Returns: boolean }
+      drain_live_cards: { Args: never; Returns: number }
       drain_notification_outbox: { Args: never; Returns: number }
       drain_receipts: { Args: never; Returns: number }
       drain_settlements: { Args: never; Returns: number }
@@ -3159,6 +3247,10 @@ export type Database = {
           p_title: string
           p_type: string
         }
+        Returns: undefined
+      }
+      enqueue_payment_declined: {
+        Args: { p_payment_id: string }
         Returns: undefined
       }
       enqueue_tomorrow_reminders: {
@@ -3258,6 +3350,7 @@ export type Database = {
       get_payment_account: { Args: { p_user_id: string }; Returns: string }
       get_payment_customer: { Args: { p_user_id: string }; Returns: string }
       hardening_fixes_enabled: { Args: never; Returns: boolean }
+      install_live_card_schedule: { Args: never; Returns: string }
       install_receipt_schedule: { Args: never; Returns: string }
       install_reminder_schedule: { Args: never; Returns: string }
       install_series_schedule: { Args: never; Returns: string }
@@ -3397,6 +3490,7 @@ export type Database = {
         }[]
       }
       legal_acceptance_enabled: { Args: never; Returns: boolean }
+      live_card_state: { Args: { p_job_id: string }; Returns: Json }
       mark_direct_thread_read: {
         Args: { p_thread_id: string }
         Returns: undefined
@@ -3650,6 +3744,10 @@ export type Database = {
         Args: { p_worker: string }
         Returns: undefined
       }
+      register_live_activity: {
+        Args: { p_activity_id: string; p_job_id: string; p_push_token: string }
+        Returns: undefined
+      }
       register_push_token: {
         Args: { p_platform?: string; p_token: string }
         Returns: undefined
@@ -3800,6 +3898,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      resolve_live_card: {
+        Args: { p_error?: string; p_outbox_id: string; p_status: string }
+        Returns: undefined
       }
       resolve_notification: {
         Args: { p_error?: string; p_outbox_id: string; p_status: string }
