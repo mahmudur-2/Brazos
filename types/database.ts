@@ -897,6 +897,8 @@ export type Database = {
           en_route_at: string | null
           final_amount_cents: number | null
           id: string
+          late_minutes: number | null
+          late_reported_at: string | null
           location: string | null
           location_text: string | null
           needed_today: boolean
@@ -935,6 +937,8 @@ export type Database = {
           en_route_at?: string | null
           final_amount_cents?: number | null
           id?: string
+          late_minutes?: number | null
+          late_reported_at?: string | null
           location?: string | null
           location_text?: string | null
           needed_today?: boolean
@@ -973,6 +977,8 @@ export type Database = {
           en_route_at?: string | null
           final_amount_cents?: number | null
           id?: string
+          late_minutes?: number | null
+          late_reported_at?: string | null
           location?: string | null
           location_text?: string | null
           needed_today?: boolean
@@ -2690,6 +2696,8 @@ export type Database = {
           en_route_at: string | null
           final_amount_cents: number | null
           id: string
+          late_minutes: number | null
+          late_reported_at: string | null
           location: string | null
           location_text: string | null
           needed_today: boolean
@@ -2813,6 +2821,8 @@ export type Database = {
           en_route_at: string | null
           final_amount_cents: number | null
           id: string
+          late_minutes: number | null
+          late_reported_at: string | null
           location: string | null
           location_text: string | null
           needed_today: boolean
@@ -3192,6 +3202,8 @@ export type Database = {
           en_route_at: string | null
           final_amount_cents: number | null
           id: string
+          late_minutes: number | null
+          late_reported_at: string | null
           location: string | null
           location_text: string | null
           needed_today: boolean
@@ -3455,6 +3467,55 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      report_running_late: {
+        Args: { p_job_id: string; p_minutes: number }
+        Returns: {
+          accepted_bid_id: string | null
+          accepted_offer_id: string | null
+          area_code: string | null
+          arrival_end_hour: number | null
+          arrival_start_hour: number | null
+          arrived_at: string | null
+          assigned_worker_id: string | null
+          budget_cents: number | null
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          category: Database["public"]["Enums"]["job_category"]
+          client_id: string
+          completed_at: string | null
+          completion_photo_url: string | null
+          completion_photos: Json
+          completion_videos: Json
+          created_at: string
+          description: string | null
+          en_route_at: string | null
+          final_amount_cents: number | null
+          id: string
+          late_minutes: number | null
+          late_reported_at: string | null
+          location: string | null
+          location_text: string | null
+          needed_today: boolean
+          photos: Json
+          pricing_mode: string
+          property_id: string | null
+          scheduled_date: string | null
+          scheduled_for: string | null
+          status: Database["public"]["Enums"]["job_status"]
+          title: string
+          videos: Json
+          visibility: Database["public"]["Enums"]["job_visibility"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "jobs"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3865,6 +3926,8 @@ export type Database = {
           en_route_at: string | null
           final_amount_cents: number | null
           id: string
+          late_minutes: number | null
+          late_reported_at: string | null
           location: string | null
           location_text: string | null
           needed_today: boolean
@@ -3932,6 +3995,8 @@ export type Database = {
           en_route_at: string | null
           final_amount_cents: number | null
           id: string
+          late_minutes: number | null
+          late_reported_at: string | null
           location: string | null
           location_text: string | null
           needed_today: boolean

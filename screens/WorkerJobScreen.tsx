@@ -24,6 +24,8 @@ import { CategoryGlyph } from '../components/CategoryGlyph';
 import * as ImagePicker from 'expo-image-picker';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { Chip } from '../components/Chip';
+import { LATE_CHOICES } from '../lib/runningLate';
 import { HeldPulse, ReleasedTick } from '../components/MoneyMoment';
 import { JobProgress } from '../components/JobProgress';
 import { JobVideo } from '../components/JobVideo';
@@ -50,6 +52,7 @@ import {
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
   markWorkerArrival,
+  reportRunningLate,
   updateJobStatus,
   type JobPrivateLocation,
 } from '../lib/jobs';
@@ -165,6 +168,8 @@ export function WorkerJobScreen() {
 
   const isWorker = !!user && job?.assigned_worker_id === user.id;
   const clientName = client?.full_name ?? 'the client';
+  // Idea 5's "Dana was told ✓" — the first name, as a person would say it.
+  const clientFirstName = client?.full_name?.trim().split(/\s+/)[0] || 'They';
 
   // The job's sandbox ledger row: the hired worker is the payee, so RLS
   // grants this read, and the card below shows the honest §H.3 state — held
@@ -231,6 +236,23 @@ export function WorkerJobScreen() {
     setWorking(false);
     if (error) {
       await alertAsync('Could not start job', userMessage(error));
+      return;
+    }
+    await refresh();
+  }
+
+  /**
+   * 2026-09-30 (idea 5) — RUNNING LATE, ONE TAP: a chip tells the customer and moves the arrival
+   * time (report_running_late()). The latest tap wins; the job comes back with it.
+   */
+  const [reportingLate, setReportingLate] = useState<number | null>(null);
+  async function handleLate(minutes: (typeof LATE_CHOICES)[number]) {
+    if (reportingLate != null) return;
+    setReportingLate(minutes);
+    const { error: lateError } = await reportRunningLate(params.jobId, minutes);
+    setReportingLate(null);
+    if (lateError) {
+      await alertAsync('Could not tell them', userMessage(lateError));
       return;
     }
     await refresh();
@@ -810,6 +832,29 @@ export function WorkerJobScreen() {
                     );
                   })}
                 </View>
+                {/* 2026-09-30 (idea 5): before arriving, three chips say how late — one tap tells the
+                    customer and moves the arrival time; the words then say they were told. */}
+                {job.status === 'assigned' && !job.arrived_at && !awaitingProtection ? (
+                  <View style={styles.lateBlock}>
+                    <Text style={[styles.lateLabel, job.late_minutes != null && styles.lateLabelTold]} numberOfLines={1}>
+                      {job.late_minutes != null ? `${clientFirstName} was told ✓` : 'Running late?'}
+                    </Text>
+                    <View style={styles.lateRow}>
+                    {LATE_CHOICES.map((minutes) => (
+                      <Chip
+                        key={minutes}
+                        label={`${minutes} min`}
+                        variant="filter"
+                        size="sm"
+                        selected={job.late_minutes === minutes}
+                        onPress={() => void handleLate(minutes)}
+                        accessibilityLabel={`Running ${minutes} minutes late`}
+                        accessibilityHint={`Tells ${clientName} and moves your arrival time`}
+                      />
+                    ))}
+                    </View>
+                  </View>
+                ) : null}
                 <Text style={styles.stageNote}>
                   {awaitingProtection
                     ? `Waiting on ${clientName} to protect the payment. Until it’s held, sort out the details in chat.`
@@ -1184,6 +1229,25 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 12,
     lineHeight: 17,
     color: colors.textMuted,
+  },
+  // Idea 5: the words over the three chips, so a longer "<name> was told ✓" and the chosen chip's
+  // check never push a chip to a second line (the row wraps only for very large type).
+  lateBlock: {
+    gap: spacing.sm,
+  },
+  lateRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  lateLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  lateLabelTold: {
+    color: colors.emerald,
   },
   linkRow: {
     flexDirection: 'row',

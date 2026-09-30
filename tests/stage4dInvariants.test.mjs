@@ -40,7 +40,11 @@ const formattersModule = (async () => {
   const start = jobsJs.indexOf('export function formatBudget');
   const end = jobsJs.indexOf('export async function fetchClientJobStats');
   assert.ok(start > 0 && end > start, 'the formatter span must exist in lib/jobs.ts');
-  return import(toDataUrl(jobsJs.slice(start, end)));
+  // 2026-09-30 (idea 5): arrivalWindowLabel moves the window by a running-late tap through
+  // lib/runningLate.ts — itself pure, with no imports — so the span is evaluated beside it: the one
+  // shift rule, executed, never a copy of it.
+  const lateJs = stripTypeScriptTypes(await read('lib/runningLate.ts'), { mode: 'strip' });
+  return import(toDataUrl(`${lateJs}\n${jobsJs.slice(start, end)}`));
 })();
 
 const lifecycleUrl = pathToFileURL(join(root, 'lib/jobLifecycle.ts')).href;
@@ -60,6 +64,14 @@ test('4D-B2 · date + window renders "Day, Mon D · H AM–H AM"', async () => {
   // The date half is locale-woven; what must hold is the local-parts parse
   // (Aug 12 stays Aug 12 in every timezone) and the exact window text.
   assert.match(label, /^[A-Z][a-z]{2}, Aug 12 · 8 AM–11 AM$/);
+});
+
+test('4D-B2 · idea 5: running late moves the window until the worker arrives', async () => {
+  const { arrivalWindowLabel } = await formattersModule;
+  const base = { scheduled_date: '2026-09-30', arrival_start_hour: 18, arrival_end_hour: 20 };
+  assert.match(arrivalWindowLabel({ ...base, late_minutes: 20 }), / · 6:20 PM–8:20 PM$/);
+  assert.match(arrivalWindowLabel({ ...base, late_minutes: 20, arrived_at: '2026-09-30T22:10:00Z' }), / · 6 PM–8 PM$/);
+  assert.match(arrivalWindowLabel({ scheduled_date: '2026-09-30', late_minutes: 10 }), / · 10 min late$/);
 });
 
 test('4D-B2 · the window is both-or-neither: half an hour pair renders no window', async () => {

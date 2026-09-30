@@ -503,6 +503,13 @@
       if (a.p_status === 'completed') { j.completed_at = new Date().toISOString(); if (a.p_completion_photos) j.completion_photos = a.p_completion_photos; if (a.p_completion_videos) j.completion_videos = a.p_completion_videos; }
       return null;
     },
+    // Idea 5: the hired worker's running-late tap (migration 20260930000700) — the latest tap wins.
+    report_running_late: function (a) {
+      var j = jobById(a.p_job_id);
+      j.late_minutes = a.p_minutes;
+      j.late_reported_at = new Date().toISOString();
+      return clone(j);
+    },
     mark_worker_arrival: function (a) {
       var j = jobById(a.p_job_id);
       if (a.p_step === 'en_route') j.en_route_at = new Date().toISOString();

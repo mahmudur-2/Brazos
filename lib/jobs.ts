@@ -1,3 +1,4 @@
+import { LATE_CHOICES, lateShiftMinutes, movedWindow } from './runningLate';
 import type { ComponentProps } from 'react';
 import type { Ionicons } from '@expo/vector-icons';
 import { categoryAccents } from '../ui/tokens';
@@ -191,6 +192,10 @@ export type Job = {
    */
   en_route_at: string | null;
   arrived_at: string | null;
+  /** Idea 5 (2026-09-30, migration 20260930000700): the hired worker's last "running late" tap — 10,
+   *  20 or 30 minutes — and when they said it. The arrival window moves by it until arrived_at. */
+  late_minutes: number | null;
+  late_reported_at: string | null;
   /** When the job reached `completed` (phase51). Starts the 72h auto-release
    *  clock. Null for jobs completed before phase51 — their clock never runs. */
   completed_at: string | null;
@@ -232,6 +237,8 @@ export function mapJobRow(row: any): Job {
     completion_videos: toPhotoArray(row.completion_videos),
     en_route_at: row.en_route_at ?? null,
     arrived_at: row.arrived_at ?? null,
+    late_minutes: row.late_minutes ?? null,
+    late_reported_at: row.late_reported_at ?? null,
     completed_at: row.completed_at ?? null,
   };
 }
@@ -367,7 +374,7 @@ export function toOpenJob(row: any): OpenJob {
 const OPEN_JOB_COLUMNS =
   'id, client_id, title, description, category, location, budget_cents, budget_min_cents, budget_max_cents, pricing_mode, needed_today, scheduled_date, arrival_start_hour, arrival_end_hour, status, created_at, photos, videos';
 const JOB_COLUMNS =
-  `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos, completion_videos, en_route_at, arrived_at, completed_at`;
+  `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos, completion_videos, en_route_at, arrived_at, late_minutes, late_reported_at, completed_at`;
 
 /** Fetch all jobs with status 'open', newest first (worker browse feed). */
 export async function fetchOpenJobs() {
@@ -878,6 +885,9 @@ export function arrivalWindowLabel(job: {
   scheduled_date?: string | null;
   arrival_start_hour?: number | null;
   arrival_end_hour?: number | null;
+  /** Idea 5: a hired worker running late moves the window until they arrive (lib/runningLate.ts). */
+  late_minutes?: number | null;
+  arrived_at?: string | null;
 }): string | null {
   let dateLabel: string | null = null;
   if (job.scheduled_date) {
@@ -890,13 +900,31 @@ export function arrivalWindowLabel(job: {
       });
     }
   }
+  const shift = lateShiftMinutes(job);
   const windowLabel =
     job.arrival_start_hour != null && job.arrival_end_hour != null
-      ? `${formatHour(job.arrival_start_hour)}–${formatHour(job.arrival_end_hour)}`
-      : null;
+      ? shift
+        ? movedWindow(job.arrival_start_hour, job.arrival_end_hour, shift, false)
+        : `${formatHour(job.arrival_start_hour)}–${formatHour(job.arrival_end_hour)}`
+      : // A flexible day has no window to move, so the delay is said instead.
+        shift
+        ? `${shift} min late`
+        : null;
 
   if (dateLabel && windowLabel) return `${dateLabel} · ${windowLabel}`;
   return dateLabel ?? windowLabel;
+}
+
+/**
+ * 2026-09-30 (idea 5) — the hired worker says they are running 10, 20 or 30 minutes late
+ * (report_running_late(), migration 20260930000700): the delay is recorded, the customer is told,
+ * and the job comes back with it.
+ */
+export async function reportRunningLate(jobId: string, minutes: (typeof LATE_CHOICES)[number]) {
+  const { data, error } = await supabase
+    .rpc('report_running_late', { p_job_id: jobId, p_minutes: minutes })
+    .single();
+  return { data: data ? mapJobRow(data) : null, error };
 }
 
 /**

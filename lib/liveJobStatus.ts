@@ -1,3 +1,4 @@
+import { lateShiftMinutes, movedWindow } from './runningLate';
 import { releaseCountdownLabel, releaseDeadlineMs, type JobLifecycleState } from './jobLifecycle';
 
 /**
@@ -87,14 +88,29 @@ function hourLabel(hour: number): string {
  * 8–11 AM", "tomorrow, 6–8 PM". Null when the poster left timing flexible.
  */
 export function bookedWindow(
-  job: { scheduled_date?: string | null; arrival_start_hour?: number | null; arrival_end_hour?: number | null },
+  job: {
+    scheduled_date?: string | null;
+    arrival_start_hour?: number | null;
+    arrival_end_hour?: number | null;
+    /** Idea 5: running late moves the window until the worker arrives (lib/runningLate.ts). */
+    late_minutes?: number | null;
+    arrived_at?: string | null;
+  },
   nowMs: number
 ): string | null {
   let window: string | null = null;
+  const shift = lateShiftMinutes(job);
   if (job.arrival_start_hour != null && job.arrival_end_hour != null) {
-    const a = hourLabel(job.arrival_start_hour);
-    const b = hourLabel(job.arrival_end_hour);
-    window = a.slice(-2) === b.slice(-2) ? `${a.slice(0, -3)}–${b}` : `${a}–${b}`;
+    if (shift) {
+      window = movedWindow(job.arrival_start_hour, job.arrival_end_hour, shift);
+    } else {
+      const a = hourLabel(job.arrival_start_hour);
+      const b = hourLabel(job.arrival_end_hour);
+      window = a.slice(-2) === b.slice(-2) ? `${a.slice(0, -3)}–${b}` : `${a}–${b}`;
+    }
+  } else if (shift) {
+    // A flexible day has no window to move, so the delay is said instead.
+    window = `${shift} min late`;
   }
   let day: string | null = null;
   if (job.scheduled_date) {
