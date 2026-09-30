@@ -1,3 +1,4 @@
+import { ACTION_MESSAGE, ACTION_ROUTE, REMINDER_CATEGORIES } from './notificationActions';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
@@ -74,6 +75,22 @@ export async function configurePushHandling(): Promise<void> {
       shouldSetBadge: false,
     }),
   });
+
+  // 2026-09-30 (idea 6): the evening-before reminder's buttons — the worker's Message and Route, the
+  // customer's Message. Registered once per start, idempotent; the server names the set per push.
+  try {
+    await Notifications.setNotificationCategoryAsync(REMINDER_CATEGORIES.worker, [
+      { identifier: ACTION_MESSAGE, buttonTitle: 'Message', options: { opensAppToForeground: true } },
+      { identifier: ACTION_ROUTE, buttonTitle: 'Route', options: { opensAppToForeground: true } },
+    ]);
+    await Notifications.setNotificationCategoryAsync(REMINDER_CATEGORIES.customer, [
+      { identifier: ACTION_MESSAGE, buttonTitle: 'Message', options: { opensAppToForeground: true } },
+    ]);
+  } catch (err) {
+    // A push without its buttons still opens the job — never let this take down app startup.
+    console.error('[push] setNotificationCategoryAsync failed', err);
+    Sentry?.captureException(err, { extra: { site: 'pushNotifications.configurePushHandling.categories' } });
+  }
 
   if (Platform.OS === 'android') {
     try {

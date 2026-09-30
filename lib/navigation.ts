@@ -293,7 +293,8 @@ export type WorkerHomeStackNavigation =
 export type MyJobsStackParamList = {
   MyJobsHub: undefined;
   ClientJobDetail: { job: Job };
-  WorkerJob: { jobId: string };
+  /** Idea 6: `intent: 'route'` — the reminder's Route button — opens directions once on arrival. */
+  WorkerJob: { jobId: string; intent?: 'route' };
   JobDetail: { job: OpenJob };
   SubmitBid: { job: OpenJob };
   BidSent: { jobTitle: string; amountCents: number; offerId: string };

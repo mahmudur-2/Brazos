@@ -347,7 +347,8 @@ test('every entry point from the audit still opens Chat with a shape Chat accept
     // Both Chat shapes are still built — now as resolved targets rather than
     // at the call site — and dispatched by the single navigateChecked below.
     ['lib/notificationRoutes.ts', /screen: 'Chat',\s*params: \{ directThreadId: data\.directThreadId \}/],
-    ['lib/notificationRoutes.ts', /screen: data\.screen, params: \{ jobId: data\.jobId \}/],
+    // 2026-09-30 (idea 6): the worker's job may carry the reminder's Route intent beside the job.
+    ['lib/notificationRoutes.ts', /screen: data\.screen, params: \{ jobId: data\.jobId(?:, \.\.\.intent)? \}/],
     ['lib/notificationRoutes.ts', /navigateChecked\(target\.tab, target\.screen, target\.params\)/],
   ];
   for (const [file, pattern] of expected) {

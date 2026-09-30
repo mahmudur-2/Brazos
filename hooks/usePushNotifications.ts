@@ -1,3 +1,4 @@
+import { dataForAction } from '../lib/notificationActions';
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
@@ -85,7 +86,8 @@ export function usePushNotifications() {
       .then((response) => {
         if (!active || !response || handledColdStart.current) return;
         handledColdStart.current = true;
-        handleNotificationData(response.notification.request.content.data, modeBridge);
+        // Idea 6: a reminder's button (Message, Route) leads where it says.
+        handleNotificationData(dataForAction(response.notification.request.content.data, response.actionIdentifier), modeBridge);
       })
       .catch((err) => {
         console.error('[push] getLastNotificationResponseAsync failed', err);
@@ -104,7 +106,7 @@ export function usePushNotifications() {
       // Any tap arriving through this listener is a fresh one, so the
       // cold-start replay is no longer relevant.
       handledColdStart.current = true;
-      handleNotificationData(response.notification.request.content.data, modeBridge);
+      handleNotificationData(dataForAction(response.notification.request.content.data, response.actionIdentifier), modeBridge);
     });
 
     return () => subscription.remove();

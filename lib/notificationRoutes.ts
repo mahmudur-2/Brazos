@@ -33,6 +33,8 @@ export type NotificationData = {
   directThreadId?: string;
   type?: string;
   outboxId?: string;
+  /** Idea 6: the reminder's Route button — the worker's job opens and asks for directions. */
+  intent?: string;
 };
 
 /** Tab that owns each destination, for the nested navigate() call. */
@@ -115,6 +117,7 @@ function toNotificationData(raw: unknown): NotificationData | null {
       typeof data.directThreadId === 'string' ? data.directThreadId : undefined,
     type: typeof data.type === 'string' ? data.type : undefined,
     outboxId: typeof data.outboxId === 'string' ? data.outboxId : undefined,
+    intent: typeof data.intent === 'string' ? data.intent : undefined,
   };
 }
 
@@ -168,7 +171,9 @@ function resolveTarget(data: NotificationData | null): RouteTarget | null {
 
   // These take only an id, so they can be routed without a round-trip.
   if (data.screen === 'Chat' || data.screen === 'WorkerJob') {
-    return { kind: 'direct', tab, screen: data.screen, params: { jobId: data.jobId }, mode };
+    // Idea 6: only the worker's job takes the Route button's intent — an allow-list of one.
+    const intent = data.screen === 'WorkerJob' && data.intent === 'route' ? { intent: 'route' as const } : {};
+    return { kind: 'direct', tab, screen: data.screen, params: { jobId: data.jobId, ...intent }, mode };
   }
 
   // ClientJobDetail / JobDetail need the job row itself.

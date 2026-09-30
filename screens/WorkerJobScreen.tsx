@@ -494,6 +494,15 @@ export function WorkerJobScreen() {
     if (ok) await handleStart();
   }
   const addressLine = location?.address_line ?? null;
+  // Idea 6: arriving from the reminder's Route button, the directions open once the address is known.
+  const routedRef = useRef(false);
+  useEffect(() => {
+    if (params.intent !== 'route' || routedRef.current || !addressLine) return;
+    routedRef.current = true;
+    void openDirections(addressLine);
+    // Once per visit; openDirections is this screen's own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.intent, addressLine]);
   const windowLabel = job ? arrivalWindowLabel(job) : null;
   const STAGES = ['On my way', 'Arrived', 'Started', 'Finished'];
   // 2026-09-27 (the Lux remake, ruling 14): the stepper's dots and connectors

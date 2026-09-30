@@ -88,6 +88,9 @@ function buildMessage({ row, token }: Pair) {
     // Android needs a channel that the client created with the same id.
     channelId: 'default',
     priority: 'high',
+    // 2026-09-30 (idea 6): the push's buttons — a category the app registered (the evening-before
+    // reminder's Message / Route) — named by the row; absent, a push has none.
+    ...(typeof row.data?.categoryId === 'string' ? { categoryId: row.data.categoryId } : {}),
   };
 }
 

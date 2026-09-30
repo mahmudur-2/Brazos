@@ -2951,6 +2951,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      enqueue_tomorrow_reminders: {
+        Args: { p_today?: string }
+        Returns: number
+      }
       ensure_direct_thread: {
         Args: { p_a: string; p_b: string }
         Returns: string
@@ -3044,6 +3048,7 @@ export type Database = {
       get_payment_account: { Args: { p_user_id: string }; Returns: string }
       get_payment_customer: { Args: { p_user_id: string }; Returns: string }
       hardening_fixes_enabled: { Args: never; Returns: boolean }
+      install_reminder_schedule: { Args: never; Returns: string }
       install_settlement_schedules: { Args: never; Returns: string }
       is_active_user: { Args: never; Returns: boolean }
       is_blocked_between: { Args: { a: string; b: string }; Returns: boolean }

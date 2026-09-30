@@ -209,7 +209,9 @@ test('both tap consumers forward ModeContext through the bridge hook', () => {
   const push = read('hooks/usePushNotifications.ts');
   assert.match(push, /useNotificationModeBridge\(\)/);
   assert.equal(
-    [...push.matchAll(/handleNotificationData\([^)]*, modeBridge\)/g)].length,
+    // 2026-09-30 (idea 6): the payload may arrive through dataForAction(…) — a reminder's button —
+    // so one level of nested call is allowed inside the first argument.
+    [...push.matchAll(/handleNotificationData\((?:[^()]|\([^()]*\))*, modeBridge\)/g)].length,
     2,
     'both the cold-start replay and the warm-tap listener must pass the bridge'
   );
