@@ -84,7 +84,7 @@
       en_route_at: ago(3.2 * D), arrived_at: ago(3.1 * D), completed_at: ago(3 * D), created_at: ago(6 * D),
     }),
     // the worker side (Dana posts; you work)
-    job(101, DANA, 'Dog walking - twice this week', 'dog_walking', 'East Flatbush, Brooklyn, NY', { budget_cents: 7500, created_at: ago(2 * H) }),
+    job(101, DANA, 'Dog walking - twice this week', 'dog_walking', 'East Flatbush, Brooklyn, NY', { budget_cents: 7500, created_at: ago(2 * H), needed_today: true }), // idea 12: posted needed today
     job(102, DANA, 'Mount a 55-inch TV in the living room', 'tv_mounting', 'Bed-Stuy, Brooklyn, NY', { budget_min_cents: 9000, budget_max_cents: 12000, budget_cents: 12000, created_at: ago(6 * H) }),
     job(103, DANA, 'Help moving boxes into a third-floor walk-up', 'packing', 'Crown Heights, Brooklyn, NY', { budget_min_cents: 14000, budget_max_cents: 18000, budget_cents: 18000, created_at: ago(24 * H) }),
     job(104, DANA, 'Paint one bedroom, walls only', 'painting', 'Prospect Heights, Brooklyn, NY', { budget_min_cents: 20000, budget_max_cents: 26000, budget_cents: 26000, created_at: ago(72 * H) }),

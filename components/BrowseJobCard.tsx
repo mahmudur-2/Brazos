@@ -25,6 +25,8 @@ import {
   type OpenJob,
 } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
+import { showsTodayPill } from '../lib/neededToday';
+import { TodayPill } from './TodayPill';
 
 /**
  * Fixed, so every card in the list is the same height whether its title runs
@@ -76,6 +78,7 @@ export function BrowseJobCard({
   return (
     <Card onPress={onPress} style={styles.card}>
       <View style={styles.row}>
+        <View>
         {showImage ? (
           <RemoteImage
             uri={thumbUrl}
@@ -97,6 +100,10 @@ export function BrowseJobCard({
             <CategoryGlyph name={icon} size={30} color={isDark ? colors.emerald : accent.icon} bare />
           </View>
         )}
+        {/* Idea 12: needed today, on the day it was posted — on the picture's corner, so the fixed-height
+            body keeps its lines. */}
+        {showsTodayPill(job) ? <TodayPill size="xs" solid style={styles.todayOnThumb} /> : null}
+        </View>
 
         <View style={styles.body}>
           <View style={styles.bodyTop}>
@@ -159,6 +166,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     height: THUMB_SIZE,
     borderRadius: radius.md,
     backgroundColor: colors.neutralBg,
+  },
+  todayOnThumb: {
+    position: 'absolute',
+    top: spacing.xs + 2,
+    left: spacing.xs + 2,
   },
   thumbFallback: {
     // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.

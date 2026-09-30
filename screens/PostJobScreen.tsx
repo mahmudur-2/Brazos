@@ -101,7 +101,7 @@ import {
   type ColorPalette,
   screenGround,
 } from '../lib/theme';
-import { MediaUploader, usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
+import { MediaUploader, Toggle, usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 // Ten per the screen-13 spec; phase49 raised create_job's server cap to match.
@@ -352,6 +352,10 @@ export function PostJobScreen() {
   // before this run. The ONE typed figure above is the price in posted mode and
   // the maximum in open mode — one field, one dialog, never two amounts.
   const [pricingMode, setPricingMode] = useState<PricingMode>(DEFAULT_PRICING_MODE);
+  // 2026-09-30 (idea 12) — "Need it today", off by default, a fresh post's alone: on, nearby workers'
+  // alert says so and their cards show a Today pill on the day it is posted. Not kept in the draft —
+  // "today" is the day the post goes out, so a resumed draft starts with it off.
+  const [neededToday, setNeededToday] = useState(false);
   // Exact service address — job_private_details on publish, never public.
   const [address, setAddress] = useState('');
   const [scheduledDate, setScheduledDate] = useState<string | null>(null);
@@ -1155,6 +1159,7 @@ export function PostJobScreen() {
       budgetMinCents: null,
       budgetMaxCents: posted ? null : budgetMaxCents,
       pricingMode,
+      neededToday: isFreshPost && neededToday,
       scheduledDate,
       arrivalStartHour,
       arrivalEndHour,
@@ -1907,6 +1912,19 @@ export function PostJobScreen() {
                 </View>
               )}
 
+              {/* 2026-09-30 (idea 12): "Need it today", a fresh post's own — the drawn row: the
+                  flash, the words, the switch, off until turned on. */}
+              {isFreshPost ? (
+                <View style={styles.todayRow}>
+                  <Ionicons name="flash-outline" size={18} color={colors.emerald} />
+                  <View style={styles.todayCopy}>
+                    <Text style={styles.todayTitle}>Need it today</Text>
+                    <Text style={styles.todayCaption}>Nearby workers get an instant alert</Text>
+                  </View>
+                  <Toggle value={neededToday} onValueChange={setNeededToday} accessibilityLabel="Need it today" />
+                </View>
+              ) : null}
+
               {/* #38 — the summary, rebuilt from refs/job-summary.html: every
                   detail opens its own step, the media are managed in place,
                   and BUDGET opens the price list above. */}
@@ -2164,6 +2182,23 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   stepSubtitleReused: {
     color: colors.emerald,
     fontWeight: '600',
+  },
+  // Idea 12: the "Need it today" row — the flash, the two lines, the switch.
+  todayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2,
+    minHeight: 44,
+  },
+  todayCopy: { flex: 1, gap: 1 },
+  todayTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  todayCaption: {
+    fontSize: 12,
+    color: colors.textMuted,
   },
   progressRow: {
     flexDirection: 'row',

@@ -154,6 +154,9 @@ export type Job = {
    *  price (migration 20260930000400). Never nullable here — the column is
    *  defaulted and `pricingModeFrom` resolves anything unknown to open bids. */
   pricing_mode: PricingMode;
+  /** Idea 12 (2026-09-30, migration 20260930000600): the customer asked for it today when posting.
+   *  Never nullable here — the column is defaulted false; lib/neededToday.ts decides the pill. */
+  needed_today: boolean;
   /** Scheduling (phase49): the chosen day plus a local wall-clock arrival
    *  window. All nullable — "flexible" is a real, common answer. */
   scheduled_date: string | null;
@@ -213,6 +216,7 @@ export function mapJobRow(row: any): Job {
     budget_min_cents: row.budget_min_cents ?? null,
     budget_max_cents: row.budget_max_cents ?? null,
     pricing_mode: pricingModeFrom(row.pricing_mode),
+    needed_today: row.needed_today === true,
     scheduled_date: row.scheduled_date ?? null,
     arrival_start_hour: row.arrival_start_hour ?? null,
     arrival_end_hour: row.arrival_end_hour ?? null,
@@ -269,6 +273,9 @@ export type NewJobInput = {
   /** a4 (2026-09-05): the posting choice. Absent means the default the server
    *  itself defaults to, so an older caller writes exactly today's row. */
   pricingMode?: PricingMode;
+  /** Idea 12: "Need it today". Sent only when on, so an ordinary post is the exact call installed
+   *  builds make; create_job() defaults it false. */
+  neededToday?: boolean;
   /** YYYY-MM-DD, or null for "flexible" (screen 14). */
   scheduledDate?: string | null;
   /** Local wall-clock arrival window, both-or-neither (screen 14). */
@@ -306,6 +313,8 @@ export type OpenJob = {
   /** a4 (2026-09-05): carried on the browse shape too, so a card built from it
    *  can name the amount correctly without a second read. */
   pricing_mode: PricingMode;
+  /** Idea 12: the customer asked for it today — the card's Today pill (lib/neededToday.ts). */
+  needed_today: boolean;
   scheduled_date: string | null;
   arrival_start_hour: number | null;
   arrival_end_hour: number | null;
@@ -335,6 +344,7 @@ export function toOpenJob(row: any): OpenJob {
     // Absent from a projection that predates a4 (the map drill-down RPC) and
     // correctly open bids there — the allow-list resolves anything unknown.
     pricing_mode: pricingModeFrom(row.pricing_mode),
+    needed_today: row.needed_today === true,
     scheduled_date: row.scheduled_date ?? null,
     arrival_start_hour: row.arrival_start_hour ?? null,
     arrival_end_hour: row.arrival_end_hour ?? null,
@@ -355,7 +365,7 @@ export function toOpenJob(row: any): OpenJob {
 // from silently reopening this class of leak if a new sensitive column is
 // ever added to `jobs`.
 const OPEN_JOB_COLUMNS =
-  'id, client_id, title, description, category, location, budget_cents, budget_min_cents, budget_max_cents, pricing_mode, scheduled_date, arrival_start_hour, arrival_end_hour, status, created_at, photos, videos';
+  'id, client_id, title, description, category, location, budget_cents, budget_min_cents, budget_max_cents, pricing_mode, needed_today, scheduled_date, arrival_start_hour, arrival_end_hour, status, created_at, photos, videos';
 const JOB_COLUMNS =
   `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos, completion_videos, en_route_at, arrived_at, completed_at`;
 
@@ -515,6 +525,7 @@ export async function createJob(_clientId: string, input: NewJobInput) {
       p_arrival_end_hour: input.arrivalEndHour ?? null,
       p_address_line: input.addressLine ?? null,
       p_pricing_mode: input.pricingMode ?? DEFAULT_PRICING_MODE,
+      ...(input.neededToday ? { p_needed_today: true } : {}),
     })
     .single();
 

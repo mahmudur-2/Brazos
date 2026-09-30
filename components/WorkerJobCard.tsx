@@ -31,6 +31,8 @@ import { formatDistanceMiles } from '../lib/discoveryFilter';
 import { scheduledDayLabel } from '../lib/jobFilters';
 import { neighbourhoodLabel } from '../lib/locationPrivacy';
 import { formatTimeAgoShort } from '../lib/time';
+import { showsTodayPill } from '../lib/neededToday';
+import { TodayPill } from './TodayPill';
 
 /**
  * 2026-09-20 (sitting 2) — layout "a1" (docs/mockups/html/worker-results-card.html,
@@ -216,6 +218,7 @@ export function WorkerJobCard({
       accessibilityRole="button"
       accessibilityLabel={job.title}
     >
+      <View>
       {showImage ? (
         <RemoteImage
           uri={thumbUrl}
@@ -245,6 +248,10 @@ export function WorkerJobCard({
           />
         </View>
       )}
+      {/* Idea 12: needed today, on the day it was posted — on the picture's corner, so the chip row
+          and its measured fit are untouched. */}
+      {showsTodayPill(job) ? <TodayPill size="xs" solid style={styles.todayOnThumb} /> : null}
+      </View>
 
       <View style={styles.info}>
         <Text style={[styles.title, { paddingRight: payClear }]} numberOfLines={1}>
@@ -464,6 +471,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: chipGap(),
+  },
+  todayOnThumb: {
+    position: 'absolute',
+    top: spacing.xs + 2,
+    left: spacing.xs + 2,
   },
   // The chip at the full label, before the fit is decided: laid out, unseen.
   chipUnmeasured: {

@@ -146,7 +146,8 @@ select throws_ok(
 -- ---------------------------------------------------------------------------
 select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'create_job'), 1, '12a: one create_job - the fifteen-parameter signature is gone');
 select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'update_job_details'), 1, '12b: one update_job_details - the sixteen-parameter signature is gone');
-select ok((select pg_get_function_identity_arguments(p.oid) like '%, p_pricing_mode text' from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'create_job'), '13a: create_job takes p_pricing_mode last');
+-- 2026-09-30 (idea 12, 20260930000600): create_job's last parameter is p_needed_today now; p_pricing_mode sits right before it.
+select ok((select pg_get_function_identity_arguments(p.oid) like '%, p_pricing_mode text, p_needed_today boolean' from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'create_job'), '13a: create_job takes p_pricing_mode next to last, before p_needed_today');
 select ok((select pg_get_function_identity_arguments(p.oid) like '%, p_pricing_mode text' from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'update_job_details'), '13b: update_job_details takes p_pricing_mode last');
 
 -- ---------------------------------------------------------------------------
@@ -154,8 +155,9 @@ select ok((select pg_get_function_identity_arguments(p.oid) like '%, p_pricing_m
 --     authenticated may execute, anon may not. The 120_reputation_batch.sql
 --     section 10 idiom, on the new identities.
 -- ---------------------------------------------------------------------------
-select ok(has_function_privilege('authenticated', 'public.create_job(text, text, public.job_category, text, integer, jsonb, double precision, double precision, jsonb, integer, integer, date, smallint, smallint, text, text)', 'EXECUTE'), '14a: authenticated may execute create_job under its sixteen-parameter signature');
-select ok(not has_function_privilege('anon', 'public.create_job(text, text, public.job_category, text, integer, jsonb, double precision, double precision, jsonb, integer, integer, date, smallint, smallint, text, text)', 'EXECUTE'), '14b: anon holds no EXECUTE on create_job');
+-- 2026-09-30 (idea 12): create_job's identity is the seventeen-parameter one (140_needed_today.sql).
+select ok(has_function_privilege('authenticated', 'public.create_job(text, text, public.job_category, text, integer, jsonb, double precision, double precision, jsonb, integer, integer, date, smallint, smallint, text, text, boolean)', 'EXECUTE'), '14a: authenticated may execute create_job under its seventeen-parameter signature');
+select ok(not has_function_privilege('anon', 'public.create_job(text, text, public.job_category, text, integer, jsonb, double precision, double precision, jsonb, integer, integer, date, smallint, smallint, text, text, boolean)', 'EXECUTE'), '14b: anon holds no EXECUTE on create_job');
 select ok(has_function_privilege('authenticated', 'public.update_job_details(uuid, text, text, public.job_category, text, integer, jsonb, double precision, double precision, jsonb, integer, integer, date, smallint, smallint, text, text)', 'EXECUTE'), '14c: authenticated may execute update_job_details under its seventeen-parameter signature');
 select ok(not has_function_privilege('anon', 'public.update_job_details(uuid, text, text, public.job_category, text, integer, jsonb, double precision, double precision, jsonb, integer, integer, date, smallint, smallint, text, text)', 'EXECUTE'), '14d: anon holds no EXECUTE on update_job_details');
 

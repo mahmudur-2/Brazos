@@ -899,6 +899,7 @@ export type Database = {
           id: string
           location: string | null
           location_text: string | null
+          needed_today: boolean
           photos: Json
           pricing_mode: string
           property_id: string | null
@@ -936,6 +937,7 @@ export type Database = {
           id?: string
           location?: string | null
           location_text?: string | null
+          needed_today?: boolean
           photos?: Json
           pricing_mode?: string
           property_id?: string | null
@@ -973,6 +975,7 @@ export type Database = {
           id?: string
           location?: string | null
           location_text?: string | null
+          needed_today?: boolean
           photos?: Json
           pricing_mode?: string
           property_id?: string | null
@@ -2689,6 +2692,7 @@ export type Database = {
           id: string
           location: string | null
           location_text: string | null
+          needed_today: boolean
           photos: Json
           pricing_mode: string
           property_id: string | null
@@ -2777,6 +2781,7 @@ export type Database = {
           p_lat?: number
           p_lng?: number
           p_location: string
+          p_needed_today?: boolean
           p_photos?: Json
           p_pricing_mode?: string
           p_scheduled_date?: string
@@ -2810,6 +2815,7 @@ export type Database = {
           id: string
           location: string | null
           location_text: string | null
+          needed_today: boolean
           photos: Json
           pricing_mode: string
           property_id: string | null
@@ -3188,6 +3194,7 @@ export type Database = {
           id: string
           location: string | null
           location_text: string | null
+          needed_today: boolean
           photos: Json
           pricing_mode: string
           property_id: string | null
@@ -3860,6 +3867,7 @@ export type Database = {
           id: string
           location: string | null
           location_text: string | null
+          needed_today: boolean
           photos: Json
           pricing_mode: string
           property_id: string | null
@@ -3926,6 +3934,7 @@ export type Database = {
           id: string
           location: string | null
           location_text: string | null
+          needed_today: boolean
           photos: Json
           pricing_mode: string
           property_id: string | null

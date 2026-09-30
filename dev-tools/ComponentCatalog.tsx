@@ -106,6 +106,8 @@ const CATALOG_JOB: OpenJob = {
   // RUN a4 (2026-09-05): OpenJob carries the posting choice; the fixture has a
   // range, so open bids is the only mode it could honestly be in.
   pricing_mode: 'open_bids',
+  // Idea 12 (2026-09-30): OpenJob carries "Need it today"; a catalog fixture never claims urgency.
+  needed_today: false,
   scheduled_date: null,
   arrival_start_hour: null,
   arrival_end_hour: null,
