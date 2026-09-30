@@ -70,7 +70,7 @@ import { fetchMyPayoutsStatus } from '../lib/payments/stripe';
 import { fetchOpenJobDispute } from '../lib/disputes';
 import { JOB_LIFECYCLE_LABELS, deriveJobLifecycle, trackStepIndex } from '../lib/jobLifecycle';
 import { MoneyText } from '../ui/primitives/MoneyText';
-import { PINNED_FOOTER_BOTTOM_PADDING, useScrollClearance } from '../ui/primitives';
+import { usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
 import {
   deleteJobPhoto,
   rejectionForPickedVideo,
@@ -127,6 +127,7 @@ export function WorkerJobScreen() {
   const photoHeight = useDialNumber('workerJob.photo.height') ?? 180;
   // emerald(3): the floating pill's real footprint.
   const navClearance = useScrollClearance();
+  const footerPad = usePinnedFooterPadding();
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'WorkerJob'>>();
   const { user } = useAuth();
@@ -995,7 +996,7 @@ export function WorkerJobScreen() {
         {/* M-3 — THE ONE PINNED PRIMARY: always the next step, never two
             buttons of equal weight. */}
         {stageAction ? (
-          <View style={[styles.actionBar, { paddingBottom: PINNED_FOOTER_BOTTOM_PADDING }]}>
+          <View style={[styles.actionBar, { paddingBottom: footerPad }]}>
             <Button
               title={stageAction.title}
               onPress={stageAction.onPress}

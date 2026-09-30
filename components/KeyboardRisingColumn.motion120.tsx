@@ -55,6 +55,7 @@ import {
  */
 export function KeyboardRisingColumn({
   insetBelow,
+  reserveBelow = 0,
   style,
   children,
 }: KeyboardRisingColumnProps) {
@@ -69,11 +70,11 @@ export function KeyboardRisingColumn({
     // shared arithmetic two conventions is exactly how the two drivers would
     // start landing the column at different heights.
     const keyboardHeight = -keyboard.height.value;
-    return { transform: [{ translateY: -riseFor(keyboardHeight, insetBelow) }] };
+    return { transform: [{ translateY: -riseFor(keyboardHeight, insetBelow + reserveBelow) }] };
   });
 
   return (
-    <Animated.View style={[style, { paddingBottom: COLUMN_BOTTOM_PADDING }, rise]}>
+    <Animated.View style={[style, { paddingBottom: COLUMN_BOTTOM_PADDING + reserveBelow }, rise]}>
       {children}
     </Animated.View>
   );

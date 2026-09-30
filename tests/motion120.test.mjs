@@ -490,7 +490,9 @@ test('[static] the chat composer rises on a native-driven transform, not on padd
   // nothing else; the assertions below moved to the component that now owns
   // the transform, and none was dropped.
   assert.match(chat, /<KeyboardRisingColumn/);
-  assert.match(chat, /insetBelow=\{navClearance\}/);
+  // 2026-09-30: the pill floats, so nothing below the column holds it clear; the screen names the
+  // pill it reserves instead (KeyboardRisingColumn's reserveBelow).
+  assert.match(chat, /insetBelow=\{0\}\s+reserveBelow=\{pillReserve\}/);
   assert.doesNotMatch(
     chat,
     /useKeyboardOffset/,
@@ -498,7 +500,9 @@ test('[static] the chat composer rises on a native-driven transform, not on padd
   );
 
   const column = stripComments(read('components/KeyboardRisingColumn.tsx'));
-  assert.match(column, /const keyboardRise = useKeyboardOffset\(insetBelow\);/);
+  // 2026-09-30: the column also takes back the pill it reserves (reserveBelow), so the rise is the
+  // keyboard less both — the same hook, one more term.
+  assert.match(column, /const keyboardRise = useKeyboardOffset\(insetBelow \+ reserveBelow\);/);
   assert.match(
     column,
     /transform: \[\{ translateY: Animated\.multiply\(keyboardRise, -1\) \}\]/,
@@ -518,7 +522,8 @@ test('[static] the chat composer rises on a native-driven transform, not on padd
   for (const [path, source] of [['fallback', column], ['motion120', fast]]) {
     assert.match(
       source,
-      /\{ paddingBottom: COLUMN_BOTTOM_PADDING \}/,
+      /\{ paddingBottom: COLUMN_BOTTOM_PADDING \+ reserveBelow \}/,
+      // 2026-09-30: plus the pill the column reserves itself now the pill floats (reserveBelow).
       `the ${path} path must carry the shared pinned-column padding on the rising view`,
     );
     assert.doesNotMatch(
@@ -561,7 +566,8 @@ test('[static] the chat composer rises on a native-driven transform, not on padd
   // endCoordinates.height. Getting this wrong does not fail to compile and
   // does not throw — it drives the column the wrong way — so it is asserted.
   assert.match(fast, /const keyboardHeight = -keyboard\.height\.value;/);
-  assert.match(fast, /translateY: -riseFor\(keyboardHeight, insetBelow\)/);
+  // 2026-09-30: the rise also takes back the pill the column reserves (reserveBelow).
+  assert.match(fast, /translateY: -riseFor\(keyboardHeight, insetBelow \+ reserveBelow\)/);
   // The clip is load-bearing: a transformed child draws outside its parent's
   // box, and this column is a LATER sibling than the header, so without it
   // the messages paint over the header as they rise.
@@ -604,7 +610,9 @@ test('[executed] the column takes the fast path only with BOTH vendors, and the 
   );
   // The fallback stays the path taken and is NOT deleted: it is the
   // implementation every build shipped so far runs.
-  assert.match(column, /const keyboardRise = useKeyboardOffset\(insetBelow\);/);
+  // 2026-09-30: the column also takes back the pill it reserves (reserveBelow), so the rise is the
+  // keyboard less both — the same hook, one more term.
+  assert.match(column, /const keyboardRise = useKeyboardOffset\(insetBelow \+ reserveBelow\);/);
 
   // THE DECISION ITSELF, run over all four combinations. `canTrackKeyboard()
   // && canWorklet()` is modelled here exactly as the source writes it, and the
@@ -640,86 +648,51 @@ test('[executed] the column takes the fast path only with BOTH vendors, and the 
 });
 
 test('[executed] the chat column counts the pill once at rest and the keyboard once risen', () => {
-  // THE CHAT CLEARANCE DOUBLE COUNT, closed 2026-08-23, as arithmetic.
+  // THE CHAT CLEARANCE DOUBLE COUNT, closed 2026-08-23, as arithmetic — REDONE 2026-09-30 for the
+  // floating Melt-through pill (docs/dispatch/MELT-TAB-BAR.md), as the note that stood here asked
+  // of whoever took the bar out of flow.
   //
-  // Every number here is READ from the source, and every step is tied to a
-  // line that has to keep saying what the model assumes it says — otherwise
-  // this is a story about code rather than a fence on it.
+  // Every number here is READ from the source, and every step is tied to a line that has to keep
+  // saying what the model assumes it says — otherwise this is a story about code rather than a
+  // fence on it.
   const tokens = read('ui/tokens.ts');
-  const navHeight = Number(tokens.match(/const FLOATING_NAV_HEIGHT = (\d+);/)[1]);
   const navGap = Number(tokens.match(/const FLOATING_NAV_GAP = (\d+);/)[1]);
-  const bottomNav = read('ui/primitives/BottomNav.tsx');
+  const melt = tokens.slice(tokens.indexOf('export const meltBar = {'));
+  const meltNum = (key) => Number(melt.match(new RegExp(`\\b${key}: (\\d+)`))[1]);
+  const pillHeight = meltNum('height');
+  const tuck = meltNum('bottomTuck');
+  const min = meltNum('bottomMin');
+  const bottomNav = stripComments(read('ui/primitives/BottomNav.tsx'));
 
-  // (1) The pill is in NORMAL FLOW on the route this arithmetic is about.
-  //     This is the premise the whole double count turned on: BottomTabView
-  //     lays the scene container out as a flex:1 sibling above the bar, so the
-  //     scene already ends at the pill's top edge.
-  //
-  //     RUN GROUND1 (C3) TOOK THE BAR OUT OF FLOW ON TWO ROUTES, and this
-  //     block is REDONE rather than adjusted — which is exactly what the note
-  //     that used to stand here demanded of whoever did it. The bar is
-  //     absolutely positioned on customer Home and worker Home so the
-  //     atmosphere raster behind them can reach the screen's bottom edge
-  //     instead of stopping at a band above the bar. The chat column does not
-  //     live on either, and cannot: the exception is an ALLOW-LIST of two leaf
-  //     route names, read out of the source below, and every other route —
-  //     Chat included — still gets an in-flow bar that reserves the scene
-  //     space this model relies on. A third name appearing there fails here.
-  const flatNav = bottomNav.replace(/\/\//g, ' ').replace(/\s+/g, ' ');
+  // (1) THE PILL FLOATS ON EVERY ROUTE, Chat's included: both paths of the bar are absolutely
+  //     positioned at the screen's foot, and both trees draw it through `tabBar`. So the scene the
+  //     column lives in runs the screen's full height and nothing below it reserves the pill —
+  //     the column reserves it itself.
+  for (const path of ['components/MeltTabBar.tsx', 'components/MeltTabBar.motion120.tsx']) {
+    assert.match(
+      stripComments(read(path)),
+      /root: \{ position: 'absolute', left: 0, right: 0, bottom: 0 \}/,
+      `${path}: the bar floats at the screen's foot`
+    );
+  }
+  for (const tree of ['navigation/CustomerRoot.tsx', 'navigation/WorkerRoot.tsx']) {
+    assert.match(stripComments(read(tree)), /tabBar=\{\(props\) =>/, `${tree} draws the floating bar`);
+  }
+  // What a pinned surface reserves is the pill's top edge under the tab navigator, and nothing
+  // outside it.
   assert.match(
-    flatNav,
-    /IN FLOW EVERYWHERE EXCEPT THE TWO HOMES/,
-    'the bar must still declare where it is in-flow where the next reader will look'
-  );
-  const tabBarStyle = stripComments(bottomNav).match(/tabBarStyle: \{([\s\S]*?)\n {4}\},/);
-  assert.ok(tabBarStyle, 'bottomNavScreenOptions must still declare a tabBarStyle');
-  // The pill declares `position` exactly once and never unconditionally: it
-  // rides a spread that is gated on the route.
-  assert.equal(
-    (tabBarStyle[1].match(/position:/g) ?? []).length,
-    1,
-    'the pill may declare position once, and only behind the route gate'
+    bottomNav.replace(/\s+/g, ' '),
+    /export function usePillReserve\(\): number \{ const inTabs = useContext\(BottomTabBarHeightContext\) !== undefined; const pillTop = usePillTop\(\); return inTabs \? pillTop : 0; \}/
   );
   assert.match(
-    tabBarStyle[1].replace(/\s+/g, ' '),
-    /\.\.\.\(isAtmosphereHomeRoute\(route\) \? \(\{ position: 'absolute', left: 0, right: 0, bottom: 0 \} as const\) : null\),/,
-    'the absolutely positioned pill must stay gated on the two Home routes'
-  );
-  const allowList = stripComments(bottomNav).match(
-    /const ATMOSPHERE_HOME_ROUTES = new Set\(\[([^\]]*)\]\)/
-  );
-  assert.ok(allowList, 'the exception must stay a named allow-list of route names');
-  const floating = allowList[1]
-    .split(',')
-    .map((name) => name.trim().replace(/'/g, ''))
-    .filter(Boolean)
-    .sort();
-  assert.deepEqual(
-    floating,
-    ['HomeMain', 'WorkerHome'],
-    'only the two screens that mount the atmosphere may take the bar out of flow'
-  );
-  assert.ok(
-    !floating.includes('Chat'),
-    'the chat column is modelled against an in-flow bar; Chat must not join the exception'
-  );
-  // And the gate is the leaf, not the tab: `Home` is a STACK, so scoping to
-  // the tab route would take the bar out of flow for Chat itself, which is
-  // registered on the worker Home stack.
-  assert.match(
-    stripComments(bottomNav).replace(/\s+/g, ' '),
-    /export function isAtmosphereHomeRoute\(route: \{ name: string \}\): boolean \{ const leaf = getFocusedRouteNameFromRoute\(route\); return route\.name === 'Home' && \(leaf === undefined \|\| ATMOSPHERE_HOME_ROUTES\.has\(leaf\)\); \}/,
-    'the gate must read the focused LEAF, or every screen in the Home stack floats too'
-  );
-  assert.match(
-    bottomNav,
-    /return TAB_BAR_CONTENT_HEIGHT \+ insetBottom;/,
-    'bottomNavHeight is the bar footprint this model uses (attached, PJ1 C9)'
+    stripComments(read('hooks/useNavInset.ts')).replace(/\s+/g, ' '),
+    /return meltBar\.height \+ pillBottomOffset\(insets\.bottom, meltBar\.bottomTuck, meltBar\.bottomMin\);/
   );
   assert.match(bottomNav, /export const PINNED_FOOTER_BOTTOM_PADDING = layout\.floatingNavGap;/);
 
-  // (2) The column's two inputs, both from the shared module, so the fallback
-  //     and the reanimated path cannot land differently.
+  // (2) The column's inputs, from the shared module, so the fallback and the reanimated path
+  //     cannot land differently: it pads by the pill it reserves and rises by the keyboard less
+  //     that same reserve.
   const shared = stripComments(read('components/KeyboardRisingColumn.shared.tsx'));
   assert.match(shared, /return Math\.max\(0, keyboardHeight - insetBelow\);/);
   assert.match(shared, /export const COLUMN_BOTTOM_PADDING = PINNED_FOOTER_BOTTOM_PADDING;/);
@@ -727,47 +700,41 @@ test('[executed] the chat column counts the pill once at rest and the keyboard o
     'components/KeyboardRisingColumn.tsx',
     'components/KeyboardRisingColumn.motion120.tsx',
   ]) {
-    assert.match(stripComments(read(path)), /\{ paddingBottom: COLUMN_BOTTOM_PADDING \}/, path);
+    const source = stripComments(read(path));
+    assert.match(source, /\{ paddingBottom: COLUMN_BOTTOM_PADDING \+ reserveBelow \}/, path);
+    assert.match(source, /insetBelow \+ reserveBelow/, `${path}: the rise takes the reserve back out`);
   }
+  const chat = stripComments(read('screens/ChatScreen.tsx'));
+  assert.match(chat, /const pillReserve = usePillReserve\(\);/);
+  assert.match(chat, /insetBelow=\{0\}\s+reserveBelow=\{pillReserve\}/, 'nothing below the column, the pill reserved by it');
 
   const riseFor = (keyboardHeight, insetBelow) => Math.max(0, keyboardHeight - insetBelow);
   const columnPadding = navGap;
 
-  // A notched iPhone, where the double count was worst, and one where the
-  // float margin rather than the inset wins.
+  // A notched iPhone, and one without an inset, where the pill's minimum offset wins.
   for (const insetBottom of [34, 0]) {
     const screenH = 852;
     const keyboard = 336;
-    // PJ1 (C9): the attached bar's footprint — content plus the inset it
-    // carries inside; the float-margin max() is gone with the float.
-    const navClearance = navHeight + insetBottom;
-    // The scene the column lives in ALREADY stops at the pill's top edge.
-    const sceneBottom = screenH - navClearance;
+    const pillTop = pillHeight + Math.max(insetBottom - tuck, min);
+    // The scene runs full height: its foot is the screen's.
+    const sceneBottom = screenH;
 
-    // AT REST. The column fills the scene; its padding is all that sits below
-    // the composer.
-    const restingBottom = sceneBottom - columnPadding - riseFor(0, navClearance);
+    // AT REST. The column reserves the pill and its breathing room below the composer.
+    const restingBottom = sceneBottom - (columnPadding + pillTop) - riseFor(0, pillTop);
     assert.equal(
       screenH - restingBottom,
-      navClearance + columnPadding,
-      `inset ${insetBottom}: the pill must be reserved exactly once — by the scene`
+      pillTop + columnPadding,
+      `inset ${insetBottom}: the pill must be reserved exactly once — by the column`
     );
     assert.equal(
-      sceneBottom - restingBottom,
+      screenH - pillTop - restingBottom,
       columnPadding,
-      `inset ${insetBottom}: the composer keeps a pinned element's breathing room and nothing more`
-    );
-    // The defect this replaced, stated so it cannot come back unnoticed: the
-    // old padding reserved the footprint a second time.
-    assert.equal(
-      screenH - (sceneBottom - navClearance),
-      2 * navClearance,
-      `inset ${insetBottom}: paddingBottom: insetBelow counted the pill twice`
+      `inset ${insetBottom}: the composer keeps a pinned element's breathing room above the pill`
     );
 
-    // RISEN. The keyboard covers the pill completely, so the pill drops out of
-    // the arithmetic entirely and only the keyboard is counted.
-    const risenBottom = sceneBottom - columnPadding - riseFor(keyboard, navClearance);
+    // RISEN. The keyboard covers the pill completely, so the reserve comes back out of the rise
+    // and only the keyboard is counted.
+    const risenBottom = sceneBottom - (columnPadding + pillTop) - riseFor(keyboard, pillTop);
     assert.equal(
       screenH - risenBottom,
       keyboard + columnPadding,
@@ -778,18 +745,18 @@ test('[executed] the chat column counts the pill once at rest and the keyboard o
       columnPadding,
       `inset ${insetBottom}: the same breathing room above the keyboard as above the pill`
     );
-    // ...and the old dead band was exactly a pill's footprint, in this state
-    // too — one cause, both symptoms.
+    // The defect this closes, stated so it cannot come back unnoticed: a rise that forgot the
+    // reserve would leave a pill-high dead band above the keyboard.
     assert.equal(
-      screenH - keyboard - (sceneBottom - navClearance - riseFor(keyboard, navClearance)),
-      navClearance,
-      `inset ${insetBottom}: the risen dead band was the same quantity as the resting one`
+      screenH - keyboard - (sceneBottom - (columnPadding + pillTop) - riseFor(keyboard, 0)),
+      columnPadding + pillTop,
+      `inset ${insetBottom}: without the reserve the dead band is exactly the pill`
     );
   }
 
-  // A hardware keyboard whose accessory bar is shorter than the clearance must
-  // not drive the column DOWN. riseFor clamps at zero.
-  assert.equal(riseFor(40, 104), 0);
+  // A hardware keyboard whose accessory bar is shorter than the pill's reserve must not drive the
+  // column DOWN. riseFor clamps at zero.
+  assert.equal(riseFor(40, 88), 0);
 });
 
 test("[static] riseFor opens with the 'worklet' directive, so the fast path may call it", () => {
@@ -2187,6 +2154,10 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       'components/ChipCheck.motion120.tsx',
       'components/DropMenu.motion120.tsx',
       'components/KeyboardRisingColumn.motion120.tsx',
+      // 2026-09-30 — the Melt-through tab bar (docs/dispatch/MELT-TAB-BAR.md): one frame loop
+      // stepping every spring, and a Pan; the geometry it calls is lib/meltBarGeometry.ts, every
+      // function there a 'worklet'.
+      'components/MeltTabBar.motion120.tsx',
       // 2026-09-21 — the mode switch's glass wipe, the operator's pick from
       // six rendered ideas; two shared values (the pane's translateX, the
       // capsule's translateY), each ending in a runOnJS hop to the sequence.

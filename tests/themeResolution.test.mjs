@@ -558,6 +558,12 @@ const BAKED_ART = {
   'assets/glyphs/roller-fill.png': { bake: 'transparent', gate: false },
   'assets/glyphs/trash-fill.png': { bake: 'transparent', gate: false },
   'assets/glyphs/drill-fill.png': { bake: 'transparent', gate: false },
+  // 2026-09-30 (the build run, docs/dispatch/MELT-TAB-BAR.md §3) — THE MELT BAR'S HOME GLYPHS:
+  // the app's own home / home-outline with the chimney cut off, white on a transparent ground,
+  // baked by .shots/refresh/build-run/bake-home.mjs (200 × 205, the Ionicons em box) and drawn by
+  // components/MeltTabBar.shared.tsx through Image tintColor. White on nothing, tinted: no gate owed.
+  'assets/glyphs/home-flat.png': { bake: 'transparent', gate: false },
+  'assets/glyphs/home-outline-flat.png': { bake: 'transparent', gate: false },
   // home(4)'s fixed atmosphere behind both homes. GATE DECISION: gated, and it
   // is the strongest case on the roster — this one is genuinely still baked
   // (RGB, no alpha channel at all, 1290x2796 of dark room), it is full-bleed
@@ -1145,7 +1151,9 @@ test('[static] T1 (D6): every eligible sheet is lazy, and the exclusions are nam
   // and components/SetupChoiceCard.tsx carry colour now (palette roles, so
   // Setup renders in dark), so they moved from the colourless `metricStyles`
   // to `themedStyles`, which is the other lazy factory. Nothing went eager.
-  assert.equal(lazy.length, 21, 'the D6 conversion set is 21 files');
+  // 2026-09-30 (the build run): 21 -> 24 — the Melt-through tab bar's three files
+  // (components/MeltTabBar.tsx, .motion120.tsx, .shared.tsx) are born lazy.
+  assert.equal(lazy.length, 24, 'the D6 conversion set is 24 files');
   for (const path of lazy) {
     const source = await read(path);
     assert.match(source, /^\s*const styles = stylesFor\(\);$/m, `${path} must read its sheet inside the component`);

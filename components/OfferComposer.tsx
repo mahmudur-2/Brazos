@@ -36,7 +36,7 @@ import {
 } from '../lib/offers';
 import { quoteJobPrice, workerTakeLine, type JobPriceQuote } from '../lib/payments';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
-import { PINNED_FOOTER_BOTTOM_PADDING } from '../ui/primitives';
+import { usePinnedFooterPadding } from '../ui/primitives';
 
 /** How long after the last keystroke the take-home quote is asked for. */
 const TAKE_LINE_DEBOUNCE_MS = 400;
@@ -146,6 +146,7 @@ export function OfferComposer({
   palette: paletteProp,
   layout = 'inline',
 }: OfferComposerProps) {
+  const footerPad = usePinnedFooterPadding();
   const { palette: colors } = useThemeColors();
   const palette = paletteProp ?? colors;
   const styles = stylesFor(colors);
@@ -526,7 +527,7 @@ export function OfferComposer({
         >
           <View style={styles.wrap}>{fields}</View>
         </ScrollView>
-        <View style={[styles.footer, { paddingBottom: PINNED_FOOTER_BOTTOM_PADDING }]}>{commit}</View>
+        <View style={[styles.footer, { paddingBottom: footerPad }]}>{commit}</View>
       </KeyboardAvoidingView>
     );
   }

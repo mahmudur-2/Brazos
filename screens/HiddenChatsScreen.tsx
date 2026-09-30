@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useScrollClearance } from '../ui/primitives';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { ConversationRow } from '../components/ConversationRow';
@@ -55,6 +56,8 @@ import {
  * would be one-way, which is a trap rather than a feature.
  */
 export function HiddenChatsScreen() {
+  // 2026-09-30: the tab bar floats over this screen; the list ends above the pill.
+  const navClearance = useScrollClearance();
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const navigation = useNavigation<MessagesStackNavigation>();
@@ -193,9 +196,10 @@ export function HiddenChatsScreen() {
           ItemSeparatorComponent={() => (
             <View style={[styles.rowRule, { backgroundColor: withAlpha(colors.inboxRule, isDark ? 0.11 : 1) }]} />
           )}
-          contentContainerStyle={
-            rows.length === 0 ? styles.emptyContainer : styles.listContent
-          }
+          contentContainerStyle={[
+            rows.length === 0 ? styles.emptyContainer : styles.listContent,
+            { paddingBottom: navClearance },
+          ]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }

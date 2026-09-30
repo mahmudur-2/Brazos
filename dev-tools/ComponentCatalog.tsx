@@ -4,11 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import {
   Avatar,
-  BOTTOM_NAV_TABS,
-  BottomNavPreview,
   Button,
-  CUSTOMER_BAR_TABS,
-  WORKER_BAR_TABS,
   Card,
   Chip,
   EmptyState,
@@ -363,32 +359,13 @@ export function ComponentCatalog() {
 
         {/* --- Phase 2 primitives ------------------------------------------ */}
 
-        <Section title="BottomNav — tab states">
+        <Section title="BottomNav — the Melt-through bar">
           <Text style={styles.note}>
-            The real bar is drawn by React Navigation from bottomNavScreenOptions(); this preview
-            uses the same item renderer and constants, so a change to one shows here. Prestige 0d
-            (decision 4): one floating pill, the same five tabs in both modes, emerald active
-            with a soft glow in dark (the customer tree keeps Discover as a hidden route).
+            2026-09-30: the tab bar is components/MeltTabBar.tsx, a floating pill drawn by each
+            tree's tabBar. It needs a live navigator (its state and its tab presses), so it is seen
+            on any tab screen rather than here; ui/primitives/BottomNav.tsx keeps the tab lists and
+            the clearance hooks.
           </Text>
-          {WORKER_BAR_TABS.map((key) => {
-            const tab = BOTTOM_NAV_TABS.find((t) => t.key === key);
-            return (
-              <View key={key} style={styles.navBox}>
-                <Text style={styles.navCaption}>worker bar, active: {tab?.label ?? key}</Text>
-                <BottomNavPreview activeKey={key} />
-              </View>
-            );
-          })}
-          <View style={styles.navBox}>
-            <Text style={styles.navCaption}>
-              customer bar — decision 4’s five plus D3’s creation slot
-            </Text>
-            <BottomNavPreview activeKey="Home" tabs={CUSTOMER_BAR_TABS} showCreateAction />
-          </View>
-          <View style={styles.navBox}>
-            <Text style={styles.navCaption}>with a notched device’s bottom inset (34pt reported)</Text>
-            <BottomNavPreview activeKey="Home" insetBottom={34} />
-          </View>
         </Section>
 
         <Section title="JobCard — customer perspective">

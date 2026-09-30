@@ -1,76 +1,29 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { layout } from '../ui/tokens';
-import { useDesignDial, useOverrideNumber } from '../lib/designOverrides';
+import { meltBar } from '../ui/tokens';
+import { pillBottomOffset, pillFootprint } from '../lib/meltBarGeometry';
 
 /**
- * RUN G1 (C4/C6) — THE INSET CONTRACT, in one place.
+ * THE INSET CONTRACT, in one place — 2026-09-30 (the build run, docs/dispatch/MELT-TAB-BAR.md §8),
+ * for the floating Melt-through pill.
  *
- * The attached bar is flush to the physical bottom edge and carries its
- * bottom padding INSIDE — and since the flush fix that padding is no longer
- * the whole safe-area inset. The operator's complaint was that the bar's
- * content sat too high; the fix is
+ *     pill offset  = max(insetBottom − meltBar.bottomTuck, meltBar.bottomMin)   24 on a 34pt inset
+ *     pill top     = meltBar.height + pill offset                              88
+ *     clearance    = pill top + meltBar.breathing                              96
  *
- *     navBottomPad = max(insetBottom − NAV_FLUSH_TUCK, NAV_FLUSH_MIN_PAD)
- *
- * — the icon/label row tucks 22pt into the inset zone and never sits closer
- * than 6pt to the edge. The design studio's navBottomPad dial REPLACES the
- * formula outright when set, so the operator can tune the real bar live.
- *
- * RUN N3 (2026-09-08) — THE TUCK DEEPENS, 16 → 22, AND 12 IS NOT WRITTEN
- * ANYWHERE. The operator dialled the bar's bottom padding to 12 on a phone
- * whose bottom inset is 34pt, and 12 is a DEVICE READING, not a constant:
- * baking it as one would give a device with a different inset the wrong
- * padding, which is the whole reason this is a formula. So the TERM moved
- * instead — max(34 − 22, 6) = 12 on that phone, and the shape is untouched.
- * NAV_FLUSH_MIN_PAD stays 6, so every device whose inset is 28pt or less —
- * a zero-inset device included — gets exactly the 6 it got before: the
- * change is confined to devices with a home indicator, which is where the
- * operator's 12 was measured.
- *
- * `useNavInset()` is the height CONTENT must clear:
- *
- *     bar content height + navBottomPad + safe-area remainder
- *
- * where the remainder is whatever part of the device inset the bar's own
- * padding no longer absorbs (max(0, inset − pad)). With no dial set that sum
- * is exactly the bar's old footprint (content + inset), so every screen's
- * clearance is unchanged on launch; content never sinks into the
- * home-indicator zone even when the dial shortens the bar, because the bar
- * is translucent chrome and what shows through it must still end above the
- * indicator. Everything reads the same override, so one dial moves the bar
- * and every clearance at once.
- *
- * These constants and this arithmetic are the ONE home of the bar's flush
- * numbers — tests/layout.test.mjs fences bar-height literals from appearing
- * anywhere else.
+ * `useNavInset()` is the height scrolling CONTENT must clear; `usePillTop()` is where the pill's
+ * top edge sits, which a pinned footer lifts its controls over. This replaces the attached bar's
+ * flush formula and its two studio dials (navBottomPad, nav.barHeight), retired with that bar; the
+ * arithmetic itself is `lib/meltBarGeometry.ts`, the one copy the bar and every clearance share.
  */
 
-/** How far the icon/label row tucks into the safe-area inset zone. */
-export const NAV_FLUSH_TUCK = 22;
-
-/** The least padding the row keeps above the physical edge. */
-export const NAV_FLUSH_MIN_PAD = 6;
-
-/** The flush formula — the dial replaces it entirely when set. */
-export function navBottomPadFor(insetBottom: number, override?: number): number {
-  return override ?? Math.max(insetBottom - NAV_FLUSH_TUCK, NAV_FLUSH_MIN_PAD);
-}
-
-/** The bar's live bottom padding: the studio dial, or the flush formula. */
-export function useNavBottomPad(): number {
+/** Where the pill's top edge sits above the screen's bottom edge. */
+export function usePillTop(): number {
   const insets = useSafeAreaInsets();
-  const navBottomPad = useDesignDial('navBottomPad');
-  return navBottomPadFor(insets.bottom, navBottomPad);
+  return meltBar.height + pillBottomOffset(insets.bottom, meltBar.bottomTuck, meltBar.bottomMin);
 }
 
-/** The height content must clear — see the header. RUN S2 (C6): the bar's
- *  content height is dial-adjustable too, so the clearance follows the
- *  `nav.barHeight` dial exactly as it follows the pad dial — one dial moves
- *  the bar and every clearance at once. */
+/** The height scrolling content must clear: the pill, its offset, and the breathing room above. */
 export function useNavInset(): number {
   const insets = useSafeAreaInsets();
-  const navBottomPad = useDesignDial('navBottomPad');
-  const barHeight = useOverrideNumber('nav.barHeight');
-  const pad = navBottomPadFor(insets.bottom, navBottomPad);
-  return (barHeight ?? layout.floatingNavHeight) + pad + Math.max(0, insets.bottom - pad);
+  return pillFootprint(insets.bottom, meltBar);
 }

@@ -32,6 +32,14 @@ export type KeyboardRisingColumnProps = {
    * time counts it twice. See COLUMN_BOTTOM_PADDING below.
    */
   insetBelow: number;
+  /**
+   * 2026-09-30 — what the column RESERVES ITSELF below its content, as padding, that the keyboard
+   * covers once it is up: the floating tab pill's height above the screen edge, in chat's case,
+   * since the pill no longer sits in the layout below the column. It is padding at rest and comes
+   * back out of the rise, so the column clears the pill at rest and meets the keyboard risen —
+   * counted once either way. Default 0.
+   */
+  reserveBelow?: number;
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 };

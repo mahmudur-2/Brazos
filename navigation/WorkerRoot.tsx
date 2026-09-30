@@ -1,8 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useNavBottomPad } from '../hooks/useNavInset';
+import { MeltTabBar } from '../components/MeltTabBar';
 import type { WorkerHomeStackParamList, WorkerParamList } from '../lib/navigation';
-import { navBarPalette, useThemeColors } from '../lib/theme';
 import { BidSentScreen } from '../screens/BidSentScreen';
 import { ChatScreen } from '../screens/ChatScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
@@ -17,7 +16,7 @@ import { WorkerResultsScreen } from '../screens/WorkerResultsScreen';
 import {
   bottomNavScreenListeners,
   bottomNavScreenOptions,
-  useNavBarContainerDials,
+  WORKER_BAR_TABS,
 } from '../ui/primitives/BottomNav';
 import {
   MapStackNavigator,
@@ -80,18 +79,11 @@ function WorkerHomeStackNavigator() {
 }
 
 export function WorkerRoot() {
-  // G1 (C4): the bar's resolved bottom padding — the flush formula, or the
-  // design studio's dial (hooks/useNavInset.ts owns the arithmetic).
-  const navBottomPad = useNavBottomPad();
-  // S2 (C6): re-render when a bar-container dial (height, padding, spread)
-  // moves, so the plain screenOptions factory reads fresh values.
-  useNavBarContainerDials();
-  const { palette, isDark } = useThemeColors();
-
   return (
     <Tab.Navigator
-      screenOptions={bottomNavScreenOptions(navBottomPad, navBarPalette(palette, isDark))}
+      screenOptions={bottomNavScreenOptions}
       screenListeners={bottomNavScreenListeners}
+      tabBar={(props) => <MeltTabBar {...props} tabs={WORKER_BAR_TABS} />}
     >
       <Tab.Screen name="Home" component={WorkerHomeStackNavigator} />
       <Tab.Screen name="Map" component={MapStackNavigator} options={{ tabBarLabel: 'Map' }} />

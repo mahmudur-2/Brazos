@@ -97,7 +97,7 @@ import {
   type ColorPalette,
   screenGround,
 } from '../lib/theme';
-import { MediaUploader } from '../ui/primitives';
+import { MediaUploader, useScrollClearance } from '../ui/primitives';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 // Ten per the screen-13 spec; phase49 raised create_job's server cap to match.
@@ -300,13 +300,10 @@ export function PostJobScreen() {
   const stepFieldsGap = useDialNumber('postJob.stepFields.gap') ?? 20;
   const descriptionHeight = useDialNumber('postJob.description.height') ?? 120;
   const reviewCardRadius = useDialNumber('postJob.reviewCard.radius') ?? radius.xl;
-  // home(7): the Back/Continue footer is PINNED above the pill, not scrolled
-  // under it, so it no longer takes useFloatingNavClearance() — that reserved
-  // the bar's ~104pt footprint a second time and left a hand's width of empty
-  // chrome under the buttons. Its bottom padding is
-  // PINNED_FOOTER_BOTTOM_PADDING, shared with the two templates. Nothing on
-  // this screen scrolls under the pill (the footer is always rendered), so the
-  // hook has no remaining call site here.
+  // 2026-09-30: the tab bar floats over this screen. Steps 1-3 have no footer (the Lux remake,
+  // ruling 13), so their scroller ends above the pill; the last step's bar (PostJobBar) lifts its
+  // own buttons over it and the scroller ends on the bar, as before.
+  const navClearance = useScrollClearance();
   const emeraldColors = emeraldColorsFor(colors);
   // Registered in four stacks (Home, MyJobs, Messages, Map) for posting, edit,
   // and Hire Again entry points, so its types are standalone rather than tied
@@ -1391,7 +1388,7 @@ export function PostJobScreen() {
             { paddingHorizontal: contentPaddingX, gap: contentGap },
             // Only the last step has a footer to clear (no footer padding on
             // steps 1-3 — the operator's "no pinned Continue, no footer padding").
-            isLastStep && styles.contentWithFooter,
+            isLastStep ? styles.contentWithFooter : { paddingBottom: navClearance },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}

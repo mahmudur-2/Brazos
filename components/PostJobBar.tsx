@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { spacing, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import { usePinnedFooterPadding } from '../ui/primitives';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -67,8 +68,12 @@ export function PostJobBar({
 
   const ink = primaryDisabled ? colors.waitingInk : colors.publishInk;
 
+  // 2026-09-30: the tab bar floats; the bar's ground runs on under the pill and its buttons sit
+  // above it, a pinned footer's breathing room clear.
+  const footerPad = usePinnedFooterPadding();
+
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, { paddingBottom: footerPad }]}>
       {secondary ? (
         <Pressable
           onPress={secondary.onPress}

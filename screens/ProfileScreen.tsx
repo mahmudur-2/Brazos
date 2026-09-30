@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useScrollClearance } from '../ui/primitives';
 import {
   ActivityIndicator,
   Animated,
@@ -240,6 +241,8 @@ async function openSupportMail(): Promise<void> {
 
 
 export function ProfileScreen() {
+  // 2026-09-30: the tab bar floats over this screen; the list ends above the pill.
+  const navClearance = useScrollClearance();
   const { palette: colors, isDark, preference, setPreference } = useThemeColors();
   const styles = stylesFor(colors);
   // RUN T2 (C5) — PROFILE'S OWN DIALS. Each falls back to the value this file
@@ -838,7 +841,7 @@ export function ProfileScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={[styles.content, { gap: contentGap }]}
+          contentContainerStyle={[styles.content, { gap: contentGap, paddingBottom: navClearance }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >

@@ -373,9 +373,11 @@ test('[static] the Map screen structure holds: no header card, sheet-filtered, t
   // but never the field — and the sheet takes what its rows need up to it.
   // 2026-09-20 (sitting 2): the sheet RESTS ON the nav bar — the room's floor
   // is MAP_SHEET_BOTTOM (0), not the side inset, which stays the dial.
-  assert.match(map, /const MAP_SHEET_BOTTOM = 0;/);
-  assert.match(map, /rootHeight - insets\.top - pillHeight - sheetGap - MAP_SHEET_BOTTOM/);
-  assert.match(map, /insetBottom=\{MAP_SHEET_BOTTOM\}/);
+  // 2026-09-30 (the build run): the nav bar is the floating Melt pill, so the floor the sheet rests
+  // on is the pill's top edge — usePillReserve() — read where the sheet is placed.
+  assert.match(map, /const sheetBottom = usePillReserve\(\);/);
+  assert.match(map, /rootHeight - insets\.top - pillHeight - sheetGap - sheetBottom/);
+  assert.match(map, /insetBottom=\{sheetBottom\}/);
   assert.match(map, /<View onLayout=\{onPillLayout\}>\s*(\{\/\*[\s\S]*?\*\/\}\s*)?<Surface\s+material="pane"\s+radius=\{searchRadius\}/);
   // 2026-09-20 (sitting 2, item 13): the panes' own edges, from the one table —
   // the pill and the chip option C, the sheet option B, the Filters sheet a hairline.
@@ -393,7 +395,7 @@ test('[static] the Map screen structure holds: no header card, sheet-filtered, t
   assert.match(map, /const \[sheetStop, setSheetStop\] = useState<PeekStop>\('peek'\);/);
   assert.match(map, /useFocusEffect\(\s*useCallback\(\(\) => \{\s*setSheetStop\('peek'\);\s*\}, \[\]\)\s*\);/);
   assert.match(map, /stop=\{sheetStop\}\s*onStopChange=\{setSheetStop\}\s*onPeekHeight=\{setPeekHeight\}/);
-  assert.match(map, /legalLabelInsetBottom=\{isWorker && peekHeight > 0 \? MAP_SHEET_BOTTOM \+ peekHeight \+ LEGAL_LINK_AIR : undefined\}/);
+  assert.match(map, /legalLabelInsetBottom=\{isWorker && peekHeight > 0 \? sheetBottom \+ peekHeight \+ LEGAL_LINK_AIR : undefined\}/);
   const nativeMap = await read('components/HotspotMap.native.tsx');
   assert.match(nativeMap, /legalLabelInsets=\{\s*legalLabelInsetBottom != null\s*\? \{ top: 0, left: 0, bottom: legalLabelInsetBottom, right: 0 \}\s*: undefined\s*\}/);
 });

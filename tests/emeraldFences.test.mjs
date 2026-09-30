@@ -431,17 +431,18 @@ test('emerald D1 fence: hiding a tab item never unregisters its route', () => {
   // hairline in dark, every value from ui/tokens.ts's materials table). The
   // hook renders exactly the NavChrome component, the blur layer itself
   // still paints nothing, and the options declare no background at all.
-  const navBar = flatten(read('ui/primitives/BottomNav.tsx'));
-  assert.match(
-    navBar,
-    /tabBarBackground: \(\) => <NavChrome \/>,/,
-    'the only thing the bar-background hook may render is the chrome component'
-  );
-  assert.equal(
-    (navBar.match(/tabBarBackground/g) ?? []).length,
-    1,
-    'the bar-background hook may be named exactly once'
-  );
+  // 2026-09-30 (the build run): the bar is the Melt-through pill, drawn by each tree's tabBar —
+  // the navigator's options name no background at all, and the bar's root paints nothing; the pill
+  // is the one painted layer (tests/layout.test.mjs holds its material).
+  const navBar = flatten(stripComments(read('ui/primitives/BottomNav.tsx')));
+  assert.doesNotMatch(navBar, /tabBarBackground/, 'the options may not add a ground behind the pill');
+  for (const bar of ['components/MeltTabBar.tsx', 'components/MeltTabBar.motion120.tsx']) {
+    assert.match(
+      flatten(read(bar)),
+      /root: \{ position: 'absolute', left: 0, right: 0, bottom: 0 \}/,
+      bar + "'s root must paint nothing"
+    );
+  }
   assert.doesNotMatch(
     flatten(read('lib/blur.tsx')),
     /backgroundColor/,
@@ -1095,29 +1096,26 @@ test('home(19) fence: the Home screens carry no mode-conditional layout — only
   // way every other themed control in the tree is. home(8)'s own fence owns the
   // colours; duplicating them here is what let the two records drift apart.
   assert.doesNotMatch(bar, /CREATE_BUTTON_LIGHT_SIZE|CREATE_BUTTON_LIGHT_RAISE/);
-  const barFlat = flatten(read('ui/primitives/BottomNav.tsx'));
-  const shared = /createButton: \{([^}]*)\}/.exec(barFlat);
-  assert.ok(shared, 'the control must keep a shared style');
-  // RUN N3 (2026-09-08): the radius is navBar.createRadius (18) rather than
-  // radius.lg (17). WHAT THIS FENCE ASSERTS IS UNCHANGED — that there is ONE
-  // radius and ONE ring weight, on the style both themes share, so a
-  // light-only corner can never come back. Only the token supplying it moved,
-  // and it moved because 18 is not on the radius scale and the scale is not
-  // being re-cut for one control.
-  assert.match(
-    shared[1],
-    /borderRadius: navBar\.createRadius, borderWidth: 1,/,
-    'the ring weight and the radius are one set of numbers for both themes'
-  );
-  for (const key of ['createButtonDark', 'createButtonLight']) {
-    const branch = new RegExp(`${key}: \\{([^}]*)\\}`).exec(barFlat);
-    assert.ok(branch, `${key} must exist — the control forks on colour, per theme`);
-    assert.doesNotMatch(
-      branch[1],
-      /width|height|padding|margin|radius|borderWidth|shadow|elevation|transform/,
-      `${key} must carry colours only — geometry and depth are shared`
+  // 2026-09-30 (the build run, docs/dispatch/MELT-TAB-BAR.md §1): the [ + ] is the Melt bar's flat
+  // 44pt circle in the bubble colour, the add glyph in ink. What this fence is for holds: ONE
+  // geometry — its size and corner from ui/tokens meltBar, in both paths — and only the palette's
+  // colours differ by theme.
+  for (const bar of ['components/MeltTabBar.tsx', 'components/MeltTabBar.motion120.tsx']) {
+    const flatBar = flatten(read(bar));
+    const plus = /plus: \{([^}]*)\}/.exec(flatBar);
+    assert.ok(plus, bar + ': the control must keep a shared style');
+    assert.match(
+      plus[1],
+      /width: meltBar\.plus, height: meltBar\.plus, borderRadius: (meltBar\.plus \/ 2|PLUS_R),/,
+      bar + ': one size and one corner, from the tokens'
     );
+    assert.doesNotMatch(plus[1], /[Cc]olor/, bar + ": the +'s style is geometry; its colours come from the palette");
   }
+  assert.match(
+    flatten(read('components/MeltTabBar.shared.tsx')),
+    /bubble: palette\.emerald, ink: palette\.onForest,/,
+    'the + takes the bubble colour and the ink per theme, off the palette'
+  );
 
   // WORKER HOME — same contract: its *Dark styles are colour-only and the
   // hero column/artwork are one geometry.
@@ -1722,315 +1720,32 @@ test('home(6) fence: nothing sits between the Post a Job scroller and its bar', 
 // matters most — the pill's height or the clearance being re-derived from the
 // button, or the static clearance token returning as a side effect.
 // ---------------------------------------------------------------------------
-test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is unmoved', () => {
-  const bar = stripComments(read('ui/primitives/BottomNav.tsx'));
-  const flat = flatten(read('ui/primitives/BottomNav.tsx'));
-
-  // home(11) — THIS USED TO PIN 0.149 OF THE SCREEN, AND A SHARE OF THE SCREEN
-  // IS THE WRONG QUANTITY FOR THIS CONTROL. The pill's height is a constant
-  // (layout.floatingNavHeight), so a control sized off the screen changes its
-  // relationship to the pill on every device: at 393pt it resolved to 59 in a
-  // 70pt pill, and the -14 lift then carried its top edge OUT through the
-  // pill's hairline. What the control has to satisfy is containment, and
-  // containment is a relationship between the two boxes — so that is what is
-  // asserted, arithmetically, from whatever the source declares. home(18) sets
-  // the master's share; this catches the control leaving the pill at any value.
-  const pillHeight = constantOf(stripComments(read('ui/tokens.ts')), 'FLOATING_NAV_HEIGHT');
-  const size = createButtonDarkSize(bar, flat);
-  assert.ok(size > 0, 'the dark control must resolve to a positive size');
-  assert.match(flat, /\{ width: size, height: size \}/);
-
-  // home(18) — THE MASTER'S SHARE, and a share of the PILL because that is what
-  // the control has to fit inside. Master 44 draws no [ + ] at all (its bar is
-  // the five classic tabs), so the band is a dispatch bound rather than a
-  // measurement, and it is recorded as such.
-  //
-  // RUN N3 (2026-09-08) — THE CEILING MOVES, 0.88 → 0.89, AND NOTHING ELSE
-  // ABOUT THIS CHECK DOES. The operator dialled the control to 62 in the new
-  // 70pt bar; 62 / 70 = 88.6%, which sat one half of a point outside home(18)'s
-  // 85-88 bound. The bound was never the constraint — CONTAINMENT is, and it is
-  // asserted below from the source's own numbers, unchanged and still passing
-  // with 4pt of clearance top and bottom. What moved is the recorded band, to
-  // the value the operator chose.
-  const shareOfPill = size / pillHeight;
-  assert.ok(
-    shareOfPill >= 0.85 && shareOfPill <= 0.89,
-    `the [ + ] is ${(shareOfPill * 100).toFixed(1)}% of the pill's height; it belongs between ` +
-      '85% and 89%'
-  );
-
-  // Parity 2026-08-22: ONE geometry for both themes — the frozen light square
-  // and its lift are retired; light keeps only its colours.
-  assert.doesNotMatch(bar, /CREATE_BUTTON_LIGHT_SIZE|CREATE_BUTTON_LIGHT_RAISE/);
-
-  // FILLED FROM A TOKEN SURFACE, dark only. home(8) made that fill GOLD, which
-  // is the operator reversal this fence was built around; 2026-09-17 REVERSES
-  // THE GOLD, on operator instruction, and gives the control the dark
-  // "Post a job" pill's own recipe instead. What this pins is unchanged in
-  // KIND and is the half that has never moved: the control must be FILLED,
-  // from a token surface, never from a hex spelled at the call site.
-  const darkFill =
-    /createButtonDark: \{ backgroundColor: (colors|navBar)\.(\w+),/.exec(flat);
-  assert.ok(
-    darkFill,
-    'the dark control must be FILLED from a token surface — the palette or ui/tokens.ts navBar'
-  );
-  // AND THE WASH OVER IT IS THE PILL'S, not a second description of it. The
-  // recipe is read off the source so "identical by construction" stays a fact
-  // about this file rather than a claim in a comment: the same primitive, the
-  // same far stop, the same lift, the shared alpha token — and `flat: !isDark`,
-  // which is the whole of "dark only" (litFill returns undefined in light, and
-  // React Native drops undefined from a style array).
+test('home(8) fence: the [ + ] sits inside the pill, and the bar footprint is the pill\'s', () => {
+  // home(8)/home(18) measured the old centre control as a share of the attached bar and held the
+  // bar's footprint unmoved by it. 2026-09-30 (the build run, docs/dispatch/MELT-TAB-BAR.md): the
+  // [ + ] is the Melt bar's flat circle, centred in the pill, so the same two facts are fenced for
+  // it — it fits inside the pill it sits in, and nothing about it moves what content clears.
+  const tokens = read('ui/tokens.ts');
+  const melt = tokens.slice(tokens.indexOf('export const meltBar = {'));
+  const n = (key) => Number(new RegExp('\\b' + key + ': ([\\d.]+)').exec(melt)[1]);
+  assert.equal(n('plus'), 44);
+  assert.equal(n('plusGlyph'), 28);
+  assert.ok(n('plus') < n('height'), 'the + fits inside the pill');
+  assert.ok(n('plusGlyph') < n('plus'), 'the glyph fits inside the +');
   assert.match(
-    flat,
-    /const litTile = litFill\(\{ surface: fillDial \?\? colors\.postPillGreen, lift: colors\.emerald, liftAlpha: navBar\.createLiftAlpha, highlight: false, flat: !isDark, \}\);/,
-    "the dark tile must be lit with the Post-a-job pill's own recipe, dark only"
+    flatten(read('components/MeltTabBar.tsx')),
+    /top: \(meltBar\.height - meltBar\.plus\) \/ 2,/,
+    'the + is centred in the pill'
   );
-  assert.equal(
-    `${darkFill[1]}.${darkFill[2]}`,
-    'colors.postPillGreen',
-    "the flat far stop under the wash must be the pill's green, so the two controls cannot drift"
-  );
-  // 2026-09-17: THE RING IS GONE IN DARK, and it went by COLOUR rather than by
-  // width. `borderWidth: 1` stays on the shared style — RN lays a border inside
-  // the box, so zeroing it in one theme moves that theme's content box by a
-  // point, which is the geometry fork tests/themeTokens.test.mjs forbids. So
-  // what replaces "the ring must be a token, and never the fill's own colour"
-  // is the stronger statement that there is no ring at all, spelled the way
-  // screens/HomeScreen.tsx already un-rings the dark pill.
-  assert.match(
-    flat,
-    /createButtonDark: \{ backgroundColor: colors\.postPillGreen, borderColor: 'transparent', \}/,
-    "the dark control declares NO ring — 'transparent', so no geometry forks with it"
-  );
-  // 2026-09-27 (the Lux remake, the operator's Home picture): the Post-a-job
-  // pill is COLOURED AS THE SYSTEM CTA — the one mint, `primary` — while the
-  // bar's [ + ] keeps the green it was drawn in (the bar is frozen, ruling 1).
-  // The two controls part company here by ruling; the pill still declares no
-  // ring the same way.
-  assert.match(
-    flatten(read('screens/HomeScreen.tsx')),
-    /heroButtonDark: \{ backgroundColor: colors\.primary, borderColor: 'transparent' \}/,
-    'the dark pill is the system CTA and declares no ring'
-  );
-  // RUN H2 — THE COLOURS FORK PER THEME AGAIN AND THE GEOMETRY DOES NOT, which
-  // is the split the parity pass was actually protecting. What these
-  // assertions pin is unchanged in KIND: the glyph is legible against its own
-  // tile in both themes, the ring is never the fill's own colour, and no hue
-  // is written as a hex at the call site. Only the values moved.
-  // S2 (C6): the glyph colour is its dial, DEFAULTING to the per-theme
-  // palette read — the fork and its tokens are pinned exactly as before.
-  // RUN N3 (2026-09-08): dark's half reads ui/tokens.ts navBar now — the token
-  // it took, `postPillGreen`, is THEME-CONSTANT and also fills light's tile,
-  // so the dark glyph could not move while it stayed on the palette. The
-  // widening is the ring's D14 widening again, and the two assertions under
-  // it are untouched: a per-theme read off a token surface, never a hex.
-  const glyphColour =
-    /<Ionicons name="add" size=\{glyph\} color=\{glyphColorDial \?\? \(isDark \? (?:colors|navBar)\.(\w+) : colors\.(\w+)\)\}/.exec(flat);
-  assert.ok(
-    glyphColour,
-    'the glyph must read its colour per theme, off the resolved palette — a hex here would be a ' +
-      'new colour, which neither the Prestige pass nor the structure pass introduces'
-  );
-  const [, darkGlyph, lightGlyph] = glyphColour;
-  assert.notEqual(
-    darkGlyph,
-    'gold',
-    'the dark glyph must be dark content on the gold fill — gold on gold is invisible'
-  );
-
-  // LIGHT NO LONGER SHARES THE TILE. It fills with the light Post-a-job pill's
-  // green and rings a slate glyph one shade deeper; the fill and the glyph may
-  // never be the same token, which is the light half of "gold on gold is not a
-  // ring".
-  const lightBody =
-    /createButtonLight: \{ backgroundColor: colors\.(\w+), borderColor: colors\.(\w+),/.exec(flat);
-  assert.ok(lightBody, 'the light control must declare its own fill and ring, both from the palette');
-  const [, lightFill, lightRing] = lightBody;
-  assert.notEqual(lightFill, 'gold', 'the gold fill is the DARK reversal and must not spread to light');
-  assert.notEqual(lightFill, lightGlyph, 'a glyph the colour of its own tile is invisible');
-  assert.notEqual(lightRing, lightFill, 'a ring the colour of its own fill is not a ring');
-
-  // The shared style is the part that really is shared. A fill or a ring
-  // reappearing on it would silently paint BOTH themes again.
-  // RUN N3 (2026-09-08): the corner is navBar.createRadius (18) rather than
-  // radius.lg (17) — the operator dialled 18, which is not on the radius
-  // scale, and the scale does not move for one control. What this pins is
-  // unchanged: the corner is GEOMETRY, so it stays on the style both themes
-  // share, and neither a fill nor a ring may reappear beside it.
-  const base = /createButton: \{ borderRadius: navBar\.createRadius, borderWidth: 1,([^}]*)\}/.exec(flat);
-  assert.ok(base, 'the shared style must keep the geometry it never forked on');
-  assert.doesNotMatch(
-    base[1],
-    /backgroundColor:|borderColor:/,
-    'fill and ring are per-theme now; declaring either on the shared style paints both'
-  );
-  assert.doesNotMatch(
-    flat,
-    /backgroundColor: colors\.forest, borderWidth: 1, borderColor: colors\.gold,/,
-    'the retired light treatment must not return beside the shared one'
-  );
-
-  // THE DEPTH. The black drop shadow is replaced by a gold glow built from the
-  // SHARED glow shape, with its strength in one named constant so the operator
-  // can tune it without touching the style.
-  //
-  // IT IS DECLARED ONCE, ON THE SHARED STYLE, and that is load-bearing rather
-  // than tidy: tests/themeTokens.test.mjs forbids a theme decision from
-  // reaching depth at all, so a glow in the dark branch and a drop shadow in
-  // the light one would be two designs rather than one design in two palettes.
-  // It still resolves per theme without a ternary, because `colors` is the
-  // resolved palette. RUN S2 (C6): the glow is built ONCE at render — the
-  // same shared shape, the strength now the create.glowAlpha dial defaulting
-  // to the ui/tokens.ts navBar token — and applied in the one style array
-  // both themes share, so the depth still never forks.
-  // 2026-09-17: the glow follows the FILL, which is what it has always done —
-  // it was `colors.gold` when the tile was gold on one side of the palette and
-  // light's gold on the other. Dark's tile is the pill's green now, so dark's
-  // halo is too, and LIGHT'S ARM IS PINNED UNCHANGED beside it. One shape, one
-  // alpha, one declaration: the ternary reaches the COLOUR only, so the depth
-  // still does not fork.
-  assert.match(
-    flat,
-    /const halo = glow\.halo\( withAlpha\( glowColorDial \?\? \(isDark \? colors\.postPillGreen : colors\.mark\), glowDial \?\? navBar\.createGlowAlpha \) \);/,
-    "the control lifts with a glow the colour of its own fill, built from the shared glow shape"
-  );
-  const glowAlphaMatch = /createGlowAlpha: ([\d.]+),/.exec(stripComments(read('ui/tokens.ts')));
-  assert.ok(glowAlphaMatch, 'navBar.createGlowAlpha must be a plain number in ui/tokens.ts');
-  const glowAlpha = Number(glowAlphaMatch[1]);
-  assert.ok(
-    glowAlpha > 0 && glowAlpha < 1,
-    `the glow alpha must be a real fraction (saw ${glowAlpha})`
-  );
-  assert.doesNotMatch(
-    flat,
-    /createButton(?:Dark|Light)?: \{[^}]*shadowColor: colors\.black/,
-    'a black drop shadow under this tile reads as a hole on the Prestige ground'
-  );
-  assert.doesNotMatch(
-    flat,
-    /create(?:Button|Slot)[^:]*: \{[^}]*overflow:/,
-    'iOS cancels a shadow on a node that clips — the glow and any clipping must not share a node'
-  );
-
-  // THE CONSTRAINT. The pill's height and the clearance are functions of the
-  // two declared geometry tokens and nothing else — the control's ratio must
-  // not appear in either, and the retired static token must not return.
-  assert.match(flat, /export const TAB_BAR_CONTENT_HEIGHT = layout\.floatingNavHeight;/);
-  assert.match(flat, /export const TAB_BAR_FLOAT_MARGIN = layout\.floatingNavGap;/);
-  const heightFn = /export function bottomNavHeight\(insetBottom: number\): number \{([^}]*)\}/.exec(flat);
-  assert.ok(heightFn, 'bottomNavHeight must stay a plain function');
-  assert.doesNotMatch(
-    heightFn[1],
-    /CREATE_/,
-    'the bar footprint must not be re-derived from the creation control'
-  );
-  assert.doesNotMatch(
-    flatten(read('ui/tokens.ts')),
-    /floatingNavClearance/,
-    'the static clearance token must not return as a side effect of home(8)'
-  );
-  // The control is raised by a TRANSFORM, which Yoga does not lay out — that
-  // is WHY the footprint is unmoved, so it must stay a transform, and the
-  // pressed state must raise it by the same amount or the control drops on
-  // touch-down.
-  // ONE LIFT, built once at render, so the pressed state cannot drop the
-  // control on touch-down by forgetting it.
-  assert.match(
-    flat,
-    /transform: pressed \? \[\{ translateY: -raise \}, \{ scale: 0\.96 \}\] : \[\{ translateY: -raise \}\]/,
-    'resting and pressed must be the same lift with a scale added, not two literals'
-  );
-  assert.doesNotMatch(
-    flat,
-    /createButtonPressed: \{[^}]*transform/,
-    'the pressed transform must not be restated in the stylesheet where it can drift'
-  );
-
-  // CONTAINMENT. The control's laid-out box sits inside a slot of the pill's
-  // own height, packed to flex-end with TAB_BOTTOM_GAP under it, then lifted.
-  // Both edges are computed here from the source's own numbers rather than
-  // eyeballed, so any future size or lift that pushes the control through the
-  // pill's hairline fails. home(18) took the ceiling home(11) recorded — a 6pt
-  // overhang — to zero.
-  const gap = constantOf(bar, 'TAB_BOTTOM_GAP');
-  assert.match(
-    flat,
-    /const raise = Math\.round\(\(barHeight - size\) \/ 2\) - TAB_BOTTOM_GAP;/,
-    'the lift must be DERIVED from the slack the pill leaves, never chosen — one lift, both themes'
-  );
-  const raise = Math.round((pillHeight - size) / 2) - gap;
-  const bottomEdge = pillHeight - gap - raise;   // distance from the pill's top
-  const topEdge = bottomEdge - size;
-  assert.ok(
-    topEdge >= 0,
-    `the [ + ] starts ${(-topEdge).toFixed(1)}pt above the pill's top edge — it belongs INSIDE`
-  );
-  assert.ok(
-    bottomEdge <= pillHeight,
-    `the [ + ] ends ${(bottomEdge - pillHeight).toFixed(1)}pt below the pill's bottom edge`
-  );
-  assert.ok(
-    Math.abs(topEdge - (pillHeight - bottomEdge)) <= 1,
-    `the [ + ] sits ${topEdge}pt from the top and ${pillHeight - bottomEdge}pt from the bottom; ` +
-      'centring it in the pill is what "inside" means here'
-  );
-
-  // And the size expression itself is unconditional — the isDark fork must
-  // not come back around either the size or the lift. S2 (C6): the size is
-  // its dial, defaulting to the token-ratio derivation.
-  assert.match(flat, /const size = sizeDial \?\? Math\.round\(barHeight \* navBar\.createSizeRatio\);/);
+  assert.match(flatten(read('components/MeltTabBar.motion120.tsx')), /top: MID - PLUS_R,/, 'centred on the fast path too');
+  // THE FOOTPRINT is the pill's alone: the clearance is pillFootprint(inset, meltBar).
+  assert.match(read('hooks/useNavInset.ts'), /return pillFootprint\(insets\.bottom, meltBar\);/);
+  const geometry = read('lib/meltBarGeometry.ts');
+  const footprint = geometry.slice(geometry.indexOf('export function pillFootprint'), geometry.indexOf('/** The slot nearest'));
+  assert.ok(footprint.length > 40, 'pillFootprint must stay in lib/meltBarGeometry.ts');
+  assert.doesNotMatch(footprint, /plus/, 'the footprint arithmetic never reads the +');
 });
 
-/**
- * The dark control's resolved size at the reference 393pt width, whichever
- * quantity the source derives it from. Kept as one function so the fence above
- * reads as containment arithmetic rather than as a regex.
- */
-function createButtonDarkSize(bar, flat) {
-  const screen = /Math\.round\(screenWidth \* CREATE_BUTTON_WIDTH_RATIO\)/.test(flat);
-  if (screen) return Math.round(393 * constantOf(bar, 'CREATE_BUTTON_WIDTH_RATIO'));
-  const ofPill = /Math\.round\(TAB_BAR_CONTENT_HEIGHT \* CREATE_BUTTON_PILL_RATIO\)/.test(flat);
-  if (ofPill) {
-    const pill = constantOf(stripComments(read('ui/tokens.ts')), 'FLOATING_NAV_HEIGHT');
-    return Math.round(pill * constantOf(bar, 'CREATE_BUTTON_PILL_RATIO'));
-  }
-  // RUN S2 (C6): the ratio is a TOKEN (ui/tokens.ts navBar.createSizeRatio)
-  // and the size is its dial's default — the derivation is unchanged, only
-  // its home moved, and with no dial set barHeight IS the pill height.
-  const dialled = /Math\.round\(barHeight \* navBar\.createSizeRatio\)/.test(flat);
-  if (dialled) {
-    assert.match(
-      flat,
-      /const barHeight = useOverrideNumber\('nav\.barHeight'\) \?\? TAB_BAR_CONTENT_HEIGHT;/,
-      "the [ + ]'s bar height must default to the pill's own token"
-    );
-    const tokensSource = stripComments(read('ui/tokens.ts'));
-    const pill = constantOf(tokensSource, 'FLOATING_NAV_HEIGHT');
-    const ratio = /createSizeRatio: ([\d.]+),/.exec(tokensSource);
-    assert.ok(ratio, 'navBar.createSizeRatio must be a plain number in ui/tokens.ts');
-    return Math.round(pill * Number(ratio[1]));
-  }
-  assert.fail('the dark control must derive its size from a declared ratio, never a pt literal');
-}
-
-
-// ---------------------------------------------------------------------------
-// H9 — NO customer-Home surface links to Map, and the route survived anyway.
-//
-// CATCHES: the "View map" control (or any other Map link) reappearing on any
-// screen the customer Home stack mounts — not just on HomeScreen, which is the
-// spot-check a hand-written assertion would settle for; and the far worse
-// reflex of un-registering the route now that nothing calls it, which is the
-// exact mistake emerald D1 nearly made with MyJobs and which turns the next
-// customer-side dispatch into NAVIGATE-not-handled.
-//
-// WHY NOT VACUOUS: the screen list is DERIVED — the stack's registrations are
-// parsed out of CustomerRoot.tsx and resolved to files through that file's own
-// import map, and the resolution is asserted non-empty before anything is
-// checked. Adding a screen to the customer Home stack puts it under this fence
-// automatically.
-// ---------------------------------------------------------------------------
 test('home(9) fence: nothing on the customer Home stack links to Map', () => {
   const customerRoot = stripComments(read('navigation/CustomerRoot.tsx'));
 
@@ -2299,7 +2014,7 @@ test('RUN H2 fence: the greeting name and the Post-a-job pill', () => {
 // stated derivation; the retired `greetingSlateDeep` coming back; and — the one
 // that matters most — either change reaching the DARK branch.
 // ---------------------------------------------------------------------------
-test('RUN H3 fence: the light [ + ] goes gold, the light pill goes cream, dark does not move', () => {
+test('RUN H3 fence: the light pill goes cream, dark does not move (the [ + ] left with the attached bar)', () => {
   const bar = flatten(read('ui/primitives/BottomNav.tsx'));
   const home = flatten(read('screens/HomeScreen.tsx'));
   const tokens = read('ui/tokens.ts');
@@ -2323,30 +2038,8 @@ test('RUN H3 fence: the light [ + ] goes gold, the light pill goes cream, dark d
   // glyph could not change while it read the palette. The pin follows it to
   // ui/tokens.ts's navBar and stays a pin: light is asserted UNCHANGED just
   // below, which is the half H3 exists to protect.
-  const glyph =
-    /<Ionicons name="add" size=\{glyph\} color=\{glyphColorDial \?\? \(isDark \? (?:colors|navBar)\.(\w+) : colors\.(\w+)\)\}/.exec(bar);
-  assert.ok(glyph, 'the [ + ] glyph must still take its colour per theme, off a token surface');
-  // 2026-09-17 MOVES THE DARK ARM AGAIN, and H3's own claim is intact for the
-  // same reason it survived N3: H3 was light-only, and light is asserted
-  // UNCHANGED on the next line. N3's `navBar.glyphColorDark` was a green for
-  // reading against a GOLD tile; the tile is that green now, so the glyph is
-  // the content colour a green fill takes — the palette's `onForest`, the app's
-  // cream, and the value the dark "Post a job" label is already set in.
-  assert.equal(glyph[1], 'onForest', "the dark glyph is the app's cream on the pill's green");
-  // 2026-09-28 (LUX-LIST-64 #47): light's gold plus left the gold; a green glyph would
-  // vanish on the green tile, so it is the white the approved light pages draw.
-  assert.equal(glyph[2], 'white', "the light glyph is the white of the approved light pages");
-
-  // ---- C1, the ring -------------------------------------------------------
-  const lightBranch = /createButtonLight: \{([^}]*)\}/.exec(bar);
-  assert.ok(lightBranch, 'the light [ + ] must keep its own branch');
-  assert.match(
-    lightBranch[1],
-    /backgroundColor: colors\.postPillGreen,/,
-    'the FILL does not move — this is a glyph and a ring, which is why the gold fence stays quiet'
-  );
-  // 2026-09-28 (LUX-LIST-64 #47): the ring is the forest mark, no longer the gold.
-  assert.match(lightBranch[1], /borderColor: colors\.mark,/, 'the ring is the forest mark');
+  // 2026-09-30: the [ + ]'s glyph, fill and ring assertions left with the control — the Melt bar's
+  // + is fenced in home(8) and home(19). What stays is the light pill and the gold arithmetic.
   assert.doesNotMatch(
     bar,
     /greetingSlateDeep/,
@@ -2377,13 +2070,6 @@ test('RUN H3 fence: the light [ + ] goes gold, the light pill goes cream, dark d
   // branch is STILL asserted WHOLE, so nothing may move in it unnoticed, and
   // the light branch above is still pinned unchanged, which is what "light
   // only" was ever a claim about. What is gone is the gold, not the fence.
-  assert.match(
-    bar,
-    /createButtonDark: \{ backgroundColor: colors\.postPillGreen, borderColor: 'transparent', \}/,
-    "the dark tile takes the Post-a-job pill's green and declares no ring; light is untouched"
-  );
-
-  // ---- the derivation, so "one shade down" cannot become a taste edit ------
   const gold = hex('gold');
   const goldDeep = hex('goldDeep');
   assert.equal(gold, '#C8A15B', "the first `gold` in this file is the light palette's");

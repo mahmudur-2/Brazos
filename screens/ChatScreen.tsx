@@ -133,7 +133,7 @@ import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette,
   screenGround,
 } from '../lib/theme';
-import { useFloatingNavClearance } from '../ui/primitives';
+import { usePillReserve } from '../ui/primitives';
 
 /** One entry in the merged timeline: a message, or the job it belongs to. */
 type TimelineItem =
@@ -145,9 +145,9 @@ export function ChatScreen() {
   const styles = stylesFor(colors);
   // Perspective for the header menu comes from ModeContext, never a prop.
   const { mode } = useMode();
-  // emerald(3): the floating pill's real footprint. The Messages thread was on
-  // the device pass's list.
-  const navClearance = useFloatingNavClearance();
+  // 2026-09-30: the floating pill's height above the screen edge — the chat column reserves it
+  // beneath the composer, and the keyboard's rise takes it back out (KeyboardRisingColumn).
+  const pillReserve = usePillReserve();
   // Chat is nested in more than one tab's stack, so its nav/route types are
   // declared standalone (ChatRouteParamList) rather than tied to one parent
   // stack — it only needs goBack() and its own params.
@@ -1804,7 +1804,8 @@ export function ChatScreen() {
           // component so a reanimated build can track the keyboard's live
           // height instead of imitating its curve. The fallback is the same
           // native-driver rise this screen has had; see the component.
-          insetBelow={navClearance}
+          insetBelow={0}
+          reserveBelow={pillReserve}
           style={styles.flex}
         >
           {loading || (threadsLoading && targets.length === 0) ? (

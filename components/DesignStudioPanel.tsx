@@ -38,7 +38,6 @@ import {
   type StoredDesignPreset,
 } from '../lib/designStudioPresets';
 import { confirmAsync } from '../lib/dialog';
-import { navBottomPadFor } from '../hooks/useNavInset';
 import {
   colors as appLightPalette,
   darkColors as appDarkPalette,
@@ -745,7 +744,6 @@ export function DesignStudioPanel() {
       emeraldLight: emeraldLightPalette,
       emeraldDark: emeraldDarkPalette,
       isDark,
-      navBottomPadAuto: navBottomPadFor(insets.bottom),
       glowAlphaDefault: SURFACE_GLOW_ALPHA,
     }),
     [overrides, isDark, insets.bottom],

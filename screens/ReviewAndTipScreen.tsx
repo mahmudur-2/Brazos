@@ -18,7 +18,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ReviewSection } from '../components/ReviewSection';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ScreenStateView } from '../ui/templates/ScreenStates';
-import { PINNED_FOOTER_BOTTOM_PADDING } from '../ui/primitives';
+import { usePinnedFooterPadding } from '../ui/primitives';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
@@ -92,6 +92,7 @@ type TipPhase = 'idle' | 'confirming' | 'gone' | 'timeout';
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export function ReviewAndTipScreen() {
+  const footerPad = usePinnedFooterPadding();
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const emeraldColors = emeraldColorsFor(colors);
@@ -673,7 +674,7 @@ export function ReviewAndTipScreen() {
             </View>
           </ScrollView>
           {reviewed ? (
-            <View style={[styles.doneBar, { paddingBottom: PINNED_FOOTER_BOTTOM_PADDING }]}>
+            <View style={[styles.doneBar, { paddingBottom: footerPad }]}>
               {job.assigned_worker_id ? (
                 <Button
                   title={`Hire ${(workerName ?? 'them').split(/\s+/)[0]} again`}

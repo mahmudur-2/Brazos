@@ -119,25 +119,20 @@ export type { MediaUploaderKind, MediaUploaderProps } from './MediaUploader';
 // --- Built in Phase 2 (the two Phase 1 deferred on ModeContext) -----------
 
 /**
- * §I "BottomNav". The tab bar's whole visual language in one place, consumed by
- * both navigator trees and by the dev catalog. React Navigation still draws the
- * real bar — see the file header for why that is deliberate rather than a
- * shortcut.
+ * §I "BottomNav". The tab bar's contract in one place — the tab lists, the press listener, the
+ * screen options and what content keeps clear of the bar. The bar itself is the Melt-through
+ * pill, components/MeltTabBar.tsx (2026-09-30).
  */
 export {
   BOTTOM_NAV_TABS,
-  BottomNavItem,
-  BottomNavPreview,
-  bottomNavHeight,
   bottomNavScreenOptions,
-  CenterCreateButton,
   CUSTOMER_BAR_TABS,
   CUSTOMER_CREATE_SLOT,
   HIDDEN_TAB_ITEM_OPTIONS,
   PINNED_FOOTER_BOTTOM_PADDING,
-  TAB_BAR_CONTENT_HEIGHT,
-  TAB_BAR_FLOAT_MARGIN,
   useFloatingNavClearance,
+  usePinnedFooterPadding,
+  usePillReserve,
   useScrollClearance,
   WORKER_BAR_TABS,
   type BottomNavTabKey,

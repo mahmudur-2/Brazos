@@ -20,7 +20,6 @@ import {
   DIVIDER_DEFAULTS,
   layout,
   LAYOUT_METRIC_DEFAULTS,
-  navBar,
   radius as tokenRadius,
   shadows as tokenShadows,
   RADIUS_DEFAULTS,
@@ -70,7 +69,6 @@ export type StudioScope = 'token' | 'local';
 
 export type StudioCategoryKey =
   | 'chrome'
-  | 'navigation'
   | 'sheets'
   | 'menus'
   | 'cards'
@@ -95,7 +93,6 @@ export type StudioCategory = {
 
 export const STUDIO_CATEGORIES: readonly StudioCategory[] = [
   { key: 'chrome', label: 'Chrome & Header', icon: 'browsers-outline' },
-  { key: 'navigation', label: 'Navigation', icon: 'navigate-outline' },
   { key: 'sheets', label: 'Sheets', icon: 'albums-outline' },
   { key: 'menus', label: 'Menus & Popovers', icon: 'list-outline' },
   { key: 'cards', label: 'Cards', icon: 'card-outline' },
@@ -130,8 +127,6 @@ export type StudioContext = {
   emeraldLight: Record<string, string>;
   emeraldDark: Record<string, string>;
   isDark: boolean;
-  /** The nav flush formula's live answer — navBottomPad's automatic value. */
-  navBottomPadAuto: number;
   /** ui/primitives SURFACE_GLOW_ALPHA — the standing glow strength. */
   glowAlphaDefault: number;
 };
@@ -192,7 +187,7 @@ export function isModified(entry: StudioEntry, ctx: StudioContext): boolean {
  *  (the fence, resets, export). The panel supplies the palettes. */
 export function studioContext(
   palettes: Pick<StudioContext, 'appLight' | 'appDark' | 'emeraldLight' | 'emeraldDark'>,
-  live: Pick<StudioContext, 'isDark' | 'navBottomPadAuto' | 'glowAlphaDefault'>,
+  live: Pick<StudioContext, 'isDark' | 'glowAlphaDefault'>,
 ): StudioContext {
   return { overrides: getDesignOverrides(), staticMaterials: STATIC_MATERIALS, ...palettes, ...live };
 }
@@ -373,403 +368,6 @@ function materialDials(material: MaterialName): StudioEntry[] {
       plainLabel: 'Edge line colour',
       description: "The hairline on this surface's edge.",
       tier: 'advanced',
-    }),
-  ];
-}
-
-// ---------------------------------------------------------------------------
-// The Navigation category (C6). The bar-container dials are read by the
-// screenOptions factory (the trees subscribe through the fingerprint hook);
-// the item and centre-button dials are read live inside the components. The
-// bar stays SLOT-BASED FLEX: no per-item X offsets and no per-pair gaps —
-// spread and centre clearance reproduce that geometry responsively.
-// ---------------------------------------------------------------------------
-
-/** The live bar content height — the dial, or the token. */
-function liveNavBarHeight(ctx: StudioContext): number {
-  const dial = ctx.overrides.values?.['nav.barHeight'];
-  return typeof dial === 'number' ? dial : layout.floatingNavHeight;
-}
-
-/** The live centre-button size — its dial, or its share of the live bar. */
-function liveCreateSize(ctx: StudioContext): number {
-  const dial = ctx.overrides.values?.['create.size'];
-  return typeof dial === 'number' ? dial : Math.round(liveNavBarHeight(ctx) * navBar.createSizeRatio);
-}
-
-function navigationDialEntries(): StudioEntry[] {
-  const bar = (row: Omit<StudioEntry, 'overrideValue' | 'write' | 'category' | 'subcategory'>) =>
-    bagEntry({ ...row, category: 'navigation', subcategory: 'Bar container' });
-  const item = (row: Omit<StudioEntry, 'overrideValue' | 'write' | 'category' | 'subcategory'>) =>
-    bagEntry({ ...row, category: 'navigation', subcategory: 'Tab items' });
-  const create = (row: Omit<StudioEntry, 'overrideValue' | 'write' | 'category' | 'subcategory'>) =>
-    bagEntry({ ...row, category: 'navigation', subcategory: 'Centre [+]' });
-  return [
-    bar({
-      key: 'nav.barHeight',
-      plainLabel: 'Bar height',
-      technicalKey: 'nav.barHeight',
-      description:
-        "The bar's content height — every screen's bottom clearance follows it live.",
-      tier: 'basic',
-      kind: 'number',
-      scope: 'token',
-      unit: 'pt',
-      min: 56,
-      max: 140,
-      step: 2,
-      defaultValue: () => layout.floatingNavHeight,
-    }),
-    bar({
-      key: 'nav.padTop',
-      plainLabel: 'Padding above the icons',
-      technicalKey: 'nav.padTop',
-      description: "Space between the bar's top hairline and the icon row.",
-      tier: 'advanced',
-      kind: 'number',
-      scope: 'local',
-      unit: 'pt',
-      min: 0,
-      max: 20,
-      step: 1,
-      defaultValue: () => 0,
-    }),
-    bar({
-      key: 'nav.padLeft',
-      plainLabel: 'Left padding',
-      technicalKey: 'nav.padLeft',
-      description: "Space inside the bar's left edge, before the first slot.",
-      tier: 'advanced',
-      kind: 'number',
-      scope: 'local',
-      unit: 'pt',
-      min: 0,
-      max: 40,
-      step: 1,
-      defaultValue: () => 0,
-    }),
-    bar({
-      key: 'nav.padRight',
-      plainLabel: 'Right padding',
-      technicalKey: 'nav.padRight',
-      description: "Space inside the bar's right edge, after the last slot.",
-      tier: 'advanced',
-      kind: 'number',
-      scope: 'local',
-      unit: 'pt',
-      min: 0,
-      max: 40,
-      step: 1,
-      defaultValue: () => 0,
-    }),
-    bar({
-      key: 'nav.spread',
-      plainLabel: 'Tab spread',
-      technicalKey: 'nav.spread',
-      description:
-        'Pulls the tab slots toward the centre from both sides — the flex row re-lays out responsively.',
-      tier: 'basic',
-      kind: 'number',
-      scope: 'local',
-      unit: 'pt',
-      min: 0,
-      max: 60,
-      step: 2,
-      defaultValue: () => 0,
-    }),
-    bar({
-      key: 'nav.centerClearance',
-      plainLabel: 'Centre-button clearance',
-      technicalKey: 'nav.centerClearance',
-      description: 'Extra room the neighbouring slots leave around the centre [+].',
-      tier: 'basic',
-      kind: 'number',
-      scope: 'local',
-      unit: 'pt',
-      min: 0,
-      max: 40,
-      step: 2,
-      defaultValue: () => 0,
-    }),
-    item({
-      key: 'nav.iconSize',
-      plainLabel: 'Icon size',
-      technicalKey: 'nav.iconSize',
-      description: 'Every tab glyph — tokenised as ui/tokens navBar.iconSize.',
-      tier: 'basic',
-      kind: 'number',
-      scope: 'token',
-      unit: 'pt',
-      min: 16,
-      max: 48,
-      step: 1,
-      defaultValue: () => navBar.iconSize,
-    }),
-    item({
-      key: 'nav.labelSize',
-      plainLabel: 'Label size',
-      technicalKey: 'nav.labelSize',
-      description:
-        'The tab labels — THE one font value any dial may touch (the narrow typography exception).',
-      tier: 'basic',
-      kind: 'number',
-      scope: 'token',
-      unit: 'pt',
-      min: 8,
-      max: 20,
-      step: 1,
-      defaultValue: () => navBar.labelFontSize,
-    }),
-    item({
-      key: 'nav.iconLabelGap',
-      plainLabel: 'Icon-label gap',
-      technicalKey: 'nav.iconLabelGap',
-      description: 'The breath between each glyph and its label.',
-      tier: 'advanced',
-      kind: 'number',
-      scope: 'local',
-      unit: 'pt',
-      min: 0,
-      max: 12,
-      step: 1,
-      defaultValue: () => navBar.iconLabelGap,
-    }),
-    item({
-      key: 'nav.itemOffsetX',
-      plainLabel: 'Item row X offset',
-      technicalKey: 'nav.itemOffsetX',
-      description: 'Nudges every icon+label block sideways inside its slot — the slots themselves never move.',
-      tier: 'advanced',
-      kind: 'number',
-      scope: 'local',
-      unit: 'pt',
-      min: -20,
-      max: 20,
-      step: 1,
-      defaultValue: () => 0,
-    }),
-    item({
-      key: 'nav.itemOffsetY',
-      plainLabel: 'Item row Y offset',
-      technicalKey: 'nav.itemOffsetY',
-      description: 'Nudges every icon+label block up or down inside the bar.',
-      tier: 'advanced',
-      kind: 'number',
-      scope: 'local',
-      unit: 'pt',
-      min: -20,
-      max: 20,
-      step: 1,
-      defaultValue: () => 0,
-    }),
-    item({
-      key: 'nav.activeColor',
-      plainLabel: 'Active colour',
-      technicalKey: 'nav.activeColor',
-      description: 'The focused tab’s glyph and label tint, in whichever theme is showing.',
-      tier: 'basic',
-      kind: 'color',
-      scope: 'local',
-      // N3: dark ships the bar's own green (ui/tokens navBar.activeColorDark),
-      // which is what BottomNavItem draws; light still resolves the palette's
-      // emerald. Reset therefore lands on what shipped, in both themes.
-      defaultValue: (ctx) => (ctx.isDark ? navBar.activeColorDark : (ctx.appLight.emerald ?? '')),
-      contrastGround: (ctx) => ({
-        label: 'background',
-        hex: (ctx.isDark ? ctx.appDark : ctx.appLight).background,
-      }),
-    }),
-    item({
-      key: 'nav.inactiveColor',
-      plainLabel: 'Inactive colour',
-      technicalKey: 'nav.inactiveColor',
-      description: 'The resting tabs’ glyph and label tint, in whichever theme is showing.',
-      tier: 'basic',
-      kind: 'color',
-      scope: 'local',
-      defaultValue: (ctx) => (ctx.isDark ? ctx.appDark : ctx.appLight).navInactive ?? '',
-      contrastGround: (ctx) => ({
-        label: 'background',
-        hex: (ctx.isDark ? ctx.appDark : ctx.appLight).background,
-      }),
-    }),
-    item({
-      key: 'nav.activeOpacity',
-      plainLabel: 'Active opacity',
-      technicalKey: 'nav.activeOpacity',
-      description: 'How solid the focused tab’s icon+label block renders.',
-      tier: 'advanced',
-      kind: 'decimal',
-      scope: 'local',
-      min: 0,
-      max: 1,
-      step: 0.02,
-      defaultValue: () => 1,
-    }),
-    item({
-      key: 'nav.inactiveOpacity',
-      plainLabel: 'Inactive opacity',
-      technicalKey: 'nav.inactiveOpacity',
-      description: 'How solid the resting tabs’ icon+label blocks render.',
-      tier: 'advanced',
-      kind: 'decimal',
-      scope: 'local',
-      min: 0,
-      max: 1,
-      step: 0.02,
-      defaultValue: () => 1,
-    }),
-    item({
-      key: 'nav.activeScale',
-      plainLabel: 'Active scale',
-      technicalKey: 'nav.activeScale',
-      description: 'Grows or shrinks the focused tab’s icon+label block.',
-      tier: 'advanced',
-      kind: 'decimal',
-      scope: 'local',
-      min: 0.8,
-      max: 1.5,
-      step: 0.02,
-      defaultValue: () => 1,
-    }),
-    create({
-      key: 'create.size',
-      plainLabel: 'Button size',
-      technicalKey: 'create.size',
-      description:
-        'The centre [+] tile’s square — by default its home(18) share of the live bar height. Never below the 44pt touch floor.',
-      tier: 'basic',
-      kind: 'number',
-      scope: 'local',
-      unit: 'pt',
-      min: 44,
-      max: 96,
-      step: 1,
-      defaultValue: (ctx) => Math.round(liveNavBarHeight(ctx) * navBar.createSizeRatio),
-    }),
-    create({
-      key: 'create.radius',
-      // N3: it no longer INHERITS. It was radius.lg's child and shipped at
-      // that scale step's 17; the operator dialled 18, which is not on the
-      // scale. An inheriting dial has to ship at its parent's value or the
-      // chain is a lie, and the alternative — moving radius.lg — would have
-      // rounded a great deal of the tree for one control. So the control
-      // carries its own corner (ui/tokens navBar.createRadius), as it already
-      // carries its own fill and its own ring.
-      plainLabel: 'Corner roundness',
-      technicalKey: 'create.radius',
-      description: 'The centre [+] tile’s corner radius.',
-      tier: 'basic',
-      kind: 'number',
-      scope: 'local',
-      unit: 'pt',
-      min: 0,
-      max: 48,
-      step: 1,
-      defaultValue: () => navBar.createRadius,
-    }),
-    create({
-      key: 'create.fill',
-      plainLabel: 'Fill',
-      technicalKey: 'create.fill',
-      description: 'The centre [+] tile’s own fill — it inherits nothing from the tab items.',
-      tier: 'basic',
-      kind: 'color',
-      scope: 'local',
-      // 2026-09-17: the tile is the Post-a-job pill's green in BOTH themes
-      // now. `postPillGreen` is theme-constant, so one read answers both and
-      // the ternary N3 needed for its dark-only navBar.gold is gone with it.
-      // The SHIPPED dark tile lights that green through
-      // ui/primitives/LitSurface.tsx; a colour dial can only name the flat
-      // far stop, which is what this is — turning it moves the wash with it.
-      defaultValue: (ctx) => ctx.appLight.postPillGreen ?? '',
-      contrastGround: (ctx) => ({
-        label: 'background',
-        hex: (ctx.isDark ? ctx.appDark : ctx.appLight).background,
-      }),
-    }),
-    create({
-      key: 'create.border',
-      plainLabel: 'Ring',
-      technicalKey: 'create.border',
-      description: 'The centre [+] tile’s outline.',
-      tier: 'advanced',
-      kind: 'color',
-      scope: 'local',
-      // S3 (D14): dark's ring is the champagne token now; light keeps H3's
-      // deepened gold. The dial itself is unchanged — only its default moved.
-      defaultValue: (ctx) => (ctx.isDark ? navBar.ringColorDark : (ctx.appLight.goldDeep ?? '')),
-    }),
-    create({
-      key: 'create.glowAlpha',
-      plainLabel: 'Glow strength',
-      technicalKey: 'create.glowAlpha',
-      description: 'The gold halo under the centre [+] (dark ground) — RUN H2’s operator dial.',
-      tier: 'advanced',
-      kind: 'decimal',
-      scope: 'local',
-      min: 0,
-      max: 1,
-      step: 0.02,
-      defaultValue: () => navBar.createGlowAlpha,
-    }),
-    create({
-      key: 'create.glyphSize',
-      plainLabel: 'Glyph size',
-      technicalKey: 'create.glyphSize',
-      description: 'The + glyph — by default its shipped share of the live button size.',
-      tier: 'advanced',
-      kind: 'number',
-      scope: 'local',
-      unit: 'pt',
-      min: 16,
-      max: 64,
-      step: 1,
-      defaultValue: (ctx) => Math.round(liveCreateSize(ctx) * navBar.createGlyphRatio),
-    }),
-    create({
-      key: 'create.glyphColor',
-      plainLabel: 'Glyph colour',
-      technicalKey: 'create.glyphColor',
-      description: 'The + glyph’s ink, in whichever theme is showing.',
-      tier: 'advanced',
-      kind: 'color',
-      scope: 'local',
-      // 2026-09-17: dark ships the app's cream — the dark palette's `onForest`,
-      // the content colour a green fill takes and the value the dark
-      // "Post a job" label is already set in. N3's navBar.glyphColorDark was
-      // a green for reading against a GOLD tile and no longer applies. Light
-      // is untouched.
-      defaultValue: (ctx) =>
-        ctx.isDark ? (ctx.appDark.onForest ?? '') : (ctx.appLight.gold ?? ''),
-    }),
-    create({
-      key: 'create.glyphOffsetX',
-      plainLabel: 'Glyph X offset',
-      technicalKey: 'create.glyphOffsetX',
-      description: 'Nudges the + glyph sideways inside the tile.',
-      tier: 'advanced',
-      kind: 'number',
-      scope: 'local',
-      unit: 'pt',
-      min: -16,
-      max: 16,
-      step: 1,
-      defaultValue: () => 0,
-    }),
-    create({
-      key: 'create.glyphOffsetY',
-      plainLabel: 'Glyph Y offset',
-      technicalKey: 'create.glyphOffsetY',
-      description: 'Nudges the + glyph up or down inside the tile.',
-      tier: 'advanced',
-      kind: 'number',
-      scope: 'local',
-      unit: 'pt',
-      min: -16,
-      max: 16,
-      step: 1,
-      defaultValue: () => 0,
     }),
   ];
 }
@@ -1610,17 +1208,6 @@ function shadowDialEntries(): StudioEntry[] {
     ...dialEntries('shadows', 'Sheets', [
       { key: 'sheet.shadowOpacity', label: 'Dialog shadow opacity', description: 'The floating dialog cards’ lift (the raised shadow ships at 0.14).', tier: 'advanced', scope: 'local', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: 0.14 },
     ]),
-    ...dialEntries('shadows', 'Centre [+]', [
-      {
-        key: 'create.glowColor',
-        label: 'Glow colour',
-        description: 'The halo under the centre [+] — palette gold today.',
-        tier: 'advanced',
-        scope: 'local',
-        kind: 'color',
-        defaultValue: (ctx) => themePalette(ctx).gold ?? '',
-      },
-    ]),
     ...dialEntries('shadows', 'Selection', [
       {
         key: 'glow.chipSelection',
@@ -2407,7 +1994,6 @@ export const STUDIO_REGISTRY: readonly StudioEntry[] = [
   ...materialDials('menu'),
   ...materialDials('clear'),
   ...materialDials('pane'),
-  ...navigationDialEntries(),
   ...sheetDialEntries(),
   ...menuDialEntries(),
   ...cardDialEntries(),
@@ -2436,43 +2022,6 @@ export const STUDIO_REGISTRY: readonly StudioEntry[] = [
     defaultValue: (ctx) => ctx.glowAlphaDefault,
     overrideValue: (ctx) => ctx.overrides.glowAlpha,
     write: (value) => patchDesignOverrides({ glowAlpha: value as number | undefined }),
-  },
-  {
-    key: 'nav.radius',
-    plainLabel: 'Top corner roundness',
-    technicalKey: 'navRadius',
-    description: "Rounds the nav bar's top corners — 0 is the flush, square bar.",
-    category: 'navigation',
-    subcategory: 'Bar container',
-    tier: 'basic',
-    kind: 'number',
-    scope: 'token',
-    unit: 'pt',
-    min: 0,
-    max: 40,
-    step: 2,
-    defaultValue: () => 0,
-    overrideValue: (ctx) => ctx.overrides.navRadius,
-    write: (value) => patchDesignOverrides({ navRadius: value as number | undefined }),
-  },
-  {
-    key: 'nav.bottomPad',
-    plainLabel: 'Space below the nav bar',
-    technicalKey: 'navBottomPad',
-    description:
-      "Padding between the bar's icon row and the physical bottom edge — automatic from the safe area until touched.",
-    category: 'navigation',
-    subcategory: 'Bar container',
-    tier: 'basic',
-    kind: 'number',
-    scope: 'token',
-    unit: 'pt',
-    min: 0,
-    max: 34,
-    step: 2,
-    defaultValue: (ctx) => ctx.navBottomPadAuto,
-    overrideValue: (ctx) => ctx.overrides.navBottomPad,
-    write: (value) => patchDesignOverrides({ navBottomPad: value as number | undefined }),
   },
   {
     key: 'color.gold',

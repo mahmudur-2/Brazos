@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useNavBottomPad } from '../hooks/useNavInset';
 import { CreateSheet } from '../components/CreateSheet';
+import { MeltTabBar } from '../components/MeltTabBar';
 import { navigateAcrossTabs } from '../lib/navigationRef';
-import { navBarPalette, useThemeColors } from '../lib/theme';
 import type {
   CustomerHomeStackParamList,
   CustomerParamList,
@@ -21,9 +20,8 @@ import { WorkerSearchScreen } from '../screens/WorkerSearchScreen';
 import {
   bottomNavScreenListeners,
   bottomNavScreenOptions,
-  CenterCreateButton,
+  CUSTOMER_BAR_TABS,
   HIDDEN_TAB_ITEM_OPTIONS,
-  useNavBarContainerDials,
 } from '../ui/primitives/BottomNav';
 import {
   MapStackNavigator,
@@ -148,13 +146,6 @@ function CreateActionScreen() {
 }
 
 export function CustomerRoot() {
-  // G1 (C4): the bar's resolved bottom padding — the flush formula, or the
-  // design studio's dial (hooks/useNavInset.ts owns the arithmetic).
-  const navBottomPad = useNavBottomPad();
-  // S2 (C6): re-render when a bar-container dial (height, padding, spread)
-  // moves, so the plain screenOptions factory reads fresh values.
-  useNavBarContainerDials();
-  const { palette, isDark } = useThemeColors();
   const [createOpen, setCreateOpen] = useState(false);
   // 2026-09-18: the customer's mode switch moved off Home and into the
   // sheet's bottom row — the same switchMode() the Home pill called, which
@@ -178,9 +169,14 @@ export function CustomerRoot() {
 
   return (
     <>
+      {/* 2026-09-30 — the Melt-through bar (components/MeltTabBar.tsx) draws this tree's four
+          tabs and the [ + ], which opens the creation sheet below and never navigates. */}
       <Tab.Navigator
-        screenOptions={bottomNavScreenOptions(navBottomPad, navBarPalette(palette, isDark))}
+        screenOptions={bottomNavScreenOptions}
         screenListeners={bottomNavScreenListeners}
+        tabBar={(props) => (
+          <MeltTabBar {...props} tabs={CUSTOMER_BAR_TABS} onCreate={() => setCreateOpen(true)} />
+        )}
       >
         {/* The ONLY tabPress listener is the shared haptics tap
             (bottomNavScreenListeners) — it navigates nothing and reads
@@ -196,17 +192,9 @@ export function CustomerRoot() {
           component={DiscoverStackNavigator}
           options={{ tabBarLabel: 'Discover' }}
         />
-        {/* The creation slot, dead centre of the five drawn slots. */}
-        <Tab.Screen
-          name="Create"
-          component={CreateActionScreen}
-          options={{
-            // Replaces the library's pressable outright: the [ + ] opens the
-            // creation sheet and never dispatches navigation, so Create is not
-            // a destination and never renders as focused.
-            tabBarButton: () => <CenterCreateButton onPress={() => setCreateOpen(true)} />,
-          }}
-        />
+        {/* The creation slot's route. The bar draws the [ + ] in its place and opens the
+            creation sheet; nothing navigates here, so Create is never focused. */}
+        <Tab.Screen name="Create" component={CreateActionScreen} options={HIDDEN_TAB_ITEM_OPTIONS} />
         <Tab.Screen
           name="Messages"
           component={MessagesStackNavigator}

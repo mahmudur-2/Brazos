@@ -58,6 +58,7 @@ import {
   type ColorPalette,
 } from '../lib/theme';
 import { PalettePinContext } from '../hooks/useThemeColors';
+import { usePillReserve } from '../ui/primitives';
 
 /** Matches HotspotMap.native's DEFAULT_REGION span — the pre-interaction zoom. */
 const INITIAL_LAT_DELTA = 0.08;
@@ -84,11 +85,9 @@ const MAP_CHIP_HEIGHT = 42;
 const MAP_CHIP_RADIUS = 21;
 /** The jobs sheet's corner. */
 const MAP_SHEET_RADIUS = 30;
-/** The jobs sheet RESTS ON the nav bar — no map strip under it — since
- *  2026-09-20 (sitting 2), the operator's red line; the sides keep the
- *  `map.sheet.inset` dial. A constant, not the dial: the dial drives the
- *  sides and stays a dial. */
-const MAP_SHEET_BOTTOM = 0;
+/* The jobs sheet RESTS ON the nav bar (2026-09-20, sitting 2, the operator's red line); since
+ * 2026-09-30 the bar is the floating pill, so it rests on the pill's top edge — usePillReserve(),
+ * read where the sheet is placed. The sides keep the `map.sheet.inset` dial. */
 /** Air between the jobs pane's top and Apple's Legal link above it. */
 const LEGAL_LINK_AIR = 8;
 
@@ -156,6 +155,7 @@ function MapJobsSheet({
   sheetPaddingX: number;
   sheetInset: number;
 }) {
+  const sheetBottom = usePillReserve();
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const feed = useOpenJobs();
@@ -251,7 +251,7 @@ function MapJobsSheet({
         radius={sheetRadius}
         paddingX={sheetPaddingX}
         inset={sheetInset}
-        insetBottom={MAP_SHEET_BOTTOM}
+        insetBottom={sheetBottom}
       />
       ) : null}
       {/* THE FILTERS SHEET — the approved design, over the one filter model.
@@ -279,6 +279,7 @@ function MapJobsSheet({
 }
 
 export function MapScreen() {
+  const sheetBottom = usePillReserve();
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const insets = useSafeAreaInsets();
@@ -518,7 +519,7 @@ export function MapScreen() {
   const sheetGap = spacing.md;
   const sheetMaxHeight =
     rootHeight > 0 && pillHeight > 0
-      ? Math.max(0, rootHeight - insets.top - pillHeight - sheetGap - MAP_SHEET_BOTTOM)
+      ? Math.max(0, rootHeight - insets.top - pillHeight - sheetGap - sheetBottom)
       : 0;
   const onRootLayout = (event: LayoutChangeEvent) => setRootHeight(event.nativeEvent.layout.height);
   const onPillLayout = (event: LayoutChangeEvent) => setPillHeight(event.nativeEvent.layout.height);
@@ -546,7 +547,7 @@ export function MapScreen() {
           // The approved design carries no locate button over the worker
           // map; the customer map keeps it, untouched.
           hideLocateButton={isWorker}
-          legalLabelInsetBottom={isWorker && peekHeight > 0 ? MAP_SHEET_BOTTOM + peekHeight + LEGAL_LINK_AIR : undefined}
+          legalLabelInsetBottom={isWorker && peekHeight > 0 ? sheetBottom + peekHeight + LEGAL_LINK_AIR : undefined}
           onRegionChangeComplete={
             isWorker ? (region) => setLatDelta(region.latitudeDelta) : undefined
           }
@@ -732,7 +733,7 @@ export function MapScreen() {
             material="pane"
             radius={sheetRadius}
             corners="all"
-            style={[styles.countCapsule, { left: sheetInset, right: sheetInset, bottom: sheetInset }]}
+            style={[styles.countCapsule, { left: sheetInset, right: sheetInset, bottom: sheetInset + sheetBottom }]}
           >
             <Text style={styles.countText} numberOfLines={1}>
               {visibleJobCount} open {visibleJobCount === 1 ? 'job' : 'jobs'}

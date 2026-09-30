@@ -1453,6 +1453,83 @@ export const navBar = {
   createRadius: 18,
 } as const;
 
+/**
+ * 2026-09-30 (the build run, `docs/dispatch/MELT-TAB-BAR.md`) — THE MELT-THROUGH TAB BAR: a
+ * floating pill in the lit-card material with the chosen tab a flat bubble that melts from tab to
+ * tab. Every number the bar draws or springs with lives here; `lib/meltBarGeometry.ts`
+ * holds the pure arithmetic and takes these as arguments, so a test can execute it.
+ *
+ * The greys are the palettes' own `ink` at an alpha (dark #F1EDE1 at 60 %, light #13201B at 50 %),
+ * the bubble is `emerald` and what sits inside it `onForest` — no new hue.
+ */
+export const meltBar = {
+  /** The pill: 16pt in from each side, 64 tall, fully round. */
+  sideInset: 16,
+  height: 64,
+  radius: 32,
+  /** Its bottom edge sits max(inset − tuck, min) above the screen's (24 on a 34pt inset). */
+  bottomTuck: 10,
+  bottomMin: 12,
+  /** Room a scroller keeps between its last row and the pill's top. */
+  breathing: 8,
+  /** The moving bubble's three circles, and the + bubble. */
+  bubble: [54, 45, 36] as const,
+  plus: 44,
+  plusGlyph: 28,
+  icon: 25,
+  /** The flat Home glyph's height at a 25 width (the Ionicons em box, 512 × 525). */
+  homeIconHeight: 25.63,
+  labelSize: 11,
+  labelWeight: '500' as const,
+  /** 0.01 em at 11pt. */
+  labelTracking: 0.11,
+  labelGap: 2,
+  /** A tab column is the pill's height square. */
+  column: 64,
+  restInkAlpha: { dark: 0.6, light: 0.5 },
+  /** Springs as [stiffness, damping], mass 1. */
+  springs: {
+    circles: [
+      [640, 40],
+      [380, 30],
+      [240, 23],
+    ] as const,
+    follow: [1400, 70] as const,
+    swellIn: [520, 30] as const,
+    swellOut: [380, 22] as const,
+    plusPull: [300, 14] as const,
+    plusScale: [420, 12] as const,
+    plusPress: [900, 40] as const,
+    chosen: [260, 24] as const,
+  },
+  /** The press swell on the lead circle. */
+  swell: 0.1,
+  /** Stretch while moving: s = min(|v| / stretchVelocity, stretchMax); height × (1 − squash·s). */
+  stretchVelocity: 2600,
+  stretchMax: 0.2,
+  stretchSquash: 0.45,
+  /** Fillet radii: inside the moving bubble, the + joint, and the + joint while they overlap. */
+  fillet: { chain: 40, plus: 12, over: 26 },
+  /** The + joint starts forming this far away, and eases from `over` while they overlap this much. */
+  plusReach: 9,
+  plusOverlap: 12,
+  plusPull: 2.5,
+  plusJoinKick: -1.2,
+  plusSnapKick: 3.2,
+  plusPressed: 0.86,
+  /** The chosen tab: its icon drops, its name rises and fades. */
+  iconDrop: 7.5,
+  labelRise: 4,
+  labelFade: 1.6,
+  /** A finger has to travel this far before the lead circle follows it. */
+  dragSlop: 5,
+  /** The integrator's substep, seconds. */
+  substep: 0.004,
+  /** The fallback's slide, and the reduced-motion timing. */
+  fallbackSpring: [420, 34] as const,
+  reducedMs: 180,
+} as const;
+
 // ---------------------------------------------------------------------------
 // Controls
 // ---------------------------------------------------------------------------

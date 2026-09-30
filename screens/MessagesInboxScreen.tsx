@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useScrollClearance } from '../ui/primitives';
 import {
   ActivityIndicator,
   FlatList,
@@ -126,6 +127,8 @@ const SWIPE_SETTLE_MS = 320;
 type SheetTarget = ResolvedSheetTarget;
 
 export function MessagesInboxScreen() {
+  // 2026-09-30: the tab bar floats over this screen; the list ends above the pill.
+  const navClearance = useScrollClearance();
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // RUN T2 (C6) — THE INBOX'S OWN FOUR. The filter pill's height keeps the
@@ -1026,11 +1029,12 @@ export function MessagesInboxScreen() {
           ItemSeparatorComponent={() => (
             <View style={[styles.rowRule, { backgroundColor: withAlpha(colors.inboxRule, isDark ? 0.11 : 1) }]} />
           )}
-          contentContainerStyle={
+          contentContainerStyle={[
             visibleRows.length === 0
               ? styles.emptyContainer
-              : [styles.listContent, { paddingHorizontal: listPaddingX }]
-          }
+              : [styles.listContent, { paddingHorizontal: listPaddingX }],
+            { paddingBottom: navClearance },
+          ]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }

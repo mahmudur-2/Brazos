@@ -93,7 +93,7 @@ import {
   type ColorPalette,
   screenGround,
 } from '../lib/theme';
-import { PINNED_FOOTER_BOTTOM_PADDING, useScrollClearance } from '../ui/primitives';
+import { usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
 
 /**
  * The worker's take on this job — "$45–$54" / "$54" — comes from
@@ -128,6 +128,7 @@ export function JobDetailScreen() {
   useShellGround('homeBackground');
   // emerald(3): the floating pill's real footprint.
   const navClearance = useScrollClearance();
+  const footerPad = usePinnedFooterPadding();
   // The shared meta-glyph rule (prestige 3c, WorkerJobCard): gold in dark,
   // Heritage muted in light.
   const metaGlyph = isDark ? colors.gold : colors.textMuted;
@@ -1050,7 +1051,7 @@ export function JobDetailScreen() {
           </View>
         </ScrollView>
         {showBidBar ? (
-          <View style={[styles.bidBar, { paddingBottom: PINNED_FOOTER_BOTTOM_PADDING }]}>
+          <View style={[styles.bidBar, { paddingBottom: footerPad }]}>
             <View style={styles.bidBarRow}>
               {job.budget_cents != null ? (
                 <Button

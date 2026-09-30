@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { useScrollClearance } from '../ui/primitives';
 import {
   ActivityIndicator,
   Pressable,
@@ -125,6 +126,8 @@ function bidNextAction(status: string, awaitingMe: boolean): string {
 }
 
 export function MyJobsHubScreen() {
+  // 2026-09-30: the tab bar floats over this screen; the list ends above the pill.
+  const navClearance = useScrollClearance();
   const { palette: colors, isDark } = useThemeColors();
   // Forest reads near-black on a dark surface under palette v2; masters
   // 35/36/37 draw these accents gold.
@@ -289,7 +292,7 @@ export function MyJobsHubScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={[styles.content, { gap: contentGap }]}
+          contentContainerStyle={[styles.content, { gap: contentGap, paddingBottom: navClearance }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl

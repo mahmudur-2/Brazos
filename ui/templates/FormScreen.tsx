@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { PINNED_FOOTER_BOTTOM_PADDING, StepHeader, useScrollClearance } from '../primitives';
+import { StepHeader, usePinnedFooterPadding, useScrollClearance } from '../primitives';
 import {
   controls,
   layout,
@@ -103,6 +103,7 @@ export function FormScreen({
   // from a flat token. Whichever of the two bottom elements is last on screen
   // takes it — the footer when there is one, the scroller when there is not.
   const navClearance = useScrollClearance();
+  const footerPad = usePinnedFooterPadding();
 
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
@@ -150,7 +151,7 @@ export function FormScreen({
                 // and Delete my account. It takes its own breathing room now;
                 // the clearance stays exactly where it is still needed, on the
                 // scroller above when there is no footer at all.
-                { paddingBottom: PINNED_FOOTER_BOTTOM_PADDING },
+                { paddingBottom: footerPad },
               ]}
             >
               {footerNote ? <View style={styles.footerNote}>{footerNote}</View> : null}

@@ -106,7 +106,7 @@ test('D0 · the success overlay renders opaque — no animated opacity, no trans
   }
 });
 
-test('D0 · the publish surface paints the palette green (the Lux mint); the bottom nav keeps its own #5FAE81', () => {
+test('D0 · the publish surface paints the palette green (the Lux mint), and so does the Melt bar\'s bubble', () => {
   const tokens = read('ui/tokens.ts');
   const emeraldDark = tokenValue(tokens, 'export const dark = {', 'emerald');
   // 2026-09-26 (the refresh): Emerald Lux Glass moved the live-state green to the
@@ -128,14 +128,15 @@ test('D0 · the publish surface paints the palette green (the Lux mint); the bot
     'the live page\'s tick resolves its green from the emerald token'
   );
 
-  // The bottom nav is ONE component with ONE active tint, so the publish
-  // screen cannot paint it differently unless something composites over it —
-  // which is precisely what the test above now forbids.
-  const nav = stripComments(read('ui/primitives/BottomNav.tsx'));
+  // The bottom nav is ONE component with ONE chosen-tab colour. 2026-09-30 (the build run,
+  // docs/dispatch/MELT-TAB-BAR.md §1): the operator redrew the bar — the Melt-through pill — and
+  // its chosen tab is a bubble in the palette's own emerald, the one mint, so the bar's green of
+  // its own (NAV_BAR_DARK, 2026-09-26's freeze) no longer draws it.
+  const nav = stripComments(read('components/MeltTabBar.shared.tsx'));
   assert.match(
     nav,
-    /tabBarActiveTintColor: palette\.emerald,/,
-    'the nav active tint is the emerald role of the palette the bar is handed'
+    /bubble: palette\.emerald,/,
+    'the bubble is the emerald role of the resolved palette'
   );
 
   // ANTI-VACUITY: the dark palette lib/theme.ts hands screens must BE that
@@ -305,8 +306,10 @@ test('D5 · the last step scroller ends above its bar, which never covers it', (
     // 2026-09-27 (the Lux remake): only the LAST step has a footer to clear —
     // "no pinned Continue, no footer padding" on steps 1-3 — and it is still
     // the one style that clears it.
-    /contentContainerStyle=\{\[ styles\.content,[^\]]*\}, isLastStep && styles\.contentWithFooter, \]\}/,
-    'the clearance applies on the last step, the one step with a footer'
+    // 2026-09-30: the tab bar floats over this screen, so steps 1-3 (no footer) end above the pill
+    // with the scroll clearance, and the last step still ends on its bar.
+    /contentContainerStyle=\{\[ styles\.content,[^\]]*\}, isLastStep \? styles\.contentWithFooter : \{ paddingBottom: navClearance \}, \]\}/,
+    'the last step ends on its bar; the others clear the floating pill'
   );
   // 2026-09-28 (LUX-LIST-64 #41): the bar is in the column UNDER the scroller —
   // it never covers the content — and sits flush on the tab bar, so what the

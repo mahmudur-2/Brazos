@@ -432,21 +432,21 @@ test('each tree carries its own tab contract (emerald D1 + D4)', () => {
   assert.match(bottomNav, /key: 'Map'[^}]*icons: \['location', 'location-outline'\]/);
   // D4 is CUSTOMER ONLY. The worker bar keeps the five-tab pill with no
   // action slot and no sheet — asserted, not merely left unwritten.
-  assert.doesNotMatch(workerRoot, /CenterCreateButton|name="Create"|ActionSheet/);
-  // The slot is an ACTION, not a destination: its button replaces the
-  // library's pressable outright, so Create never dispatches navigation and
-  // never renders focused, and its component draws nothing.
-  assert.match(customerRoot, /tabBarButton: \(\) => <CenterCreateButton onPress=/);
+  assert.doesNotMatch(workerRoot, /onCreate|name="Create"|ActionSheet/);
+  // The slot is an ACTION, not a destination. 2026-09-30 (the build run, docs/dispatch/
+  // MELT-TAB-BAR.md): the Melt bar draws the [ + ] itself and calls the tree's onCreate — the
+  // creation sheet — so Create never dispatches navigation and never renders focused, and its
+  // route's component draws nothing.
+  assert.match(
+    customerRoot,
+    /<MeltTabBar \{\.\.\.props\} tabs=\{CUSTOMER_BAR_TABS\} onCreate=\{\(\) => setCreateOpen\(true\)\} \/>/
+  );
+  assert.match(workerRoot, /<MeltTabBar \{\.\.\.props\} tabs=\{WORKER_BAR_TABS\} \/>/);
   assert.match(customerRoot, /function CreateActionScreen\(\) \{\s*return null;/);
-  // 4D-4: the options factory takes the resolved palette so the bar repaints
-  // on a theme change — still the ONE implementation, now theme-aware. G1
-  // (C4): the first argument is the resolved navBottomPad — the flush
-  // formula or the studio dial — from the one hook in hooks/useNavInset.ts.
-  assert.match(customerRoot, /const navBottomPad = useNavBottomPad\(\);/);
-  assert.match(workerRoot, /const navBottomPad = useNavBottomPad\(\);/);
-  // 2026-09-26 (the refresh): the bar paints with its own frozen colours in dark.
-  assert.match(customerRoot, /bottomNavScreenOptions\(navBottomPad, navBarPalette\(palette, isDark\)\)/);
-  assert.match(workerRoot, /bottomNavScreenOptions\(navBottomPad, navBarPalette\(palette, isDark\)\)/);
+  // The bar reads the resolved palette itself (useThemeColors), so it repaints on a theme change,
+  // and the trees hand the navigator nothing but the shared options and listeners.
+  assert.match(customerRoot, /screenOptions=\{bottomNavScreenOptions\}/);
+  assert.match(workerRoot, /screenOptions=\{bottomNavScreenOptions\}/);
 });
 
 test('customer Home no longer links to Map, and the Map route survived anyway', () => {
@@ -560,7 +560,9 @@ test('the [ + ] sheet is a shortcut: each action also keeps a standing surface',
 });
 
 test('there is exactly one bottom nav implementation', () => {
-  assert.match(bottomNav, /export function bottomNavScreenOptions/);
+  // 2026-09-30: the ONE bar is components/MeltTabBar.tsx, drawn through each tree's tabBar; the
+  // options every tab screen takes stay here, and style nothing.
+  assert.match(bottomNav, /export const bottomNavScreenOptions: BottomTabNavigationOptions = \{\s*headerShown: false,\s*\};/);
   // The trees configure it; they do not re-declare the bar.
   for (const [path, source] of [
     ['navigation/CustomerRoot.tsx', customerRoot],

@@ -3,7 +3,7 @@ import { RemoteImage } from '../../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { PINNED_FOOTER_BOTTOM_PADDING, useScrollClearance } from '../primitives';
+import { usePinnedFooterPadding, useScrollClearance } from '../primitives';
 import { layout, radius, spacing, type EmeraldPalette } from '../tokens';
 import { EYEBROW_TYPE, screenGround, themedStyles, useThemeColors } from '../../lib/theme';
 import { useOverrideNumber } from '../../lib/designOverrides';
@@ -68,6 +68,7 @@ export function DetailScreen({
   // the pill's real footprint — the action bar when there is one, otherwise
   // the scroller.
   const navClearance = useScrollClearance();
+  const footerPad = usePinnedFooterPadding();
   // RUN S2 (C9) — the layout dials, live across every template screen.
   const pagePadDial = useOverrideNumber('layout.pagePadding');
   const topPadDial = useOverrideNumber('layout.contentTopPad');
@@ -119,7 +120,7 @@ export function DetailScreen({
                 // pill, so it does not reserve the pill's footprint a second
                 // time; it takes its own breathing room. The scroller above
                 // still clears the pill when there is no action bar at all.
-                { paddingBottom: PINNED_FOOTER_BOTTOM_PADDING },
+                { paddingBottom: footerPad },
               ]}
             >
               {actionBar}

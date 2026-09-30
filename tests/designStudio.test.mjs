@@ -367,8 +367,6 @@ test('registry: defaults mirror the token surfaces value by value', async () => 
     }
   }
   assert.equal(byKey.get('glow.alpha').defaultValue(ctx), SURFACE_GLOW_ALPHA_AS_SHIPPED);
-  assert.equal(byKey.get('nav.radius').defaultValue(ctx), 0, 'the bar launches square');
-  assert.equal(byKey.get('nav.bottomPad').defaultValue(ctx), ctx.navBottomPadAuto);
   assert.equal(byKey.get('color.gold').defaultValue(ctx), tokens.dark.gold, 'dark ctx: dark gold');
   assert.equal(byKey.get('color.cardFill').defaultValue(ctx), tokens.dark.surface);
 });
@@ -381,7 +379,6 @@ test('registry: writes round-trip through the real store, and reset restores ide
   try {
     byKey.get('material.chrome.blur').write(44);
     byKey.get('glow.alpha').write(0.31);
-    byKey.get('nav.radius').write(12);
     const ctx = await contextFor();
     assert.equal(byKey.get('material.chrome.blur').overrideValue(ctx), 44);
     assert.equal(schema.currentValueOf(byKey.get('material.chrome.blur'), ctx), 44);
@@ -389,7 +386,6 @@ test('registry: writes round-trip through the real store, and reset restores ide
     assert.equal(schema.isModified(byKey.get('material.sheet.blur'), ctx), false);
     assert.equal(o.resolveMaterials(o.getDesignOverrides()).chrome.blur, 44);
     assert.equal(o.getDesignOverrides().glowAlpha, 0.31);
-    assert.equal(o.getDesignOverrides().navRadius, 12);
 
     // Clearing one dial returns exactly that entry to its default.
     byKey.get('material.chrome.blur').write(undefined);
@@ -416,7 +412,8 @@ test('registry: every category icon is a real glyph in the installed Ionicons fo
       'utf8',
     ),
   );
-  assert.equal(schema.STUDIO_CATEGORIES.length, 15, "the fourteen dispatched categories, plus RUN T2's Screens");
+  // 2026-09-30: 15 -> 14 — the Navigation category left with the attached bar's dials.
+  assert.equal(schema.STUDIO_CATEGORIES.length, 14, "the dispatched categories less Navigation, plus RUN T2's Screens");
   for (const category of schema.STUDIO_CATEGORIES) {
     assert.ok(category.label.trim().length > 0, `${category.key}: empty label`);
     assert.ok(
@@ -789,178 +786,19 @@ test('[static] the panel routes every gesture and frame change through the clamp
 // The Navigation category (S2 C6)
 // ---------------------------------------------------------------------------
 
-test('nav dials: defaults mirror the tokens, the [+] derives from the live bar, and writes round-trip', async () => {
+test('the attached bar\'s dials left with it: no nav, no centre-[+] dial, no Navigation category', async () => {
+  // 2026-09-30 (the build run, docs/dispatch/MELT-TAB-BAR.md §8): the tab bar is the Melt-through
+  // pill, which reads no studio dial, so the attached bar's container, item and centre-[+] dials —
+  // and its radius and bottom-pad dials — were removed rather than left inert. This is where their
+  // fences moved: none may come back as an orphan.
   const schema = await schemaModule;
-  const tokens = await tokensModule;
-  const o = await overridesModule;
-  const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
-  const ctx = await contextFor();
-
-  assert.equal(byKey.get('nav.barHeight').defaultValue(ctx), tokens.layout.floatingNavHeight);
-  assert.equal(byKey.get('nav.iconSize').defaultValue(ctx), tokens.navBar.iconSize);
-  assert.equal(byKey.get('nav.labelSize').defaultValue(ctx), tokens.navBar.labelFontSize);
-  assert.equal(byKey.get('nav.iconLabelGap').defaultValue(ctx), tokens.navBar.iconLabelGap);
-  assert.equal(byKey.get('create.glowAlpha').defaultValue(ctx), tokens.navBar.createGlowAlpha);
-  assert.equal(
-    byKey.get('create.size').defaultValue(ctx),
-    Math.round(tokens.layout.floatingNavHeight * tokens.navBar.createSizeRatio),
-    "the [+]'s default size is home(18)'s share of the bar",
-  );
-  assert.equal(
-    byKey.get('create.glyphSize').defaultValue(ctx),
-    Math.round(
-      Math.round(tokens.layout.floatingNavHeight * tokens.navBar.createSizeRatio) *
-        tokens.navBar.createGlyphRatio,
-    ),
-  );
-  assert.equal(
-    byKey.get('nav.activeColor').defaultValue(ctx),
-    tokens.navBar.activeColorDark,
-    "N3: dark ships the bar's own green, not the palette's live-state emerald",
-  );
-  assert.ok(byKey.get('create.size').min >= 44, 'the [+] can never dial under the touch floor');
-
-  try {
-    // The [+]'s derived defaults FOLLOW the live bar height.
-    byKey.get('nav.barHeight').write(100);
-    const live = await contextFor();
-    assert.equal(
-      byKey.get('create.size').defaultValue(live),
-      Math.round(100 * tokens.navBar.createSizeRatio),
-    );
-    // A bag write round-trips and clears.
-    byKey.get('nav.spread').write(24);
-    assert.equal(o.getDesignOverrides().values['nav.spread'], 24);
-    byKey.get('nav.spread').write(undefined);
-    byKey.get('nav.barHeight').write(undefined);
-    assert.equal('values' in o.getDesignOverrides(), false);
-  } finally {
-    o.resetDesignOverrides();
-  }
-
-  // NO per-item X offsets and NO per-pair gaps: the row dials are the ROW's.
-  const navKeys = schema.STUDIO_REGISTRY.filter((entry) => entry.category === 'navigation').map(
-    (entry) => entry.key,
-  );
-  assert.ok(!navKeys.some((key) => /item\d|perItem|pairGap/i.test(key)), 'the bar stays slot-based flex');
-  assert.ok(navKeys.includes('nav.spread') && navKeys.includes('nav.centerClearance'));
+  const keys = schema.STUDIO_REGISTRY.map((entry) => entry.key);
+  assert.deepEqual(keys.filter((key) => /^(nav|create)\./.test(key)), [], 'no nav or centre-[+] dial');
+  assert.ok(!schema.STUDIO_CATEGORIES.some((category) => category.key === 'navigation'), 'no Navigation category');
+  assert.doesNotMatch(stripComments(await read('ui/designStudioSchema.ts')), /navBottomPadAuto|liveNavBarHeight|liveCreateSize/);
+  assert.doesNotMatch(stripComments(await read('components/DesignStudioPanel.tsx')), /navBottomPadFor/);
 });
 
-test('S3 nav paint: solid chrome ground, the champagne [+] ring, and no raster in the bar', async () => {
-  const tokens = await tokensModule;
-  const schema = await schemaModule;
-  const bar = stripComments(await read('ui/primitives/BottomNav.tsx'));
-  const surface = stripComments(await read('ui/primitives/Surface.tsx'));
-
-  // ---- D11, SOLID NAV GROUND --------------------------------------------
-  assert.equal(tokens.materials.chrome.blur, 0, 'the chrome material no longer blurs');
-  assert.equal(tokens.materials.chrome.scrimAlpha, 1, 'the chrome scrim is opaque');
-  assert.equal(tokens.materials.chrome.fallbackScrimAlpha, 1, 'and opaque without blur too');
-  // The same material at a different mix — everything else is untouched.
-  assert.equal(tokens.materials.chrome.scrimColor, '#071B15');
-  assert.equal(tokens.materials.chrome.borderColor, tokens.brand.mint);
-  assert.equal(tokens.materials.chrome.borderAlpha, 0.2);
-  assert.equal(tokens.materials.chrome.radius, null);
-  assert.equal(tokens.materials.chrome.radiusTopOnly, false);
-  // Sheet and menu are NOT dragged along: both still blur under a
-  // translucent scrim, so this is the nav's ground and nothing else's.
-  for (const name of ['sheet', 'menu']) {
-    assert.ok(tokens.materials[name].blur > 0, `${name} must still blur`);
-    assert.ok(tokens.materials[name].scrimAlpha < 1, `${name}'s scrim must stay translucent`);
-  }
-  // The blur mounts ONLY where it can be seen. 2026-09-18: the condition
-  // reads the RESOLVED recipe (`glass` — the material in dark, its `light`
-  // block in light, null for a flat light surface), so the same three
-  // clauses now also keep the blur off every light surface that carries no
-  // recipe. The rule did not move; the name it reads did.
-  assert.match(
-    surface.replace(/\s+/g, ' '),
-    /\{glass && !flat && glass\.blur > 0 && scrimAlpha < 1 \?/,
-    'the BlurLayer must not mount behind an opaque scrim or at zero blur',
-  );
-  assert.match(
-    surface.replace(/\s+/g, ' '),
-    /const glass = isDark \? spec : spec\.light \?\? null;/,
-    'light wears glass only from a material’s own light block — never the dark recipe',
-  );
-  // The registry's chrome dials read the tokens, so they launch at the new
-  // values and keep working — a solid ground is a default, not a removal.
-  const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
-  const ctx = await contextFor();
-  assert.equal(byKey.get('material.chrome.blur').defaultValue(ctx), 0);
-  assert.equal(byKey.get('material.chrome.scrimAlpha').defaultValue(ctx), 1);
-  assert.equal(byKey.get('material.chrome.fallbackScrimAlpha').defaultValue(ctx), 1);
-
-  // ---- D14, THE [+] RING GOES CHAMPAGNE (dark only) ---------------------
-  //
-  // 2026-09-17 STOPS DRAWING THAT RING, on operator instruction: the dark
-  // control has no outline at all. D14's token is NOT deleted and this block
-  // still owns it — the studio's `create.border` dial launches at it and
-  // turning that dial still paints a ring, so the hue is live where a dial can
-  // reach it. What moved is the shipped default, and the DIAL half of D14 is
-  // asserted exactly as it was.
-  assert.equal(tokens.navBar.ringColorDark, '#E6D19A');
-  assert.match(
-    bar,
-    /borderColor: 'transparent',/,
-    "the dark control declares no ring — by colour, so no geometry forks with it",
-  );
-  assert.doesNotMatch(bar, /#E6D19A/i, 'the hex belongs in ui/tokens.ts, never at the call site');
-  // The registry default follows the token; LIGHT is untouched.
-  assert.equal(byKey.get('create.border').defaultValue({ ...ctx, isDark: true }), '#E6D19A');
-  assert.equal(
-    byKey.get('create.border').defaultValue({ ...ctx, isDark: false }),
-    ctx.appLight.goldDeep,
-    "light keeps H3's deepened gold",
-  );
-  // RUN N3 (2026-09-08) put the fill on the control's OWN gold token; 2026-09-17
-  // reverses the gold and hands the control the dark "Post a job" pill's recipe
-  // — `postPillGreen` under ui/primitives/LitSurface.tsx's wash. So the tree has
-  // no gold FILL in this file at all now, which is why tests/goldOnForest's
-  // recorded exception for it is deleted rather than left standing.
-  assert.match(bar, /backgroundColor: colors\.postPillGreen,/, "the fill is the pill's green");
-  assert.match(bar, /liftAlpha: navBar\.createLiftAlpha,/, 'lit with the pill’s own alpha');
-  // 2026-09-28 (LUX-LIST-64 #47): light's [ + ] ring left the gold for the forest mark.
-  assert.match(bar, /borderColor: colors\.mark,/, "light's ring stays");
-
-  // ---- D16, NO RASTER IN THE BAR (a proof, not a change) ----------------
-  // Every mark in the bar is an Ionicons font glyph or a styled View, so it
-  // is resolution-independent on every device.
-  assert.doesNotMatch(bar, /\bfrom 'react-native'.*\bImage\b/, 'no Image import');
-  assert.doesNotMatch(bar, /<Image\b/, 'the bar renders no Image');
-  assert.doesNotMatch(bar, /\bImageBackground\b/, 'the bar renders no ImageBackground');
-  assert.doesNotMatch(bar, /require\(/, 'the bar bundles no asset');
-  assert.doesNotMatch(bar, /\ssource=/, 'nothing in the bar takes an image source');
-  assert.match(bar, /<Ionicons/, 'the marks are font glyphs');
-});
-
-// ---------------------------------------------------------------------------
-// RUN S3 (D12) — THE STATIC REGISTRY AUDIT.
-//
-// A dial nothing reads is worse than a missing one: the operator turns it,
-// the app does not move, and they cannot tell whether the dial is broken or
-// their eye is. So EVERY static registry key must be provably read by
-// production source, and this test is the proof rather than a claim.
-//
-// The five ways a key counts as READ — anything else is an ORPHAN:
-//   (a) its exact literal appears in single or double quotes;
-//   (b) its exact literal sits in a string-array constant a wearer feeds to
-//       useOverrideFingerprint (the nav's bar-container dials);
-//   (c) a TEMPLATE read brackets it — a `${...}` template with real static
-//       text on BOTH ends, so `button.${variant}.height` reads
-//       button.primary.height but `${ns}.${role}` brackets nothing;
-//   (d) it is a `material.<name>.<prop>` key and ui/primitives/Surface.tsx
-//       reads `spec.<prop>`, or lib/designOverrides.ts's resolver folds it;
-//   (e) it is one of the G1 dials, read through useDesignDial('...') or
-//       `overrides.<dial>` — including the palette pair, which fold inside
-//       lib/designOverrides.ts's exported resolver that hooks/useThemeColors
-//       consumes, the same shape (d) allows for the materials.
-//
-// The panel, the schema and the override layer are EXCLUDED from the search:
-// they are the studio talking about itself, and a dial that only the studio
-// mentions is exactly the orphan this looks for. Tests are excluded for the
-// same reason. Runtime-enumerated colour entries are out of scope — they are
-// generated from the live palettes and have no static key to audit.
 // ---------------------------------------------------------------------------
 
 test('registry audit: every static entry has a reader in production source — zero orphans', async () => {
@@ -1131,98 +969,18 @@ test('registry audit: every static entry has a reader in production source — z
   );
 });
 
-test('[static] S3 D15: the active tab glows with a box to blur into, and composites in place', async () => {
-  const bar = stripComments(await read('ui/primitives/BottomNav.tsx'));
-  const flat = bar.replace(/\s+/g, ' ');
-
-  // The glow itself is UNCHANGED — same shape, same colour, same strength,
-  // same dial. This fence is about the box around it, not the light.
-  assert.match(
-    flat,
-    /glow\.text\(withAlpha\(colors\.emerald, glowAlpha \?\? ACTIVE_TAB_GLOW_ALPHA\)\)/,
-    'the glow keeps its colour and its dial',
-  );
-
-  // (a) THE BOX. The bleed is READ from the shape's own radius rather than
-  // restated, so the padding can never drift from the blur it contains.
-  assert.match(flat, /const bleed = activeGlow\?\.textShadowRadius \?\? 0;/);
-  assert.match(flat, /const glyphGlowBox = bleed \? \{ padding: bleed, margin: -bleed \} : null;/);
-  // Equal and opposite: the laid-out geometry is byte-identical.
-  assert.match(flat, /marginTop: iconLabelGap - bleed, marginBottom: -bleed, marginLeft: -bleed, marginRight: -bleed,/);
-  assert.match(flat, /style=\{\[activeGlow, glyphGlowBox\]\}/, 'the glyph wears the box');
-  assert.match(flat, /activeGlow, labelGlowBox,/, 'the label wears its own');
-  // Unfocused and light: bleed is 0, both boxes are null, nothing is declared.
-  assert.match(flat, /const labelGlowBox = bleed \?/);
-
-  // (b) IN PLACE. Identity dials are not declared at all, so an untouched bar
-  // never forces its subtree onto an offscreen layer.
-  assert.match(flat, /const moved = offsetX !== 0 \|\| offsetY !== 0 \|\| dialledScale !== 1;/);
-  assert.match(flat, /\.\.\.\(dialledOpacity !== 1 \? \{ opacity: dialledOpacity \} : null\),/);
-  assert.match(flat, /\.\.\.\(moved \? \{ transform: \[/);
-  // The dials themselves still exist and still default to identity.
-  assert.match(bar, /useOverrideNumber\('nav\.activeOpacity'\) \?\? 1/);
-  assert.match(bar, /useOverrideNumber\('nav\.activeScale'\) \?\? 1/);
-  assert.match(bar, /useOverrideNumber\('nav\.itemOffsetX'\) \?\? 0/);
-
-  // Nothing in the item's own chain may clip the blur back off again.
-  assert.doesNotMatch(bar, /overflow: 'hidden'/, 'the bar clips nothing');
-});
-
-test('the narrow typography exception: nav label size is the ONLY font dial', async () => {
+test('the narrow typography exception is gone: no font property has a dial', async () => {
+  // It was the nav label size, the one font dial; it left with the attached bar (2026-09-30).
   const schema = await schemaModule;
   const fontDials = schema.STUDIO_REGISTRY.filter(
     (entry) =>
       /font/i.test(entry.technicalKey) ||
       /font size|text size|label size/i.test(entry.plainLabel) ||
-      /labelSize/.test(entry.key),
+      /fontSize/.test(entry.key),
   ).map((entry) => entry.key);
-  assert.deepEqual(fontDials, ['nav.labelSize'], 'no other font property may grow a dial');
+  assert.deepEqual(fontDials, [], 'no font property may grow a dial');
 });
 
-test('[static] the bar reads every dial through the override layer, and the trees subscribe', async () => {
-  const bottomNav = stripComments(await read('ui/primitives/BottomNav.tsx'));
-  // Item dials live in the item; container dials in the options factory; the
-  // [+] inherits nothing from tab items — its dials are its own create.* set.
-  for (const key of [
-    "'nav.iconSize'",
-    "'nav.labelSize'",
-    "'nav.iconLabelGap'",
-    "'nav.itemOffsetX'",
-    "'nav.itemOffsetY'",
-    "'nav.activeColor'",
-    "'nav.inactiveColor'",
-    "'nav.activeOpacity'",
-    "'nav.inactiveOpacity'",
-    "'nav.activeScale'",
-    "'nav.barHeight'",
-    "'nav.padTop'",
-    "'nav.padLeft'",
-    "'nav.padRight'",
-    "'nav.spread'",
-    "'nav.centerClearance'",
-    "'create.size'",
-    "'create.radius'",
-    "'create.fill'",
-    "'create.border'",
-    "'create.glowAlpha'",
-    "'create.glyphSize'",
-    "'create.glyphColor'",
-    "'create.glyphOffsetX'",
-    "'create.glyphOffsetY'",
-  ]) {
-    assert.ok(bottomNav.includes(key), `BottomNav must read the ${key} dial`);
-  }
-  for (const path of ['navigation/CustomerRoot.tsx', 'navigation/WorkerRoot.tsx']) {
-    assert.match(
-      stripComments(await read(path)),
-      /useNavBarContainerDials\(\);/,
-      `${path} must subscribe to the bar-container dials`,
-    );
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Sheets and Menus (S2 C7)
 // ---------------------------------------------------------------------------
 
 test('sheet and menu dials: defaults mirror the shipped values, and the wearers read them', async () => {
@@ -1650,7 +1408,6 @@ test('[static] the glow follows selection and the depth dials reach their surfac
   );
   assert.match(stripComments(await read('ui/primitives/JobCard.tsx')), /'card\.shadowColor'/);
   assert.match(stripComments(await read('components/Button.tsx')), /'button\.primary\.shadowOpacity'/);
-  assert.match(stripComments(await read('ui/primitives/BottomNav.tsx')), /'create\.glowColor'/);
   for (const path of [
     'components/ActionSheet.tsx',
     'components/ConfirmDialog.tsx',
@@ -1758,7 +1515,6 @@ test('sanitize: a raw override object round-trips; junk is dropped and listed, n
     {
       materials: { chrome: { blur: 44, scrimAlpha: 0.6 }, sheet: { borderAlpha: 0.3 } },
       glowAlpha: 0.31,
-      navRadius: 12,
       gold: 'dcab60',
       values: {},
       palette: { dark: { 'app.text': '#abc' } },
@@ -1775,7 +1531,6 @@ test('sanitize: a raw override object round-trips; junk is dropped and listed, n
     {
       materials: { chrome: { blur: 'loud', scrimColor: '#071B20' }, kitchen: { blur: 10 } },
       glowAlpha: Number.POSITIVE_INFINITY,
-      navRadius: 999,
       cardFill: 'not-a-colour',
       values: { 'no.such.entry': 5, 'material.chrome.blur': 51 },
       palette: { dark: { 'app.notARole': '#111111', 'emerald.bg': '#101010' }, mars: {} },
@@ -1785,7 +1540,11 @@ test('sanitize: a raw override object round-trips; junk is dropped and listed, n
   );
   assert.equal(junk.overrides.materials.chrome.scrimColor, '#071B20', 'valid keys beside junk survive');
   assert.equal(junk.overrides.materials.chrome.blur, undefined, 'a non-numeric blur is dropped');
-  assert.equal(junk.overrides.navRadius, 40, 'out-of-range clamps to the schema max');
+  assert.equal(
+    schema.sanitizeOverrides({ glowAlpha: 7 }, ctx).overrides.glowAlpha,
+    1,
+    'out-of-range clamps to the schema max',
+  );
   assert.equal(junk.overrides.glowAlpha, undefined, 'a non-finite number is dropped');
   assert.equal(junk.overrides.cardFill, undefined);
   assert.equal(
@@ -1826,13 +1585,13 @@ test('sanitize: the grouped export shape imports through the same path', async (
         { technicalKey: 'materials.menu.nonsense', value: 1 },
         'not an item',
       ],
-      Navigation: [{ technicalKey: 'navBottomPad', scope: 'token', value: 10 }],
+      'Shadows & Glows': [{ technicalKey: 'glowAlpha', scope: 'token', value: 0.4 }],
       Colors: [{ technicalKey: 'palette.light.app.text', value: '#112233' }],
     },
     ctx,
   );
   assert.equal(result.overrides.materials.menu.blur, 60);
-  assert.equal(result.overrides.navBottomPad, 10);
+  assert.equal(result.overrides.glowAlpha, 0.4);
   assert.equal(result.overrides.palette.light['app.text'], '#112233');
   assert.ok(result.dropped.includes('materials.menu.nonsense'));
   assert.ok(result.dropped.some((entry) => entry.includes('unreadable item')));
@@ -1846,11 +1605,11 @@ test('export: modified values only, grouped, carrying technicalKey and scope', a
     assert.deepEqual(schema.exportModifiedOverrides(await contextFor()), {}, 'no overrides, no payload');
 
     o.patchMaterialOverride('chrome', { blur: 44 });
-    o.patchDesignOverrides({ navRadius: 12 });
+    o.patchDesignOverrides({ glowAlpha: 0.31 });
     o.setPaletteTokenOverride('dark', 'app.text', '#AABBCC');
     const grouped = schema.exportModifiedOverrides(await contextFor());
 
-    assert.deepEqual(Object.keys(grouped).sort(), ['Blur & Material', 'Colors', 'Navigation']);
+    assert.deepEqual(Object.keys(grouped).sort(), ['Blur & Material', 'Colors', 'Shadows & Glows']);
     const blur = grouped['Blur & Material'][0];
     assert.deepEqual(blur, {
       technicalKey: 'materials.chrome.blur',
@@ -1866,7 +1625,7 @@ test('export: modified values only, grouped, carrying technicalKey and scope', a
     const reimported = schema.sanitizeOverrides(grouped, await contextFor());
     assert.deepEqual(reimported.dropped, []);
     assert.equal(reimported.overrides.materials.chrome.blur, 44);
-    assert.equal(reimported.overrides.navRadius, 12);
+    assert.equal(reimported.overrides.glowAlpha, 0.31);
     assert.equal(reimported.overrides.palette.dark['app.text'], '#AABBCC');
   } finally {
     o.resetDesignOverrides();

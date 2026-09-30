@@ -7,55 +7,34 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const dir = (path) => readdirSync(new URL(`../${path}`, import.meta.url));
 
 test('main tab screens do not reserve redundant gaps above the safe tab bar', async () => {
-  // Phase 2 extracted the tab bar's sizing into the BottomNav primitive, which
-  // both mode trees consume. The arithmetic being asserted is byte-identical;
-  // only its file moved.
-  const [homeScreen, myJobs, messages, profile, bottomNav] = await Promise.all([
+  // Phase 2 extracted the tab bar's sizing into the BottomNav primitive. 2026-09-30 (the build run,
+  // docs/dispatch/MELT-TAB-BAR.md): the bar is the floating Melt-through pill — 16pt in from each
+  // side, its bottom edge max(inset − 10, 12) above the screen's — and these four roots scroll under
+  // it, ending above it with the clearance (the next fences) rather than with a gap of their own.
+  const [homeScreen, myJobs, messages, profile, geometry, shared, tokens] = await Promise.all([
     read('screens/HomeScreen.tsx'),
     read('screens/MyJobsHubScreen.tsx'),
     read('screens/MessagesInboxScreen.tsx'),
     read('screens/ProfileScreen.tsx'),
-    read('ui/primitives/BottomNav.tsx'),
+    read('lib/meltBarGeometry.ts'),
+    read('components/MeltTabBar.shared.tsx'),
+    read('ui/tokens.ts'),
   ]);
 
   for (const screen of [homeScreen, myJobs, messages, profile]) {
     assert.match(screen, /paddingBottom: 0/);
   }
-  // PJ1 (C9): the bar is ATTACHED — full width, flush to the bottom edge,
-  // with its bottom padding carried INSIDE. G1 (C4), the flush fix: that
-  // padding is navBottomPad — max(inset − 22, 6), or the studio dial — so
-  // the row sits lower than the full inset used to put it; the arithmetic's
-  // one home is hooks/useNavInset.ts and nothing floats by margin.
-  // S2 (C6): the content height is the 'nav.barHeight' dial, DEFAULTING to
-  // the token — the box is still content + navBottomPad.
+  assert.match(geometry, /return Math\.max\(insetBottom - tuck, min\);/);
+  assert.match(tokens, /sideInset: 16,/);
+  assert.match(tokens, /bottomTuck: 10,\s*bottomMin: 12,/);
   assert.match(
-    bottomNav,
-    /const barHeight = dialNumber\('nav\.barHeight', TAB_BAR_CONTENT_HEIGHT\);/
+    shared,
+    /pill: \{ position: 'absolute', left: meltBar\.sideInset, height: meltBar\.height \}/,
+    'the pill is placed by its side inset and its offset'
   );
-  assert.match(
-    bottomNav,
-    /height: barHeight \+ navBottomPad,\s*paddingBottom: navBottomPad,/
-  );
-  assert.match(bottomNav, /marginHorizontal: 0,\s*marginBottom: 0,\s*borderRadius: 0,/);
-  assert.ok(
-    !bottomNav.includes('Math.max(insetBottom, TAB_BAR_FLOAT_MARGIN)'),
-    'the float-margin arithmetic must not return — the bar no longer floats'
-  );
+  assert.ok(!/margin(Bottom|Horizontal)/.test(shared), 'the pill is never floated by margins');
 });
 
-// ---------------------------------------------------------------------------
-// RUN H3 (C3) — THE GROUND OUTSIDE THE PILL IS THE PAGE'S, NOT A SECOND IVORY.
-//
-// MEASURED: on the light customer Home render the pill's 12pt side margins and
-// the 12pt gap under it (y 770..851 at 393x852) painted #F4F1E8 while the page
-// above painted #FAF5F1 — a band across the full width. On the WORKER Home
-// render, whose page ground IS `background`, the same rows are one continuous
-// colour and there is no band. So the defect was never the shell's paint; it
-// was a screen whose page ground the shell could not know.
-//
-// CATCHES: a screen that introduces its own ground token and forgets to tell
-// the shell — which is the exact shape of the original defect, and the only
-// way it can come back.
 // ---------------------------------------------------------------------------
 test('a screen with its own page ground declares it to the shell (RUN H3)', async () => {
   const hook = await read('lib/shellGround.tsx');
@@ -109,35 +88,19 @@ test('a screen with its own page ground declares it to the shell (RUN H3)', asyn
 });
 
 test('the bar row paints nothing but the pill (emerald D2)', async () => {
-  // The dark device pass photographed a white band around the floating pill.
-  // Nothing of ours was painting it: the pill floats by margins in normal
-  // layout flow and every ancestor of that gap was a colourless `flex: 1`, so
-  // the iOS root view (white by platform default) showed through. The ground
-  // now lives on ModeShell, the single parent of both trees.
-  const [shell, bottomNav, customerRoot, workerRoot] = await Promise.all([
+  // emerald D2's finding stands: one painted layer, the pill. 2026-09-30: the pill is the Melt bar's
+  // lit card (components/MeltTabBar.shared.tsx pillStyle); the bar's root and the navigator's
+  // options paint nothing, and the trees add no ground behind it.
+  const [shell, bottomNav, customerRoot, workerRoot, shared] = await Promise.all([
     read('navigation/ModeShell.tsx'),
     read('ui/primitives/BottomNav.tsx'),
     read('navigation/CustomerRoot.tsx'),
     read('navigation/WorkerRoot.tsx'),
+    read('components/MeltTabBar.shared.tsx'),
   ]);
 
-  // One ground, resolved from the palette, wrapping BOTH trees — so a theme
-  // change repaints it and neither mode can be left transparent.
-  //
-  // RUN H3 (C3) MADE THE VALUE A VARIABLE. emerald D2 fixed the bar row falling
-  // through to the iOS root view; it did not make the ground the right COLOUR
-  // on a screen whose page is not `palette.background`, and on light customer
-  // Home that showed as a full-width band of #F4F1E8 under a #FAF5F1 page. The
-  // ground is now whatever the focused screen declares. The claim here is
-  // unchanged — ONE painted View, resolved from the palette, wrapping both
-  // trees — and the fallback is pinned so "no screen declared one" still
-  // paints.
-  // 2026-09-27 (the Lux remake, ruling 9): the shell paints the Lux gradient
-  // OVER that flat ground in dark (`luxGround`, lib/theme.ts screenGround);
-  // the flat ground is still there beneath it, so the claim stands.
   assert.match(shell, /<View style=\{\[styles\.tree, \{ backgroundColor: treeGround \}, luxGround\]\}>/);
   assert.match(shell, /const treeGround = ground \? palette\[ground\] : palette\.background;/);
-  // Exactly one painted tree View — a second would be a second ground.
   assert.equal(
     (shell.match(/styles\.tree, \{ backgroundColor: treeGround \}/g) ?? []).length,
     1,
@@ -149,156 +112,76 @@ test('the bar row paints nothing but the pill (emerald D2)', async () => {
     'the ground must wrap the tree swap, not replace it'
   );
 
-  // G1 (C4): the bar row's ONE painted layer is the chrome Surface rendered
-  // through tabBarBackground — the options themselves paint NOTHING. With
-  // tabBarBackground set, the library's own container goes transparent, and
-  // a backgroundColor reappearing in the options would put an opaque plate
-  // under the glass — the exact second-ground defect D2 buried.
-  const options = bottomNav.slice(
-    bottomNav.indexOf('export function bottomNavScreenOptions'),
-    bottomNav.indexOf('Registration options for a tab')
-  );
-  assert.equal(
-    (options.match(/backgroundColor:/g) ?? []).length,
-    0,
-    'the bar options paint nothing — the chrome Surface is the one painted layer'
-  );
-  // No second GROUND may be introduced through the library's own hook for one.
-  // Comments are stripped first — the D2 audit in BottomNav.tsx NAMES that hook
-  // while recording what it may and may not carry.
   const codeOnly = (source) =>
     source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-
-  // G1 (C4) — THE HOOK IS USED ONCE, AND ONLY FOR THE CHROME.
-  //
-  // MOTION1 put the blur layer through this hook; G1 puts the whole chrome
-  // material through it. The rule is unchanged — ONE painted layer in the bar
-  // row — and it is now the Surface's: in light the solid theme surface with
-  // the ordinary hairline, in dark the chrome scrim + blur + mint hairline,
-  // every value from the materials table in ui/tokens.ts. The identifier is
-  // allowed exactly once, in exactly one file, bound to exactly the NavChrome
-  // component — and the two trees still may not name it at all. A second
-  // ground reintroduced through this hook fails here as loudly as ever, and a
-  // colour smuggled into the blur layer still fails below.
-  const navCode = codeOnly(bottomNav);
-  assert.equal(
-    (navCode.match(/tabBarBackground/g) ?? []).length,
-    1,
-    'the bar options may name tabBarBackground exactly once'
+  assert.doesNotMatch(
+    codeOnly(bottomNav),
+    /tabBarBackground|tabBarStyle|backgroundColor/,
+    'the bar options style nothing — the Melt bar draws itself'
   );
+  for (const path of ['components/MeltTabBar.tsx', 'components/MeltTabBar.motion120.tsx']) {
+    const code = codeOnly(await read(path));
+    assert.match(
+      code,
+      /root: \{ position: 'absolute', left: 0, right: 0, bottom: 0 \}/,
+      path + ": the bar's root paints nothing"
+    );
+    assert.match(code, /pillStyle\(m\.isDark, m\.pillWidth, m\.bottom\)/, path + ': the pill is the painted layer');
+  }
   assert.match(
-    navCode.replace(/\s+/g, ' '),
-    /tabBarBackground: \(\) => <NavChrome \/>,/,
-    'the only thing tabBarBackground may render is the chrome component'
-  );
-  assert.match(
-    navCode.replace(/\s+/g, ' '),
-    /function NavChrome\(\) \{ const \{ navRadius \} = useDesignOverrides\(\); return \( <Surface material="chrome" border="top" corners="top" radius=\{navRadius \?\? 0\} style=\{StyleSheet\.absoluteFill\} \/> \); \}/,
-    'NavChrome is exactly the chrome material with the studio radius dial — nothing else'
+    codeOnly(shared).replace(/\s+/g, ' '),
+    /return \[styles\.pill, \{ width, bottom \}, litCardStyle\(isDark\), \{ borderRadius: meltBar\.radius \}\];/,
+    "the pill wears the lit card, at the bar's own corner"
   );
   const blur = codeOnly(await read('lib/blur.tsx'));
   assert.doesNotMatch(
     blur,
     /backgroundColor/,
-    'the blur layer must paint no ground of its own — the pill has exactly one'
+    'the blur layer must paint no ground of its own'
   );
-  for (const [path, source] of [
+  for (const [tree, source] of [
     ['navigation/CustomerRoot.tsx', customerRoot],
     ['navigation/WorkerRoot.tsx', workerRoot],
   ]) {
     assert.doesNotMatch(
       codeOnly(source),
       /tabBarBackground/,
-      `${path} must not add a tabBarBackground layer behind the pill`
+      tree + ' must not add a tabBarBackground layer behind the pill'
     );
   }
-  // The bar's ONE edge — the top hairline — is the chrome material's now
-  // (G1 C4). The options ZERO the library's own hairline so there are never
-  // two lines drawn on the same edge.
-  assert.match(options, /borderTopWidth: 0,/);
 });
 
 test('the nav glyphs are D3 size and every slot still fits its label', async () => {
-  const [bottomNav, tokens] = await Promise.all([
-    read('ui/primitives/BottomNav.tsx'),
-    read('ui/tokens.ts'),
-  ]);
-
-  const numberIn = (source, where, name) => {
-    const match = source.match(new RegExp(`${name} = (\\d+)`));
-    assert.ok(match, `${name} must be a plain number in ${where}`);
+  // 2026-09-30: the Melt bar's glyph is 25pt over an 11pt name in a 64pt column (ui/tokens.ts
+  // meltBar, the handoff page's numbers). The stack must fit the column, and the chosen tab's icon
+  // must drop onto the pill's centre line — the bubble's centre — or it sits off-centre in it.
+  const [tokens, shared] = await Promise.all([read('ui/tokens.ts'), read('components/MeltTabBar.shared.tsx')]);
+  const melt = tokens.slice(tokens.indexOf('export const meltBar = {'));
+  const n = (key) => {
+    const match = melt.match(new RegExp('\\b' + key + ': ([\\d.]+)'));
+    assert.ok(match, 'meltBar.' + key + ' must be a plain number in ui/tokens.ts');
     return Number(match[1]);
   };
-  const number = (name) => numberIn(bottomNav, 'ui/primitives/BottomNav.tsx', name);
-  // Since emerald(3) the pill's geometry lives in ui/tokens.ts, so both the bar
-  // and every screen that clears it read one number each.
-  const geometry = (name) => numberIn(tokens, 'ui/tokens.ts', name);
-  // S2 (C6): the glyph and label sizes are TOKENS too — ui/tokens.ts navBar —
-  // read live through the studio's override layer.
-  const navToken = (name) => {
-    const match = tokens.match(new RegExp(`${name}: (\\d+)`));
-    assert.ok(match, `navBar.${name} must be a plain number in ui/tokens.ts`);
-    return Number(match[1]);
-  };
+  assert.equal(n('icon'), 25);
+  assert.equal(n('labelSize'), 11);
+  assert.equal(n('column'), 64);
+  assert.equal(n('height'), 64);
 
-  // PJ1 (C9): emerald D3's 28/11 scaled in proportion with the bar's 25%
-  // content-height rise — 35pt glyphs, 14pt labels. S2 (C6): tokenised.
-  // RUN N3 (2026-09-08): THE RISE IS REVERSED and these go with it, to the
-  // 30/12 the operator dialled — below 28/11 rather than back on them. The
-  // bar's own height reverses in the same run (88 → 70); the stack check
-  // below is what proves the three still fit together.
-  assert.equal(navToken('iconSize'), 30);
-  assert.equal(navToken('labelFontSize'), 12);
-
-  // FENCED AGAINST RETURN (S2 C6): the two sizes may never come back as
-  // literals in the bar — the token, read through the override layer, is the
-  // one home. Comment-stripped so the docblock recording the move may name
-  // the old constants.
-  const navCodeOnly = bottomNav
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '');
-  assert.doesNotMatch(
-    navCodeOnly,
-    /TAB_ICON_SIZE|TAB_LABEL_FONT_SIZE/,
-    'the icon/label size literals must not return to BottomNav — ui/tokens.ts navBar is the home'
+  const labelLine = Number(shared.match(/const LABEL_LINE = (\d+);/)[1]);
+  const stack = n('icon') + n('labelGap') + labelLine;
+  assert.ok(stack <= n('column'), 'the icon+name stack (' + stack + ') must fit the ' + n('column') + 'pt column');
+  const top = (n('column') - stack) / 2;
+  assert.equal(
+    top + n('icon') / 2 + n('iconDrop'),
+    n('height') / 2,
+    "the chosen tab's icon drops onto the pill's centre line"
   );
-  assert.match(navCodeOnly, /navBar\.iconSize/);
-  assert.match(navCodeOnly, /navBar\.labelFontSize/);
+  assert.match(shared, /numberOfLines=\{1\} maxFontSizeMultiplier=\{1\.2\}/);
 
-  // The bar grows only as much as the content needs. Ionicons renders in a box
-  // of about size + 3; the label adds its lineHeight (size + 2) plus the
-  // icon-label gap; TAB_BOTTOM_GAP closes it. BottomTabItem's non-overridable
-  // 5pt padding costs 10 of the bar's height.
-  const barHeight = geometry('const FLOATING_NAV_HEIGHT');
-  const stack =
-    navToken('iconSize') +
-    3 +
-    (navToken('labelFontSize') + 2 + navToken('iconLabelGap')) +
-    number('const TAB_BOTTOM_GAP');
-  assert.ok(
-    stack <= barHeight - 10,
-    `the icon+label stack (${stack}) must fit the usable slot (${barHeight - 10}) ` +
-      'or a label clips through the top hairline'
-  );
-
-  // D3: a label may not clip or truncate. numberOfLines={1} turns an overrun
-  // into an ellipsis, so the scale is capped the way iOS tab bars cap it.
-  assert.match(bottomNav, /numberOfLines=\{1\}\s*\/\/[\s\S]{0,600}?maxFontSizeMultiplier=\{1\.2\}/);
-
-  // Even distribution, and a ≥44pt target on the narrowest supported width.
-  // Both bars draw five slots: the worker's five tabs, and the customer's four
-  // destinations plus the centre action. PJ1 (C9): the attached bar spans the
-  // full width — no side insets subtract from the slots.
-  const narrowestScreen = 320;
-  const slotWidth = narrowestScreen / 5;
-  assert.ok(slotWidth >= 44, `slot width ${slotWidth} must clear the 44pt touch floor`);
-  assert.ok(
-    barHeight >= 44,
-    'the slot is the full bar height, which must also clear the touch floor'
-  );
-  // Equal flex is the library's own `styles.bottomItem` on every item; the
-  // centre action must match it rather than sizing itself.
-  assert.match(bottomNav, /createSlot: \{\s*flex: 1,/);
+  const touch = Number(shared.match(/const SLOT_TOUCH = (\d+);/)[1]);
+  assert.ok(touch >= 44 && n('height') >= 44, 'every slot clears the 44pt touch floor');
+  const narrowest = (320 - 2 * n('sideInset')) / 5;
+  assert.ok(narrowest >= 44, 'slot width ' + narrowest + ' on a 320pt phone must clear the 44pt floor');
 });
 
 test('every screen inside the tab bar leaves the bottom safe-area inset to it', async () => {
@@ -336,76 +219,48 @@ test('every screen inside the tab bar leaves the bottom safe-area inset to it', 
 });
 
 test('the floating-nav clearance is derived from the bar, in one place', async () => {
-  // emerald(3). The old §I token was a flat 68 against a pill that occupies its
-  // 70pt height PLUS the margin that floats it — up to the device's 34pt
-  // home-indicator inset. That is why surfaces which DID apply the token still
-  // had content under the pill on the device pass. A static token cannot see a
-  // runtime inset, so the clearance is a hook now.
-  const [tokens, bottomNav, primitivesIndex] = await Promise.all([
+  // emerald(3): a static token cannot see a runtime inset, so the clearance is a hook. 2026-09-30:
+  // derived from the Melt pill — its height, its offset and the breathing room above it — by the
+  // one piece of arithmetic the bar itself draws with (lib/meltBarGeometry.ts).
+  const [tokens, bottomNav, primitivesIndex, hook, geometry] = await Promise.all([
     read('ui/tokens.ts'),
     read('ui/primitives/BottomNav.tsx'),
     read('ui/primitives/index.ts'),
+    read('hooks/useNavInset.ts'),
+    read('lib/meltBarGeometry.ts'),
   ]);
 
-  // The token is gone, so nothing can quietly go back to the flat number.
-  assert.doesNotMatch(
-    tokens,
-    /floatingNavClearance:/,
-    'floatingNavClearance must not come back as a static token'
-  );
-  // The two design values it derives from live in tokens, and the bar reads
-  // them — so the bar and the screens can never disagree about the geometry.
-  assert.match(tokens, /floatingNavHeight: FLOATING_NAV_HEIGHT,/);
+  assert.doesNotMatch(tokens, /floatingNavClearance:/, 'floatingNavClearance must not come back as a static token');
   assert.match(tokens, /floatingNavGap: FLOATING_NAV_GAP,/);
-  assert.match(bottomNav, /export const TAB_BAR_CONTENT_HEIGHT = layout\.floatingNavHeight;/);
-  assert.match(bottomNav, /export const TAB_BAR_FLOAT_MARGIN = layout\.floatingNavGap;/);
-  // G1 (C6): the hook's implementation IS the inset contract in
-  // hooks/useNavInset.ts — override-aware, one copy of the arithmetic.
   assert.match(
     bottomNav,
     /export function useFloatingNavClearance\(\): number \{\s*return useNavInset\(\);\s*\}/
   );
-  // PJ1 (C9): the STATIC no-dial footprint stays content height plus the
-  // inset — the motion model's reserved-box quantity, equal to the live
-  // clearance whenever no studio dial is set.
-  assert.match(bottomNav, /return TAB_BAR_CONTENT_HEIGHT \+ insetBottom;/);
+  assert.match(hook, /return pillFootprint\(insets\.bottom, meltBar\);/);
+  assert.match(
+    geometry,
+    /return m\.height \+ pillBottomOffset\(insetBottom, m\.bottomTuck, m\.bottomMin\) \+ m\.breathing;/
+  );
   assert.match(primitivesIndex, /useFloatingNavClearance,/);
 });
 
 test('every tab-contained scroll surface clears the floating pill', async () => {
-  // emerald(3): the named device-pass surfaces plus the peers found with them.
-  // A screen qualifies by having the clearance reach whichever element is LAST
-  // above the pill — the scroller when there is no footer, the composer when
-  // there is one.
-  //
-  // home(7) SPLIT THIS ROSTER. It used to also accept a PINNED footer carrying
-  // the clearance, which is how the double count survived: a pinned action bar
-  // is laid out above the bar, permanently, so giving it the pill's whole
-  // footprint reserved that space twice. Pinned footers are now checked by the
-  // test below instead — with the opposite assertion — and this list is
-  // scrolling surfaces and the chat composer only. screens/PostJobScreen.tsx
-  // left it entirely: everything on that screen sits above a footer that is
-  // always rendered, so nothing there travels under the pill.
+  // emerald(3), home(7) and the 2026-09-21 by-route rule, redone 2026-09-30 for the floating Melt
+  // pill: it floats over EVERY tab screen, so every scroller whose end would travel under it pads
+  // that end with useScrollClearance() — the pill's footprint under the tab navigator, one spacing
+  // step outside it. Pinned footers are the next fence. The four tab roots that leaned on the
+  // attached bar sitting in the layout flow (Inbox, My Jobs, Profile, hidden chats) and Post a
+  // job's footer-less steps joined the roster.
   const surfaces = [
-    // Templates — these carry 17 screens between them, including the device
-    // pass's Notifications feed, Services & availability and Delete account.
-    // FormScreen and DetailScreen are here for their NO-footer branch.
     'ui/templates/FormScreen.tsx',
     'ui/templates/DetailScreen.tsx',
     'ui/templates/SuccessScreen.tsx',
-    // Hand-rolled surfaces.
     'screens/ProfileDetailsScreen.tsx',
     'screens/ClientJobDetailScreen.tsx',
-    'screens/ChatScreen.tsx',
     'screens/AccountSafetyScreen.tsx',
     'screens/NotificationSettingsScreen.tsx',
     'screens/JobDetailScreen.tsx',
     'screens/WorkerJobScreen.tsx',
-    // 2026-09-26 (the refresh, audit M-33): SubmitBid and Counteroffer left
-    // this list the way PostJob did — their body is OfferComposer's 'screen'
-    // layout, whose scroller sits above a footer that is always rendered, so
-    // nothing there travels under the pill. The footer is held to the pinned
-    // rule below.
     'screens/LegalDocumentScreen.tsx',
     'screens/ProfileReviewsScreen.tsx',
     'screens/WorkerProfileScreen.tsx',
@@ -414,241 +269,122 @@ test('every tab-contained scroll surface clears the floating pill', async () => 
     'screens/CellJobsScreen.tsx',
     'screens/WorkerResultsScreen.tsx',
     'screens/WorkerSearchScreen.tsx',
+    'screens/MessagesInboxScreen.tsx',
+    'screens/MyJobsHubScreen.tsx',
+    'screens/ProfileScreen.tsx',
+    'screens/HiddenChatsScreen.tsx',
+    'screens/PostJobScreen.tsx',
   ];
-
-  // 2026-09-21 — THE SECOND DOUBLE COUNT. Since G1 (C3) the bar is out of the
-  // layout flow on the TWO HOMES ONLY; everywhere else it is laid out beneath
-  // the screen, so a scroller padded with the bar's whole footprint ended
-  // ~104pt above the bar (Available Jobs, the operator's finding — DECISIONS
-  // 2026-09-20 sitting 2, (10)). Every scrolling surface now reads
-  // useScrollClearance(): the footprint on a home route, one spacing step
-  // elsewhere, decided by NavigationRouteContext. Chat is the one exception
-  // below — its keyboard rise subtracts the real footprint.
-  const keepsFootprint = new Set(['screens/ChatScreen.tsx']);
   for (const path of surfaces) {
     const source = await read(path);
-    const hook = keepsFootprint.has(path) ? 'useFloatingNavClearance' : 'useScrollClearance';
-    assert.match(
-      source,
-      new RegExp(`${hook}\\(\\)`),
-      `${path} must take its bottom clearance from ${hook}()`
-    );
-    if (!keepsFootprint.has(path)) {
-      assert.doesNotMatch(source, /useFloatingNavClearance/, `${path} pads a scroller with the bar's footprint — the double count`);
-    }
-    // Applied directly, OR handed to the shared rising column — 2026-08-23,
-    // when chat's keyboard rise moved into components/KeyboardRisingColumn.tsx
-    // so a reanimated build could track the keyboard instead of imitating its
-    // curve. What the column DOES with it is the block below the loop, and the
-    // answer changed: chat's bottom element is pinned, so the clearance is the
-    // rise's subtrahend rather than padding. Nothing here got weaker — a
-    // surface that neither applies it nor hands it over still fails.
-    assert.ok(
-      /paddingBottom: navClearance/.test(source) ||
-        /insetBelow=\{navClearance\}/.test(source),
-      `${path} must apply the clearance to whatever sits last above the pill`
-    );
-    // The double count cannot come back HERE either: a clearance that has
-    // something added to it is a footer's arithmetic, not a scroller's.
+    assert.match(source, /useScrollClearance\(\)/, path + ' must take its bottom clearance from useScrollClearance()');
+    assert.doesNotMatch(source, /useFloatingNavClearance/, path + " pads a scroller with the bar's raw footprint");
+    assert.match(source, /paddingBottom: navClearance/, path + ' must apply the clearance to whatever sits last above the pill');
     assert.doesNotMatch(
       source,
       /paddingBottom: [\w.]+ \+ navClearance/,
-      `${path} adds to the clearance — that is the pinned-footer double count (home(7))`
+      path + ' adds to the clearance — that is the pinned-footer double count (home(7))'
     );
   }
 
-  // CHAT SPENDS ITS CLEARANCE ON THE RISE, NOT ON PADDING — corrected 2026-08-23.
-  //
-  // This block used to require the opposite, and requiring it was the chat
-  // double count. Chat's bottom element is PINNED, not scrolling: the composer
-  // (or the locked / blocked notice) never travels under the pill, and the bar
-  // sits in normal flow beneath the scene, so the scene already ends at the
-  // pill's top edge — the very reasoning the pinned-footer test below states.
-  // Applying the whole footprint again inside the column held the composer a
-  // pill's height clear of a pill that was no longer there, in BOTH states:
-  // at rest above the pill, and risen above the keyboard, because `riseFor`
-  // had already subtracted the clearance.
-  //
-  // So the clearance is still read, still handed over, and still subtracted
-  // from the rise — the loop above requires all of that, unchanged. What the
-  // column applies below itself is a pinned element's own breathing room.
-  // Nothing here got weaker: a path that re-applied the footprint, or that
-  // applied no padding at all, now fails.
-  for (const path of [
-    'components/KeyboardRisingColumn.tsx',
-    'components/KeyboardRisingColumn.motion120.tsx',
-  ]) {
-    const source = await read(path);
-    assert.match(
-      source,
-      /\{ paddingBottom: COLUMN_BOTTOM_PADDING \}/,
-      `${path} must apply the pinned-column padding on the view that rises`
-    );
-    assert.doesNotMatch(
-      source,
-      /paddingBottom: insetBelow/,
-      `${path} re-reserves the pill's footprint — that is the chat clearance double count`
-    );
-  }
+  // The chat column is pinned, not scrolled: it RESERVES the pill beneath its composer and the
+  // keyboard's rise takes it back out (tests/motion120.test.mjs has the arithmetic).
+  const chat = await read('screens/ChatScreen.tsx');
+  assert.match(chat, /const pillReserve = usePillReserve\(\);/);
+  assert.match(chat, /insetBelow=\{0\}\s+reserveBelow=\{pillReserve\}/);
+  assert.doesNotMatch(chat, /useFloatingNavClearance|useScrollClearance/);
 
-  // ONE VALUE, ONE PLACE, so the two binaries cannot land differently — and
-  // DERIVED from the quantity home(7) already defined for a pinned composer
-  // rather than being a fresh number.
-  const shared = await read('components/KeyboardRisingColumn.shared.tsx');
+  // The by-route rule, now "under the tab navigator or not".
+  const bottomNav = await read('ui/primitives/BottomNav.tsx');
   assert.match(
-    shared,
-    /export const COLUMN_BOTTOM_PADDING = PINNED_FOOTER_BOTTOM_PADDING;/,
-    'the column padding must be home(7)s pinned-footer padding, not a new literal'
+    bottomNav,
+    /export function useScrollClearance\(\): number \{\s*const inTabs = useContext\(BottomTabBarHeightContext\) !== undefined;\s*const inset = useNavInset\(\);\s*return inTabs \? inset : spacing\.lg;\s*\}/
   );
-  // The rise arithmetic did NOT move: insetBelow is still the subtrahend.
+  const shared = await read('components/KeyboardRisingColumn.shared.tsx');
   assert.match(shared, /return Math\.max\(0, keyboardHeight - insetBelow\);/);
 });
 
 test('a PINNED footer takes its own padding, never the scroll clearance', async () => {
-  // home(7) — the distinguishing assertion. Two kinds of bottom element, two
-  // different quantities, and they must not be confused again:
-  //
-  //   SCROLLING content passes UNDER the pill, so it reserves the pill's whole
-  //   footprint — height plus the margin that floats it, read from the device.
-  //   That is useFloatingNavClearance(), and the test above still requires it.
-  //
-  //   A PINNED footer never travels. The bar is laid out in normal flow
-  //   beneath the scene, so its space is already reserved; a footer that also
-  //   reserved it put ~104pt of empty chrome under every action button.
-  // 2026-09-28 (LUX-LIST-64 #41): Post a Job's last-step footer is the posting
-  // bar now, which the operator put FLUSH on the tab bar — "0 vertical padding"
-  // (refs/bottom-bar.html) — so it leaves this list; its own assertion below
-  // holds it to that, and to never reserving the pill's footprint either.
+  // home(7)'s rule, redone 2026-09-30: a pinned footer sits at the foot of a full-height scene now
+  // the pill floats, so it lifts its controls over the pill and keeps its own breathing room above
+  // it — usePinnedFooterPadding(), the pill's top edge plus PINNED_FOOTER_BOTTOM_PADDING — and never
+  // the scroll clearance, which would count the breathing room twice.
   const pinned = [
     ['ui/templates/FormScreen.tsx', 'footer'],
     ['ui/templates/DetailScreen.tsx', 'actionBar'],
-    // M-33 — the bid and counter forms' Send, pinned above the keyboard.
     ['components/OfferComposer.tsx', 'footer'],
+    ['screens/ClientJobDetailScreen.tsx', 'actionBar'],
+    ['screens/JobDetailScreen.tsx', 'bidBar'],
+    ['screens/WorkerJobScreen.tsx', 'actionBar'],
+    ['screens/ReviewAndTipScreen.tsx', 'doneBar'],
   ];
   const bar = (await read('components/PostJobBar.tsx')).replace(/\s+/g, ' ');
   const barStyle = / bar: \{([^}]*)\}/.exec(bar);
   assert.ok(barStyle, 'the posting bar must keep a flat bar style');
-  assert.doesNotMatch(barStyle[1], /paddingBottom|paddingVertical|paddingTop/, 'the posting bar sits flush: no space above or below its buttons');
-  assert.doesNotMatch(bar, /navClearance|useScrollClearance/, 'and it never reserves the pill\'s footprint');
+  assert.doesNotMatch(barStyle[1], /paddingBottom|paddingVertical|paddingTop/, 'the posting bar style itself carries no space above or below its buttons');
+  assert.match(bar, /const footerPad = usePinnedFooterPadding\(\);/, 'the posting bar lifts over the pill like every pinned footer');
+  assert.match(bar, /<View style=\{\[styles\.bar, \{ paddingBottom: footerPad \}\]\}>/);
+  assert.doesNotMatch(bar, /navClearance|useScrollClearance/, "and it never reserves the pill's footprint");
 
-  // The shared value, and that it is DERIVED from the bar's own geometry
-  // rather than being a fresh literal — the same rule the clearance follows.
   const bottomNav = await read('ui/primitives/BottomNav.tsx');
   assert.match(
     bottomNav,
     /export const PINNED_FOOTER_BOTTOM_PADDING = layout\.floatingNavGap;/,
     'the pinned footer padding must derive from the pill geometry, not be hardcoded'
   );
-  assert.match(await read('ui/primitives/index.ts'), /PINNED_FOOTER_BOTTOM_PADDING,/);
-
-  for (const [path, styleName] of pinned) {
-    const flat = (await read(path)).replace(/\s+/g, ' ');
-
-    // The footer's style is whatever the STYLESHEET declares plus whatever the
-    // JSX layers on top. Importing the constant is not applying it, so both
-    // halves are gathered and the assertion is made against them — not against
-    // the file at large.
-    const declAt = flat.indexOf(` ${styleName}: { `);
-    assert.notEqual(declAt, -1, `${path} must still declare a ${styleName} style`);
-    const declEnd = flat.indexOf(' }, ', declAt);
-    assert.notEqual(declEnd, -1, `${path}: ${styleName} must stay a flat style object`);
-    const declared = flat.slice(declAt, declEnd);
-
-    // Only the templates layer an inline override; PostJobScreen puts the
-    // padding in the stylesheet and passes `style={styles.footer}` bare.
-    const useAt = flat.indexOf(`styles.${styleName},`);
-    let applied = '';
-    if (useAt !== -1) {
-      const useEnd = flat.indexOf(']}', useAt);
-      assert.notEqual(useEnd, -1, `${path}: the ${styleName} style array must close`);
-      applied = flat.slice(useAt, useEnd);
-    }
-    const footerStyle = `${declared} ${applied}`;
-
-    assert.match(
-      footerStyle,
-      /paddingBottom: PINNED_FOOTER_BOTTOM_PADDING/,
-      `${path}'s pinned ${styleName} must APPLY the shared pinned-footer padding, not just import it`
-    );
-    assert.doesNotMatch(
-      footerStyle,
-      /navClearance/,
-      `${path}: the pinned ${styleName} must not reserve the pill's footprint a second time`
-    );
-  }
-
-  // The hook itself is untouched — chat and the studio panel still need it, and
-  // home(7) explicitly does not retire it or reintroduce a static token.
-  assert.match(bottomNav, /export function useFloatingNavClearance\(\): number \{/);
-  // 2026-09-21: the scroller's own hook sits beside it — by route, from the
-  // context (never useRoute(), which throws outside a navigator), the
-  // footprint on the two atmosphere homes and spacing.lg read at use time.
   assert.match(
     bottomNav,
-    /export function useScrollClearance\(\): number \{\s*const route = useContext\(NavigationRouteContext\);\s*const inset = useNavInset\(\);\s*return route && ATMOSPHERE_HOME_ROUTES\.has\(route\.name\) \? inset : spacing\.lg;\s*\}/
+    /export function usePinnedFooterPadding\(\): number \{\s*return usePillReserve\(\) \+ PINNED_FOOTER_BOTTOM_PADDING;\s*\}/
   );
-  assert.match(await read('ui/primitives/index.ts'), /useScrollClearance,/);
+  const index = await read('ui/primitives/index.ts');
+  assert.match(index, /PINNED_FOOTER_BOTTOM_PADDING,/);
+  assert.match(index, /usePinnedFooterPadding,/);
+
+  for (const [path, styleName] of pinned) {
+    const source = await read(path);
+    const flat = source.replace(/\s+/g, ' ');
+    assert.match(source, /const footerPad = usePinnedFooterPadding\(\);/, path + ' must read the pinned-footer padding');
+    const useAt = flat.indexOf('styles.' + styleName + ',');
+    assert.notEqual(useAt, -1, path + ' must still apply its ' + styleName + ' style');
+    const applied = flat.slice(useAt, flat.indexOf(']}', useAt));
+    assert.match(applied, /paddingBottom: footerPad/, path + "'s pinned " + styleName + ' must APPLY the pinned-footer padding');
+    assert.doesNotMatch(applied, /navClearance/, path + ": the pinned " + styleName + " must not reserve the pill's footprint a second time");
+  }
+
+  assert.match(bottomNav, /export function useFloatingNavClearance\(\): number \{/);
+  assert.match(index, /useScrollClearance,/);
   assert.doesNotMatch(
     await read('ui/tokens.ts'),
     /floatingNavClearance/,
-    'the static clearance token must not return as a side effect of home(7)'
+    'the static clearance token must not return'
   );
 });
 
 test('the flush arithmetic lives in hooks/useNavInset.ts alone (G1 C6)', async () => {
-  // The inset contract: the bar's bottom padding is max(inset − 22, 6) — or
-  // the studio dial, which REPLACES the formula — and the height content must
-  // clear is content + pad + the safe-area remainder the pad no longer
-  // absorbs. One hook owns every number; the bar and all nineteen clearance
-  // consumers read it, so the dial moves everything at once.
+  // G1 (C6)'s rule — ONE home for the bar's inset arithmetic — kept for the floating pill
+  // (2026-09-30): hooks/useNavInset.ts answers with lib/meltBarGeometry.ts, and no screen or
+  // template does bar arithmetic of its own. The attached bar's flush formula and its studio dials
+  // are retired with it.
   const hook = await read('hooks/useNavInset.ts');
-  assert.match(hook, /export const NAV_FLUSH_TUCK = 22;/);
-  assert.match(hook, /export const NAV_FLUSH_MIN_PAD = 6;/);
   assert.match(
     hook,
-    /return override \?\? Math\.max\(insetBottom - NAV_FLUSH_TUCK, NAV_FLUSH_MIN_PAD\);/,
-    'the flush formula must stay the dial-replaceable one'
+    /return meltBar\.height \+ pillBottomOffset\(insets\.bottom, meltBar\.bottomTuck, meltBar\.bottomMin\);/
   );
-  // S2 (C6): the content height follows the 'nav.barHeight' dial, defaulting
-  // to the token — the clearance is still content + pad + remainder.
-  assert.match(
-    hook,
-    /return \(barHeight \?\? layout\.floatingNavHeight\) \+ pad \+ Math\.max\(0, insets\.bottom - pad\);/,
-    'the clearance must stay content + pad + safe-area remainder'
-  );
-
-  // No screen or template may restate the bar's footprint. The attached
-  // bar's derived numbers (106 and 122 with pad and inset folded in) may not
-  // appear as code anywhere a screen computes clearance, and nothing outside
-  // the bar and the hook may do arithmetic on the bar-height tokens.
-  //
-  // RUN N3 (2026-09-08) — 106 AND 122 ARE THE PRE-N3 FOOTPRINT AND STAY
-  // FENCED, but they are no longer the live one: with the bar at 70 and the
-  // tuck at 22 it is 82 (70 + 12) and 104 (70 + 34). Those two are NOT swapped
-  // in, deliberately — `\b82\b` matches the `0.82` pressed-opacity a dozen
-  // screens declare and `\b104\b` matches a 104pt thumbnail on two of them, so
-  // fencing them would fail on numbers that have nothing to do with the bar.
-  // The live guard is the token-arithmetic assertion below, which is
-  // value-independent and catches the real regression; this literal sweep is
-  // belt-and-braces and keeps the two numbers a screen might still have
-  // hand-typed from the PJ1 era.
+  assert.match(hook, /return pillFootprint\(insets\.bottom, meltBar\);/);
   const codeOf = (source) =>
     source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert.doesNotMatch(codeOf(hook), /NAV_FLUSH_TUCK|navBottomPad|useDesignDial|useOverrideNumber/, "the attached bar's flush formula and dials are retired");
+
   for (const [root, files] of [
     ['screens', dir('screens').filter((name) => name.endsWith('.tsx'))],
     ['ui/templates', dir('ui/templates').filter((name) => name.endsWith('.tsx'))],
   ]) {
     for (const name of files) {
-      const code = codeOf(await read(`${root}/${name}`));
+      const code = codeOf(await read(root + '/' + name));
       assert.doesNotMatch(
         code,
-        /\b(?:106|122)\b/,
-        `${root}/${name}: a bar-footprint literal — read useFloatingNavClearance() instead`
-      );
-      assert.doesNotMatch(
-        code,
-        /layout\.floatingNavHeight|TAB_BAR_CONTENT_HEIGHT/,
-        `${root}/${name}: bar-height arithmetic belongs to the hook, never a screen`
+        /meltBar\.|pillFootprint|pillBottomOffset|layout\.floatingNavHeight|TAB_BAR_CONTENT_HEIGHT/,
+        root + '/' + name + ': bar arithmetic belongs to the hook, never a screen'
       );
     }
   }

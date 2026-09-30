@@ -29,16 +29,17 @@ export type { KeyboardRisingColumnProps } from './KeyboardRisingColumn.shared';
  */
 function KeyboardRisingColumnFallback({
   insetBelow,
+  reserveBelow = 0,
   style,
   children,
 }: KeyboardRisingColumnProps) {
-  const keyboardRise = useKeyboardOffset(insetBelow);
+  const keyboardRise = useKeyboardOffset(insetBelow + reserveBelow);
 
   return (
     <Animated.View
       style={[
         style,
-        { paddingBottom: COLUMN_BOTTOM_PADDING },
+        { paddingBottom: COLUMN_BOTTOM_PADDING + reserveBelow },
         { transform: [{ translateY: Animated.multiply(keyboardRise, -1) }] },
       ]}
     >
