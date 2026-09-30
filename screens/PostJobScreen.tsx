@@ -309,7 +309,11 @@ export function PostJobScreen() {
   // job has zero bids.
   const editJobId = params?.editJobId ?? null;
   const isEditing = !!editJobId;
-  const [loadingJob, setLoadingJob] = useState(isEditing);
+  // 2026-09-30 (idea 2) — a fresh post that starts from a past one (the + sheet's "Reuse a past
+  // job"). Not an edit: it saves a NEW job; only its opening values come from the old one.
+  const reuseJobId = !isEditing && !params?.hireWorkerId ? params?.reuseJobId ?? null : null;
+  const [loadingJob, setLoadingJob] = useState(isEditing || !!reuseJobId);
+  const [reusedFrom, setReusedFrom] = useState<string | null>(null);
 
   // The only mode a local draft applies to — editing reloads from the saved
   // job, and a hire request is a single quick action with nothing worth
@@ -565,7 +569,8 @@ export function PostJobScreen() {
     const hasRouteSeed = !!(
       params?.initialTitle ||
       params?.initialDescription ||
-      params?.initialCategory
+      params?.initialCategory ||
+      reuseJobId
     );
     if (hasRouteSeed) {
       setDraftReady(true);
@@ -802,6 +807,54 @@ export function PostJobScreen() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editJobId]);
+
+  /**
+   * 2026-09-30 (idea 2) — REUSE A PAST JOB. Everything a new visit repeats is copied: the words,
+   * the category, the area and its pin, the private address, the posting choice and the price —
+   * and the form opens on its Review step, one tap from Publish. The schedule is not copied (a past
+   * day is never right) and neither are the photos and clips: they belong to that job, and its own
+   * clean-ups delete their files. A failed read opens the plain form instead.
+   */
+  useEffect(() => {
+    if (!reuseJobId) return;
+    let active = true;
+    (async () => {
+      const [{ data: job, error }, { data: loc }] = await Promise.all([
+        fetchJobById(reuseJobId),
+        fetchJobLocation(reuseJobId),
+      ]);
+      if (!active) return;
+      if (error || !job) {
+        setLoadingJob(false);
+        await alertAsync('Could not open that job', userMessage(error, 'Start a new post instead.'));
+        return;
+      }
+      setTitle(job.title);
+      setDescription(job.description);
+      setCategory(job.category);
+      setLocation(job.location ?? '');
+      setBudgetMin(job.budget_min_cents != null ? String(job.budget_min_cents / 100) : '');
+      setBudgetMax(
+        job.budget_max_cents != null
+          ? String(job.budget_max_cents / 100)
+          : job.budget_cents != null
+            ? String(job.budget_cents / 100)
+            : ''
+      );
+      setPricingMode(pricingModeFrom(job.pricing_mode));
+      if (loc) {
+        if (loc.lat != null && loc.lng != null) setCoords({ lat: loc.lat, lng: loc.lng });
+        setAddress(loc.address_line ?? '');
+      }
+      setReusedFrom(job.title);
+      setStep(POST_STEPS.length - 1);
+      setLoadingJob(false);
+    })();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reuseJobId]);
 
   /**
    * D0 — THE SUCCESS SURFACE IS NOT FADED IN, AND MUST NOT BE.
@@ -1291,7 +1344,9 @@ export function PostJobScreen() {
       ? 'Photos and clips are optional, but they help.'
       : step === POST_STEPS.length - 1 && (isEditing || isHiring)
         ? 'Check the details. You can still go back.'
-        : currentStep.subtitle;
+        : step === POST_STEPS.length - 1 && reusedFrom
+          ? `Copied from “${reusedFrom}”. Change anything, or just Publish.`
+          : currentStep.subtitle;
   const reviewBudgetCents = dollarsToCents(budget);
   const reviewMaxCents = dollarsToCents(budgetMax);
   const validMax =
@@ -1446,7 +1501,13 @@ export function PostJobScreen() {
                 STEP {step + 1} OF {POST_STEPS.length}
               </Text>
               <Text style={styles.stepTitle}>{currentStepTitle}</Text>
-              <Text style={styles.stepSubtitle}>{currentStepSubtitle}</Text>
+              {/* Idea 2: a reused post says where it came from, in the accent. */}
+              <Text
+                style={[styles.stepSubtitle, step === POST_STEPS.length - 1 && reusedFrom && !isEditing && !isHiring && styles.stepSubtitleReused]}
+                numberOfLines={step === POST_STEPS.length - 1 && reusedFrom ? 2 : undefined}
+              >
+                {currentStepSubtitle}
+              </Text>
             </StepPane>
 
             <View
@@ -2098,6 +2159,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     lineHeight: 20,
     color: colors.textMuted,
     maxWidth: 420,
+  },
+  // Idea 2: "Copied from …" — the drawn line, in the accent and a touch heavier.
+  stepSubtitleReused: {
+    color: colors.emerald,
+    fontWeight: '600',
   },
   progressRow: {
     flexDirection: 'row',

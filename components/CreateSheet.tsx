@@ -1,14 +1,16 @@
 import { useModalPresence } from '../hooks/useModalPresence';
 import { useSheetPresence } from '../hooks/useSheetPresence';
 import { SheetCard } from './SheetCard';
-import { useEffect, useMemo, type ComponentProps } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Fragment, useEffect, useMemo, useState, type ComponentProps } from 'react';
+import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CategoryGlyph } from './CategoryGlyph';
+import { DropdownBody, DropdownChevron } from './DropdownReveal';
 import { splitNextAction } from './HubCard';
 import {
   SCRIM_DARK_ALPHA,
+  emeraldRadius,
   radius,
   scrimInDark,
   spacing,
@@ -23,7 +25,8 @@ import { SheetHeader } from '../ui/primitives/SheetHeader';
 import { ConfirmHost } from './ConfirmHost';
 import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import { attentionItems } from '../lib/homeAttention';
-import { JOB_CATEGORY_ICONS, type Job } from '../lib/jobs';
+import { budgetRangeLabel, formatBudget, JOB_CATEGORY_ICONS, type Job } from '../lib/jobs';
+import { reusableJobs, reuseCardFigure, reuseCardInstant, reuseCardWidth } from '../lib/reuseJobs';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -43,6 +46,11 @@ type CreateSheetProps = {
   items: CreateSheetItem[];
   /** The "Needs you" card's tap — the job that is waiting on the customer. */
   onOpenJob: (job: Job) => void;
+  /**
+   * 2026-09-30 (idea 2): "Reuse a past job" — a past job's card, tapped. The tree opens a fresh
+   * post filled from it; the sheet only draws.
+   */
+  onReuseJob?: (job: Job) => void;
   /** The bottom row. Hands off to switchMode(), which confirms first. */
   onSwitchMode: () => void;
   switching?: boolean;
@@ -90,6 +98,7 @@ export function CreateSheet({
   title,
   items,
   onOpenJob,
+  onReuseJob,
   onSwitchMode,
   switching = false,
   onClose,
@@ -100,6 +109,23 @@ export function CreateSheet({
   const presence = useSheetPresence(visible);
   const styles = stylesFor(colors);
   const insets = useSafeAreaInsets();
+  // ONE batched read per opening, shared by the two rows that show the customer's own jobs — Needs
+  // you and Reuse a past job (the hooks/useMyJobsHub.ts read customer Home makes on focus). Until it
+  // settles for THIS opening, neither shows the last opening's jobs.
+  const hub = useMyJobsHub();
+  const { refresh } = hub;
+  const [hubReady, setHubReady] = useState(false);
+  useEffect(() => {
+    if (!visible) return;
+    let alive = true;
+    setHubReady(false);
+    void refresh().then(() => {
+      if (alive) setHubReady(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [visible, refresh]);
   // The mockup's chevrons: the cream at 35% on the dark glass, the nav's
   // inactive grey in light — colour only, per theme.
   const chevron = isDark ? withAlpha(colors.text, 0.35) : colors.navInactive;
@@ -145,12 +171,12 @@ export function CreateSheet({
           {/* #64 (M-31) — the one sheet header; "Close": a row is the action. */}
           <SheetHeader title={title} dismissWord="Close" onDismiss={onClose} />
 
-          <NeedsYou onOpen={onOpenJob} />
+          <NeedsYou hub={hub} ready={hubReady} onOpen={onOpenJob} />
 
           <View style={styles.rows}>
             {items.map((item, index) => (
+              <Fragment key={item.key}>
               <Pressable
-                key={item.key}
                 onPress={item.onPress}
                 style={({ pressed }) => [
                   styles.row,
@@ -172,6 +198,11 @@ export function CreateSheet({
                 </Text>
                 <Ionicons name="chevron-forward" size={18} color={chevron} />
               </Pressable>
+              {/* Idea 2: under the first action, the way to start from one posted before. */}
+              {index === 0 && onReuseJob ? (
+                <ReusePastJob hub={hub} ready={hubReady} visible={visible} onPick={onReuseJob} />
+              ) : null}
+              </Fragment>
             ))}
           </View>
 
@@ -217,17 +248,16 @@ function PlusGlyph({ color }: { color: string }) {
   );
 }
 
+type Hub = ReturnType<typeof useMyJobsHub>;
+
 /** The one job most in need of the customer's move, or nothing. */
-function NeedsYou({ onOpen }: { onOpen: (job: Job) => void }) {
+function NeedsYou({ hub, ready, onOpen }: { hub: Hub; ready: boolean; onOpen: (job: Job) => void }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const chevron = isDark ? withAlpha(colors.text, 0.35) : colors.navInactive;
-  const { posted, payments, openDisputeJobIds, reviewedJobIds, loading, error, refresh } =
-    useMyJobsHub();
-  // Inside the Modal, so this is the sheet opening: one batched read per open.
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  // The sheet's one read per opening (above); nothing shows until it has settled for this one.
+  const { posted, payments, openDisputeJobIds, reviewedJobIds, error } = hub;
+  const loading = !ready;
   // One clock reading per data load — the hub's rule, so the item's rank and
   // its next-action line cannot be read at two different instants.
   const nowMs = useMemo(() => Date.now(), [posted, payments]);
@@ -277,6 +307,133 @@ function NeedsYou({ onOpen }: { onOpen: (job: Job) => void }) {
   );
 }
 
+/**
+ * 2026-09-30 (the build run, idea 2) — REUSE A PAST JOB. A row in the same white as the others,
+ * "Reuse a past job" over the grey "Start from one you posted before", CLOSED until tapped (popup
+ * 12); its chevron opens, in place, a sideways strip of compact cards — about two and a half across,
+ * each 128 to 160 wide, just wide enough for its own words: the full title (three lines at most),
+ * the worker's full name and the date on lines of their own, the price at the bottom right (the
+ * operator's "what's wrong" item 1). A card opens a fresh post on its Review step, filled from that
+ * job — three taps from anywhere. A failed read is absent, never "nothing to reuse".
+ */
+function ReusePastJob({
+  hub,
+  ready,
+  visible,
+  onPick,
+}: {
+  hub: Hub;
+  ready: boolean;
+  visible: boolean;
+  onPick: (job: Job) => void;
+}) {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
+  const chevron = isDark ? withAlpha(colors.text, 0.35) : colors.navInactive;
+  const [open, setOpen] = useState(false);
+  // Each opening of the sheet starts with the row closed.
+  useEffect(() => {
+    if (!visible) setOpen(false);
+  }, [visible]);
+  const jobs = useMemo(() => reusableJobs(hub.posted), [hub.posted]);
+
+  return (
+    <View>
+      <Pressable
+        onPress={() => setOpen((current) => !current)}
+        style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Reuse a past job"
+        accessibilityHint="Start from one you posted before"
+        accessibilityState={{ expanded: open }}
+      >
+        <View style={styles.disc}>
+          <Ionicons name="repeat-outline" size={20} color={colors.emerald} />
+        </View>
+        <View style={styles.reuseCopy}>
+          <Text style={styles.rowLabel}>Reuse a past job</Text>
+          <Text style={[styles.reuseCaption, isDark && styles.hintDark]} numberOfLines={1}>
+            Start from one you posted before
+          </Text>
+        </View>
+        <DropdownChevron open={open}>
+          <Ionicons name="chevron-down" size={18} color={chevron} />
+        </DropdownChevron>
+      </Pressable>
+      <DropdownBody open={open}>
+        {!ready ? (
+          <View style={styles.stripState}>
+            <ActivityIndicator color={colors.emerald} />
+          </View>
+        ) : hub.error ? null : jobs.length === 0 ? (
+          <View style={styles.stripState}>
+            <Text style={[styles.hint, isDark && styles.hintDark]}>
+              The jobs you post show here, ready to post again.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            horizontal
+            data={jobs}
+            keyExtractor={(job) => job.id}
+            showsHorizontalScrollIndicator={false}
+            style={styles.stripScroller}
+            contentContainerStyle={styles.strip}
+            renderItem={({ item: job }) => (
+              <ReuseCard job={job} worker={job.assigned_worker_id ? hub.names[job.assigned_worker_id] ?? null : null} onPick={onPick} />
+            )}
+          />
+        )}
+      </DropdownBody>
+    </View>
+  );
+}
+
+/** The sheet's side padding; the reuse strip runs out through it to the sheet's edges. */
+const SHEET_PAD_X = 22;
+
+/** One compact card: the title, the worker and the date, the price at the bottom right. */
+function ReuseCard({ job, worker, onPick }: { job: Job; worker: string | null; onPick: (job: Job) => void }) {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
+  const figure = reuseCardFigure(job);
+  const price =
+    figure === 'agreed' ? formatBudget(job.final_amount_cents) : figure === 'budget' ? budgetRangeLabel(job) : null;
+  const date = new Date(reuseCardInstant(job)).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  return (
+    <Pressable
+      onPress={() => onPick(job)}
+      style={({ pressed }) => [
+        styles.card,
+        // Its width is its title's (lib/reuseJobs.ts), read with the card's side padding at render.
+        { width: reuseCardWidth(job.title, 2 * (spacing.md - 1)) },
+        isDark && styles.cardDark,
+        pressed && styles.pressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`Post again: ${job.title}`}
+      accessibilityHint="Opens a new post filled from this job, ready to publish"
+    >
+      <Text style={styles.cardTitle} numberOfLines={3}>
+        {job.title}
+      </Text>
+      <View style={styles.cardMeta}>
+        {worker ? (
+          <Text style={styles.cardLine} numberOfLines={1}>
+            {worker}
+          </Text>
+        ) : null}
+        <Text style={styles.cardLine}>{date}</Text>
+        {price ? <Text style={styles.cardPrice}>{price}</Text> : null}
+      </View>
+    </Pressable>
+  );
+}
+
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
     root: {
@@ -296,7 +453,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // inset, the way the two other sheets reserve it.
     sheet: {
       paddingTop: 10,
-      paddingHorizontal: 22,
+      paddingHorizontal: SHEET_PAD_X,
       gap: 6,
     },
     // The contextual card: a pane on the pane. Light: the frost's own white
@@ -417,5 +574,53 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       color: colors.textMuted,
     },
     hintDark: { color: withAlpha(colors.text, 0.45) },
+    // Idea 2 — the reuse row's words, and its strip of cards.
+    reuseCopy: { flex: 1, minWidth: 0, gap: 2 },
+    reuseCaption: {
+      fontSize: 12,
+      color: colors.textMuted,
+    },
+    // Full bleed, as Home's tile row: out to the sheet's edges, the first card back on the column.
+    stripScroller: { marginHorizontal: -SHEET_PAD_X },
+    strip: {
+      paddingHorizontal: SHEET_PAD_X,
+      gap: spacing.sm + 2,
+      paddingTop: spacing.xs,
+      paddingBottom: spacing.sm + 2,
+    },
+    stripState: {
+      minHeight: 64,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    // The operator's compact card: as wide as its own words need, from 128 to 160 (set at render).
+    card: {
+      minHeight: 118,
+      borderRadius: emeraldRadius.md,
+      paddingVertical: spacing.sm + 2,
+      paddingHorizontal: spacing.md - 1,
+      gap: spacing.xs + 2,
+      backgroundColor: withAlpha(colors.forest, 0.07),
+    },
+    cardDark: { backgroundColor: withAlpha(colors.text, 0.06) },
+    cardTitle: {
+      fontSize: 12,
+      lineHeight: 15,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    cardMeta: { marginTop: 'auto', gap: 2 },
+    cardLine: {
+      fontSize: 11,
+      lineHeight: 14,
+      color: colors.textMuted,
+    },
+    cardPrice: {
+      alignSelf: 'flex-end',
+      marginTop: 2,
+      fontSize: 13,
+      fontWeight: '800',
+      color: colors.money,
+    },
   }),
 );

@@ -148,6 +148,9 @@ export type CustomerHomeStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** 2026-09-30 (idea 2): the past job a fresh post starts from — the + sheet's "Reuse a
+         *  past job". The form opens on its Review step, filled from that job. */
+        reuseJobId?: string;
         /** Prefill for the hire flow's single offer amount, integer cents —
          *  e.g. a worker_services listed price ("Book at listed price").
          *  Read only when hireWorkerId is set; fresh posts ignore it. */
@@ -188,6 +191,9 @@ export type DiscoverStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** 2026-09-30 (idea 2): the past job a fresh post starts from — the + sheet's "Reuse a
+         *  past job". The form opens on its Review step, filled from that job. */
+        reuseJobId?: string;
         /** Prefill for the hire flow's single offer amount, integer cents —
          *  e.g. a worker_services listed price ("Book at listed price").
          *  Read only when hireWorkerId is set; fresh posts ignore it. */
@@ -246,6 +252,9 @@ export type WorkerHomeStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** 2026-09-30 (idea 2): the past job a fresh post starts from — the + sheet's "Reuse a
+         *  past job". The form opens on its Review step, filled from that job. */
+        reuseJobId?: string;
         /** Prefill for the hire flow's single offer amount, integer cents —
          *  e.g. a worker_services listed price ("Book at listed price").
          *  Read only when hireWorkerId is set; fresh posts ignore it. */
@@ -331,6 +340,9 @@ export type MyJobsStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** 2026-09-30 (idea 2): the past job a fresh post starts from — the + sheet's "Reuse a
+         *  past job". The form opens on its Review step, filled from that job. */
+        reuseJobId?: string;
         /** Prefill for the hire flow's single offer amount, integer cents —
          *  e.g. a worker_services listed price ("Book at listed price").
          *  Read only when hireWorkerId is set; fresh posts ignore it. */
@@ -364,6 +376,9 @@ export type MessagesStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** 2026-09-30 (idea 2): the past job a fresh post starts from — the + sheet's "Reuse a
+         *  past job". The form opens on its Review step, filled from that job. */
+        reuseJobId?: string;
         /** Prefill for the hire flow's single offer amount, integer cents —
          *  e.g. a worker_services listed price ("Book at listed price").
          *  Read only when hireWorkerId is set; fresh posts ignore it. */
@@ -402,6 +417,9 @@ export type MapStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** 2026-09-30 (idea 2): the past job a fresh post starts from — the + sheet's "Reuse a
+         *  past job". The form opens on its Review step, filled from that job. */
+        reuseJobId?: string;
         /** Prefill for the hire flow's single offer amount, integer cents —
          *  e.g. a worker_services listed price ("Book at listed price").
          *  Read only when hireWorkerId is set; fresh posts ignore it. */
@@ -462,6 +480,9 @@ export type ProfileStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** 2026-09-30 (idea 2): the past job a fresh post starts from — the + sheet's "Reuse a
+         *  past job". The form opens on its Review step, filled from that job. */
+        reuseJobId?: string;
         /** Prefill for the hire flow's single offer amount, integer cents —
          *  e.g. a worker_services listed price ("Book at listed price").
          *  Read only when hireWorkerId is set; fresh posts ignore it. */
@@ -626,6 +647,9 @@ export type PostJobRouteParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** 2026-09-30 (idea 2): the past job a fresh post starts from — the + sheet's "Reuse a
+         *  past job". The form opens on its Review step, filled from that job. */
+        reuseJobId?: string;
         /** Prefill for the hire flow's single offer amount, integer cents —
          *  e.g. a worker_services listed price ("Book at listed price").
          *  Read only when hireWorkerId is set; fresh posts ignore it. */

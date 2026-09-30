@@ -251,6 +251,10 @@ export function CustomerRoot() {
         onOpenJob={(job) =>
           runCreateAction(() => navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job }))
         }
+        // Idea 2 — a past job's card opens a fresh post, filled from it, on its Review step.
+        onReuseJob={(job) =>
+          runCreateAction(() => navigateAcrossTabs('Home', 'PostJob', { reuseJobId: job.id }))
+        }
         // switchMode() asks with the sheet still up; only a yes swaps the trees.
         onSwitchMode={() => void switchFromSheet()}
         switching={switching}

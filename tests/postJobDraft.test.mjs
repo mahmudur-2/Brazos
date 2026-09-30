@@ -120,7 +120,9 @@ test('a fresh post survives in AsyncStorage, editing and hiring never touch it',
   assert.match(source, /await loadPostJobDraft\(draftUserId\)/);
   assert.match(
     source,
-    /const hasRouteSeed = !!\(\s*params\?\.initialTitle \|\|\s*params\?\.initialDescription \|\|\s*params\?\.initialCategory\s*\)/
+    // 2026-09-30 (idea 2): a reused past job is a route seed too — an explicit fresh start that a
+    // stale draft must not override.
+    /const hasRouteSeed = !!\(\s*params\?\.initialTitle \|\|\s*params\?\.initialDescription \|\|\s*params\?\.initialCategory \|\|\s*reuseJobId\s*\)/
   );
 
   // Autosave only fires once restore has resolved, so it can never clobber a
