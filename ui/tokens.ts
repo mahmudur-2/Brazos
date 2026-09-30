@@ -1530,6 +1530,29 @@ export const meltBar = {
   reducedMs: 180,
 } as const;
 
+/**
+ * 2026-09-30 (the build run, idea 23) — POST A JOB'S CATEGORY TILES: Home's Popular-services tile
+ * (components/ServiceTileRow.tsx — the same measured square, corner, glyph and name) with a chosen
+ * state. The chosen tile grows by `slot` to make room for a check box at its top-left, and a small
+ * down-arrow sits half under its bottom edge, where the questions open (lib/postQuestions.ts).
+ */
+export const postTiles = {
+  /** How much wider the chosen tile grows — the slot the check sits in. */
+  slot: 25,
+  /** The check box: its side, its corner, its inset from the tile's corner, its glyph. */
+  check: 18,
+  checkRadius: 5,
+  checkInset: 7,
+  checkGlyph: 13,
+  /** The down-arrow's disc and glyph, and how far the disc hangs below the tile. */
+  arrow: 18,
+  arrowGlyph: 12,
+  arrowDrop: 11,
+  /** How long the slot takes to open, and how long the arrow waits before it drops in. */
+  widenMs: 220,
+  arrowDelayMs: 160,
+} as const;
+
 // ---------------------------------------------------------------------------
 // Controls
 // ---------------------------------------------------------------------------

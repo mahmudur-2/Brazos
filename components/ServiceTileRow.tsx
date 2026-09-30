@@ -33,7 +33,7 @@ export function tileSizeFor(rowWidth: number, gap: number): number {
 }
 /** The glyph inside the square: the Lux tile draws 26; 2026-09-28 (LUX-LIST-64
  *  #12) the operator's 30, dead centre in the tile. */
-const TILE_ICON_SIZE = 30;
+export const TILE_ICON_SIZE = 30;
 /**
  * 2026-09-27 (the Lux remake, ruling 12): the Lux line icons — the Ionicons
  * `-outline` variant of each tile's own glyph, mint. Every name in

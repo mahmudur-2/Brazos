@@ -24,6 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { CategoryTileRow } from '../components/CategoryTileRow';
 import { Chip } from '../components/Chip';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EyeOffIcon } from '../components/EyeOffIcon';
@@ -31,6 +32,7 @@ import { JobLivePage } from '../components/JobLivePage';
 import { JobSummaryCard, type SummaryTarget } from '../components/JobSummaryCard';
 import { OfferAmountField, validateOfferAmount } from '../components/OfferComposer';
 import { PhotoViewer } from '../components/PhotoViewer';
+import { PostQuestions } from '../components/PostQuestions';
 import { POST_BAR_BUTTON, PostJobBar } from '../components/PostJobBar';
 import { PriceDropdown, type PriceDropdownHandle, type PriceViewport } from '../components/PriceDropdown';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -44,14 +46,13 @@ import { Sentry } from '../lib/observability/sentry';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   arrivalWindowLabel,
-  categoryAccent,
   createJob,
   dollarsToCents,
   fetchJobById,
   fetchJobLocation,
   formatBudget,
   JOB_CATEGORIES,
-  JOB_CATEGORY_ICONS,
+  JOB_CATEGORY_CHIP_ORDER,
   JOB_CATEGORY_LABELS,
   LAUNCH_EXCLUDED_CATEGORIES,
   updateJob,
@@ -73,6 +74,7 @@ import {
 import { priceGuidanceLines } from '../lib/priceGuidance';
 import { PRICE_GUIDANCE } from '../lib/featureFlags';
 import { descriptionCharsNeeded } from '../lib/validation';
+import { answerLine, withAnswerLine, type PostAnswers } from '../lib/postQuestions';
 import { createDirectOffer } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
@@ -97,7 +99,7 @@ import {
   type ColorPalette,
   screenGround,
 } from '../lib/theme';
-import { MediaUploader, useScrollClearance } from '../ui/primitives';
+import { MediaUploader, usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 // Ten per the screen-13 spec; phase49 raised create_job's server cap to match.
@@ -205,44 +207,16 @@ const POSTABLE_CATEGORIES: readonly JobCategory[] = JOB_CATEGORIES.filter(
 );
 
 /**
- * RUN PJ1 (C2b) — FIRST-FIT-DECREASING PACKING OF THE CATEGORY PILLS.
- *
- * The pills keep their natural content width and the row keeps its uniform
- * gap; only the RENDER ORDER changes, so flexWrap fills each row as fully as
- * first-fit-decreasing gets it instead of leaving large dead ends. Computed
- * once from real measured widths, deterministic (widths sort descending with
- * the source order as the tiebreak). "Other" never participates — it renders
- * last regardless of fit, as the catch-all after every named category.
- *
- * Flattening the packed rows re-wraps identically under flexWrap: every
- * row's prefix fits by construction, and a row's first item was placed there
- * precisely because no earlier row had room for it at the time — and earlier
- * rows only ever grew. The half-point epsilon absorbs sub-pixel layout noise;
- * at worst it wraps one pill a row early, which is still a legal layout.
+ * 2026-09-30 (the build run, idea 23) — THE TILES' ORDER: every postable category, in the order
+ * Home's tiles and the job filter's chips use (the six quick services first, Other last). The
+ * packing pass the pills needed (C2b) went with them: tiles slide, they do not wrap.
  */
-function packCategoryChips(
-  widths: ReadonlyMap<JobCategory, number>,
-  rowWidth: number,
-  gap: number
-): JobCategory[] {
-  const packable = POSTABLE_CATEGORIES.filter((c) => c !== 'other');
-  const sorted = [...packable].sort(
-    (a, b) =>
-      (widths.get(b) ?? 0) - (widths.get(a) ?? 0) ||
-      packable.indexOf(a) - packable.indexOf(b)
-  );
-  const rows: { used: number; items: JobCategory[] }[] = [];
-  for (const c of sorted) {
-    const w = widths.get(c) ?? 0;
-    const row = rows.find((r) => r.used + gap + w <= rowWidth - 0.5);
-    if (row) {
-      row.items.push(c);
-      row.used += gap + w;
-    } else {
-      rows.push({ used: w, items: [c] });
-    }
-  }
-  return [...rows.flatMap((r) => r.items), 'other'];
+const POSTABLE_TILES: readonly JobCategory[] = [...POSTABLE_CATEGORIES].sort(
+  (a, b) => tileRank(a) - tileRank(b)
+);
+function tileRank(category: JobCategory): number {
+  const at = JOB_CATEGORY_CHIP_ORDER.indexOf(category);
+  return at < 0 ? JOB_CATEGORY_CHIP_ORDER.length : at;
 }
 
 /**
@@ -307,6 +281,8 @@ export function PostJobScreen() {
   // ruling 13), so their scroller ends above the pill; the last step's bar (PostJobBar) lifts its
   // own buttons over it and the scroller ends on the bar, as before.
   const navClearance = useScrollClearance();
+  // The last step's bar lifts its buttons over the pill by this much; its note floats above them.
+  const footerPad = usePinnedFooterPadding();
   const emeraldColors = emeraldColorsFor(colors);
   // Registered in four stacks (Home, MyJobs, Messages, Map) for posting, edit,
   // and Hire Again entry points, so its types are standalone rather than tied
@@ -425,21 +401,21 @@ export function PostJobScreen() {
   // is open. Null means nothing is pending.
   const [confirmOfferCents, setConfirmOfferCents] = useState<number | null>(null);
 
-  // C2b — the category pills' one-time measurement. Widths land from a
-  // hidden measurement pass; the visible row stays invisible (a plain style,
-  // not an animation) until the packed order exists, so no reorder is ever
-  // displayed. The order then persists for the life of the screen — step
-  // revisits render it directly with no second measurement.
-  const chipWidthsRef = useRef<Map<JobCategory, number>>(new Map());
-  const [chipMeasureCount, setChipMeasureCount] = useState(0);
-  const [chipsWidth, setChipsWidth] = useState(0);
-  const [chipOrder, setChipOrder] = useState<readonly JobCategory[] | null>(null);
-
-  useEffect(() => {
-    if (chipOrder != null || chipsWidth <= 0) return;
-    if (POSTABLE_CATEGORIES.some((c) => !chipWidthsRef.current.has(c))) return;
-    setChipOrder(packCategoryChips(chipWidthsRef.current, chipsWidth, spacing.sm));
-  }, [chipMeasureCount, chipsWidth, chipOrder]);
+  // 2026-09-30 (idea 23) — the chosen category's usual questions: whether they are open under the
+  // tiles, which answers are picked, and the line those answers wrote into the description (so the
+  // next answer replaces it where it stands). Kept in the draft with everything else.
+  const [questionsOpen, setQuestionsOpen] = useState(false);
+  const [answers, setAnswers] = useState<PostAnswers>({});
+  const [answersLine, setAnswersLine] = useState('');
+  const questionsRef = useRef<View>(null);
+  // The reveal waits one frame for the opened questions' layout — a frame, never a timer.
+  const revealFrameRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (revealFrameRef.current != null) cancelAnimationFrame(revealFrameRef.current);
+    },
+    []
+  );
 
   const successScale = useRef(new Animated.Value(0.4)).current;
   const reducedMotion = useReducedMotion();
@@ -618,6 +594,8 @@ export function PostJobScreen() {
         setArrivalEndHour(draft.arrivalEndHour);
         setPhotos(draft.photos);
         setVideos(draft.videos);
+        setAnswers(draft.answers);
+        setAnswersLine(draft.answersLine);
         setStep(Math.min(draft.step, POST_STEPS.length - 1));
         // A restored draft's media belongs to no saved job (the job does not
         // exist yet), so it follows the same rule as a photo added this
@@ -655,11 +633,60 @@ export function PostJobScreen() {
       arrivalEndHour,
       photos,
       videos,
+      answers,
+      answersLine,
       step,
     };
     draftHasContentRef.current = draftHasContent(draft);
     void savePostJobDraft(draftUserId, draft);
-  }, [isFreshPost, draftReady, draftUserId, title, description, category, location, coords, budgetMin, budgetMax, pricingMode, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, step]);
+  }, [isFreshPost, draftReady, draftUserId, title, description, category, location, coords, budgetMin, budgetMax, pricingMode, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, answers, answersLine, step]);
+
+  /**
+   * Idea 23 — choosing a tile. Tapping the chosen tile again clears the category, as the pills did
+   * (C2a). The answers belonged to the category being left, so their line leaves the description
+   * with them; a newly chosen category opens its questions.
+   */
+  function chooseCategory(next: JobCategory) {
+    const nextCategory = category === next ? null : next;
+    if (answersLine) setDescription(withAnswerLine(description, answersLine, '', MAX_DESCRIPTION_LENGTH).text);
+    setAnswers({});
+    setAnswersLine('');
+    setCategory(nextCategory);
+    setQuestionsOpen(nextCategory != null);
+  }
+
+  /**
+   * Idea 23 — an answer chip. Tapping the picked answer again unpicks it. The answers make one line
+   * at the end of the description, rewritten where it stands; an answer that would push the
+   * description past its limit is not taken.
+   */
+  function answerQuestion(questionId: string, index: number) {
+    const next: Record<string, number> = { ...answers };
+    if (next[questionId] === index) delete next[questionId];
+    else next[questionId] = index;
+    const line = answerLine(category, next);
+    const written = withAnswerLine(description, answersLine, line, MAX_DESCRIPTION_LENGTH);
+    if (written.line !== line) return;
+    setAnswers(next);
+    setDescription(written.text);
+    setAnswersLine(written.line);
+  }
+
+  /** Idea 23 — once the questions have opened, the page scrolls itself so all of them show above the tab bar. */
+  function revealQuestions() {
+    if (revealFrameRef.current != null) cancelAnimationFrame(revealFrameRef.current);
+    revealFrameRef.current = requestAnimationFrame(() => {
+      revealFrameRef.current = null;
+      priceViewport.measure(({ bottom, scrollY }) => {
+        questionsRef.current?.measureInWindow((_x, top, _width, height) => {
+          const overflow = top + height - (bottom - navClearance - spacing.md);
+          if (overflow > 0) {
+            scrollRef.current?.scrollTo({ y: scrollY + overflow, animated: reducedMotion === false });
+          }
+        });
+      });
+    });
+  }
 
   // Header Back, Android Back, and the iOS edge gesture all mean the same
   // thing inside the wizard: move back one step. A write in flight cannot be
@@ -1506,59 +1533,30 @@ export function PostJobScreen() {
                 <FieldLabel palette={emeraldColors}>Category</FieldLabel>
                 <Text style={styles.requiredHint}>Required</Text>
               </View>
-              <View
-                style={[styles.chips, chipOrder == null && styles.chipsMeasuring]}
-                onLayout={(event) => setChipsWidth(event.nativeEvent.layout.width)}
-              >
-                {/* D2: the saturated per-category palette is retired in dark
-                    wherever a category is drawn. Light keeps it. */}
-                {/* C2a — tapping the selected pill again deselects it, back to
-                    the pristine no-category state (the footer then says
-                    "Pick a category to continue"). C2b — the packed order once
-                    measured; source order, invisible, for the frame or two
-                    before. M-7 — Other is an ordinary pill: it selects the
-                    Other category, one tap like every other. */}
-                {(chipOrder ?? POSTABLE_CATEGORIES).map((c) => (
-                  <Chip
-                    key={c}
-                    label={JOB_CATEGORY_LABELS[c]}
-                    icon={JOB_CATEGORY_ICONS[c]}
-                    accentColor={isDark ? colors.gold : categoryAccent(c).bg}
-                    variant="filter"
-                    selected={category === c}
-                    onPress={() => setCategory(category === c ? null : c)}
-                  />
-                ))}
-              </View>
+              {/* 2026-09-30 (idea 23): Home's tiles, one per postable category, sliding. The
+                  chosen tile widens for its check and drops a small arrow; its usual questions open
+                  in the page under the row, and the page scrolls itself to show them. C2a stands —
+                  tapping the chosen tile again clears the category, and the header then says "Pick a
+                  category to continue". M-7 stands — Other is an ordinary tile. */}
+              <CategoryTileRow
+                categories={POSTABLE_TILES}
+                selected={category}
+                questionsOpen={questionsOpen}
+                onSelect={chooseCategory}
+                onToggleQuestions={() => setQuestionsOpen((open) => !open)}
+                inset={contentPaddingX}
+              />
               {reasonUnder('category')}
-              {chipOrder == null && (
-                /* C2b — the measurement pass: absolute, invisible, inert, one
-                   column of naturally-sized copies. Unmounts the moment the
-                   order exists. */
-                <View
-                  style={styles.chipsMeasure}
-                  pointerEvents="none"
-                  accessibilityElementsHidden
-                  importantForAccessibility="no-hide-descendants"
-                >
-                  {POSTABLE_CATEGORIES.map((c) => (
-                    <View
-                      key={c}
-                      onLayout={(event) => {
-                        chipWidthsRef.current.set(c, event.nativeEvent.layout.width);
-                        setChipMeasureCount((count) => count + 1);
-                      }}
-                    >
-                      <Chip
-                        label={JOB_CATEGORY_LABELS[c]}
-                        icon={JOB_CATEGORY_ICONS[c]}
-                        accentColor={isDark ? colors.gold : categoryAccent(c).bg}
-                        variant="filter"
-                      />
-                    </View>
-                  ))}
-                </View>
-              )}
+              <View ref={questionsRef} collapsable={false}>
+                <PostQuestions
+                  category={category}
+                  open={questionsOpen}
+                  answers={answers}
+                  onAnswer={answerQuestion}
+                  onSkip={() => setQuestionsOpen(false)}
+                  onShown={revealQuestions}
+                />
+              </View>
             </View>
           )}
 
@@ -2001,7 +1999,7 @@ export function PostJobScreen() {
         message={toast?.message ?? null}
         onUndo={toast?.undo}
         onExpire={() => setToast(null)}
-        bottom={POST_BAR_BUTTON + 1 + spacing.md}
+        bottom={footerPad + POST_BAR_BUTTON + 1 + spacing.md}
       />
 
       {/* #42 — the Seal, over everything while it runs. */}
@@ -2215,18 +2213,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-  },
-  // C2b — a plain style, deliberately not an animation: the row is simply not
-  // painted until the packed order exists, so no reorder is ever visible.
-  chipsMeasuring: {
-    opacity: 0,
-  },
-  chipsMeasure: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    opacity: 0,
-    alignItems: 'flex-start',
   },
   locationRow: {
     flexDirection: 'row',

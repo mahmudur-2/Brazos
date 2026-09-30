@@ -1063,6 +1063,16 @@ const SIBLINGS = [
     shared: 'components/ChipCheck.shared.tsx',
     needs: 'reanimated',
   },
+  {
+    // 2026-09-30 (the build run, idea 23) — the chosen category tile on Post a job grows by a slot
+    // for its check box and GLIDES to its new width, the tiles after it with it. Worklets alone, like
+    // ChipCheck; the fallback simply places the slot.
+    name: 'TileCheck',
+    fallback: 'components/TileCheck.tsx',
+    fast: 'components/TileCheck.motion120.tsx',
+    shared: 'components/TileCheck.shared.tsx',
+    needs: 'reanimated',
+  },
 ];
 
 test('[executed] every sibling is taken when its native is present and skipped when it is absent', () => {
@@ -2207,6 +2217,9 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       'components/SheetCard.motion120.tsx',
       'components/SuccessMark.motion120.tsx',
       'components/SwipeableRow.motion120.tsx',
+      // 2026-09-30 (the build run, idea 23) — the chosen category tile's check slot: one shared
+      // value, 0 → 1, the slot's width and the box's opacity computed from it on the UI thread.
+      'components/TileCheck.motion120.tsx',
     ],
     'the fast-path roster changed — bring the new sibling into this fence deliberately'
   );

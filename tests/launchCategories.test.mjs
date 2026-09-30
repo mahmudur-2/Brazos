@@ -71,12 +71,20 @@ test('3 · [static] the filter lives at ONE site in PostJobScreen, and every enu
   // listed these same categories again — so its rows and its pick are gone
   // with it, and Other is an ordinary pill that selects the Other category.
   assert.equal((screen.match(/\bJOB_CATEGORIES\b/g) ?? []).length, 2, 'no enumeration of the unfiltered map remains');
-  assert.equal((screen.match(/\bPOSTABLE_CATEGORIES\b/g) ?? []).length, 5, 'the filter and its four readers');
-  assert.match(screen, /\(chipOrder \?\? POSTABLE_CATEGORIES\)\.map/);
-  assert.match(screen, /const packable = POSTABLE_CATEGORIES\.filter\(\(c\) => c !== 'other'\);/);
-  assert.match(screen, /POSTABLE_CATEGORIES\.some\(\(c\) => !chipWidthsRef\.current\.has\(c\)\)/);
+  // 2026-09-30 (the build run, idea 23): the pills became Home's tiles (components/CategoryTileRow.tsx)
+  // and their packing pass went with them — tiles slide, they do not wrap. The filter's ONE reader
+  // is the tiles' order, and the row draws exactly the list it is handed, never the shared map.
+  assert.equal((screen.match(/\bPOSTABLE_CATEGORIES\b/g) ?? []).length, 2, "the filter and its one reader, the tiles' order");
+  assert.match(screen, /const POSTABLE_TILES: readonly JobCategory\[\] = \[\.\.\.POSTABLE_CATEGORIES\]\.sort\(/);
+  assert.match(screen, /<CategoryTileRow\s+categories=\{POSTABLE_TILES\}/);
+  const row = stripComments(read('components/CategoryTileRow.tsx'));
+  assert.match(row, /\{categories\.map\(\(category\) => \{/);
+  assert.doesNotMatch(row, /\bJOB_CATEGORIES\b|POSTABLE_CATEGORIES|LAUNCH_EXCLUDED_CATEGORIES/, 'the row enumerates only what it is handed');
   assert.ok(!screen.includes('ServicePickerSheet'), 'the posting wizard opens no category sheet');
-  assert.match(screen, /onPress=\{\(\) => setCategory\(category === c \? null : c\)\}/, 'every pill, Other included, toggles its own category');
+  // C2a stands: every tile, Other included, toggles its own category.
+  assert.match(row, /onPress=\{\(\) => onSelect\(category\)\}/);
+  assert.match(screen, /onSelect=\{chooseCategory\}/);
+  assert.match(screen, /const nextCategory = category === next \? null : next;[\s\S]*?setCategory\(nextCategory\);/, 'tapping the chosen tile again clears the category');
 });
 
 test('4 · [static] search, browse, worker services and Home tiles never see the allowlist', () => {

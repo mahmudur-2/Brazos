@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { alertAsync } from './dialog';
 import type { JobCategory } from './jobs';
+import type { PostAnswers } from './postQuestions';
 import { Sentry } from './observability/sentry';
 import { pricingModeFrom, type PricingMode } from './pricingMode';
 
@@ -55,6 +56,10 @@ export type PostJobDraft = {
   arrivalEndHour: number | null;
   photos: string[];
   videos: string[];
+  /** 2026-09-30 (idea 23): the usual questions' picked answers, and the line they wrote into the
+   *  description — so a resumed draft rewrites that line rather than adding a second one. */
+  answers: PostAnswers;
+  answersLine: string;
   step: number;
   // 2026-09-28 (LUX-LIST-64 #32): `photoNudgeDismissed` is gone with the photo
   // nudge it remembered; a stored draft that still carries it simply has the
@@ -98,6 +103,9 @@ export async function loadPostJobDraft(userId: string): Promise<PostJobDraft | n
       arrivalEndHour: parsed.arrivalEndHour ?? null,
       photos: Array.isArray(parsed.photos) ? parsed.photos : [],
       videos: Array.isArray(parsed.videos) ? parsed.videos : [],
+      // Idea 23: a draft saved before the questions existed has none picked and no line.
+      answers: answersFrom(parsed.answers),
+      answersLine: typeof parsed.answersLine === 'string' ? parsed.answersLine : '',
       step: typeof parsed.step === 'number' ? parsed.step : 0,
     };
   } catch {
@@ -105,6 +113,16 @@ export async function loadPostJobDraft(userId: string): Promise<PostJobDraft | n
     // crash — the wizard just starts blank, same as if none existed.
     return null;
   }
+}
+
+/** Idea 23: only question-id → option-index pairs survive a load; anything else reads as no answers. */
+function answersFrom(value: unknown): PostAnswers {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, number> = {};
+  for (const [key, index] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof index === 'number' && Number.isInteger(index) && index >= 0) out[key] = index;
+  }
+  return out;
 }
 
 /**
