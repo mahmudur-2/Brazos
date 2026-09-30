@@ -99,6 +99,13 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
   // starts (the status rows jump there) and ends (reaching it completes that document), measured.
   const blockTop = useRef<Record<LegalDocumentKey, number>>({ terms: 0, privacy: 0 });
   const blockEnd = useRef<Record<LegalDocumentKey, number>>({ terms: 0, privacy: 0 });
+  // A jump (a status row) scrolls straight past the documents above its target without showing
+  // their ends, and the landing's own scroll event would read them as reached. Those documents are
+  // held here until the reader's own scroll (`dragged`) brings their end into view.
+  const skippedByJump = useRef<Set<LegalDocumentKey>>(new Set());
+  const dragged = useRef(false);
+  // The completion as written this instant — two scroll events can land before React re-renders.
+  const seenNow = useRef<Record<LegalDocumentKey, boolean>>({ terms: false, privacy: false });
 
   const mounted = useRef(true);
   useEffect(() => {
@@ -109,6 +116,8 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
   }, []);
 
   function markSeen(key: LegalDocumentKey) {
+    if (seenNow.current[key]) return;
+    seenNow.current[key] = true;
     // Announced rather than only ticked: a screen-reader user gets no benefit
     // from a checkmark appearing somewhere above the fold.
     AccessibilityInfo.announceForAccessibility(
@@ -127,7 +136,13 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
     for (const required of REQUIRED_DOCUMENTS) {
       const end = blockEnd.current[required.key];
       const reached = end > 0 && layoutMeasurement.height + contentOffset.y >= end - 48;
-      if (reached && !seen[required.key]) markSeen(required.key);
+      // Jumped past: it completes only once the reader's own scroll shows its end.
+      const jumpedPast =
+        skippedByJump.current.has(required.key) && !(dragged.current && contentOffset.y <= end);
+      if (reached && !jumpedPast && !seen[required.key]) {
+        skippedByJump.current.delete(required.key);
+        markSeen(required.key);
+      }
     }
     // The open document is the one whose block holds the top third of the viewport.
     const probe = contentOffset.y + layoutMeasurement.height / 3;
@@ -156,7 +171,14 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
   }
 
   function switchTab(next: LegalDocumentKey) {
-    // A jump link: scroll to that document's block. Navigation only — it completes nothing.
+    // A jump link: scroll to that document's block. Navigation only — it completes nothing, and the
+    // unfinished documents it passes over stay unfinished until the reader scrolls to their ends.
+    dragged.current = false;
+    for (const required of REQUIRED_DOCUMENTS) {
+      if (blockTop.current[required.key] < blockTop.current[next] && !seenNow.current[required.key]) {
+        skippedByJump.current.add(required.key);
+      }
+    }
     setTab(next);
     scrollRef.current?.scrollTo({ y: blockTop.current[next], animated: reducedMotion !== true });
   }
@@ -308,6 +330,9 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
             style={[styles.docScroll, litCardStyle(isDark)]}
             contentContainerStyle={styles.docContent}
             onScroll={onScroll}
+            onScrollBeginDrag={() => {
+              dragged.current = true;
+            }}
             onContentSizeChange={onContentSizeChange}
             onLayout={onLayout}
             scrollEventThrottle={64}

@@ -14,8 +14,14 @@ test('[static] a moment is news: fresh (two minutes), once per payment, haptic k
   const moment = read('components/MoneyMoment.tsx');
   assert.match(moment, /export const MOMENT_FRESH_MS = 2 \* 60 \* 1000;/);
   assert.match(moment, /const played = new Set<string>\(\);/);
-  assert.match(moment, /if \(!isFreshMoment\(heldAt\) \|\| !claim\(`held:\$\{paymentId\}`\)\) return;\s*tap\(\);\s*if \(reduced\) return;/);
-  assert.match(moment, /if \(!isFreshMoment\(releasedAt\) \|\| !claim\(`released:\$\{paymentId\}`\)\) return;\s*confirm\(\);\s*if \(reduced\) return;/);
+  // 2026-09-30 (group 1's review): the moment waits for the Reduce Motion answer (null until read)
+  // before it claims its one play, and its key names the viewer as well as the payment.
+  assert.match(moment, /const key = `held:\$\{user\?\.id \?\? ''\}:\$\{paymentId\}`;/);
+  assert.match(moment, /const key = `released:\$\{user\?\.id \?\? ''\}:\$\{paymentId\}`;/);
+  assert.match(moment, /if \(reduced === null\) return;\s*if \(!isFreshMoment\(heldAt\) \|\| !claim\(key\)\) return;\s*tap\(\);\s*if \(reduced\) return;/);
+  assert.match(moment, /if \(reduced === null\) return;\s*if \(!isFreshMoment\(releasedAt\) \|\| !claim\(key\)\) return;\s*confirm\(\);\s*if \(reduced\) \{\s*pop\.setValue\(1\);/);
+  // The tick that is about to pop starts hidden: no flash of it before the pop.
+  assert.match(moment, /new Animated\.Value\(isFreshMoment\(releasedAt\) && !played\.has\(key\) \? 0 : 1\)/);
   assert.match(moment, /useNativeDriver: USE_NATIVE_DRIVER/);
   assert.doesNotMatch(moment, /react-native-reanimated/, 'the moments are core Animated, as drawn');
 });

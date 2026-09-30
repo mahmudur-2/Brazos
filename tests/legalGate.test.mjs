@@ -86,6 +86,22 @@ test('opening a document does not complete it — only reaching its end does', (
   );
 });
 
+test('a jump never completes the document it passes over', () => {
+  // 2026-09-30 (the build run, group 1's review): tapping Privacy scrolled straight past Terms' end,
+  // and the landing's scroll event completed Terms unread. A jumped-past document is held until the
+  // reader's OWN scroll (a drag) brings its end into view.
+  const switchBody = gate.slice(gate.indexOf('function switchTab('));
+  assert.match(
+    switchBody.slice(0, switchBody.indexOf('\n  }')),
+    /blockTop\.current\[required\.key\] < blockTop\.current\[next\] && !seenNow\.current\[required\.key\]\) \{\s*skippedByJump\.current\.add\(required\.key\);/
+  );
+  assert.match(gate, /skippedByJump\.current\.has\(required\.key\) && !\(dragged\.current && contentOffset\.y <= end\)/);
+  assert.match(gate, /if \(reached && !jumpedPast && !seen\[required\.key\]\) \{/);
+  assert.match(gate, /onScrollBeginDrag=\{\(\) => \{\s*dragged\.current = true;/);
+  // Two scroll events can land before a re-render: the completion is written once, synchronously.
+  assert.match(gate, /function markSeen\(key: LegalDocumentKey\) \{\s*if \(seenNow\.current\[key\]\) return;\s*seenNow\.current\[key\] = true;/);
+});
+
 test('reaching the end is measured with a tolerance, not pixel equality', () => {
   // 2026-09-30 (decision F): both documents are ONE scroll now, so the end is each document's own
   // block end — the same forgiving 48pt, and an unmeasured block (end 0) can complete nothing.

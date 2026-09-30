@@ -182,6 +182,24 @@ export async function markConversationUnread(target: ChatTarget, userId: string)
   return { error };
 }
 
+/**
+ * 2026-09-30 (the build run, idea 4's Undo) — put one thread's read position back exactly where it
+ * stood: an instant, or never read (null). The same two routes as markConversationUnread above, so
+ * an Undo never marks anything read that was not, and a message that arrived in between stays
+ * unread.
+ */
+export async function restoreConversationReadAt(target: ChatTarget, userId: string, readAt: string | null) {
+  if (!target.jobId) {
+    return setDirectThreadReadAt(target.directThreadId as string, readAt);
+  }
+
+  const { error } = await supabase.from('message_reads').upsert(
+    { job_id: target.jobId, user_id: userId, last_read_at: readAt ?? FULLY_UNREAD_AT },
+    { onConflict: 'user_id,job_id' }
+  );
+  return { error };
+}
+
 /** Rewind every thread of a conversation, so the one inbox row goes unread. */
 export async function markConversationUnreadForAll(
   targets: readonly ChatTarget[],

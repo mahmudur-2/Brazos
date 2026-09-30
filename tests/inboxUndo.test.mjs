@@ -26,7 +26,11 @@ test('[static] the three everyday actions never confirm, and each offers its Und
 
 test('[static] the Undo reverses the action itself, through the same door', () => {
   assert.match(body('toggleMute'), /\? await muteUser\(user\.id, target\.userId\)\s*: await unmuteUser\(user\.id, target\.userId\);/);
-  assert.match(body('markUnread'), /markConversationRead\(thread, user\.id\)/);
+  // 2026-09-30 (group 1's review): mark-unread's Undo restores each thread's OWN earlier read
+  // position, read before the rewind — never "read now", which would mark unread messages read.
+  assert.match(body('markUnread'), /const before = target\.targets\.map\(\(thread\) => \(\{/);
+  assert.match(body('markUnread'), /restoreConversationReadAt\(thread, user\.id, readAt\)/);
+  assert.doesNotMatch(body('markUnread'), /markConversationRead\(/);
   assert.match(body('applyConversationState'), /setConversationStateForAll\(target\.targets, undoable\.revert\)/);
 });
 

@@ -30,7 +30,6 @@ import {
   conversationPreviewText,
   conversationTarget,
   fetchActiveJobs,
-  markConversationRead,
   resolveOtherId,
   threadUnread,
   type ActiveJob,
@@ -40,6 +39,7 @@ import {
   BLOCK_DURATIONS,
   foldConversationStates,
   markConversationUnreadForAll,
+  restoreConversationReadAt,
   setBlockUntil,
   setConversationStateForAll,
   blockExpiryFrom,
@@ -597,6 +597,13 @@ export function MessagesInboxScreen() {
   async function markUnread(target: SheetTarget) {
     if (!user) return;
     setMenuUserId(null);
+    // Idea 4's Undo puts each thread's own read position back — read before the rewind.
+    const before = target.targets.map((thread) => ({
+      thread,
+      readAt: thread.jobId
+        ? readMap[thread.jobId] ?? null
+        : conversations.find((c) => c.direct_thread_id === thread.directThreadId)?.my_read_at ?? null,
+    }));
     const { error: unreadError } = await markConversationUnreadForAll(
       target.targets,
       user.id
@@ -605,7 +612,9 @@ export function MessagesInboxScreen() {
       await alertAsync('Could not mark as unread', userMessage(unreadError));
     } else {
       offerUndo('Marked as unread', async () => {
-        const results = await Promise.all(target.targets.map((thread) => markConversationRead(thread, user.id)));
+        const results = await Promise.all(
+          before.map(({ thread, readAt }) => restoreConversationReadAt(thread, user.id, readAt))
+        );
         const undoError = results.find((result) => result.error)?.error;
         if (undoError) await alertAsync('Could not undo', userMessage(undoError));
         await refresh();
