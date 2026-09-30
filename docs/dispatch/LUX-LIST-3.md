@@ -344,4 +344,28 @@ shown and it boxes width can adjust slightly to better show the info in a nicer 
 should be about 2.5 box shown with full horizontal scrollable method" → FIXED in the full list
 and board-9: the Reuse cards are 128–160 px wide (each just wide enough for its own text), about
 2.5 visible across the strip, the title up to three lines, the worker's name and the date on
-their own lines, the price bottom-right, the strip scrolling sideways. Item 2 onwards: awaited.
+their own lines, the price bottom-right, the strip scrolling sideways.
+Item 2 (2026-09-30, a screenshot of idea 3 "Reuse your last pitch" with "no get rid of this") →
+idea 3 DROPPED; removed from the full list. PICKED now: 1, 2, 4, 5, 6, 7, 8, 9, 10, 12, 14, 18,
+20, 23, 25.
+Item 3 (2026-09-30, a marked-up screenshot of idea 9's Dynamic Island scene over Home): "since
+dynamic is doing same work as the on the way above post a job tab.... get rid of that (unless it
+doesnt)" → the Dynamic Island scene is REMOVED from 9; the lock-screen live card stays. (Noted
+back: on Home the island does repeat the live bar; outside the app it would be the only place the
+stage shows — the operator's call stands.)
+Item 4 (2026-09-30, a marked-up screenshot of idea 18): "make the description one on the right
+bottom corner not left... and make both of the outline circles a little smaller..." → DECIDED:
+the description mic sits at the bottom-RIGHT of the box; both mic circles are smaller (26 px, was
+30). Fixed in the full list and board-8.
+Item 5 (2026-09-30, a screenshot of idea 20's push with "i hope all of these (not just these) arent
+what it looks like on the app exactly...") → ANSWERED HONESTLY: the app screens are real
+screenshots; everything the app cannot show (the lock screen, a push, an email, the live card) is
+DRAWN and was drawn in the app's colours, which a phone would not do for a push. Redrawn: the
+lock-screen pushes now look the way a phone shows them (a light frosted banner, the app icon,
+dark text, plain stacked action rows that a phone cannot tint). The live card stays app-designed
+(a phone lets the app design that one). The emails are drawn as an email client shows them.
+Item 6 (2026-09-30, a marked-up screenshot of 23's three looks, "I pick this one (2)") → 23 DECIDED
+AGAIN, the last word wins: version 2, plain rows in the page (like the Profile rows), not the lit
+card. The full list keeps only that version.
+Item 7 (2026-09-30, a screenshot of idea 25 with "remove this scratch") → idea 25 DROPPED.
+PICKED now: 1, 2, 4, 5, 6, 7, 8, 9, 10, 12, 14, 18, 20, 23. Item 8 onwards: awaited.

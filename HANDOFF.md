@@ -46,10 +46,22 @@ published (URLs in `LUX-LIST-3.md` §2). The closing deliverable is ONE local fi
 artifact, at the operator's request: `.shots/refresh/boards/full-list.html` (built from
 `full-list.tpl.html` by `inline.mjs`), every decision with today beside the change playing on the
 real screens. NOTHING IS BUILT: the standing rule from popup 5 holds until the operator says
-"build" in so many words. 23's dropdown look was decided last (popup 15): the lit card. Two things
-were left open when the operator dismissed the final popup and asked to wait: "something is wrong"
-with the full-list file (undescribed) and "change something" on the list (undescribed). The next
-session starts by asking both, then splits the file into lighter pages if it is the size.
+"build" in so many words. The operator then walked a "what's wrong" list against the full-list
+file (`LUX-LIST-3.md` §7, items 1–7): the Reuse cards made compact (about 2.5 across), ideas 3
+and 25 dropped, the Dynamic Island scene dropped from 9, the mics moved bottom-right and made
+smaller, the pushes redrawn the way a phone shows them (with the honest answer that anything the
+app cannot show — a lock screen, a push, an email — is drawn, not a screenshot), and 23 decided
+as look 2, plain rows in the page (the last word; the lit card was the earlier pick). The list
+was still open when the operator dismissed the popup and asked to wait; the next session asks
+for item 8. PICKED ideas now: 1, 2, 4, 5, 6, 7, 8, 9, 10, 12, 14, 18, 20, 23.
+
+**The sitting's record and the next dispatch.** At the operator's request the whole sitting is
+written up, checked line by line against `LUX-LIST-3.md`, in
+`docs/dispatch/DESIGN-LOOP-RECORD-2026-09-29.md` (every decision, every idea's final spec, the
+"what's wrong" list, everything pending, the facts read from the code), and the next session's
+brief is `docs/dispatch/DESIGN-LOOP-2.md` (the operator's way of working, where things stand, the
+first ten minutes, the pending list, the recipes and traps). The next session starts from those two
+files and this section; the boards are records, the full-list file is the surface of truth.
 
 **Recipes added.** `boards/inline.mjs` inlines the Now shots (1x JPEG via jimp-compact) and the
 Ionicons TTF into a single HTML; `boards/look.mjs` accepts `"<selector>@<nth>"` clicks
