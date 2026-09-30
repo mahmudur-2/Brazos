@@ -95,6 +95,10 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
 
   const scrollRef = useRef<ScrollView>(null);
   const viewportHeight = useRef(0);
+  // 2026-09-30 (decision F): both documents sit in ONE scroll, one block each. Where each block
+  // starts (the status rows jump there) and ends (reaching it completes that document), measured.
+  const blockTop = useRef<Record<LegalDocumentKey, number>>({ terms: 0, privacy: 0 });
+  const blockEnd = useRef<Record<LegalDocumentKey, number>>({ terms: 0, privacy: 0 });
 
   const mounted = useRef(true);
   useEffect(() => {
@@ -117,17 +121,34 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
     // The hint has done its job the moment the user starts moving.
     setGuidanceDismissed(true);
 
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const atBottom =
-      layoutMeasurement.height + contentOffset.y >= contentSize.height - 48;
-    if (atBottom && !seen[tab]) markSeen(tab);
+    const { layoutMeasurement, contentOffset } = event.nativeEvent;
+    // Each document is complete when the viewport reaches the end of ITS block — the same
+    // forgiving 48pt as before, per block; an unmeasured block (end 0) completes nothing.
+    for (const required of REQUIRED_DOCUMENTS) {
+      const end = blockEnd.current[required.key];
+      const reached = end > 0 && layoutMeasurement.height + contentOffset.y >= end - 48;
+      if (reached && !seen[required.key]) markSeen(required.key);
+    }
+    // The open document is the one whose block holds the top third of the viewport.
+    const probe = contentOffset.y + layoutMeasurement.height / 3;
+    let open: LegalDocumentKey = REQUIRED_DOCUMENTS[0].key;
+    for (const required of REQUIRED_DOCUMENTS) if (blockTop.current[required.key] <= probe) open = required.key;
+    if (open !== tab) setTab(open);
   }
 
   function onContentSizeChange(_w: number, h: number) {
-    // A document short enough not to scroll counts as read on sight.
-    if (viewportHeight.current > 0 && h <= viewportHeight.current && !seen[tab]) {
-      markSeen(tab);
+    // Documents short enough not to scroll count as read on sight — both, since both are in view.
+    if (viewportHeight.current > 0 && h <= viewportHeight.current) {
+      for (const required of REQUIRED_DOCUMENTS) if (!seen[required.key]) markSeen(required.key);
     }
+  }
+
+  function onBlockLayout(key: LegalDocumentKey) {
+    return (event: LayoutChangeEvent) => {
+      const { y, height } = event.nativeEvent.layout;
+      blockTop.current[key] = y;
+      blockEnd.current[key] = y + height;
+    };
   }
 
   function onLayout(event: LayoutChangeEvent) {
@@ -135,8 +156,9 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
   }
 
   function switchTab(next: LegalDocumentKey) {
+    // A jump link: scroll to that document's block. Navigation only — it completes nothing.
     setTab(next);
-    scrollRef.current?.scrollTo({ y: 0, animated: false });
+    scrollRef.current?.scrollTo({ y: blockTop.current[next], animated: reducedMotion !== true });
   }
 
   // --- scroll guidance ----------------------------------------------------
@@ -162,7 +184,6 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
   }, [guidance, guidanceShown]);
 
   // --- agreement unlock ---------------------------------------------------
-  const doc = LEGAL_DOCUMENTS[tab];
   // The real gate. Detected from actual scroll position/content size (above),
   // never a timer — a user could read faster or slower than any fixed delay,
   // and a delay would let someone "accept" without the content ever having
@@ -291,8 +312,16 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
             onLayout={onLayout}
             scrollEventThrottle={64}
           >
-            <MarkdownText markdown={doc.body} />
-            <Text style={styles.version}>Version {doc.version}</Text>
+            {REQUIRED_DOCUMENTS.map((required, index) => (
+              <View
+                key={required.key}
+                onLayout={onBlockLayout(required.key)}
+                style={index > 0 ? styles.docBlockNext : undefined}
+              >
+                <MarkdownText markdown={LEGAL_DOCUMENTS[required.key].body} />
+                <Text style={styles.version}>Version {LEGAL_DOCUMENTS[required.key].version}</Text>
+              </View>
+            ))}
           </ScrollView>
 
           {/* pointerEvents none: a hint must never be a thing you have to get
@@ -596,6 +625,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   docContent: {
     padding: authSpacing.lg,
     paddingBottom: authSpacing.xl,
+  },
+  // 2026-09-30 (decision F): the second document starts a clear step below the first, over a rule.
+  docBlockNext: {
+    marginTop: authSpacing.xl,
+    paddingTop: authSpacing.xl,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   version: {
     marginTop: authSpacing.lg,

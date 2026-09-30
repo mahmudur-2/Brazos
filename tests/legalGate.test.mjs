@@ -87,14 +87,16 @@ test('opening a document does not complete it — only reaching its end does', (
 });
 
 test('reaching the end is measured with a tolerance, not pixel equality', () => {
+  // 2026-09-30 (decision F): both documents are ONE scroll now, so the end is each document's own
+  // block end — the same forgiving 48pt, and an unmeasured block (end 0) can complete nothing.
   assert.match(
     gate,
-    /layoutMeasurement\.height \+ contentOffset\.y >= contentSize\.height - 48/,
+    /const reached = end > 0 && layoutMeasurement\.height \+ contentOffset\.y >= end - 48;/,
     'a forgiving threshold, so a rounding error cannot make the gate unpassable'
   );
-  // A document shorter than the viewport can never be scrolled, so it counts
-  // on sight rather than trapping the user.
-  assert.match(gate, /h <= viewportHeight\.current && !seen\[tab\]/);
+  // Documents shorter than the viewport can never be scrolled, so they count on sight rather than
+  // trapping the user — both at once, since both are in view.
+  assert.match(gate, /h <= viewportHeight\.current\) \{\s*for \(const required of REQUIRED_DOCUMENTS\) if \(!seen\[required\.key\]\) markSeen\(required\.key\);/);
 });
 
 test('each document is tracked separately', () => {
