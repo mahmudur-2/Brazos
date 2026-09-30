@@ -128,3 +128,28 @@ test('[static] both trees draw the melt bar, the + opens the same sheet, and hid
   assert.match(shared, /!focused && !event\.defaultPrevented/);
   assert.ok(!/navigate\('Create'/.test(shared), 'Create is an action, never a destination');
 });
+
+test('[static] a tap is the platform\'s own press, a drag is a Pan, and nothing stays held (the operator\'s report, 2026-09-30)', () => {
+  const flat = (source) => stripComments(source).replace(/\s+/g, ' ');
+  const shared = flat(read('components/MeltTabBar.shared.tsx'));
+  const fast = flat(read('components/MeltTabBar.motion120.tsx'));
+  // Every tab and the + is a Pressable on both paths: a tap never depends on the Pan's release.
+  assert.doesNotMatch(shared, /onAccessibilityTap|pressable \?/, 'no touch-less stand-ins for the buttons');
+  assert.match(shared, /<Pressable key=\{slot\.key\} \{\.\.\.a11y\} style=\{\[styles\.touch, place\]\} onPressIn=\{onTabPressIn \? \(\) => onTabPressIn\(i\) : undefined\} onPressOut=\{onTabPressOut \? \(\) => onTabPressOut\(i\) : undefined\} onPress=\{\(\) => onTab\(slot\.key, i\)\} >/);
+  assert.match(fast, /<MeltTouchLayer slots=\{slots\} centres=\{centres\} focused=\{focused\} onTab=\{onTab\} onTabPressIn=\{onTabPressIn\} onTabPressOut=\{onTabPressOut\} onCreate=\{onCreate\} onCreatePressIn=\{onCreatePressIn\} onCreatePressOut=\{onCreatePressOut\} \/>/);
+  // The Pan only drags: it activates after sideways travel, gives way to a vertical move, and reads
+  // no tap off a failed state.
+  assert.match(fast, /Gesture\.Pan\(\) \.activeOffsetX\(\[-SLOP, SLOP\]\) \.failOffsetY\(\[-DRAG_FAIL_Y, DRAG_FAIL_Y\]\)/);
+  assert.doesNotMatch(fast, /minDistance\(0\)|State\.FAILED/);
+  assert.ok(num('dragSlop') >= 10, 'a fingertip\'s wobble stays a tap');
+  // Nothing stays held: the release, or failing it the finalize, lets go; a stalled drag lets go on
+  // its own; a choice that never became the showing tab sends the bubble back.
+  assert.match(fast, /\.onEnd\(\(_e, success\) => \{ if \(mode\.value !== 1\) return; letGo\(\);/);
+  assert.match(fast, /\.onFinalize\(\(\) => \{ if \(mode\.value !== 1\) return; letGo\(\); runOnJS\(restore\)\(\); \}\)/);
+  assert.match(fast, /if \(mode\.value === 1\) \{ stall\.value \+= dt; if \(stall\.value > DRAG_STALL_S\) \{ mode\.value = 0;/);
+  assert.match(fast, /if \(mode\.value === 0 && chosenIdx\.value !== restIdx\.value\) restore\(\);/);
+  assert.match(fast, /if \(!held\.chose && mode\.value === 0\) restore\(\);/);
+  // Everything drawn is clipped to the pill.
+  assert.match(fast, /inside: \{ \.\.\.StyleSheet\.absoluteFillObject, borderRadius: meltBar\.radius, overflow: 'hidden' \}/);
+  assert.match(fast, /<View pointerEvents="none" style=\{styles\.inside\}>/);
+});

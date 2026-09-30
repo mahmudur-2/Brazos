@@ -149,7 +149,6 @@ function MeltTabBarFallback(props: MeltTabBarProps) {
           slots={slots}
           centres={m.centres}
           focused={focused}
-          pressable
           onTab={(name) => pressTab(props, name)}
           onCreate={onCreate}
           onCreatePressIn={() => squish(meltBar.plusPressed)}

@@ -1521,8 +1521,8 @@ export const meltBar = {
   iconDrop: 7.5,
   labelRise: 4,
   labelFade: 1.6,
-  /** A finger has to travel this far before the lead circle follows it. */
-  dragSlop: 5,
+  /** A finger has to travel this far sideways before a touch becomes a drag (a tap is a press). */
+  dragSlop: 12,
   /** The integrator's substep, seconds. */
   substep: 0.004,
   /** The fallback's slide, and the reduced-motion timing. */

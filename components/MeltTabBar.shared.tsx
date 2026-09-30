@@ -199,17 +199,20 @@ export function pillStyle(isDark: boolean, width: number, bottom: number): ViewS
 }
 
 /**
- * THE TOUCH AND ACCESSIBILITY LAYER, topmost: one box per slot. Each tab is a `tab` with its name
- * (and the name as hidden text, which is how the screenshot harness finds it), the + keeps today's
- * "Create" label and hint. `pressable` (the fallback) makes them Pressables; the 120 Hz path lets
- * its one Pan take the touches and keeps these for VoiceOver.
+ * THE TOUCH AND ACCESSIBILITY LAYER, topmost: one Pressable per slot, on both paths. Each tab is a
+ * `tab` with its name (and the name as hidden text, which is how the screenshot harness finds it),
+ * the + keeps today's "Create" label and hint. A TAP IS ALWAYS THE PLATFORM'S OWN PRESS: the 120 Hz
+ * path used to read taps off its Pan, and on a phone a press whose release never reached the Pan
+ * chose nothing and left the bubble held (the operator's report, 2026-09-30) — so the Pan now only
+ * drags, and the press-in / press-out hooks let that path swell the bubble under the finger.
  */
 export function MeltTouchLayer({
   slots,
   centres,
   focused,
-  pressable,
   onTab,
+  onTabPressIn,
+  onTabPressOut,
   onCreate,
   onCreatePressIn,
   onCreatePressOut,
@@ -217,8 +220,9 @@ export function MeltTouchLayer({
   slots: readonly MeltSlot[];
   centres: readonly number[];
   focused: number;
-  pressable: boolean;
-  onTab: (name: string) => void;
+  onTab: (name: string, slot: number) => void;
+  onTabPressIn?: (slot: number) => void;
+  onTabPressOut?: (slot: number) => void;
   onCreate?: () => void;
   onCreatePressIn?: () => void;
   onCreatePressOut?: () => void;
@@ -234,7 +238,7 @@ export function MeltTouchLayer({
             accessibilityLabel: 'Create',
             accessibilityHint: 'Post a job, hire someone again, or open your jobs',
           };
-          return pressable ? (
+          return (
             <Pressable
               key="create"
               {...a11y}
@@ -243,8 +247,6 @@ export function MeltTouchLayer({
               onPressOut={onCreatePressOut}
               onPress={() => pressCreate(onCreate)}
             />
-          ) : (
-            <View key="create" {...a11y} accessible onAccessibilityTap={() => pressCreate(onCreate)} style={[styles.touch, place]} />
           );
         }
         const a11y = {
@@ -253,14 +255,17 @@ export function MeltTouchLayer({
           accessibilityState: { selected: i === focused },
         };
         const hidden = <Text style={styles.hiddenLabel}>{slot.label}</Text>;
-        return pressable ? (
-          <Pressable key={slot.key} {...a11y} style={[styles.touch, place]} onPress={() => onTab(slot.key)}>
+        return (
+          <Pressable
+            key={slot.key}
+            {...a11y}
+            style={[styles.touch, place]}
+            onPressIn={onTabPressIn ? () => onTabPressIn(i) : undefined}
+            onPressOut={onTabPressOut ? () => onTabPressOut(i) : undefined}
+            onPress={() => onTab(slot.key, i)}
+          >
             {hidden}
           </Pressable>
-        ) : (
-          <View key={slot.key} {...a11y} accessible onAccessibilityTap={() => onTab(slot.key)} style={[styles.touch, place]}>
-            {hidden}
-          </View>
         );
       })}
     </>

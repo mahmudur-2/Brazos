@@ -10,16 +10,24 @@
  * animated style only reads them. Nothing crosses to JS while a finger moves: the tab is chosen on
  * release, and the loop sleeps once everything has settled.
  *
- * A TAP IS A PAN THAT NEVER MOVED. On iOS a pan activates only once the finger moves, so a still tap
- * ends FAILED rather than ENDED (group 0's review): FAILED chooses like a release, and only a
- * CANCELLED touch — the system took it — chooses nothing, the bubble going back to the tab showing.
+ * A TAP IS A PRESS; A DRAG IS A PAN (the operator's report, 2026-09-30: on the phone the tabs did
+ * nothing and the bubble stuck swollen on a tab that was not showing — the taps had been read off
+ * the Pan, and a release that never reached it chose nothing and let nothing go). Taps now go
+ * through the touch layer's Pressables, the platform's own press, exactly as on the fallback; the
+ * press-in moves and swells the bubble under the finger, the press chooses. The Pan activates only
+ * after the finger travels `meltBar.dragSlop` sideways; the press is then cancelled and the drag
+ * owns the bubble until its release. NOTHING STAYS HELD: a drag ends through onEnd or, failing
+ * that, onFinalize; a drag whose release never arrives lets go after DRAG_STALL_S of stillness;
+ * and a choice that does not land — the route never changed — sends the bubble back to the tab
+ * that is showing after RESYNC_MS. The bubbles are clipped to the pill, so a swell or a stretch at
+ * the end tabs never spills past it.
  *
  * Only this file imports the vendor packages (the motion boundary, tests/motion120.test.mjs); the
  * body — rows, glyphs, colours, the tab-press path — is `MeltTabBar.shared.tsx`.
  */
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Gesture, GestureDetector, State } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -48,7 +56,6 @@ import {
   pillGround,
   pillStyle,
   PlusGlyph,
-  pressCreate,
   pressTab,
   useMeltMetrics,
   type MeltSlot,
@@ -73,11 +80,15 @@ const STRETCH_V = meltBar.stretchVelocity;
 const STRETCH_MAX = meltBar.stretchMax;
 const SQUASH = meltBar.stretchSquash;
 const SLOP = meltBar.dragSlop;
+/** A drag gives way to a scroll the other way once the finger has gone this far up or down first. */
+const DRAG_FAIL_Y = 2 * SLOP;
+/** A held drag that has not moved or ended for this long has lost its release: it lets go. */
+const DRAG_STALL_S = 4;
+/** A chosen tab that has not become the showing one this long after the choice was not chosen. */
+const RESYNC_MS = 900;
 const ICON_DROP = meltBar.iconDrop;
 const LABEL_RISE = meltBar.labelRise;
 const LABEL_FADE = meltBar.labelFade;
-/** The + takes a touch within its own circle plus a fingertip. */
-const PLUS_TOUCH = PLUS_R + 8;
 /** Frames of stillness before the loop sleeps. */
 const QUIET_FRAMES = 12;
 const MAX_SLOTS = 5;
@@ -203,9 +214,9 @@ export function MeltTabBar(props: MeltTabBarProps) {
   const neck01 = useSharedValue<Neck | null>(null);
   const neck12 = useSharedValue<Neck | null>(null);
   const neckP = useSharedValue<Neck | null>(null);
-  // The gesture's own.
-  const mode = useSharedValue(0); // 0 idle · 1 a tab touch · 2 the +
-  const startX = useSharedValue(0);
+  // The touch's own.
+  const mode = useSharedValue(0); // 0 idle · 1 a drag · 3 a finger held on a slot
+  const stall = useSharedValue(0); // seconds a drag has gone without a move
   const quiet = useSharedValue(0);
   // Where the bubble rests: the showing tab, for a touch that is cancelled.
   const restX = useSharedValue(home);
@@ -304,6 +315,19 @@ export function MeltTabBar(props: MeltTabBarProps) {
       pscaleV.value = r[1];
     }
 
+    // A drag whose release never arrived lets go: nothing stays held.
+    if (mode.value === 1) {
+      stall.value += dt;
+      if (stall.value > DRAG_STALL_S) {
+        mode.value = 0;
+        follow.value = 0;
+        swellTarget.value = 0;
+        chosenIdx.value = restIdx.value;
+        if (restIdx.value >= 0) target.value = restX.value;
+        shownTarget.value = restIdx.value >= 0 ? 1 : 0;
+      }
+    }
+
     // Sleep once everything has settled, so an idle bar costs no frames.
     const still =
       mode.value === 0 &&
@@ -335,10 +359,10 @@ export function MeltTabBar(props: MeltTabBarProps) {
   const placed = useRef(false);
   useEffect(() => {
     if (mode.value === 1) return;
-    if (focused >= 0) {
-      restX.value = home;
-      restIdx.value = focused;
-    }
+    // Where the bubble rests — or, while a route the bar does not draw is focused, that it rests
+    // nowhere (a choice that does not land then fades it where it is).
+    restIdx.value = focused;
+    if (focused >= 0) restX.value = home;
     if (!placed.current) {
       placed.current = true;
       x0.value = x1.value = x2.value = target.value = home;
@@ -365,14 +389,95 @@ export function MeltTabBar(props: MeltTabBarProps) {
     wake();
   }, [home, focused, wake, mode, x0, x1, x2, target, shown, shownTarget, chosenIdx, chosen, restX, restIdx]);
 
-  // JS entry points, reached only on release.
-  const live = useRef({ props, slots });
-  live.current = { props, slots };
-  const select = useCallback((slot: number) => {
-    const s: MeltSlot | undefined = live.current.slots[slot];
-    if (s && s.kind === 'tab') pressTab(live.current.props, s.key);
-  }, []);
-  const create = useCallback(() => pressCreate(live.current.props.onCreate), []);
+  // JS ENTRY POINTS: the Pressables' press-in, press-out and press, and the drag's release.
+  const live = useRef({ props, slots, centres });
+  live.current = { props, slots, centres };
+
+  /** The bubble back to the tab that is showing — or, with none showing, faded where it is. */
+  const restore = useCallback(() => {
+    chosenIdx.value = restIdx.value;
+    if (restIdx.value >= 0) {
+      target.value = restX.value;
+      shownTarget.value = 1;
+    } else {
+      shownTarget.value = 0;
+    }
+    wake();
+  }, [chosenIdx, restIdx, restX, target, shownTarget, wake]);
+
+  // A choice has RESYNC_MS to become the showing tab; otherwise the bubble goes back to the one that is.
+  const resyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resyncSoon = useCallback(() => {
+    if (resyncTimer.current) clearTimeout(resyncTimer.current);
+    resyncTimer.current = setTimeout(() => {
+      resyncTimer.current = null;
+      if (mode.value === 0 && chosenIdx.value !== restIdx.value) restore();
+    }, RESYNC_MS);
+  }, [mode, chosenIdx, restIdx, restore]);
+  useEffect(
+    () => () => {
+      if (resyncTimer.current) clearTimeout(resyncTimer.current);
+    },
+    []
+  );
+
+  const select = useCallback(
+    (slot: number) => {
+      const s: MeltSlot | undefined = live.current.slots[slot];
+      if (s && s.kind === 'tab') pressTab(live.current.props, s.key);
+      resyncSoon();
+    },
+    [resyncSoon]
+  );
+
+  // A finger on a tab: the bubble comes under it and swells. The press chooses; a press that does
+  // not complete (the finger slid off, or a drag took over) settles on the next tick.
+  const pressing = useRef<{ slot: number; chose: boolean } | null>(null);
+  const onTabPressIn = useCallback(
+    (slot: number) => {
+      if (mode.value === 1) return;
+      pressing.current = { slot, chose: false };
+      mode.value = 3;
+      target.value = live.current.centres[slot];
+      chosenIdx.value = slot;
+      swellTarget.value = 1;
+      shownTarget.value = 1;
+      wake();
+    },
+    [mode, target, chosenIdx, swellTarget, shownTarget, wake]
+  );
+  const onTabPressOut = useCallback(
+    (slot: number) => {
+      if (mode.value === 3) {
+        mode.value = 0;
+        swellTarget.value = 0;
+        wake();
+      }
+      // A completed press calls onTab right after this, in the same event.
+      setTimeout(() => {
+        const held = pressing.current;
+        if (!held || held.slot !== slot) return;
+        pressing.current = null;
+        if (!held.chose && mode.value === 0) restore();
+      }, 0);
+    },
+    [mode, swellTarget, wake, restore]
+  );
+  const onTab = useCallback(
+    (_name: string, slot: number) => {
+      if (pressing.current && pressing.current.slot === slot) pressing.current.chose = true;
+      select(slot);
+    },
+    [select]
+  );
+  const onCreatePressIn = useCallback(() => {
+    pscaleTarget.value = PRESSED;
+    wake();
+  }, [pscaleTarget, wake]);
+  const onCreatePressOut = useCallback(() => {
+    pscaleTarget.value = 1;
+    wake();
+  }, [pscaleTarget, wake]);
 
   const pan = useMemo(() => {
     const first = tabCentres[0];
@@ -389,53 +494,53 @@ export function MeltTabBar(props: MeltTabBarProps) {
       'worklet';
       return Math.min(last, Math.max(first, x));
     };
+    const letGo = () => {
+      'worklet';
+      mode.value = 0;
+      follow.value = 0;
+      swellTarget.value = 0;
+    };
+    // The drag: only once the finger has travelled sideways (a tap stays the Pressable's), and it
+    // gives way to anything that moved up or down first.
     return Gesture.Pan()
-      .minDistance(0)
-      .onBegin((e) => {
-        if (plusX >= 0 && Math.abs(e.x - plusX) <= PLUS_TOUCH && Math.abs(e.y - MID) <= PLUS_TOUCH) {
-          mode.value = 2;
-          pscaleTarget.value = PRESSED;
-          runOnJS(wake)();
-          return;
-        }
+      .activeOffsetX([-SLOP, SLOP])
+      .failOffsetY([-DRAG_FAIL_Y, DRAG_FAIL_Y])
+      .onStart((e) => {
         mode.value = 1;
-        startX.value = e.x;
+        follow.value = 1;
+        stall.value = 0;
         swellTarget.value = 1;
+        shownTarget.value = 1;
         target.value = clampX(e.x);
         chosenIdx.value = tabSlots[nearestTab(target.value)];
-        shownTarget.value = 1;
         runOnJS(wake)();
       })
       .onUpdate((e) => {
         if (mode.value !== 1) return;
-        if (follow.value === 0 && Math.abs(e.x - startX.value) > SLOP) follow.value = 1;
+        stall.value = 0;
         target.value = clampX(e.x);
         chosenIdx.value = tabSlots[nearestTab(target.value)];
       })
-      .onFinalize((e, success) => {
-        // A still tap never activates a pan on iOS and ends FAILED: it chooses all the same.
-        const released = success || e.state === State.FAILED;
-        if (mode.value === 2) {
-          pscaleTarget.value = 1;
-          if (released && Math.abs(e.x - plusX) <= PLUS_TOUCH) runOnJS(create)();
-        } else if (mode.value === 1) {
-          follow.value = 0;
-          swellTarget.value = 0;
-          if (released) {
-            const n = nearestTab(target.value);
-            target.value = tabCentres[n];
-            chosenIdx.value = tabSlots[n];
-            runOnJS(select)(tabSlots[n]);
-          } else {
-            // Cancelled: nothing was chosen, so the bubble goes back to the tab that is showing.
-            target.value = restX.value;
-            chosenIdx.value = restIdx.value;
-            shownTarget.value = restIdx.value >= 0 ? 1 : 0;
-          }
+      .onEnd((_e, success) => {
+        if (mode.value !== 1) return;
+        letGo();
+        if (success) {
+          const n = nearestTab(target.value);
+          target.value = tabCentres[n];
+          chosenIdx.value = tabSlots[n];
+          runOnJS(select)(tabSlots[n]);
+        } else {
+          // The system took the touch: nothing was chosen, the bubble goes back.
+          runOnJS(restore)();
         }
-        mode.value = 0;
+      })
+      .onFinalize(() => {
+        // However else it ended, nothing stays held.
+        if (mode.value !== 1) return;
+        letGo();
+        runOnJS(restore)();
       });
-  }, [tabCentres, tabSlots, plusX, mode, pscaleTarget, startX, swellTarget, target, chosenIdx, shownTarget, follow, wake, create, select, restX, restIdx]);
+  }, [tabCentres, tabSlots, mode, stall, swellTarget, target, chosenIdx, shownTarget, follow, wake, select, restore]);
 
   // THE PIECES' MOTIONS — each only reads what the loop wrote.
   const { iconStyles, labelStyles } = useChosenStyles(chosen);
@@ -480,6 +585,8 @@ export function MeltTabBar(props: MeltTabBarProps) {
     <View pointerEvents="box-none" style={[styles.root, { height: m.bottom + meltBar.height }]}>
       <GestureDetector gesture={pan}>
         <View style={pillStyle(m.isDark, m.pillWidth, m.bottom)}>
+          {/* Everything drawn is clipped to the pill: a swell or a stretch at an end tab stays in it. */}
+          <View pointerEvents="none" style={styles.inside}>
           {row('rest')}
           {necks.map((n, i) => (
                 <Animated.View key={i} pointerEvents="none" style={[shared.clip, { backgroundColor: m.bubble }, n.holder]}>
@@ -513,13 +620,17 @@ export function MeltTabBar(props: MeltTabBarProps) {
               <PlusGlyph color={m.ink} />
             </Animated.View>
           ) : null}
+          </View>
           <MeltTouchLayer
             slots={slots}
             centres={centres}
             focused={focused}
-            pressable={false}
-            onTab={(name) => pressTab(props, name)}
+            onTab={onTab}
+            onTabPressIn={onTabPressIn}
+            onTabPressOut={onTabPressOut}
             onCreate={onCreate}
+            onCreatePressIn={onCreatePressIn}
+            onCreatePressOut={onCreatePressOut}
           />
         </View>
       </GestureDetector>
@@ -529,6 +640,7 @@ export function MeltTabBar(props: MeltTabBarProps) {
 
 const stylesFor = metricStyles(() => StyleSheet.create({
   root: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  inside: { ...StyleSheet.absoluteFillObject, borderRadius: meltBar.radius, overflow: 'hidden' },
   middle: { width: MIDDLE, height: MIDDLE, borderRadius: R1 },
   tail: { width: TAIL, height: TAIL, borderRadius: R2 },
   plus: {
