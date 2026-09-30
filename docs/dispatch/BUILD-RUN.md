@@ -63,14 +63,18 @@ Decided in this sitting:
 
 ## 2. Every change, the same loop
 
-Test first → build in the practice copy → its checks (`tsc`; `node --test` minus safety and
-governance; `npm run db:test` for server changes) → render dark and light (`export.mjs after`,
-`prepare.mjs after`, `validate.mjs`, `.shots/refresh/shot.mjs`) → read the PNGs against the
-drawing → fix until nothing is wrong → land it as its own commit (`make-patch.mjs`, `git apply
---ignore-whitespace`, `.shots/refresh/buildit-lf.mjs`, the narrow check, commit by explicit path).
-If `make-patch.mjs`'s ROOTS lack a folder a change needs (such as `supabase/`), add it first. Last,
-before each ship: every screen rendered again and compared with the previous After, so nothing
-moved by accident.
+Test first → build → its checks (`npm run lint`, the touched tests, `npm run db:test` for server
+changes) → mirror into the practice copy (`node .shots/refresh/build-run/sync-practice.mjs`) and
+render dark and light (`export.mjs after`, `prepare.mjs after`, `validate.mjs`,
+`.shots/refresh/shot.mjs`) → read the PNGs against the drawing → fix until nothing is wrong →
+commit it on its own, by explicit path. MECHANICS, decided at the start of the run: the run edits
+the real tree and uses the practice copy only as the render sandbox, because many of its changes
+sit outside `make-patch.mjs`'s ROOTS (migrations, edge functions, assets, `app.config.ts`,
+`package.json`) and a per-change patch would meet the CRLF trap twenty times. Nothing reaches the
+phone before the ship steps of §3, so "the real app isn't touched" still holds where it matters.
+At the start the practice copy equalled the app (`sync-practice.mjs --dry`: 0 files). Last, before
+each ship: every screen rendered again and compared with the previous After, so nothing moved by
+accident.
 
 ## 3. Shipping
 
@@ -90,6 +94,28 @@ SQL against a remote database, production, `.env`, `start.ps1` or the frozen web
 fence whose logic would have to weaken, a hook or deny collision. NOT a stop: what only the phone
 can show (pushes, haptics, the lock screen, the melt feel) — report it "landed, unverified" for
 the operator's walk.
+
+## 5a. Pauses and resuming (the watchdog)
+
+The operator chose this chat for the run and an hourly auto-restart for pauses (usage limits).
+- The run keeps `.shots/refresh/build-run/heartbeat.txt`: its first line is the local ISO time,
+  the group and the step, rewritten after every step and before any wait longer than 20 minutes.
+  Beside it, `progress.md`: every item landed (its commit), the one in flight (what is done in
+  the practice copy), and the next.
+- The scheduled task `brazos-build-watchdog` (created 2026-09-30, hourly at about :07, only while
+  the app is open) checks: no heartbeat → not started, stop; `DONE` → pause itself, stop; a
+  heartbeat under 90 minutes old → alive, stop; otherwise it takes the run over. A scheduled run's
+  model is not chosen by the task (a one-time test on 2026-09-30 ran as `claude-fable-5-1`; the
+  watchdog's own self-test, started with "Run now", ran as `claude-opus-5-5` and its Opus helper
+  ran a command and wrote a file with no approval prompt), so the watchdog only dispatches: the building is done by an Opus helper
+  (Agent, model `opus`), which stops before every push, OTA or Beta build and returns
+  `SHIP DUE`; the watchdog then does the Fable review itself (findings into `progress.md`), and a
+  fresh Opus helper fixes them and ships. Its full prompt is the task's own `SKILL.md`.
+- Any session, this chat included, checks the heartbeat before continuing after a pause; if
+  another session wrote it within 90 minutes, it stops.
+- Resuming: read `HANDOFF.md`'s first section, this brief, `progress.md` and `git log`; the practice
+  copy's diff against the app shows the work in flight — finish that item or redo it from the app.
+- The run's last step writes `DONE` to the heartbeat and disables the watchdog task.
 
 ## 5. After the run, the operator
 

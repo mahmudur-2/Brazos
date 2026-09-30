@@ -492,3 +492,24 @@ Apple (1) to the run too?" → "Not now" — 1 stays out of the run. "If 1 is ad
 signs in with Apple, ask for their phone number next?" → "Skip it for Apple users" — recorded for
 the run that builds 1, which confirms it first (it departs from decision I for that door).
 The run's written brief: `docs/dispatch/BUILD-RUN.md`.
+Then the operator ran the helpers command in their own terminal and restarted the app ("back"). A
+one-line helper (Agent, model haiku) started and reported — the evidence guard no longer blocks
+helpers. Each helper spends about 57k tokens just starting (it loads the instruction files), which
+is why the run keeps to the lean plan: one review per group, Fable before each ship. The app keeps
+the PC awake through each turn on its own; a closed lid or Sleep still stops it.
+Asked "before i build... how long will it take approximately? (if i went to sleep right now...
+(3am) when do i expect it to be finished?)" → answered: OTA 1 around Thursday afternoon or
+evening, everything (OTA 2 and the new Beta's link) around Friday morning to afternoon, Oct 2;
+one buzz at the end only (their rule). Then, with a screenshot of the usage panel (5-hour limit
+1%, weekly 39% resetting Fri 8:00 PM), their words: "how will this work.... like if it runs out?
+does it auto check the reset time then it keeps auto building everytime it resets... or wht" →
+answered: a paused run does not restart by itself; the weekly limit may run out before Friday
+8 PM, in which case the last part waits for the reset. The popup: "Set up the hourly
+auto-restart?" → "Yes, set it up (Recommended)"; "Where should the build run?" → "This chat"
+(the fresh chat was recommended as cheaper; their choice stands). The watchdog's design:
+`BUILD-RUN.md` §5a. Set up and tested while the operator was awake: a one-time unattended task
+ran a command and wrote a file with no approval prompt (as Fable); the real task
+`brazos-build-watchdog` (hourly) passed its self-test — it started an Opus helper that ran a
+command and wrote a file, again with no prompt.
+Then, at 03:22 on 2026-09-30, their one word: "build" → THE BUILD RUN STARTED, in this chat, per
+`docs/dispatch/BUILD-RUN.md` (heartbeat and progress in `.shots/refresh/build-run/`).
