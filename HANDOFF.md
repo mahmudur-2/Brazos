@@ -1,7 +1,7 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-30 (BUILD RUN — DONE; its section, the first below, is the next session's start —
-then the BUILD RUN's planning section as it was written before "build", superseded by the first —
+WRITTEN: 2026-09-30 (THE TAB BAR FIX, the first section below, is the next session's start — then
+BUILD RUN — DONE, the run it followed — then the BUILD RUN's planning section as it was written before "build", superseded by the first —
 then THE VIEWER'S PREP FIXED, AND THE TAB BAR EXPLORED, the DESIGN LOOP section, BUILD IT, the
 LUX-LIST-2 run's, LUX-LIST-64's, the NEXT SESSION primer of 2026-09-27 (the pipeline, the fences and
 the traps), THE OPERATOR'S REVIEW OF THE LUX AFTER, THE LUX REMAKE, the brief's own section, THE
@@ -10,6 +10,40 @@ the Lux drawing run's, the eighteen-item run's and the sittings before them, unc
 
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
+
+## THE TAB BAR FIX — the buttons work, the bubble never sticks (2026-09-30, after the build run; `26efca0`, OTA 3)
+
+**Start here.** The operator, on the Beta: the tab buttons did nothing, and the melt bubble stuck —
+swollen on Inbox joined to the +, spilling past the pill's end on Profile, sitting on Discover over
+the Home screen. All three pictures showed the finger-down swell, so the release never reached the
+bar: the 120 Hz bar read taps off its Pan, and a release the Pan never got chose nothing and let
+nothing go.
+
+**Fixed** (`26efca0`):
+- Taps go through the touch layer's Pressables on both paths, the platform's own press. Press-in
+  brings the bubble under the finger; the press chooses.
+- The Pan only drags, after 12pt sideways (`meltBar.dragSlop`).
+- Nothing stays held: a drag lets go on onEnd or onFinalize, or by itself after 4 s; a choice that
+  has not become the showing tab in 900 ms sends the bubble back.
+- Everything drawn is clipped to the pill.
+
+**Shipped:** OTA 3, update group `acad91e2-a5aa-4483-b375-b6ebb8b1ef89`, iOS update
+`01a0f2ac-bdd6-761d-ab55-be306ca0aac9`. Beta build 3 and the old Beta both take it: close the app
+fully and open it twice.
+
+**Verified:**
+- `npm run verify`: 1477/1477.
+- The preview: 79/79 targets.
+- Real mouse taps on the preview (the same Reanimated + gesture-handler bar) landed Discover,
+  Profile, Inbox and Home, the bubble at rest size each time (54 / 45 / 36 — it had stuck at about
+  60), and the + opened its sheet.
+
+**Not verified:** the phone. The drag cannot be proven in a desktop browser: there the press is not
+cancelled when a drag starts, as it is on iOS. If a drag still sticks on the phone, the next step is
+to drop the drag and keep taps.
+
+**Seen, not a bug:** the second outline under the pill in the Profile picture is the page's own card
+scrolling under the floating bar.
 
 ## BUILD RUN — DONE: every pick built, reviewed and shipped; the lock-screen card waits on one install (2026-09-30, the build run, "build" at 03:22)
 
