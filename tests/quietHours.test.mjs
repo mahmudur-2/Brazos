@@ -20,7 +20,7 @@ test('[executed] the phone\'s zone: its IANA name, else a whole-hour fixed offse
   assert.equal(deviceTimeZone(() => { throw new Error('no Intl'); }, 300), 'Etc/GMT+5');
   assert.equal(deviceTimeZone(() => 'not a zone; drop table', 240), 'Etc/GMT+4', 'a malformed name is never sent');
   assert.equal(QUIET_HOURS_LABEL, 'Quiet hours');
-  assert.equal(QUIET_HOURS_HINT, 'Midnight to 6 am · nearby alerts wait');
+  assert.equal(QUIET_HOURS_HINT, 'Midnight to 6 am. Nearby alerts wait.');
 });
 
 test('[static] the server: off by default, only nearby alerts wait, the drain waits with them', () => {

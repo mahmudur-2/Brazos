@@ -19,9 +19,10 @@
 //
 //   RESEND_API_KEY    the service's key. UNTIL IT EXISTS, every receipt is resolved 'skipped' with
 //                     the reason, and logged — nothing waits to go out days later.
-//   RECEIPT_FROM      the sender, e.g. "Brazos <receipts@your-domain>". Without a domain the
-//                     service's testing sender "Brazos <onboarding@resend.dev>" is used, which only
-//                     delivers to the service account's own address — real customers need a domain.
+//   RECEIPT_FROM      the sender, e.g. "Brazos <receipts@your-domain>" — real customers need a
+//                     domain. Without it, receipts go out only with RECEIPT_TEST_TO set (through the
+//                     service's testing sender, which delivers to its own account's address alone);
+//                     otherwise each is skipped and logged.
 //   RECEIPT_REPLY_TO  where "Reply to this email" goes (the support inbox). Optional; without it a
 //                     reply goes to the sender.
 //   RECEIPT_TEST_TO   while testing: EVERY receipt goes to this one address instead, its subject
@@ -56,7 +57,8 @@ const MAX_PASSES = 5;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
-const RECEIPT_FROM = Deno.env.get('RECEIPT_FROM') || 'Brazos <onboarding@resend.dev>';
+const RECEIPT_FROM_SET = Deno.env.get('RECEIPT_FROM') ?? '';
+const RECEIPT_FROM = RECEIPT_FROM_SET || 'Brazos <onboarding@resend.dev>';
 const RECEIPT_REPLY_TO = Deno.env.get('RECEIPT_REPLY_TO') ?? '';
 const RECEIPT_TEST_TO = Deno.env.get('RECEIPT_TEST_TO') ?? '';
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
@@ -100,12 +102,17 @@ function resolve(row: ReceiptRow, status: Status, error: string | null, provider
   });
 }
 
-/** The account's email address, from the auth admin API; null when it has none (a phone sign-up). */
+/**
+ * The account's email address, from the auth admin API; null when it has none (a phone sign-up) or
+ * the account is gone. Anything else — the auth API busy or failing — throws, so the receipt waits and
+ * is tried again rather than being skipped for good (the group 4 review).
+ */
 async function recipientEmail(userId: string): Promise<string | null> {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
     headers: serviceHeaders(),
   });
-  if (!res.ok) return null;
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`auth admin ${res.status}`);
   const user = (await res.json()) as { email?: string | null };
   const email = typeof user.email === 'string' ? user.email.trim() : '';
   return email.includes('@') ? email : null;
@@ -135,6 +142,14 @@ async function sendOne(row: ReceiptRow): Promise<Status> {
     // Skipped and logged until the operator places the key (the build run's brief).
     console.log(`[send-receipts] ${row.id}: skipped — RESEND_API_KEY is not set on this project`);
     await resolve(row, 'skipped', 'no email service key on this project yet');
+    return 'skipped';
+  }
+
+  if (!RECEIPT_FROM_SET && !RECEIPT_TEST_TO) {
+    // The service's testing sender delivers only to its own account's address: without a sender of
+    // Brazos's own, or the test inbox, every real recipient would be refused — so nothing is tried.
+    console.log(`[send-receipts] ${row.id}: skipped — RECEIPT_FROM is not set on this project`);
+    await resolve(row, 'skipped', 'no sender set (RECEIPT_FROM)');
     return 'skipped';
   }
 

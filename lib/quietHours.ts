@@ -10,7 +10,7 @@
 
 /** The row's words, one place. */
 export const QUIET_HOURS_LABEL = 'Quiet hours';
-export const QUIET_HOURS_HINT = 'Midnight to 6 am · nearby alerts wait';
+export const QUIET_HOURS_HINT = 'Midnight to 6 am. Nearby alerts wait.';
 
 /**
  * The phone's time zone for the server: its IANA name when the runtime reports one; otherwise the

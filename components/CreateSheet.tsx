@@ -360,7 +360,8 @@ function ReusePastJob({
           <Ionicons name="chevron-down" size={18} color={chevron} />
         </DropdownChevron>
       </Pressable>
-      <DropdownBody open={open}>
+      {/* The Fable review: the strip grows the sheet by height, so the sheet's top edge travels. */}
+      <DropdownBody open={open} grow>
         {!ready ? (
           <View style={styles.stripState}>
             <ActivityIndicator color={colors.emerald} />

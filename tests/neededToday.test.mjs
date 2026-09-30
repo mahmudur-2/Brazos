@@ -44,7 +44,8 @@ test('[static] the app: sent only when on, read on both shapes, a fresh post\'s 
   const screen = flat(read('screens/PostJobScreen.tsx'));
   assert.match(screen, /const \[neededToday, setNeededToday\] = useState\(false\);/, 'off by default');
   assert.match(screen, /neededToday: isFreshPost && neededToday,/);
-  assert.match(screen, /\{isFreshPost \? \( <View style=\{styles\.todayRow\}>/);
+  // The Fable review: the whole row answers a tap.
+  assert.match(screen, /<Pressable onPress=\{\(\) => setNeedItToday\(!neededToday\)\} style=\{\(\{ pressed \}\) => \[styles\.todayRow, pressed && styles\.repeatPressed\]\}/);
   assert.match(screen, /<Toggle value=\{neededToday\} onValueChange=\{setNeedItToday\} accessibilityLabel="Need it today" \/>/);
   // The toggle and the day agree (group 2's review): on sets the day to today; another day turns it off.
   assert.match(screen, /if \(on\) setScheduledDate\(toLocalIsoDate\(new Date\(\)\)\);/);

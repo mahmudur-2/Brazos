@@ -373,6 +373,7 @@ export function PostJobScreen() {
   // live (start_job_series()). Not kept in the draft, as "Need it today" is not.
   const [repeatCadence, setRepeatCadence] = useState<SeriesCadence | null>(null);
   const [repeatOpen, setRepeatOpen] = useState(false);
+  const repeatRef = useRef<View>(null);
   /**
    * Idea 14: the series starts from the job just posted — one quiet retry, then, if it still fails, the
    * failure said and a Try again (the job is live either way; a repeat is never silently lost).
@@ -380,7 +381,9 @@ export function PostJobScreen() {
   async function startRepeat(jobId: string, cadence: SeriesCadence) {
     let { error: seriesError } = await startJobSeries(jobId, cadence);
     if (seriesError) ({ error: seriesError } = await startJobSeries(jobId, cadence));
-    while (seriesError && screenMountedRef.current) {
+    // The dialog lives at the app's root, so it asks even if the screen has already gone — a repeat is
+    // never silently lost (the group 4 review).
+    while (seriesError) {
       const again = await confirmAsync({
         title: 'The repeat didn’t save',
         message: `Your job is posted. ${userMessage(seriesError)}`,
@@ -750,11 +753,16 @@ export function PostJobScreen() {
 
   /** Idea 23 — once the questions have opened, the page scrolls itself so all of them show above the tab bar. */
   function revealQuestions() {
+    revealInView(questionsRef);
+  }
+
+  /** Scrolls just enough that what just opened sits above the posting bar (the questions, the repeat list). */
+  function revealInView(target: { current: View | null }) {
     if (revealFrameRef.current != null) cancelAnimationFrame(revealFrameRef.current);
     revealFrameRef.current = requestAnimationFrame(() => {
       revealFrameRef.current = null;
       priceViewport.measure(({ bottom, scrollY }) => {
-        questionsRef.current?.measureInWindow((_x, top, _width, height) => {
+        target.current?.measureInWindow((_x, top, _width, height) => {
           const overflow = top + height - (bottom - navClearance - spacing.md);
           if (overflow > 0) {
             scrollRef.current?.scrollTo({ y: scrollY + overflow, animated: reducedMotion === false });
@@ -1407,8 +1415,10 @@ export function PostJobScreen() {
       : step === POST_STEPS.length - 1 && (isEditing || isHiring)
         ? 'Check the details. You can still go back.'
         : step === POST_STEPS.length - 1 && reusedFrom
-          ? `Copied from “${reusedFrom}”. Change anything, or just Publish.`
+          ? 'Change anything, or just Publish.'
           : currentStep.subtitle;
+  // Idea 2 (the Fable review): the source on a line of its own, so a long title never eats the instruction.
+  const reusedLine = step === POST_STEPS.length - 1 && reusedFrom && !isEditing && !isHiring ? `Copied from “${reusedFrom}”` : null;
   const reviewBudgetCents = dollarsToCents(budget);
   const reviewMaxCents = dollarsToCents(budgetMax);
   const validMax =
@@ -1563,13 +1573,13 @@ export function PostJobScreen() {
                 STEP {step + 1} OF {POST_STEPS.length}
               </Text>
               <Text style={styles.stepTitle}>{currentStepTitle}</Text>
-              {/* Idea 2: a reused post says where it came from, in the accent. */}
-              <Text
-                style={[styles.stepSubtitle, step === POST_STEPS.length - 1 && reusedFrom && !isEditing && !isHiring && styles.stepSubtitleReused]}
-                numberOfLines={step === POST_STEPS.length - 1 && reusedFrom ? 2 : undefined}
-              >
-                {currentStepSubtitle}
-              </Text>
+              {/* Idea 2: a reused post says where it came from, in the accent, on its own line. */}
+              {reusedLine ? (
+                <Text style={[styles.stepSubtitle, styles.stepSubtitleReused]} numberOfLines={1}>
+                  {reusedLine}
+                </Text>
+              ) : null}
+              <Text style={[styles.stepSubtitle, reusedLine ? styles.stepSubtitleUnder : null]}>{currentStepSubtitle}</Text>
             </StepPane>
 
             <View
@@ -1669,6 +1679,8 @@ export function PostJobScreen() {
               <View style={styles.labelRow}>
                 <FieldLabel palette={emeraldColors}>Category</FieldLabel>
                 <Text style={styles.requiredHint}>Required</Text>
+                {/* The Fable review: the row slides past its first four — said as Discover's row says it. */}
+                <Text style={styles.swipeHint}>Swipe to explore</Text>
               </View>
               {/* 2026-09-30 (idea 23): Home's tiles, one per postable category, sliding. The
                   chosen tile widens for its check and drops a small arrow; its usual questions open
@@ -1973,14 +1985,19 @@ export function PostJobScreen() {
               {/* 2026-09-30 (idea 12): "Need it today", a fresh post's own — the drawn row: the
                   flash, the words, the switch, off until turned on. */}
               {isFreshPost ? (
-                <View style={styles.todayRow}>
+                // The Fable review: the whole row answers a tap, as the repeat row below does.
+                <Pressable
+                  onPress={() => setNeedItToday(!neededToday)}
+                  style={({ pressed }) => [styles.todayRow, pressed && styles.repeatPressed]}
+                  accessible={false}
+                >
                   <Ionicons name="flash-outline" size={18} color={colors.emerald} />
                   <View style={styles.todayCopy}>
                     <Text style={styles.todayTitle}>Need it today</Text>
                     <Text style={styles.todayCaption}>Nearby workers get an instant alert</Text>
                   </View>
                   <Toggle value={neededToday} onValueChange={setNeedItToday} accessibilityLabel="Need it today" />
-                </View>
+                </Pressable>
               ) : null}
 
               {/* 2026-09-30 (idea 14): "Repeat this job · Every 2 weeks" — the drawn row, a fresh post's
@@ -1988,7 +2005,11 @@ export function PostJobScreen() {
               {isFreshPost ? (
                 <View>
                   <Pressable
-                    onPress={() => setRepeatOpen((open) => !open)}
+                    onPress={() => {
+                      const opening = !repeatOpen;
+                      setRepeatOpen(opening);
+                      if (opening) revealInView(repeatRef);
+                    }}
                     style={({ pressed }) => [styles.todayRow, pressed && styles.repeatPressed]}
                     accessibilityRole="button"
                     accessibilityLabel="Repeat this job"
@@ -2010,7 +2031,7 @@ export function PostJobScreen() {
                     </DropdownChevron>
                   </Pressable>
                   <DropdownBody open={repeatOpen}>
-                    <View style={styles.repeatList}>
+                    <View style={styles.repeatList} ref={repeatRef} collapsable={false}>
                       {[null, ...SERIES_CADENCES].map((cadence) => {
                         const chosen = repeatCadence === cadence;
                         const label = cadence ? CADENCE_LABELS[cadence] : 'Off';
@@ -2026,8 +2047,10 @@ export function PostJobScreen() {
                             accessibilityLabel={label}
                             accessibilityState={{ selected: chosen }}
                           >
+                            <View style={styles.repeatTick}>
+                              {chosen ? <Ionicons name="checkmark" size={16} color={colors.emerald} /> : null}
+                            </View>
                             <Text style={[styles.repeatOptionText, chosen && styles.repeatValueOn]}>{label}</Text>
-                            {chosen ? <Ionicons name="checkmark" size={18} color={colors.emerald} /> : null}
                           </Pressable>
                         );
                       })}
@@ -2297,6 +2320,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.emerald,
     fontWeight: '600',
   },
+  stepSubtitleUnder: {
+    marginTop: 0,
+  },
   // Idea 12: the "Need it today" row — the flash, the two lines, the switch.
   todayRow: {
     flexDirection: 'row',
@@ -2327,18 +2353,22 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     opacity: 0.7,
   },
   // The choices, in place under the row: the app's dropdown rows (44pt, the platform hairline over
-  // border), indented to the title so the list reads as the row's own.
+  // border). The tick sits first, in the row's icon column, as the price list's does; the labels
+  // line up under the title.
   repeatList: {
-    marginLeft: 18 + spacing.sm + 2,
     marginTop: spacing.xs,
   },
   repeatOption: {
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
+  },
+  repeatTick: {
+    width: 18 + spacing.sm + 2,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
   repeatOptionText: {
     fontSize: 15,
@@ -2425,6 +2455,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
   },
   requiredHint: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  swipeHint: {
+    marginLeft: 'auto',
     fontSize: 12,
     color: colors.textMuted,
   },

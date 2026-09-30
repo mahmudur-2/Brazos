@@ -145,7 +145,8 @@ export function CategoryTileRow({
               accessibilityLabel={JOB_CATEGORY_LABELS[category]}
               accessibilityHint={chosen ? 'Clears the category' : 'Chooses this category and opens its questions'}
             >
-              <View style={[styles.box, litCardStyle(isDark, 'tile'), { height: tile }, chosen && { borderColor: rim }]}>
+              <View style={[styles.box, litCardStyle(isDark, 'tile'), { height: tile }]}>
+                <TileRim shown={chosen} color={rim} still={reducedMotion !== false} />
                 <TileCheck shown={chosen} fill={colors.primary} ink={colors.onPrimary} />
                 {/* The glyph and the name keep the unchosen tile's column, less its two hairlines. */}
                 <View style={[styles.content, { width: tile - 2 }]}>
@@ -174,6 +175,30 @@ export function CategoryTileRow({
       })}
     </ScrollView>
   );
+}
+
+/**
+ * The Fable review: the chosen tile's rim, over the tile's own hairline, fading in (and out) over the
+ * same time the tile widens — it no longer snaps while the width glides. Native-driven opacity.
+ */
+function TileRim({ shown, color, still }: { shown: boolean; color: string; still: boolean }) {
+  const styles = stylesFor(useThemeColors().palette);
+  const on = useRef(new Animated.Value(shown ? 1 : 0)).current;
+  useEffect(() => {
+    if (still) {
+      on.setValue(shown ? 1 : 0);
+      return;
+    }
+    const animation = Animated.timing(on, {
+      toValue: shown ? 1 : 0,
+      duration: postTiles.widenMs,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: USE_NATIVE_DRIVER,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [on, shown, still]);
+  return <Animated.View pointerEvents="none" style={[styles.rim, { borderColor: color, opacity: on }]} />;
 }
 
 /**
@@ -250,6 +275,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       borderWidth: 1,
       borderColor: colors.border,
       ...shadows.card,
+    },
+    // The chosen rim, laid exactly over the box's own hairline.
+    rim: {
+      position: 'absolute',
+      top: -1,
+      left: -1,
+      right: -1,
+      bottom: -1,
+      borderRadius: emeraldRadius.lg,
+      borderWidth: 1,
     },
     content: {
       alignItems: 'center',

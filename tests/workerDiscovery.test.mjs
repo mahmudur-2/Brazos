@@ -395,7 +395,7 @@ test('[static] the Map screen structure holds: no header card, sheet-filtered, t
   assert.match(map, /const \[sheetStop, setSheetStop\] = useState<PeekStop>\('peek'\);/);
   assert.match(map, /useFocusEffect\(\s*useCallback\(\(\) => \{\s*setSheetStop\('peek'\);\s*\}, \[\]\)\s*\);/);
   assert.match(map, /stop=\{sheetStop\}\s*onStopChange=\{setSheetStop\}\s*onPeekHeight=\{setPeekHeight\}/);
-  assert.match(map, /legalLabelInsetBottom=\{isWorker && peekHeight > 0 \? sheetBottom \+ peekHeight \+ LEGAL_LINK_AIR : undefined\}/);
+  assert.match(map, /legalLabelInsetBottom=\{isWorker \? sheetBottom \+ peekHeight \+ LEGAL_LINK_AIR : undefined\}/);
   const nativeMap = await read('components/HotspotMap.native.tsx');
   assert.match(nativeMap, /legalLabelInsets=\{\s*legalLabelInsetBottom != null\s*\? \{ top: 0, left: 0, bottom: legalLabelInsetBottom, right: 0 \}\s*: undefined\s*\}/);
 });

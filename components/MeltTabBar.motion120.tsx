@@ -335,8 +335,10 @@ export function MeltTabBar(props: MeltTabBarProps) {
   const placed = useRef(false);
   useEffect(() => {
     if (mode.value === 1) return;
-    restX.value = home;
-    restIdx.value = focused;
+    if (focused >= 0) {
+      restX.value = home;
+      restIdx.value = focused;
+    }
     if (!placed.current) {
       placed.current = true;
       x0.value = x1.value = x2.value = target.value = home;
@@ -345,9 +347,21 @@ export function MeltTabBar(props: MeltTabBarProps) {
       chosen.value = Array.from({ length: MAX_SLOTS }, (_, i) => (i === focused ? 1 : 0));
       return;
     }
+    // The Fable review: a route the bar does not draw fades the bubble WHERE IT IS — it never drifts
+    // to Home on its way out — and coming back to a tab, it appears at that tab rather than sliding
+    // from wherever it faded.
+    if (focused < 0) {
+      chosenIdx.value = focused;
+      shownTarget.value = 0;
+      wake();
+      return;
+    }
+    if (shown.value === 0 && shownTarget.value === 0) {
+      x0.value = x1.value = x2.value = home;
+    }
     target.value = home;
     chosenIdx.value = focused;
-    shownTarget.value = focused >= 0 ? 1 : 0;
+    shownTarget.value = 1;
     wake();
   }, [home, focused, wake, mode, x0, x1, x2, target, shown, shownTarget, chosenIdx, chosen, restX, restIdx]);
 

@@ -84,22 +84,22 @@ function partsOf(iso) {
   };
 }
 
-/** "29 Sep 2026" on the market's clock. */
+/** "Sep 29, 2026" on the market's clock — the app's own order (the reuse cards, the job pages). */
 export function dayLabel(iso) {
   const p = partsOf(iso);
-  return p ? `${p.day} ${p.month} ${p.year}` : null;
+  return p ? `${p.month} ${p.day}, ${p.year}` : null;
 }
 
-/** "29 Sep". */
+/** "Sep 29". */
 export function shortDay(iso) {
   const p = partsOf(iso);
-  return p ? `${p.day} ${p.month}` : null;
+  return p ? `${p.month} ${p.day}` : null;
 }
 
-/** "29 Sep, 8:50 AM". */
+/** "Sep 29, 8:50 AM". */
 export function dayTime(iso) {
   const p = partsOf(iso);
-  return p ? `${p.day} ${p.month}, ${p.time}` : null;
+  return p ? `${p.month} ${p.day}, ${p.time}` : null;
 }
 
 export function escapeHtml(value) {
@@ -158,7 +158,14 @@ export function buildReceipt(details, role, extras = {}) {
   const agreed = requireCents(details, 'agreed_cents');
   const customer = String(details.customer_name ?? '').trim() || 'The customer';
   const worker = String(details.worker_name ?? '').trim() || 'The worker';
-  const auto = details.release_reason === 'auto_approved';
+  // Why the money was released — an allow-list (the group 4 review: a dispute ruled for the worker
+  // must never read "after you approved the work"); any other reason is never guessed at.
+  const reason = details.release_reason;
+  if (reason !== 'approved' && reason !== 'auto_approved' && reason !== 'dispute_resolved') {
+    throw new Error('receipt: release_reason is not one a receipt can explain');
+  }
+  const auto = reason === 'auto_approved';
+  const dispute = reason === 'dispute_resolved';
   const released = dayLabel(details.released_at);
   if (!released) throw new Error('receipt: released_at is missing');
   const category = CATEGORY_LABELS[details.category] ?? null;
@@ -177,9 +184,11 @@ export function buildReceipt(details, role, extras = {}) {
     const protection = requireCents(details, 'protection_fee_cents');
     heading = 'Receipt';
     amount = money(charged);
-    line = auto
-      ? `Released to ${worker} on ${released}, after the approval window closed.`
-      : `Released to ${worker} on ${released}, after you approved the work.`;
+    line = dispute
+      ? `Released to ${worker} on ${released}, after the dispute was resolved.`
+      : auto
+        ? `Released to ${worker} on ${released}, after the approval window closed.`
+        : `Released to ${worker} on ${released}, after you approved the work.`;
     facts = [
       ['Worker', worker],
       extras.card ? ['Paid with', extras.card] : null,
@@ -190,7 +199,14 @@ export function buildReceipt(details, role, extras = {}) {
       ['Posted', shortDay(details.posted_at)],
       [`Hired ${firstName(worker)} · ${moneyShort(charged)} held in protection`, shortDay(details.held_at ?? details.hired_at)],
       ['Work marked complete', dayTime(details.completed_at)],
-      [auto ? `Approved automatically · released to ${firstName(worker)}` : `You approved · released to ${firstName(worker)}`, dayTime(details.released_at)],
+      [
+        dispute
+          ? `Dispute resolved · released to ${firstName(worker)}`
+          : auto
+            ? `Approved automatically · released to ${firstName(worker)}`
+            : `You approved · released to ${firstName(worker)}`,
+        dayTime(details.released_at),
+      ],
     ];
     lines = [
       ['Agreed price', money(agreed)],
@@ -201,12 +217,19 @@ export function buildReceipt(details, role, extras = {}) {
   } else {
     const fee = requireCents(details, 'worker_fee_cents');
     const paid = requireCents(details, 'paid_to_worker_cents');
-    const pct = percentLabel(details.worker_fee_bps);
+    // The rate beside the fee only when it IS the fee charged — a job under the minimum fee pays
+    // the minimum, not the rate (the group 4 review).
+    const pct =
+      Number.isInteger(details.worker_fee_bps) && Math.round((agreed * details.worker_fee_bps) / 10000) === fee
+        ? percentLabel(details.worker_fee_bps)
+        : null;
     heading = 'You’ve been paid';
     amount = money(paid);
-    line = auto
-      ? `Released to you on ${released}, after the approval window closed. It arrives with your next payout.`
-      : `Released to you on ${released}, after ${firstName(customer)} approved the work. It arrives with your next payout.`;
+    line = dispute
+      ? `Released to you on ${released}, after the dispute was resolved. It arrives with your next payout.`
+      : auto
+        ? `Released to you on ${released}, after the approval window closed. It arrives with your next payout.`
+        : `Released to you on ${released}, after ${firstName(customer)} approved the work. It arrives with your next payout.`;
     facts = [
       ['Customer', customer],
       categoryArea ? ['Category · area', categoryArea] : null,
@@ -220,9 +243,17 @@ export function buildReceipt(details, role, extras = {}) {
         byWorker === false ? `${firstName(customer)} offered ${offered}` : `You bid ${offered}`,
         byWorker === true || byWorker === false ? shortDay(details.offered_at) : null,
       ],
-      [`Hired · ${moneyShort(charged)} held in protection`, shortDay(details.held_at ?? details.hired_at)],
+      // The customer's all-in charge is theirs: the worker's receipt keeps to the worker's figures.
+      ['Hired · payment held in protection', shortDay(details.held_at ?? details.hired_at)],
       ['You marked the work complete', dayTime(details.completed_at)],
-      [auto ? 'Approved automatically · released to you' : `${firstName(customer)} approved · released to you`, dayTime(details.released_at)],
+      [
+        dispute
+          ? 'Dispute resolved · released to you'
+          : auto
+            ? 'Approved automatically · released to you'
+            : `${firstName(customer)} approved · released to you`,
+        dayTime(details.released_at),
+      ],
     ];
     lines = [
       ['Agreed price', money(agreed)],

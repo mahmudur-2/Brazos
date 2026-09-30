@@ -885,8 +885,9 @@ export function WorkerJobScreen() {
                         key={minutes}
                         label={`${minutes} min`}
                         variant="filter"
-                        size="sm"
-                        selected={job.late_minutes === minutes}
+                        // The Fable review: chosen the moment it is tapped (the reply only confirms it),
+                        // in the same size as every other one-tap answer in the app.
+                        selected={(reportingLate ?? job.late_minutes) === minutes}
                         onPress={() => void handleLate(minutes)}
                         accessibilityLabel={`Running ${minutes} minutes late`}
                         accessibilityHint={`Tells ${clientName} and moves your arrival time`}

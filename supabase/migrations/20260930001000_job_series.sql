@@ -49,7 +49,12 @@
 --             day is already too close is skipped rather than rushed, and a series whose last post
 --             still waits for a hire never stacks a second one.
 --       Each series runs in its own sub-transaction: one failure is recorded on its row
---       (last_error) and the rest go on; an inactive customer's series stops.
+--       (last_error) and the rest go on; an inactive customer's series stops. The group 4 review
+--       settled the edges: who ended a first refusal decides the visit (the customer calling it off
+--       skips it; the worker passing, or the day lapsing, opens it to bids); only a post for a day
+--       still to come holds the next one back, and then the customer is told the visit was skipped;
+--       a first refusal blocked by another live offer between the two is tried again while the
+--       visit is still two days off; a first visit cancelled before any other ends the series.
 --   (5) install_series_schedule() — the settlement schedules' idempotent installer shape:
 --       brazos-job-series at minute 17 of every hour where pg_cron exists; skipped locally.
 --   (6) series_on_visit_change() — AFTER UPDATE OF assigned_worker_id, status on jobs, for a visit of
@@ -61,10 +66,10 @@
 --       (withdraw_offer() / decline_offer() as the customer). drop_series_worker(p_series_id) — the
 --       series' worker's; closes theirs the same way, the next visits open to bids, the customer is
 --       told.
---   (8) notify_on_message(): the baseline body, plus one early return — a series visit's offer
---       events (created, accepted, declined, expired, withdrawn) do not buzz as "New message",
---       because the series says each of those moments itself; a counter is a real negotiation and
---       keeps its push.
+--   (8) notify_on_message(): the baseline body, plus one early return — an allow-list of a series
+--       visit's offer events the series says itself (created; accepted; declined by the worker) do
+--       not buzz as "New message"; every other event keeps its push, and stop / drop tell the other
+--       side in words (series_stopped, series_worker_dropped).
 --   Every new SECURITY DEFINER function carries revoke / grant (CLAUDE.md section Supabase): the
 --   three the app calls — start_job_series, stop_job_series, drop_series_worker — to authenticated
 --   (lib/jobSeries.ts, through supabase.rpc as the signed-in user); advance_job_series and
@@ -92,7 +97,7 @@ create table if not exists public.job_series (
   worker_id uuid references public.profiles (id) on delete set null,
   price_cents integer,
   pending_job_id uuid references public.jobs (id) on delete set null,
-  dropped_worker_id uuid references public.profiles (id) on delete set null,
+  dropped_worker_ids uuid[] not null default '{}',
   status text not null default 'active',
   stopped_at timestamptz,
   last_error text,
@@ -107,7 +112,12 @@ create table if not exists public.job_series (
 alter table public.job_series enable row level security;
 -- No role writes a series directly — the functions below are its only writers.
 revoke all on table public.job_series from public, anon, authenticated, service_role;
-grant select on table public.job_series to authenticated, service_role;
+grant select on table public.job_series to service_role;
+-- The two people read the series, not its bookkeeping (the group 4 review): who dropped it before and
+-- the last error stay the service role's.
+grant select (id, client_id, origin_job_id, cadence, anchor_date, next_visit_no, next_visit_date,
+              worker_id, price_cents, pending_job_id, status, stopped_at, created_at, updated_at)
+  on public.job_series to authenticated;
 drop policy if exists "job_series_select_parties" on public.job_series;
 create policy "job_series_select_parties" on public.job_series for select to authenticated
   using ((select auth.uid()) = client_id or (select auth.uid()) = worker_id);
@@ -432,11 +442,14 @@ declare
   v_series public.job_series;
   v_draft public.jobs;
   v_root public.job_offers;
+  v_last public.job_offers;
   v_offer public.job_offers;
+  v_waiting public.jobs;
   v_passed_by uuid;
   v_visit date;
   v_next integer;
   v_made uuid;
+  v_retry boolean;
   v_done integer := 0;
 begin
   -- The market's daytime only: nobody gets a first refusal, and no visit is posted, at 3 am.
@@ -447,8 +460,10 @@ begin
   for v_id in
     select s.id from public.job_series s where s.status = 'active' order by s.created_at
   loop
+    v_next := null;
     begin
       select * into v_series from public.job_series where id = v_id;
+      v_next := v_series.next_visit_no;
 
       if not public.is_profile_active(v_series.client_id) then
         update public.job_series
@@ -484,8 +499,7 @@ begin
            and now() < v_root.created_at + interval '24 hours' then
           continue;   -- still inside the worker's 24 hours
         end if;
-        -- The worker passed, or the 24 hours ran out: whatever is still pending expires the canonical
-        -- way, and the visit opens to bids.
+        -- The 24 hours are up: whatever is still pending expires the canonical way.
         for v_offer in
           select * from public.job_offers o
           where o.job_id = v_draft.id and o.status = 'pending'
@@ -495,8 +509,34 @@ begin
           select * into v_offer from public.job_offers where id = v_offer.id;
           perform public.expire_offer_if_stale(v_offer);
         end loop;
-        v_passed_by := v_root.worker_id;
-        perform public.series_open_visit(v_series, v_draft.scheduled_date, v_passed_by);
+
+        -- Who ended the first refusal decides what happens to the visit (the group 4 review): the last
+        -- word in the chain says.
+        select * into v_last from public.job_offers o
+         where o.job_id = v_draft.id
+         order by o.updated_at desc, o.created_at desc
+         limit 1;
+        if (v_last.status = 'withdrawn' and v_last.author_id = v_series.client_id)
+           or (v_last.status = 'declined' and v_last.author_id is distinct from v_series.client_id) then
+          -- The customer called it off — withdrew the offer, or turned down the worker's counter: this
+          -- visit is skipped, nothing is posted, nobody is told they "didn't take it".
+          update public.job_series
+             set pending_job_id = null,
+                 next_visit_no = next_visit_no + 1,
+                 next_visit_date = public.series_visit_date(anchor_date, cadence, next_visit_no + 1),
+                 last_error = null,
+                 updated_at = now()
+           where id = v_id;
+          continue;
+        end if;
+        -- The worker passed, or the 24 hours ran out: the visit opens to bids — unless its day is
+        -- already too close (the schedule was down), when it is skipped rather than posted late.
+        if v_draft.scheduled_date is not null and v_draft.scheduled_date >= v_today + 1 then
+          -- "<worker> didn't take this one" only when the last word was the customer's own offer.
+          v_passed_by := case when v_last.author_id = v_series.client_id then v_root.worker_id end;
+          perform public.series_open_visit(v_series, v_draft.scheduled_date, v_passed_by);
+          v_done := v_done + 1;
+        end if;
         update public.job_series
            set pending_job_id = null,
                next_visit_no = next_visit_no + 1,
@@ -504,20 +544,21 @@ begin
                last_error = null,
                updated_at = now()
          where id = v_id;
-        v_done := v_done + 1;
         continue;
       end if;
 
       -- (b) The next visit.
-      if v_series.anchor_date is null then
-        -- A flexible first visit counts from the day it is done; one cancelled first ends the series.
-        if exists (select 1 from public.jobs j where j.id = v_series.origin_job_id and j.status = 'cancelled') then
-          update public.job_series
-             set status = 'stopped', stopped_at = now(), updated_at = now(),
-                 last_error = 'the first visit was cancelled before it was done'
-           where id = v_id;
-        end if;
+      -- A first visit cancelled before any other visit exists ends the series (scheduled or flexible).
+      if exists (select 1 from public.jobs j where j.id = v_series.origin_job_id and j.status = 'cancelled')
+         and not exists (select 1 from public.jobs j where j.series_id = v_id and j.id <> v_series.origin_job_id) then
+        update public.job_series
+           set status = 'stopped', stopped_at = now(), updated_at = now(),
+               last_error = 'the first visit was cancelled'
+         where id = v_id;
         continue;
+      end if;
+      if v_series.anchor_date is null then
+        continue;   -- a flexible first visit counts from the day it is done
       end if;
 
       select * into v_series from public.job_series where id = v_id for update skip locked;
@@ -543,29 +584,26 @@ begin
         continue;   -- not yet: three days before
       end if;
 
-      -- Never stack a second post while the last one still waits for a hire: this visit is skipped.
-      if exists (select 1 from public.jobs j where j.series_id = v_id and j.status = 'open') then
-        update public.job_series
-           set next_visit_no = v_next + 1,
-               next_visit_date = public.series_visit_date(v_series.anchor_date, v_series.cadence, v_next + 1),
-               updated_at = now()
-         where id = v_id;
-        continue;
-      end if;
-
+      -- The first refusal, to the series' worker at their price.
       v_made := null;
+      v_retry := false;
       if v_series.worker_id is not null and v_series.price_cents is not null
          and public.job_request_parties_ok(v_series.client_id, v_series.worker_id) then
         begin
           v_made := public.series_offer_visit(v_series, v_visit);
         exception when others then
-          -- The offer could not be made (a live offer between the two already, say): to bids instead.
           v_made := null;
+          -- The two already have a live offer between them (one per pair): a later run tries again
+          -- while the visit is still two days off, rather than taking the worker's first refusal away.
+          v_retry := sqlerrm like 'You already have a live offer open here%' and v_visit > v_today + 2;
         end;
+      end if;
+      if v_retry then
+        continue;
       end if;
 
       if v_made is not null then
-        -- The pointer stays on the visit on offer until it is taken (the trigger) or opens to bids (a).
+        -- The pointer stays on the visit on offer until it is taken (the trigger) or settled (a).
         update public.job_series
            set pending_job_id = v_made,
                next_visit_no = v_next,
@@ -573,25 +611,47 @@ begin
                last_error = null,
                updated_at = now()
          where id = v_id;
+        v_done := v_done + 1;
+        continue;
+      end if;
+
+      -- To bids — but never a second post while one of the series' posts for a day still to come
+      -- waits for a hire (the group 4 review: a stale post from a past day never blocks the series).
+      select * into v_waiting from public.jobs j
+       where j.series_id = v_id and j.status = 'open' and j.scheduled_date >= v_today
+       order by j.scheduled_date
+       limit 1;
+      if v_waiting.id is not null then
+        perform public.enqueue_notification(
+          v_series.client_id,
+          null,
+          'job_updates',
+          'series_skipped',
+          'Your ' || to_char(v_visit, 'FMDy') || ' visit was skipped',
+          left(v_waiting.title, 60) || ' · your last post is still waiting for a worker.',
+          jsonb_build_object('screen', 'ClientJobDetail', 'jobId', v_waiting.id::text),
+          'series_skipped:' || v_id::text || ':' || v_visit::text
+        );
       else
         perform public.series_open_visit(v_series, v_visit, null);
-        update public.job_series
-           set next_visit_no = v_next + 1,
-               next_visit_date = public.series_visit_date(v_series.anchor_date, v_series.cadence, v_next + 1),
-               last_error = null,
-               updated_at = now()
-         where id = v_id;
+        v_done := v_done + 1;
       end if;
-      v_done := v_done + 1;
+      update public.job_series
+         set next_visit_no = v_next + 1,
+             next_visit_date = public.series_visit_date(v_series.anchor_date, v_series.cadence, v_next + 1),
+             last_error = null,
+             updated_at = now()
+       where id = v_id;
     exception when others then
-      -- One series' failure never stops the others; it is recorded, and that visit is skipped rather
-      -- than retried every hour.
+      -- One series' failure never stops the others; it is recorded, and that visit — the one this run
+      -- rolled forward to — is skipped rather than retried every hour.
       update public.job_series
          set last_error = left(sqlerrm, 300),
              pending_job_id = null,
-             next_visit_no = next_visit_no + 1,
+             next_visit_no = greatest(next_visit_no, coalesce(v_next, next_visit_no)) + 1,
              next_visit_date = case when anchor_date is not null
-                                    then public.series_visit_date(anchor_date, cadence, next_visit_no + 1) end,
+                                    then public.series_visit_date(anchor_date, cadence,
+                                           greatest(next_visit_no, coalesce(v_next, next_visit_no)) + 1) end,
              updated_at = now()
        where id = v_id;
     end;
@@ -600,6 +660,7 @@ begin
   return v_done;
 end;
 $$;
+
 revoke all on function public.advance_job_series(timestamptz) from public, anon, authenticated;
 grant execute on function public.advance_job_series(timestamptz) to service_role;
 comment on function public.advance_job_series(timestamptz) is
@@ -650,6 +711,7 @@ declare
   v_total integer;
   v_first text;
   v_today date := (now() at time zone 'America/New_York')::date;
+  v_rejoins boolean;
 begin
   select * into v_series from public.job_series where id = new.series_id for update;
   if v_series.id is null then
@@ -657,12 +719,13 @@ begin
   end if;
 
   if old.assigned_worker_id is null and new.assigned_worker_id is not null then
-    -- The same worker gets the next visit first, at this price — unless they dropped the series.
+    -- The same worker gets the next visit first, at this price — unless they dropped the series
+    -- (any worker who ever did: the group 4 review).
+    v_rejoins := not (new.assigned_worker_id = any (v_series.dropped_worker_ids));
     update public.job_series
-       set worker_id = case when new.assigned_worker_id is distinct from v_series.dropped_worker_id
-                            then new.assigned_worker_id else v_series.worker_id end,
-           price_cents = case when new.assigned_worker_id is distinct from v_series.dropped_worker_id
-                              then coalesce(new.final_amount_cents, v_series.price_cents) else v_series.price_cents end,
+       set worker_id = case when v_rejoins then new.assigned_worker_id else v_series.worker_id end,
+           price_cents = case when v_rejoins then coalesce(new.final_amount_cents, v_series.price_cents)
+                              else v_series.price_cents end,
            -- The visit on offer, taken: on to the one after it.
            pending_job_id = case when v_series.pending_job_id = new.id then null else v_series.pending_job_id end,
            next_visit_no = case when v_series.pending_job_id = new.id
@@ -696,6 +759,23 @@ begin
     end if;
   end if;
 
+  -- The first visit's day moved (Edit, before anyone was hired) while it is still the series' only
+  -- visit: the series counts from the new day (the group 4 review) — or, made flexible, from the day
+  -- it is done.
+  if new.id = v_series.origin_job_id
+     and old.scheduled_date is distinct from new.scheduled_date
+     and v_series.pending_job_id is null
+     and not exists (select 1 from public.jobs j where j.series_id = v_series.id and j.id <> new.id) then
+    update public.job_series
+       set anchor_date = new.scheduled_date,
+           next_visit_no = 1,
+           next_visit_date = case when new.scheduled_date is not null
+                                  then public.series_visit_date(new.scheduled_date, v_series.cadence, 1) end,
+           updated_at = now()
+     where id = v_series.id;
+    select * into v_series from public.job_series where id = v_series.id;
+  end if;
+
   -- A flexible first visit, done: the series counts from today.
   if new.status = 'completed' and old.status is distinct from 'completed' and v_series.anchor_date is null then
     update public.job_series
@@ -711,7 +791,7 @@ end;
 $$;
 revoke all on function public.series_on_visit_change() from public, anon, authenticated;
 drop trigger if exists jobs_series_visit on public.jobs;
-create trigger jobs_series_visit after update of assigned_worker_id, status on public.jobs
+create trigger jobs_series_visit after update of assigned_worker_id, status, scheduled_date on public.jobs
   for each row when (new.series_id is not null)
   execute function public.series_on_visit_change();
 
@@ -726,6 +806,8 @@ as $$
 declare
   v_actor uuid := auth.uid();
   v_series public.job_series;
+  v_title text;
+  v_last_visit uuid;
 begin
   if v_actor is null or not public.is_active_user() then
     raise exception 'Active authentication required';
@@ -743,19 +825,45 @@ begin
     return v_series;
   end if;
   if v_series.pending_job_id is not null then
+    -- The withdrawal's own thread event stays quiet: the worker is told below, in words.
+    perform set_config('brazos.series_quiet', 'on', true);
     perform public.series_close_offers(v_series.pending_job_id, v_actor);
+    perform set_config('brazos.series_quiet', 'off', true);
   end if;
   update public.job_series
      set status = 'stopped', stopped_at = now(), pending_job_id = null, updated_at = now()
    where id = p_series_id
   returning * into v_series;
+
+  -- The series' worker is told (the group 4 review): no more visits will come to them first.
+  if v_series.worker_id is not null then
+    select j.title into v_title from public.jobs j where j.id = v_series.origin_job_id;
+    -- Their own last visit of the series, for the push to open.
+    select j.id into v_last_visit from public.jobs j
+     where j.series_id = p_series_id and j.assigned_worker_id = v_series.worker_id
+     order by j.created_at desc
+     limit 1;
+    perform public.enqueue_notification(
+      v_series.worker_id,
+      v_actor,
+      'job_updates',
+      'series_stopped',
+      coalesce(nullif(split_part(btrim(public.notify_display_name(v_actor)), ' ', 1), ''), 'Your customer')
+        || ' stopped repeating',
+      coalesce(left(v_title, 60) || ' · ', '') || 'Visits already booked stay booked.',
+      case when v_last_visit is not null
+           then jsonb_build_object('screen', 'WorkerJob', 'jobId', v_last_visit::text)
+           else '{}'::jsonb end,
+      'series_stopped:' || p_series_id::text
+    );
+  end if;
   return v_series;
 end;
 $$;
 revoke all on function public.stop_job_series(uuid) from public, anon;
 grant execute on function public.stop_job_series(uuid) to authenticated;
 comment on function public.stop_job_series(uuid) is
-  'Idea 14: the customer stops their repeating job; a first refusal still pending is withdrawn (or its counter declined). Visits already hired stay hired. Idempotent. SECURITY DEFINER; authenticated only.';
+  'Idea 14: the customer stops their repeating job; a first refusal still pending is withdrawn (or its counter declined) and the series'' worker is told. Visits already hired stay hired. Idempotent. SECURITY DEFINER; authenticated only.';
 
 create or replace function public.drop_series_worker(p_series_id uuid)
 returns void
@@ -784,17 +892,25 @@ begin
     return;
   end if;
   if v_series.pending_job_id is not null then
+    -- The decline's own thread event stays quiet: the customer is told below, in words.
+    perform set_config('brazos.series_quiet', 'on', true);
     perform public.series_close_offers(v_series.pending_job_id, v_actor);
+    perform set_config('brazos.series_quiet', 'off', true);
   end if;
   update public.job_series
-     set worker_id = null, price_cents = null, dropped_worker_id = v_actor, updated_at = now()
+     set worker_id = null,
+         price_cents = null,
+         -- Every worker who ever dropped the series, so none of them is enrolled again by a later hire.
+         dropped_worker_ids = array_append(array_remove(dropped_worker_ids, v_actor), v_actor),
+         updated_at = now()
    where id = p_series_id;
 
   -- The customer: the next visits will open to bids.
   if v_series.status = 'active' then
+    -- An allow-list of the statuses a customer's job screen shows (a draft is an offer, not a job).
     select j.id, j.title into v_latest, v_title
     from public.jobs j
-    where j.series_id = p_series_id and j.status <> 'draft'
+    where j.series_id = p_series_id and j.status in ('open', 'assigned', 'in_progress', 'completed')
     order by j.created_at desc
     limit 1;
     perform public.enqueue_notification(
@@ -836,23 +952,32 @@ begin
     return new;
   end if;
 
-  -- Idea 14 (2026-09-30): a repeat visit's first refusal says each of its moments itself — the
-  -- worker's "Repeat visit" push, the customer's "can come · Confirm" and "open to bids" — so its
-  -- offer events do not buzz a second time as "New message". The offer being written right now
-  -- (brazos.series_offer, set by series_offer_visit) is caught before its visit is tied to the
-  -- series; every later event by the visit's series_id. A counter is a real negotiation and keeps
-  -- its push.
-  if new.job_offer_id is not null and new.request_event is not null and new.request_event <> 'countered' then
-    if coalesce(current_setting('brazos.series_offer', true), '') = 'on' then
+  -- Idea 14 (2026-09-30; narrowed by the group 4 review): a repeat visit's first refusal says three of
+  -- its moments itself — the worker's "Repeat visit" push (created), the customer's "can come ·
+  -- Confirm" (accepted) and "open to bids" (the worker declined) — so those do not buzz a second time
+  -- as "New message". An allow-list: every other event (a counter, the customer turning a counter
+  -- down, a withdrawal, a lapse) keeps its push, so nobody is left uninformed. While the series itself
+  -- closes an offer (stop, drop: brazos.series_quiet) it tells the other side in words instead; and
+  -- the offer being written right now (brazos.series_offer, set by series_offer_visit) is caught before
+  -- its visit is tied to the series — its 'created' event alone.
+  if new.job_offer_id is not null and new.request_event is not null then
+    if coalesce(current_setting('brazos.series_quiet', true), '') = 'on' then
       return new;
     end if;
-    perform 1
-      from public.job_offers o
-      join public.jobs j on j.id = o.job_id
-     where o.id = new.job_offer_id
-       and j.series_id is not null;
-    if found then
+    if new.request_event = 'created' and coalesce(current_setting('brazos.series_offer', true), '') = 'on' then
       return new;
+    end if;
+    if new.request_event in ('created', 'accepted', 'declined') then
+      perform 1
+        from public.job_offers o
+        join public.jobs j on j.id = o.job_id
+       where o.id = new.job_offer_id
+         and j.series_id is not null
+         -- A decline is the series' to say only when the worker declined the customer's offer.
+         and (new.request_event <> 'declined' or o.author_id = j.client_id);
+      if found then
+        return new;
+      end if;
     end if;
   end if;
 

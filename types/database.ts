@@ -877,7 +877,7 @@ export type Database = {
           cadence: string
           client_id: string
           created_at: string
-          dropped_worker_id: string | null
+          dropped_worker_ids: string[]
           id: string
           last_error: string | null
           next_visit_date: string | null
@@ -895,7 +895,7 @@ export type Database = {
           cadence: string
           client_id: string
           created_at?: string
-          dropped_worker_id?: string | null
+          dropped_worker_ids?: string[]
           id?: string
           last_error?: string | null
           next_visit_date?: string | null
@@ -913,7 +913,7 @@ export type Database = {
           cadence?: string
           client_id?: string
           created_at?: string
-          dropped_worker_id?: string | null
+          dropped_worker_ids?: string[]
           id?: string
           last_error?: string | null
           next_visit_date?: string | null
@@ -930,13 +930,6 @@ export type Database = {
           {
             foreignKeyName: "job_series_client_id_fkey"
             columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "job_series_dropped_worker_id_fkey"
-            columns: ["dropped_worker_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -2057,6 +2050,7 @@ export type Database = {
           id: string
           job_id: string
           last_error: string | null
+          next_attempt_at: string | null
           payment_id: string
           provider_ref: string | null
           recipient_id: string
@@ -2070,6 +2064,7 @@ export type Database = {
           id?: string
           job_id: string
           last_error?: string | null
+          next_attempt_at?: string | null
           payment_id: string
           provider_ref?: string | null
           recipient_id: string
@@ -2083,6 +2078,7 @@ export type Database = {
           id?: string
           job_id?: string
           last_error?: string | null
+          next_attempt_at?: string | null
           payment_id?: string
           provider_ref?: string | null
           recipient_id?: string
@@ -2938,6 +2934,7 @@ export type Database = {
           id: string
           job_id: string
           last_error: string | null
+          next_attempt_at: string | null
           payment_id: string
           provider_ref: string | null
           recipient_id: string
@@ -4154,7 +4151,7 @@ export type Database = {
           cadence: string
           client_id: string
           created_at: string
-          dropped_worker_id: string | null
+          dropped_worker_ids: string[]
           id: string
           last_error: string | null
           next_visit_date: string | null
@@ -4191,7 +4188,7 @@ export type Database = {
           cadence: string
           client_id: string
           created_at: string
-          dropped_worker_id: string | null
+          dropped_worker_ids: string[]
           id: string
           last_error: string | null
           next_visit_date: string | null

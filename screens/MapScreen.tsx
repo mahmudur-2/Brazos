@@ -547,7 +547,8 @@ export function MapScreen() {
           // The approved design carries no locate button over the worker
           // map; the customer map keeps it, untouched.
           hideLocateButton={isWorker}
-          legalLabelInsetBottom={isWorker && peekHeight > 0 ? sheetBottom + peekHeight + LEGAL_LINK_AIR : undefined}
+          // The Fable review: above the floating tab bar always, and above the job card when one shows.
+          legalLabelInsetBottom={isWorker ? sheetBottom + peekHeight + LEGAL_LINK_AIR : undefined}
           onRegionChangeComplete={
             isWorker ? (region) => setLatDelta(region.latitudeDelta) : undefined
           }

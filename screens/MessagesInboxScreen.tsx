@@ -535,7 +535,7 @@ export function MessagesInboxScreen() {
     if (error) {
       await alertAsync(target.muted ? 'Could not unmute' : 'Could not mute', userMessage(error));
     } else {
-      offerUndo(target.muted ? `Unmuted ${target.name}` : `Muted ${target.name}`, async () => {
+      offerUndo(target.muted ? 'Unmuted' : 'Muted', async () => {
         const { error: undoError } = target.muted
           ? await muteUser(user.id, target.userId)
           : await unmuteUser(user.id, target.userId);

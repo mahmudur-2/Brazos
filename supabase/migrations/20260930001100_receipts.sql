@@ -78,6 +78,8 @@ create table if not exists public.receipt_outbox (
   attempts integer not null default 0,
   last_error text,
   provider_ref text,
+  -- A receipt put back to wait (the email service busy) is not claimed again before this.
+  next_attempt_at timestamptz,
   created_at timestamptz not null default now(),
   sent_at timestamptz,
   constraint receipt_outbox_role_known check (role in ('customer', 'worker')),
@@ -129,6 +131,7 @@ begin
     select r.id
     from public.receipt_outbox r
     where r.status = 'pending' and r.attempts < 5
+      and (r.next_attempt_at is null or r.next_attempt_at <= now())
     order by r.created_at
     limit greatest(1, least(coalesce(p_limit, 20), 50))
     for update skip locked
@@ -163,8 +166,10 @@ begin
      set status = case when p_status = 'pending' and attempts >= 5 then 'failed' else p_status end,
          last_error = left(p_error, 500),
          provider_ref = coalesce(p_provider_ref, provider_ref),
-         sent_at = case when p_status = 'sent' then now() else sent_at end
-   where id = p_id;
+         sent_at = case when p_status = 'sent' then now() else sent_at end,
+         next_attempt_at = case when p_status = 'pending' then now() + make_interval(mins => 5 * greatest(attempts, 1)) end
+   where id = p_id
+     and status = 'pending';
 end;
 $$;
 revoke all on function public.resolve_receipt(uuid, text, text, text) from public, anon, authenticated;
@@ -230,17 +235,22 @@ declare
   v_request_id bigint;
 begin
   -- Nothing waiting: the function is not woken at all.
-  if not exists (select 1 from public.receipt_outbox where status = 'pending' and attempts < 5) then
+  if not exists (
+    select 1 from public.receipt_outbox
+    where status = 'pending' and attempts < 5 and (next_attempt_at is null or next_attempt_at <= now())
+  ) then
     return null;
   end if;
 
   select decrypted_secret into v_url from vault.decrypted_secrets where name = 'send_receipts_url';
   select decrypted_secret into v_key from vault.decrypted_secrets where name = 'send_receipts_service_key';
-  if v_url is null or v_key is null then
-    -- The same project's settlement function: its address with this function's name, and the
-    -- service key every function checks against. No new secret for the plumbing.
+  -- Each falls back on its own: the same project's settlement function — its address with this
+  -- function's name, and the service key every function checks against. No new secret needed.
+  if v_url is null then
     select replace(decrypted_secret, '/process-settlements', '/send-receipts') into v_url
       from vault.decrypted_secrets where name = 'process_settlements_url';
+  end if;
+  if v_key is null then
     select decrypted_secret into v_key
       from vault.decrypted_secrets where name = 'process_settlements_service_key';
   end if;

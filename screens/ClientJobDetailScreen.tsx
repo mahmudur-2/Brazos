@@ -171,6 +171,8 @@ export function ClientJobDetailScreen() {
   // Idea 14: whether this job's ledger has been read — a repeat visit's "Confirm $X" push opens
   // Checkout only once it says the visit still waits for its payment.
   const [paymentRead, setPaymentRead] = useState(false);
+  // The group 4 review: payments may be paused — the jump to Checkout also waits for that answer.
+  const [configRead, setConfigRead] = useState(false);
   // Idea 14: a visit of a repeating job — its line, and "Stop repeating".
   const { series, setSeries } = useJobSeries(job.series_id);
   const [stoppingSeries, setStoppingSeries] = useState(false);
@@ -258,10 +260,10 @@ export function ClientJobDetailScreen() {
   // still be funded (a visit already paid, or a closed funding window, stays here).
   const checkoutIntentRef = useRef(false);
   useEffect(() => {
-    if (params.intent !== 'checkout' || checkoutIntentRef.current || !paymentRead) return;
+    if (params.intent !== 'checkout' || checkoutIntentRef.current || !paymentRead || !configRead) return;
     checkoutIntentRef.current = true;
     if (canFundNow && paymentsEnabled) navigation.navigate('Checkout', { job });
-  }, [params.intent, paymentRead, canFundNow, paymentsEnabled, job, navigation]);
+  }, [params.intent, paymentRead, configRead, canFundNow, paymentsEnabled, job, navigation]);
 
   async function handleStopSeries() {
     if (!series || stoppingSeries) return;
@@ -376,7 +378,9 @@ export function ClientJobDetailScreen() {
     useCallback(() => {
       let active = true;
       fetchRemoteConfig().then((config) => {
-        if (active) setPaymentsEnabled(config.paymentsEnabled);
+        if (!active) return;
+        setPaymentsEnabled(config.paymentsEnabled);
+        setConfigRead(true);
       });
       return () => {
         active = false;

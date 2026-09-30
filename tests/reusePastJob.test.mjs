@@ -69,7 +69,7 @@ test('[static] the sheet: one read per opening, the row closed until tapped, the
   assert.match(sheet, /\{index === 0 && onReuseJob \? \( <ReusePastJob hub=\{hub\} ready=\{hubReady\} visible=\{visible\} onPick=\{onReuseJob\} \/> \) : null\}/);
   assert.match(sheet, /const \[open, setOpen\] = useState\(false\);/);
   assert.match(sheet, /accessibilityLabel="Reuse a past job" accessibilityHint="Start from one you posted before" accessibilityState=\{\{ expanded: open \}\}/);
-  assert.match(sheet, /<DropdownBody open=\{open\}>/);
+  assert.match(sheet, /<DropdownBody open=\{open\} grow>/);
   // The compact card: as wide as its title needs in 128–160, three lines at most, the price at the bottom right.
   assert.match(sheet, /\{ width: reuseCardWidth\(job\.title, 2 \* \(spacing\.md - 1\)\) \}/);
   assert.match(sheet, /<Text style=\{styles\.cardTitle\} numberOfLines=\{3\}>/);
@@ -93,7 +93,9 @@ test('[static] the post: a NEW job, filled from the old one, on its Review step 
   for (const kept of ['setScheduledDate', 'setArrivalStartHour', 'setPhotos', 'setVideos', 'sessionUploadsRef', 'originalPhotosRef']) {
     assert.ok(!load.includes(kept), `never copies: ${kept}`);
   }
-  assert.match(screen, /\? `Copied from “\$\{reusedFrom\}”\. Change anything, or just Publish\.`/);
+  // The Fable review: the source on its own line, the instruction whole under it.
+  assert.match(screen, /\? 'Change anything, or just Publish\.'/);
+  assert.match(screen, /\? `Copied from “\$\{reusedFrom\}”` : null;/);
   // Group 2's review: a reuse never touches the draft slot and offers no "Save draft"; and it is
   // its own screen — keyed by the job it copies — never a rewrite of a post already open.
   assert.match(screen, /const usesDraft = isFreshPost && !reuseJobId;/);

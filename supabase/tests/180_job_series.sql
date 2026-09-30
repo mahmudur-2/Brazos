@@ -1,6 +1,6 @@
 -- 180_job_series.sql — idea 14's proofs: 20260930001000_job_series.sql proven on the local stack
--- before the pipeline applies it anywhere. Fifty assertions: twelve numbered groups and the two money
--- rules at the end; each says what it proves.
+-- before the pipeline applies it anywhere. Fifty-eight assertions: thirteen numbered groups (the
+-- thirteenth, the group 4 review's edges) and the two money rules at the end; each says what it proves.
 --
 -- THE CAST: one worker (Sam) every series has hired, a stranger (Olly), and six customers — one per
 -- series, because a pair holds one live direct offer at a time: A (the worker says yes), B (the
@@ -18,7 +18,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(50);
+select plan(58);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -38,6 +38,11 @@ select tests.create_user('i14.c@brazos.test', 'Cal Lapsed') as cust_c \gset
 select tests.create_user('i14.d@brazos.test', 'Dee Stops') as cust_d \gset
 select tests.create_user('i14.e@brazos.test', 'Eve Dropped') as cust_e \gset
 select tests.create_user('i14.f@brazos.test', 'Fay Flexible') as cust_f \gset
+select tests.create_user('i14.h@brazos.test', 'Hal Moves') as cust_h \gset
+select tests.create_user('i14.i@brazos.test', 'Ida Withdraws') as cust_i \gset
+select tests.create_user('i14.j@brazos.test', 'Jo Stale') as cust_j \gset
+select tests.create_user('i14.k@brazos.test', 'Kit Waiting') as cust_k \gset
+select tests.create_user('i14.l@brazos.test', 'Lou Pair') as cust_l \gset
 insert into fx values ('worker', :'worker'), ('other', :'other');
 
 -- A customer posts (10 AM–12 PM, an exact address), Sam bids the posted amount, the customer
@@ -310,6 +315,18 @@ select ok(
   and not exists (select 1 from public.jobs where series_id = :'series_d' and status = 'open'),
   '10d: a stopped series posts nothing more - its first visit and the withdrawn offer''s draft, nothing new'
 );
+select is(
+  (select title from public.notification_outbox where recipient_id = :'worker' and type = 'series_stopped'),
+  'Dee stopped repeating',
+  '10e: Sam is told the customer stopped (the group 4 review) - in words, not as a withdrawn offer'
+);
+select ok(
+  (select count(*) from public.notification_outbox
+    where recipient_id = :'worker' and type = 'message' and data ->> 'jobId' = :'job_d') = 0
+  and (select count(*) from public.notification_outbox
+    where recipient_id = :'worker' and type = 'message' and data ->> 'jobId' = :'job_c') = 1,
+  '10f: the stop''s withdrawal stays quiet, while the lapse on C still told Sam his offer ran out (never left uninformed)'
+);
 
 -- ---------------------------------------------------------------------------
 -- 11. E: Sam drops the series.
@@ -325,7 +342,7 @@ select public.drop_series_worker(:'series_e') as dropped_e \gset
 select is((select count(*)::int from public.job_series where id = :'series_e'), 0, '11b: once dropped, Sam no longer reads the series');
 select tests.clear_auth();
 select ok(
-  (select worker_id is null and dropped_worker_id = :'worker'::uuid and status = 'active' from public.job_series where id = :'series_e'),
+  (select worker_id is null and dropped_worker_ids = array[:'worker'::uuid] and status = 'active' from public.job_series where id = :'series_e'),
   '11c: the series goes on without him'
 );
 select is((select status::text from public.job_offers where id = :'offer_e'), 'declined', '11d: his pending first refusal is declined');
@@ -351,6 +368,87 @@ update public.jobs set status = 'completed' where id = :'job_f';
 select ok(
   (select anchor_date = :'today'::date and next_visit_date = :'today'::date + 14 from public.job_series where id = :'series_f'),
   '12b: done today, every 2 weeks: the next visit is two weeks from today'
+);
+
+-- ---------------------------------------------------------------------------
+-- 13. The group 4 review's edges.
+-- ---------------------------------------------------------------------------
+select ok(
+  has_column_privilege('authenticated', 'public.job_series', 'next_visit_date', 'SELECT')
+  and not has_column_privilege('authenticated', 'public.job_series', 'last_error', 'SELECT')
+  and not has_column_privilege('authenticated', 'public.job_series', 'dropped_worker_ids', 'SELECT'),
+  '13a: the two people read the series, not its bookkeeping (who dropped it before, the last error)'
+);
+
+-- H: the first visit's day moves before anyone is hired; the series counts from the new day.
+select tests.authenticate_as(:'cust_h');
+select (public.create_job(
+  p_title := 'I14 H water the plants', p_description := 'probe row, rolled back', p_category := 'errands',
+  p_location := 'Park Slope', p_budget_cents := 3000, p_scheduled_date := (:'today'::date + 10)
+)).id as job_h \gset
+select (public.start_job_series(:'job_h', 'weekly')).id as series_h \gset
+select tests.clear_auth();
+update public.jobs set scheduled_date = :'today'::date + 12 where id = :'job_h';
+select ok(
+  (select anchor_date = :'today'::date + 12 and next_visit_date = :'today'::date + 19 from public.job_series where id = :'series_h'),
+  '13b: a first visit moved to another day moves the whole series with it'
+);
+
+-- I, J, L: hired as the others were. J also has an old post, for a day gone by, that nobody took.
+-- K: nobody hired yet (its first visit is still open, for a day gone by), and a later post waits for
+-- a day still to come. L: a live direct offer between the two already.
+select pg_temp.i14_post_and_hire(:'cust_i', 'I14 I clean the flat', 5000, :'anchor'::date, false) as job_i \gset
+select pg_temp.i14_post_and_hire(:'cust_j', 'I14 J clean the flat', 5000, :'anchor'::date, false) as job_j \gset
+select pg_temp.i14_post_and_hire(:'cust_l', 'I14 L clean the flat', 5000, :'anchor'::date, false) as job_l \gset
+select tests.clear_auth();
+select series_id as series_i from public.jobs where id = :'job_i' \gset
+select series_id as series_j from public.jobs where id = :'job_j' \gset
+select series_id as series_l from public.jobs where id = :'job_l' \gset
+insert into public.jobs (client_id, title, status, scheduled_date, series_id)
+values (:'cust_j', 'I14 J the stale post', 'open', :'today'::date - 3, :'series_j');
+select tests.authenticate_as(:'cust_k');
+select (public.create_job(
+  p_title := 'I14 K mow the lawn', p_description := 'probe row, rolled back', p_category := 'yard_work',
+  p_location := 'Park Slope', p_budget_cents := 4000, p_scheduled_date := :'anchor'::date
+)).id as job_k \gset
+select (public.start_job_series(:'job_k', 'weekly')).id as series_k \gset
+select tests.clear_auth();
+insert into public.jobs (client_id, title, status, scheduled_date, series_id)
+values (:'cust_k', 'I14 K the next post', 'open', :'today'::date + 5, :'series_k');
+select tests.authenticate_as(:'cust_l');
+select public.create_offer(
+  p_amount_cents := 5000, p_worker_id := :'worker', p_title := 'I14 L something else', p_category := 'cleaning'
+) as pair_offer \gset
+select tests.clear_auth();
+select public.advance_job_series(:'noon'::timestamptz) as moved5 \gset
+
+select ok(
+  (select pending_job_id is not null from public.job_series where id = :'series_j'),
+  '13c: an old post from a day gone by never takes the worker''s first refusal away'
+);
+select ok(
+  not exists (select 1 from public.jobs where series_id = :'series_k' and scheduled_date = :'visit'::date)
+  and exists (select 1 from public.notification_outbox where recipient_id = :'cust_k' and type = 'series_skipped'),
+  '13d: with a post for a day still to come waiting, the next visit is not stacked - it is skipped, and the customer is told'
+);
+select ok(
+  (select pending_job_id is null and next_visit_no = 1 from public.job_series where id = :'series_l')
+  and not exists (select 1 from public.jobs where series_id = :'series_l' and id <> :'job_l'),
+  '13e: a live offer between the two already: the first refusal waits for a later run, nothing goes to bids'
+);
+
+-- I: the customer withdraws the standing offer to skip a week.
+select pending_job_id as draft_i from public.job_series where id = :'series_i' \gset
+select id as offer_i from public.job_offers where job_id = :'draft_i' \gset
+select tests.authenticate_as(:'cust_i');
+select public.withdraw_offer(:'offer_i') as withdrawn_i \gset
+select tests.clear_auth();
+select public.advance_job_series(:'noon'::timestamptz) as moved6 \gset
+select ok(
+  (select pending_job_id is null and next_visit_no = 2 from public.job_series where id = :'series_i')
+  and not exists (select 1 from public.jobs where series_id = :'series_i' and status = 'open' and scheduled_date = :'visit'::date)
+  and not exists (select 1 from public.notification_outbox where recipient_id = :'cust_i' and type = 'series_open'),
+  '13f: the customer calling off the week skips it - nothing posted, nobody told they "didn''t take it"'
 );
 
 -- The money rules: no visit was ever charged by the series; every hire went through accept_offer().

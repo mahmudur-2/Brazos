@@ -14,4 +14,11 @@ export type DropdownRevealProps = {
   open: boolean;
   style?: StyleProp<ViewStyle>;
   children?: ReactNode;
+  /**
+   * The Fable review: a body that GROWS its container — the + sheet's reuse strip, in a sheet docked
+   * to the bottom — opens by height as well, on the UI thread, so the container's edge travels instead
+   * of jumping. On the fallback path (no 120 Hz library) the height cannot move off the JS thread, and
+   * the body keeps the plain fade.
+   */
+  grow?: boolean;
 };

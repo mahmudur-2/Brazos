@@ -25,13 +25,15 @@ export function RepeatNote({
   const styles = stylesFor(colors);
   const active = series.status === 'active';
   const action = perspective === 'customer' ? 'Stop repeating' : 'Drop future visits';
+  const line = seriesLine(series, perspective);
   return (
     <View style={styles.row}>
       <View style={[styles.glyph, isDark && styles.glyphDark]}>
         <Ionicons name="repeat-outline" size={17} color={isDark ? colors.gold : colors.emerald} />
       </View>
       <View style={styles.copy}>
-        <Text style={[styles.text, !active && styles.textStopped]}>{seriesLine(series, perspective)}</Text>
+        <Text style={[styles.text, !active && styles.textStopped]}>{line.title}</Text>
+        {line.caption ? <Text style={styles.caption}>{line.caption}</Text> : null}
         {active && onEnd ? (
           <Pressable
             onPress={onEnd}
@@ -83,10 +85,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     textStopped: {
       color: colors.textMuted,
     },
+    // The address row's own caption (ClientJobDetail's TIMING & ADDRESS).
+    caption: {
+      fontSize: 12,
+      color: colors.textMuted,
+      lineHeight: 17,
+    },
     action: {
       alignSelf: 'flex-start',
       minHeight: 20,
       justifyContent: 'center',
+      marginTop: 2,
     },
     actionText: {
       fontSize: 13,

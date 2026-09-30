@@ -77,5 +77,6 @@ test('[static] the app: the three chips inside the progress card, before arrivin
   assert.match(screen, /'Running late\?'\} <\/Text> <View style=\{styles\.lateRow\}>/);
   assert.match(screen, /\{job\.late_minutes != null \? `\$\{clientFirstName\} was told ✓` : 'Running late\?'\}/);
   assert.match(screen, /\{LATE_CHOICES\.map\(\(minutes\) => \( <Chip key=\{minutes\} label=\{`\$\{minutes\} min`\}/);
-  assert.match(screen, /selected=\{job\.late_minutes === minutes\}/);
+  // The Fable review: chosen at the tap, not after the round trip.
+  assert.match(screen, /selected=\{\(reportingLate \?\? job\.late_minutes\) === minutes\}/);
 });

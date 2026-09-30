@@ -43,18 +43,23 @@ export function visitDayLabel(isoDate: string): string {
 }
 
 /**
- * The one line both people read on a visit of a series. The customer's: "Repeats every 2 weeks · next
- * visit Tue, Oct 21" (or, before a flexible first visit is done, when it counts from); the worker's:
- * "Repeats every 2 weeks · you get each visit first". A stopped series says so.
+ * The two lines both people read on a visit of a series — what repeats, then what it means for the
+ * reader (the Fable review: one line wrapped at the date's comma). The customer's: "Repeats every 2
+ * weeks" / "Next visit Tue, Oct 21" (or, before a flexible first visit is done, when it counts
+ * from); the worker's: "Repeats every 2 weeks" / "You get each visit first". A stopped series says
+ * so, with no second line.
  */
 export function seriesLine(
   series: Pick<JobSeries, 'cadence' | 'next_visit_date' | 'status'>,
   perspective: 'customer' | 'worker'
-): string {
-  if (series.status !== 'active') return 'Repeat stopped';
-  const every = `Repeats ${CADENCE_LABELS[series.cadence].toLowerCase()}`;
-  if (perspective === 'worker') return `${every} · you get each visit first`;
-  return series.next_visit_date
-    ? `${every} · next visit ${visitDayLabel(series.next_visit_date)}`
-    : `${every} · counts from the day this visit is done`;
+): { title: string; caption: string | null } {
+  if (series.status !== 'active') return { title: 'Repeat stopped', caption: null };
+  const title = `Repeats ${CADENCE_LABELS[series.cadence].toLowerCase()}`;
+  if (perspective === 'worker') return { title, caption: 'You get each visit first' };
+  return {
+    title,
+    caption: series.next_visit_date
+      ? `Next visit ${visitDayLabel(series.next_visit_date)}`
+      : 'Counts from the day this visit is done',
+  };
 }

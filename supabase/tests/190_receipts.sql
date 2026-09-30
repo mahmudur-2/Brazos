@@ -1,5 +1,5 @@
 -- 190_receipts.sql — idea 8's proofs: 20260930001100_receipts.sql proven on the local stack before the
--- pipeline applies it anywhere. Twenty-one assertions in six numbered groups; each says what it
+-- pipeline applies it anywhere. Twenty-three assertions in six numbered groups; each says what it
 -- proves. The email itself (supabase/functions/send-receipts) is fenced offline in
 -- tests/receipts.test.mjs.
 --
@@ -11,7 +11,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(21);
+select plan(23);
 
 select tests.create_user('i8.customer@brazos.test', 'Dana Whitfield') as customer \gset
 select tests.create_user('i8.worker@brazos.test', 'Priya Natarajan') as worker \gset
@@ -138,6 +138,26 @@ select is(
 select throws_ok(
   $$ select public.resolve_receipt(gen_random_uuid(), 'delivered') $$,
   'P0001', 'resolve_receipt: unknown status', '4e: the status is an allow-list'
+);
+-- The group 4 review: a receipt put back to wait is not claimed again at once, and a resolve never
+-- overwrites a receipt already sent.
+insert into public.receipt_outbox (payment_id, job_id, recipient_id, role)
+values (:'payment_sandbox', :'job_sandbox', :'customer', 'customer')
+returning id as waiting \gset
+select public.resolve_receipt(:'waiting', 'pending', 'email service 503', null) as put_back \gset
+select ok(
+  (select next_attempt_at > now() from public.receipt_outbox where id = :'waiting')
+  and not exists (select 1 from public.claim_receipt_batch(20) c where c.id = :'waiting'),
+  '4f: a receipt put back to wait waits - the next claim leaves it for a later run'
+);
+select public.resolve_receipt(
+  (select id from public.receipt_outbox where payment_id = :'payment' and role = 'customer'),
+  'failed', 'overlapping run', null
+) as overwrite \gset
+select is(
+  (select status from public.receipt_outbox where payment_id = :'payment' and role = 'customer'),
+  'sent',
+  '4g: a receipt already sent is never overwritten by an overlapping run'
 );
 
 -- ---------------------------------------------------------------------------

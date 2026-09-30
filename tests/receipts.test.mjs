@@ -57,18 +57,18 @@ test('[executed] the customer\'s receipt, as drawn: the band, the amount, the fa
       'Move a dresser down two flights',
       '',
       '$86.00',
-      'Released to Priya Natarajan on 29 Sep 2026, after you approved the work.',
+      'Released to Priya Natarajan on Sep 29, 2026, after you approved the work.',
       '',
       'Worker: Priya Natarajan',
       'Paid with: Visa ···· 4242',
       'Category · area: Moving · Park Slope',
-      'Hired: 12 Sep 2026',
+      'Hired: Sep 12, 2026',
       '',
       'What happened',
-      '- Posted — 10 Sep',
-      '- Hired Priya · $86 held in protection — 12 Sep',
-      '- Work marked complete — 29 Sep, 8:50 AM',
-      '- You approved · released to Priya — 29 Sep, 9:40 AM',
+      '- Posted — Sep 10',
+      '- Hired Priya · $86 held in protection — Sep 12',
+      '- Work marked complete — Sep 29, 8:50 AM',
+      '- You approved · released to Priya — Sep 29, 9:40 AM',
       '',
       'Agreed price: $80.00',
       'Protection fee: $6.00',
@@ -77,7 +77,7 @@ test('[executed] the customer\'s receipt, as drawn: the band, the amount, the fa
       'Questions? Reply to this email and quote the job number.',
     ].join('\n')
   );
-  for (const piece of ['#BZ-0186', '$86.00', 'Released to Priya Natarajan on 29 Sep 2026, after you approved the work.', 'What happened', 'Amount charged', CLOSING_LINE]) {
+  for (const piece of ['#BZ-0186', '$86.00', 'Released to Priya Natarajan on Sep 29, 2026, after you approved the work.', 'What happened', 'Amount charged', CLOSING_LINE]) {
     assert.ok(r.html.includes(escapeHtml(piece)), `the HTML says ${piece}`);
   }
   // The operator's cuts: no link into the app, no provider receipt number, no fee explanation.
@@ -96,17 +96,17 @@ test('[executed] the worker\'s receipt: "You\'ve been paid", what moved to them,
       'Move a dresser down two flights',
       '',
       '$74.00',
-      'Released to you on 29 Sep 2026, after Dana approved the work. It arrives with your next payout.',
+      'Released to you on Sep 29, 2026, after Dana approved the work. It arrives with your next payout.',
       '',
       'Customer: Dana Whitfield',
       'Category · area: Moving · Park Slope',
-      'Hired: 12 Sep 2026',
+      'Hired: Sep 12, 2026',
       '',
       'What happened',
-      '- You bid $80 — 11 Sep',
-      '- Hired · $86 held in protection — 12 Sep',
-      '- You marked the work complete — 29 Sep, 8:50 AM',
-      '- Dana approved · released to you — 29 Sep, 9:40 AM',
+      '- You bid $80 — Sep 11',
+      '- Hired · payment held in protection — Sep 12',
+      '- You marked the work complete — Sep 29, 8:50 AM',
+      '- Dana approved · released to you — Sep 29, 9:40 AM',
       '',
       'Agreed price: $80.00',
       'Brazos fee (7.5%): −$6.00',
@@ -119,16 +119,28 @@ test('[executed] the worker\'s receipt: "You\'ve been paid", what moved to them,
 
 test('[executed] honest to the ledger: an automatic release says so, a customer\'s own offer says so, nothing is invented', () => {
   const auto = buildReceipt({ ...DETAILS, release_reason: 'auto_approved' }, 'customer');
-  assert.match(auto.text, /Released to Priya Natarajan on 29 Sep 2026, after the approval window closed\./);
+  assert.match(auto.text, /Released to Priya Natarajan on Sep 29, 2026, after the approval window closed\./);
   assert.match(auto.text, /- Approved automatically · released to Priya — /);
   assert.doesNotMatch(auto.text, /Paid with/, 'no card read, no card line');
   const offered = buildReceipt({ ...DETAILS, offer_by_worker: false }, 'worker');
-  assert.match(offered.text, /- Dana offered \$80 — 11 Sep/);
+  assert.match(offered.text, /- Dana offered \$80 — Sep 11/);
+  // The Fable review: the customer's all-in charge never appears on the worker's receipt.
+  assert.doesNotMatch(buildReceipt(DETAILS, 'worker').text, /\$86/);
   const unknown = buildReceipt({ ...DETAILS, offer_by_worker: null, completed_at: null }, 'worker');
   assert.doesNotMatch(unknown.text, /You bid|offered|marked the work complete/, 'a step with no instant is left out');
   assert.throws(() => buildReceipt({ ...DETAILS, charged_cents: null }, 'customer'), /charged_cents is missing/);
   assert.throws(() => buildReceipt({ ...DETAILS, job_number: null }, 'worker'), /job_number is missing/);
   assert.throws(() => buildReceipt(DETAILS, 'someone'), /unknown side/);
+  // The group 4 review: a dispute ruled for the worker says so, never "you approved"; a reason no
+  // receipt can explain is refused; the fee's rate shows only when it is the fee charged.
+  const ruled = buildReceipt({ ...DETAILS, release_reason: 'dispute_resolved' }, 'customer');
+  assert.match(ruled.text, /after the dispute was resolved\./);
+  assert.match(ruled.text, /- Dispute resolved · released to Priya — /);
+  assert.doesNotMatch(ruled.text, /approved/);
+  assert.match(buildReceipt({ ...DETAILS, release_reason: 'dispute_resolved' }, 'worker').text, /- Dispute resolved · released to you — /);
+  assert.throws(() => buildReceipt({ ...DETAILS, release_reason: 'cancellation_fee' }, 'customer'), /release_reason/);
+  const small = buildReceipt({ ...DETAILS, agreed_cents: 1000, worker_fee_cents: 100, paid_to_worker_cents: 900, charged_cents: 1075, protection_fee_cents: 75 }, 'worker');
+  assert.match(small.text, /Brazos fee: −\$1\.00/, 'the minimum fee, with no rate beside it');
 });
 
 test('[executed] the small rules: the number, the money, the card, and every person-written string escaped', () => {
@@ -164,6 +176,12 @@ test('[static] the function: service role only, skipped and logged without the k
   const sql = read('supabase/migrations/20260930001100_receipts.sql');
   assert.match(sql, /when \(new\.status = 'released' and old\.status is distinct from 'released'\s*and new\.kind = 'job_payment' and new\.provider in \('stripe'\)\)/, 'a sandbox payment moved no money: no receipt');
   assert.match(sql, /constraint receipt_outbox_one_per_side unique \(payment_id, role\)/);
-  assert.match(sql, /if not exists \(select 1 from public\.receipt_outbox where status = 'pending' and attempts < 5\) then\s*return null;/);
-  assert.match(read('supabase/tests/190_receipts.sql'), /select plan\(21\);/);
+  assert.match(sql, /where status = 'pending' and attempts < 5 and \(next_attempt_at is null or next_attempt_at <= now\(\)\)\s*\) then\s*return null;/);
+  // The group 4 review: a retry waits (backoff), an overlapping run never overwrites 'sent', only a
+  // missing account skips, and without a sender of its own nothing is tried.
+  assert.match(sql, /next_attempt_at = case when p_status = 'pending' then now\(\) \+ make_interval\(mins => 5 \* greatest\(attempts, 1\)\) end/);
+  assert.match(sql, /where id = p_id\s*and status = 'pending';/);
+  assert.match(fn, /if \(res\.status === 404\) return null;\s*if \(!res\.ok\) throw new Error/);
+  assert.match(fn, /if \(!RECEIPT_FROM_SET && !RECEIPT_TEST_TO\) \{/);
+  assert.match(read('supabase/tests/190_receipts.sql'), /select plan\(23\);/);
 });
