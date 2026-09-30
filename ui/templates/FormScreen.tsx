@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { StepHeader, usePinnedFooterPadding, useScrollClearance } from '../primitives';
+import { StepHeader, usePillReserve, usePinnedFooterPadding, useScrollClearance } from '../primitives';
 import {
   controls,
   layout,
@@ -104,6 +104,9 @@ export function FormScreen({
   // takes it — the footer when there is one, the scroller when there is not.
   const navClearance = useScrollClearance();
   const footerPad = usePinnedFooterPadding();
+  // With the keyboard up the pill is under it: the footer's reserve for it comes off the keyboard's
+  // padding, so the pinned action sits on the keyboard.
+  const pillReserve = usePillReserve();
 
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
@@ -121,6 +124,7 @@ export function FormScreen({
           // iOS only: on Android the system already resizes the window, and
           // adding padding on top of that double-counts the keyboard.
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={-pillReserve}
         >
           <ScrollView
             style={styles.flex}

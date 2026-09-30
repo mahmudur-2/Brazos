@@ -10,12 +10,16 @@
  * animated style only reads them. Nothing crosses to JS while a finger moves: the tab is chosen on
  * release, and the loop sleeps once everything has settled.
  *
+ * A TAP IS A PAN THAT NEVER MOVED. On iOS a pan activates only once the finger moves, so a still tap
+ * ends FAILED rather than ENDED (group 0's review): FAILED chooses like a release, and only a
+ * CANCELLED touch — the system took it — chooses nothing, the bubble going back to the tab showing.
+ *
  * Only this file imports the vendor packages (the motion boundary, tests/motion120.test.mjs); the
  * body — rows, glyphs, colours, the tab-press path — is `MeltTabBar.shared.tsx`.
  */
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, State } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -156,7 +160,9 @@ function useNeckStyles(neck: SharedValue<Neck | null>, shown: SharedValue<number
 
 export function MeltTabBar(props: MeltTabBarProps) {
   const { tabs, onCreate, state } = props;
-  const slots = useMemo(() => meltSlots(tabs, onCreate != null), [tabs, onCreate]);
+  // Keyed on whether there is a +, never on the handler's identity (a tree passes it inline).
+  const hasCreate = onCreate != null;
+  const slots = useMemo(() => meltSlots(tabs, hasCreate), [tabs, hasCreate]);
   const m = useMeltMetrics(slots.length);
   const focused = focusedSlotIndex(state, slots);
   const centres = m.centres;
@@ -201,8 +207,23 @@ export function MeltTabBar(props: MeltTabBarProps) {
   const mode = useSharedValue(0); // 0 idle · 1 a tab touch · 2 the +
   const startX = useSharedValue(0);
   const quiet = useSharedValue(0);
+  // Where the bubble rests: the showing tab, for a touch that is cancelled.
+  const restX = useSharedValue(home);
+  const restIdx = useSharedValue(focused);
+  // THE SLEEP IS DECIDED ON THE UI THREAD AND DONE ON JS, so a wake can land between the two. Each
+  // wake takes a new generation; a sleep carries the generation it was decided in and is dropped if
+  // a wake has come since.
+  const generation = useSharedValue(0);
+  const generationJS = useRef(0);
+  const frameRef = useRef<{ setActive: (active: boolean) => void } | null>(null);
+  const sleep = useCallback((seen: number) => {
+    if (seen === generationJS.current) frameRef.current?.setActive(false);
+  }, []);
 
-  const frame = useFrameCallback((info) => {
+  // One worklet for the life of the bar — rebuilt only if the + moves — so the loop is never
+  // unregistered and re-registered by a render.
+  const step = useCallback((info: { timeSincePreviousFrame: number | null }) => {
+    'worklet';
     const dt = Math.min((info.timeSincePreviousFrame ?? 16.7) / 1000, 1 / 30);
     const t = target.value;
     const lead = follow.value === 1 ? SPRINGS.follow : SPRINGS.circles[0];
@@ -225,8 +246,11 @@ export function MeltTabBar(props: MeltTabBarProps) {
     shown.value = r[0];
     shownV.value = r[1];
 
-    const cs = chosen.value.slice();
-    const cv = chosenV.value.slice();
+    // Copied through locals: an array read off a shared value is a plain array on the UI runtime.
+    const chosenNow = chosen.value;
+    const chosenVNow = chosenV.value;
+    const cs = chosenNow.slice();
+    const cv = chosenVNow.slice();
     let chosenMoving = false;
     for (let i = 0; i < cs.length; i++) {
       const to = i === chosenIdx.value ? 1 : 0;
@@ -293,22 +317,26 @@ export function MeltTabBar(props: MeltTabBarProps) {
       Math.abs(pscale.value - pscaleTarget.value) < 0.001 &&
       Math.abs(pscaleV.value) < 0.01;
     quiet.value = still ? quiet.value + 1 : 0;
-    if (quiet.value === QUIET_FRAMES) runOnJS(sleep)();
-  }, false);
+    if (quiet.value === QUIET_FRAMES) runOnJS(sleep)(generation.value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plusX, sleep]);
+  const frame = useFrameCallback(step, false);
+  frameRef.current = frame;
 
-  function sleep() {
-    frame.setActive(false);
-  }
   const wake = useCallback(() => {
+    generationJS.current += 1;
+    generation.value = generationJS.current;
     quiet.value = 0;
-    if (!frame.isActive) frame.setActive(true);
-  }, [frame, quiet]);
+    frame.setActive(true);
+  }, [frame, quiet, generation]);
 
   // THE TAB FOLLOWS NAVIGATION: a route change (a tap, a notification, the + sheet's My jobs) moves
   // the bubble to its tab, or hides it while a route the bar does not draw is focused.
   const placed = useRef(false);
   useEffect(() => {
     if (mode.value === 1) return;
+    restX.value = home;
+    restIdx.value = focused;
     if (!placed.current) {
       placed.current = true;
       x0.value = x1.value = x2.value = target.value = home;
@@ -321,7 +349,7 @@ export function MeltTabBar(props: MeltTabBarProps) {
     chosenIdx.value = focused;
     shownTarget.value = focused >= 0 ? 1 : 0;
     wake();
-  }, [home, focused, wake, mode, x0, x1, x2, target, shown, shownTarget, chosenIdx, chosen]);
+  }, [home, focused, wake, mode, x0, x1, x2, target, shown, shownTarget, chosenIdx, chosen, restX, restIdx]);
 
   // JS entry points, reached only on release.
   const live = useRef({ props, slots });
@@ -371,20 +399,29 @@ export function MeltTabBar(props: MeltTabBarProps) {
         chosenIdx.value = tabSlots[nearestTab(target.value)];
       })
       .onFinalize((e, success) => {
+        // A still tap never activates a pan on iOS and ends FAILED: it chooses all the same.
+        const released = success || e.state === State.FAILED;
         if (mode.value === 2) {
           pscaleTarget.value = 1;
-          if (success && Math.abs(e.x - plusX) <= PLUS_TOUCH) runOnJS(create)();
+          if (released && Math.abs(e.x - plusX) <= PLUS_TOUCH) runOnJS(create)();
         } else if (mode.value === 1) {
           follow.value = 0;
           swellTarget.value = 0;
-          const n = nearestTab(target.value);
-          target.value = tabCentres[n];
-          chosenIdx.value = tabSlots[n];
-          if (success) runOnJS(select)(tabSlots[n]);
+          if (released) {
+            const n = nearestTab(target.value);
+            target.value = tabCentres[n];
+            chosenIdx.value = tabSlots[n];
+            runOnJS(select)(tabSlots[n]);
+          } else {
+            // Cancelled: nothing was chosen, so the bubble goes back to the tab that is showing.
+            target.value = restX.value;
+            chosenIdx.value = restIdx.value;
+            shownTarget.value = restIdx.value >= 0 ? 1 : 0;
+          }
         }
         mode.value = 0;
       });
-  }, [tabCentres, tabSlots, plusX, mode, pscaleTarget, startX, swellTarget, target, chosenIdx, shownTarget, follow, wake, create, select]);
+  }, [tabCentres, tabSlots, plusX, mode, pscaleTarget, startX, swellTarget, target, chosenIdx, shownTarget, follow, wake, create, select, restX, restIdx]);
 
   // THE PIECES' MOTIONS — each only reads what the loop wrote.
   const { iconStyles, labelStyles } = useChosenStyles(chosen);
@@ -455,6 +492,8 @@ export function MeltTabBar(props: MeltTabBarProps) {
           {plusX >= 0 ? (
             <Animated.View
               pointerEvents="none"
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
               style={[styles.plus, { left: plusX - PLUS_R, backgroundColor: m.bubble }, plusStyle]}
             >
               <PlusGlyph color={m.ink} />

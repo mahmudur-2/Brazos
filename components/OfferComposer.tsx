@@ -36,7 +36,7 @@ import {
 } from '../lib/offers';
 import { quoteJobPrice, workerTakeLine, type JobPriceQuote } from '../lib/payments';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
-import { usePinnedFooterPadding } from '../ui/primitives';
+import { usePillReserve, usePinnedFooterPadding } from '../ui/primitives';
 
 /** How long after the last keystroke the take-home quote is asked for. */
 const TAKE_LINE_DEBOUNCE_MS = 400;
@@ -147,6 +147,9 @@ export function OfferComposer({
   layout = 'inline',
 }: OfferComposerProps) {
   const footerPad = usePinnedFooterPadding();
+  // With the keyboard up the pill is under it, so the footer's reserve for the pill comes off the
+  // keyboard's padding — Send sits on the keyboard, as M-33 pinned it.
+  const pillReserve = usePillReserve();
   const { palette: colors } = useThemeColors();
   const palette = paletteProp ?? colors;
   const styles = stylesFor(colors);
@@ -518,6 +521,7 @@ export function OfferComposer({
       <KeyboardAvoidingView
         style={styles.screen}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={-pillReserve}
       >
         <ScrollView
           contentContainerStyle={styles.screenContent}

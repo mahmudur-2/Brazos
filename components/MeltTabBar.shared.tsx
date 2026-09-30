@@ -11,7 +11,7 @@
  * out, with no mask library. A cut-out does the reverse: a circle of the pill's own ground and the
  * grey row, carving the concave waist of a neck.
  */
-import type { ComponentProps, ComponentType } from 'react';
+import { useMemo, type ComponentProps, type ComponentType } from 'react';
 import { Image, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CommonActions } from '@react-navigation/native';
@@ -81,9 +81,12 @@ export function useMeltMetrics(count: number) {
   const insets = useSafeAreaInsets();
   const { palette, isDark } = useThemeColors();
   const pillWidth = width - 2 * meltBar.sideInset;
+  // One array per geometry, so what is built from it (the fast path's gesture) is not rebuilt by
+  // every render.
+  const centres = useMemo(() => slotCentres(pillWidth, count), [pillWidth, count]);
   return {
     pillWidth,
-    centres: slotCentres(pillWidth, count),
+    centres,
     bottom: pillBottomOffset(insets.bottom, meltBar.bottomTuck, meltBar.bottomMin),
     isDark,
     bubble: palette.emerald,
@@ -153,8 +156,15 @@ export function MeltRow({
   labelStyles: readonly AnyStyle[];
 }) {
   const styles = stylesFor();
+  // Drawn up to thirteen times over (the rest row, the copies inside the bubbles and the cut-outs):
+  // pictures only — VoiceOver reads the touch layer's one element per tab.
   return (
-    <View pointerEvents="none" style={[styles.row, { width }]}>
+    <View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[styles.row, { width }]}
+    >
       {slots.map((slot, i) =>
         slot.kind === 'create' ? null : (
           <View key={slot.key} style={[styles.column, { left: centres[i] - meltBar.column / 2 }]}>

@@ -39,7 +39,9 @@ const LEAD = meltBar.bubble[0];
 
 function MeltTabBarFallback(props: MeltTabBarProps) {
   const { tabs, onCreate, state } = props;
-  const slots = useMemo(() => meltSlots(tabs, onCreate != null), [tabs, onCreate]);
+  // Keyed on whether there is a +, never on the handler's identity (a tree passes it inline).
+  const hasCreate = onCreate != null;
+  const slots = useMemo(() => meltSlots(tabs, hasCreate), [tabs, hasCreate]);
   const m = useMeltMetrics(slots.length);
   const reduced = useReducedMotion() === true;
   const focused = focusedSlotIndex(state, slots);
@@ -133,6 +135,8 @@ function MeltTabBarFallback(props: MeltTabBarProps) {
         {createIndex >= 0 ? (
           <Animated.View
             pointerEvents="none"
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
             style={[
               styles.plus,
               { left: m.centres[createIndex] - meltBar.plus / 2, backgroundColor: m.bubble, transform: [{ scale: plusScale }] },

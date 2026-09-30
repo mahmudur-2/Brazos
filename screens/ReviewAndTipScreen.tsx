@@ -18,7 +18,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ReviewSection } from '../components/ReviewSection';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ScreenStateView } from '../ui/templates/ScreenStates';
-import { usePinnedFooterPadding } from '../ui/primitives';
+import { usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
@@ -93,6 +93,9 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 export function ReviewAndTipScreen() {
   const footerPad = usePinnedFooterPadding();
+  // Until the review is sent there is no done bar, so the scroller's last control (the tip's Send)
+  // must end above the floating tab bar; once it is sent, the done bar clears it.
+  const navClearance = useScrollClearance();
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const emeraldColors = emeraldColorsFor(colors);
@@ -487,7 +490,7 @@ export function ReviewAndTipScreen() {
         >
           <ScrollView
             ref={scrollRef}
-            contentContainerStyle={styles.content}
+            contentContainerStyle={[styles.content, !reviewed && { paddingBottom: Math.max(spacing.xxl, navClearance) }]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
