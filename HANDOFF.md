@@ -1,8 +1,8 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-30 (THE VIEWER'S PREP FIXED, AND THE TAB BAR EXPLORED — a one-line run and this
-session's side work; its section, the first below — then the DESIGN LOOP section, still the current
-design work and the next session's start, BUILD IT, the LUX-LIST-2 run's, LUX-LIST-64's, the NEXT
+WRITTEN: 2026-09-30 (BUILD RUN — planned, waiting for "build"; its section, the first below, is the
+next session's start — then THE VIEWER'S PREP FIXED, AND THE TAB BAR EXPLORED, a one-line run and
+side work from another session the same day — then the DESIGN LOOP section, BUILD IT, the LUX-LIST-2 run's, LUX-LIST-64's, the NEXT
 SESSION primer of 2026-09-27 (the pipeline, the fences and the traps), THE OPERATOR'S REVIEW OF THE
 LUX AFTER, THE LUX REMAKE, the brief's own section, THE REFRESH (2026-09-26), the sign-in records,
 the WebP run's, the Welcome records, the mode switch's, the Lux drawing run's, the eighteen-item
@@ -10,6 +10,42 @@ run's and the sittings before them, unchanged).
 
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
+
+## BUILD RUN — planned, waiting for the word "build" (2026-09-30, the DESIGN-LOOP-2 sitting; docs only, nothing in the app changed)
+
+**Start here.** This supersedes the next section's "start from the DESIGN LOOP section": the
+design loop turned into ONE autonomous build run, planned with the operator popup by popup (every
+answer in `docs/dispatch/LUX-LIST-3.md` §7, in their words). The run's brief is
+`docs/dispatch/BUILD-RUN.md`; the operator's pictures of it are `.shots/refresh/boards/v1-build.html`
+(four panels: the v1 list with every pick placed, the run's steps, the plan, repeat jobs).
+NOTHING IS BUILT: the standing rule holds until the operator says "build".
+
+**Decided.** Every pick is ruled into v1 — `docs/DECISIONS.md` 2026-09-30 (1) and (4), eight new
+lines in `docs/SCOPE.md`. The run carries C, F, 2, 4, 5, 6, 7, 8, 9, 10, 12, 14, 18, 20, 23, plus
+the Melt-through tab bar the next section describes (its brief copied, tracked, to
+`docs/dispatch/MELT-TAB-BAR.md`; FIRST in the order) and a smoothness pass over the five shared
+motions. Also: no stop for the operator to look (the run reviews its own renders and fixes until
+it finds nothing); Opus 5.5 at max builds alone, helpers review lean, Fable reviews before each
+ship; the receipt is Brazos's own email; the add-ons for 9 and 20 are approved; the run starts
+the new Beta build itself; quiet hours run midnight to 6 am, OFF by default; the run writes 23's
+questions; repeat jobs as drawn (`DECISIONS` (5)); Sign in with Apple "Not now".
+
+**Found.** Not the cause of the un-smooth motion the operator reported on the Beta: the iPhone
+120 Hz permission (Expo's template sets `CADisableMinimumFrameDurationOnPhone`) or the binary
+(Reanimated, worklets and gesture-handler predate the Beta's `d2ccc7f`). The cause: only eight
+`*.motion120.tsx` siblings use the library; 42 files animate with core `Animated`, and some state
+changes only snap. The Beta is the `preview` profile, internal distribution — installed from a
+link, not TestFlight.
+
+**Waiting on the operator.** (1) Helpers: set the user variable `BRAZOS_EVIDENCE` to
+`images subagents` (the one-line command given in chat), then fully restart the Claude app.
+(2) Optional before the run: "what's wrong" item 8 onwards; the animations that feel worst.
+(3) The word "build". After the run: the email service's key and Apple's push key on staging.
+
+**Notes.** Docker Desktop was off at planning; the run starts it. This sitting's commit is docs
+only: `docs/DECISIONS.md`, `docs/SCOPE.md`, `docs/dispatch/LUX-LIST-3.md`,
+`docs/dispatch/MELT-TAB-BAR.md`, `docs/dispatch/BUILD-RUN.md` and this file. The operator's
+uncommitted lux mockup files are untouched.
 
 ## THE VIEWER'S PREP FIXED, AND THE TAB BAR EXPLORED (2026-09-30, one session; nothing in the app changed)
 

@@ -369,3 +369,126 @@ AGAIN, the last word wins: version 2, plain rows in the page (like the Profile r
 card. The full list keeps only that version.
 Item 7 (2026-09-30, a screenshot of idea 25 with "remove this scratch") → idea 25 DROPPED.
 PICKED now: 1, 2, 4, 5, 6, 7, 8, 9, 10, 12, 14, 18, 20, 23. Item 8 onwards: awaited.
+
+Next sitting (2026-09-30, the DESIGN-LOOP-2 session), the first popup ("Next item on your list?"),
+answered by typing, their words: "Do not build anything until I say to do it and for now please
+refer to file:///C:/Users/mdmah/BRAZOS/.shots/refresh/index.html#signin-phone (to see the current
+info on how the app looks rn) or if you can access my OTA (whichever is faster and more accurate
+to see) Im still gonna list more things (I have adhd so I need this process to be done as fast as
+possible)" → NOT an item; two standing instructions. (a) The build rule restated: nothing is built
+until they say so. (b) The reference for "how the app looks now" is the refresh viewer's After
+column (`.shots/refresh/index.html`, the shots under `.shots/refresh/shots/after-*`), which is the
+same code as the app at `c508b09`; the OTA on the phone is not reachable from a run. The list is
+still open: item 8 onwards awaited, typed by the operator.
+
+Asked (2026-09-30, their words): "Right now if you were to build everything out flawlessly and
+making sure everything works with no bugs.. how long will this take to build into [the refresh
+viewer] as well as the final OTA publish so i can view from my phone too?" → answered: about 2–3
+weeks in four batches; 1, 9 and 20 need new add-ons and so a new TestFlight build, not an OTA.
+Then: "Why cant all of this be done besides the ones that need new TestFlight build be built right
+now in 1 full autonomous run ?" → answered: it can — one run, no stops, ending with the OTA; it
+waits on the word "build", the end of the list, and three answers; 14 and 8 stay out of that run.
+The three-question popup, their answers:
+- "Put the run's picks on your v1 list?" → typed "whats v1 list?" — explained (`docs/SCOPE.md`,
+  the list of what v1 may have) and re-asked.
+- "Quiet hours (7): how should it start for each person?" → typed "12pm - 6am" — the hours change
+  from the drawn 10 pm–7 am; read as midnight to 6 am and re-asked to confirm, with the default
+  (drawn ON) still open.
+- "Category questions (23): may I write the 2 to 4 questions for each category myself?" → "Yes,
+  you write them (Recommended)" — DECIDED: the run writes the questions; the operator sees them on
+  the phone and may change any afterwards.
+The re-ask popup, their answers:
+- "Add your new picks to the v1 list, so the run is allowed to build them?" → typed "Dont build
+  yet.... I wanna know whats in v1 list... first..... then I wanna know exactly the process you're
+  gonna use to build..." → NOT answered; shown the v1 list with every pick placed on it, then the
+  build run step by step (one picture each, `.shots/refresh/boards/v1-build.html`).
+- "Quiet hours, midnight to 6 am (your "12pm - 6am"). Should it be on for everyone from the
+  start?" → "Off until turned on" — DECIDED: idea 7 is midnight to 6 am, OFF until each person
+  switches it on (the drawn default was ON, 10 pm–7 am; both changed).
+The two pictures sent (the v1 list with every pick placed: green = fits a line — C, F, 1, 2, 23,
+10, 6, 7; purple = needs the operator's OK — 4, 5, 12, 18, 8, 9, 20, 14; and the build run in eight
+steps with one optional stop before the OTA). The follow-up popup — "Add 4, 5, 12, 18 to the v1
+list?" and "Stop once before the OTA?" — was DISMISSED ("do not proceed, wait"): both OPEN.
+Then typed, with a crop of the picture's "Optional stop: you look" step, their words: "can we skip
+this part.... where i look... and rather you look yourself.... and fix any mistakes /
+bugs....... then when its flawless you keep going until finished?" → DECIDED: no operator stop in
+the build run. The run reviews its own renders of every changed screen (dark and light), fixes
+every mistake it finds, re-checks until it finds none, then continues without stopping to the
+OTA. The picture's step 4 now reads "I look, not you". Still OPEN: adding 4, 5, 12, 18 to the v1
+list; the word "build" has not been said.
+Asked "so to build it the best way... in 1 autonomous run... how are you gonna do it?" → shown the
+plan picture (`v1-build.html`, third panel: before it starts, the order C F 10 4 / 23 18 2 12 /
+5 7 6, the per-change loop, the last sweep). The popup, their answers:
+- "OK to add 4, 5, 12 and 18 to your v1 list?" → "Yes, add them (Recommended)" — DONE:
+  `docs/DECISIONS.md` 2026-09-30 entries (1)–(3) and four lines in `docs/SCOPE.md` "In v1".
+- "Turn helpers on for the run?" → typed "Yes but efficiently run it so dont waste tokens.... (and
+  i wanna use opus 5.5 max for this not fable..., if possible u can use fable at the last... to
+  review everything and make sure everything is smooth / consistent.... etc automatically tho (if
+  its not possible let me know)" → DECIDED: helpers on, few and lean — the build is done by the
+  main chat alone on Opus 5.5 at max effort; three fresh-eyes checks (one per group, Opus, given
+  only the diff and the spec) and ONE final review of everything by a Fable helper, automatic,
+  before anything ships. Possible: each helper takes its own model. Needs the operator to allow
+  helpers (the evidence guard: `BRAZOS_EVIDENCE` must contain `subagents`), which only they can set.
+- "Which model should run the build?" → typed "can it smart switch between models?" → answered:
+  the chat cannot switch its own model (the app refuses a session re-pricing its own turns; the
+  operator picks it in the model menu), but each helper runs on the model it is given — so Opus
+  5.5 builds and Fable reviews at the end, with no switching by hand.
+Then (2026-09-30), a screenshot of the navbar chat (its pages "Melt Tab Bar Handoff", "Lifted",
+"Glowing" and "Melt-Through Tab Bar") and the path `.shots/refresh/navbar/handoff-brief.full.md`,
+their words: "last chat i changed the navbar... So can we add this to the list too for fully
+autonomous?" → ADDED to the one build run as its own milestone, and FIRST in the order, because
+every tab screen sits on the bar (the floating pill changes every tab screen's bottom clearance,
+so the other changes are built and checked on the final layout). The brief is copied, verbatim
+under a one-line header, to `docs/dispatch/MELT-TAB-BAR.md` (tracked); the run follows it as
+written and compares against that chat's handoff page. App code only: no database, no new package
+(Reanimated, gesture-handler and expo-image are in `package.json` since 2026-08-23/25, before the
+Beta's native build; the bar's 120 Hz path sits behind `lib/motion120` with a built-in `Animated`
+fallback, so an OTA is safe either way). The feel is a phone-only check.
+Then (2026-09-30), their words: "I have the animations / libarary for the 120hz feel.... thats 1
+thing i forgot to tell u .... in the new recent ota build alot of the animations arent smooth...
+or 120hz feel.... idk why it wasnt implemented...." → CHECKED, read from the code: (a) the iPhone's
+120 Hz permission is not the cause — the app has no `ios/` folder, so its Info.plist comes from
+Expo's template, whose default (`@expo/config-plugins` `getInfoPlistTemplate()`) carries
+`CADisableMinimumFrameDurationOnPhone: true`; (b) the smooth library IS in the binary on the phone
+(Reanimated and worklets since 2026-08-23, gesture-handler too; the Beta build is `d2ccc7f`,
+2026-08-29); (c) the builds barely used it — eight `*.motion120.tsx` siblings (ChipCheck, DropMenu,
+KeyboardRisingColumn, ModeTransitionOverlay, PeekSheet, RimLight, SuccessMark, SwipeableRow),
+while 42 files animate with core `Animated`, and `docs/dispatch/MOTION-INVENTORY.md`'s "Nothing"
+tier lists what only snaps (chip colours, rows appearing, a Modal's own slide). Why: the motion
+boundary makes every Reanimated animation carry a native-driver twin, so the Lux builds took the
+cheap route (the remake's ruling 14, "the cheap ones"). The shared pieces most screens move
+through: `hooks/useSheetPresence`, `useModalPresence`, `useDropdownPresence`, `usePressFeedback`,
+`useEntrance`, `ui/primitives/Sheet.tsx`. Offered: a smoothness pass in the run.
+The popup "How far should the smoothness pass go?" → "Shared pieces + my worst (Recommended)" —
+DECIDED: the run moves the five shared motions (sheets, pop-ups, dropdowns, card presses, screen
+entrances) onto the smooth library through the motion boundary (each with its native-driver
+twin), plus any animation the operator names as feeling worst; everything new in the run is
+built smooth-first. It runs early, right after the tab bar, so the later changes inherit it.
+The operator's "worst" list: awaited (they may type it any time before "build").
+Then (2026-09-30), with a crop of the v1-list picture's "Not on the list · needs your OK" box
+(4, 5, 12, 18, 8, 9, 20, 14), their words: "btw add all of them to the list for run too (im okay
+with it)" → DONE for the v1 list: `docs/DECISIONS.md` 2026-09-30 entry (4) and four more lines in
+`docs/SCOPE.md` (8 the receipt, 9 the lock-screen live card, 20 hire from the push, 14 repeat
+jobs). For the run: 14 and 8 can ride the same run and OTA (8 once its sender is chosen); 9 and 20
+need new native add-ons (to be approved) and so a new Beta build, a fresh install — the Beta is
+the `preview` profile, internal distribution (`eas.json`), installed from a link, not TestFlight,
+so the earlier "TestFlight build" wording meant this; 9 also needs Apple's push key on the
+staging server, which only the operator can place.
+The popup, their answers: "9 … and 20 … need new add-ons inside the app. Approve adding them?" →
+"Yes, approve them (Recommended)" — APPROVED: a Live Activities add-on, and a background add-on if
+Confirm needs one to work without opening the app (flagged here, so the run may add them). "Who
+sends the receipt (8)?" → "Brazos's own email (Recommended)" — DECIDED, closing the open receipt
+question: Brazos's own email as drawn, with the timeline; it needs an email account the operator
+creates (its key placed on staging by the operator), may go to the operator's own inbox while
+testing, and needs a domain before real customers; until the key exists the send stays off.
+"When the run finishes, may it start the new Beta build itself?" → "Yes, the run starts it
+(Recommended)" — APPROVED: the run ends by starting `eas build --platform ios --profile preview`
+(the Beta's profile), and the operator installs it from the link.
+Shown the updated plan (groups 0–5; OTA 1 after group 4, the new Beta build after group 5), the
+run's steps (now ten, ending with the new Beta build) and panel 4, repeat jobs visit by visit.
+The popup, their answers: "Repeat jobs (14): build it the way picture 3 shows?" → "Yes, like
+picture 3 (Recommended)" — DECIDED (`docs/DECISIONS.md` 2026-09-30 entry (5)). "Add Sign in with
+Apple (1) to the run too?" → "Not now" — 1 stays out of the run. "If 1 is added: after someone
+signs in with Apple, ask for their phone number next?" → "Skip it for Apple users" — recorded for
+the run that builds 1, which confirms it first (it departs from decision I for that door).
+The run's written brief: `docs/dispatch/BUILD-RUN.md`.

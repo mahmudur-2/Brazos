@@ -14,6 +14,14 @@ Anything not listed goes to `docs/BACKLOG.md` under v1.2 — it is not built bef
 - Worker discovery with radius and default-on nearby alerts
 - Account deletion; report / block
 - Posted-price choice at posting: the customer chooses between a posted price and open bids (ruled in 2026-09-05 - docs/DECISIONS.md, entry (2) of that date; not Instant Book - the customer still accepts and funds)
+- Undo instead of a confirm box when archiving, muting or marking a chat unread: a five-second Undo; money and hiring keep their confirm (ruled in 2026-09-30 - docs/DECISIONS.md, entry (1) of that date; the only change those built-already features get)
+- Running late, one tap: the worker's 10 / 20 / 30 min chips tell the customer and move the arrival time (ruled in 2026-09-30 - docs/DECISIONS.md, entry (1) of that date)
+- Need it today: a posting toggle, off by default; on, nearby workers get an instant alert and the job card shows a Today pill (ruled in 2026-09-30 - docs/DECISIONS.md, entry (1) of that date)
+- Dictation into the Post-a-job title and description: two mics, on-device speech-to-text filling the field in place; not voice messages (ruled in 2026-09-30 - docs/DECISIONS.md, entry (1) of that date)
+- The receipt: after a release, the customer and the worker each get a receipt with a short job number and the What-happened timeline; the sender is decided separately (ruled in 2026-09-30 - docs/DECISIONS.md, entry (4) of that date)
+- The lock-screen live card: the worker's stage taps and the arrival time on the customer's lock screen; it needs a new TestFlight build (ruled in 2026-09-30 - docs/DECISIONS.md, entry (4) of that date)
+- Hire from the push: Accept & pay on a bid's push, confirmed in place, paid with a card the customer chose to save (opt-in at Checkout and in Payment methods, removable there), through accept_offer() and the Checkout payment path; no new money rule (ruled in 2026-09-30 - docs/DECISIONS.md, entry (4) of that date)
+- Repeat jobs: post once; the same worker gets first refusal on each visit; the customer still approves and pays each visit; the money rules stay; a repeating job, not a calendar (ruled in 2026-09-30 - docs/DECISIONS.md, entry (4) of that date)
 
 ## Not in v1 (do not build before ten real users ask)
 Voice messages · live location · document sharing · translation · hidden / archived / muted chats · Android · web · design studio · second theme · second font · instant payouts · calendars · AI features
