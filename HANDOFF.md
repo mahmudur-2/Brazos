@@ -33,6 +33,30 @@ the operator picked 1, 2 (after a picture), 3, 4, 5, 6, 7, 8 (show the email for
 visually), 10, 12, 14 for the next list, and asked for a better second round; `LUX-LIST-3.md` §7.
 `npm run verify` exit 0 (`.shots/refresh/boards/_verify.log`, 40 s) before the record commit.
 
+**The rest of the sitting (2026-09-29 → 30), all in `LUX-LIST-3.md` §4 and §7, popups 4–14.** The
+operator picked ideas 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 18, 20, 23, 25 (21 "not now"; 11, 13,
+15, 16, 17, 19, 22, 24 off), and reshaped several in their own words — 2 became "Reuse a past job", a
+closed row in the + sheet whose chevron opens a sliding strip of compact cards; 18 became two mic
+icons; 20 became a push confirmed in place that then turns into the live card of 9, with a saved
+card opt-in at Checkout and in Payment methods; 23 became the app's own tiles with a questions
+dropdown and the page scrolling itself (three looks offered, none picked yet); 8 became a
+Brazos-made receipt with the What-happened timeline and category · area, nothing under "Amount
+charged" but the reply line, plus the worker's receipt. Boards 4–10 and two ideas pages were
+published (URLs in `LUX-LIST-3.md` §2). The closing deliverable is ONE local file, not an
+artifact, at the operator's request: `.shots/refresh/boards/full-list.html` (built from
+`full-list.tpl.html` by `inline.mjs`), every decision with today beside the change playing on the
+real screens. NOTHING IS BUILT: the standing rule from popup 5 holds until the operator says
+"build" in so many words. 23's dropdown look was decided last (popup 15): the lit card. Two things
+were left open when the operator dismissed the final popup and asked to wait: "something is wrong"
+with the full-list file (undescribed) and "change something" on the list (undescribed). The next
+session starts by asking both, then splits the file into lighter pages if it is the size.
+
+**Recipes added.** `boards/inline.mjs` inlines the Now shots (1x JPEG via jimp-compact) and the
+Ionicons TTF into a single HTML; `boards/look.mjs` accepts `"<selector>@<nth>"` clicks
+(force-clicked) and prints page errors; `boards/probe*.mjs` are throwaway DOM probes. The app's
+browser pane renders a local HTML as a data: snapshot, so relative images never load there — inline
+them, or render with playwright and read the PNG.
+
 **Recipes that worked.** The `.txt` beside each shot is an element map in 1x CSS px (`top x left
 w×h text {style}`), enough to place overlays without opening the PNG; `boards/sample.mjs` (pngjs)
 samples exact colours; `boards/look.mjs` renders a board from disk with the harness's playwright and
