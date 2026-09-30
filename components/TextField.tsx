@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
-import { metricStyles, radius, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import { fieldAccessory, metricStyles, radius, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 import { FocusRing } from './FocusRing';
 
 type TextFieldProps = {
@@ -19,6 +19,12 @@ type TextFieldProps = {
    *  light token's green) — "Phone number" is said that way everywhere. */
   /** 2026-09-29 (LUX-LIST-2 #4): 'gold' — the kept-gold labels (light #86641A). */
   labelTone?: 'eyebrow' | 'accent' | 'gold';
+  /**
+   * 2026-09-30 (idea 18): a control drawn INSIDE the field — at its far right on a one-line field,
+   * in the bottom-right corner of a multi-line box — with the text kept clear of it
+   * (ui/tokens.ts `fieldAccessory`). Post a job's dictation mics.
+   */
+  accessory?: ReactNode;
 } & TextInputProps;
 
 /**
@@ -66,6 +72,7 @@ export function TextField({
   hint,
   palette: paletteProp,
   labelTone = 'eyebrow',
+  accessory,
   style,
   multiline,
   onFocus,
@@ -113,6 +120,8 @@ export function TextField({
           },
           error && { borderColor: palette.danger },
           style,
+          // The room the inside control needs, whatever the caller's own padding.
+          accessory ? (multiline ? styles.roomBottom : styles.roomEnd) : null,
         ]}
         placeholderTextColor={palette.textSubtle}
         autoCapitalize="none"
@@ -123,6 +132,11 @@ export function TextField({
         color={error ? palette.danger : palette.emerald}
         radius={multiline ? radius.lg : radius.pill}
       />
+      {accessory ? (
+        <View pointerEvents="box-none" style={[styles.accessory, multiline ? styles.accessoryCorner : styles.accessoryEnd]}>
+          {accessory}
+        </View>
+      ) : null}
       </View>
       {error ? <Text style={[styles.error, { color: palette.danger }]}>{error}</Text> : null}
     </View>
@@ -163,6 +177,25 @@ const stylesFor = metricStyles(() => StyleSheet.create({
   },
   inputMultiline: {
     borderRadius: radius.lg,
+  },
+  roomEnd: {
+    paddingRight: fieldAccessory.roomEnd,
+  },
+  roomBottom: {
+    paddingBottom: fieldAccessory.roomBottom,
+  },
+  accessory: {
+    position: 'absolute',
+    right: fieldAccessory.inset,
+  },
+  // Centred on the one-line field, whatever its height.
+  accessoryEnd: {
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
+  accessoryCorner: {
+    bottom: fieldAccessory.inset,
   },
   error: {
     fontSize: 12,

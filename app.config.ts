@@ -152,7 +152,7 @@ export default (_context: ConfigContext): ExpoConfig => ({
         cameraPermission:
           'Brazos uses the camera to take photos and videos of jobs, completed work, and your profile.',
         microphonePermission:
-          'Brazos uses the microphone to record voice messages and job videos.',
+          'Brazos uses your microphone only while you search or dictate by voice, record a voice message or film a job video, and stops listening when you finish.',
       },
     ],
     [
@@ -166,7 +166,7 @@ export default (_context: ConfigContext): ExpoConfig => ({
       'expo-audio',
       {
         microphonePermission:
-          'Brazos uses the microphone to record voice messages and job videos.',
+          'Brazos uses your microphone only while you search or dictate by voice, record a voice message or film a job video, and stops listening when you finish.',
       },
     ],
     [
@@ -175,13 +175,16 @@ export default (_context: ConfigContext): ExpoConfig => ({
         color: '#1F4D3A',
       },
     ],
+    // 2026-09-30 (the build run, idea 18): expo-image-picker, expo-audio and this plugin each write
+    // NSMicrophoneUsageDescription and one wins at prebuild, so all three carry the one complete
+    // sentence — search, dictation into Post a job, voice messages and job videos.
     [
       'expo-speech-recognition',
       {
         microphonePermission:
-          'Brazos uses your microphone only while you are searching by voice, and stops listening when you finish speaking.',
+          'Brazos uses your microphone only while you search or dictate by voice, record a voice message or film a job video, and stops listening when you finish.',
         speechRecognitionPermission:
-          'Speech is recognized on your device to turn what you say into a search. Nothing is sent to a server.',
+          'Speech is recognized on your device to turn what you say into a search, or into the words of a job you post. Nothing is sent to a server.',
       },
     ],
     'expo-video',

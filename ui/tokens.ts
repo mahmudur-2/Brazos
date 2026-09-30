@@ -1531,6 +1531,22 @@ export const meltBar = {
 } as const;
 
 /**
+ * 2026-09-30 (the build run, idea 18) — A CONTROL INSIDE A TEXT FIELD (the dictation mic): a
+ * `size` disc `inset` in from the field's right edge — centred on a one-line field, in the
+ * bottom-right corner of a multi-line box — and the room the text leaves for it (`roomEnd` on the
+ * right of a line, `roomBottom` under a box). While it listens a `halo`-wide ring pulses round it.
+ */
+export const fieldAccessory = {
+  size: 26,
+  glyph: 14,
+  inset: 10,
+  roomEnd: 48,
+  roomBottom: 40,
+  halo: 6,
+  pulseMs: 1200,
+} as const;
+
+/**
  * 2026-09-30 (the build run, idea 23) — POST A JOB'S CATEGORY TILES: Home's Popular-services tile
  * (components/ServiceTileRow.tsx — the same measured square, corner, glyph and name) with a chosen
  * state. The chosen tile grows by `slot` to make room for a check box at its top-left, and a small

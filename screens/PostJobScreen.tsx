@@ -27,6 +27,7 @@ import { Card } from '../components/Card';
 import { CategoryTileRow } from '../components/CategoryTileRow';
 import { Chip } from '../components/Chip';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useDictation } from '../components/DictationMic';
 import { EyeOffIcon } from '../components/EyeOffIcon';
 import { JobLivePage } from '../components/JobLivePage';
 import { JobSummaryCard, type SummaryTarget } from '../components/JobSummaryCard';
@@ -75,6 +76,7 @@ import { priceGuidanceLines } from '../lib/priceGuidance';
 import { PRICE_GUIDANCE } from '../lib/featureFlags';
 import { descriptionCharsNeeded } from '../lib/validation';
 import { answerLine, withAnswerLine, type PostAnswers } from '../lib/postQuestions';
+import { dictateBeforeLine } from '../lib/dictation';
 import { createDirectOffer } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
@@ -407,6 +409,16 @@ export function PostJobScreen() {
   const [questionsOpen, setQuestionsOpen] = useState(false);
   const [answers, setAnswers] = useState<PostAnswers>({});
   const [answersLine, setAnswersLine] = useState('');
+  // 2026-09-30 (idea 18) — the two mics: on-device dictation into the title and the description,
+  // in place. The description's words go above idea 23's answers line, which stays its last line.
+  const titleDictation = useDictation({ value: title, onChangeText: setTitle, maxLength: MAX_TITLE_LENGTH, field: 'title' });
+  const descriptionDictation = useDictation({
+    value: description,
+    onChangeText: setDescription,
+    maxLength: MAX_DESCRIPTION_LENGTH,
+    field: 'description',
+    join: (base, spoken) => dictateBeforeLine(base, answersLine, spoken, MAX_DESCRIPTION_LENGTH),
+  });
   const questionsRef = useRef<View>(null);
   // The reveal waits one frame for the opened questions' layout — a frame, never a timer.
   const revealFrameRef = useRef<number | null>(null);
@@ -1493,8 +1505,9 @@ export function PostJobScreen() {
               <TextField
                 palette={emeraldColors}
                 label="Title"
-                value={title}
+                value={titleDictation.value}
                 onChangeText={setTitle}
+                accessory={titleDictation.accessory}
                 // M-7 — a required field says so, in the slot its count
                 // already sits in.
                 hint={`Required · ${title.length}/${MAX_TITLE_LENGTH}`}
@@ -1507,8 +1520,9 @@ export function PostJobScreen() {
               <TextField
                 palette={emeraldColors}
                 label="Description"
-                value={description}
+                value={descriptionDictation.value}
                 onChangeText={setDescription}
+                accessory={descriptionDictation.accessory}
                 hint={`Required · ${description.length}/${MAX_DESCRIPTION_LENGTH}`}
                 maxLength={MAX_DESCRIPTION_LENGTH}
                 placeholder="Describe what you need done…"

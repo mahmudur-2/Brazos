@@ -9,8 +9,8 @@
  * The two iOS usage strings in app.json are a behavioural contract this
  * boundary enforces, not copy:
  *
- *   - "…only while you are searching by voice, and stops listening when you
- *     finish speaking." → recognition runs only inside a bounded tap session:
+ *   - "…only while you search or dictate by voice, … and stops listening when you
+ *     finish." → recognition runs only inside a bounded tap session:
  *     one tap starts it, and it ends on ~3s of silence after speech has
  *     begun, a hard 30s ceiling, a second tap, focus loss, backgrounding, or
  *     unmount — never an open-ended stream.
