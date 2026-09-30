@@ -251,8 +251,10 @@ appId: app.brazos.mobile.preview
     direction: DOWN
     timeout: 30000
 - tapOn: "Accept offer"
-# The ConfirmDialog's confirmText (screens/ClientJobDetailScreen.tsx).
-- tapOn: "Accept bid"
+# The ConfirmDialog's confirmText (screens/ClientJobDetailScreen.tsx). 2026-09-30 (decision C):
+# with the server's quote it names the total — "Accept & pay $53.75" for the $50 bid — and it
+# reads "Accept bid" only until the quote has loaded, so either is the one button to tap.
+- tapOn: 'Accept & pay \$53\.75|Accept bid'
 # Checkout (D8): the $50 job quotes $53.75 all-in — the 7.5% protection fee.
 - extendedWaitUntil:
     visible: "Protected checkout"

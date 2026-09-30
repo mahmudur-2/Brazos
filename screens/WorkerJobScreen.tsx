@@ -24,6 +24,7 @@ import { CategoryGlyph } from '../components/CategoryGlyph';
 import * as ImagePicker from 'expo-image-picker';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { HeldPulse, ReleasedTick } from '../components/MoneyMoment';
 import { JobProgress } from '../components/JobProgress';
 import { JobVideo } from '../components/JobVideo';
 import { PhotoViewer } from '../components/PhotoViewer';
@@ -502,6 +503,9 @@ export function WorkerJobScreen() {
 
   const paymentCard =
     isWorker && payment && job ? (
+      // Idea 10: freshly protected, the card gives one soft haptic and a one-second pulse; freshly
+      // released, a tick pops in beside the eyebrow with the success haptic.
+      <HeldPulse paymentId={payment.id} heldAt={isHeld(payment) ? payment.held_at : null}>
       <Card style={styles.paymentCard}>
         {/* Masters 6 and 7 set a large outlined shield-check here. */}
         <View style={styles.paymentShield} pointerEvents="none">
@@ -516,6 +520,7 @@ export function WorkerJobScreen() {
             customer approved (release_requested_at set) is approved —
             the payout is on its way; MoneyText keeps the row's real
             status, and nothing here says released before it is. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
         <Text style={[styles.paymentEyebrow, isDark && styles.paymentEyebrowDark, isHeld(payment) && !isReleaseRequested(payment) && !isReleased(payment) && styles.eyebrowGold]}>
           {paymentsMode === 'sandbox'
             ? isReleased(payment)
@@ -533,6 +538,10 @@ export function WorkerJobScreen() {
                   ? 'PAYMENT PROTECTED'
                   : 'PAYMENT'}
         </Text>
+        {isReleased(payment) ? (
+          <ReleasedTick paymentId={payment.id} releasedAt={payment.released_at} color={isDark ? colors.gold : colors.emerald} size={18} />
+        ) : null}
+        </View>
         {/* R6c (D7): the figure a worker reads as "yours" is the take —
             amount_cents − platform_fee_cents through the one helper.
             Sandbox rows carry a zero fee, so nothing changes there. */}
@@ -618,6 +627,7 @@ export function WorkerJobScreen() {
           </View>
         ) : null}
       </Card>
+      </HeldPulse>
     ) : null;
 
   return (

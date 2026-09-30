@@ -31,6 +31,7 @@ import {
 } from '../lib/offerCopy';
 import { OfferCard } from '../components/OfferCard';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { HeldPulse, ReleasedTick } from '../components/MoneyMoment';
 import { JobOwnerActions } from '../components/JobOwnerActions';
 import { JobProgress } from '../components/JobProgress';
 import { JobVideo } from '../components/JobVideo';
@@ -1106,6 +1107,8 @@ export function ClientJobDetailScreen() {
                     and it is the pinned primary below (2026-09-26). */}
               </Card>
             ) : payment && isHeld(payment) && job.status === 'assigned' ? (
+              // Idea 10: fresh from Checkout, the held card gives one soft haptic and a one-second pulse.
+              <HeldPulse paymentId={payment.id} heldAt={payment.held_at}>
               <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
                 {/* Master 17 rings a shield at the payment card's right. */}
                 <View style={styles.paymentShield}>
@@ -1131,6 +1134,7 @@ export function ClientJobDetailScreen() {
                     : 'Funds stay held until you approve the finished work.'}
                 </Text>
               </Card>
+              </HeldPulse>
             ) : payment && fundingWindowClosed ? (
               // D14 PAST DUE: no checkout CTA (canFundNow refused it — D9), the
               // window closed, and a re-read: once the row is voided a fresh
@@ -1297,7 +1301,11 @@ export function ClientJobDetailScreen() {
                   </Card>
                 ) : isReleased(payment) ? (
                   <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
-                    <Text style={styles.approvalTitle}>Payment released</Text>
+                    {/* Idea 10: fresh, the release pops a tick in beside the title with the success haptic. */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                      <Text style={styles.approvalTitle}>Payment released</Text>
+                      <ReleasedTick paymentId={payment.id} releasedAt={payment.released_at} color={colors.emerald} />
+                    </View>
                     <Text style={styles.noticeText}>
                       {stripe
                         ? `Settled. Leave ${workerFirstName} a review.`
@@ -1392,8 +1400,9 @@ export function ClientJobDetailScreen() {
             : 'This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll protect the payment in checkout.')
         }
         // #64 (M-17): the confirmation repeats the button's verb and noun; the
-        // total it charges is spelled out in the message above.
-        confirmText={acceptOfferConfirmText(false)}
+        // total it charges is spelled out in the message above. 2026-09-30 (decision C):
+        // with the quote, the button itself says what the tap does — "Accept & pay $129".
+        confirmText={acceptOfferConfirmText(false, acceptQuote ? formatBudget(acceptQuote.total_cents) : undefined)}
         cancelText="Cancel"
         loading={!!pendingAccept && acceptingId === pendingAccept.id}
         palette={emeraldColors}

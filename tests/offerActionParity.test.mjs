@@ -390,6 +390,11 @@ test('the actionable card uses the required labels, order and icons', async () =
   assert.equal(acceptOfferActionLabel('$110', false), 'Accept bid ($110)');
   assert.equal(acceptOfferConfirmText(true), 'Accept offer');
   assert.equal(acceptOfferConfirmText(false), 'Accept bid');
+  // 2026-09-30 (decision C): with the server's quote the customer's button names the total;
+  // a worker's never does, whatever it is handed.
+  assert.equal(acceptOfferConfirmText(false, '$129'), 'Accept & pay $129');
+  assert.equal(acceptOfferConfirmText(true, '$129'), 'Accept offer');
+  assert.equal(acceptOfferConfirmText(false, undefined), 'Accept bid');
   assert.equal(COUNTER_OFFER_ACTION_LABEL, 'Send counter-offer');
   assert.equal(declineOfferActionLabel(true), 'Decline offer');
   assert.equal(declineOfferActionLabel(false), 'Decline bid');

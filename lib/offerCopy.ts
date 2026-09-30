@@ -65,8 +65,14 @@ export function acceptOfferActionLabel(amountLabel: string, viewerIsWorker: bool
   return `Accept ${offerNoun(viewerIsWorker)} (${amountLabel})`;
 }
 
-/** The accept confirmation's button: the action's verb and noun, exactly. */
-export function acceptOfferConfirmText(viewerIsWorker: boolean): string {
+/**
+ * The accept confirmation's button: the action's verb and noun, exactly — or, 2026-09-30 (the
+ * build run, decision C), when the customer's dialog has the server's quote, what the tap does:
+ * "Accept & pay $129", the total being formatBudget() of the quote's total_cents, never a sum the
+ * client made. Only the customer pays, so a worker's confirmation never carries a total.
+ */
+export function acceptOfferConfirmText(viewerIsWorker: boolean, totalLabel?: string): string {
+  if (totalLabel && !viewerIsWorker) return `Accept & pay ${totalLabel}`;
   return `Accept ${offerNoun(viewerIsWorker)}`;
 }
 
