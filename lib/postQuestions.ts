@@ -357,6 +357,25 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
   ],
 };
 
+/**
+ * Where `line` stands as a WHOLE line of `text` — from a line's start to its end — the last such
+ * place, or -1. A short answer ("Dog") inside the customer's own sentence ("Please walk my Dog") is
+ * theirs, never the answers' line (group 2's review).
+ */
+function lastWholeLine(text: string, line: string): number {
+  let from = text.length;
+  while (from >= 0) {
+    const at = text.lastIndexOf(line, from);
+    if (at < 0) return -1;
+    const startsLine = at === 0 || text[at - 1] === '\n';
+    const end = at + line.length;
+    const endsLine = end === text.length || text[end] === '\n';
+    if (startsLine && endsLine) return at;
+    from = at - 1;
+  }
+  return -1;
+}
+
 /** The description line a category's answers make, in question order; '' when nothing is answered. */
 export function answerLine(category: JobCategory | null, answers: PostAnswers): string {
   if (!category) return '';
@@ -383,7 +402,7 @@ export function withAnswerLine(
   maxLength: number
 ): { text: string; line: string } {
   let text = description;
-  const at = previous ? text.lastIndexOf(previous) : -1;
+  const at = previous ? lastWholeLine(text, previous) : -1;
   if (at >= 0) {
     if (next) {
       text = text.slice(0, at) + next + text.slice(at + previous.length);

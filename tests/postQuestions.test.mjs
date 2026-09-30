@@ -59,6 +59,13 @@ test('[executed] the line is written in place, never duplicated, and never past 
     text: 'Two bookcases.\n2 big pieces\n2 pieces · Bring tools',
     line: '2 pieces · Bring tools',
   });
+  // Group 2's review: only a WHOLE line is the answers' line — a short answer inside the customer's
+  // own sentence is theirs, never rewritten or deleted.
+  assert.deepEqual(withAnswerLine('Dog\nPlease walk my Dog', 'Dog', 'Dog · 1 pet', 500), {
+    text: 'Dog · 1 pet\nPlease walk my Dog',
+    line: 'Dog · 1 pet',
+  });
+  assert.deepEqual(withAnswerLine('Please walk my Dog', 'Dog', '', 500), { text: 'Please walk my Dog', line: '' });
   // Past the limit nothing is written, and the line the text still holds is reported.
   const full = 'x'.repeat(495);
   assert.deepEqual(withAnswerLine(full, '', '2 pieces', 500), { text: full, line: '' });
@@ -91,7 +98,11 @@ test('[static] the questions open in the page as plain rows, and the page brings
   assert.doesNotMatch(questions, /litCardStyle|BlurLayer|<(?:Sheet|SheetCard|PeekSheet|ActionSheet)\b/, 'look 2: no card, no pane, no sheet');
 
   const screen = flat(read('screens/PostJobScreen.tsx'));
-  assert.match(screen, /<PostQuestions category=\{category\} open=\{questionsOpen\} answers=\{answers\} onAnswer=\{answerQuestion\} onSkip=\{\(\) => setQuestionsOpen\(false\)\} onShown=\{revealQuestions\} \/>/);
+  assert.match(screen, /<PostQuestions category=\{category\} open=\{questionsOpen\} answers=\{answers\} onAnswer=\{answerQuestion\} onSkip=\{\(\) => setQuestionsOpen\(false\)\} revealKey=\{revealKey\} onShown=\{revealQuestions\} \/>/);
+  // Group 2's review: the page scrolls for an opening on purpose (a tile, the arrow), never on a
+  // return to this step — which closes the questions — so the title stays where the customer is.
+  assert.match(screen, /if \(nextCategory != null\) setRevealKey\(\(key\) => key \+ 1\);/);
+  assert.match(screen, /useEffect\(\(\) => \{ if \(step !== 0\) setQuestionsOpen\(false\); \}, \[step\]\);/);
   // Leaving a category takes its answers' line out of the description with it.
   assert.match(screen, /if \(answersLine\) setDescription\(withAnswerLine\(description, answersLine, '', MAX_DESCRIPTION_LENGTH\)\.text\);/);
   // An answer that would not fit is not taken.

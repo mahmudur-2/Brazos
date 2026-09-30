@@ -127,7 +127,10 @@ test('a fresh post survives in AsyncStorage, editing and hiring never touch it',
 
   // Autosave only fires once restore has resolved, so it can never clobber a
   // draft it hasn't read yet with the screen's still-blank initial state.
-  assert.match(source, /if \(!isFreshPost \|\| !draftReady \|\| !draftUserId\) return;/);
+  // 2026-09-30 (idea 2, group 2's review): the draft slot belongs to a fresh post that is not a
+  // reuse — a reused post neither restores, saves nor clears it, so an unfinished draft survives.
+  assert.match(source, /const usesDraft = isFreshPost && !reuseJobId;/);
+  assert.match(source, /if \(!usesDraft \|\| !draftReady \|\| !draftUserId\) return;/);
   // M-7: the object is built once, so the keep-on-Back check reads the
   // same record the autosave writes.
   assert.match(source, /const draft = \{\s*title,\s*description,\s*category,/);
@@ -159,7 +162,7 @@ test('the draft is cleared on publish and on an empty abandon, kept on Back with
   // deleted and an empty fresh draft cleared, in the same branch.
   assert.match(
     source,
-    /if \(!uploadsCommittedRef\.current && !submittingRef\.current\) \{\s*const keepDraft = isFreshPost && !!draftUserId && draftHasContentRef\.current;\s*if \(!keepDraft\) \{\s*cleanupSessionUploads\(\);\s*if \(isFreshPost && draftUserId\) void clearPostJobDraft\(draftUserId\);\s*\}/
+    /if \(!uploadsCommittedRef\.current && !submittingRef\.current\) \{\s*const keepDraft = usesDraft && !!draftUserId && draftHasContentRef\.current;\s*if \(!keepDraft\) \{\s*cleanupSessionUploads\(\);\s*if \(usesDraft && draftUserId\) void clearPostJobDraft\(draftUserId\);\s*\}/
   );
   // …and a kept draft has its one explicit delete on the My Jobs card, which
   // takes the draft's never-published media with it.

@@ -319,6 +319,10 @@ export function PostJobScreen() {
   // job, and a hire request is a single quick action with nothing worth
   // resuming.
   const isFreshPost = !isEditing && !isHiring;
+  // 2026-09-30 (idea 2, group 2's review): a REUSED post never touches the draft slot — it neither
+  // restores, saves nor clears it, and offers no "Save draft" — so an unfinished draft survives a
+  // reuse, untouched, for My Jobs and Home to resume.
+  const usesDraft = isFreshPost && !reuseJobId;
   // Gates the autosave effect until the one-time restore-or-skip check below
   // finishes, so autosave can never race ahead of it and overwrite a
   // not-yet-read draft with the screen's still-blank initial state.
@@ -356,11 +360,21 @@ export function PostJobScreen() {
   // alert says so and their cards show a Today pill on the day it is posted. Not kept in the draft —
   // "today" is the day the post goes out, so a resumed draft starts with it off.
   const [neededToday, setNeededToday] = useState(false);
+  // The toggle and the day agree (group 2's review): turning it on sets the day to today, and
+  // choosing another day turns it off — the alert never says "today" for Saturday's job.
+  function setNeedItToday(on: boolean) {
+    setNeededToday(on);
+    if (on) setScheduledDate(toLocalIsoDate(new Date()));
+  }
   // Exact service address — job_private_details on publish, never public.
   const [address, setAddress] = useState('');
   const [scheduledDate, setScheduledDate] = useState<string | null>(null);
   const [arrivalStartHour, setArrivalStartHour] = useState<number | null>(null);
   const [arrivalEndHour, setArrivalEndHour] = useState<number | null>(null);
+  // Idea 12 (group 2's review): choosing another day turns "Need it today" off.
+  useEffect(() => {
+    if (neededToday && scheduledDate && scheduledDate !== toLocalIsoDate(new Date())) setNeededToday(false);
+  }, [neededToday, scheduledDate]);
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [videos, setVideos] = useState<string[]>([]);
@@ -415,6 +429,9 @@ export function PostJobScreen() {
   // tiles, which answers are picked, and the line those answers wrote into the description (so the
   // next answer replaces it where it stands). Kept in the draft with everything else.
   const [questionsOpen, setQuestionsOpen] = useState(false);
+  // Each opening on purpose — a tile chosen, the arrow tapped — asks once to be brought into view
+  // (group 2's review: coming back to this step to edit the title must not scroll away from it).
+  const [revealKey, setRevealKey] = useState(0);
   const [answers, setAnswers] = useState<PostAnswers>({});
   const [answersLine, setAnswersLine] = useState('');
   // 2026-09-30 (idea 18) — the two mics: on-device dictation into the title and the description,
@@ -502,10 +519,10 @@ export function PostJobScreen() {
         // cleared. An app KILL never reaches this line at all (the process
         // is gone before any unmount effect runs), which leaves the persisted
         // draft in place either way.
-        const keepDraft = isFreshPost && !!draftUserId && draftHasContentRef.current;
+        const keepDraft = usesDraft && !!draftUserId && draftHasContentRef.current;
         if (!keepDraft) {
           cleanupSessionUploads();
-          if (isFreshPost && draftUserId) void clearPostJobDraft(draftUserId);
+          if (usesDraft && draftUserId) void clearPostJobDraft(draftUserId);
         }
       }
       successScale.stopAnimation();
@@ -566,7 +583,7 @@ export function PostJobScreen() {
   // explicit fresh start and should win over a stale draft, not be silently
   // overridden by it.
   useEffect(() => {
-    if (!isFreshPost) {
+    if (!usesDraft) {
       setDraftReady(true);
       return;
     }
@@ -638,7 +655,7 @@ export function PostJobScreen() {
   // Autosave, once the restore-or-skip check above has finished. Fresh-post
   // only; edit/hire never read or write this key.
   useEffect(() => {
-    if (!isFreshPost || !draftReady || !draftUserId) return;
+    if (!usesDraft || !draftReady || !draftUserId) return;
     const draft = {
       title,
       description,
@@ -660,7 +677,7 @@ export function PostJobScreen() {
     };
     draftHasContentRef.current = draftHasContent(draft);
     void savePostJobDraft(draftUserId, draft);
-  }, [isFreshPost, draftReady, draftUserId, title, description, category, location, coords, budgetMin, budgetMax, pricingMode, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, answers, answersLine, step]);
+  }, [usesDraft, draftReady, draftUserId, title, description, category, location, coords, budgetMin, budgetMax, pricingMode, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, answers, answersLine, step]);
 
   /**
    * Idea 23 — choosing a tile. Tapping the chosen tile again clears the category, as the pills did
@@ -674,6 +691,18 @@ export function PostJobScreen() {
     setAnswersLine('');
     setCategory(nextCategory);
     setQuestionsOpen(nextCategory != null);
+    if (nextCategory != null) setRevealKey((key) => key + 1);
+  }
+
+  // Leaving the Describe step closes the questions; coming back shows the title and description.
+  useEffect(() => {
+    if (step !== 0) setQuestionsOpen(false);
+  }, [step]);
+
+  /** The arrow under the chosen tile: open (and bring into view) or close. */
+  function toggleQuestions() {
+    if (!questionsOpen) setRevealKey((key) => key + 1);
+    setQuestionsOpen(!questionsOpen);
   }
 
   /**
@@ -1623,7 +1652,7 @@ export function PostJobScreen() {
                 selected={category}
                 questionsOpen={questionsOpen}
                 onSelect={chooseCategory}
-                onToggleQuestions={() => setQuestionsOpen((open) => !open)}
+                onToggleQuestions={toggleQuestions}
                 inset={contentPaddingX}
               />
               {reasonUnder('category')}
@@ -1634,6 +1663,7 @@ export function PostJobScreen() {
                   answers={answers}
                   onAnswer={answerQuestion}
                   onSkip={() => setQuestionsOpen(false)}
+                  revealKey={revealKey}
                   onShown={revealQuestions}
                 />
               </View>
@@ -1921,7 +1951,7 @@ export function PostJobScreen() {
                     <Text style={styles.todayTitle}>Need it today</Text>
                     <Text style={styles.todayCaption}>Nearby workers get an instant alert</Text>
                   </View>
-                  <Toggle value={neededToday} onValueChange={setNeededToday} accessibilityLabel="Need it today" />
+                  <Toggle value={neededToday} onValueChange={setNeedItToday} accessibilityLabel="Need it today" />
                 </View>
               ) : null}
 
@@ -1996,7 +2026,7 @@ export function PostJobScreen() {
         {isLastStep && !showSuccess ? (
           <PostJobBar
             secondary={
-              isFreshPost
+              usesDraft
                 ? { label: 'Save draft', onPress: () => setLeaving(true), accessibilityLabel: 'Save draft and go Home' }
                 : undefined
             }

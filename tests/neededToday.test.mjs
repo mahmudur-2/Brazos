@@ -45,8 +45,16 @@ test('[static] the app: sent only when on, read on both shapes, a fresh post\'s 
   assert.match(screen, /const \[neededToday, setNeededToday\] = useState\(false\);/, 'off by default');
   assert.match(screen, /neededToday: isFreshPost && neededToday,/);
   assert.match(screen, /\{isFreshPost \? \( <View style=\{styles\.todayRow\}>/);
-  assert.match(screen, /<Toggle value=\{neededToday\} onValueChange=\{setNeededToday\} accessibilityLabel="Need it today" \/>/);
+  assert.match(screen, /<Toggle value=\{neededToday\} onValueChange=\{setNeedItToday\} accessibilityLabel="Need it today" \/>/);
+  // The toggle and the day agree (group 2's review): on sets the day to today; another day turns it off.
+  assert.match(screen, /if \(on\) setScheduledDate\(toLocalIsoDate\(new Date\(\)\)\);/);
+  assert.match(screen, /if \(neededToday && scheduledDate && scheduledDate !== toLocalIsoDate\(new Date\(\)\)\) setNeededToday\(false\);/);
   assert.doesNotMatch(read('lib/postJobDraft.ts'), /neededToday|needed_today/, 'never resumed from a draft: today is the day it goes out');
+  // Group 2's review: the radius search's RPC has a fixed column list, so its rows are re-read
+  // through the feed's allowlist (the pill survives); and a screen reader hears "needed today" on the
+  // card whose label is its title alone.
+  assert.match(read('lib/hotspots.ts'), /const \{ data: hydrated, error: hydrateError \} = await fetchOpenJobsByIds\(rows\.map\(\(j\) => j\.id\)\);\s*if \(hydrateError\) return \{ data: rows, error: null \};/);
+  assert.match(read('components/WorkerJobCard.tsx'), /accessibilityLabel=\{showsTodayPill\(job\) \? `\$\{job\.title\}, needed today` : job\.title\}/);
   for (const card of ['components/WorkerJobCard.tsx', 'components/BrowseJobCard.tsx']) {
     const source = read(card);
     assert.match(source, /showsTodayPill\(job\)/, `${card} asks the one rule`);

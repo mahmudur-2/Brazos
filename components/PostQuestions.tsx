@@ -14,7 +14,10 @@ type PostQuestionsProps = {
   /** A chip's tap: the question and the option's index — the screen writes the description. */
   onAnswer: (questionId: string, index: number) => void;
   onSkip: () => void;
-  /** Once each time the questions have opened and laid out, so the page can bring them into view. */
+  /** A count the screen raises each time the questions are opened on purpose (a tile chosen, the
+   *  arrow tapped). Each new value asks, once, to be brought into view. */
+  revealKey: number;
+  /** Called for each new revealKey once the questions are open and laid out. */
   onShown?: () => void;
 };
 
@@ -25,22 +28,33 @@ type PostQuestionsProps = {
  * its rows lift in one after another (components/EntranceView.tsx), and each question's answers are
  * the app's own choice chips. Skip closes it; the category stays chosen.
  */
-export function PostQuestions({ category, open, answers, onAnswer, onSkip, onShown }: PostQuestionsProps) {
+export function PostQuestions({ category, open, answers, onAnswer, onSkip, revealKey, onShown }: PostQuestionsProps) {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   const questions = category ? POST_QUESTIONS[category] : [];
-  const shown = useRef(false);
+  // The reveal this component last answered: a new key asks once — on the first layout after an
+  // opening, or at once when the questions were already laid out (another tile while open).
+  const answered = useRef(0);
+  const laidOut = useRef(false);
   useEffect(() => {
-    if (!open) shown.current = false;
+    if (!open) laidOut.current = false;
   }, [open]);
+  useEffect(() => {
+    if (!open || !laidOut.current || revealKey === answered.current) return;
+    answered.current = revealKey;
+    onShown?.();
+    // Answered per key; onShown is the screen's and reads its own refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealKey, open]);
 
   if (!category || questions.length === 0) return null;
   return (
     <DropdownBody open={open} style={styles.drop}>
       <View
         onLayout={() => {
-          if (shown.current) return;
-          shown.current = true;
+          laidOut.current = true;
+          if (revealKey === answered.current) return;
+          answered.current = revealKey;
           onShown?.();
         }}
       >

@@ -249,7 +249,19 @@ export async function fetchJobsWithinRadius(
     ...toOpenJob(row),
     distance_miles: row.distance_miles,
   }));
-  return { data: rows, error: null };
+  // The RPC's column list is fixed and predates later columns (needed_today — the Today pill), so
+  // the rows are re-read through the feed's own allowlist, as fetchJobsInCell does, keeping the
+  // server's distance and order.
+  const { data: hydrated, error: hydrateError } = await fetchOpenJobsByIds(rows.map((j) => j.id));
+  if (hydrateError) return { data: rows, error: null };
+  const byId = new Map(hydrated.map((job) => [job.id, job]));
+  return {
+    data: rows.map((row) => {
+      const full = byId.get(row.id);
+      return full ? { ...full, distance_miles: row.distance_miles } : row;
+    }),
+    error: null,
+  };
 }
 
 /**

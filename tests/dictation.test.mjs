@@ -52,6 +52,12 @@ test('[static] the mic listens through the voice boundary only, and renders only
   // Typing while it listens ends the session and keeps what was typed.
   assert.match(mic, /if \(!listening \|\| value === baseRef\.current \|\| value === committedRef\.current\) return;\s*sessionRef\.current\?\.cancel\(\);/);
   assert.match(mic, /accessibilityLabel=\{listening \? 'Stop dictating' : `Dictate the \$\{field\}`\}/);
+  // Group 2's review: ONE live dictation at a time — the recognizer runs one session, and a second
+  // start cancels the first inside the vendor, ending both. The other mic is stopped (its words kept)
+  // and this one starts only after it has ended.
+  assert.match(mic, /let liveDictation: \{ owner: number; stop: \(\) => void; ended: Promise<void> \} \| null = null;/);
+  assert.match(mic, /if \(other && other\.owner !== ownerRef\.current\) \{\s*other\.stop\(\);\s*await other\.ended;/);
+  assert.match(mic, /if \(finished\) return;\s*sessionRef\.current = session;\s*liveDictation = \{ owner, stop: \(\) => session\.stop\(\), ended \};/);
 });
 
 test('[static] both fields carry their mic, and the text keeps clear of it', () => {

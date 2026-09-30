@@ -338,7 +338,8 @@ test('D6 · dropping the footers kept the exit guard and the draft autosave', ()
   // And the autosave effect still writes every field the draft carries.
   assert.match(code, /void savePostJobDraft\(draftUserId, draft\);/);
   assert.match(code, /const draft = \{\s*title,\s*description,\s*category,/);
-  assert.match(code, /if \(!isFreshPost \|\| !draftReady \|\| !draftUserId\) return;/);
+  // 2026-09-30 (idea 2): a reused post keeps out of the draft slot (usesDraft).
+  assert.match(code, /if \(!usesDraft \|\| !draftReady \|\| !draftUserId\) return;/);
 });
 
 test('D2 · the header new props are optional and leave every other caller untouched', () => {

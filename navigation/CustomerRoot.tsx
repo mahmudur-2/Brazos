@@ -107,7 +107,13 @@ function CustomerHomeStackNavigator() {
       <CustomerHomeStack.Screen name="HomeMain" component={HomeScreen} />
       <CustomerHomeStack.Screen name="Notifications" component={NotificationsScreen} />
       <CustomerHomeStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
-      <CustomerHomeStack.Screen name="PostJob" component={PostJobScreen} />
+      {/* Idea 2 (group 2's review): a reuse is its own post — keyed by the job it copies, so it is
+          pushed on top of a post already open here instead of rewriting that one's params. */}
+      <CustomerHomeStack.Screen
+        name="PostJob"
+        component={PostJobScreen}
+        getId={({ params }) => params?.reuseJobId}
+      />
       <CustomerHomeStack.Screen name="WorkerSearch" component={WorkerSearchScreen} />
       <CustomerHomeStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <CustomerHomeStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />

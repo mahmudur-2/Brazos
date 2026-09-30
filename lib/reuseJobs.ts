@@ -27,13 +27,13 @@ export function reusableJobs<T extends Dated>(posted: readonly T[]): T[] {
 }
 
 /**
- * Which figure the card's price shows: the price the worker was hired at, else the budget the job
- * was posted with, else none — an open-bids job with no maximum has no figure, and none is made up.
+ * Whether the card shows a price: the budget the job was posted with — exactly what the new post is
+ * filled with (group 2's review: a card reading the hired price opened a post carrying a different
+ * one) — else none: an open-bids job with no maximum has no figure, and none is made up.
  */
 export function reuseCardFigure(
-  job: Pick<Job, 'final_amount_cents' | 'budget_cents' | 'budget_min_cents' | 'budget_max_cents'>
-): 'agreed' | 'budget' | null {
-  if (job.final_amount_cents != null) return 'agreed';
+  job: Pick<Job, 'budget_cents' | 'budget_min_cents' | 'budget_max_cents'>
+): 'budget' | null {
   if (job.budget_cents != null || job.budget_min_cents != null || job.budget_max_cents != null) return 'budget';
   return null;
 }

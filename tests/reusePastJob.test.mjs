@@ -51,9 +51,10 @@ test('[executed] a card is just wide enough for its title in three lines, from 1
   assert.equal(reuseCardWidth('x'.repeat(80), 22), 160, 'never past 160');
 });
 
-test('[executed] the card\'s price is the hired price, else the posted budget, else none', () => {
-  const none = { final_amount_cents: null, budget_cents: null, budget_min_cents: null, budget_max_cents: null };
-  assert.equal(reuseCardFigure({ ...none, final_amount_cents: 8000, budget_cents: 9000 }), 'agreed');
+test('[executed] the card\'s price is the budget the new post carries, else none', () => {
+  // Group 2's review: a card reading the hired price opened a post carrying a different one.
+  const none = { budget_cents: null, budget_min_cents: null, budget_max_cents: null };
+  assert.equal(reuseCardFigure({ ...none, budget_cents: 9000 }), 'budget');
   assert.equal(reuseCardFigure({ ...none, budget_max_cents: 12000 }), 'budget');
   assert.equal(reuseCardFigure(none), null, 'no figure is made up');
 });
@@ -73,7 +74,7 @@ test('[static] the sheet: one read per opening, the row closed until tapped, the
   assert.match(sheet, /\{ width: reuseCardWidth\(job\.title, 2 \* \(spacing\.md - 1\)\) \}/);
   assert.match(sheet, /<Text style=\{styles\.cardTitle\} numberOfLines=\{3\}>/);
   assert.match(sheet, /cardPrice: \{ alignSelf: 'flex-end',/);
-  assert.match(sheet, /figure === 'agreed' \? formatBudget\(job\.final_amount_cents\) : figure === 'budget' \? budgetRangeLabel\(job\) : null/);
+  assert.match(sheet, /const price = figure === 'budget' \? budgetRangeLabel\(job\) : null;/);
   // A failed read is absent, never "nothing to reuse".
   assert.match(sheet, /\) : hub\.error \? null : jobs\.length === 0 \? \(/);
   // The tree routes; the sheet only draws.
@@ -93,4 +94,9 @@ test('[static] the post: a NEW job, filled from the old one, on its Review step 
     assert.ok(!load.includes(kept), `never copies: ${kept}`);
   }
   assert.match(screen, /\? `Copied from “\$\{reusedFrom\}”\. Change anything, or just Publish\.`/);
+  // Group 2's review: a reuse never touches the draft slot and offers no "Save draft"; and it is
+  // its own screen — keyed by the job it copies — never a rewrite of a post already open.
+  assert.match(screen, /const usesDraft = isFreshPost && !reuseJobId;/);
+  assert.match(flat(screen), /secondary=\{ usesDraft \? \{ label: 'Save draft'/);
+  assert.match(flat(read('navigation/CustomerRoot.tsx')), /<CustomerHomeStack\.Screen name="PostJob" component=\{PostJobScreen\} getId=\{\(\{ params \}\) => params\?\.reuseJobId\} \/>/);
 });

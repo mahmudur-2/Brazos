@@ -25,7 +25,7 @@ import { SheetHeader } from '../ui/primitives/SheetHeader';
 import { ConfirmHost } from './ConfirmHost';
 import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import { attentionItems } from '../lib/homeAttention';
-import { budgetRangeLabel, formatBudget, JOB_CATEGORY_ICONS, type Job } from '../lib/jobs';
+import { budgetRangeLabel, JOB_CATEGORY_ICONS, type Job } from '../lib/jobs';
 import { reusableJobs, reuseCardFigure, reuseCardInstant, reuseCardWidth } from '../lib/reuseJobs';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -397,8 +397,7 @@ function ReuseCard({ job, worker, onPick }: { job: Job; worker: string | null; o
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const figure = reuseCardFigure(job);
-  const price =
-    figure === 'agreed' ? formatBudget(job.final_amount_cents) : figure === 'budget' ? budgetRangeLabel(job) : null;
+  const price = figure === 'budget' ? budgetRangeLabel(job) : null;
   const date = new Date(reuseCardInstant(job)).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',

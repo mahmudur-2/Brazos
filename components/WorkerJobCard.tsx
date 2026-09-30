@@ -216,7 +216,7 @@ export function WorkerJobCard({
         pressed && styles.cardPressed,
       ]}
       accessibilityRole="button"
-      accessibilityLabel={job.title}
+      accessibilityLabel={showsTodayPill(job) ? `${job.title}, needed today` : job.title}
     >
       <View>
       {showImage ? (
