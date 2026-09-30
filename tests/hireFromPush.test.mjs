@@ -68,13 +68,22 @@ test('[static] create-payment: the opt-in sets or clears the intent\'s future us
   // Both run after begin_job_payment() has decided — the database still says whether a charge may begin.
   const begun = fn.indexOf("'begin_job_payment'");
   assert.ok(begun > 0 && begun < fn.indexOf('if (useSavedCard) {'), 'the database decides first');
-  assert.match(fn, /const wanted = saveCard \? 'off_session' : '';/);
-  assert.match(fn, /\{ setup_future_usage: wanted \}/);
-  // Confirm: the customer's own latest saved card, off-session, one idempotency key per payment and card.
-  assert.match(fn, /customers\/\$\{encodeURIComponent\(customerId\)\}\/payment_methods\?type=card&limit=1/);
-  assert.match(fn, /\{ payment_method: card, off_session: 'true' \},\s*`brazos-offsession-\$\{paymentId\}-\$\{card\}`/);
+  // Applied every time, both ways — never compared with the intent's (replayed) creation response.
+  assert.match(fn, /const wanted = saveCard \? 'off_session' : '';\s*const updated = await stripe\(/);
+  assert.doesNotMatch(fn, /intent\.body\.setup_future_usage/);
+  assert.match(read('lib/payments/stripe.ts'), /typeof options\?\.saveCard === 'boolean'\s*\? \{ jobId, saveCard: options\.saveCard \}/);
+  // Confirm: the card the app named, once the provider says it is this caller's; off-session, with
+  // the return URL an automatic-payment-methods intent needs; one idempotency key per payment and card.
+  assert.match(fn, /if \(useSavedCard && !\/\^pm_\[A-Za-z0-9_\]\+\$\/\.test\(savedCardId\)\) \{/);
+  assert.match(fn, /if \(!card\.ok \|\| card\.body\.customer !== customerId \|\| card\.body\.type !== 'card'\) \{/);
+  assert.match(fn, /const OFF_SESSION_RETURN_URL = 'brazos:\/\/checkout';/);
+  assert.match(fn, /\{ payment_method: savedCardId, off_session: 'true', return_url: OFF_SESSION_RETURN_URL \},\s*`brazos-offsession-\$\{paymentId\}-\$\{savedCardId\}`/);
+  assert.doesNotMatch(fn, /latestSavedCard/, 'never "whichever card is newest"');
+  // Only a card decline is a decline; the rest is the provider's, and an unknown outcome is the ledger's.
+  assert.match(fn, /const declined =\s*confirmed\.status === 402 \|\|\s*failure\?\.type === 'card_error' \|\|/);
+  assert.match(fn, /const ambiguous = confirmed\.status >= 500 \|\| failure\?\.code === 'payment_intent_unexpected_state';\s*return json\(\{ error: 'The payment provider is unavailable right now\.', ambiguous \}, 502\);/);
   assert.match(fn, /code: 'no_saved_card' \}, 409\)/);
-  assert.match(fn, /await serviceRpc\('enqueue_payment_declined', \{ p_payment_id: paymentId \}\)\.catch\(\(\) => null\);\s*return json\(\{ error: 'Your card was declined\. Protect the payment in Checkout\.', declined: true \}, 402\);/);
+  assert.match(fn, /if \(declined\) \{\s*await serviceRpc\('enqueue_payment_declined', \{ p_payment_id: paymentId \}\)\.catch\(\(\) => null\);\s*return json\(\{ error: 'Your card was declined\. Protect the payment in Checkout\.', declined: true \}, 402\);/);
   // The webhook marks the row held, as after the sheet; the confirm path returns no secret.
   assert.match(fn, /return json\(\{ paymentId, confirmed: true \}\);/);
 });
@@ -91,7 +100,7 @@ test('[static] payment-methods: only the caller\'s own cards, removal checked fo
   assert.match(fn, /usage: 'off_session',/);
   assert.doesNotMatch(fn, /payment_intents/, 'saving a card never charges');
   const config = read('supabase/config.toml');
-  assert.match(config, /\[functions\.payment-methods\]\n(?:#[^\n]*\n)*verify_jwt = true/);
+  assert.match(config, /\[functions\.payment-methods\]\r?\n(?:#[^\r\n]*\r?\n)*verify_jwt = true/);
 });
 
 test('[static] the app: the buttons registered, the intents allow-listed, the confirm kept, the saved card first', () => {
@@ -107,9 +116,12 @@ test('[static] the app: the buttons registered, the intents allow-listed, the co
   const detail = flat(read('screens/ClientJobDetailScreen.tsx'));
   assert.match(
     detail,
-    /if \(params\.intent !== 'accept' \|\| !params\.offerId \|\| acceptIntentRef\.current \|\| loading \|\| !canAccept\) return; acceptIntentRef\.current = true; const bid = bids\.find\(\(offer\) => offer\.id === params\.offerId\); if \(bid\) confirmAccept\(bid\);/
+    /if \(params\.intent !== 'accept' \|\| !params\.offerId \|\| acceptIntentRef\.current \|\| loading \|\| !canAccept \|\| !cardsRead\) return; acceptIntentRef\.current = true; \/\/ [^]*?const pending = pendingBids\.find\(\(bid\) => bid\.id === params\.offerId\); if \(pending\) confirmAccept\(pending\.offer\);/
   );
-  assert.match(detail, /function proceedToCheckout\(\) \{ \/\/ [^]*?navigation\.navigate\('Checkout', \{ job, oneTap: true \}\);/);
+  // Only a confirm that named the saved card pays at once — and it names it.
+  assert.match(detail, /const card = oneTapCardRef\.current; navigation\.navigate\('Checkout', card \? \{ job, oneTap: true, oneTapCard: card \} : \{ job \}\);/);
+  assert.match(detail, /onConfirm=\{\(\) => \{ \/\/ [^]*?oneTapCardRef\.current = stripe && savedCard && acceptQuote \? savedCard\.id : null; if \(pendingAccept\) void doAccept\(pendingAccept\); \}\}/);
+  assert.match(detail, /: stripe && savedCard && acceptQuote \? `This selects their bid for the job — the other active bids will no longer be eligible\. \$\{cardLabel\(savedCard\)\} is charged the total now, and the funds are held in protection until you approve the work\.`/);
   // Checkout: the opt-in is off by default and only offered while no card is saved.
   const checkout = flat(read('screens/CheckoutScreen.tsx'));
   assert.match(checkout, /const \[saveCard, setSaveCard\] = useState\(false\);/);
@@ -119,12 +131,17 @@ test('[static] the app: the buttons registered, the intents allow-listed, the co
   // and it watches the ledger reach held exactly as after the sheet.
   assert.match(
     checkout,
-    /if \(!params\.oneTap \|\| oneTapRef\.current \|\| !stripe \|\| !cardsRead \|\| !savedCard\) return; if \(!canFund \|\| !figures \|\| !paymentsEnabled \|\| phase !== 'idle' \|\| funding\) return; oneTapRef\.current = true; void fundBySavedCard\(\);/
+    /if \(!params\.oneTap \|\| oneTapRef\.current \|\| !stripe \|\| !cardsRead \|\| !savedCard\) return; \/\/ [^]*?if \(params\.oneTapCard && params\.oneTapCard !== savedCard\.id\) return; if \(!canFund \|\| !figures \|\| !paymentsEnabled \|\| phase !== 'idle' \|\| funding\) return; oneTapRef\.current = true; void fundBySavedCard\(\);/
   );
-  assert.match(checkout, /const result = await confirmWithSavedCard\(job\.id\); if \(result\.confirmed\) \{ await confirmPayment\(\); return; \}/);
+  assert.match(checkout, /const result = await confirmWithSavedCard\(job\.id, savedCard\.id\); \/\/ [^]*?if \(result\.confirmed \|\| result\.ambiguous\) \{ await confirmPayment\(\); return; \}/);
+  assert.match(checkout, /if \(params\.oneTapCard && params\.oneTapCard !== savedCard\.id\) return;/);
   // Money is integer cents, through formatBudget, and the button names the card.
-  assert.match(checkout, /title=\{`Pay \$\{formatBudget\(figures\.total\)\} with \$\{cardLabel\(savedCard\)\}`\}/);
-  assert.match(read('lib/payments/stripe.ts'), /supabase\.functions\.invoke\('create-payment', \{ body: \{ jobId, useSavedCard: true \} \}\)/);
+  assert.match(checkout, /title=\{`Protect \$\{formatBudget\(figures\.total\)\} with card ···· \$\{savedCard\.last4\}`\}/);
+  // The saved card is read before the page paints, and one-tap is one spinner until held.
+  assert.match(checkout, /!paymentLoaded \|\| \(stripe && !cardsRead\) \? \{ kind: 'loading', variant: 'spinner' \}/);
+  assert.match(checkout, /setPhase\('confirming'\); try \{ const result = await confirmWithSavedCard\(job\.id, savedCard\.id\);/);
+  assert.match(checkout, /result\.declined \? 'Nothing was charged\.\\n\\nYour accepted offer is unchanged — pay with another card below\.'/);
+  assert.match(read('lib/payments/stripe.ts'), /supabase\.functions\.invoke\('create-payment', \{ body: \{ jobId, useSavedCard: true, paymentMethodId \} \}\)/);
 });
 
 test('[static] Payment methods: the saved card listed, removed only after its confirm, added in the provider\'s sheet', () => {

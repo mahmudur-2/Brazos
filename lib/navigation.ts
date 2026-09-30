@@ -315,8 +315,9 @@ export type MyJobsStackParamList = {
     countersRemaining: number;
   };
   /** Screen 31 — sandbox protected checkout for an assigned, unfunded job. */
-  /** Idea 20: `oneTap` — after "Accept & pay" or a push's Confirm, the saved card pays at once. */
-  Checkout: { job: Job; oneTap?: boolean };
+  /** Idea 20: `oneTap` — after "Accept & pay" or a push's Confirm, the saved card pays at once;
+   *  `oneTapCard` — the card the accept's confirm named, the only one that may. */
+  Checkout: { job: Job; oneTap?: boolean; oneTapCard?: string };
   /** Screen 32 — rendered only after funds are genuinely held. */
   JobConfirmed: { job: Job };
   /** Screen 56 — the worker's static arrival declarations (Phase 6). No live

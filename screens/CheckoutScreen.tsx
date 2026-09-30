@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
@@ -273,7 +273,9 @@ export function CheckoutScreen() {
                 actionLabel: 'Back to the job',
                 onAction: goBackOrHome,
               }
-            : !paymentLoaded
+            : // Idea 20: on the card path the saved-card read is part of the page — painting without it
+              // would insert the opt-in row, or swap the action bar, a beat later.
+              !paymentLoaded || (stripe && !cardsRead)
               ? { kind: 'loading', variant: 'spinner' }
               : paymentError
                 ? {
@@ -400,16 +402,22 @@ export function CheckoutScreen() {
     fundingRef.current = true;
     setFunding(true);
     setConfirmVisible(false);
+    // One spinner, "Confirming your payment…", from the tap (or the arrival) until the ledger says held.
+    setPhase('confirming');
     try {
-      const result = await confirmWithSavedCard(job.id);
-      if (result.confirmed) {
+      const result = await confirmWithSavedCard(job.id, savedCard.id);
+      // Confirmed — or an outcome nobody knows yet: the ledger decides, as after the sheet.
+      if (result.confirmed || result.ambiguous) {
         await confirmPayment();
         return;
       }
+      setPhase('idle');
       if (result.noSavedCard) setSavedCard(null);
       await alertAsync(
         result.declined ? 'Your card was declined' : 'Could not pay with your saved card',
-        `${userMessage(result.error, 'The card could not be charged.')}\n\nYour accepted offer is unchanged — pay with another card below.`
+        result.declined
+          ? 'Nothing was charged.\n\nYour accepted offer is unchanged — pay with another card below.'
+          : `${userMessage(result.error, 'The card could not be charged.')}\n\nYour accepted offer is unchanged — pay with another card below.`
       );
       await loadPayment();
     } finally {
@@ -422,6 +430,8 @@ export function CheckoutScreen() {
   // saved card pays at once. Without one, this is ordinary Checkout.
   useEffect(() => {
     if (!params.oneTap || oneTapRef.current || !stripe || !cardsRead || !savedCard) return;
+    // The card the accept's confirm named, and no other.
+    if (params.oneTapCard && params.oneTapCard !== savedCard.id) return;
     if (!canFund || !figures || !paymentsEnabled || phase !== 'idle' || funding) return;
     oneTapRef.current = true;
     void fundBySavedCard();
@@ -512,7 +522,9 @@ export function CheckoutScreen() {
     // Idea 20: the saved card first; another card, through the sheet, one tap away.
     <View style={styles.cardActions}>
       <Button
-        title={`Pay ${formatBudget(figures.total)} with ${cardLabel(savedCard)}`}
+        // The sheet's verb; the card by its last four, so the title never runs out of room (the
+        // brand is in the confirm and the explainer).
+        title={`Protect ${formatBudget(figures.total)} with card ···· ${savedCard.last4}`}
         onPress={() => {
           setDialogPath('saved');
           setConfirmVisible(true);
@@ -718,7 +730,12 @@ export function CheckoutScreen() {
             ? [
                 {
                   content: (
-                    <View style={styles.saveRow}>
+                    // The whole row answers a tap, as Need it today's does; the switch stays the control.
+                    <Pressable
+                      onPress={() => setSaveCard(!saveCard)}
+                      style={({ pressed }) => [styles.saveRow, pressed && styles.saveRowPressed]}
+                      accessible={false}
+                    >
                       <View style={styles.saveCopy}>
                         <Text style={styles.saveTitle}>Save this card for one-tap hiring</Text>
                         <Text style={styles.explainText}>
@@ -726,7 +743,7 @@ export function CheckoutScreen() {
                         </Text>
                       </View>
                       <Toggle value={saveCard} onValueChange={setSaveCard} accessibilityLabel="Save this card for one-tap hiring" />
-                    </View>
+                    </Pressable>
                   ),
                 },
               ]
@@ -925,6 +942,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderWidth: 1,
     borderColor: colors.mint2,
     backgroundColor: colors.surface,
+  },
+  saveRowPressed: {
+    opacity: 0.7,
   },
   saveCopy: {
     flex: 1,

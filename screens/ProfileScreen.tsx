@@ -145,8 +145,14 @@ const HUB_SETTINGS: SettingsRow[] = [
     icon: 'card-outline',
     label: 'Payment methods',
     // D16 (R6a): the sandbox subtitle renders in sandbox mode only.
-    // Idea 20: a card may now be saved — for one-tap hiring, kept by the provider.
-    sub: paymentsMode === 'sandbox' ? 'Sandbox only · no stored card.' : 'Cards and one-tap hiring.',
+    // Idea 20: on the card path a card may now be saved — for one-tap hiring, kept by the provider.
+    // Sandbox and a build with payments off keep their words.
+    sub:
+      paymentsMode === 'stripe'
+        ? 'Cards and one-tap hiring.'
+        : paymentsMode === 'sandbox'
+          ? 'Sandbox only · no stored card.'
+          : 'No stored cards · entered at checkout.',
   },
   {
     route: 'Notifications',

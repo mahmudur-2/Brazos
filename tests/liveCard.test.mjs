@@ -76,12 +76,13 @@ test('[static] the hook: no query without the module, the customer\'s own jobs, 
   const body = flat(hook);
   assert.match(body, /useEffect\(\(\) => \{ if \(!userId \|\| !liveCardAvailable\(\)\) return;/, 'not even a query on a binary without the module');
   assert.match(body, /\.eq\('client_id', userId\) \.in\('status', \['assigned', 'in_progress', 'completed'\]\)/, 'an allow-list');
-  assert.match(hook, /\.or\(`status\.neq\.completed,completed_at\.gte\."\$\{since\}"`\)/, 'the instant quoted for PostgREST');
+  assert.match(hook, /\.or\(`status\.neq\.completed,completed_at\.gte\."\$\{since\}"`\)\s*\.order\('created_at', \{ ascending: false \}\)\s*\.limit\(LIVE_LIMIT\);/, 'the instant quoted for PostgREST, newest first (jobs has no updated_at)');
+  assert.match(body, /const complete = \(data \?\? \[\]\)\.length < LIVE_LIMIT;/, 'a cut-off list ends no card');
   assert.match(hook, /supabase\.rpc\('live_card_state', \{ p_job_id: job\.id \}\)/);
   assert.doesNotMatch(hook, /en_route_at|arrived_at|'on_the_way'|'arrived'/, 'the stage is the server\'s to derive');
   // A finished job's card is updated, not ended: ending dismisses at once.
   assert.match(body, /if \(existing\) \{ \/\/ [^]*?updateLiveCard\(existing\.id, state\); cards\[job\.id\] = \{ id: existing\.id, last: state \}; \} else if \(!state\.ended\) \{/);
-  assert.match(body, /for \(const jobId of Object\.keys\(cards\)\) \{ if \(keep\.has\(jobId\)\) continue; endLiveCard\(cards\[jobId\]\.id, cards\[jobId\]\.last\);/);
+  assert.match(body, /for \(const jobId of Object\.keys\(cards\)\) \{ if \(keep\.has\(jobId\) \|\| !complete\) continue; endLiveCard\(cards\[jobId\]\.id, cards\[jobId\]\.last\);/);
   // One map in memory, shared with the token listener, so a token issued at start finds its job.
   assert.match(body, /const cardsNow = \(\) => \(loaded \?\?= readCards\(\)\);/);
   assert.match(body, /const cards = await cardsNow\(\); const jobId = Object\.keys\(cards\)\.find\(\(key\) => cards\[key\]\.id === activityId\);/);
@@ -92,7 +93,7 @@ test('[static] the hook: no query without the module, the customer\'s own jobs, 
   const windowMs = hook.match(/export const FINISHED_WINDOW_MS = 2 \* 60 \* 60_000;/);
   const fn = read('supabase/functions/send-live-cards/index.ts');
   assert.ok(windowMs && /const FINISHED_WINDOW_S = 2 \* 60 \* 60;/.test(fn), 'two hours, in the app and in the push');
-  assert.match(fn, /'dismissal-date': now \+ FINISHED_WINDOW_S/);
+  assert.match(fn, /'dismissal-date': row\.state\.stage === 'cancelled' \? now : now \+ FINISHED_WINDOW_S/, 'a cancelled job\'s card goes at once');
   // Mounted once, at the root.
   assert.equal((read('App.tsx').match(/useLiveJobCard\(user\?\.id\);/g) ?? []).length, 1);
 });
@@ -114,6 +115,10 @@ test('[static] the server: the customer\'s card only, a narrow token path, the o
   assert.match(sql, /if not public\.pg_function_present\('cron', 'schedule'\) then/);
   assert.match(sql, /perform cron\.schedule\('brazos-live-cards', '\* \* \* \* \*', \$cron\$select public\.drain_live_cards\(\);\$cron\$\);/);
   assert.match(sql, /if not exists \(select 1 from public\.live_card_outbox where status = 'pending' and attempts < 5\) then\s*return null;/, 'a call only when a row waits');
+  // The group 5 review: a change during a send gets its own row; a row that never resolves gives up.
+  assert.match(sql, /o\.status = 'pending' and o\.attempts = 0\) then/);
+  assert.match(sql, /set status = 'failed', last_error = coalesce\(last_error, 'no answer after five tries'\)\s*where status = 'pending' and attempts >= 5;/);
+  assert.match(sql, /if v_job\.status = 'cancelled' then\s*return jsonb_build_object\(\s*'stage', 'cancelled',/);
   assert.doesNotMatch(sql, /\b(drop table|drop column|rename to|rename column|truncate|delete from)\b/i, 'additive');
 });
 

@@ -56,6 +56,7 @@ import {
 } from '../lib/payments';
 import { customerChargeCents } from '../lib/paymentRules';
 import { paymentsMode } from '../lib/adapters/payments';
+import { cardLabel, listSavedCards, type SavedCard } from '../lib/paymentMethods';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
 import { MoneyText } from '../ui/primitives/MoneyText';
@@ -265,18 +266,39 @@ export function ClientJobDetailScreen() {
     if (canFundNow && paymentsEnabled) navigation.navigate('Checkout', { job, oneTap: params.intent === 'pay' });
   }, [params.intent, paymentRead, configRead, canFundNow, paymentsEnabled, job, navigation]);
 
-  // Idea 20: a bid push's Accept & pay — that offer's own confirm opens as soon as the bids are read
-  // ("Accept & pay $X": money and hiring keep their confirm). Once per visit; an offer no longer open
-  // simply leaves the screen as it is.
+  // 2026-09-30 (idea 20): the card saved for one-tap hiring, read while there is a bid to accept
+  // (card path only). The accept's confirm names it, and only a confirm that named it pays at once.
+  const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
+  const [cardsRead, setCardsRead] = useState(paymentsMode !== 'stripe');
+  const oneTapCardRef = useRef<string | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (paymentsMode !== 'stripe' || !canAccept) return;
+      listSavedCards().then(({ data }) => {
+        if (!active) return;
+        setSavedCard(data[0] ?? null);
+        setCardsRead(true);
+      });
+      return () => {
+        active = false;
+      };
+    }, [canAccept])
+  );
+
+  // Idea 20: a bid push's Accept & pay — that offer's own confirm opens once the bids and the saved
+  // card are read ("Accept & pay $X", naming the card: money and hiring keep their confirm). Once per
+  // visit; an offer no longer open simply leaves the screen as it is.
   const acceptIntentRef = useRef(false);
   useEffect(() => {
-    if (params.intent !== 'accept' || !params.offerId || acceptIntentRef.current || loading || !canAccept) return;
+    if (params.intent !== 'accept' || !params.offerId || acceptIntentRef.current || loading || !canAccept || !cardsRead) return;
     acceptIntentRef.current = true;
-    const bid = bids.find((offer) => offer.id === params.offerId);
-    if (bid) confirmAccept(bid);
+    // Only a bid still open: a countered or withdrawn one leaves the screen as it is.
+    const pending = pendingBids.find((bid) => bid.id === params.offerId);
+    if (pending) confirmAccept(pending.offer);
     // confirmAccept is this render's own; the gate above is what the effect waits on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.intent, params.offerId, loading, canAccept, bids]);
+  }, [params.intent, params.offerId, loading, canAccept, cardsRead, pendingBids]);
 
   async function handleStopSeries() {
     if (!series || stoppingSeries) return;
@@ -547,8 +569,10 @@ export function ClientJobDetailScreen() {
    * which re-reads the job canonically and shows the truthful payment state.
    */
   function proceedToCheckout() {
-    // Idea 20: the accept's own confirm said "Accept & pay" — with a saved card, Checkout pays at once.
-    navigation.navigate('Checkout', { job, oneTap: true });
+    // Idea 20: when the accept's own confirm named the saved card and the total, Checkout pays with
+    // that card at once.
+    const card = oneTapCardRef.current;
+    navigation.navigate('Checkout', card ? { job, oneTap: true, oneTapCard: card } : { job });
   }
 
   /**
@@ -1461,7 +1485,9 @@ export function ClientJobDetailScreen() {
             : '') +
           (paymentsMode === 'sandbox'
             ? 'This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll authorize and protect the payment in a sandbox checkout (no real money in this build).'
-            : 'This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll protect the payment in checkout.')
+            : stripe && savedCard && acceptQuote
+              ? `This selects their bid for the job — the other active bids will no longer be eligible. ${cardLabel(savedCard)} is charged the total now, and the funds are held in protection until you approve the work.`
+              : 'This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll protect the payment in checkout.')
         }
         // #64 (M-17): the confirmation repeats the button's verb and noun; the
         // total it charges is spelled out in the message above. 2026-09-30 (decision C):
@@ -1470,7 +1496,11 @@ export function ClientJobDetailScreen() {
         cancelText="Cancel"
         loading={!!pendingAccept && acceptingId === pendingAccept.id}
         palette={emeraldColors}
-        onConfirm={() => pendingAccept && doAccept(pendingAccept)}
+        onConfirm={() => {
+          // Idea 20: pay at once only when this confirm named the saved card.
+          oneTapCardRef.current = stripe && savedCard && acceptQuote ? savedCard.id : null;
+          if (pendingAccept) void doAccept(pendingAccept);
+        }}
         onCancel={() => setPendingAccept(null)}
       />
     </SafeAreaView>

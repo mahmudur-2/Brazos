@@ -74,6 +74,17 @@ begin
     return null;
   end if;
 
+  -- A cancelled job's card ends, saying so — the sender ends it by push at once (the group 5 review).
+  if v_job.status = 'cancelled' then
+    return jsonb_build_object(
+      'stage', 'cancelled',
+      'title', 'Job cancelled',
+      'subtitle', left(v_job.title, 60),
+      'progress', 0,
+      'ended', true
+    );
+  end if;
+
   -- An allow-list of the four live stages; anything else has no card.
   v_stage := case
     when v_job.status = 'completed' then 'finished'
@@ -99,7 +110,7 @@ begin
       when 'on_the_way' then v_first || ' is on the way'
       when 'arrived' then v_first || ' has arrived'
       when 'started' then v_first || ' started the job'
-      else v_first || ' finished'
+      else v_first || ' finished the job'
     end,
     'subtitle', case v_stage
       when 'on_the_way' then coalesce('Arrives ' || v_window, left(v_job.title, 60))
@@ -189,7 +200,9 @@ begin
   -- Only a job whose customer holds a card; one waiting row per job is enough — the sender reads the
   -- job's state as it is when it sends.
   if exists (select 1 from public.live_activity_tokens t where t.job_id = new.id)
-     and not exists (select 1 from public.live_card_outbox o where o.job_id = new.id and o.status = 'pending') then
+     -- An unclaimed row is enough; a row already in the sender's hands gets a successor, so a change
+     -- during a send is never lost (the group 5 review).
+     and not exists (select 1 from public.live_card_outbox o where o.job_id = new.id and o.status = 'pending' and o.attempts = 0) then
     insert into public.live_card_outbox (job_id) values (new.id);
   end if;
   return new;
@@ -211,6 +224,10 @@ language plpgsql security definer
 set search_path = public, pg_temp
 as $$
 begin
+  -- A row claimed five times and never resolved (a sender stopped mid-send) gives up.
+  update public.live_card_outbox
+     set status = 'failed', last_error = coalesce(last_error, 'no answer after five tries')
+   where status = 'pending' and attempts >= 5;
   return query
   with claimed as (
     select o.id

@@ -32,7 +32,7 @@ select tests.clear_auth();
 -- ---------------------------------------------------------------------------
 select is(
   (select body from public.notification_outbox where recipient_id = :'customer' and dedupe_key = 'bid_received:' || :'offer_sam'),
-  'Sam Okafor bid $80 · $86 all-in',
+  'Sam bid $80 · $86 all-in',
   '1a: the customer reads the bid and what they would pay (quote_job_price), since a button''s title cannot carry it'
 );
 select ok(
@@ -53,6 +53,11 @@ select is(
 select tests.authenticate_as(:'customer');
 select public.accept_offer(:'offer_sam') as accepted \gset
 select tests.clear_auth();
+-- Every switch the customer has, off: the declined card is told anyway ('jobs' is ungated).
+insert into public.notification_prefs (user_id, bids, hire_requests, job_updates, messages, nearby_jobs)
+values (:'customer', false, false, false, false, false)
+on conflict (user_id) do update
+  set bids = false, hire_requests = false, job_updates = false, messages = false, nearby_jobs = false;
 insert into public.payments (job_id, payer_id, payee_id, amount_cents, customer_fee_cents, platform_fee_cents, provider, status)
 values (:'job', :'customer', :'sam', 8000, 600, 600, 'stripe', 'held')
 returning id as payment \gset
@@ -61,7 +66,7 @@ select ok(
   (select title = 'Your card was declined' and category = 'jobs'
           and data ->> 'intent' = 'checkout' and data ->> 'jobId' = :'job' and data ->> 'screen' = 'ClientJobDetail'
    from public.notification_outbox where recipient_id = :'customer' and type = 'payment_declined'),
-  '2a: the customer is told, always-on, and the push opens the job''s Checkout'
+  '2a: the customer is told with every notification switch off, and the push opens the job''s Checkout'
 );
 select is(
   (select body from public.notification_outbox where recipient_id = :'customer' and type = 'payment_declined'),
@@ -74,7 +79,7 @@ select is(
 -- ---------------------------------------------------------------------------
 select ok(
   pg_get_functiondef('public.series_on_visit_change()'::regprocedure) like '%''categoryId'', ''series_confirm''%',
-  '3a: the Confirm push carries the series_confirm button set'
+  '3a: the function body names the series_confirm button set (the push row itself: 180_job_series.sql 7b)'
 );
 select has_trigger('public', 'jobs', 'jobs_series_visit', '3b: and jobs_series_visit still fires it');
 

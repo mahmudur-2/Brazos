@@ -242,10 +242,11 @@ select ok(
   '7a: the visit is Sam''s - assigned, and nothing is paid yet'
 );
 select is(
-  (select title || ' | ' || body || ' | ' || category || ' | ' || (data ->> 'intent') from public.notification_outbox
+  (select title || ' | ' || body || ' | ' || category || ' | ' || (data ->> 'intent') || ' | ' || (data ->> 'categoryId')
+     from public.notification_outbox
     where recipient_id = :'cust_a' and dedupe_key = 'series_confirm:' || :'draft_a'),
-  'Sam can come ' || :'visit_dy' || ' 10 AM | Confirm $86 · I14 A clean the flat | jobs | checkout',
-  '7b: Ana is asked to confirm $86 (the $80 price and its protection fee, quote_job_price()); the push opens Checkout'
+  'Sam can come ' || :'visit_dy' || ' 10 AM | Confirm $86 · I14 A clean the flat | jobs | checkout | series_confirm',
+  '7b: Ana is asked to confirm $86 (the $80 price and its protection fee, quote_job_price()); the push opens Checkout, with its Confirm button (20260930001200)'
 );
 select is(
   (select count(*)::int from public.notification_outbox where recipient_id = :'cust_a' and type = 'message'),

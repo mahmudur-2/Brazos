@@ -26,6 +26,8 @@ const STORE_KEY = 'brazos.liveCards.v1';
 const REFRESH_MS = 60_000;
 /** A finished job keeps its card this long after it was marked complete (send-live-cards: the same). */
 export const FINISHED_WINDOW_MS = 2 * 60 * 60_000;
+/** The most live cards read at once; a list cut off here never ends the cards past it. */
+const LIVE_LIMIT = 10;
 
 /** jobId → the card's id and the words it last showed (a card is ended with its last words). */
 type Cards = Record<string, { id: string; last: LiveCardState }>;
@@ -75,7 +77,8 @@ export function useLiveJobCard(userId: string | null | undefined) {
       running = true;
       try {
         const since = new Date(Date.now() - FINISHED_WINDOW_MS).toISOString();
-        // The customer's own jobs that can be live: hired and not done, or done in the last two hours.
+        // The customer's own jobs that can be live — hired and not done, or done in the last two hours —
+        // newest first. Which of them IS live is live_card_state()'s alone to say.
         const { data, error } = await supabase
           .from('jobs')
           .select('id, status, completed_at')
@@ -83,7 +86,8 @@ export function useLiveJobCard(userId: string | null | undefined) {
           .in('status', ['assigned', 'in_progress', 'completed'])
           // The date is quoted: PostgREST reads a bare ISO instant's punctuation as its own syntax.
           .or(`status.neq.completed,completed_at.gte."${since}"`)
-          .limit(10);
+          .order('created_at', { ascending: false })
+          .limit(LIVE_LIMIT);
         if (error || !active) return;
         const cards = await cardsNow();
         // The jobs whose card goes on — every other card ends below.
@@ -111,9 +115,11 @@ export function useLiveJobCard(userId: string | null | undefined) {
         }
         // Signed out meanwhile: the cleanup below has ended every card and cleared the map.
         if (!active) return;
+        // A list cut off at the limit cannot say a card's job has gone: those cards wait.
+        const complete = (data ?? []).length < LIVE_LIMIT;
         // A card whose job has left the lock screen — long finished, cancelled, no longer live — ends.
         for (const jobId of Object.keys(cards)) {
-          if (keep.has(jobId)) continue;
+          if (keep.has(jobId) || !complete) continue;
           endLiveCard(cards[jobId].id, cards[jobId].last);
           delete cards[jobId];
         }

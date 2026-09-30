@@ -180,9 +180,10 @@ export async function createPaymentSession(
       body:
         tipAmountCents != null
           ? { jobId, tipAmountCents }
-          : // Idea 20: the customer's "Save this card for one-tap hiring", sent only when it is on.
-            options?.saveCard
-            ? { jobId, saveCard: true }
+          : // Idea 20: the customer's "Save this card for one-tap hiring", sent both ways whenever the
+            // caller states it, so turning it off clears it on an intent that already carried it.
+            typeof options?.saveCard === 'boolean'
+            ? { jobId, saveCard: options.saveCard }
             : { jobId },
     });
   } catch (error) {
@@ -338,42 +339,52 @@ const jobCheckoutPaymentIds = new Set<string>();
 /**
  * 2026-09-30 (idea 20) — CONFIRM WITH THE SAVED CARD: create-payment, as the caller, with
  * useSavedCard — the same intent the sheet would have used, confirmed off-session with the card the
- * customer saved for one-tap hiring. `confirmed` means the provider took it; the screen then watches
- * the ledger reach held exactly as after the sheet. A decline (or a bank that wants the customer
- * present) comes back `declined`; no saved card, `noSavedCard` — either way Checkout takes over.
+ * customer saved for one-tap hiring — THAT card, `paymentMethodId`, the one the screen named.
+ * `confirmed` means the provider took it; the screen then watches the ledger reach held exactly as
+ * after the sheet. A decline (or a bank that wants the customer present) comes back `declined`; a
+ * card no longer saved, `noSavedCard` — either way Checkout takes over. `ambiguous`: nobody knows yet
+ * whether the provider charged (no answer, or the provider's own failure mid-charge) — the ledger
+ * decides, never a guess.
  */
-export async function confirmWithSavedCard(jobId: string): Promise<{
+export async function confirmWithSavedCard(
+  jobId: string,
+  paymentMethodId: string
+): Promise<{
   confirmed: boolean;
   declined: boolean;
   noSavedCard: boolean;
+  ambiguous: boolean;
   error: { message: string } | null;
 }> {
   let invoked: { data: unknown; error: unknown };
   try {
-    invoked = await supabase.functions.invoke('create-payment', { body: { jobId, useSavedCard: true } });
+    invoked = await supabase.functions.invoke('create-payment', { body: { jobId, useSavedCard: true, paymentMethodId } });
   } catch (error) {
     invoked = { data: null, error };
   }
   if (invoked.error) {
     const body = await readInvokeErrorBody(invoked.error);
     const { message } = extractInvokeError(invoked.error as InvokeErrorLike, body);
-    let parsed: { declined?: unknown; code?: unknown } = {};
+    let parsed: { declined?: unknown; code?: unknown; ambiguous?: unknown } = {};
     try {
       parsed = body ? (JSON.parse(body) as typeof parsed) : {};
     } catch {
       parsed = {};
     }
-    return {
-      confirmed: false,
-      declined: parsed.declined === true,
-      noSavedCard: parsed.code === 'no_saved_card',
-      error: { message: userMessage(message) },
-    };
+    const context = (invoked.error as { context?: { status?: unknown } } | null)?.context;
+    const status = typeof context?.status === 'number' ? context.status : 0;
+    const declined = parsed.declined === true;
+    const noSavedCard = parsed.code === 'no_saved_card';
+    // The function says whether the outcome is known; without its word, only a refusal before any
+    // charge (a 4xx) is known — no answer at all, or a server failure, is not.
+    const ambiguous =
+      typeof parsed.ambiguous === 'boolean' ? parsed.ambiguous : !declined && !noSavedCard && !(status >= 400 && status < 500);
+    return { confirmed: false, declined, noSavedCard, ambiguous, error: { message: userMessage(message) } };
   }
   const confirmed = (invoked.data as { confirmed?: unknown } | null)?.confirmed === true;
   return confirmed
-    ? { confirmed: true, declined: false, noSavedCard: false, error: null }
-    : { confirmed: false, declined: false, noSavedCard: false, error: { message: 'The payment could not be confirmed.' } };
+    ? { confirmed: true, declined: false, noSavedCard: false, ambiguous: false, error: null }
+    : { confirmed: false, declined: false, noSavedCard: false, ambiguous: true, error: null };
 }
 
 /**

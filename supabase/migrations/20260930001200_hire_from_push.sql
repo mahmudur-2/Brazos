@@ -51,7 +51,8 @@ begin
     return new;
   end if;
 
-  v_worker_name := public.notify_display_name(new.worker_id);
+  -- The worker's first name, as this run's other pushes take it ("Sam bid $80 · $86 all-in").
+  v_worker_name := coalesce(nullif(split_part(btrim(public.notify_display_name(new.worker_id)), ' ', 1), ''), 'A worker');
   -- Idea 20: what the customer would pay, from the one price arithmetic.
   select q.total_cents into v_total from public.quote_job_price(new.amount_cents) q;
 

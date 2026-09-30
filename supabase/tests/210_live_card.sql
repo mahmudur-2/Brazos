@@ -11,7 +11,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(14);
+select plan(17);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -133,6 +133,31 @@ select ok(
 );
 select public.resolve_live_card((select outbox_id from i9_claimed where job_id = :'job'), 'sent', null) as resolved \gset
 select is(public.drain_live_cards(), null::bigint, '6b: with nothing waiting, the wake-up calls nothing');
+
+-- ---------------------------------------------------------------------------
+-- 7. The group 5 review: a change during a send, a send that never answers, a cancelled job.
+-- ---------------------------------------------------------------------------
+update public.jobs set late_minutes = 10 where id = :'job';
+create temp table i9_first as select * from public.claim_live_card_batch(50);
+update public.jobs set late_minutes = 20 where id = :'job';
+select is(
+  (select count(*)::int from public.live_card_outbox where job_id = :'job' and status = 'pending'),
+  2,
+  '7a: a change while a send is in flight waits in its own row, so the card never keeps older words'
+);
+update public.live_card_outbox set attempts = 5 where id = (select outbox_id from i9_first where job_id = :'job');
+create temp table i9_second as select * from public.claim_live_card_batch(50);
+select ok(
+  (select status = 'failed' from public.live_card_outbox where id = (select outbox_id from i9_first where job_id = :'job'))
+  and exists (select 1 from i9_second where job_id = :'job'),
+  '7b: a send that never answered gives up at five tries, and the job''s next change still goes'
+);
+update public.jobs set status = 'cancelled' where id = :'job';
+select ok(
+  (select s ->> 'stage' = 'cancelled' and s ->> 'title' = 'Job cancelled' and (s ->> 'ended')::boolean
+     from (select public.live_card_state(:'job') as s) x),
+  '7c: a cancelled job''s card ends, saying so'
+);
 
 select * from finish();
 rollback;

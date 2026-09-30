@@ -70,6 +70,8 @@ const KIND_OF: Record<string, Kind> = {
   dispute_opened: 'dispute',
   review_received: 'review',
   hire_declined: 'muted',
+  // 2026-09-30 (idea 20): a declined saved card needs the customer — the warning colour.
+  payment_declined: 'dispute',
 };
 const kindColour = (type: string, colors: ColorPalette): string => {
   switch (KIND_OF[type] ?? 'bids') {

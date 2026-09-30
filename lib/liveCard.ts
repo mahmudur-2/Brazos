@@ -17,7 +17,7 @@ import { darkColors } from './theme';
 
 /** The words a card shows, as live_card_state() returns them. */
 export type LiveCardState = {
-  stage: 'on_the_way' | 'arrived' | 'started' | 'finished';
+  stage: 'on_the_way' | 'arrived' | 'started' | 'finished' | 'cancelled';
   title: string;
   subtitle: string;
   progress: number;

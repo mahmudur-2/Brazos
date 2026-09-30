@@ -60,7 +60,7 @@ export function PaymentMethodsScreen() {
   async function remove(card: SavedCard) {
     const ok = await confirmAsync({
       title: `Remove ${cardLabel(card)}?`,
-      message: 'One-tap hiring stops until you save a card again. Nothing already paid changes.',
+      message: 'One-tap hiring stops until you save a card again. Payments you’ve already protected aren’t affected.',
       confirmText: 'Remove',
       cancelText: 'Keep it',
       destructive: true,
@@ -73,6 +73,7 @@ export function PaymentMethodsScreen() {
       await alertAsync('Could not remove the card', userMessage(error, 'Try again in a moment.'));
       return;
     }
+    setCards((current) => (current ? current.filter((saved) => saved.id !== card.id) : current));
     await loadCards();
   }
 
@@ -90,7 +91,10 @@ export function PaymentMethodsScreen() {
       await alertAsync('The card was not saved', userMessage(sheet.error, 'Try again in a moment.'));
       return;
     }
-    if (sheet.outcome === 'saved') await loadCards();
+    if (sheet.outcome === 'saved') {
+      setCards(null);
+      await loadCards();
+    }
   }
 
   return (
@@ -182,17 +186,26 @@ export function PaymentMethodsScreen() {
                         </Pressable>
                       </View>
                     ))}
-                    <Text style={styles.bodyText}>
-                      Accept and pay from a bid’s notification with this card. The provider keeps it — Brazos never sees the number.
-                    </Text>
+                    <Text style={styles.bodyText}>Accept and pay from a bid’s notification with this card.</Text>
+                  </>
+                ) : cardsError ? (
+                  // A failed read is not "no card": it says so, and tries again.
+                  <>
+                    <Text style={styles.sectionTitle}>Couldn’t read your cards</Text>
+                    <Text style={styles.bodyText}>{cardsError}</Text>
+                    <Button
+                      title="Try again"
+                      variant="secondary"
+                      onPress={() => {
+                        setCards(null);
+                        void loadCards();
+                      }}
+                    />
                   </>
                 ) : (
                   <>
                     <Text style={styles.sectionTitle}>No card saved</Text>
-                    <Text style={styles.bodyText}>
-                      {cardsError ??
-                        'Save a card for one-tap hiring: accept and pay from a bid’s notification. The provider keeps it — Brazos never sees the number.'}
-                    </Text>
+                    <Text style={styles.bodyText}>Save a card for one-tap hiring: accept and pay from a bid’s notification.</Text>
                     <Button title="Add a card" variant="secondary" onPress={() => void addCard()} loading={busy} disabled={busy} />
                   </>
                 )

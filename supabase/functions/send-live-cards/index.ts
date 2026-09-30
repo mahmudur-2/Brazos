@@ -42,7 +42,7 @@ const FINISHED_WINDOW_S = 2 * 60 * 60;
 type Row = {
   outbox_id: string;
   job_id: string;
-  state: { title?: string; subtitle?: string; progress?: number; ended?: boolean } | null;
+  state: { stage?: string; title?: string; subtitle?: string; progress?: number; ended?: boolean } | null;
   tokens: string[];
 };
 
@@ -125,8 +125,8 @@ Deno.serve(async (req) => {
           progress: Number(row.state.progress ?? 0),
         },
         // A finished card stays two hours on the lock screen, then goes — as the app keeps it
-        // (hooks/useLiveJobCard.ts, FINISHED_WINDOW_MS).
-        ...(row.state.ended ? { 'dismissal-date': now + FINISHED_WINDOW_S } : {}),
+        // (hooks/useLiveJobCard.ts, FINISHED_WINDOW_MS); a cancelled job's goes at once.
+        ...(row.state.ended ? { 'dismissal-date': row.state.stage === 'cancelled' ? now : now + FINISHED_WINDOW_S } : {}),
       },
     });
     let delivered = false;
