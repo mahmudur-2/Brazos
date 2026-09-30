@@ -871,6 +871,99 @@ export type Database = {
           },
         ]
       }
+      job_series: {
+        Row: {
+          anchor_date: string | null
+          cadence: string
+          client_id: string
+          created_at: string
+          dropped_worker_id: string | null
+          id: string
+          last_error: string | null
+          next_visit_date: string | null
+          next_visit_no: number
+          origin_job_id: string
+          pending_job_id: string | null
+          price_cents: number | null
+          status: string
+          stopped_at: string | null
+          updated_at: string
+          worker_id: string | null
+        }
+        Insert: {
+          anchor_date?: string | null
+          cadence: string
+          client_id: string
+          created_at?: string
+          dropped_worker_id?: string | null
+          id?: string
+          last_error?: string | null
+          next_visit_date?: string | null
+          next_visit_no?: number
+          origin_job_id: string
+          pending_job_id?: string | null
+          price_cents?: number | null
+          status?: string
+          stopped_at?: string | null
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Update: {
+          anchor_date?: string | null
+          cadence?: string
+          client_id?: string
+          created_at?: string
+          dropped_worker_id?: string | null
+          id?: string
+          last_error?: string | null
+          next_visit_date?: string | null
+          next_visit_no?: number
+          origin_job_id?: string
+          pending_job_id?: string | null
+          price_cents?: number | null
+          status?: string
+          stopped_at?: string | null
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_series_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_series_dropped_worker_id_fkey"
+            columns: ["dropped_worker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_series_origin_job_id_fkey"
+            columns: ["origin_job_id"]
+            isOneToOne: true
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_series_pending_job_id_fkey"
+            columns: ["pending_job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_series_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jobs: {
         Row: {
           accepted_bid_id: string | null
@@ -907,6 +1000,7 @@ export type Database = {
           property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
+          series_id: string | null
           status: Database["public"]["Enums"]["job_status"]
           title: string
           videos: Json
@@ -947,6 +1041,7 @@ export type Database = {
           property_id?: string | null
           scheduled_date?: string | null
           scheduled_for?: string | null
+          series_id?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           title: string
           videos?: Json
@@ -987,6 +1082,7 @@ export type Database = {
           property_id?: string | null
           scheduled_date?: string | null
           scheduled_for?: string | null
+          series_id?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           title?: string
           videos?: Json
@@ -1040,6 +1136,13 @@ export type Database = {
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jobs_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "job_series"
             referencedColumns: ["id"]
           },
         ]
@@ -2553,6 +2656,7 @@ export type Database = {
           status: string
         }[]
       }
+      advance_job_series: { Args: { p_now?: string }; Returns: number }
       apply_payment_event: { Args: { p_event_id: string }; Returns: Json }
       apply_worker_embeddings: {
         Args: { p_model: string; p_rows: Json }
@@ -2715,6 +2819,7 @@ export type Database = {
           property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
+          series_id: string | null
           status: Database["public"]["Enums"]["job_status"]
           title: string
           videos: Json
@@ -2840,6 +2945,7 @@ export type Database = {
           property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
+          series_id: string | null
           status: Database["public"]["Enums"]["job_status"]
           title: string
           videos: Json
@@ -2938,6 +3044,7 @@ export type Database = {
       direct_thread_notifications_enabled: { Args: never; Returns: boolean }
       drain_notification_outbox: { Args: never; Returns: number }
       drain_settlements: { Args: never; Returns: number }
+      drop_series_worker: { Args: { p_series_id: string }; Returns: undefined }
       enqueue_notification: {
         Args: {
           p_actor: string
@@ -3049,6 +3156,7 @@ export type Database = {
       get_payment_customer: { Args: { p_user_id: string }; Returns: string }
       hardening_fixes_enabled: { Args: never; Returns: boolean }
       install_reminder_schedule: { Args: never; Returns: string }
+      install_series_schedule: { Args: never; Returns: string }
       install_settlement_schedules: { Args: never; Returns: string }
       is_active_user: { Args: never; Returns: boolean }
       is_blocked_between: { Args: { a: string; b: string }; Returns: boolean }
@@ -3226,6 +3334,7 @@ export type Database = {
           property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
+          series_id: string | null
           status: Database["public"]["Enums"]["job_status"]
           title: string
           videos: Json
@@ -3268,6 +3377,7 @@ export type Database = {
         Args: { p_direct_thread_id?: string; p_job_id?: string }
         Returns: boolean
       }
+      money_label: { Args: { p_cents: number }; Returns: string }
       my_payouts_enabled: { Args: never; Returns: boolean }
       my_payouts_status: { Args: never; Returns: string }
       my_pending_job_requests: {
@@ -3523,6 +3633,7 @@ export type Database = {
           property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
+          series_id: string | null
           status: Database["public"]["Enums"]["job_status"]
           title: string
           videos: Json
@@ -3848,6 +3959,29 @@ export type Database = {
         }
       }
       security_definer_search_path_enabled: { Args: never; Returns: boolean }
+      series_close_offers: {
+        Args: { p_actor: string; p_job_id: string }
+        Returns: undefined
+      }
+      series_offer_visit: {
+        Args: {
+          p_series: Database["public"]["Tables"]["job_series"]["Row"]
+          p_visit: string
+        }
+        Returns: string
+      }
+      series_open_visit: {
+        Args: {
+          p_passed_by: string
+          p_series: Database["public"]["Tables"]["job_series"]["Row"]
+          p_visit: string
+        }
+        Returns: string
+      }
+      series_visit_date: {
+        Args: { p_anchor: string; p_cadence: string; p_visit: number }
+        Returns: string
+      }
       set_active_mode: { Args: { p_mode: string }; Returns: string }
       set_block: {
         Args: { p_blocked: string; p_expires_at?: string }
@@ -3894,6 +4028,33 @@ export type Database = {
         Args: { p_actor: string; p_category: string; p_recipient: string }
         Returns: boolean
       }
+      start_job_series: {
+        Args: { p_cadence: string; p_job_id: string }
+        Returns: {
+          anchor_date: string | null
+          cadence: string
+          client_id: string
+          created_at: string
+          dropped_worker_id: string | null
+          id: string
+          last_error: string | null
+          next_visit_date: string | null
+          next_visit_no: number
+          origin_job_id: string
+          pending_job_id: string | null
+          price_cents: number | null
+          status: string
+          stopped_at: string | null
+          updated_at: string
+          worker_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "job_series"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       start_live_location: {
         Args: {
           p_direct_thread_id?: string
@@ -3903,6 +4064,33 @@ export type Database = {
           p_lng: number
         }
         Returns: string
+      }
+      stop_job_series: {
+        Args: { p_series_id: string }
+        Returns: {
+          anchor_date: string | null
+          cadence: string
+          client_id: string
+          created_at: string
+          dropped_worker_id: string | null
+          id: string
+          last_error: string | null
+          next_visit_date: string | null
+          next_visit_no: number
+          origin_job_id: string
+          pending_job_id: string | null
+          price_cents: number | null
+          status: string
+          stopped_at: string | null
+          updated_at: string
+          worker_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "job_series"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       stop_live_location: {
         Args: { p_direct_thread_id?: string; p_job_id?: string }
@@ -3951,6 +4139,7 @@ export type Database = {
           property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
+          series_id: string | null
           status: Database["public"]["Enums"]["job_status"]
           title: string
           videos: Json
@@ -4020,6 +4209,7 @@ export type Database = {
           property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
+          series_id: string | null
           status: Database["public"]["Enums"]["job_status"]
           title: string
           videos: Json

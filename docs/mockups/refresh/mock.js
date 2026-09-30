@@ -56,7 +56,7 @@
       budget_cents: null, budget_min_cents: null, budget_max_cents: null, pricing_mode: 'open_bids',
       scheduled_date: null, arrival_start_hour: null, arrival_end_hour: null, status: 'open', created_at: ago(2 * H),
       photos: [], videos: [], assigned_worker_id: null, final_amount_cents: null, completion_photo_url: null,
-      completion_photos: [], completion_videos: [], en_route_at: null, arrived_at: null, completed_at: null,
+      completion_photos: [], completion_videos: [], en_route_at: null, arrived_at: null, completed_at: null, series_id: null,
       visibility: 'open_market', accepted_bid_id: null, accepted_offer_id: null, scheduled_for: null,
       location_text: null, property_id: null, area_code: null, updated_at: ago(H),
     }, extra || {});
@@ -73,6 +73,7 @@
       description: 'Three 36-inch oak shelves, drywall, anchors needed. I would like them level and evenly spaced.',
       budget_cents: 11000, status: 'assigned', assigned_worker_id: SAM, final_amount_cents: 11000, accepted_offer_id: uuid(303),
       scheduled_date: today(0), arrival_start_hour: 18, arrival_end_hour: 20, en_route_at: ago(12 * 60e3), created_at: ago(2 * D),
+      series_id: uuid(801), // idea 14: repeats every 2 weeks with Sam
     }),
     job(203, ME, 'Mount a 65-inch TV above the fireplace', 'tv_mounting', 'Park Slope, Brooklyn, NY', {
       description: 'Brick above the fireplace, bracket is here. Cables should run down the side.',
@@ -101,6 +102,7 @@
       description: 'A 40 kg mirror, about 90 x 120 cm, on a plaster wall. The cleat is in the box.',
       budget_cents: 7000, status: 'assigned', assigned_worker_id: ME, final_amount_cents: 7000, accepted_offer_id: uuid(309),
       scheduled_date: today(0), arrival_start_hour: 16, arrival_end_hour: 18, created_at: ago(1.5 * D),
+      series_id: uuid(802), // idea 14: Dana's weekly repeat; you get each visit first
     }),
   ];
   db.job_locations = [
@@ -111,6 +113,19 @@
     { job_id: J.wardrobe, lat: 40.6773, lng: -73.9645, address_line: '88 Lincoln Pl, Apt 2, Brooklyn, NY 11217' },
     { job_id: J.door, lat: 40.6773, lng: -73.9645, address_line: '88 Lincoln Pl, Apt 2, Brooklyn, NY 11217' },
     { job_id: J.mirror, lat: 40.6773, lng: -73.9645, address_line: '88 Lincoln Pl, Apt 2, Brooklyn, NY 11217' },
+  ];
+
+  // ---- repeating jobs (idea 14, migration 20260930001000) -----------------------------------
+  var series = function (n, client, originJob, cadence, nextDate, worker, price) {
+    return {
+      id: uuid(n), client_id: client, origin_job_id: originJob, cadence: cadence, anchor_date: today(0), next_visit_no: 1,
+      next_visit_date: nextDate, worker_id: worker, price_cents: price, pending_job_id: null, dropped_worker_id: null,
+      status: 'active', stopped_at: null, last_error: null, created_at: ago(2 * D), updated_at: ago(H),
+    };
+  };
+  db.job_series = [
+    series(801, ME, J.shelves, 'biweekly', today(14), SAM, 11000),
+    series(802, DANA, J.mirror, 'weekly', today(7), ME, 7000),
   ];
 
   // ---- offers (sealed bids) -----------------------------------------------------------------
@@ -243,6 +258,7 @@
     db.job_offers = db.job_offers.filter(notMine);
     db.payments = db.payments.filter(notMine);
     db.job_locations = db.job_locations.filter(notMine);
+    db.job_series = db.job_series.filter(function (s) { return s.client_id !== ME; });
     db.messages = db.messages.filter(function (m) { return !m.job_id || mine.indexOf(m.job_id) < 0; });
     db.saved_workers = [];
   }
@@ -501,6 +517,32 @@
       var j = jobById(a.p_job_id);
       j.status = a.p_status;
       if (a.p_status === 'completed') { j.completed_at = new Date().toISOString(); if (a.p_completion_photos) j.completion_photos = a.p_completion_photos; if (a.p_completion_videos) j.completion_videos = a.p_completion_videos; }
+      return null;
+    },
+    // Idea 14: repeat jobs (migration 20260930001000) — start from a posted job, stop, drop.
+    start_job_series: function (a) {
+      var j = jobById(a.p_job_id);
+      if (j.series_id) return clone(db.job_series.find(function (s) { return s.id === j.series_id; }));
+      var row = insertRows('job_series', {
+        client_id: ME, origin_job_id: j.id, cadence: a.p_cadence, anchor_date: j.scheduled_date, next_visit_no: 1,
+        next_visit_date: null, worker_id: j.assigned_worker_id, price_cents: j.final_amount_cents, pending_job_id: null,
+        dropped_worker_id: null, status: 'active', stopped_at: null, last_error: null,
+      })[0];
+      j.series_id = row.id;
+      return clone(row);
+    },
+    stop_job_series: function (a) {
+      var s = db.job_series.find(function (x) { return x.id === a.p_series_id; });
+      s.status = 'stopped';
+      s.stopped_at = new Date().toISOString();
+      s.pending_job_id = null;
+      return clone(s);
+    },
+    drop_series_worker: function (a) {
+      var s = db.job_series.find(function (x) { return x.id === a.p_series_id; });
+      s.dropped_worker_id = s.worker_id;
+      s.worker_id = null;
+      s.price_cents = null;
       return null;
     },
     // Idea 5: the hired worker's running-late tap (migration 20260930000700) — the latest tap wins.

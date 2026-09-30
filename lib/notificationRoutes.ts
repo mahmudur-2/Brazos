@@ -138,6 +138,8 @@ type RouteTarget =
       screen: 'ClientJobDetail' | 'JobDetail';
       jobId: string;
       mode: AppMode | null;
+      /** Idea 14: a repeat visit's "Confirm $X" opens Checkout on arrival. */
+      intent?: 'checkout';
     };
 
 /** Pure: reads the payload, touches neither the network nor the navigator. */
@@ -178,7 +180,9 @@ function resolveTarget(data: NotificationData | null): RouteTarget | null {
 
   // ClientJobDetail / JobDetail need the job row itself.
   if (data.screen === 'ClientJobDetail' || data.screen === 'JobDetail') {
-    return { kind: 'job', tab, screen: data.screen, jobId: data.jobId, mode };
+    // Idea 14: only the customer's job takes the checkout intent — an allow-list of one.
+    const intent = data.screen === 'ClientJobDetail' && data.intent === 'checkout' ? { intent: 'checkout' as const } : {};
+    return { kind: 'job', tab, screen: data.screen, jobId: data.jobId, mode, ...intent };
   }
 
   // Named in TAB_FOR_SCREEN but not handled above. Fail closed rather than
@@ -290,7 +294,7 @@ export async function handleNotificationData(
   }
 
   if (target.screen === 'ClientJobDetail') {
-    navigateChecked('MyJobs', 'ClientJobDetail', { job });
+    navigateChecked('MyJobs', 'ClientJobDetail', { job, ...(target.intent ? { intent: target.intent } : {}) });
     return;
   }
 

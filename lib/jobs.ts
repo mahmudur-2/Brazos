@@ -196,6 +196,9 @@ export type Job = {
    *  20 or 30 minutes — and when they said it. The arrival window moves by it until arrived_at. */
   late_minutes: number | null;
   late_reported_at: string | null;
+  /** Idea 14 (2026-09-30, migration 20260930001000): the repeating job this visit belongs to, if any
+   *  (lib/jobSeries.ts). Set only by the series' own functions. */
+  series_id: string | null;
   /** When the job reached `completed` (phase51). Starts the 72h auto-release
    *  clock. Null for jobs completed before phase51 — their clock never runs. */
   completed_at: string | null;
@@ -239,6 +242,7 @@ export function mapJobRow(row: any): Job {
     arrived_at: row.arrived_at ?? null,
     late_minutes: row.late_minutes ?? null,
     late_reported_at: row.late_reported_at ?? null,
+    series_id: row.series_id ?? null,
     completed_at: row.completed_at ?? null,
   };
 }
@@ -374,7 +378,7 @@ export function toOpenJob(row: any): OpenJob {
 const OPEN_JOB_COLUMNS =
   'id, client_id, title, description, category, location, budget_cents, budget_min_cents, budget_max_cents, pricing_mode, needed_today, scheduled_date, arrival_start_hour, arrival_end_hour, status, created_at, photos, videos';
 const JOB_COLUMNS =
-  `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos, completion_videos, en_route_at, arrived_at, late_minutes, late_reported_at, completed_at`;
+  `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos, completion_videos, en_route_at, arrived_at, late_minutes, late_reported_at, series_id, completed_at`;
 
 /** Fetch all jobs with status 'open', newest first (worker browse feed). */
 export async function fetchOpenJobs() {

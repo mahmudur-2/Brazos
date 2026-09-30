@@ -68,7 +68,8 @@ test('[static] the server: one writer for the hired worker before arriving, one 
 test('[static] the app: the three chips inside the progress card, before arriving, once the payment is held', () => {
   const jobs = read('lib/jobs.ts');
   assert.match(jobs, /\.rpc\('report_running_late', \{ p_job_id: jobId, p_minutes: minutes \}\)/);
-  assert.match(jobs, /en_route_at, arrived_at, late_minutes, late_reported_at, completed_at`;/);
+  // Idea 14 added series_id beside them.
+  assert.match(jobs, /en_route_at, arrived_at, late_minutes, late_reported_at, series_id, completed_at`;/);
   const screen = flat(read('screens/WorkerJobScreen.tsx'));
   assert.match(screen, /\{job\.status === 'assigned' && !job\.arrived_at && !awaitingProtection && isLateDay\(job\.scheduled_date\) \? \( <View style=\{styles\.lateBlock\}>/);
   assert.match(screen, /const clientFirstName = client\?\.full_name\?\.trim\(\)\.split\(\/\\s\+\/\)\[0\] \|\| 'Your customer';/, 'never "They was told"');

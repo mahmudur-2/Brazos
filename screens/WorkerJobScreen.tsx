@@ -40,6 +40,9 @@ import { useJob } from '../hooks/useJob';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { RepeatNote } from '../components/RepeatNote';
+import { useJobSeries } from '../hooks/useJobSeries';
+import { dropSeriesWorker } from '../lib/jobSeries';
 import { userMessage } from '../lib/errorMessage';
 import { Sentry } from '../lib/observability/sentry';
 import {
@@ -168,6 +171,29 @@ export function WorkerJobScreen() {
 
   const isWorker = !!user && job?.assigned_worker_id === user.id;
   const clientName = client?.full_name ?? 'the client';
+  // Idea 14: a visit of a repeating job this worker gets first — its line, and "Drop future visits".
+  // RLS answers with no row once they are not the series' worker, and the note is gone.
+  const { series, setSeries } = useJobSeries(job?.series_id);
+  const [droppingSeries, setDroppingSeries] = useState(false);
+  async function handleDropSeries() {
+    if (!series || droppingSeries) return;
+    const ok = await confirmAsync({
+      title: 'Drop future visits?',
+      message: `${clientName} will post the next visits for bids. This visit stays yours.`,
+      confirmText: 'Drop future visits',
+      cancelText: 'Keep them',
+      destructive: true,
+    });
+    if (!ok) return;
+    setDroppingSeries(true);
+    const { error: dropError } = await dropSeriesWorker(series.id);
+    setDroppingSeries(false);
+    if (dropError) {
+      await alertAsync('Could not drop the visits', userMessage(dropError));
+      return;
+    }
+    setSeries(null);
+  }
   // Idea 5's "Dana was told ✓" — the first name, as a person would say it.
   const clientFirstName = client?.full_name?.trim().split(/\s+/)[0] || 'Your customer';
 
@@ -734,6 +760,11 @@ export function WorkerJobScreen() {
               </Text>
               <Text style={styles.muted}>for {clientName}</Text>
             </View>
+            {series ? (
+              <View style={styles.repeatWrap}>
+                <RepeatNote series={series} perspective="worker" busy={droppingSeries} onEnd={() => void handleDropSeries()} />
+              </View>
+            ) : null}
           </Card>
 
           {live ? (
@@ -1413,6 +1444,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  // Idea 14: the repeating job's line under the price, behind the same hairline.
+  repeatWrap: {
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,

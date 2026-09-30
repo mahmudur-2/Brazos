@@ -78,7 +78,9 @@ import { descriptionCharsNeeded } from '../lib/validation';
 import { answerLine, withAnswerLine, type PostAnswers } from '../lib/postQuestions';
 import { dictateBeforeLine } from '../lib/dictation';
 import { createDirectOffer } from '../lib/offers';
-import { alertAsync } from '../lib/dialog';
+import { alertAsync, confirmAsync } from '../lib/dialog';
+import { DropdownBody, DropdownChevron } from '../components/DropdownReveal';
+import { CADENCE_LABELS, SERIES_CADENCES, startJobSeries, type SeriesCadence } from '../lib/jobSeries';
 import { userMessage } from '../lib/errorMessage';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { resolveCurrentPlace } from '../lib/geolocation';
@@ -366,6 +368,30 @@ export function PostJobScreen() {
     setNeededToday(on);
     if (on) setScheduledDate(toLocalIsoDate(new Date()));
   }
+  // 2026-09-30 (idea 14) — "Repeat this job", a fresh post's alone, off by default: every week, every
+  // 2 weeks or every month. The job posts as it always does; the series starts from it once it is
+  // live (start_job_series()). Not kept in the draft, as "Need it today" is not.
+  const [repeatCadence, setRepeatCadence] = useState<SeriesCadence | null>(null);
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  /**
+   * Idea 14: the series starts from the job just posted — one quiet retry, then, if it still fails, the
+   * failure said and a Try again (the job is live either way; a repeat is never silently lost).
+   */
+  async function startRepeat(jobId: string, cadence: SeriesCadence) {
+    let { error: seriesError } = await startJobSeries(jobId, cadence);
+    if (seriesError) ({ error: seriesError } = await startJobSeries(jobId, cadence));
+    while (seriesError && screenMountedRef.current) {
+      const again = await confirmAsync({
+        title: 'The repeat didn’t save',
+        message: `Your job is posted. ${userMessage(seriesError)}`,
+        confirmText: 'Try again',
+        cancelText: 'Not now',
+      });
+      if (!again) return;
+      ({ error: seriesError } = await startJobSeries(jobId, cadence));
+    }
+  }
+
   // Exact service address — job_private_details on publish, never public.
   const [address, setAddress] = useState('');
   const [scheduledDate, setScheduledDate] = useState<string | null>(null);
@@ -1275,6 +1301,8 @@ export function PostJobScreen() {
       // Published — nothing left to resume. Uploads are already marked
       // committed above, so this only removes the now-stale draft record.
       if (draftUserId) void clearPostJobDraft(draftUserId);
+      // Idea 14: the live job becomes the series' first visit. It is posted whatever happens here.
+      if (savedJob && isFreshPost && repeatCadence) void startRepeat(savedJob.id, repeatCadence);
     }
 
     // #42 — THE SERVER HAS CONFIRMED: only now may the Seal's tick draw; the
@@ -1955,6 +1983,62 @@ export function PostJobScreen() {
                 </View>
               ) : null}
 
+              {/* 2026-09-30 (idea 14): "Repeat this job · Every 2 weeks" — the drawn row, a fresh post's
+                  own: the words and the choice at the right; it opens in place to the four choices. */}
+              {isFreshPost ? (
+                <View>
+                  <Pressable
+                    onPress={() => setRepeatOpen((open) => !open)}
+                    style={({ pressed }) => [styles.todayRow, pressed && styles.repeatPressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Repeat this job"
+                    accessibilityValue={{ text: repeatCadence ? CADENCE_LABELS[repeatCadence] : 'Off' }}
+                    accessibilityState={{ expanded: repeatOpen }}
+                  >
+                    <Ionicons name="repeat-outline" size={18} color={colors.emerald} />
+                    <View style={styles.todayCopy}>
+                      <Text style={styles.todayTitle}>Repeat this job</Text>
+                      <Text style={styles.todayCaption} numberOfLines={1}>
+                        Same worker gets first pick
+                      </Text>
+                    </View>
+                    <Text style={[styles.repeatValue, repeatCadence ? styles.repeatValueOn : null]}>
+                      {repeatCadence ? CADENCE_LABELS[repeatCadence] : 'Off'}
+                    </Text>
+                    <DropdownChevron open={repeatOpen}>
+                      <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+                    </DropdownChevron>
+                  </Pressable>
+                  <DropdownBody open={repeatOpen}>
+                    <View style={styles.repeatList}>
+                      {[null, ...SERIES_CADENCES].map((cadence) => {
+                        const chosen = repeatCadence === cadence;
+                        const label = cadence ? CADENCE_LABELS[cadence] : 'Off';
+                        return (
+                          <Pressable
+                            key={cadence ?? 'off'}
+                            onPress={() => {
+                              setRepeatCadence(cadence);
+                              setRepeatOpen(false);
+                            }}
+                            style={({ pressed }) => [styles.repeatOption, pressed && styles.repeatPressed]}
+                            accessibilityRole="button"
+                            accessibilityLabel={label}
+                            accessibilityState={{ selected: chosen }}
+                          >
+                            <Text style={[styles.repeatOptionText, chosen && styles.repeatValueOn]}>{label}</Text>
+                            {chosen ? <Ionicons name="checkmark" size={18} color={colors.emerald} /> : null}
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <Text style={styles.repeatHint}>
+                      Three days before each visit, they get it first at the same price. You confirm and pay each visit.
+                    </Text>
+                  </DropdownBody>
+                </View>
+              ) : null}
+
               {/* #38 — the summary, rebuilt from refs/job-summary.html: every
                   detail opens its own step, the media are managed in place,
                   and BUDGET opens the price list above. */}
@@ -2229,6 +2313,44 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   todayCaption: {
     fontSize: 12,
     color: colors.textMuted,
+  },
+  // Idea 14: the repeat row's choice at the right, and what opens under it.
+  repeatValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  repeatValueOn: {
+    color: colors.emerald,
+  },
+  repeatPressed: {
+    opacity: 0.7,
+  },
+  // The choices, in place under the row: the app's dropdown rows (44pt, the platform hairline over
+  // border), indented to the title so the list reads as the row's own.
+  repeatList: {
+    marginLeft: 18 + spacing.sm + 2,
+    marginTop: spacing.xs,
+  },
+  repeatOption: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  repeatOptionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.ink,
+  },
+  repeatHint: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textMuted,
+    paddingTop: spacing.sm,
+    paddingLeft: 18 + spacing.sm + 2,
   },
   progressRow: {
     flexDirection: 'row',

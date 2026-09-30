@@ -60,7 +60,10 @@ import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
-import { alertAsync } from '../lib/dialog';
+import { alertAsync, confirmAsync } from '../lib/dialog';
+import { RepeatNote } from '../components/RepeatNote';
+import { useJobSeries } from '../hooks/useJobSeries';
+import { stopJobSeries } from '../lib/jobSeries';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { acceptOffer, type OfferWithWorker } from '../lib/offers';
@@ -165,6 +168,12 @@ export function ClientJobDetailScreen() {
   const [statusReadAttempt, setStatusReadAttempt] = useState(0);
   // D15: the payments kill switch, read on focus; a failed read is true.
   const [paymentsEnabled, setPaymentsEnabled] = useState(true);
+  // Idea 14: whether this job's ledger has been read — a repeat visit's "Confirm $X" push opens
+  // Checkout only once it says the visit still waits for its payment.
+  const [paymentRead, setPaymentRead] = useState(false);
+  // Idea 14: a visit of a repeating job — its line, and "Stop repeating".
+  const { series, setSeries } = useJobSeries(job.series_id);
+  const [stoppingSeries, setStoppingSeries] = useState(false);
   const [workerError, setWorkerError] = useState<string | null>(null);
   const [rehirable, setRehirable] = useState<Set<string>>(new Set());
   // The exact service address (job_private_details). This is the poster's own
@@ -245,6 +254,36 @@ export function ClientJobDetailScreen() {
     payment,
     hasOpenDispute: !!openDispute,
   });
+  // Idea 14: from a repeat visit's "Confirm $X" push — Checkout, once, and only when this visit can
+  // still be funded (a visit already paid, or a closed funding window, stays here).
+  const checkoutIntentRef = useRef(false);
+  useEffect(() => {
+    if (params.intent !== 'checkout' || checkoutIntentRef.current || !paymentRead) return;
+    checkoutIntentRef.current = true;
+    if (canFundNow && paymentsEnabled) navigation.navigate('Checkout', { job });
+  }, [params.intent, paymentRead, canFundNow, paymentsEnabled, job, navigation]);
+
+  async function handleStopSeries() {
+    if (!series || stoppingSeries) return;
+    const ok = await confirmAsync({
+      title: 'Stop repeating?',
+      message: 'Visits already booked stay booked. No new visits will be offered or posted.',
+      confirmText: 'Stop repeating',
+      cancelText: 'Keep it',
+      destructive: true,
+    });
+    if (!ok) return;
+    setStoppingSeries(true);
+    const { data, error: stopError } = await stopJobSeries(series.id);
+    if (!screenMountedRef.current) return;
+    setStoppingSeries(false);
+    if (stopError) {
+      await alertAsync('Could not stop the repeat', userMessage(stopError));
+      return;
+    }
+    if (data) setSeries(data);
+  }
+
   // D14: an unfunded stripe row's funding window. Open → the countdown rides
   // the funding card; closed → canFundNow already refuses (D9), and the card
   // below says so and offers a re-read, never a charge into a lapsed row.
@@ -304,6 +343,7 @@ export function ClientJobDetailScreen() {
     setPayment(null);
     setOpenDispute(null);
     setStatusReadError(false);
+    setPaymentRead(false);
   }, [job.id]);
 
   // The ledger row, re-read on every focus: Checkout and the approval flow are
@@ -319,6 +359,8 @@ export function ClientJobDetailScreen() {
           if (!active) return;
           if (!paymentResult.error) setPayment(paymentResult.data);
           if (!disputeResult.error) setOpenDispute(disputeResult.data);
+          // Idea 14: the checkout intent waits for a ledger actually read.
+          if (!paymentResult.error && !disputeResult.error) setPaymentRead(true);
           // Either read failing marks the pair failed: both feed the same
           // lifecycle answer, and a retry re-runs them together.
           setStatusReadError(!!(paymentResult.error || disputeResult.error));
@@ -710,7 +752,7 @@ export function ClientJobDetailScreen() {
           </View>
         </Card>
 
-        {arrivalWindowLabel(job) || privateAddress || addressReadFailed ? (
+        {arrivalWindowLabel(job) || privateAddress || addressReadFailed || series ? (
           <Card palette={emeraldColors} style={[styles.timingCard, isDark && styles.hairlineDark]}>
             <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>TIMING &amp; ADDRESS</Text>
             {arrivalWindowLabel(job) ? (
@@ -763,6 +805,10 @@ export function ClientJobDetailScreen() {
                   onPress={() => setAddressReadAttempt((attempt) => attempt + 1)}
                 />
               </View>
+            ) : null}
+            {/* Idea 14: a visit of a repeating job says so, with the one thing to do about it. */}
+            {series ? (
+              <RepeatNote series={series} perspective="customer" busy={stoppingSeries} onEnd={() => void handleStopSeries()} />
             ) : null}
           </Card>
         ) : null}

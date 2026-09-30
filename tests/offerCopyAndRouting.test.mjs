@@ -107,7 +107,8 @@ test('notificationRoutes still owns the screen→tab contract', async () => {
   // The two screens the feed now delegates must actually be routable there.
   assert.match(routes, /ClientJobDetail: 'MyJobs'/);
   assert.match(routes, /JobDetail: 'MyJobs'/);
-  assert.match(routes, /navigateChecked\('MyJobs', 'ClientJobDetail', \{ job \}\)/);
+  // 2026-09-30 (idea 14): the job may carry a repeat visit's checkout intent beside it.
+  assert.match(routes, /navigateChecked\('MyJobs', 'ClientJobDetail', \{ job(?:, \.\.\.\(target\.intent \? \{ intent: target\.intent \} : \{\}\))? \}\)/);
 });
 
 // ---------------------------------------------------------------------------

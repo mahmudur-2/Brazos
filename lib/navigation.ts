@@ -292,7 +292,9 @@ export type WorkerHomeStackNavigation =
 // screens live here so hub cards navigate within the same stack.
 export type MyJobsStackParamList = {
   MyJobsHub: undefined;
-  ClientJobDetail: { job: Job };
+  /** Idea 14: `intent: 'checkout'` — a repeat visit's "Confirm $X" push — opens Checkout once, when
+   *  the ledger says the visit still waits for its payment. */
+  ClientJobDetail: { job: Job; intent?: 'checkout' };
   /** Idea 6: `intent: 'route'` — the reminder's Route button — opens directions once on arrival. */
   WorkerJob: { jobId: string; intent?: 'route' };
   JobDetail: { job: OpenJob };
