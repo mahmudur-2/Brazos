@@ -27,7 +27,7 @@ const legalSource = readFileSync(join(repo, 'lib', 'legal', 'index.ts'), 'utf8')
 const pick = (name) => legalSource.match(new RegExp(`export const ${name} = '([^']+)'`))[1];
 writeFileSync(join(shared, 'legal.js'), `window.__REFRESH_LEGAL__ = ${JSON.stringify({ terms: pick('TERMS_VERSION'), privacy: pick('PRIVACY_VERSION') })};\n`);
 for (const [from, to] of [
-  ['assets/prestige/hero_armchair_customer.webp', 'armchair.webp'],
+  ['assets/prestige/hero_armchair_customer_lamp_dark.webp', 'armchair.webp'],
   ['assets/prestige/hero_toolbox_worker.webp', 'toolbox.webp'],
   ['assets/prestige/home-atmosphere-dark.webp', 'room.webp'],
 ]) copyFileSync(join(repo, from), join(shared, 'sample', to));
