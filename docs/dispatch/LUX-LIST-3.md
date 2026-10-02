@@ -513,3 +513,49 @@ ran a command and wrote a file with no approval prompt (as Fable); the real task
 command and wrote a file, again with no prompt.
 Then, at 03:22 on 2026-09-30, their one word: "build" → THE BUILD RUN STARTED, in this chat, per
 `docs/dispatch/BUILD-RUN.md` (heartbeat and progress in `.shots/refresh/build-run/`).
+
+Next sitting (2026-10-01, the first design chat after the build run, started from
+`.shots/refresh/BRAZOS-build-run-chat-2026-09-30.md`). The first popup, their answers:
+- "Did the tab bar work on your phone after update 3?" → typed "for nav bar?" — yes, the bar
+  along the bottom; re-asked as "Did the nav bar at the bottom work on your phone after update 3?"
+  → "Taps and slide both work" — the tab bar fix (`26efca0`, OTA 3) PASSED on the phone, taps and
+  the slide both; the slide stays. The tab bar report counts as item 8.
+- "Next item on your list?" → typed "I'll send them when ur ready" → item 9 onwards awaited, as
+  screenshots.
+Then, shown the full parked list, the operator quoted its four "only you can do" lines (the
+lock-screen add-on and Apple's push key, the receipt email key, the rest of the phone check, the
+production copy of the build run's migrations), their words: "ok park this.... and just give me
+some reminders on the way later" → PARKED; reminded in one line at the moment each matters (the
+phone check after an OTA, the add-on before a new build, the production copy before a real
+release, the email key when receipts come up), never every reply.
+
+The whole-app review (2026-10-01), asked for in these words: "plan out everything thats kind of
+inconsistent / wrong with the current app.... What can be done better... Better architected......
+Unnecessary things... etc Any inconsistenies in the app etc Test out the functionality,
+smoothness.... etc (take your time with this to analyze then give me a detailed report... and what
+needs to be done to make it as best as possible) Also before you start ask me some question / give
+me more ideas on what I can ask you to do here". The popups, their answers:
+- Extras → "Stranger test, Bad-day test, App Store check"; More → "Words pass, Accessibility,
+  Speed"; Report → "Pictures + short plan (Recommended)".
+- "Continue with phone" can't work (text sign-in off) → typed "ok for now.. forward to the screen
+  to show email + phone number just dont change it to continue with email (will add it later)" →
+  DECIDED: the button keeps its label and opens the email + phone screen until text sign-in is on.
+- Delete the out-of-v1 extras? → typed "No show me all of the features that were planned but never
+  built...." → DECIDED: nothing is deleted; the never-built list is drawn instead.
+- Order on "build" → "Money & safety first (Recommended)".
+- The plan's approval box → rejected: "dont do anything yet... will pick this up tomm".
+The next day (2026-10-02), their words: "for Brazos, I need a kind of like the best thing you could
+do for Brazos, kind of making sure the app functions correctly. And this will be for done in Claude
+Code. And it's going to ask me a bunch of questions and stuff. ... To literally use up my all of my
+usages ... I don't mind if it uses uh, sub agents and uses a lot of sub agents ... along with
+whatever you planned in this chat". The popup, their answers:
+- Start the big run now? → "Pictures first, build later" — DECIDED: this run changes nothing in
+  the app; it verifies every finding, hunts for more, runs the suites, draws the picture report and
+  the a–f boards, and writes the fix brief. "build" has NOT been said.
+- The look-and-words choices → "Draw a–f, I pick later (Recommended)".
+- A new Beta build for the permission wording → "Yes, start it (Recommended)" — for the build run.
+The run launched as one workflow of ~150–250 helpers; within minutes the operator, their words:
+"dont use 100 agents are you crazy..... (use the usages efficiently..) i only have 30% left for
+opus 5.5max... and this is just for planning..." → STOPPED at once (the workflow was stopped; it
+had written nothing; no tracked file changed). STANDING RULE: use usage efficiently — no large
+helper fan-outs; planning work is done lean.

@@ -1,7 +1,7 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-30 (THE TAB BAR FIX, the first section below, is the next session's start — then
-BUILD RUN — DONE, the run it followed — then the BUILD RUN's planning section as it was written before "build", superseded by the first —
+WRITTEN: 2026-10-01 (DESIGN LOOP 3, the first section below, is the next session's start — then
+THE TAB BAR FIX — then BUILD RUN — DONE, the run it followed — then the BUILD RUN's planning section as it was written before "build", superseded by the first —
 then THE VIEWER'S PREP FIXED, AND THE TAB BAR EXPLORED, the DESIGN LOOP section, BUILD IT, the
 LUX-LIST-2 run's, LUX-LIST-64's, the NEXT SESSION primer of 2026-09-27 (the pipeline, the fences and
 the traps), THE OPERATOR'S REVIEW OF THE LUX AFTER, THE LUX REMAKE, the brief's own section, THE
@@ -11,9 +11,46 @@ the Lux drawing run's, the eighteen-item run's and the sittings before them, unc
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
 
+## DESIGN LOOP 3 — the review is planned; nothing built (2026-10-01/02, the first design chat after the build run; docs only, nothing in the app changed)
+
+**Start here.** Started from `.shots/refresh/BRAZOS-build-run-chat-2026-09-30.md`. The operator's
+answers, in their words: `docs/dispatch/LUX-LIST-3.md` §7, from "Next sitting (2026-10-01)" on.
+
+- **The whole-app review is written up as `docs/dispatch/FIX-RUN.md`.** That's the brief for
+  "build": batches A money & safety, B App Store & bad days, C one language, D one look,
+  E accessibility, F smooth, fast, built better. ✔ marks an item read in the code; the rest are the
+  review readers' and get confirmed first. "build" has NOT been said. The operator's order: money &
+  safety first.
+- **Picks waiting** (FIX-RUN.md "Picks waiting"): stage names, one button, capital letters, the tab
+  bar on deep screens, what shows under the bar, the worker no-show refund rule, the legal facts.
+  None of the a–f boards is drawn yet.
+- **Usage rule (operator, 2026-10-02):** "dont use 100 agents are you crazy..... (use the usages
+  efficiently..)". A ~200-helper workflow was launched for the planning and stopped within minutes.
+  It wrote nothing. Work lean from now on: the main session alone, at most one fresh-eyes review per
+  batch.
+
+- **The tab bar fix PASSED on the phone** (OTA 3, `26efca0`): "Taps and slide both work". The slide
+  stays. That report was item 8 of the "what's wrong" list; item 9 onwards is awaited, as screenshots.
+- **Parked, with reminders.** The operator's four, from BUILD RUN — DONE's "Waiting on the operator"
+  below — the lock-screen add-on and Apple's push key; the receipt email key (and a domain and
+  support inbox before real customers); the rest of the phone check; the production copy of
+  migrations `20260930000600`–`20260930001300`. Their words: "ok park this.... and just give me some
+  reminders on the way later". Remind in ONE line at the moment each matters — the phone check right
+  after any OTA, the add-on before any new native build, the production copy before any real
+  release, TestFlight or App Store step, the email key when receipts come up — never every reply.
+  Drop an item once it is done.
+- **Also open, not yet asked:** what shows through under the floating nav bar (a frosted backing,
+  more fade, or leave it); any animation that still feels stiff; Sign in with Apple stays "Not now";
+  a repeat visit gets the same free 15-minute cancel after hiring as any job (`cancel_job()`), keep
+  or change. Three small cleanups, each its own session: the baseline's extra table rights for
+  `authenticated`; feed icons for the new notification kinds; deleting the paused
+  `brazos-build-watchdog`.
+- **Note:** the reminder rule could not go to the auto-memory — GUARD-PATH-ESCAPE blocks writes
+  outside the project. It lives here and in `LUX-LIST-3.md` §7 instead.
+
 ## THE TAB BAR FIX — the buttons work, the bubble never sticks (2026-09-30, after the build run; `26efca0`, OTA 3)
 
-**Start here.** The operator, on the Beta: the tab buttons did nothing, and the melt bubble stuck —
+**The operator, on the Beta:** the tab buttons did nothing, and the melt bubble stuck —
 swollen on Inbox joined to the +, spilling past the pill's end on Profile, sitting on Discover over
 the Home screen. All three pictures showed the finger-down swell, so the release never reached the
 bar: the 120 Hz bar read taps off its Pan, and a release the Pan never got chose nothing and let
