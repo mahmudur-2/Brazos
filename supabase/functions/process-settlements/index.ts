@@ -153,6 +153,33 @@ async function getRows<T>(path: string): Promise<T[]> {
   return Array.isArray(rows) ? (rows as T[]) : [];
 }
 
+/**
+ * A9 (2026-10-03): how many rows a queue holds, by PostgREST's exact count — no rows transferred.
+ * The drain reports blocked = due − ready, queue-wide, so the operator sees every payee that
+ * cannot be paid, not only the few that landed in one batch. A failed count never fails the pass:
+ * it reports null and the money still moves.
+ */
+async function countRows(view: string): Promise<number | null> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${view}?select=id&limit=1`, {
+      method: 'HEAD',
+      headers: { ...serviceHeaders(), Prefer: 'count=exact' },
+    });
+    if (!res.ok) return null;
+    const total = res.headers.get('content-range')?.split('/')[1];
+    const n = total == null ? NaN : Number(total);
+    return Number.isInteger(n) && n >= 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The queue-wide blocked count for a pass: everything due that is not ready. */
+async function countBlocked(due: string, ready: string): Promise<number> {
+  const [d, r] = await Promise.all([countRows(due), countRows(ready)]);
+  return d != null && r != null ? Math.max(0, d - r) : 0;
+}
+
 /** A service_role RPC: writes no client may make. */
 async function serviceRpc(fn: string, args: Record<string, unknown>): Promise<Response> {
   return fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
@@ -241,8 +268,13 @@ async function recordFailure(counts: Tally, kind: Kind, paymentId: string, outco
 // ---------------------------------------------------------------------------
 async function runTransfers(): Promise<Tally> {
   const counts = tally();
+  // A9 (2026-10-03): the drain reads transfers_READY — transfers_due minus the payees it could
+  // never pay (no ENABLED payout account), in the same order (20261003000000). Before, 25 blocked
+  // rows at the head of transfers_due hid every payable row behind them, tick after tick. The
+  // blocked count is now the whole difference between the two queues, not one batch's share.
+  counts.blocked = await countBlocked('transfers_due', 'transfers_ready');
   const rows = await getRows<TransferRow>(
-    `transfers_due?select=id,payee_id,transfer_cents,transfer_attempts&limit=${QUEUE_LIMIT}`
+    `transfers_ready?select=id,payee_id,transfer_cents,transfer_attempts&limit=${QUEUE_LIMIT}`
   );
   if (rows.length === 0) return counts;
 
@@ -331,8 +363,11 @@ async function runTransfers(): Promise<Tally> {
 // ---------------------------------------------------------------------------
 async function runRefunds(): Promise<Tally> {
   const counts = tally();
+  // A9: refunds_READY — refunds_due minus the rows with no provider reference to refund against
+  // (20261003000000), so such a row cannot sit at the head and hide refundable rows behind it.
+  counts.blocked = await countBlocked('refunds_due', 'refunds_ready');
   const rows = await getRows<RefundRow>(
-    `refunds_due?select=id,provider_ref,refund_cents,refund_attempts&limit=${QUEUE_LIMIT}`
+    `refunds_ready?select=id,provider_ref,refund_cents,refund_attempts&limit=${QUEUE_LIMIT}`
   );
 
   for (const row of rows) {

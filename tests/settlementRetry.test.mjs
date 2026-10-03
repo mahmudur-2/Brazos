@@ -227,8 +227,22 @@ test('13 · the drain (raw text): refunds_due select names refund_attempts, both
 
   // The refunds query reads the counter the key is built from; the transfers
   // query still reads its own.
-  assert.match(src, /refunds_due\?select=id,provider_ref,refund_cents,refund_attempts&/, 'refunds_due select names refund_attempts');
-  assert.match(src, /transfers_due\?select=id,payee_id,transfer_cents,transfer_attempts&/, 'transfers_due select still names transfer_attempts');
+  // A9 (2026-10-03): both passes read the *_ready views — the *_due queues minus the rows the
+  // drain could never act on (20261003000000_settlement_queue_ready.sql) — so blocked rows at the
+  // head of a queue cannot hide payable rows behind them; blocked is reported queue-wide.
+  assert.match(src, /refunds_ready\?select=id,provider_ref,refund_cents,refund_attempts&/, 'refunds_ready select names refund_attempts');
+  assert.match(src, /transfers_ready\?select=id,payee_id,transfer_cents,transfer_attempts&/, 'transfers_ready select still names transfer_attempts');
+  assert.doesNotMatch(src, /transfers_due\?select|refunds_due\?select/, 'the drain no longer pages the complete queues');
+  assert.match(src, /counts\.blocked = await countBlocked\('transfers_due', 'transfers_ready'\);/, 'pass one reports blocked = due − ready');
+  assert.match(src, /counts\.blocked = await countBlocked\('refunds_due', 'refunds_ready'\);/, 'pass two reports blocked = due − ready');
+  assert.match(src, /headers: \{ \.\.\.serviceHeaders\(\), Prefer: 'count=exact' \}/, "the count is PostgREST's exact count, no rows transferred");
+  const migration = readFileSync(new URL('../supabase/migrations/20261003000000_settlement_queue_ready.sql', import.meta.url), 'utf8');
+  assert.match(migration, /create or replace view public\.transfers_ready as\s+select t\.\*\s+from public\.transfers_due t\s+where exists \(\s+select 1\s+from public\.payment_accounts a\s+where a\.user_id = t\.payee_id\s+and a\.payouts_enabled\s+and a\.stripe_account_id is not null\s+\)\s+order by t\.release_requested_at;/);
+  assert.match(migration, /create or replace view public\.refunds_ready as\s+select r\.\*\s+from public\.refunds_due r\s+where r\.provider_ref is not null\s+order by r\.updated_at;/);
+  for (const view of ['transfers_ready', 'refunds_ready']) {
+    assert.match(migration, new RegExp(`revoke all on table public\\.${view} from public, anon, authenticated;\\s*grant select on table public\\.${view} to service_role;`), `${view}: service_role only`);
+  }
+  assert.doesNotMatch(migration, /\bdrop |\brename |truncate|delete from/i, 'additive — never destructive');
 
   // Both idempotency keys carry their counter, and the counter-less refund
   // key — the one that could not be rotated even by hand — is gone.
