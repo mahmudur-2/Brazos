@@ -1618,10 +1618,10 @@ test('home(13) fence: the atmosphere carries a vignette, and it crops to fill', 
 // CATCHES: the ground being changed in one surface and not the others (dark
 // screens read `bg` from ui/tokens.ts, `background` and `homeBackground` from
 // lib/theme.ts, so a partial change shows as a seam between the two homes and
-// everything else); and the same edit being applied to the LIGHT palette,
-// which is frozen.
+// everything else); and the light palette drifting back to more than one
+// cream (fix run D10).
 // ---------------------------------------------------------------------------
-test('home(5) fence: one dark ground in three places, light untouched', () => {
+test('home(5) fence: one dark ground in three places, one light cream in three places', () => {
   // 2026-09-26 (the refresh): the Lux ground's middle stop, still ONE value in three places.
   const DARK_GROUND = '#0A1A17';
 
@@ -1653,10 +1653,13 @@ test('home(5) fence: one dark ground in three places, light untouched', () => {
   assert.equal(value(darkTheme, 'background', 'lib/theme darkColors'), DARK_GROUND);
   assert.equal(value(darkTheme, 'homeBackground', 'lib/theme darkColors'), DARK_GROUND);
 
-  // LIGHT IS FROZEN. Not "different from dark" — these exact values.
-  assert.equal(value(lightTokens, 'bg', 'ui/tokens light'), '#F6F3EA');
-  assert.equal(value(lightTheme, 'background', 'lib/theme light'), '#F4F1E8');
-  assert.equal(value(lightTheme, 'homeBackground', 'lib/theme light'), '#FAF5F1');
+  // ONE LIGHT CREAM (fix run D10, 2026-10-03). The three light page grounds were
+  // #F6F3EA, #F4F1E8 and #FAF5F1 — a seam wherever two of them met. They are now
+  // the one cream, #F4F1E8, in all three places; these exact values.
+  const LIGHT_GROUND = '#F4F1E8';
+  assert.equal(value(lightTokens, 'bg', 'ui/tokens light'), LIGHT_GROUND);
+  assert.equal(value(lightTheme, 'background', 'lib/theme light'), LIGHT_GROUND);
+  assert.equal(value(lightTheme, 'homeBackground', 'lib/theme light'), LIGHT_GROUND);
 
   // And the retired value is gone from both surfaces entirely, so a half-done
   // revert cannot leave one screen on the old ground.

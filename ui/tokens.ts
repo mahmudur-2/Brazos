@@ -70,7 +70,7 @@ export const colors = {
   ...brand,
 
   /** --bg — the warm ivory page background. */
-  bg: '#F6F3EA',
+  bg: '#F4F1E8',
   /** --surface — cards and sheets. */
   surface: '#FFFFFF',
   /** --muted — secondary text. */
@@ -181,9 +181,9 @@ export const colors = {
   authGlintHalo: '#E8C98C',
   authBadgeFill: '#FFFFFF',
   authShade: '#10261D',
-  authGroundTop: '#F6F3EA',
-  authGroundMid: '#F6F3EA',
-  authGroundBottom: '#F6F3EA',
+  authGroundTop: '#F4F1E8',
+  authGroundMid: '#F4F1E8',
+  authGroundBottom: '#F4F1E8',
   heroDiscTop: '#F6F9F4',
   heroDiscMid: '#DEEBE1',
   heroDiscBottom: '#CDDCCF',

@@ -31,7 +31,7 @@ export const authColors = {
   // forest, emerald, gold, goldSoft, mint, mint2, ink — from ui/tokens.ts.
   ...brand,
   /** --bg */
-  bg: '#F6F3EA',
+  bg: '#F4F1E8',
   /** --surface */
   surface: '#FFFFFF',
   /** --muted */

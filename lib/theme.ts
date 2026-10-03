@@ -92,8 +92,8 @@ export const colors = {
   // gold, goldSoft, mint, mint2, ink. `brand` is `as const`, so each keeps its
   // literal type here exactly as when they were written out inline.
   ...brand,
-  /** Exact warm surface used by the approved Customer Home reference. */
-  homeBackground: '#FAF5F1',
+  /** The light page cream — one value with `background` and ui/tokens `bg` since fix run D10. */
+  homeBackground: '#F4F1E8',
   /** The blue-slate secondary text used by the approved Customer Home reference. */
   homeSlate: '#526477',
   /** The "Switch to Worker" pill's ring. Light rides the same blue-slate the

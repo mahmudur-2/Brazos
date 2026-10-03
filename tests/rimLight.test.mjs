@@ -257,7 +257,7 @@ test('[static] the ground and the corner are the pages’; the roles are the pag
     // 2026-09-27 (the Lux remake, rulings 4 and 5): the one mint #4FC58C is the
     // accent; the gold is today's #D4A24C, and the glint's halo IS the gold.
     dark: { authInk: '#F3F1E8', authMuted: '#A9B8B1', authAccent: '#4FC58C', authGold: '#D4A24C', authGlintCore: '#FFE9B0', authGlintHalo: '#D4A24C', authBadgeFill: '#0A2822', authShade: '#000000', authGroundTop: '#062421', authGroundMid: '#0A1A17', authGroundBottom: '#07110F', heroDiscTop: '#19553F', heroDiscMid: '#0F3B30', heroDiscBottom: '#0A2A23', authCtaTop: '#1C503F', authCtaBottom: '#0E3229' },
-    light: { authInk: '#13201B', authMuted: '#6E7771', authAccent: '#0D6B52', authGold: '#C8A15B', authGlintCore: '#FFF6DE', authGlintHalo: '#E8C98C', authBadgeFill: '#FFFFFF', authShade: '#10261D', authGroundTop: '#F6F3EA', authGroundMid: '#F6F3EA', authGroundBottom: '#F6F3EA', heroDiscTop: '#F6F9F4', heroDiscMid: '#DEEBE1', heroDiscBottom: '#CDDCCF', authCtaTop: '#064C3B', authCtaBottom: '#064C3B' },
+    light: { authInk: '#13201B', authMuted: '#6E7771', authAccent: '#0D6B52', authGold: '#C8A15B', authGlintCore: '#FFF6DE', authGlintHalo: '#E8C98C', authBadgeFill: '#FFFFFF', authShade: '#10261D', authGroundTop: '#F4F1E8', authGroundMid: '#F4F1E8', authGroundBottom: '#F4F1E8', heroDiscTop: '#F6F9F4', heroDiscMid: '#DEEBE1', heroDiscBottom: '#CDDCCF', authCtaTop: '#064C3B', authCtaBottom: '#064C3B' },
   };
   for (const [theme, block] of [['dark', dark], ['light', light]]) {
     for (const [key, value] of Object.entries(expected[theme])) assert.equal(hex(block, key), value, `${theme} ${key}`);
