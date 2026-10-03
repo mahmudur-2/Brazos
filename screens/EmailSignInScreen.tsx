@@ -21,7 +21,7 @@ import type { AuthStackNavigation } from '../lib/navigation';
 import { PHONE_ENTRY } from '../lib/phoneAuth';
 import { isValidEmail } from '../lib/validation';
 import { requestPasswordReset } from '../lib/passwordReset';
-import { userMessage } from '../lib/errorMessage';
+import { authMessage, userMessage } from '../lib/errorMessage';
 
 /**
  * Sign in with email — the alternate route off the phone-first SignIn screen,
@@ -128,7 +128,8 @@ export function EmailSignInScreen() {
 
     // Nothing typed is cleared on failure — the user fixes one field and
     // retries rather than starting over.
-    if (error) setFormError(error.message);
+    // B7: a plain sentence, never the auth server's own text.
+    if (error) setFormError(authMessage(error));
   }
 
   // The ship page's two controls, pinned by the scaffold (see its `footer`):

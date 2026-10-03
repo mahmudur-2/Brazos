@@ -54,7 +54,7 @@ type AuthContextValue = {
     password: string,
     fullName: string,
     phone: string
-  ) => Promise<AuthResult>;
+  ) => Promise<AuthResult & { needsConfirmation: boolean }>;
   login: (email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<AuthResult>;
 };
@@ -169,7 +169,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!error && data.session && data.user) {
           await updateProfile(data.user.id, { full_name: fullName, phone });
         }
-        return { error };
+        // B7: no session means the project asks for email confirmation, and
+        // the screen says where the link went; with a session the app is
+        // already routing in.
+        return { error, needsConfirmation: !error && !data.session };
       },
       login: async (email, password) => {
         const { error } = await supabase.auth.signInWithPassword({ email, password });

@@ -19,6 +19,7 @@ import {
 import { DEFAULT_COUNTRY, type Country } from '../lib/countries';
 import { alertAsync } from '../lib/dialog';
 import type { AuthStackNavigation, AuthStackParamList } from '../lib/navigation';
+import { authMessage } from '../lib/errorMessage';
 import { PHONE_ENTRY } from '../lib/phoneAuth';
 import { phoneValidationError, toE164 } from '../lib/phoneNumber';
 import { isValidEmail } from '../lib/validation';
@@ -93,23 +94,22 @@ export function EmailCreateAccountScreen() {
     }
 
     setLoading(true);
-    const { error } = await signUp(trimmedEmail, password, trimmedName, phone);
+    const { error, needsConfirmation } = await signUp(trimmedEmail, password, trimmedName, phone);
     setLoading(false);
 
-    // Nothing valid is cleared on failure.
+    // Nothing valid is cleared on failure. B7: a plain sentence, never the
+    // auth server's own text.
     if (error) {
-      setFormError(error.message);
+      setFormError(authMessage(error));
       return;
     }
 
     // With email confirmation on there is no session yet, so the user has to be
-    // told where to go next. With it off, AuthContext's session listener has
-    // already routed them into the app and this screen is gone before the
-    // dialog matters.
-    await alertAsync(
-      'Check your email',
-      'If email confirmation is enabled, confirm your address to finish signing up.'
-    );
+    // told where the link went. With it off, AuthContext's session listener is
+    // already routing them into the app, and nothing is shown.
+    if (needsConfirmation) {
+      await alertAsync('Check your email', `We sent a link to ${trimmedEmail}. Open it to finish signing up.`);
+    }
   }
 
   return (

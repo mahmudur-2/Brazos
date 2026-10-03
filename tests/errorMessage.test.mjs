@@ -17,7 +17,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFile(join(root, rel), 'utf8');
 
 globalThis.__DEV__ = false; // production behaviour is what must be guarded
-const { userMessage } = await import(pathToFileURL(join(root, 'lib/errorMessage.ts')).href);
+const { userMessage, authMessage } = await import(pathToFileURL(join(root, 'lib/errorMessage.ts')).href);
 
 test('the four device errors never reach a user verbatim', () => {
   const observed = [
@@ -133,4 +133,48 @@ test('raw-error hooks stay raw only because their render seams wrap', async () =
     /\{error \? <Text style=\{styles\.error\}>\{userMessage\(error\)\}<\/Text> : null\}/,
     'MessagesInbox must wrap useConversations.error with userMessage() at render'
   );
+});
+
+// ---------------------------------------------------------------------------
+// FIX-RUN B7 — sign-in and sign-up never show the auth server's own text
+// ---------------------------------------------------------------------------
+
+test('B7 · authMessage maps each auth error, by code first and then by message', () => {
+  const cases = [
+    [{ code: 'invalid_credentials', message: 'Invalid login credentials' }, 'That email and password don’t match.'],
+    [{ message: 'Invalid login credentials' }, 'That email and password don’t match.'],
+    [{ code: 'email_not_confirmed', message: 'Email not confirmed' }, 'Confirm your email first — check your inbox for the link.'],
+    [{ message: 'Email not confirmed' }, 'Confirm your email first — check your inbox for the link.'],
+    [{ code: 'user_already_exists', message: 'User already registered' }, 'There’s already an account with that email. Sign in instead.'],
+    [{ message: 'User already registered' }, 'There’s already an account with that email. Sign in instead.'],
+    [{ code: 'weak_password', message: 'Password should be at least 6 characters.' }, 'Use a longer password — at least 6 characters.'],
+    [{ code: 'over_email_send_rate_limit', message: 'email rate limit exceeded' }, 'Too many tries. Wait a minute and try again.'],
+    [{ status: 429, message: 'Request rate limit reached' }, 'Too many tries. Wait a minute and try again.'],
+    [{ code: 'email_address_invalid', message: 'Email address "x@y" is invalid' }, 'Enter a valid email address.'],
+    [{ message: 'Database error saving new user' }, 'We couldn’t create this account. Contact support if you think this is a mistake.'],
+    [{ message: 'Failed to fetch' }, 'Can’t reach Brazos right now. Check your connection and try again.'],
+  ];
+  for (const [error, expected] of cases) {
+    assert.equal(authMessage(error), expected, JSON.stringify(error));
+  }
+});
+
+test('B7 · nothing raw passes through: an unmapped auth sentence becomes the generic line', () => {
+  for (const raw of ['Signups not allowed for this instance', 'Anonymous sign-ins are disabled', 'Unexpected failure']) {
+    const shown = authMessage({ message: raw });
+    assert.notEqual(shown, raw);
+    assert.equal(shown, 'Something went wrong. Please try again.');
+  }
+});
+
+test('B7 · both email screens show authMessage, and the sign-up dialog names where the link went', async () => {
+  const signIn = await readFile(join(root, 'screens/EmailSignInScreen.tsx'), 'utf8');
+  const signUp = await readFile(join(root, 'screens/EmailCreateAccountScreen.tsx'), 'utf8');
+  assert.match(signIn, /if \(error\) setFormError\(authMessage\(error\)\);/);
+  assert.match(signUp, /setFormError\(authMessage\(error\)\);/);
+  for (const src of [signIn, signUp]) assert.doesNotMatch(src, /setFormError\(error\.message\)/);
+  assert.match(signUp, /if \(needsConfirmation\) \{\s*await alertAsync\('Check your email', `We sent a link to \$\{trimmedEmail\}\. Open it to finish signing up\.`\);/);
+  assert.doesNotMatch(signUp, /If email confirmation is enabled/);
+  const auth = await readFile(join(root, 'lib/AuthContext.tsx'), 'utf8');
+  assert.match(auth, /return \{ error, needsConfirmation: !error && !data\.session \};/);
 });

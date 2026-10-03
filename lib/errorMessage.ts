@@ -17,7 +17,7 @@
 
 /** Anything a Supabase call, a fetch, or a throw can hand back. */
 export type ErrorLike =
-  | { message?: string | null; code?: string | null; details?: string | null }
+  | { message?: string | null; code?: string | null; details?: string | null; status?: number | null }
   | string
   | null
   | undefined;
@@ -108,6 +108,52 @@ export function userMessage(error: ErrorLike, fallback?: string): string {
     return `${friendly}\n\n[dev] ${raw}${code ? ` (${code})` : ''}`;
   }
   return friendly;
+}
+
+/**
+ * FIX-RUN B7 — what the sign-in and sign-up screens show for an auth error:
+ * a plain sentence by the auth server's error code first, then by its message
+ * (older servers send no code). A network failure is the shared offline
+ * sentence; anything else is the generic one — the auth server's own wording
+ * never reaches the screen.
+ */
+export function authMessage(error: ErrorLike): string {
+  const raw = rawOf(error);
+  const lower = raw.toLowerCase();
+  const code = codeOf(error);
+  const status = error && typeof error === 'object' ? error.status : null;
+
+  if (code === 'invalid_credentials' || lower.includes('invalid login credentials')) {
+    return 'That email and password don’t match.';
+  }
+  if (code === 'email_not_confirmed' || lower.includes('email not confirmed')) {
+    return 'Confirm your email first — check your inbox for the link.';
+  }
+  if (code === 'user_already_exists' || code === 'email_exists' || lower.includes('already registered')) {
+    return 'There’s already an account with that email. Sign in instead.';
+  }
+  if (code === 'weak_password' || lower.includes('password should be')) {
+    // supabase/config.toml: minimum_password_length = 6.
+    return 'Use a longer password — at least 6 characters.';
+  }
+  if (
+    code === 'over_email_send_rate_limit' ||
+    code === 'over_request_rate_limit' ||
+    status === 429 ||
+    lower.includes('rate limit')
+  ) {
+    return 'Too many tries. Wait a minute and try again.';
+  }
+  if (code === 'email_address_invalid' || (lower.includes('email address') && lower.includes('invalid'))) {
+    return 'Enter a valid email address.';
+  }
+  if (lower.includes('database error saving new user')) {
+    // handle_new_user refused the row: a banned phone, or the phone check.
+    return 'We couldn’t create this account. Contact support if you think this is a mistake.';
+  }
+  const shared = userMessage(error);
+  // userMessage passes a safe-looking raw sentence through; for auth, it never does.
+  return shared === raw ? DEFAULT : shared;
 }
 
 /**
