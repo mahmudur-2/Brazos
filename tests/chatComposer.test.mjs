@@ -416,7 +416,10 @@ test('[static] the overflow menu is MODE-shaped, and perspective comes from Mode
   // is keyed by counterparty — so per-user and per-conversation mute are the
   // same feature. Flagging it would have hidden working behaviour.
   assert.equal((chat.match(/headerMenuItems\.push\(muteMenuItem\);/g) ?? []).length, 2);
-  assert.match(chat, /label: relation\.muted \? 'Unmute' : 'Mute'/);
+  // F20: the row's words come from the one person-menu builder, fed this relation.
+  assert.match(chat, /const personRows = personSafetyItems\(\{\s*muted: relation\.muted,\s*blocking: relation\.blocking,/);
+  assert.match(chat, /const muteMenuItem: DropMenuItem = personRows\.mute;/);
+  assert.match(stripComments(read('lib/chatMenus.ts')), /label: muted \? 'Unmute' : 'Mute'/);
   assert.match(chat, /await unmuteUser\(user\.id, counterpartyId\)/);
   assert.match(chat, /await muteUser\(user\.id, counterpartyId\)/);
   // ...and it re-reads rather than flipping a local copy: the same relation
@@ -956,7 +959,7 @@ test('[static] both chat menus read the one owner, and nothing keeps a private c
 
   // The owner lives on the screen, and it is the shared transition rather than
   // a second copy of the rule.
-  assert.match(chat, /import \{ nextMenu, type ChatMenu \} from '\.\.\/lib\/chatMenus';/);
+  assert.match(chat, /import \{ nextMenu, personSafetyItems, type ChatMenu \} from '\.\.\/lib\/chatMenus';/);
   assert.match(chat, /const \[openMenu, setOpenMenu\] = useState<ChatMenu \| null>\(null\)/);
   assert.match(chat, /setOpenMenu\(\(current\) => nextMenu\(current, menu\)\)/);
 
@@ -1121,7 +1124,10 @@ test('[static] one action model, two entry mechanics, and no empty second sheet'
   // flagged, and flagging it would have hidden working behaviour.
   // The labels now read a `target` because the action model became a function
   // both mechanics call — see the swipe fence below. Same rule, one caller.
-  assert.match(screen, /label: target\.muted \? 'Unmute' : 'Mute'/);
+  // F20: the words are the one person-menu builder's (lib/chatMenus.ts), fed this target.
+  const personMenus = stripComments(read('lib/chatMenus.ts'));
+  assert.match(screen, /const person = personSafetyItems\(\{\s*muted: target\.muted,\s*blocking: target\.blocking,\s*onMute: \(\) => toggleMute\(target\),/);
+  assert.match(personMenus, /label: muted \? 'Unmute' : 'Mute'/);
   assert.doesNotMatch(screen, /\bMUTE\b/, 'the retired MUTE flag must not come back');
 
   // 2026-09-26 (the refresh, audit M-11): ONE Block. The sheet's row is
@@ -1129,9 +1135,11 @@ test('[static] one action model, two entry mechanics, and no empty second sheet'
   // row is the permanent block — the existing blockUser path, unchanged —
   // and whose others are the timed durations, still behind TIMED_BLOCK so
   // shipping them cannot quietly change what the permanent one does.
-  assert.match(screen, /key: 'block',\s*label: 'Unblock',/);
+  assert.match(personMenus, /key: 'block', label: 'Unblock',/);
   // 2026-09-28 (LUX-LIST-64 #53): the glass menu's words carry no "…".
-  assert.match(screen, /key: 'block',\s*label: 'Block',/);
+  assert.match(personMenus, /key: 'block', label: 'Block',/);
+  // The row opens the one chooser; unblocking is the screen's own toggle.
+  assert.match(screen, /onBlock: \(\) => \{\s*setMenuUserId\(null\);\s*setBlockDurationUserId\(target\.userId\);\s*\},\s*onUnblock: \(\) => toggleBlock\(target\),/);
   assert.match(screen, /key: 'block-permanent',\s*label: 'Permanently',/);
   assert.match(screen, /\.\.\.\(TIMED_BLOCK\s*\?\s*BLOCK_DURATIONS\.map/);
   assert.ok(
@@ -1362,11 +1370,6 @@ test('[static] the quick-reply row and its templates are gone from the whole tre
     }
   }
   assert.deepEqual(offenders, [], 'the component and both template sets are retired together');
-
-  // screens/RouteArrivalScreen.tsx has its own "On my way" control. It is a
-  // different feature with its own literal and is deliberately untouched —
-  // asserted so a later sweep for that string does not delete it by mistake.
-  assert.match(read('screens/RouteArrivalScreen.tsx'), /label="On my way"/);
 });
 
 // ---------------------------------------------------------------------------

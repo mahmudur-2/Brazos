@@ -115,8 +115,8 @@ export async function unsendMessage(messageId: string) {
 // them on operator instruction: the composer rebuild gives the message field
 // its full width, and a fixed-height chip row above it was the one element in
 // that column that refused to shrink to make room for the keyboard. Nothing
-// else consumed the sets, and screens/RouteArrivalScreen.tsx's own "On my way"
-// control is its own literal, unrelated to these.
+// else consumed the sets. (Route & arrival's own "On my way" control went with
+// that screen in fix run F20; WorkerJobScreen's stepper took its place.)
 
 const MESSAGE_COLUMNS =
   'id, job_id, direct_thread_id, sender_id, content, image_url, audio_url, audio_duration_ms, document_url, document_name, document_size_bytes, reply_to_id, job_request_id, job_offer_id, request_event, request_amount_cents, unsent_at, created_at';

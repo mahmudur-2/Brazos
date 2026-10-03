@@ -323,7 +323,6 @@ export type MyJobsStackParamList = {
   JobConfirmed: { job: Job };
   /** Screen 56 — the worker's static arrival declarations (Phase 6). No live
    *  location exists anywhere; these are two one-way taps. */
-  RouteArrival: { jobId: string };
   /** Screen 57 — the worker's job checklist (Phase 6). */
   WorkChecklist: { jobId: string };
   /** Screen 33 — the customer's static "where things stand" timeline (Phase 6). */

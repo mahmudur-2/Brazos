@@ -26,7 +26,7 @@ import { ChatComposer } from '../components/ChatComposer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DropMenu, type DropMenuItem } from '../components/DropMenu';
 import { LiveLocationBar, LiveLocationCard } from '../components/LiveLocationCard';
-import { nextMenu, type ChatMenu } from '../lib/chatMenus';
+import { nextMenu, personSafetyItems, type ChatMenu } from '../lib/chatMenus';
 import { canCopy, copyText } from '../lib/clipboard';
 import { TranslationSheet } from '../components/TranslationSheet';
 import { OfferCard } from '../components/OfferCard';
@@ -1061,12 +1061,17 @@ export function ChatScreen() {
    * reach the same calls the inbox row makes. They were reachable only by a
    * hidden gesture on the inbox, never from the conversation itself.
    */
-  const muteMenuItem: DropMenuItem = {
-    key: 'mute',
-    label: relation.muted ? 'Unmute' : 'Mute',
-    icon: relation.muted ? 'notifications' : 'notifications-off-outline',
-    onPress: () => void toggleMute(),
-  };
+  // F20: the person's Mute, Block and Report rows come from the one builder the
+  // inbox menu also reads (lib/chatMenus.ts); this screen keeps the handlers.
+  const personRows = personSafetyItems({
+    muted: relation.muted,
+    blocking: relation.blocking,
+    onMute: () => void toggleMute(),
+    onBlock: () => setBlockChooserOpen(true),
+    onUnblock: () => void unblock(),
+    onReport: () => setReportOpen(true),
+  });
+  const muteMenuItem: DropMenuItem = personRows.mute;
 
   const headerMenuItems: DropMenuItem[] = [];
   if (counterparty && !isSelfConversation) {
@@ -1135,30 +1140,9 @@ export function ChatScreen() {
       });
       headerMenuItems.push(muteMenuItem);
     }
-    // M-10 — the safety pair, last and in red, the same in both modes.
-    headerMenuItems.push(
-      relation.blocking
-        ? {
-            key: 'unblock',
-            label: 'Unblock',
-            icon: 'lock-open-outline',
-            onPress: () => void unblock(),
-          }
-        : {
-            key: 'block',
-            label: 'Block…',
-            icon: 'ban-outline',
-            destructive: true,
-            onPress: () => setBlockChooserOpen(true),
-          },
-      {
-        key: 'report',
-        label: 'Report',
-        icon: 'flag-outline',
-        destructive: true,
-        onPress: () => setReportOpen(true),
-      }
-    );
+    // M-10 — the safety pair, last and in red, the same in both modes and the
+    // same as the inbox row's menu (F20).
+    headerMenuItems.push(...personRows.safety);
   }
 
   // Once the jump has happened, only genuinely NEW messages pull the view back

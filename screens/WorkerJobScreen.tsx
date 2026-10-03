@@ -110,7 +110,6 @@ import {
   withAlpha,
   type ColorPalette,
   screenGround,
-  textLine,
   touchSlop,
 } from '../lib/theme';
 
@@ -833,19 +832,13 @@ export function WorkerJobScreen() {
                   Work checklist" and "Ready to start?") are one stepper whose
                   next step is the pinned button below. */}
               <Card style={styles.stageCard}>
-                <Pressable
-                  onPress={() => navigation.navigate('RouteArrival', { jobId: job.id })}
-                  style={({ pressed }) => [styles.stageHead, pressed && styles.pressed]}
-                  hitSlop={touchSlop(textLine(styles.stageEyebrow) + textLine(styles.stageTitle))}
-                  accessibilityRole="button"
-                  accessibilityLabel="Arrival details"
-                >
+                {/* F20: the head is a heading. Route & arrival repeated this screen, so it is gone. */}
+                <View style={styles.stageHead} accessibilityRole="header">
                   <View style={styles.thereCopy}>
                     <Text style={[styles.stageEyebrow, isDark && styles.stageEyebrowDark, styles.eyebrowGold]}>YOUR PROGRESS</Text>
                     <Text style={styles.stageTitle}>{lifecycle ? JOB_LIFECYCLE_LABELS[lifecycle] : ''}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-                </Pressable>
+                </View>
                 <View style={styles.stepper}>
                   {STAGES.map((label, index) => {
                     const done = track >= index + 1;

@@ -18,6 +18,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { ConversationRow } from '../components/ConversationRow';
 import { GlassDropdown, type GlassDropdownItem, type GlassDropdownRequest } from '../components/GlassDropdown';
+import { personSafetyItems } from '../lib/chatMenus';
 import { UndoToast } from '../components/UndoToast';
 import { Button } from '../components/Button';
 import { SUPPORT_EMAIL, supportMailtoUrl } from '../lib/appLinks';
@@ -751,14 +752,23 @@ export function MessagesInboxScreen() {
   // write again) — both clean-ups behind their own confirmation.
   const actionsFor = useCallback(
     (target: SheetTarget): { everyday: GlassDropdownItem[]; safety: GlassDropdownItem[] } => {
-      const items: GlassDropdownItem[] = [
-        {
-          key: 'mute',
-          label: target.muted ? 'Unmute' : 'Mute',
-          icon: target.muted ? 'notifications' : 'notifications-off-outline',
-          onPress: () => toggleMute(target),
+      // F20: Mute, Block and Report come from the one builder the chat header's
+      // menu also reads (lib/chatMenus.ts); the handlers stay this screen's.
+      const person = personSafetyItems({
+        muted: target.muted,
+        blocking: target.blocking,
+        onMute: () => toggleMute(target),
+        onBlock: () => {
+          setMenuUserId(null);
+          setBlockDurationUserId(target.userId);
         },
-      ];
+        onUnblock: () => toggleBlock(target),
+        onReport: () => {
+          setMenuUserId(null);
+          setReportTarget(target);
+        },
+      });
+      const items: GlassDropdownItem[] = [person.mute];
       if (MARK_UNREAD) {
         items.push({
           key: 'mark-unread',
@@ -796,36 +806,7 @@ export function MessagesInboxScreen() {
             ),
         });
       }
-      const safety: GlassDropdownItem[] = [];
-      safety.push(
-        target.blocking
-          ? {
-              key: 'block',
-              label: 'Unblock',
-              icon: 'lock-open-outline',
-              onPress: () => toggleBlock(target),
-            }
-          : {
-              key: 'block',
-              label: 'Block',
-              icon: 'ban-outline',
-              destructive: true,
-              onPress: () => {
-                setMenuUserId(null);
-                setBlockDurationUserId(target.userId);
-              },
-            },
-        {
-          key: 'report',
-          label: 'Report',
-          icon: 'flag-outline',
-          destructive: true,
-          onPress: () => {
-            setMenuUserId(null);
-            setReportTarget(target);
-          },
-        }
-      );
+      const safety: GlassDropdownItem[] = [...person.safety];
       if (CLEAR_CHAT) {
         safety.push({
           key: 'clear-chat',

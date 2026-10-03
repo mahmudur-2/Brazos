@@ -38,8 +38,6 @@ const NAMED = [
   ['screens/WorkerProfileScreen.tsx', 'onPress={() => bookService(service)}', 'Book'],
   ['screens/WorkerHomeScreen.tsx', 'accessibilityLabel="See all in My Jobs"', 'See all (Needs you)'],
   ['screens/WorkerSearchScreen.tsx', 'accessibilityLabel="See all saved and past workers"', 'See all (Hire again)'],
-  ['screens/WorkerJobScreen.tsx', 'accessibilityLabel="Arrival details"', 'Arrival details'],
-  ['screens/ProfileDetailsScreen.tsx', 'styles.chip, pressed && styles.chipPressed', 'the Edit chip'],
   ['components/PriceDropdown.tsx', 'onPress={finishEntry}', 'the price Done pill'],
   ['components/PastWork.tsx', 'style={[styles.tab, active', 'the Past work tabs'],
   ['screens/ChatScreen.tsx', 'accessibilityLabel="Cancel reply"', 'Cancel reply'],

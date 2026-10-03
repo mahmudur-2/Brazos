@@ -38,7 +38,6 @@ import { ProfileScreen } from '../screens/ProfileScreen';
 import { ReviewAndTipScreen } from '../screens/ReviewAndTipScreen';
 import { SavedWorkersScreen } from '../screens/SavedWorkersScreen';
 import { ServicesPricingScreen } from '../screens/ServicesPricingScreen';
-import { RouteArrivalScreen } from '../screens/RouteArrivalScreen';
 import { TrackWorkerScreen } from '../screens/TrackWorkerScreen';
 import { WorkChecklistScreen } from '../screens/WorkChecklistScreen';
 import { WorkerJobScreen } from '../screens/WorkerJobScreen';
@@ -105,7 +104,6 @@ export function MyJobsStackNavigator() {
       <MyJobsStack.Screen name="JobConfirmed" component={JobConfirmedScreen} />
       {/* Phase 6 — the active-work lifecycle. Worker side: arrival + checklist;
           customer side: tracking, approval/release, and post-release review. */}
-      <MyJobsStack.Screen name="RouteArrival" component={RouteArrivalScreen} />
       <MyJobsStack.Screen name="WorkChecklist" component={WorkChecklistScreen} />
       <MyJobsStack.Screen name="TrackWorker" component={TrackWorkerScreen} />
       <MyJobsStack.Screen name="ApproveOrDispute" component={ApproveOrDisputeScreen} />

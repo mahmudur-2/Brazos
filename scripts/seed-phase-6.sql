@@ -17,7 +17,7 @@
 --
 -- Fixtures:
 --   Job A "Assemble a bookshelf"   assigned + accepted offer + payment HELD.
---     The full walk: RouteArrival taps → start → checklist → complete with
+--     The full walk: WorkerJob stage taps → start → checklist → complete with
 --     evidence → customer approves (release) → review & tip.
 --   Job B "Mount a closet shelf"   already completed + payment HELD.
 --     The shortcut straight to ApproveOrDispute / dispute / auto-release QA.

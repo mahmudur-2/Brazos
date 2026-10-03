@@ -28,7 +28,6 @@ import {
   useThemeColors,
   type ColorPalette,
   screenGround,
-  touchSlop,
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
 import { formatMonthYear } from '../lib/time';
@@ -245,15 +244,8 @@ export function ProfileDetailsScreen() {
               <Text style={styles.eyebrow}>BOTH MODES</Text>
               <Text style={styles.cardTitle}>Profile details</Text>
             </View>
-            <Pressable
-              onPress={() => navigation.navigate('ProfileMain', { edit: true })}
-              hitSlop={touchSlop(34)}
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-            >
-              <Ionicons name="pencil" size={14} color={colors.mark} />
-              <Text style={styles.chipText}>Edit profile</Text>
-            </Pressable>
+            {/* F20: the card's own "Edit profile" chip was the third door to the same editor;
+                the header pencil above and the Profile hub's Edit pill stay. */}
           </View>
 
           {rows.map((row) => (
@@ -437,7 +429,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // gold in dark, as they were; the forest green #064C3B in light.
     borderColor: colors.mark,
   },
-  chipPressed: { opacity: 0.82 },
   chipText: {
     fontSize: 13,
     fontWeight: '700',

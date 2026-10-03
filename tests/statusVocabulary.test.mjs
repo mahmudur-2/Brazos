@@ -384,7 +384,6 @@ test('[static] C1 · every stage surface reads its words from lib/jobLifecycle.t
     'components/JobProgress.tsx',
     'screens/TrackWorkerScreen.tsx',
     'screens/WorkerJobScreen.tsx',
-    'screens/RouteArrivalScreen.tsx',
     'ui/primitives/StatusPill.tsx',
   ]) {
     const source = read(file).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');

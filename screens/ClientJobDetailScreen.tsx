@@ -219,8 +219,8 @@ export function ClientJobDetailScreen() {
   // "An accepted price exists" = the job sits on the hire-to-done track,
   // classified through THE derivation (F-012). Deliberately payment- and
   // dispute-blind — whether the job left the market must not flip on a
-  // failed payment read — so it runs payment-null, exactly like
-  // RouteArrival's derivation, instead of reusing `lifecycle` below.
+  // failed payment read — so it runs payment-null on purpose, instead of
+  // reusing `lifecycle` below.
   const hasLifecycle = trackStepIndex(deriveJobLifecycle({ job, payment: null })) >= 0;
   // The rank rows lib/compareBids.ts orders: each pending bid with its
   // worker's summary mapped to CompareWorker (null while unanswered → unrated

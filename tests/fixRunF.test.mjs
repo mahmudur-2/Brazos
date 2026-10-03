@@ -181,3 +181,50 @@ test('[static] F6: no screen re-decides "held" or "live" inline', () => {
   assert.deepEqual(heldInline, [], 'read isHeld / isReleased / isReleaseRequested (lib/paymentRules.ts)');
   assert.deepEqual(liveInline, [], 'read isLiveJob (lib/jobLifecycle.ts)');
 });
+
+// ---------------------------------------------------------------------------
+// F20 — duplicate screens and menus.
+// ---------------------------------------------------------------------------
+test('[static] F20: Route & arrival is registered nowhere, and Your job is the one stage surface', () => {
+  const tracked = execFileSync('git', ['ls-files', '--', '*.ts', '*.tsx'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
+  assert.ok(!tracked.includes('screens/RouteArrivalScreen.tsx'), 'the duplicate screen is gone');
+  for (const file of ['navigation/sharedStacks.tsx', 'navigation/CustomerRoot.tsx', 'navigation/WorkerRoot.tsx', 'lib/navigation.ts', 'screens/WorkerJobScreen.tsx']) {
+    assert.doesNotMatch(strip(read(file)), /RouteArrival/, `${file} still names RouteArrival`);
+  }
+  // The YOUR PROGRESS head is a heading now, not a door.
+  assert.match(strip(read('screens/WorkerJobScreen.tsx')), /<View style=\{styles\.stageHead\} accessibilityRole="header">/);
+});
+
+test('F20: both person menus draw the same safety rows, in the same order, from one builder', async () => {
+  const { personSafetyItems } = await import(new URL('../lib/chatMenus.ts', import.meta.url).href);
+  const calls = [];
+  const handlers = {
+    onMute: () => calls.push('mute'),
+    onBlock: () => calls.push('block'),
+    onUnblock: () => calls.push('unblock'),
+    onReport: () => calls.push('report'),
+  };
+  const open = personSafetyItems({ muted: false, blocking: false, ...handlers });
+  assert.deepEqual([open.mute, ...open.safety].map((i) => [i.key, i.label, !!i.destructive]), [
+    ['mute', 'Mute', false],
+    ['block', 'Block', true],
+    ['report', 'Report', true],
+  ]);
+  const blocked = personSafetyItems({ muted: true, blocking: true, ...handlers });
+  assert.deepEqual([blocked.mute, ...blocked.safety].map((i) => [i.key, i.label]), [
+    ['mute', 'Unmute'],
+    ['block', 'Unblock'],
+    ['report', 'Report'],
+  ]);
+  for (const item of [open.mute, ...open.safety, ...blocked.safety]) item.onPress();
+  assert.deepEqual(calls, ['mute', 'block', 'report', 'unblock', 'report']);
+
+  assert.match(strip(read('screens/ChatScreen.tsx')), /headerMenuItems\.push\(\.\.\.personRows\.safety\);/);
+  assert.match(strip(read('screens/MessagesInboxScreen.tsx')), /const safety: GlassDropdownItem\[\] = \[\.\.\.person\.safety\];/);
+});
+
+test('[static] F20: ProfileDetails keeps one door to the editor — the header pencil', () => {
+  const details = strip(read('screens/ProfileDetailsScreen.tsx'));
+  assert.equal((details.match(/navigation\.navigate\('ProfileMain', \{ edit: true \}\)/g) ?? []).length, 1);
+  assert.doesNotMatch(details, />Edit profile</, 'the card chip is gone');
+});

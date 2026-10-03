@@ -359,8 +359,12 @@ test('[static] every flagged More row has a real handler, and none is a no-op', 
 
   // 2026-09-26 (the refresh, audit M-11): "Block…" opens the one chooser,
   // whose first row runs the permanent block.
+  // F20: the block row's words are lib/chatMenus.ts's personSafetyItems (shared with
+  // the chat header); its handler is still this screen's, wired through onBlock.
+  assert.ok(stripComments(read('lib/chatMenus.ts')).includes("key: 'block'"), 'the person menu carries the block row');
+  assert.match(screen, /const person = personSafetyItems\(\{/);
+  assert.match(screen, /onBlock: \(\) => \{\s*setMenuUserId\(null\);\s*setBlockDurationUserId\(target\.userId\);/, 'block must call its real handler');
   const wired = {
-    block: /setBlockDurationUserId\(target\.userId\)/,
     'block-permanent': /void toggleBlock\(target\)/,
     'mark-unread': /onPress: \(\) => markUnread\(target\)/,
     'clear-chat': /applyConversationState\(target, \{ clear: true \}/,

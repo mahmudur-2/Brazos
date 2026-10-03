@@ -102,10 +102,19 @@ test('[static] #53 — the ••• opens the glass dropdown: two groups, no "�
   const screen = stripComments(read('screens/MessagesInboxScreen.tsx'));
   assert.match(screen, /<GlassDropdown\s+request=\{menuRequest\}\s+groups=\{menuGroups\}/);
   assert.doesNotMatch(screen, /subtitle="Manage this conversation"/, 'the bottom sheet is gone');
-  for (const label of ["'Mute'", "'Mark as Unread'", "'Archive'", "'Block'", "'Report'", "'Clear chat'", "'Delete chat'"]) {
+  // F20: Mute, Block and Report are the one person-menu builder's, which the screen reads.
+  const personMenus = stripComments(read('lib/chatMenus.ts'));
+  assert.match(screen, /const person = personSafetyItems\(\{/);
+  assert.match(screen, /const items: GlassDropdownItem\[\] = \[person\.mute\];/);
+  assert.match(screen, /const safety: GlassDropdownItem\[\] = \[\.\.\.person\.safety\];/);
+  for (const label of ["'Mark as Unread'", "'Archive'", "'Clear chat'", "'Delete chat'"]) {
     assert.ok(screen.includes(label), `the menu carries ${label}`);
   }
+  for (const label of ["'Mute'", "'Block'", "'Report'"]) {
+    assert.ok(personMenus.includes(label), `the menu carries ${label}`);
+  }
   assert.doesNotMatch(screen, /label: '[^']*…'/, 'no row ends in "…"');
+  assert.doesNotMatch(personMenus, /label: '[^']*…'/, 'no person row ends in "…"');
   const menu = stripComments(read('components/GlassDropdown.tsx'));
   assert.match(menu, /<Surface material="dropdown" fill=\{paneFills\.dropdown\} radius=\{RADIUS\}/);
   assert.match(menu, /const SCREEN_EDGE = 8;/);
