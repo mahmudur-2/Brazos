@@ -220,7 +220,7 @@ export function CreateSheet({
               <Ionicons name="swap-horizontal" size={18} color={colors.emerald} />
             </View>
             <Text style={styles.rowLabel}>Switch to Worker</Text>
-            <Text style={[styles.hint, isDark && styles.hintDark]}>confirms first</Text>
+            <Text style={styles.hint}>confirms first</Text>
           </Pressable>
         </Surface>
         </SheetCard>
@@ -353,7 +353,7 @@ function ReusePastJob({
         </View>
         <View style={styles.reuseCopy}>
           <Text style={styles.rowLabel}>Reuse a past job</Text>
-          <Text style={[styles.reuseCaption, isDark && styles.hintDark]} numberOfLines={1}>
+          <Text style={styles.reuseCaption} numberOfLines={1}>
             Start from one you posted before
           </Text>
         </View>
@@ -369,7 +369,7 @@ function ReusePastJob({
           </View>
         ) : hub.error ? null : jobs.length === 0 ? (
           <View style={styles.stripState}>
-            <Text style={[styles.hint, isDark && styles.hintDark]}>
+            <Text style={styles.hint}>
               The jobs you post show here, ready to post again.
             </Text>
           </View>
@@ -572,7 +572,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       fontSize: 13,
       color: colors.textMuted,
     },
-    hintDark: { color: withAlpha(colors.text, 0.45) },
     // Idea 2 — the reuse row's words, and its strip of cards.
     reuseCopy: { flex: 1, minWidth: 0, gap: 2 },
     reuseCaption: {

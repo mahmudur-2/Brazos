@@ -359,7 +359,7 @@ export const darkColors: ColorPalette = {
   // rim — "NEUTRAL / MINT HAIRLINES everywhere … never the warm gold line".
   text: '#F1EDE1',
   textMuted: '#A9B8B1',
-  textSubtle: '#7F918A',
+  textSubtle: '#8FA19A',
 
   background: '#0A1A17',
   surface: '#0C241F',
@@ -373,8 +373,9 @@ export const darkColors: ColorPalette = {
   successBg: '#1A362D',
   warning: '#F2B04F',
   warningBg: '#2B2A1D',
-  // 2026-09-28 (#7): the Map's red, #D8604B, is the one dark error red.
-  danger: '#D8604B',
+  // 2026-09-28 (#7): one dark error red, the Map's included. Fix run E2 lifted it
+  // #D8604B → #E57A66, 3.7:1 → 4.7:1 on the lit card (the red Sign out).
+  danger: '#E57A66',
   dangerBg: '#3A1F1B',
   info: '#7FC4C4',
   infoBg: '#16302E',
@@ -541,7 +542,7 @@ export const MAP_DARK: ColorPalette = {
   inboxChipInk: '#93A59D',
   inboxRule: '#C8FFE6',
   dropGlyph: '#9CC9B6',
-  dropDanger: '#E36A53',
+  dropDanger: '#E57A66',
   dropRule: '#C8FFE6',
   secondaryBorder: '#2F5140',
   authInk: '#F3F1E8',
@@ -571,7 +572,7 @@ export const MAP_DARK: ColorPalette = {
   successBg: '#0E1F18',
   warning: '#F2B04F',
   warningBg: '#251E10',
-  danger: '#D8604B',
+  danger: '#E57A66',
   dangerBg: '#301E19',
   info: '#5FA3A3',
   infoBg: '#1B2B2A',
@@ -601,7 +602,7 @@ export const MAP_EMERALD_DARK: Partial<EmeraldPalette> = {
   surface: '#0A1813',
   muted: '#93A096',
   line: '#55482E',
-  danger: '#D8604B',
+  danger: '#E57A66',
   secondaryBorder: '#2F5140',
   onForest: '#F1EDE1',
   taskCardLitTop: '#15362B',

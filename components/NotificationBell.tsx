@@ -75,7 +75,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       fontSize: 11,
       lineHeight: 13,
       fontWeight: '800',
-      color: colors.white,
+      // Fix run E2: the ink PastWork's remove glyph already wears on the red —
+      // cream in light (5.3:1), the dark CTA ink in dark (6.0:1); white read 3.7:1 in dark.
+      color: colors.onPrimary,
     },
   })
 );

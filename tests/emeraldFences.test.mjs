@@ -1161,7 +1161,8 @@ test('home(17) fence: the mode switch lives in the [+] sheet, not on customer Ho
   const sheet = flatten(read('components/CreateSheet.tsx'));
   assert.match(sheet, /accessibilityLabel="Switch to Worker"/);
   assert.match(sheet, /<Text style=\{styles\.rowLabel\}>Switch to Worker<\/Text>/);
-  assert.match(sheet, /<Text style=\{\[styles\.hint, isDark && styles\.hintDark\]\}>confirms first<\/Text>/);
+  // Fix run E2: one muted hint in both themes (dark's 45 % ink read 3.9:1).
+  assert.match(sheet, /<Text style=\{styles\.hint\}>confirms first<\/Text>/);
   assert.match(sheet, /onPress=\{onSwitchMode\} disabled=\{switching\}/);
   // The row is the last thing on the sheet, set apart under its own hairline.
   assert.match(sheet, /styles\.switchRow/);

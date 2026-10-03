@@ -257,7 +257,7 @@ export const colors = {
   inboxChipInk: '#5E6859',
   inboxRule: '#E6DFD3',
   /** 2026-09-28 (#53) — THE ••• GLASS DROPDOWN's glyphs (#4E6A5F light, #9CC9B6
-   *  dark), its red rows (#A8432B light, #E36A53 dark — the reference's own red,
+   *  dark), its red rows (#A8432B light; dark the one dark red since fix run E2, was #E36A53 — the reference's own red,
    *  for this menu), and its group rule (#0E6B52 / #C8FFE6, at .12). */
   dropGlyph: '#4E6A5F',
   dropDanger: '#A8432B',
@@ -326,8 +326,9 @@ export const dark = {
   surface: '#0C241F',
   muted: '#A9B8B1',
   line: '#325047',
-  // 2026-09-28 (#7): the dark error red is the Map's #D8604B everywhere.
-  danger: '#D8604B',
+  // 2026-09-28 (#7): one dark error red, the Map's included — fix run E2 lifted it
+  // #D8604B → #E57A66 (3.7:1 → 4.7:1 on the lit card), and the dropdown's red with it.
+  danger: '#E57A66',
   // Danger SURFACES keep their pre-v2 values by decision.
   dangerSurface: '#33201B',
   dangerBorder: '#4C2E26',
@@ -416,7 +417,7 @@ export const dark = {
   inboxRule: '#C8FFE6',
   // #53: the ••• dropdown — its glyphs, its red rows, its group rule (at .12).
   dropGlyph: '#9CC9B6',
-  dropDanger: '#E36A53',
+  dropDanger: '#E57A66',
   dropRule: '#C8FFE6',
 } as const satisfies Record<ColorToken, string>;
 

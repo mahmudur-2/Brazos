@@ -870,6 +870,40 @@ test('E1 contrast: every light text ink clears 4.5:1 on the cream, the white car
   }
 });
 
+test('E2 contrast: the dark secondary inks and the one dark red clear 4.5:1 on the card, the chip and the lit card', async () => {
+  const { colors, darkColors } = await themeModule;
+  const { dark, meltBar, litCard } = await tokensModule;
+  const grounds = {
+    background: darkColors.background,
+    surface: darkColors.surface,
+    mint: darkColors.mint,
+    neutralBg: darkColors.neutralBg,
+    taskCardLitTop: darkColors.taskCardLitTop,
+    litCardTop: litCard.dark.top,
+  };
+  for (const key of ['text', 'textMuted', 'textSubtle', 'danger', 'success', 'warning', 'eyebrowGold']) {
+    for (const [name, ground] of Object.entries(grounds)) assertAA(darkColors[key], ground, `dark colors.${key} on ${name}`);
+  }
+  for (const key of ['muted', 'danger', 'dropDanger', 'inboxChipInk', 'eyebrowGold']) {
+    for (const [name, ground] of Object.entries(grounds)) assertAA(dark[key], ground, `dark tokens.${key} on ${name}`);
+  }
+  // The quiet grey is words on the lit card and the page (an unchosen Start-in tile, the media
+  // limit pills), never on a chip fill.
+  for (const ground of [litCard.dark.top, litCard.dark.bottom, darkColors.surface, darkColors.background]) {
+    assertAA(dark.grey, ground, 'dark tokens.grey on its card or page');
+  }
+  assertAA(darkColors.navInactive, darkColors.surface, 'dark navInactive on surface');
+  // One dark red: the error ink, the dropdown's red rows and the map's palette agree.
+  assert.equal(darkColors.danger, dark.danger);
+  assert.equal(dark.dropDanger, dark.danger);
+  // Content on a solid danger fill (the bell's count, PastWork's remove glyph) reads in both themes.
+  assertAA(colors.onPrimary, colors.danger, 'light onPrimary on the danger fill');
+  assertAA(darkColors.onPrimary, darkColors.danger, 'dark onPrimary on the danger fill');
+  for (const stop of [litCard.dark.top, litCard.dark.bottom]) {
+    assertAA(over(dark.ink, meltBar.restInkAlpha.dark, stop), stop, 'a resting dark tab label on the pill');
+  }
+});
+
 // ---------------------------------------------------------------------------
 // RUN G1 (C2) — the live override layer resolves to the static tokens when
 // no dial is set. Identity, not merely equality: unchanged inputs must come

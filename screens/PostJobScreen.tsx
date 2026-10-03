@@ -1726,7 +1726,7 @@ export function PostJobScreen() {
                   padding moved. */}
               {/* 2026-09-28 (LUX-LIST-64 #31): the operator's sentence, two lines
                   at most at 393 wide, and the crossed-out eye in the error red —
-                  #D8604B in dark, the light palette's own red in light. */}
+                  the one dark red in dark, the light palette's own red in light. */}
               <Card style={styles.infoCard}>
                 <View style={styles.infoIcon}>
                   {/* C6 — the "not visible" eye, replacing the shield: this
