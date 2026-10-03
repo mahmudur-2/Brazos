@@ -327,7 +327,59 @@ test('the privacy policy states the deletion and media facts the code proves', (
   assert.match(policy, /public storage bucket/);
   assert.match(policy, /private storage for completion media is planned/);
 
-  // The corrections were policy-only: the Terms module is byte-identical to
-  // what the gate shipped (COMMIT 11 rule — do not touch termsOfService.ts).
+  // The Terms module still exports the one document the gate renders. (The
+  // old "COMMIT 11 — do not touch termsOfService.ts" rule ended with FIX-RUN
+  // B1, which rewrote its payment facts; the test below pins those.)
   assert.match(read('lib/legal/termsOfService.ts'), /TERMS_OF_SERVICE/);
+});
+
+// ===========================================================================
+// FIX-RUN B1 (2026-10-03, pick B1a) — the legal facts match the app
+// ===========================================================================
+
+test('B1 · Terms and Privacy state the payment facts, name every processor, and publish the contact', async () => {
+  const terms = read('lib/legal/termsOfService.ts');
+  const policy = read('lib/legal/privacyPolicy.ts');
+
+  for (const [name, doc] of [['terms', terms], ['privacy', policy]]) {
+    // The draft notice stays until counsel signs off (B1a).
+    assert.match(doc, /Working draft — pending legal review/, `${name} keeps the draft notice`);
+    // The old false sentence never returns.
+    assert.doesNotMatch(doc, /does not (currently )?process payments/i, `${name} no longer denies processing payments`);
+    // The contact is the published support address, through the one constant.
+    assert.match(doc, /import \{ SUPPORT_EMAIL \} from '\.\.\/appLinks';/, `${name} imports the address`);
+    assert.match(doc, /email \$\{SUPPORT_EMAIL\}/, `${name} names it as the contact`);
+    assert.doesNotMatch(doc, /in-app reporting tool until a published/, `${name} drops the old placeholder contact`);
+    // The defined term is "Customer" (C3).
+    assert.doesNotMatch(doc, /\bClients?\b/, `${name} says Customer, not Client`);
+  }
+
+  // Terms §4: Stripe, accept = fund, held until approval, the 72-hour release,
+  // cancellation as cancel_job() decides it, payouts, tips, saved cards.
+  assert.match(terms, /Payments in Brazos are processed by Stripe/);
+  assert.match(terms, /Accepting a bid books and pays for the job/);
+  assert.match(terms, /Brazos holds the payment, through Stripe,\s+until the Customer approves the finished work/);
+  assert.match(terms, /within 72\s+hours of being told the work is complete, the payment is released\s+automatically/);
+  assert.match(terms, /Cancelling is free more than\s+24 hours before the arrival window starts, within 15 minutes of hiring/);
+  assert.match(terms, /The Protection fee is refunded in full whenever a job is\s+cancelled/);
+  assert.match(terms, /payout account the\s+Worker sets up with Stripe/);
+
+  // Privacy: every processor by name, live location, on-device speech, the
+  // 90-day prune, and deletion as A18a built it.
+  for (const processor of ['Supabase', 'Expo', 'Stripe', 'Resend', 'OpenStreetMap Nominatim', 'Sentry', 'PostHog']) {
+    assert.ok(policy.includes(processor), `the policy names ${processor}`);
+  }
+  assert.match(policy, /share your live\s+location for a period you pick \(at most eight hours\)/);
+  assert.match(policy, /turned into\s+text on your device/);
+  assert.match(policy, /removed after 90 days/);
+  assert.match(policy, /Any card you saved is removed from Stripe before the account\s+goes/);
+  assert.match(policy, /payout account stays open until every payment still owed to\s+them has reached\s+it/);
+
+  // Both versions moved, in the exact shape scripts/shots.mjs parses.
+  const index = read('lib/legal/index.ts');
+  const pick = (name) => index.match(new RegExp(`export const ${name} = '([^']+)';`))?.[1];
+  for (const name of ['TERMS_VERSION', 'PRIVACY_VERSION']) {
+    assert.ok(pick(name), `${name} keeps the export const shape`);
+    assert.notEqual(pick(name), '2026-07-26-draft1', `${name} was bumped`);
+  }
 });

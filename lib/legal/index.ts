@@ -16,8 +16,8 @@ export { PRIVACY_POLICY, TERMS_OF_SERVICE };
 // record months later is which text was on screen at the time.
 // ---------------------------------------------------------------------------
 
-export const TERMS_VERSION = '2026-07-26-draft1';
-export const PRIVACY_VERSION = '2026-07-26-draft1';
+export const TERMS_VERSION = '2026-10-03-draft2';
+export const PRIVACY_VERSION = '2026-10-03-draft2';
 
 export type LegalDocumentKey = 'terms' | 'privacy';
 

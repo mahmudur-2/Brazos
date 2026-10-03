@@ -8,7 +8,16 @@
  *
  * Bump TERMS_VERSION in ./index.ts whenever the substance changes: existing
  * users are re-prompted on any version they have not already accepted.
+ *
+ * FIX-RUN B1 (2026-10-03, pick B1a): §4 states what the payment code does —
+ * Stripe, accept = fund, held in protection until approval, the 72-hour
+ * automatic release, cancellation and refunds as cancel_job() implements them,
+ * Stripe Connect payouts, tips and saved cards. The defined term is
+ * "Customer" (C3). The contact is the published support address. The draft
+ * notice stays until counsel signs off.
  */
+import { SUPPORT_EMAIL } from '../appLinks';
+
 export const TERMS_OF_SERVICE = `
 # Brazos Terms of Service
 
@@ -20,17 +29,20 @@ a licensed attorney, and it should NOT be relied on as legal advice or as an
 enforceable agreement in its current form. It must be reviewed and revised by
 qualified counsel before Brazos is offered to the public.
 
-Last updated: 26 July 2026
+Last updated: 3 October 2026
 
 ## 1. What Brazos is
 
-Brazos is a listing and communication platform. It lets people who need
-short-term local work done ("Clients") post jobs, and lets people willing to
-do that work ("Workers") find those jobs, bid on them, and message the Client
-about them. Many users are both at different times.
+Brazos is a marketplace for short-term local work. It lets people who need
+work done ("Customers") post jobs, and lets people willing to do that work
+("Workers") find those jobs and bid on them. Once a Customer hires a Worker,
+the two can message each other about the job. Many users are both at
+different times.
 
-Brazos provides the software. Brazos does not provide the services listed on
-it. Every job is an agreement between a Client and a Worker directly.
+Brazos provides the software and, through its payment provider, takes and
+holds payment for jobs booked in the app. Brazos does not provide the services
+listed on it. Every job is an agreement between a Customer and a Worker
+directly.
 
 ## 2. Who may use Brazos
 
@@ -59,7 +71,7 @@ Specifically, Brazos does not:
 - supervise, direct, or control how a Worker performs a job;
 - require a Worker to accept any particular job, or any minimum number of jobs;
 - prevent a Worker from working for competitors, other platforms, or directly
-  for their own clients;
+  for their own customers;
 - provide tools, equipment, vehicles, or materials;
 - pay wages, overtime, or benefits, or withhold taxes.
 
@@ -68,19 +80,49 @@ self-employment tax), your own insurance, any licences or permits your work
 requires, and compliance with any laws that apply to the work you do. You
 decide which jobs to bid on and on what terms.
 
-As a Client, you are responsible for understanding that you are engaging an
+As a Customer, you are responsible for understanding that you are engaging an
 independent contractor directly, not hiring an employee of Brazos, and for
 whatever obligations that engagement creates for you under applicable law.
 
-## 4. Payment between users
+## 4. Payments
 
-Brazos does not currently process payments. Bid amounts and agreed prices
-shown in the app are a record of what the two users agreed, not a payment
-Brazos holds, guarantees, escrows, or collects. Clients and Workers arrange
-payment directly between themselves.
+Payments in Brazos are processed by Stripe, our payment provider. Card details
+are entered into Stripe's own payment form and never reach Brazos.
 
-Brazos is not responsible for non-payment, underpayment, chargebacks, or any
-other payment dispute between users.
+- Accepting a bid books and pays for the job. When a Customer accepts a bid,
+  the Customer's card is charged the agreed price plus a Protection fee. Both
+  amounts are shown before the Customer pays.
+- The payment is held in protection. Brazos holds the payment, through Stripe,
+  until the Customer approves the finished work. The Worker is not paid before
+  then.
+- Approval releases it. When the Customer approves, the payment is released to
+  the Worker. If the Customer neither approves nor reports an issue within 72
+  hours of being told the work is complete, the payment is released
+  automatically. While an issue is open, the payment stays held until Brazos
+  resolves it.
+- Workers are paid through Stripe. A Worker receives the agreed price less
+  Brazos's service fee, which is shown in the app, into the payout account the
+  Worker sets up with Stripe. Stripe's own schedule decides when that money
+  reaches the Worker's bank.
+- Cancelling. A Customer may cancel a booked job. Cancelling is free more than
+  24 hours before the arrival window starts, within 15 minutes of hiring, or
+  when the job has no scheduled date. A later cancellation, or one after the
+  work has started, carries a cancellation fee that goes to the Worker; the
+  rest is refunded. The Protection fee is refunded in full whenever a job is
+  cancelled. If the Worker cancels, the Customer is refunded in full.
+- Refunds go back to the card that paid, on the provider's timeline.
+- Tips are optional. After a job's payment has reached the Worker, a Customer
+  may add a tip. It is charged through Stripe, with any fee shown before you
+  pay, and goes to the Worker.
+- Saved cards are optional. A Customer may choose to save a card for faster
+  hiring. The card is stored by Stripe, not by Brazos, and can be removed at
+  any time in Payment methods.
+
+Before launch, the app may run payments in a test mode in which no real money
+moves; the app says so wherever that applies.
+
+Payments arranged outside Brazos are outside these Terms, and Brazos is not
+responsible for non-payment, underpayment, or any other dispute about them.
 
 ## 5. No screening, no guarantee
 
@@ -96,7 +138,7 @@ they are accurate.
 Brazos does not guarantee:
 
 - that any Worker is skilled, qualified, licensed, insured, honest, or safe;
-- that any Client will pay, will be present, or has described the job accurately;
+- that any Customer will be present, or has described the job accurately;
 - that any job will be completed, completed on time, or completed to any standard;
 - that any listing or user profile is genuine.
 
@@ -140,7 +182,7 @@ this section may not apply to you.
 You are responsible for your own safety. Brazos strongly encourages you to:
 
 - meet in a way you are comfortable with, and tell someone where you are going;
-- agree scope and price in writing in the app's chat before work starts;
+- agree scope and price in the app before work starts;
 - carry your own insurance appropriate to the work you do or commission;
 - stop and leave any situation that feels unsafe.
 
@@ -167,15 +209,23 @@ You agree not to:
 - collect other users' personal information for any purpose other than
   completing a job with them.
 
+Brazos automatically refuses posts, bids, profiles, reviews and messages that
+contain certain words it does not allow.
+
 ## 9. Reporting, suspension and termination
 
-Brazos provides in-app tools to block, mute, and report other users. Reports
-are reviewed by Brazos administrators.
+Brazos provides in-app tools to block, mute, and report other users, and to
+report what they post — job posts, profiles, reviews, photos and messages.
+Reports are reviewed by Brazos administrators. When you block someone, their
+posts, profile and reviews no longer appear to you, and they cannot message
+you or bid on your jobs.
 
 Brazos may, at its discretion and with or without notice, restrict, suspend,
 or permanently terminate any account for a violation of these Terms, for
 conduct that puts other users at risk, or where required by law. A terminated
-user may not create a replacement account.
+user may not create a replacement account. When an account is suspended, its
+jobs that are still in progress are cancelled and their payments refunded as
+section 4 describes.
 
 You may stop using Brazos and delete your account at any time — see the
 Privacy Policy for what happens to your data.
@@ -223,6 +273,6 @@ force.
 
 ## 13. Contact
 
-Questions about these Terms can be raised through the in-app reporting tool
-until a published support contact is available.
+Questions about these Terms: email ${SUPPORT_EMAIL}. Brazos replies within 2
+business days.
 `.trim();
