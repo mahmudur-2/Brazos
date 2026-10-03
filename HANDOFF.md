@@ -11,7 +11,7 @@ the Lux drawing run's, the eighteen-item run's and the sittings before them, unc
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
 
-## FIX RUN — BUILT, REVIEWED AND SWEPT: groups A–F, the smooth pass and the final sweep are on `mainexpo`; one OTA and the new Beta build are the operator's next (2026-10-03, "build" given; the workflow's helpers ran one after another)
+## FIX RUN — DONE: groups A–F, the smooth pass, the final sweep and six review fixes are on `mainexpo`, shipped as one OTA; the new Beta build was started (2026-10-03, "build" given; the workflow's helpers ran one after another)
 
 **Start here.** The brief is `docs/dispatch/FIX-RUN.md`; the operator's selection is its first
 section (OUT: A1, B10, C5, D1, D2, D4, D5, E6, F14; picks A10a, A12a, A18a, B1a, C1b, D13a). The
@@ -213,8 +213,33 @@ running log is `.shots/refresh/review/run/log.md` (gitignored), one line per ite
   share one timestamp would page the same page again on scroll.
 - **Proof at the sweep:** `npm run verify` 1618 pass, 0 fail (1615 + the three new tests); no
   migration added, so no database run.
-- **Next:** one OTA and the new Beta build (the operator's). The parked reminders in DESIGN LOOP 3
-  below still stand.
+- **Two extra Fable reviews and a fixer after the sweep** (the operator raised Fable to six):
+  - The money/server review found no P0.
+  - The client-architecture review found one P2.
+  - Fixed: `34f958b` (deletion is blocked only while a late-cancel fee is still owed to the payee
+    of a stripe row; migration `20261003001000`), `a4238fe` (transfers_ready orders fresh rows
+    first, so refused rows sink; `20261003001100`), `ad55738` (a banned CUSTOMER's in-progress
+    job keeps its held row for the operator, and the ban loop locks and re-checks status;
+    `20261003001200`, pgTAP 290), `f9b729e` (an intent already awaiting the bank's check sends no
+    second decline push), `3fcce2b` (pills inside horizontal scrollers reach 44 pt — the
+    scroller makes room for the slop — and the F12 mechanism text is corrected).
+  - The worker-favour path for a banned customer's in-progress job is not built; it is a hand
+    decision (runbook).
+- **Shipped (the orchestrator, 2026-10-03):**
+  - `npm run verify` 1619/1619 at `3fcce2b`.
+  - `npm run db:test` Files=32, Tests=1893, PASS (the fixer's run).
+  - Staging run 37144418938 green: tests, every migration through `20261003001200` applied,
+    functions deployed.
+  - OTA: update group `97aed294-8888-4453-a55a-2f3d2c384861`, iOS update
+    `01a1030c-8f72-771d-9259-2a9b0c512ce3`, runtime 1.0.0. Safe for both installed Betas: every
+    native library the run's JS uses was in `package.json` by 2026-08-28.
+  - The new Beta build was started: EAS `64abe85b-d6ab-4242-a1ed-1774ee05a91a`
+    (https://expo.dev/accounts/mah_r2/projects/BRAZOS/builds/64abe85b-d6ab-4242-a1ed-1774ee05a91a).
+    It carries B9, B12 and B13. It does NOT carry the lock-screen add-on (not installed).
+- **Production (operator, before any real release):** hand-apply `20260930000600`–`001300` (from
+  the build run) and this run's `20261003000000`–`20261003001200`, in order.
+- **Next:** the operator's phone walk of the device checks above (one list per group). The parked
+  reminders in DESIGN LOOP 3 below still stand.
 
 ## DESIGN LOOP 3 — the review is planned; nothing built (2026-10-01/02, the first design chat after the build run; docs only, nothing in the app changed)
 
