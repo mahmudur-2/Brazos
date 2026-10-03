@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Image,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   RefreshControl,
@@ -10,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -368,7 +368,7 @@ export function WorkerHomeScreen() {
       {/* Standard input mechanics (.claude/rules/native-ui.md) for the search
           field below — nothing visual, and the field sits at the top so the
           keyboard can never cover it or its submit affordance. */}
-      <KeyboardAvoidingView
+      <KeyboardAvoid
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
@@ -823,7 +823,7 @@ export function WorkerHomeScreen() {
             </View>
           )}
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoid>
 
       <ServicePickerSheet
         visible={moreOpen}

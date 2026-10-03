@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -9,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -492,7 +492,7 @@ export function ReviewAndTipScreen() {
       {gateState ? (
         <ScreenStateView state={gateState} />
       ) : (
-        <KeyboardAvoidingView
+        <KeyboardAvoid
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
@@ -706,7 +706,7 @@ export function ReviewAndTipScreen() {
               <Button title="Done" palette={emeraldColors} onPress={goBackOrHome} style={styles.doneAction} />
             </View>
           ) : null}
-        </KeyboardAvoidingView>
+        </KeyboardAvoid>
       )}
 
       <ConfirmDialog

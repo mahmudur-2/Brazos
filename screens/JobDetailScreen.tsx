@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -10,6 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -629,7 +629,7 @@ export function JobDetailScreen() {
       style={styles.safe}
       edges={galleryPhotos.length > 0 ? [] : ['top']}
     >
-      <KeyboardAvoidingView
+      <KeyboardAvoid
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
@@ -1095,7 +1095,7 @@ export function JobDetailScreen() {
             </Text>
           </View>
         ) : null}
-      </KeyboardAvoidingView>
+      </KeyboardAvoid>
 
       <PhotoViewer
         visible={!!viewerUri}

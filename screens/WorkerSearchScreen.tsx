@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
   type KeyboardEvent,
   Platform,
   Pressable,
@@ -21,6 +20,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -320,7 +320,7 @@ export function WorkerSearchScreen() {
         largeTitle
       />
 
-      <KeyboardAvoidingView
+      <KeyboardAvoid
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
@@ -606,7 +606,7 @@ export function WorkerSearchScreen() {
           </FadeIn>
         )}
         </KeyboardShift>
-      </KeyboardAvoidingView>
+      </KeyboardAvoid>
     </SafeAreaView>
   );
 }

@@ -113,3 +113,53 @@ test('[static] F10: photo zoom is one component, on the UI thread where the bina
   assert.match(media, /scrollEnabled=\{!zoomed\}/);
   assert.match(media, /<ZoomableImage[\s\S]*?onZoomedChange=\{setZoomed\}[\s\S]*?<RemoteImage/);
 });
+
+test('[static] F9: one keyboard-avoiding view, frame-synced where the binary can', () => {
+  // React Native's view is imported in exactly one place: the fallback of the chooser.
+  const importers = appSources().filter((path) =>
+    /import\s*\{[^}]*\bKeyboardAvoidingView\b[^}]*\}\s*from 'react-native'/.test(strip(read(path)))
+  );
+  assert.deepEqual(importers, ['components/KeyboardAvoid.tsx']);
+  // Every screen that had one wears the chooser, still padding on iOS only.
+  const SITES = [
+    'screens/ClientJobDetailScreen.tsx',
+    'screens/HomeScreen.tsx',
+    'screens/JobDetailScreen.tsx',
+    'screens/PostJobScreen.tsx',
+    'screens/ReviewAndTipScreen.tsx',
+    'screens/WorkerHomeScreen.tsx',
+    'screens/WorkerJobScreen.tsx',
+    'screens/WorkerSearchScreen.tsx',
+    'components/OfferComposer.tsx',
+    'components/PortfolioPicker.tsx',
+    'components/ReportDialog.tsx',
+    'components/AuthScaffold.tsx',
+    'ui/templates/FormScreen.tsx',
+  ];
+  for (const path of SITES) {
+    const source = strip(read(path));
+    assert.match(source, /<KeyboardAvoid\b[\s\S]*?behavior=\{Platform\.OS === 'ios'[^}]*\? 'padding' : undefined\}/, `${path} avoids the keyboard`);
+    assert.match(source, /<\/KeyboardAvoid>/);
+  }
+  // The fast path pads from the keyboard's own height, on the UI thread, by the shared arithmetic.
+  const fast = strip(read('components/KeyboardAvoid.motion120.tsx'));
+  assert.match(fast, /useReanimatedKeyboardAnimation\(\)/);
+  assert.match(fast, /paddingBottom: keyboardPadding\(frameBottom\.value, screenHeight, -keyboard\.height\.value, keyboardVerticalOffset\)/);
+  assert.match(fast, /avoiding \? padding : undefined/, 'no padding style at all unless behavior is padding');
+});
+
+test('[executed] F9: keyboardPadding is React Native\'s padding arithmetic', async () => {
+  const { stripTypeScriptTypes } = await import('node:module');
+  const source = read('components/KeyboardAvoid.shared.tsx');
+  const at = source.indexOf('export function keyboardPadding');
+  const end = source.indexOf('\n}', at);
+  const js = stripTypeScriptTypes(source.slice(at, end + 2), { mode: 'strip' });
+  const { keyboardPadding } = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'));
+  // A full-height view under a 336pt keyboard on an 852pt screen pads by the keyboard.
+  assert.equal(keyboardPadding(852, 852, 336, 0), 336);
+  // A negative offset (a reserve already held below, FormScreen's pill) pads that much less.
+  assert.equal(keyboardPadding(852, 852, 336, -96), 240);
+  // A view that ends above the keyboard pads nothing; no keyboard, no padding.
+  assert.equal(keyboardPadding(400, 852, 336, 0), 0);
+  assert.equal(keyboardPadding(852, 852, 0, 40), 0);
+});

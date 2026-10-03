@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   Image,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -11,6 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -575,7 +575,7 @@ export function HomeScreen() {
       {/* home(4): a fixed layer, OUTSIDE the scroller, so the page slides over
           it instead of carrying it. Dark only; renders nothing in light. */}
       <HomeAtmosphere />
-      <KeyboardAvoidingView
+      <KeyboardAvoid
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
@@ -1058,7 +1058,7 @@ export function HomeScreen() {
             )}
           </EntranceView>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoid>
 
       <ServicePickerSheet
         visible={moreOpen}

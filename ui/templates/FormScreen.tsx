@@ -1,5 +1,4 @@
 import {
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -7,6 +6,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from '../../components/KeyboardAvoid';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
@@ -28,8 +28,9 @@ import { ScreenStateView, isReady, type ScreenState } from './ScreenStates';
  *
  * The three things it exists to stop every form re-deriving:
  *
- * 1. Keyboard handling. `KeyboardAvoidingView` with `behavior="padding"` on
- *    iOS only, wrapping BOTH the scroller and the footer, so the submit
+ * 1. Keyboard handling. A keyboard-avoiding view (components/KeyboardAvoid,
+ *    FIX-RUN F9: frame-synced with the keyboard where the binary can) with
+ *    `behavior="padding"` on iOS only, wrapping BOTH the scroller and the footer, so the submit
  *    control stays reachable with the keyboard open — CLAUDE.md's rule, which
  *    is easy to get subtly wrong per screen (wrap only the ScrollView and the
  *    footer ends up under the keyboard).
@@ -121,7 +122,7 @@ export function FormScreen({
       {!isReady(state) ? (
         <ScreenStateView state={state as Exclude<ScreenState, { kind: 'ready' }>} />
       ) : (
-        <KeyboardAvoidingView
+        <KeyboardAvoid
           style={styles.flex}
           // iOS only: on Android the system already resizes the window, and
           // adding padding on top of that double-counts the keyboard.
@@ -208,7 +209,7 @@ export function FormScreen({
               </View>
             </View>
           ) : null}
-        </KeyboardAvoidingView>
+        </KeyboardAvoid>
       )}
     </SafeAreaView>
   );

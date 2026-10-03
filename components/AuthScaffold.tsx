@@ -1,7 +1,6 @@
 import { useRef, type PropsWithChildren, type ReactNode } from 'react';
 import {
   Animated,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -10,6 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { KeyboardAvoid } from './KeyboardAvoid';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
@@ -318,7 +318,7 @@ export function AuthScaffold({
       ) : null}
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
-        <KeyboardAvoidingView
+        <KeyboardAvoid
           style={styles.flex}
           // A footer handles the keyboard itself (see the prop); the padding
           // path stays for the screens without one.
@@ -385,7 +385,7 @@ export function AuthScaffold({
               </KeyboardRisingColumn>
             </View>
           ) : null}
-        </KeyboardAvoidingView>
+        </KeyboardAvoid>
       </SafeAreaView>
     </View>
   );

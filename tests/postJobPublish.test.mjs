@@ -258,7 +258,7 @@ test('M-7 · every step ends in ONE pinned footer control, and a disabled one sa
     /isLastStep && !showSuccess \? \( $/,
     'the bar renders on the last step only'
   );
-  const close = flat.indexOf('</KeyboardAvoidingView>', at);
+  const close = flat.indexOf('</KeyboardAvoid>', at);
   assert.notEqual(close, -1, 'the bar sits inside the keyboard-avoiding view, so it rides the keyboard');
   const footer = flat.slice(at, close);
 

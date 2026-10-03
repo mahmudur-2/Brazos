@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Animated,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +11,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   StackActions,
@@ -1562,7 +1562,7 @@ export function PostJobScreen() {
       {loadingJob ? (
         <ScreenStateView state={SPINNER_STATE} />
       ) : (
-      <KeyboardAvoidingView
+      <KeyboardAvoid
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
@@ -2163,7 +2163,7 @@ export function PostJobScreen() {
             hideSecondary={seal != null || uploadingNow}
           />
         ) : null}
-      </KeyboardAvoidingView>
+      </KeyboardAvoid>
       )}
 
       {showSuccess && (

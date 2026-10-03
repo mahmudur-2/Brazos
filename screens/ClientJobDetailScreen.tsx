@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   RefreshControl,
@@ -10,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -694,7 +694,7 @@ export function ClientJobDetailScreen() {
         palette={emeraldColors}
       />
 
-      <KeyboardAvoidingView
+      <KeyboardAvoid
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
@@ -1504,7 +1504,7 @@ export function ClientJobDetailScreen() {
             />
           </View>
         ) : null}
-      </KeyboardAvoidingView>
+      </KeyboardAvoid>
 
       <PhotoViewer
         visible={!!viewerUri}

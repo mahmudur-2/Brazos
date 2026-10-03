@@ -383,8 +383,8 @@ test('[static] F8: Discover listens on the iOS WILL events and fades its blocks 
   assert.match(search, /<KeyboardAway hidden=\{keyboardVisible\} durationMs=\{keyboardMs\} style=\{styles\.serviceSection\}>/);
   assert.equal((search.match(/<KeyboardShift durationMs=\{keyboardMs\}/g) ?? []).length, 2);
   assert.doesNotMatch(search, /\{!keyboardVisible \? \(/, 'no block mounts and unmounts on the keyboard flag');
-  // The KeyboardAvoidingView stays until F9 swaps it (the native-ui rule still asks for one).
-  assert.match(search, /<KeyboardAvoidingView/);
+  // The keyboard-avoiding view stays (the native-ui rule asks for one); F9 made it KeyboardAvoid.
+  assert.match(search, /<KeyboardAvoid\b/);
   // The fast path is a Reanimated layout animation, never React Native's LayoutAnimation.
   const fast = strip(read('components/KeyboardAway.motion120.tsx'));
   assert.match(fast, /entering=\{reduced \|\| firstMount\.current \? undefined : entering\}/);

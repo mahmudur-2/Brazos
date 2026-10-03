@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
-  KeyboardAvoidingView,
   Linking,
   Platform,
   Pressable,
@@ -11,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -717,7 +717,7 @@ export function WorkerJobScreen() {
           <Text style={styles.muted}>Job not found.</Text>
         </View>
       ) : (
-        <KeyboardAvoidingView
+        <KeyboardAvoid
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
@@ -1151,7 +1151,7 @@ export function WorkerJobScreen() {
             ) : null}
           </View>
         ) : null}
-        </KeyboardAvoidingView>
+        </KeyboardAvoid>
       )}
 
       <PhotoViewer

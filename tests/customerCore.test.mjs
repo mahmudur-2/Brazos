@@ -82,8 +82,9 @@ test('Customer text inputs are protected by keyboard-avoiding layouts', async ()
     read('screens/ClientJobDetailScreen.tsx'),
   ]);
 
+  // F9: the keyboard-avoiding view is components/KeyboardAvoid (React Native's, or the 120 Hz path).
   for (const screen of screens) {
-    assert.match(screen, /<KeyboardAvoidingView/);
+    assert.match(screen, /<KeyboardAvoid\b/);
     assert.match(screen, /Platform\.OS === 'ios' \? 'padding' : undefined/);
   }
 

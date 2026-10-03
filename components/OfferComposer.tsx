@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoid } from './KeyboardAvoid';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -523,7 +524,7 @@ export function OfferComposer({
 
   if (layout === 'screen') {
     return (
-      <KeyboardAvoidingView
+      <KeyboardAvoid
         style={styles.screen}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={-pillReserve}
@@ -537,7 +538,7 @@ export function OfferComposer({
           <View style={styles.wrap}>{fields}</View>
         </ScrollView>
         <View style={[styles.footer, { paddingBottom: footerPad }]}>{commit}</View>
-      </KeyboardAvoidingView>
+      </KeyboardAvoid>
     );
   }
 

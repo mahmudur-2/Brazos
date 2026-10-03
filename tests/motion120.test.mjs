@@ -1089,6 +1089,16 @@ const SIBLINGS = [
     // 2026-10-03 (fix run F10) — a photo's pinch, pan, double tap and swipe-away (PhotoViewer,
     // MediaViewer): recognisers AND worklets, the PeekSheet AND; the fallback is the PanResponder
     // PhotoViewer always had, on the same shared numbers.
+    // 2026-10-03 (fix run F9) — the keyboard-avoiding view every input screen wraps itself in: the
+    // padding computed on the UI thread from the keyboard's own frames; the fallback is React
+    // Native's KeyboardAvoidingView. Keyboard AND worklets, the KeyboardRisingColumn AND.
+    name: 'KeyboardAvoid',
+    fallback: 'components/KeyboardAvoid.tsx',
+    fast: 'components/KeyboardAvoid.motion120.tsx',
+    shared: 'components/KeyboardAvoid.shared.tsx',
+    needs: 'keyboard',
+  },
+  {
     name: 'ZoomableImage',
     fallback: 'components/ZoomableImage.tsx',
     fast: 'components/ZoomableImage.motion120.tsx',
@@ -2220,6 +2230,9 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       // 2026-09-30 — the smoothness pass's four (SheetCard, PopModal, EntranceView, DropdownReveal).
       'components/DropdownReveal.motion120.tsx',
       'components/EntranceView.motion120.tsx',
+      // 2026-10-03 (fix run F9) — the keyboard-avoiding view's padding, one useAnimatedStyle over
+      // the vendor's keyboard height; its arithmetic is keyboardPadding, a 'worklet' in the shared file.
+      'components/KeyboardAvoid.motion120.tsx',
       // 2026-10-03 (fix run F8) — Discover's blocks stepping aside for the keyboard: Reanimated
       // layout animations (FadeIn / FadeOut / LinearTransition) and no worklet body of its own.
       'components/KeyboardAway.motion120.tsx',

@@ -1,7 +1,6 @@
 import { useModalPresence } from '../hooks/useModalPresence';
 import { useEffect, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -9,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from './KeyboardAvoid';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { PopModal } from './PopModal';
@@ -148,7 +148,7 @@ export function ReportDialog({
       onRequestClose={onClose}
       backdropStyle={[styles.backdrop, isDark && styles.backdropDark]}
     >
-        <KeyboardAvoidingView
+        <KeyboardAvoid
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.centerWrap}
         >
@@ -258,7 +258,7 @@ export function ReportDialog({
             </>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardAvoid>
     </PopModal>
   );
 }

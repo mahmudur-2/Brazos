@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -10,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { KeyboardAvoid } from './KeyboardAvoid';
 import { RemoteImage } from './RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -380,7 +380,7 @@ export function PortfolioPicker({
             <Modal> — see the component doc comment for why. */}
         {(selected || editingItem) && (
           <View style={styles.detailBackdrop}>
-            <KeyboardAvoidingView
+            <KeyboardAvoid
               behavior={Platform.OS === 'ios' ? 'padding' : undefined}
               style={styles.detailKeyboardWrap}
             >
@@ -547,7 +547,7 @@ export function PortfolioPicker({
                   </Pressable>
                 )}
               </ScrollView>
-            </KeyboardAvoidingView>
+            </KeyboardAvoid>
           </View>
         )}
       </SafeAreaView>
