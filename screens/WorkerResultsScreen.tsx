@@ -563,14 +563,14 @@ function emptyBody(
     return 'Add categories to your profile so jobs you can do surface here.';
   }
   if (mode === 'nearby') {
-    return 'Nothing open nearby right now — new jobs appear automatically as clients post them.';
+    return 'Nothing open nearby right now — new jobs appear automatically as customers post them.';
   }
   if (mode === 'search') {
     return query
       ? `Nothing matched "${query}". Try a different word or area.`
       : 'Type a service or an area to search.';
   }
-  return 'New jobs appear here automatically as clients post them.';
+  return 'New jobs appear here automatically as customers post them.';
 }
 
 const stylesFor = themedStyles((colors: ColorPalette) =>

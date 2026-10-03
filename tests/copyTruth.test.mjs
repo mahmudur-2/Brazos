@@ -181,3 +181,40 @@ test('B5 · the rewritten lines are the product sentences', () => {
   assert.match(code('lib/errorMessage.ts'), /'Can’t reach Brazos right now\. Check your connection and try again\.'/);
   assert.match(code('screens/CheckoutScreen.tsx'), /<Text style=\{styles\.summaryLabel\}>Pay by<\/Text>/);
 });
+
+// ---------------------------------------------------------------------------
+// C3 (FIX-RUN 2026-10-03) — one word for each person and thing: customer (never
+// client), job (never task). Code identifiers (client_id, ClientJobDetail) are
+// not copy; a checklist's "tasks" count checklist items, not jobs.
+// ---------------------------------------------------------------------------
+
+test('[static] C3 · no screen or component says "client" or calls a job a "task"', () => {
+  const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/\/\/.*$/gm, '');
+  const files = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(join(root, dir))) {
+      const path = join(dir, name);
+      if (statSync(join(root, path)).isDirectory()) walk(path);
+      else if (/\.tsx?$/.test(name) && !/\.web\.tsx?$/.test(name)) files.push(path);
+    }
+  };
+  walk('screens');
+  walk('components');
+  assert.ok(files.length > 50, `scanned ${files.length} files`);
+  const WORD = /\b[Cc]lients?\b|\b[Tt]asks?\b/;
+  const hits = [];
+  for (const file of files) {
+    strip(read(file)).split('\n').forEach((line, index) => {
+      // Rendered copy: quoted strings, template text (its ${…} code removed) and JSX text.
+      const texts = [...line.matchAll(/'([^'\n]*)'|"([^"\n]*)"|`([^`\n]*)`|>([^<>{}\n]+)</g)].map(
+        (m) => m[1] ?? m[2] ?? (m[3] != null ? m[3].replace(/\$\{[^}]*\}/g, '') : m[4])
+      );
+      // A JSX text line on its own (no code punctuation).
+      if (/^\s*[A-Z][^=;(){}<>]*$/.test(line)) texts.push(line);
+      for (const text of texts) {
+        if (WORD.test(text) && !/^[a-z_./-]+$/.test(text.trim())) hits.push(`${relative(root, join(root, file))}:${index + 1}: ${text.trim()}`);
+      }
+    });
+  }
+  assert.deepEqual(hits, []);
+});

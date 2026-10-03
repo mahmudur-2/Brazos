@@ -163,7 +163,7 @@ export function PastWork({
               <Ionicons name="images-outline" size={26} color={colors.textSubtle} />
               <Text style={styles.emptyText}>
                 {editable
-                  ? 'Feature photos from jobs you’ve finished to show clients your work.'
+                  ? 'Feature photos from jobs you’ve finished to show customers your work.'
                   : 'This worker hasn’t featured any photos yet.'}
               </Text>
             </View>

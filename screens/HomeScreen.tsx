@@ -767,7 +767,7 @@ export function HomeScreen() {
               value={query}
               onChangeText={setQuery}
               onSubmit={startJobDraft}
-              placeholder="Describe your task..."
+              placeholder="Describe your job..."
               autoCapitalize="sentences"
               autoCorrect
               // 2026-09-27 (the Lux remake, the operator's Home picture): the

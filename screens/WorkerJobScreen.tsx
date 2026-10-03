@@ -171,7 +171,7 @@ export function WorkerJobScreen() {
   }, [job?.client_id]);
 
   const isWorker = !!user && job?.assigned_worker_id === user.id;
-  const clientName = client?.full_name ?? 'the client';
+  const clientName = client?.full_name ?? 'the customer';
   // Idea 14: a visit of a repeating job this worker gets first — its line, and "Drop future visits".
   // RLS answers with no row once they are not the series' worker, and the note is gone.
   const { series, setSeries } = useJobSeries(job?.series_id);

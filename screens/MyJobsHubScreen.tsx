@@ -379,7 +379,7 @@ export function MyJobsHubScreen() {
                       icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                       category={job.category}
                       title={job.title}
-                      subtitle={names[job.client_id] ?? 'Client'}
+                      subtitle={names[job.client_id] ?? 'Customer'}
                       thumbnailUrl={jobThumbnailUrl(job)}
                       metaLine={metaLineFor(job)}
                       timeLabel={formatTimeAgo(job.created_at)}
@@ -476,7 +476,7 @@ export function MyJobsHubScreen() {
                       !!user &&
                       bid.awaiting_id === user.id &&
                       bid.author_id !== user.id;
-                    const clientName = names[job.client_id] ?? 'Client';
+                    const clientName = names[job.client_id] ?? 'Customer';
                     // Incoming counter-offers are addressed by first name.
                     const clientFirstName =
                       clientName.trim().split(/\s+/)[0] || clientName;
@@ -525,7 +525,7 @@ export function MyJobsHubScreen() {
                         icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                         category={job.category}
                         title={job.title}
-                        subtitle={names[job.client_id] ?? 'Client'}
+                        subtitle={names[job.client_id] ?? 'Customer'}
                         thumbnailUrl={jobThumbnailUrl(job)}
                         metaLine={metaLineFor(job)}
                         timeLabel={formatTimeAgo(bid.created_at)}

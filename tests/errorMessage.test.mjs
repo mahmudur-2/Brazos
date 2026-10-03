@@ -39,6 +39,8 @@ test('classification covers the states a user can act on', () => {
   assert.match(userMessage({ message: 'permission denied for table payments', code: '42501' }), /access/i);
   assert.match(userMessage({ code: 'PGRST116', message: 'not found' }), /available/i);
   assert.match(userMessage({ code: '23505', message: 'duplicate key value' }), /already/i);
+  // C3: the server's own-job refusal says "client"; the user reads the app's word.
+  assert.equal(userMessage({ message: 'A client cannot bid on their own job', code: 'P0001' }), 'You can’t bid on your own job.');
   // Our own RPC sentences ARE for users — they pass through.
   assert.equal(
     userMessage({ message: 'Funds release only after the job is completed' }),

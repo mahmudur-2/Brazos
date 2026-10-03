@@ -537,7 +537,7 @@ test('home(2) fence: the task card holds the title, the field and the pill, and 
   // 2026-09-26 (the refresh, audit M-12): its return key starts the draft
   // the pill starts, so it draws no magnifier (that would promise a search)
   // and its one trailing control stays the mic.
-  assert.match(inside, /placeholder="Describe your task\.\.\."/);
+  assert.match(inside, /placeholder="Describe your job\.\.\."/);
   assert.match(inside, /onSubmit=\{startJobDraft\}/);
   // 2026-09-27 (the Lux remake, the operator's Home picture): the magnifier
   // LEADS the field again ("the field with a magnifier before 'Describe your

@@ -493,7 +493,7 @@ export function WorkerHomeScreen() {
                   // stage screen. The first line is the MOVE, the second the job.
                   const isCounter = entry.kind === 'counter';
                   const job = isCounter ? toOpenJob(entry.bid.job!) : entry.item.job;
-                  const client = names[job.client_id] ?? 'Client';
+                  const client = names[job.client_id] ?? 'Customer';
                   const move = isCounter
                     ? `${client.split(/\s+/)[0] || client} sent you a counter-offer — respond`
                     : entry.item.line;
@@ -802,7 +802,7 @@ export function WorkerHomeScreen() {
             </View>
           ) : previewJobs.length === 0 ? (
             <Text style={styles.empty}>
-              No open jobs right now — new jobs appear here automatically as clients post them.
+              No open jobs right now — new jobs appear here automatically as customers post them.
             </Text>
           ) : (
             <View style={styles.cardList}>

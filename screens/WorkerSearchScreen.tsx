@@ -309,7 +309,7 @@ export function WorkerSearchScreen() {
               {/* 2026-09-27 (the Lux remake): no eyebrow, and the subtitle on
                   one line at 393 wide (ruling 10). */}
               <Text style={styles.introText}>
-                Describe the task, or pick a service below.
+                Describe the job, or pick a service below.
               </Text>
             </View>
           ) : null}
@@ -526,7 +526,7 @@ export function WorkerSearchScreen() {
             ) : null}
             <SearchStateCard
               icon="people-outline"
-              eyebrow="START WITH THE TASK"
+              eyebrow="START WITH THE JOB"
               eyebrowGold
               title="Describe what you need"
               message="e.g. “move a queen mattress up three flights”"
@@ -627,7 +627,7 @@ function SearchStateCard({
   icon?: IoniconName;
   busy?: boolean;
   eyebrow: string;
-  /** 2026-09-29 (LUX-LIST-2 #4): START WITH THE TASK is one of the kept-gold labels. */
+  /** 2026-09-29 (LUX-LIST-2 #4): START WITH THE JOB is one of the kept-gold labels. */
   eyebrowGold?: boolean;
   title: string;
   message: string;

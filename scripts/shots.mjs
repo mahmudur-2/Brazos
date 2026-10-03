@@ -378,7 +378,7 @@ const TO_MEDIA = [
 /** …then step 2 (Location), with the area typed in. */
 const TO_LOCATION = [
   ...TO_MEDIA,
-  { expect: 'Show the task' },
+  { expect: 'Show the job' },
   { press: 'Continue to Location' },
   { expect: 'Where and when?' },
   { fill: 'e.g. Sheepshead Bay, Brooklyn', text: JOB_AREA },
@@ -465,7 +465,7 @@ const TARGETS = [
       mode: 'customer',
       colorScheme,
       recipe: TO_MEDIA,
-      wait: 'Show the task',
+      wait: 'Show the job',
     },
     {
       name: `postjob-location-${colorScheme}`,

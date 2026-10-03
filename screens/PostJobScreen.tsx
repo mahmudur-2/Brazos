@@ -181,7 +181,7 @@ const POST_STEPS = [
   },
   {
     label: 'Media',
-    title: 'Show the task',
+    title: 'Show the job',
     subtitle: 'Photos and clips are optional, but they help workers.',
   },
   {

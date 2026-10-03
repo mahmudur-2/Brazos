@@ -34,6 +34,8 @@ const MISSING = 'This isn’t available anymore.';
 const CONFLICT = 'That was already done.';
 /** FIX-RUN B3: the word filter's refusal (20261003000700_ugc_moderation.sql). */
 const BLOCKED = 'That includes words Brazos doesn’t allow. Edit it and try again.';
+/** C3: place_bid()'s own-job refusal says "client" (baseline) — the app's word is customer. */
+const OWN_JOB = 'You can’t bid on your own job.';
 
 function rawOf(error: ErrorLike): string {
   if (!error) return '';
@@ -62,6 +64,8 @@ export function userMessage(error: ErrorLike, fallback?: string): string {
 
   if (lower.includes('blocked_content') || lower.includes("words brazos doesn't allow")) {
     friendly = BLOCKED;
+  } else if (lower.includes('cannot bid on their own job')) {
+    friendly = OWN_JOB;
   } else if (
     // undefined_column / undefined_table / undefined_function, and
     // PostgREST's schema-cache misses — all mean app-vs-database skew.

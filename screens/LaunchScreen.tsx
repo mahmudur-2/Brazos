@@ -38,7 +38,7 @@ const LAUNCH_MARK_RADIUS_RATIO = 0.187;
  *   120    logo fades in, lifts 10pt, overshoots to 1.02 and settles at 1.00
  *   150    wave lines wash in underneath and stay low-contrast
  *   320    gold BRAZOS wordmark rises into place
- *   550    "Any Task, Handled." arrives
+ *   550    "Any Job, Handled." arrives
  *   …      the crossfade (EXIT_MS) starts the moment the session resolves
  *
  * There is no visibility floor (n5, 2026-09-04): the layer lasts exactly as
@@ -228,7 +228,7 @@ export function LaunchScreen({ sessionReady, onFinish }: LaunchScreenProps) {
         </Animated.Text>
 
         <Animated.Text style={[styles.tagline, rise(tagline, 10)]} maxFontSizeMultiplier={1.4}>
-          Any Task, Handled.
+          Any Job, Handled.
         </Animated.Text>
       </View>
     </Animated.View>

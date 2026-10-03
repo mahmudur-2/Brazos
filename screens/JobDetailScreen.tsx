@@ -492,7 +492,7 @@ export function JobDetailScreen() {
     // sent screen SubmitBid lands on — the OS alert and the tab hop are gone.
     // Fire-and-forget, as SubmitBid does: the prompt never holds the screen.
     void maybePromptForPush(
-      'Get told the moment this client accepts your offer — and when new jobs like this are posted.'
+      'Get told the moment this customer accepts your offer — and when new jobs like this are posted.'
     );
     (navigation as unknown as {
       navigate: (
@@ -1016,7 +1016,7 @@ export function JobDetailScreen() {
                         You’ll offer {formatBudget(job.budget_cents)}
                       </Text>
                       <Text style={styles.quickBidText}>
-                        The client still chooses.
+                        The customer still chooses.
                       </Text>
                     </View>
                   </View>
@@ -1103,8 +1103,8 @@ export function JobDetailScreen() {
           title={`Send a ${formatBudget(job.budget_cents)} bid?`}
           message={
             payoutQuote !== 'loading' && payoutQuote !== 'failed' && payoutQuote.min == null
-              ? `You’d receive ${formatBudget(payoutQuote.max)} after the fee. The client will receive your bid and decide who gets the job.`
-              : 'The client will receive your bid and decide who gets the job.'
+              ? `You’d receive ${formatBudget(payoutQuote.max)} after the fee. The customer will receive your bid and decide who gets the job.`
+              : 'The customer will receive your bid and decide who gets the job.'
           }
           confirmText="Send bid"
           cancelText="Cancel"

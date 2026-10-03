@@ -488,7 +488,7 @@ export function PortfolioPicker({
 
                 <Text style={styles.detailLabel}>What did this job involve?</Text>
                 <Text style={styles.detailHint}>
-                  A real sentence or two — this is what clients read to judge your work.
+                  A real sentence or two — this is what customers read to judge your work.
                 </Text>
                 <GlowTextInput
               glowRadius={radius.md}
