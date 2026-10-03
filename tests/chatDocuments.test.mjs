@@ -82,8 +82,9 @@ const messagesModule = (async () => {
   const stubbed = js
     .replace(/import \{ supabase \} from '\.\/supabase';/, 'const supabase = null;')
     .replace(
-      /import \{ resolveChatMediaUrl \} from '\.\/storage';/,
-      'const resolveChatMediaUrl = async (_b, v) => v;'
+      /import \{ resolveChatMediaUrl, resolveChatMediaUrls \} from '\.\/storage';/,
+      // F5: the batch signer beside the single one, both identity stubs.
+      'const resolveChatMediaUrl = async (_b, v) => v; const resolveChatMediaUrls = async (_b, vs) => vs.map((v) => v ?? null);'
     );
   return import(toDataUrl(stubbed));
 })();

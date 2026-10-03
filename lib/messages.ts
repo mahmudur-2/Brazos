@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { resolveChatMediaUrl } from './storage';
+import { resolveChatMediaUrl, resolveChatMediaUrls } from './storage';
 
 /**
  * Which conversation a chat screen, message or read receipt belongs to.
@@ -136,22 +136,126 @@ export async function resolveMessageMedia(message: Message): Promise<Message> {
   };
 }
 
-/** All messages in one conversation, oldest first. */
-export async function fetchMessages(target: ChatTarget) {
-  const { data, error } = await supabase
+/**
+ * F5 — a whole page's media in one signing call per bucket, rather than up to
+ * three per message. The realtime path keeps resolveMessageMedia for its one
+ * message at a time.
+ */
+export async function resolveMessagesMedia(list: Message[]): Promise<Message[]> {
+  if (list.length === 0) return list;
+  const [images, audio, documents] = await Promise.all([
+    resolveChatMediaUrls('chat-photos', list.map((m) => m.image_url)),
+    resolveChatMediaUrls('chat-audio', list.map((m) => m.audio_url)),
+    resolveChatMediaUrls('chat-documents', list.map((m) => m.document_url)),
+  ]);
+  return list.map((message, index) => ({
+    ...message,
+    image_url: images[index],
+    audio_url: audio[index],
+    document_url: documents[index],
+  }));
+}
+
+/** F5: how many messages one thread loads at a time. */
+export const MESSAGE_PAGE_SIZE = 50;
+
+export type MessagePage = {
+  /** Oldest first. */
+  data: Message[];
+  error: { message?: string | null; code?: string | null } | null;
+  /** Whether the thread may hold older messages than this page reached. */
+  hasMore: boolean;
+};
+
+/**
+ * F5 — one page of a thread, oldest first: the newest `limit` messages at or
+ * before `before` (the thread's newest when absent). `since` instead loads
+ * every message from that instant on, unpaged — the legacy jobId entry's way
+ * to reach the job's first message. At-or-before, not strictly before, so a
+ * message sharing the cursor's timestamp is never skipped; the store drops
+ * the repeat by id.
+ */
+export async function fetchMessages(
+  target: ChatTarget,
+  { before, since, limit = MESSAGE_PAGE_SIZE }: { before?: string; since?: string; limit?: number } = {}
+): Promise<MessagePage> {
+  let query = supabase
     .from('messages')
     .select(MESSAGE_COLUMNS)
     .eq(
       target.jobId ? 'job_id' : 'direct_thread_id',
       target.jobId ?? target.directThreadId
-    )
-    .order('created_at', { ascending: true });
+    );
+  if (since) {
+    query = query.gte('created_at', since);
+  } else if (before) {
+    query = query.lte('created_at', before);
+  }
+  const ordered = query.order('created_at', { ascending: false }).order('id', { ascending: false });
+  const { data, error } = await (since ? ordered : ordered.limit(limit));
 
-  if (error) return { data: [] as Message[], error };
-  const messages = await Promise.all(
-    ((data ?? []) as Message[]).map((message) => resolveMessageMedia(message))
-  );
-  return { data: messages, error: null };
+  if (error) return { data: [] as Message[], error, hasMore: true };
+  const newestFirst = (data ?? []) as Message[];
+  const messages = await resolveMessagesMedia([...newestFirst].reverse());
+  // A `since` load reached its instant, but older messages may sit before it.
+  return { data: messages, error: null, hasMore: since ? true : newestFirst.length >= limit };
+}
+
+/**
+ * F5 — when a job's conversation began: the legacy jobId entry jumps to that
+ * job's first message, so every thread is loaded back to this instant.
+ */
+export async function fetchFirstMessageAt(jobId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('created_at')
+    .eq('job_id', jobId)
+    .order('created_at', { ascending: true })
+    .limit(1);
+  if (error || !data || data.length === 0) return null;
+  return (data[0] as { created_at: string }).created_at;
+}
+
+/** F5 — quoted messages that sit outside the loaded window, in one read. */
+export async function fetchMessagesByIds(ids: string[]): Promise<Message[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase.from('messages').select(MESSAGE_COLUMNS).in('id', ids);
+  if (error || !data) return [];
+  return resolveMessagesMedia(data as Message[]);
+}
+
+/**
+ * F5 — THE MERGED WINDOW HAS NO HOLES. Each thread loads newest-first, page by
+ * page, so a busy thread's 50 can cover an hour while a quiet thread's cover
+ * a month. Interleaving both as loaded would show the quiet thread's March
+ * beside the busy one's last hour, with the busy one's March missing between
+ * them. So the timeline starts at the FLOOR — the latest cursor among the
+ * threads that may still hold older messages — and nothing older than it is
+ * shown until those threads load further. A thread that has reached its start
+ * sets no floor. Oldest first; created_at, then id, breaks a tie.
+ */
+export function visibleWindow(
+  byThread: Record<string, Message[]>,
+  cursor: Record<string, string | null>,
+  hasMore: Record<string, boolean>
+): Message[] {
+  let floor: string | null = null;
+  for (const key of Object.keys(byThread)) {
+    if (!hasMore[key]) continue;
+    const at = cursor[key];
+    if (at && (floor === null || Date.parse(at) > Date.parse(floor))) floor = at;
+  }
+  const merged: Message[] = [];
+  for (const slice of Object.values(byThread)) {
+    for (const message of slice) {
+      if (floor === null || Date.parse(message.created_at) >= Date.parse(floor)) merged.push(message);
+    }
+  }
+  return merged.sort((a, b) => {
+    const difference = Date.parse(a.created_at) - Date.parse(b.created_at);
+    if (difference) return difference;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
 }
 
 export type NewMessageInput = {

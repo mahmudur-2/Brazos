@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Keyboard,
   type ListRenderItemInfo,
@@ -309,7 +310,12 @@ export function ChatScreen() {
     return list;
   }, [routeJobId, routeDirectThreadId, pairThreadId, sharedJobs]);
 
-  const { messages, loading, error, addLocal } = useConversationChat(targets);
+  // F5: fifty at a time; a legacy jobId entry loads every thread back to that
+  // job's first message so the jump has somewhere to land.
+  const { messages, loading, error, addLocal, loadOlder, loadingOlder, quotedById } = useConversationChat(
+    targets,
+    { anchorJobId: routeJobId }
+  );
 
   /** The `job:`/`direct:` key of the thread a message belongs to. */
   const threadKeyOf = useCallback(
@@ -708,11 +714,18 @@ export function ChatScreen() {
   // the quoted message is always somewhere in this conversation.
   // Off the VISIBLE timeline: a reply whose original this user cleared has no
   // quote left to show, because in their copy the original is not there.
+  // F5: an original outside the loaded window arrives in quotedById, through
+  // the same visibility rule, so a cleared original still shows no quote.
+  const visibleQuoted = useMemo(
+    () => visibleMessages(Object.values(quotedById), (message) => stateByKey[threadKeyOf(message)]),
+    [quotedById, stateByKey, threadKeyOf]
+  );
   const messagesById = useMemo(() => {
     const map: Record<string, Message> = {};
+    for (const m of visibleQuoted) map[m.id] = m;
     for (const m of visibleTimeline) map[m.id] = m;
     return map;
-  }, [visibleTimeline]);
+  }, [visibleTimeline, visibleQuoted]);
 
   const jobTitles = useMemo(() => {
     const map: Record<string, string> = {};
@@ -1975,6 +1988,19 @@ export function ChatScreen() {
               // F4: a message arriving at the bottom keeps a reader who has
               // scrolled up in place; within ~80pt of the bottom it follows.
               maintainVisibleContentPosition={{ minIndexForVisible: 1, autoscrollToTopThreshold: 80 }}
+              // F5: the end of an inverted list is its top — the oldest loaded
+              // message — so reaching it loads the page before.
+              onEndReached={() => void loadOlder()}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={
+                loadingOlder ? (
+                  <ActivityIndicator
+                    style={styles.olderSpinner}
+                    color={colors.textMuted}
+                    accessibilityLabel="Loading earlier messages"
+                  />
+                ) : null
+              }
               onScrollToIndexFailed={({ index, averageItemLength }) => {
                 // Variable-height rows: the target may not be measured yet.
                 listRef.current?.scrollToOffset({
@@ -2297,6 +2323,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   list: {
     flex: 1,
+  },
+  olderSpinner: {
+    paddingVertical: spacing.md,
   },
   messages: {
     padding: spacing.lg,

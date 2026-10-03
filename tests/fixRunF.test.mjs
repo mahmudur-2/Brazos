@@ -270,3 +270,104 @@ test('[static] F4: one scroll path — an inverted list, an own send goes to the
   // FlashList 2 has no `inverted`; the chat stays on FlatList.
   assert.doesNotMatch(chat, /FlashList/);
 });
+
+// ---------------------------------------------------------------------------
+// F5 — fifty at a time, batched signing, a stable image cache key.
+// ---------------------------------------------------------------------------
+const { stripTypeScriptTypes } = await import('node:module');
+const toDataUrl = (js) => 'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
+
+const messagesLib = await import(
+  toDataUrl(
+    stripTypeScriptTypes(read('lib/messages.ts'), { mode: 'strip' })
+      .replace(/import \{ supabase \} from '\.\/supabase';/, 'const supabase = null;')
+      .replace(
+        /import \{ resolveChatMediaUrl, resolveChatMediaUrls \} from '\.\/storage';/,
+        'const resolveChatMediaUrl = async (_b, v) => v; const resolveChatMediaUrls = async (_b, vs) => vs.map((v) => v ?? null);'
+      )
+  )
+);
+
+test('F5: visibleWindow — a busy thread and a quiet one leave no gap', () => {
+  const { visibleWindow } = messagesLib;
+  const at = (iso, id) => ({ id, created_at: iso });
+  // The busy thread's page reaches back to 10:00 and it holds more; the quiet
+  // thread reached its start in July.
+  const byThread = {
+    busy: [at('2026-10-03T10:00:00Z', 'b1'), at('2026-10-03T11:00:00Z', 'b2')],
+    quiet: [at('2026-07-01T09:00:00Z', 'q1'), at('2026-10-03T10:30:00Z', 'q2')],
+  };
+  const cursor = { busy: '2026-10-03T10:00:00Z', quiet: '2026-07-01T09:00:00Z' };
+  const shown = visibleWindow(byThread, cursor, { busy: true, quiet: false }).map((m) => m.id);
+  assert.deepEqual(shown, ['b1', 'q2', 'b2'], 'July waits until the busy thread has loaded back to it');
+  // Once the busy thread has reached its start, everything shows, in order.
+  assert.deepEqual(visibleWindow(byThread, cursor, { busy: false, quiet: false }).map((m) => m.id), ['q1', 'b1', 'q2', 'b2']);
+  // An exact tie is broken by id, so the order is stable.
+  const tie = visibleWindow({ a: [at('2026-10-03T10:00:00Z', 'z')], b: [at('2026-10-03T10:00:00Z', 'a')] }, {}, {});
+  assert.deepEqual(tie.map((m) => m.id), ['a', 'z']);
+});
+
+async function storageWith(signedUrlsFor) {
+  const calls = [];
+  globalThis.__f5calls = calls;
+  globalThis.__f5signed = signedUrlsFor;
+  const js = stripTypeScriptTypes(read('lib/storage.ts'), { mode: 'strip' })
+    .replace(
+      /import \{ supabase \} from '\.\/supabase';/,
+      `const supabase = { storage: { from: (bucket) => ({
+        createSignedUrls: async (paths, ttl) => { globalThis.__f5calls.push({ bucket, paths, ttl }); return globalThis.__f5signed(bucket, paths); },
+        createSignedUrl: async () => ({ data: null, error: new Error('single path not expected') }),
+      }) } };`
+    )
+    .replace(/import type \{ ImagePickerAsset \} from 'expo-image-picker';\n?/, '')
+    // A fresh module per case, so one case's kept URLs never answer another's.
+    .concat(`\n// ${Math.random()}`);
+  return { mod: await import(toDataUrl(js)), calls };
+}
+
+test('F5: the batch signer makes one call per bucket, reuses what it signed, and never hands back a raw reference', async () => {
+  const { mod, calls } = await storageWith((bucket, paths) => ({
+    data: paths.map((path) => ({ path, error: null, signedUrl: `https://x.supabase.co/storage/v1/object/sign/${bucket}/${path}?token=t1` })),
+    error: null,
+  }));
+  const values = ['storage://chat-photos/j/u/1.jpg', null, 'storage://chat-photos/j/u/2.jpg', 'storage://chat-photos/j/u/1.jpg'];
+  const urls = await mod.resolveChatMediaUrls('chat-photos', values);
+  assert.equal(calls.length, 1, 'one signing call for the whole page');
+  assert.deepEqual(calls[0].paths, ['j/u/1.jpg', 'j/u/2.jpg'], 'each object signed once');
+  assert.equal(urls[1], null);
+  assert.equal(urls[0], urls[3]);
+  // The same objects again: kept, not re-signed — so the URL, and the image cache, are stable.
+  const again = await mod.resolveChatMediaUrls('chat-photos', values);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(again, urls);
+  assert.equal(await mod.resolveChatMediaUrl('chat-photos', values[2]), urls[2], 'the single resolver reads the same keep');
+});
+
+test('F5: a failed batch resolves to null, never the storage:// reference', async () => {
+  const { mod } = await storageWith(() => ({ data: null, error: new Error('denied') }));
+  const urls = await mod.resolveChatMediaUrls('chat-documents', ['storage://chat-documents/j/u/1.pdf']);
+  assert.deepEqual(urls, [null]);
+  // A legacy public URL still falls back to itself, as the single resolver does.
+  const legacy = 'https://x.supabase.co/storage/v1/object/public/chat-photos/j/u/3.jpg';
+  assert.deepEqual(await mod.resolveChatMediaUrls('chat-photos', [legacy]), [legacy]);
+});
+
+test('F5: the cache key strips only a signed URL’s token', async () => {
+  const { mod } = await storageWith(() => ({ data: [], error: null }));
+  assert.equal(
+    mod.signedUrlCacheKey('https://x.supabase.co/storage/v1/object/sign/chat-photos/j/u/1.jpg?token=abc'),
+    'https://x.supabase.co/storage/v1/object/sign/chat-photos/j/u/1.jpg'
+  );
+  assert.equal(mod.signedUrlCacheKey('https://x.supabase.co/storage/v1/object/public/avatars/u.jpg?v=3'), undefined);
+  assert.equal(mod.signedUrlCacheKey(null), undefined);
+});
+
+test('[static] F5: a page is fifty, the realtime path keeps its single resolver, the bubble keys its photo', () => {
+  const lib = strip(read('lib/messages.ts'));
+  assert.match(lib, /export const MESSAGE_PAGE_SIZE = 50;/);
+  assert.match(lib, /resolveChatMediaUrl\('chat-documents', message\.document_url\),/);
+  assert.match(strip(read('hooks/useConversationChat.ts')), /const message = await resolveMessageMedia\(payload\.new as Message\);/);
+  assert.match(strip(read('components/ChatBubble.tsx')), /cacheKey=\{signedUrlCacheKey\(message\.image_url\)\}/);
+  assert.match(strip(read('components/RemoteImage.tsx')), /source=\{cacheKey \? \{ uri, cacheKey \} : \{ uri \}\}/);
+  assert.match(strip(read('screens/ChatScreen.tsx')), /onEndReached=\{\(\) => void loadOlder\(\)\}/);
+});

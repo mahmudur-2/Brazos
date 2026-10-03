@@ -32,7 +32,7 @@ import { Image, type ImageStyle, type StyleProp } from 'react-native';
  */
 
 type ExpoImageProps = {
-  source: { uri: string };
+  source: { uri: string; cacheKey?: string };
   style?: StyleProp<ImageStyle>;
   contentFit?: 'cover' | 'contain';
   transition?: number;
@@ -76,6 +76,12 @@ export type RemoteImageProps = {
   onError?: () => void;
   accessible?: boolean;
   accessibilityLabel?: string;
+  /**
+   * F5: the image cache's key when the URL itself is not stable — a signed
+   * chat-media URL carries a fresh token each time it is minted. expo-image
+   * only; core Image has no such key and keys by the URL.
+   */
+  cacheKey?: string;
 };
 
 export function RemoteImage({
@@ -86,6 +92,7 @@ export function RemoteImage({
   onError,
   accessible,
   accessibilityLabel,
+  cacheKey,
 }: RemoteImageProps) {
   if (!ExpoImage) {
     return (
@@ -101,7 +108,7 @@ export function RemoteImage({
   }
   return (
     <ExpoImage
-      source={{ uri }}
+      source={cacheKey ? { uri, cacheKey } : { uri }}
       style={style}
       contentFit={contentFit}
       transition={IMAGE_TRANSITION_MS}

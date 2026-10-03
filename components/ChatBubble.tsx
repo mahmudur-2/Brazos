@@ -16,6 +16,7 @@ import {
   type ColorPalette,
 } from '../lib/theme';
 import { formatClockTime } from '../lib/time';
+import { signedUrlCacheKey } from '../lib/storage';
 import {
   documentIconFor,
   formatDocumentSize,
@@ -147,7 +148,11 @@ export const ChatBubble = memo(function ChatBubble({
                     </Text>
                   </View>
                   {replyTo.image_url ? (
-                    <RemoteImage uri={replyTo.image_url} style={styles.quoteThumb} />
+                    <RemoteImage
+                      uri={replyTo.image_url}
+                      cacheKey={signedUrlCacheKey(replyTo.image_url)}
+                      style={styles.quoteThumb}
+                    />
                   ) : null}
                 </View>
               )}
@@ -165,7 +170,12 @@ export const ChatBubble = memo(function ChatBubble({
                   accessibilityLabel="Photo"
                   accessibilityHint="Opens the photo"
                 >
-                  <RemoteImage uri={message.image_url} style={styles.image} />
+                  {/* F5: keyed by the object, not the token, so a re-signed photo is a cache hit. */}
+                  <RemoteImage
+                    uri={message.image_url}
+                    cacheKey={signedUrlCacheKey(message.image_url)}
+                    style={styles.image}
+                  />
                 </Pressable>
               ) : null}
               {message.audio_url ? (

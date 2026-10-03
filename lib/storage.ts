@@ -36,6 +36,41 @@ function pathFromStorageValue(bucket: string, value: string): string | null {
   return pathFromPublicUrl(bucket, value);
 }
 
+export type ChatMediaBucket = 'chat-photos' | 'chat-audio' | 'chat-documents';
+
+/**
+ * F5 (fix run) — ONE SIGNED URL PER OBJECT PER SESSION. A signed URL carries a
+ * fresh token every time it is minted, so re-signing on every load made
+ * every photo a new URL: expo-image missed its cache each time, and a chat
+ * of 300 messages made up to 900 signing calls. Each object's URL is kept
+ * for this long — well inside its 6-hour TTL, so a kept URL is never stale
+ * when it is drawn — and reused.
+ */
+const SIGNED_URL_REUSE_MS = 5 * 60 * 60 * 1000;
+const signedUrls = new Map<string, { url: string; signedAt: number }>();
+
+function keptSignedUrl(bucket: ChatMediaBucket, path: string): string | null {
+  const kept = signedUrls.get(`${bucket}/${path}`);
+  if (!kept) return null;
+  if (Date.now() - kept.signedAt > SIGNED_URL_REUSE_MS) {
+    signedUrls.delete(`${bucket}/${path}`);
+    return null;
+  }
+  return kept.url;
+}
+
+function keepSignedUrl(bucket: ChatMediaBucket, path: string, url: string): void {
+  signedUrls.set(`${bucket}/${path}`, { url, signedAt: Date.now() });
+}
+
+/**
+ * Before phase29, the old public bucket may still serve its legacy URL.
+ * Never fall back for a new storage:// reference: that has no public URL.
+ */
+function legacyFallback(value: string): string | null {
+  return value.startsWith('http://') || value.startsWith('https://') ? value : null;
+}
+
 /**
  * Resolve a private chat-media reference for display. Legacy public URLs are
  * converted to the same object path and signed too, so making the bucket
@@ -49,15 +84,75 @@ export async function resolveChatMediaUrl(
   const path = pathFromStorageValue(bucket, value);
   if (!path) return null;
 
+  const kept = keptSignedUrl(bucket, path);
+  if (kept) return kept;
+
   const { data, error } = await supabase.storage
     .from(bucket)
     .createSignedUrl(path, CHAT_SIGNED_URL_TTL_SECONDS);
 
-  if (!error && data?.signedUrl) return data.signedUrl;
+  if (!error && data?.signedUrl) {
+    keepSignedUrl(bucket, path, data.signedUrl);
+    return data.signedUrl;
+  }
 
-  // Before phase29, the old public bucket may still serve its legacy URL.
-  // Never fall back for a new storage:// reference: that has no public URL.
-  return value.startsWith('http://') || value.startsWith('https://') ? value : null;
+  return legacyFallback(value);
+}
+
+/**
+ * F5 — many references, ONE signing call for the bucket (createSignedUrls).
+ * The answer lines up with `values`: a display URL, or null where there is
+ * nothing to show — never the raw storage:// reference. A kept URL is reused
+ * and never re-signed.
+ */
+export async function resolveChatMediaUrls(
+  bucket: ChatMediaBucket,
+  values: (string | null | undefined)[]
+): Promise<(string | null)[]> {
+  const resolved: (string | null)[] = values.map(() => null);
+  const pending: { index: number; path: string; value: string }[] = [];
+  values.forEach((value, index) => {
+    if (!value) return;
+    const path = pathFromStorageValue(bucket, value);
+    if (!path) return;
+    const kept = keptSignedUrl(bucket, path);
+    if (kept) resolved[index] = kept;
+    else pending.push({ index, path, value });
+  });
+  if (pending.length === 0) return resolved;
+
+  const paths = [...new Set(pending.map((entry) => entry.path))];
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrls(paths, CHAT_SIGNED_URL_TTL_SECONDS);
+  const byPath = new Map<string, string>();
+  if (!error && data) {
+    for (const row of data) {
+      if (!row.error && row.path && row.signedUrl) byPath.set(row.path, row.signedUrl);
+    }
+  }
+  for (const { index, path, value } of pending) {
+    const url = byPath.get(path);
+    if (url) {
+      keepSignedUrl(bucket, path, url);
+      resolved[index] = url;
+    } else {
+      resolved[index] = legacyFallback(value);
+    }
+  }
+  return resolved;
+}
+
+/**
+ * F5 — the image cache key for a SIGNED storage URL: the URL without its
+ * token, so the same object is the same cache entry however many times it is
+ * re-signed. Only signed object URLs qualify; anything else (an avatar, which
+ * may carry a cache-busting query) returns undefined and keys by its own URL.
+ */
+export function signedUrlCacheKey(url: string | null | undefined): string | undefined {
+  if (!url || !url.includes('/storage/v1/object/sign/')) return undefined;
+  const query = url.indexOf('?');
+  return query === -1 ? url : url.slice(0, query);
 }
 
 async function uploadAsset(

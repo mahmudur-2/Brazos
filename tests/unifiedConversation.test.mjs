@@ -271,16 +271,21 @@ test('the chat screen renders one merged timeline, never one thread', async () =
   // stage, plus their pair thread.
   assert.match(chat, /fetchSharedJobs\(user\.id, counterpartyId\)/);
   assert.match(chat, /fetchDirectThreadWith\(user\.id, counterpartyId\)/);
-  assert.match(chat, /useConversationChat\(targets\)/);
+  // F5: the same hook over the same targets, now paged; a legacy jobId anchors the load.
+  assert.match(chat, /useConversationChat\(\s*targets,\s*\{ anchorJobId: routeJobId \}\s*\)/);
   // The thread the caller named is always in the conversation, even if the
   // shared-job read is slow or comes back short.
   assert.match(chat, /if \(routeJobId\) add\(\{ jobId: routeJobId \}\)/);
   assert.match(chat, /if \(routeDirectThreadId\) add\(\{ directThreadId: routeDirectThreadId \}\)/);
 
   // Chronology wins: the merge sorts by created_at and nothing regroups by job.
+  // F5: the merge is lib/messages.ts's visibleWindow(), which the hook reads.
   const hook = stripComments(await read('hooks/useConversationChat.ts'));
-  assert.match(hook, /Date\.parse\(a\.created_at\) - Date\.parse\(b\.created_at\)/);
+  const windowFn = stripComments(await read('lib/messages.ts'));
+  assert.match(hook, /useMemo\(\(\) => visibleWindow\(byThread, cursor, hasMore\), \[byThread, cursor, hasMore\]\)/);
+  assert.match(windowFn, /Date\.parse\(a\.created_at\) - Date\.parse\(b\.created_at\)/);
   assert.doesNotMatch(hook, /job_id\s*===/);
+  assert.doesNotMatch(windowFn.slice(windowFn.indexOf('export function visibleWindow')), /job_id\s*===/);
 });
 
 test('a job divider marks a CHANGE of context, and never on the pair thread', async () => {
