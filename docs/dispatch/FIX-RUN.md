@@ -1,4 +1,27 @@
-# FIX RUN — the brief for "build" (written 2026-10-02; NOT started)
+# FIX RUN — the brief for "build" (written 2026-10-02; "build" given 2026-10-03)
+
+## The operator's selection (2026-10-03, from `.shots/refresh/review/changes.html`)
+
+Their list, exactly: "BRAZOS RUN — OUT: 1, 30, 41, 45, 46, 48, 49, 63, 78 | PICKS: 1a 10a 12a 18a 21a
+37b 41a 45c 46a 57a". The page's numbers map to this brief's ids: 1–20 → A1–A20, 21–36 → B1–B16,
+37–44 → C1–C8, 45–57 → D1–D13, 58–64 → E1–E7, 65–88 → F1–F24.
+
+- **OUT (not built):** A1, B10, C5, D1, D2, D4, D5, E6, F14.
+- **IN:** everything else (79), including B13, F20 and F23, which the operator switched on.
+- **Picks in force:**
+  - A10a: the tip opens once the payment reaches the worker, and the screen says why.
+  - A12a: "Brazos will look at it and reply by email within 2 business days."
+  - A18a: remove saved cards; keep the payout account open for money still owed.
+  - B1a: fix the facts now; keep the draft notice.
+  - C1b: **Booked · On the way · Here · Working · Done**.
+  - D13a: a soft fade behind the floating tab bar.
+- **Added by the operator:** a full smoothness pass on every screen. Presses, chips, switches,
+  stars, checkboxes, list and row entrances, sheets, menus, pop-ups, the keyboard, photo zoom and
+  loading pulses all move to the 120 Hz path through the shared pieces.
+- **Budget:** 12 Opus + 3 Fable helpers. Fable takes money, the money review, and the final
+  unforeseen-bug sweep.
+- **Ship:** a push per group (the staging pipeline checks each one). One OTA at the end, after the
+  final sweep. The new Beta build comes last.
 
 **Start here.** This brief changes nothing until the operator says "build". It comes from the
 whole-app review of 2026-10-01 (79 screens walked dark and light, plus three code readers:

@@ -559,3 +559,22 @@ The run launched as one workflow of ~150–250 helpers; within minutes the opera
 opus 5.5max... and this is just for planning..." → STOPPED at once (the workflow was stopped; it
 had written nothing; no tracked file changed). STANDING RULE: use usage efficiently — no large
 helper fan-outs; planning work is done lean.
+Asked for the plain list, then (their words) "Can you show me how all of these would look before and
+after the change…. Best visual demonstrations ... Then make it easy for me so ill just check off
+which ones I want in the run vs which ones I don’t (Park any of them that cannot be done fully
+autonomously for next session)" → built `.shots/refresh/review/changes.html` (88 changes, NOW/AFTER
+on the real screens, checkboxes, picks). Their list, pasted 2026-10-03, exactly:
+"BRAZOS RUN — OUT: 1, 30, 41, 45, 46, 48, 49, 63, 78 | PICKS: 1a 10a 12a 18a 21a 37b 41a 45c 46a 57a"
+→ DECIDED: 79 changes IN (33, 84 and 87 — off by default because they remove things — were switched
+ON by the operator); OUT 1, 30, 41, 45, 46, 48, 49, 63, 78; picks in force 10a, 12a, 18a, 21a, 37b,
+57a (1a, 41a, 45c, 46a belong to items that are out).
+The plan's approval box, rejected with (their words): "for this build I want to maximize quality of
+build + least / no bugs + efficiency + smart architectural build + maximum smoothness of app
+(EVERYWHERE) + Also use tokens / usage efficiently... (I allow as many subagents as you want both on
+Fable 5.1 ultracode and Opus 5.5 ultracode.. however, please don't go crazy on fable subagents (as
+well as opus but i am more lenient there) I am also trying to save my new week usage for the next
+project." The popup, their answers: smoothness → "Every screen, full pass (Recommended)"; helpers →
+"12 Opus + 3 Fable (use fable for the most complex and important parts where it matters alot like
+money / major bugs / unforeseeable bugs )"; updates → "Doesn't matter the run is fully autonomous (so
+whichever works better + higher quality output)" → push per group, one OTA at the end.
+The revised plan was APPROVED (2026-10-03) — that approval is the operator's "build".
