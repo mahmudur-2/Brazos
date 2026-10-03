@@ -58,7 +58,7 @@ export function HowBrazosWorks({ userId, hasPosted }: { userId: string | undefin
       <Text style={styles.eyebrow}>How Brazos works</Text>
       <Card style={styles.card}>
         <View style={styles.copy}>
-          <Text style={styles.title}>Post free. Get offers. Pay only when you hire.</Text>
+          <Text style={styles.title}>Post free. Get bids. Pay only when you hire.</Text>
           <Text style={styles.body}>
             When you hire, we hold your payment safely. The worker gets it only after you approve the job.
             You’ll see the protection fee before you pay.

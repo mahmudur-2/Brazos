@@ -492,7 +492,7 @@ export function JobDetailScreen() {
     // sent screen SubmitBid lands on — the OS alert and the tab hop are gone.
     // Fire-and-forget, as SubmitBid does: the prompt never holds the screen.
     void maybePromptForPush(
-      'Get told the moment this customer accepts your offer — and when new jobs like this are posted.'
+      'Get told the moment this customer accepts your bid — and when new jobs like this are posted.'
     );
     (navigation as unknown as {
       navigate: (

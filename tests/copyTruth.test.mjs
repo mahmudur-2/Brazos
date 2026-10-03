@@ -219,3 +219,24 @@ test('[static] C3 · no screen or component says "client" or calls a job a "task
   }
   assert.deepEqual(hits, []);
 });
+
+// ---------------------------------------------------------------------------
+// C2 / ruling H review (2026-10-03) — M-17's one noun per audience, kept: a customer reads
+// "bid" for what a worker sends, and a worker's own bid is "your bid". These three lines had
+// slipped to "offer" (Home's explainer, Compare bids' heading, JobDetail's push prompt, whose
+// twin on SubmitBid already said bid).
+// ---------------------------------------------------------------------------
+
+test('[static] M-17 · the customer explainer, Compare bids and the bid push prompt say bid', () => {
+  const home = code('components/HowBrazosWorks.tsx');
+  assert.match(home, /Post free\. Get bids\. Pay only when you hire\./);
+  assert.doesNotMatch(home, /Get offers/);
+  const compare = code('screens/CompareBidsScreen.tsx');
+  assert.match(compare, />Compare each bid in full\.</);
+  assert.doesNotMatch(compare, /full offer/);
+  const prompt = 'Get told the moment this customer accepts your bid — and when new jobs like this are posted.';
+  for (const file of ['screens/JobDetailScreen.tsx', 'screens/SubmitBidScreen.tsx']) {
+    assert.ok(code(file).includes(prompt), `${file} prompts with the bid sentence`);
+  }
+  assert.doesNotMatch(code('screens/JobDetailScreen.tsx'), /accepts your offer/);
+});

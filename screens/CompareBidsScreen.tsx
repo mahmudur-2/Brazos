@@ -137,7 +137,7 @@ export function CompareBidsScreen() {
                     <Text style={styles.protectedPillText}>Protected job</Text>
                   </View>
                 </View>
-                <Text style={styles.headerTitle}>Compare the full offer.</Text>
+                <Text style={styles.headerTitle}>Compare each bid in full.</Text>
                 <Text style={styles.headerFraming}>
                   Price matters, but fit, reliability and included work determine value.
                 </Text>
