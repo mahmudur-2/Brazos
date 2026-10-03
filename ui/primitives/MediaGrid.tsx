@@ -112,7 +112,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   tile: {
     // Square tiles at whatever the percentage resolves to.
     aspectRatio: 1,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     overflow: 'hidden',
     backgroundColor: colors.mint,
   },
@@ -156,7 +156,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.lg,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: colors.line,

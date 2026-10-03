@@ -22,12 +22,11 @@ import test from 'node:test';
  *      screen falls back to. For an inheriting dial the quoted number is
  *      checked against the SHIPPED token table in ui/tokens.ts as well, so
  *      "inherits theme.spacing.md" cannot quietly become a different 12.
- *   3. THE PARENT COMES FROM THE SCALE THE FILE ITSELF IMPORTS. lib/theme's
- *      `theme.spacing.xl` is 24 and ui/tokens' `spacing.xl` is 20; the two are
- *      deliberately not aliased, so a child pointed at the wrong scale sits
- *      right until the operator turns the parent and then jumps by the
- *      difference. The table records which module each screen imports from and
- *      this fence re-reads the screen to confirm it.
+ *   3. THE PARENT COMES FROM THE ONE SCALE. Until fix run D8 lib/theme's
+ *      `theme.spacing.xl` was 24 and ui/tokens' `spacing.xl` 20; they are one
+ *      live group now (`theme.spacing.*` / `theme.radius.*`), so every parent
+ *      is a step on it. The table still records which module each screen
+ *      imports from and this fence re-reads the screen to confirm it.
  *   4. NO TYPOGRAPHIC KEY EXISTS. The type is the operator's; T2 does not
  *      tokenise, dial or touch a size, weight, leading, tracking or family.
  *   5. THE CEILING HOLDS — at most twelve dials per screen. The panel is
@@ -298,8 +297,7 @@ const TOKENS_SOURCE = await read('ui/tokens.ts');
 const TABLE_FOR = {
   'theme.spacing': 'THEME_SPACING_DEFAULTS',
   'theme.radius': 'THEME_RADIUS_DEFAULTS',
-  // Fix run D8: one spacing scale — 'theme.spacing' is the only spacing table.
-  radius: 'RADIUS_DEFAULTS',
+  // Fix run D8: one scale each — 'theme.spacing' and 'theme.radius' are the only tables.
 };
 function shippedMetric(metricKey) {
   const cut = metricKey.lastIndexOf('.');

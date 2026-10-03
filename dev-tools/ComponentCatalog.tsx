@@ -505,7 +505,7 @@ const styles = StyleSheet.create({
   },
   skeletonLine: {
     height: 16,
-    borderRadius: radius.xs,
+    borderRadius: radius.sm,
   },
   skeletonBlock: {
     height: 72,

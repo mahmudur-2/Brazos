@@ -1638,7 +1638,7 @@ test('home(5) fence: one dark ground in three places, one light cream in three p
   const theme = read('lib/theme.ts');
 
   const darkTokens = paletteBlock(tokens, 'dark = {', 'spacing');
-  const darkTheme = paletteBlock(theme, 'darkColors', 'radius');
+  const darkTheme = paletteBlock(theme, 'darkColors', 'fonts');
   const lightTokens = paletteBlock(tokens, 'colors = {', 'dark = {');
   const lightTheme = paletteBlock(theme, 'colors = {', 'emeraldColors');
 

@@ -50,7 +50,7 @@ type SheetProps = PropsWithChildren<{
    *  (2026-09-19) wears `pane`, the approved Map design's deeper glass. */
   material?: MaterialName;
   /** The top corners, when a design names its own (the Filters sheet's 28);
-   *  the studio dial and the xxl default otherwise. */
+   *  the studio dial and the xl default (24) otherwise. */
   topRadius?: number;
   /** The header's hairline and the footer's — `line` unless a design
    *  names its own (the Filters sheet's sage in dark). */
@@ -113,7 +113,7 @@ export function Sheet({
   // The card's fill, blur and hairline are the sheet MATERIAL's dials (Blur &
   // Material); what lives here is the geometry and the backdrop scrim.
   const topRadiusDial = useOverrideNumber('sheet.topRadius');
-  const topRadius = topRadiusProp ?? topRadiusDial ?? radius.xxl;
+  const topRadius = topRadiusProp ?? topRadiusDial ?? radius.xl;
   const headerHairline = hairline != null ? { borderBottomColor: hairline } : null;
   const footerHairline = hairline != null ? { borderTopColor: hairline } : null;
   const maxHeightPct = useOverrideNumber('sheet.maxHeightPct');
@@ -192,7 +192,7 @@ export function Sheet({
           ]}
         >
         {/* G1 (C5): the docked card wears the sheet material — the top
-            corners keep their xxl radius via the props; in light this adds
+            corners keep their xl radius via the props; in light this adds
             the material hairline. The backdrop above and every open/close
             mechanic are byte-identical. */}
         <Surface

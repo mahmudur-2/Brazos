@@ -614,18 +614,20 @@ export const layout = metricGroup('layout', LAYOUT_METRIC_DEFAULTS, {
 } as const);
 
 // ---------------------------------------------------------------------------
-// Radii (§I: xs 10 · sm 13 · md 14 · lg 17 · xl 20 · xxl 22 · pill 999)
+// Radii — ONE scale (fix run D8, 2026-10-03): sm 8 · md 12 · lg 16 · xl 24 · pill 999
 // ---------------------------------------------------------------------------
 
-/** The six SIZES, live and dialled. */
-export const RADIUS_DEFAULTS = {
-  xs: 10,
-  sm: 13,
-  md: 14,
-  lg: 17,
-  xl: 20,
-  xxl: 22,
-} as const;
+/**
+ * THE SHIPPED CORNER SCALE is THEME_RADIUS_DEFAULTS above, and the only one.
+ *
+ * Until fix run D8 this file carried §I's second table (xs 10 · sm 13 · md 14
+ * · lg 17 · xl 20 · xxl 22) under the same names lib/theme used for 8/12/16/24,
+ * so `radius.md` was 12 or 14 depending on the import. The §I corners moved
+ * to the nearest step (a 1–2 pt change): xs 10 → `sm`, sm 13 → `md`, md 14 →
+ * `md`, lg 17 → `lg`, xxl 22 → `xl` (24). `RADIUS_DEFAULTS` survives as a name
+ * for the same table (nothing deleted).
+ */
+export const RADIUS_DEFAULTS = THEME_RADIUS_DEFAULTS;
 
 /**
  * RUN T1 (C4/D8) — THE HAIRLINE, AS SHIPPED.
@@ -653,7 +655,8 @@ export const DIVIDER_DEFAULTS = {
   inset: 0,
 } as const;
 
-export const radius = metricGroup('radius', RADIUS_DEFAULTS, {
+/** THE one live corner group (fix run D8). lib/theme.ts re-exports this binding, as `radius` and as `emeraldRadius`. */
+export const radius = metricGroup('theme.radius', THEME_RADIUS_DEFAULTS, {
   /** Not a size and therefore not a dial: 999 is how a rounded rectangle is
    *  spelled as a CAPSULE in React Native. Turning it down would not make a
    *  smaller pill, it would make a rounded rectangle — a different shape. */

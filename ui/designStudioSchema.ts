@@ -22,7 +22,6 @@ import {
   LAYOUT_METRIC_DEFAULTS,
   radius as tokenRadius,
   shadows as tokenShadows,
-  RADIUS_DEFAULTS,
   spacing,
   THEME_RADIUS_DEFAULTS,
   THEME_SPACING_DEFAULTS,
@@ -390,7 +389,7 @@ function sheetDialEntries(): StudioEntry[] {
   return [
     docked({
       key: 'sheet.topRadius',
-      inheritsFrom: 'radius.xxl',
+      inheritsFrom: 'theme.radius.xl',
       plainLabel: 'Top corner roundness',
       technicalKey: 'sheet.topRadius',
       description: "The docked sheet's top corners.",
@@ -401,7 +400,7 @@ function sheetDialEntries(): StudioEntry[] {
       min: 0,
       max: 48,
       step: 1,
-      defaultValue: () => tokenRadius.xxl,
+      defaultValue: () => tokenRadius.xl,
     }),
     docked({
       key: 'sheet.maxHeightPct',
@@ -479,7 +478,7 @@ function sheetDialEntries(): StudioEntry[] {
     }),
     dialog({
       key: 'sheet.dialogRadius',
-      inheritsFrom: 'radius.xl',
+      inheritsFrom: 'theme.radius.xl',
       plainLabel: 'Dialog corner roundness',
       technicalKey: 'sheet.dialogRadius',
       description: 'The floating action-sheet and confirm cards.',
@@ -494,7 +493,7 @@ function sheetDialEntries(): StudioEntry[] {
     }),
     dialog({
       key: 'sheet.promptRadius',
-      inheritsFrom: 'radius.lg',
+      inheritsFrom: 'theme.radius.lg',
       plainLabel: 'Amount prompt roundness',
       technicalKey: 'sheet.promptRadius',
       description: "The amount prompt card's corners.",
@@ -797,7 +796,7 @@ function cardDialEntries(): StudioEntry[] {
       { key: 'card.fillAlpha', label: 'Fill opacity', description: 'How solid the card’s surface paints.', tier: 'advanced', scope: 'local', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: 1 },
       { key: 'card.paddingX', label: 'Side padding', description: 'Inside the card, left and right.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, inheritsFrom: 'layout.cardPadding', defaultValue: layout.cardPadding },
       { key: 'card.paddingY', label: 'Top/bottom padding', description: 'Inside the card, above and below.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, inheritsFrom: 'layout.cardPadding', defaultValue: layout.cardPadding },
-      { key: 'card.radius', label: 'Corner roundness', description: 'The job card’s corners.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, inheritsFrom: 'radius.lg', defaultValue: tokenRadius.lg },
+      { key: 'card.radius', label: 'Corner roundness', description: 'The job card’s corners.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, inheritsFrom: 'theme.radius.lg', defaultValue: tokenRadius.lg },
       { key: 'card.borderWidth', label: 'Border width', description: 'A ring the card does not draw today — 0 keeps it off.', tier: 'advanced', scope: 'local', min: 0, max: 4, step: 1, defaultValue: 0 },
       {
         key: 'card.borderColor',
@@ -1080,8 +1079,8 @@ function spacingDialEntries(): StudioEntry[] {
 // ---------------------------------------------------------------------------
 
 /**
- * The two radius scales, alongside the Divider's dials below. `pill` is
- * absent from both on purpose: 999 is how a CAPSULE is spelled in React
+ * The one corner scale (fix run D8), alongside the Divider's dials below. `pill` is
+ * absent on purpose: 999 is how a CAPSULE is spelled in React
  * Native, so turning it down would not make a smaller pill, it would make a
  * rounded rectangle. It is a shape, not a size.
  */
@@ -1093,14 +1092,7 @@ function radiusDialEntries(): StudioEntry[] {
       { key: 'theme.radius.lg', label: 'Large roundness', description: 'The card corner most of the app draws.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, defaultValue: THEME_RADIUS_DEFAULTS.lg },
       { key: 'theme.radius.xl', label: 'Extra large roundness', description: 'The softest corner — sheets and hero surfaces.', tier: 'advanced', scope: 'token', min: 0, max: 48, step: 1, defaultValue: THEME_RADIUS_DEFAULTS.xl },
     ]),
-    ...metricDials('borders', 'Emerald corner scale (§I tokens)', [
-      { key: 'radius.xs', label: 'Extra small roundness', description: 'The Emerald scale’s tightest corner.', tier: 'advanced', scope: 'token', min: 0, max: 40, step: 1, defaultValue: RADIUS_DEFAULTS.xs },
-      { key: 'radius.sm', label: 'Small roundness', description: 'Small Emerald surfaces — tags and inline blocks.', tier: 'advanced', scope: 'token', min: 0, max: 40, step: 1, defaultValue: RADIUS_DEFAULTS.sm },
-      { key: 'radius.md', label: 'Medium roundness', description: 'The Emerald standard corner; the menu panel and glyph tiles read it.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, defaultValue: RADIUS_DEFAULTS.md },
-      { key: 'radius.lg', label: 'Large roundness', description: 'The Emerald card corner — job cards, the prompt dialog, the centre [+].', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, defaultValue: RADIUS_DEFAULTS.lg },
-      { key: 'radius.xl', label: 'Extra large roundness', description: 'The floating dialog’s corner.', tier: 'advanced', scope: 'token', min: 0, max: 48, step: 1, defaultValue: RADIUS_DEFAULTS.xl },
-      { key: 'radius.xxl', label: 'Sheet roundness', description: 'The softest Emerald corner — the docked sheet’s top edge.', tier: 'advanced', scope: 'token', min: 0, max: 48, step: 1, defaultValue: RADIUS_DEFAULTS.xxl },
-    ]),
+    // Fix run D8: the §I 'Emerald corner scale' group is gone — it is the same live group as the app scale above.
   ];
 }
 
@@ -1229,15 +1221,10 @@ function shadowDialEntries(): StudioEntry[] {
 //
 //  1. `scope: 'local'` — always. A screen dial is one surface's own value by
 //     definition; nothing else reads it.
-//  2. It INHERITS from the scale ITS OWN FILE imports, and the two scales are
-//     deliberately not aliased. A screen importing `spacing`/`radius` from
-//     lib/theme takes `theme.spacing.*` / `theme.radius.*` as its parent; a
-//     screen importing them from ui/tokens takes `spacing.*` / `radius.*`.
-//     `theme.spacing.xl` is 24 and `spacing.xl` is 20; `theme.radius.sm` is 8
-//     and `radius.sm` is 13. Pointing a child at the wrong one moves it the
-//     moment the operator turns the parent, and moves it by the difference.
-//     A value that matches no token in its file's scale is a plain dial with
-//     the literal as its default and no parent at all.
+//  2. It INHERITS from the one scale (fix run D8 merged the two): its parent
+//     is a `theme.spacing.*` / `theme.radius.*` step that ships at exactly the
+//     value the screen draws. A value that matches no step is a plain dial
+//     with the literal as its default and no parent at all.
 //  3. The DEFAULT is the value the screen drew before the dial existed — so
 //     the studio launches every one of these at today's pixel and "reset"
 //     lands back on it. tests/screenDials.test.mjs quotes each of those

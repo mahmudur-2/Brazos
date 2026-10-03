@@ -909,7 +909,10 @@ test('registry audit: every static entry has a reader in production source — z
       if (!table) continue;
       for (const key of Object.keys(table)) keys.add(`${group}.${key}`);
     }
-    assert.ok(keys.size >= 20, 'the live token key space must actually have been read');
+    // 17 since fix run D8 merged the two spacing and the two radius scales
+    // (6 + 4 + controls + layout); both merged groups must be in it.
+    assert.ok(keys.size >= 15, 'the live token key space must actually have been read');
+    assert.ok(keys.has('theme.spacing.lg') && keys.has('theme.radius.md'), 'the one spacing and the one radius group are live');
     return keys;
   })();
 
@@ -989,7 +992,7 @@ test('sheet and menu dials: defaults mirror the shipped values, and the wearers 
   const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
   const ctx = await contextFor();
 
-  assert.equal(byKey.get('sheet.topRadius').defaultValue(ctx), tokens.radius.xxl);
+  assert.equal(byKey.get('sheet.topRadius').defaultValue(ctx), tokens.radius.xl);
   assert.equal(byKey.get('sheet.dialogRadius').defaultValue(ctx), tokens.radius.xl);
   assert.equal(byKey.get('sheet.promptRadius').defaultValue(ctx), tokens.radius.lg);
   assert.equal(byKey.get('sheet.contentPad').defaultValue(ctx), tokens.layout.screenGutter);
@@ -1183,10 +1186,10 @@ test('chrome and layout dials: defaults mirror the shipped values; spacing/divid
     borderEntries.map((entry) => entry.key).sort(),
     [
       'divider.color', 'divider.inset', 'divider.thickness',
-      'radius.lg', 'radius.md', 'radius.sm', 'radius.xl', 'radius.xs', 'radius.xxl',
+      // Fix run D8: one corner scale — the §I 'radius.*' dials are gone.
       'theme.radius.lg', 'theme.radius.md', 'theme.radius.sm', 'theme.radius.xl',
     ],
-    'Borders & Dividers must carry both corner scales and the Divider’s dials',
+    'Borders & Dividers must carry the one corner scale and the Divider’s dials',
   );
 
   // S2 held this category empty on an honest premise: a spacing dial "would
@@ -1217,8 +1220,7 @@ test('T1 (C5): every metric dial mirrors its shipped table, floors hold, and pil
 
   /** Every dial that writes the metric bag, and the table it must mirror. */
   const TABLES = {
-    // Fix run D8: no §I 'spacing' group — it is 'theme.spacing' below.
-    radius: 'RADIUS_DEFAULTS',
+    // Fix run D8: no §I 'spacing' or 'radius' group — they are 'theme.spacing' and 'theme.radius' below.
     controls: 'CONTROL_DEFAULTS',
     layout: 'LAYOUT_METRIC_DEFAULTS',
     'theme.spacing': 'THEME_SPACING_DEFAULTS',
@@ -1240,7 +1242,7 @@ test('T1 (C5): every metric dial mirrors its shipped table, floors hold, and pil
       checked += 1;
     }
   }
-  assert.equal(checked, 23, 'every live scale is dialled, end to end');
+  assert.equal(checked, 17, 'every live scale is dialled, end to end');
 
   // THE TOUCH FLOOR IS NOT NEGOTIABLE (CLAUDE.md). No control-height dial may
   // be turned below 44 — the schema range is the enforcement, because

@@ -419,7 +419,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   tile: {
     width: TILE_SIZE,
     height: TILE_SIZE,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     overflow: 'hidden',
     backgroundColor: colors.bg,
   },
@@ -442,7 +442,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     bottom: spacing.xs,
     paddingHorizontal: spacing.xs + 1,
     paddingVertical: 1,
-    borderRadius: radius.xs,
+    borderRadius: radius.sm,
   },
   durationText: {
     ...typeScale.caption,

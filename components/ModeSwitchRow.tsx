@@ -68,8 +68,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       gap: spacing.md,
       paddingVertical: 14,
       paddingHorizontal: spacing.lg,
-      // The #6 card corner — 22, what ui/tokens.ts `materials.card.radius` draws.
-      borderRadius: emeraldRadius.xxl,
+      // The card corner — the one scale's xl (24) since fix run D8; it was §I's 22.
+      borderRadius: emeraldRadius.xl,
     },
     pressed: { opacity: 0.82 },
     disc: {

@@ -5,10 +5,9 @@ import {
   light as emeraldLight,
   constantAccents,
   metricGeneration,
-  metricGroup,
   shadows as tokenShadows,
   litCard as tokenLitCard,
-  THEME_RADIUS_DEFAULTS,
+  radius,
   spacing,
   withAlpha as alpha,
   type EmeraldPalette,
@@ -16,10 +15,9 @@ import {
 
 // lib/theme.ts is the standard import surface for screens (CLAUDE.md): the
 // §I helpers below are re-exported here so no screen ever needs to import
-// ui/tokens.ts directly. `emeraldRadius` is §I's radius scale (10/13/14/17/
-// 20/22) under an explicit name, since this file's own older `radius` scale
-// (8/12/16/24) already claims the size names; the VALUES of both live in
-// exactly one place.
+// ui/tokens.ts directly. `emeraldRadius` is the one corner scale under its
+// older name — since fix run D8 it IS `radius` (8/12/16/24), and the VALUES
+// live in exactly one place.
 export { withAlpha, layout, controls, glow, paneEdges, paneFills, PANE_HALO_RING, wells, discs, meltBar, postTiles, fieldAccessory } from '../ui/tokens';
 export type { PaneRim, PaneHalo, PaneFill } from '../ui/tokens';
 export { radius as emeraldRadius } from '../ui/tokens';
@@ -386,21 +384,15 @@ export const darkColors: ColorPalette = {
 /**
  * THE SCALE THE SCREENS READ (RUN T1 C2; fix run D8, 2026-10-03).
  *
- * Spacing is ONE live group now: ui/tokens.ts's `spacing`, re-exported here,
- * so `spacing.xl` is 24 whichever surface a file imports it from. Before D8
- * this file built its own group from the same table while ui/tokens.ts kept
- * §I's older numbers (`xl` 20) under the same names. The studio addresses the
- * one group as `theme.spacing.*`.
- *
- * Radius is still this file's own group, built from ui/tokens.ts's
- * THEME_RADIUS_DEFAULTS and addressed as `theme.radius.*`.
+ * Spacing and radius are ONE live group each now: ui/tokens.ts's `spacing`
+ * and `radius`, re-exported here, so `spacing.xl` is 24 and `radius.md` is 12
+ * whichever surface a file imports them from. Before D8 this file built its
+ * own groups while ui/tokens.ts kept §I's older numbers (`spacing.xl` 20,
+ * `radius.md` 14) under the same names. The studio addresses them as
+ * `theme.spacing.*` / `theme.radius.*`; `radius.pill` is a shape, no dial.
+ * `emeraldRadius` (above) is the same binding under its older name.
  */
-export { spacing };
-
-export const radius = metricGroup('theme.radius', THEME_RADIUS_DEFAULTS, {
-  /** A capsule, not a size — see ui/tokens.ts's `radius.pill`. No dial. */
-  pill: 999,
-} as const);
+export { spacing, radius };
 
 /**
  * The heading voice used for Emerald headlines (Home's "Take a task off your
