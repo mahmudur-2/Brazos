@@ -1,5 +1,6 @@
 -- 240_deletion_partial_refund.sql — FIX-RUN A14's proofs: 20261003000300_deletion_partial_refund.sql
--- proven on the local stack before the pipeline applies it anywhere.
+-- proven on the local stack before the pipeline applies it anywhere; §4 proves its review,
+-- 20261003001000_deletion_fee_owed.sql — the worker waits while the cancellation fee is still queued.
 --
 -- THE CAST: a customer (the payer), a worker (the payee), and the runner — the connection's own
 -- role, RLS bypassed — for the fixture rows. Everything rolls back; no commit.
@@ -12,7 +13,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(9);
+select plan(16);
 
 select tests.create_user('a14.customer@brazos.test', 'Cara Customer') as customer \gset
 select tests.create_user('a14.worker@brazos.test',   'Wren Worker')   as worker   \gset
@@ -73,6 +74,46 @@ select ok(
   (select obj_description('public.account_deletion_blockers()'::regprocedure, 'pg_proc')) like '%partially_refunded counts as finished%',
   '3c: the comment records the ruling'
 );
+
+-- ---------------------------------------------------------------------------
+-- 4. A14 review (20261003001000): the fee still queued. cancel_job()'s late branch on the card path —
+--    transfer_cents = the fee with release_requested_at, refund_cents = the rest — after
+--    charge.refunded wrote partially_refunded and BEFORE transfer.created: the row is still in
+--    transfers_due, and its payee waits with it. The customer, whose refund landed, does not.
+-- ---------------------------------------------------------------------------
+update public.payments
+   set status = 'partially_refunded', provider = 'stripe',
+       transfer_cents = 1600, refund_cents = 7000,
+       release_reason = 'cancellation_fee', refund_reason = 'customer_cancelled_late',
+       release_requested_at = now(), transfer_ref = null, released_at = null
+ where id = :'payment';
+select tests.authenticate_as(:'worker');
+select is(
+  (select row(b.kind, b.ref_id, b.label, b.detail) from public.account_deletion_blockers() b),
+  row('payment_incoming'::text, :'job'::uuid, 'Payment owed to you'::text, 'The cancellation fee has not reached your payout account yet.'::text),
+  '4a: the worker still owed the fee is blocked, with the fee sentence'
+);
+select tests.authenticate_as(:'customer');
+select is((select count(*) from public.account_deletion_blockers()), 0::bigint, '4b: the customer, whose refund landed, is not');
+select tests.clear_auth();
+select is((select count(*) from public.transfers_due d where d.id = :'payment'), 1::bigint,
+  '4c: the ground truth the gate mirrors — the fee is still in transfers_due');
+-- transfer.created's write: the fee has left.
+update public.payments set transfer_ref = 'tr_a14_fee', released_at = now() where id = :'payment';
+select tests.authenticate_as(:'worker');
+select is((select count(*) from public.account_deletion_blockers()), 0::bigint, '4d: once transfer.created records the transfer the worker may delete');
+select tests.clear_auth();
+select is((select count(*) from public.transfers_due d where d.id = :'payment'), 0::bigint, '4e: and the row has left transfers_due');
+-- A sandbox row finalises in the statement that writes it: no transfer_ref ever, never a blocker.
+update public.payments set provider = 'sandbox', transfer_ref = null, released_at = now() where id = :'payment';
+select tests.authenticate_as(:'worker');
+select is((select count(*) from public.account_deletion_blockers()), 0::bigint, '4f: a sandbox late cancellation never blocks the worker — it finalised in the same statement');
+select tests.clear_auth();
+-- Nothing to transfer: nothing to wait for.
+update public.payments set provider = 'stripe', transfer_cents = 0, transfer_ref = null, released_at = null where id = :'payment';
+select tests.authenticate_as(:'worker');
+select is((select count(*) from public.account_deletion_blockers()), 0::bigint, '4g: a partly refunded card row with no fee to transfer never blocks the worker');
+select tests.clear_auth();
 
 select * from finish();
 rollback;
