@@ -172,6 +172,19 @@ test('money can only be labelled released where the ledger truthfully is', async
   const moneyText = await read('ui/primitives/MoneyText.tsx');
   assert.match(moneyText, /"Paid" never appears before/);
   assert.doesNotMatch(moneyText, /caption[?]?:\s*string/);
+  // A6 (2026-10-03): ONE state map — MoneyText reads StatusPill's byte-frozen PAYMENT_LABELS and
+  // keeps no copy; the viewer override is a second FIXED map, settled states only, keyed by the
+  // mode from ModeContext and never by a prop. Under the customer's charge the settled caption is
+  // "Paid"; under the worker's take, "You received". Nothing unsettled may be overridden.
+  assert.match(moneyText, /import \{ PAYMENT_LABELS, type PaymentStatus \} from '\.\/StatusPill';/);
+  assert.doesNotMatch(moneyText, /const CAPTIONS/, 'no second state-caption map');
+  const viewerMap = moneyText.slice(moneyText.indexOf('const VIEWER_CAPTIONS'), moneyText.indexOf('};', moneyText.indexOf('const VIEWER_CAPTIONS')));
+  assert.match(viewerMap, /customer: \{ released: 'Paid', paid_out: 'Paid' \},/);
+  assert.match(viewerMap, /worker: \{ released: 'You received' \},/);
+  assert.doesNotMatch(viewerMap, /unfunded|authorized|held|failed|voided|refunded/, 'only settled states take a viewer caption');
+  assert.match(moneyText, /const perspective = useModePerspective\(\);/);
+  assert.match(moneyText, /const caption = state \? VIEWER_CAPTIONS\[perspective\]\[state\] \?\? PAYMENT_LABELS\[state\] : null;/);
+  assert.doesNotMatch(moneyText, /viewer\??:|perspective\??:/, 'the viewer is never a prop');
 
   // The pre-release surfaces (checkout, the held celebration) still cannot
   // hand-write a released/paid claim — nothing is released there, ever.

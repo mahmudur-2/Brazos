@@ -134,7 +134,7 @@ const PAYMENT_TONES: Record<PaymentStatus, Tone> = {
  * is a hard product rule, not a copy preference, so these strings live here
  * next to the type rather than being passed in by each caller.
  */
-const PAYMENT_LABELS: Record<PaymentStatus, string> = {
+export const PAYMENT_LABELS: Record<PaymentStatus, string> = {
   unfunded: 'Not funded',
   authorized: 'Payment authorized — not charged yet',
   held: 'Funds held in protection',

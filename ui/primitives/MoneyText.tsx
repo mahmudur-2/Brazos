@@ -2,7 +2,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { formatBudget } from '../../lib/jobs';
 import { spacing, type EmeraldPalette, type as typeScale } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
-import type { PaymentStatus } from './StatusPill';
+import { useModePerspective, type AppMode } from '../../modes';
+import { PAYMENT_LABELS, type PaymentStatus } from './StatusPill';
 
 /**
  * Money, rendered with payment-state-accurate labelling (§I, §H.3).
@@ -19,22 +20,26 @@ import type { PaymentStatus } from './StatusPill';
  *
  * Passing no `state` renders a plain amount with no payment claim at all,
  * which is the correct shape for a budget or a bid — neither is a payment.
+ *
+ * A6 (2026-10-03): ONE captions map. The state captions are StatusPill's
+ * PAYMENT_LABELS (byte-frozen in tests/statusVocabulary.test.mjs); this file
+ * no longer keeps a second copy. The settled captions depend on who is
+ * viewing, because the figure does: the customer's MoneyText carries their
+ * CHARGE, the worker's carries their TAKE, and "$86 · Released to worker"
+ * under the customer's own $86 read their charge as the worker's money. The
+ * viewer is the mode from ModeContext (CLAUDE.md: never a hand-passed prop),
+ * and the override exists only for settled states, so "paid" still appears
+ * only once the ledger says released.
  */
-
-const CAPTIONS: Record<PaymentStatus, string> = {
-  unfunded: 'Not funded',
-  authorized: 'Payment authorized — not charged yet',
-  held: 'Funds held in protection',
-  released: 'Released to worker',
-  paid_out: 'Paid out',
-  failed: 'Payment failed',
-  voided: 'Payment voided',
-  refunded: 'Refunded',
-  partially_refunded: 'Partially refunded',
-};
 
 /** States where the amount is real money that has actually moved or settled. */
 const SETTLED: PaymentStatus[] = ['released', 'paid_out'];
+
+/** The viewer-specific captions, settled states only — see the header. */
+const VIEWER_CAPTIONS: Record<AppMode, Partial<Record<PaymentStatus, string>>> = {
+  customer: { released: 'Paid', paid_out: 'Paid' },
+  worker: { released: 'You received' },
+};
 
 type MoneyTextProps = {
   /** Integer cents. Never dollars — see CLAUDE.md's money invariant. */
@@ -50,13 +55,14 @@ type MoneyTextProps = {
 export function MoneyText({ cents, state, size = 'md', captionHidden = false }: MoneyTextProps) {
   const { emerald: colors } = useThemeColors();
   const styles = stylesFor(colors);
+  const perspective = useModePerspective();
   // 2026-09-28 (LUX-LIST-64 #40): money is WHITE — the `money` role, the Lux ink
   // in dark and the near-black ink in light; "gold for money" ends. Unsettled
   // payment states stay muted in both — the state machine's honesty outranks
   // the accent.
   const amountColor =
     state && !SETTLED.includes(state) ? colors.muted : colors.money;
-  const caption = state ? CAPTIONS[state] : null;
+  const caption = state ? VIEWER_CAPTIONS[perspective][state] ?? PAYMENT_LABELS[state] : null;
 
   return (
     <View style={styles.wrap}>
