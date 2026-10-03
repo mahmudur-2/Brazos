@@ -33,6 +33,14 @@ test('E7: the state copy lives once, and the template reads it', () => {
   assert.doesNotMatch(view, /'Try again'\s*:|title="Something went wrong"/, 'no second copy of the words');
 });
 
+test('E7 review: each wait is ONE VoiceOver element that says what it waits for', () => {
+  // iOS ignores accessibilityLabel on a View that is not `accessible`, so without it the spinner's
+  // label was never spoken and the skeleton's rows were read as nothing at all.
+  const view = stripComments(read('ui/templates/ScreenStates.tsx'));
+  assert.match(view, /<View style=\{styles\.centered\} accessible accessibilityLabel=\{state\.label \?\? 'Loading'\}>/);
+  assert.match(view, /<View style=\{styles\.skeletonWrap\} accessible accessibilityLabel="Loading">/);
+});
+
 test('E7: no load retry says "Retry" or "Refresh"', () => {
   const offenders = sources.filter((path) =>
     /title="(Retry|Refresh)"|'Retry'|>\s*Retry\s*</.test(stripComments(read(path))),

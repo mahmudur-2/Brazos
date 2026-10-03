@@ -91,14 +91,14 @@ export function ScreenStateView({ state }: { state: Exclude<ScreenState, { kind:
     case 'loading':
       if (state.variant === 'spinner') {
         return (
-          <View style={styles.centered} accessibilityLabel={state.label ?? 'Loading'}>
+          <View style={styles.centered} accessible accessibilityLabel={state.label ?? 'Loading'}>
             <ActivityIndicator size="large" color={colors.forest} />
             {state.label ? <Text style={[styles.spinnerLabel, { color: palette.textMuted }]}>{state.label}</Text> : null}
           </View>
         );
       }
       return (
-        <View style={styles.skeletonWrap} accessibilityLabel="Loading">
+        <View style={styles.skeletonWrap} accessible accessibilityLabel="Loading">
           {Array.from({ length: state.rows ?? 4 }).map((_, i) => (
             <Skeleton key={i} style={styles.skeletonRow} />
           ))}
