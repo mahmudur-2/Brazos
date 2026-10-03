@@ -140,6 +140,44 @@ export function deriveJobLifecycle(
 }
 
 /**
+ * F6 (fix run, 2026-10-03) — ONE RULE SET. The two statuses in which a hired
+ * job is live: booked and not yet started, or started. Every "is this job
+ * running" question reads this, never an inline pair of literals (P3-31).
+ */
+export const LIVE_JOB_STATUSES = ['assigned', 'in_progress'] as const;
+
+export function isLiveJob(job: { status?: string | null } | null | undefined): boolean {
+  return !!job && (LIVE_JOB_STATUSES as readonly (string | null | undefined)[]).includes(job.status);
+}
+
+/** The worker's next one-way step on a live job; the screen owns the words (C1). */
+export type WorkerStep = 'message' | 'en_route' | 'arrived' | 'start' | 'complete';
+
+/**
+ * F6 — THE NEXT STEP, decided once. A8: nothing on the trip is offered until
+ * the customer's payment is held — transition_job_status() refuses
+ * assigned → in_progress on an unheld row — so an unheld booking's step is
+ * the conversation, whatever the arrival facts say. (deriveJobLifecycle lets
+ * arrival outrank payment, so its 'pending_payment' alone cannot decide this.)
+ * Declaring the trip is optional: 'en_route' and 'arrived' are offered, but
+ * 'start' is reachable from either (the screen's skip link).
+ */
+export function nextWorkerStep({
+  job,
+  held,
+}: {
+  job: { status?: string | null; en_route_at?: string | null; arrived_at?: string | null };
+  held: boolean;
+}): WorkerStep | null {
+  if (!isLiveJob(job)) return null;
+  if (job.status === 'in_progress') return 'complete';
+  if (!held) return 'message';
+  if (!job.en_route_at && !job.arrived_at) return 'en_route';
+  if (!job.arrived_at) return 'arrived';
+  return 'start';
+}
+
+/**
  * C1 (2026-10-03, pick C1b) — THE STAGE WORDS. One set, everywhere a hired
  * job's progress is named: the pills, the steppers, the rail, Track and the
  * Inbox chip all read these. Booked · On the way · Here · Working · Done.

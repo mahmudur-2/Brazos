@@ -128,3 +128,56 @@ test('[static] F19: no date or clock is formatted outside lib/time.ts', () => {
   assert.deepEqual(offenders, [], 'format a day or a clock through lib/time.ts');
   assert.equal((strip(read('lib/repeatJobs.ts')).match(/\.toLocaleDateString\(/g) ?? []).length, 1);
 });
+
+// ---------------------------------------------------------------------------
+// F6 — one rule set. lib/jobLifecycle.ts's imports are type-only, so it loads
+// from its file URL.
+// ---------------------------------------------------------------------------
+const lifecycle = await import(new URL('../lib/jobLifecycle.ts', import.meta.url).href);
+
+test('F6: nextWorkerStep — nothing on the trip before held, and the trip is optional once held', () => {
+  const { nextWorkerStep } = lifecycle;
+  const at = '2026-10-03T15:00:00Z';
+  const rows = [
+    // [job, held, step]
+    [{ status: 'open' }, true, null],
+    [{ status: 'completed' }, true, null],
+    [{ status: 'cancelled' }, true, null],
+    [{ status: 'assigned' }, false, 'message'],
+    [{ status: 'assigned', en_route_at: at }, false, 'message'],
+    [{ status: 'assigned', en_route_at: at, arrived_at: at }, false, 'message'], // arrived but unpaid
+    [{ status: 'assigned' }, true, 'en_route'],
+    [{ status: 'assigned', en_route_at: at }, true, 'arrived'],
+    [{ status: 'assigned', arrived_at: at }, true, 'start'],
+    [{ status: 'assigned', en_route_at: at, arrived_at: at }, true, 'start'],
+    [{ status: 'in_progress' }, true, 'complete'],
+  ];
+  for (const [job, held, step] of rows) {
+    assert.equal(nextWorkerStep({ job, held }), step, `${JSON.stringify(job)} held=${held}`);
+  }
+});
+
+test('F6: isLiveJob is assigned or in progress, and nothing else', () => {
+  const { isLiveJob, LIVE_JOB_STATUSES } = lifecycle;
+  assert.deepEqual([...LIVE_JOB_STATUSES], ['assigned', 'in_progress']);
+  for (const status of ['assigned', 'in_progress']) assert.equal(isLiveJob({ status }), true);
+  for (const status of ['draft', 'open', 'completed', 'cancelled', '', null, undefined]) assert.equal(isLiveJob({ status }), false);
+  assert.equal(isLiveJob(null), false);
+});
+
+test('[static] F6: no screen re-decides "held" or "live" inline', () => {
+  const screens = execFileSync('git', ['ls-files', '--', 'screens/*.tsx', 'components/*.tsx'], { cwd: ROOT, encoding: 'utf8' })
+    .split('\n')
+    .filter((f) => f && !/\.web\.tsx$/.test(f));
+  const heldInline = [];
+  const liveInline = [];
+  for (const file of screens) {
+    const src = strip(read(file));
+    if (/\.status === 'held'/.test(src)) heldInline.push(file);
+    // The exact live pair. Checkout's three-status gate (assigned, in progress, completed) is the
+    // phase58 fundable set, a different rule fenced in tests/fundingPath.test.mjs.
+    if (/status === 'assigned' \|\| [\w?.]*status === 'in_progress'\)|status !== 'assigned' && [\w?.]*status !== 'in_progress'\)/.test(src)) liveInline.push(file);
+  }
+  assert.deepEqual(heldInline, [], 'read isHeld / isReleased / isReleaseRequested (lib/paymentRules.ts)');
+  assert.deepEqual(liveInline, [], 'read isLiveJob (lib/jobLifecycle.ts)');
+});

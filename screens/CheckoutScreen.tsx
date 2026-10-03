@@ -18,6 +18,7 @@ import { customerChargeCents } from '../lib/paymentRules';
 import {
   canOfferJobFunding,
   fetchJobPayment,
+  isHeld,
   quoteJobPrice,
   type JobPriceQuote,
   type Payment,
@@ -291,7 +292,7 @@ export function CheckoutScreen() {
                     { kind: 'loading', variant: 'spinner' }
                   : { kind: 'ready' };
 
-  const held = payment?.status === 'held';
+  const held = !!payment && isHeld(payment);
   const authorizedOnly = payment?.status === 'authorized';
   // D9 / D14: THE one derivation of whether checkout may be offered on this
   // row — an unfunded row inside its window is, a lapsed one never is.
@@ -494,7 +495,7 @@ export function CheckoutScreen() {
    */
   async function recheck() {
     const row = await loadPayment();
-    if (row?.status === 'held') {
+    if (row && isHeld(row)) {
       setPhase('idle');
       navigation.replace('JobConfirmed', { job });
       return;

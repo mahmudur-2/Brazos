@@ -17,7 +17,7 @@ import {
   setChecklistItemDone,
   type ChecklistItem,
 } from '../lib/checklist';
-import { deriveJobLifecycle } from '../lib/jobLifecycle';
+import { deriveJobLifecycle, isLiveJob } from '../lib/jobLifecycle';
 import type { MyJobsStackParamList } from '../lib/navigation';
 import { litCardStyle, radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
@@ -62,7 +62,7 @@ export function WorkChecklistScreen() {
   );
 
   const isWorker = !!user && !!job && job.assigned_worker_id === user.id;
-  const editable = isWorker && (job?.status === 'assigned' || job?.status === 'in_progress');
+  const editable = isWorker && isLiveJob(job);
   // Presentation only (F-012): the read-only caption classifies through THE
   // derivation, payment-blind — raw 'completed' is 1:1 with the derived
   // state when no payment fact is in play. `editable` above stays a raw

@@ -232,7 +232,13 @@ test('the inbox subtitle is the resolver’s job, never a second opinion', async
 
 test('the active-job window is stated once, in the data layer', async () => {
   const conversations = stripComments(await read('lib/conversations.ts'));
-  assert.match(conversations, /ACTIVE_JOB_STATUSES: string\[\] = \['assigned', 'in_progress'\]/);
+  // F6: the window is lib/jobLifecycle.ts's one live set, spread here, never restated.
+  assert.match(conversations, /ACTIVE_JOB_STATUSES: string\[\] = \[\.\.\.LIVE_JOB_STATUSES\]/);
+  assert.match(conversations, /import \{ LIVE_JOB_STATUSES \} from '\.\/jobLifecycle';/);
+  assert.match(
+    stripComments(await read('lib/jobLifecycle.ts')),
+    /export const LIVE_JOB_STATUSES = \['assigned', 'in_progress'\] as const;/
+  );
   assert.match(conversations, /\.in\('status', ACTIVE_JOB_STATUSES\)/);
   // Both sides of a job, in one round trip.
   assert.match(

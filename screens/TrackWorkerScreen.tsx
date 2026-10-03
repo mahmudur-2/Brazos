@@ -14,7 +14,7 @@ import { paymentsMode } from '../lib/adapters/payments';
 import { paymentEyebrow } from '../lib/moneyCopy';
 import { customerChargeCents } from '../lib/paymentRules';
 import { firstNameOf } from '../lib/liveJobStatus';
-import { fetchJobPaymentState, isReleased, isReleaseRequested, type Payment } from '../lib/payments';
+import { fetchJobPaymentState, isHeld, isReleased, isReleaseRequested, type Payment } from '../lib/payments';
 import { fetchOpenJobDispute } from '../lib/disputes';
 import { fetchProfileById } from '../lib/profiles';
 import { arrivalWindowLabel } from '../lib/jobs';
@@ -270,7 +270,7 @@ export function TrackWorkerScreen() {
                     {/* C4: PAYMENT over the amount, as on every money card — the
                         sandbox arm ("PAYMENT · TEST MODE") is paymentEyebrow()'s,
                         and the caption under the amount carries the state. */}
-                    <Text style={[styles.eyebrow, isDark && styles.eyebrowDark, paymentsMode === 'stripe' && payment.status === 'held' && styles.eyebrowGold]}>
+                    <Text style={[styles.eyebrow, isDark && styles.eyebrowDark, paymentsMode === 'stripe' && isHeld(payment) && styles.eyebrowGold]}>
                       {paymentEyebrow(paymentsMode === 'sandbox')}
                     </Text>
                     <MoneyText

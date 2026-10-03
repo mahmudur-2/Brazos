@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { ChatTarget } from './messages';
+import { LIVE_JOB_STATUSES } from './jobLifecycle';
 
 // One row per conversation with its latest message — backed by the
 // public.conversations view (phase9, widened by phase36), which already
@@ -222,8 +223,8 @@ export type ActiveJob = {
   assigned_worker_id: string | null;
 };
 
-/** The statuses that mean "still being worked" — the resolver's window. */
-export const ACTIVE_JOB_STATUSES: string[] = ['assigned', 'in_progress'];
+/** The statuses that mean "still being worked" — the resolver's window: the one live set (F6). */
+export const ACTIVE_JOB_STATUSES: string[] = [...LIVE_JOB_STATUSES];
 
 /** Every job the user currently holds with anyone, either side of it. */
 export async function fetchActiveJobs(userId: string) {

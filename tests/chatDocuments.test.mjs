@@ -518,7 +518,9 @@ test('[executed] an inbox row names the document, ahead of the voice branch', as
   );
   const conversationsJs = stripTypeScriptTypes(await read('lib/conversations.ts'), { mode: 'strip' })
     .replace(/import \{ supabase \} from '\.\/supabase';/, 'const supabase = null;')
-    .replace(/export \{[\s\S]*?\} from '\.\/conversationVisibility';/, visibility);
+    .replace(/export \{[\s\S]*?\} from '\.\/conversationVisibility';/, visibility)
+    // F6: the live set comes from lib/jobLifecycle.ts, whose own imports are type-only.
+    .replace("from './jobLifecycle'", `from '${new URL('../lib/jobLifecycle.ts', import.meta.url).href}'`);
   const { conversationPreviewText } = await import(toDataUrl(conversationsJs));
 
   const row = (fields) => ({

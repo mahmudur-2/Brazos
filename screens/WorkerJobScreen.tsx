@@ -76,7 +76,15 @@ import {
 } from '../lib/payments';
 import { fetchMyPayoutsStatus } from '../lib/payments/stripe';
 import { fetchOpenJobDispute } from '../lib/disputes';
-import { JOB_LIFECYCLE_LABELS, STAGE_TRACK, deriveJobLifecycle, jobPillLabel, trackStepIndex } from '../lib/jobLifecycle';
+import {
+  JOB_LIFECYCLE_LABELS,
+  STAGE_TRACK,
+  deriveJobLifecycle,
+  isLiveJob,
+  jobPillLabel,
+  nextWorkerStep,
+  trackStepIndex,
+} from '../lib/jobLifecycle';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
 import {
@@ -251,7 +259,7 @@ export function WorkerJobScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      if (!job || (job.status !== 'assigned' && job.status !== 'in_progress')) return;
+      if (!job || !isLiveJob(job)) return;
       fetchJobLocation(job.id).then(({ data, error: locationError }) => {
         if (active && !locationError) setLocation(data);
       });
@@ -494,29 +502,32 @@ export function WorkerJobScreen() {
   // weight and a status the worker had to find.
   const lifecycle = job ? deriveJobLifecycle({ job, payment, hasOpenDispute: issueOpen }) : null;
   const track = lifecycle ? trackStepIndex(lifecycle) : -1;
-  const live = !!job && isWorker && (job.status === 'assigned' || job.status === 'in_progress');
+  const live = !!job && isWorker && isLiveJob(job);
   // M-27 — hired is not paid. Until the customer's payment is protected the
   // primary is the conversation, not the trip. A8 (2026-10-03): starting is
   // not offered at all until the payment is held — transition_job_status()
   // refuses assigned → in_progress on an unheld row
   // (supabase/migrations/20260925000000_job_completions.sql), so "Start
   // anyway" could only ever fail.
-  const awaitingProtection = lifecycle === 'pending_payment';
+  // F6: the step is decided once, in lib/jobLifecycle.ts; this screen maps it to words and a handler.
+  const step = live && job ? nextWorkerStep({ job, held: !!payment && isHeld(payment) }) : null;
+  const awaitingProtection = step === 'message';
   const stageAction: { title: string; onPress: () => void; loading: boolean; disabled?: boolean } | null =
-    !live || !job
+    !step || !job
       ? null
-      : awaitingProtection
+      : step === 'message'
         ? { title: `Message ${clientName}`, onPress: () => navigation.navigate('Chat', { jobId: job.id }), loading: false }
-      : job.status === 'in_progress'
+      : step === 'complete'
         ? { title: 'Mark complete', onPress: handleComplete, loading: working, disabled: uploadingMedia }
-        : !job.en_route_at && !job.arrived_at
+        : step === 'en_route'
           ? { title: 'I’m on my way', onPress: () => void handleMark('en_route'), loading: marking === 'en_route', disabled: marking !== null || working }
-          : !job.arrived_at
+          : step === 'arrived'
             ? { title: 'I’m here', onPress: () => void handleMark('arrived'), loading: marking === 'arrived', disabled: marking !== null || working }
             : { title: 'Start job', onPress: handleStart, loading: working, disabled: marking !== null };
   // Declaring the trip is optional, never a gate: before arriving, "Start job"
   // stays one tap away under the primary — once the payment is held (A8).
-  const canSkipToStart = live && job?.status === 'assigned' && !awaitingProtection && !job?.arrived_at;
+  const beforeArrival = step === 'en_route' || step === 'arrived';
+  const canSkipToStart = beforeArrival;
   const addressLine = location?.address_line ?? null;
   // Idea 6: arriving from the reminder's Route button, the directions open once the address is known.
   const routedRef = useRef(false);
@@ -653,15 +664,13 @@ export function WorkerJobScreen() {
             only: the sandbox ledger carries no charge figure. */}
         {paymentsMode === 'stripe' &&
         payment.charge_amount_cents != null &&
-        (payment.status === 'held' ||
-          payment.status === 'released' ||
-          payment.status === 'paid_out') ? (
+        (isHeld(payment) || isReleased(payment)) ? (
           <View style={styles.breakdown}>
             <View style={styles.breakdownRow}>
               {/* A2 — held is held: the money is the customer's until it is
                   released, so "paid" is never written on a held row. */}
               <Text style={styles.breakdownLabel}>
-                {payment.status === 'held' ? 'Customer’s payment · held' : 'Customer paid'}
+                {isHeld(payment) ? 'Customer’s payment · held' : 'Customer paid'}
               </Text>
               <Text style={styles.breakdownValue}>
                 {formatBudget(payment.charge_amount_cents)}
@@ -869,7 +878,7 @@ export function WorkerJobScreen() {
                 </View>
                 {/* 2026-09-30 (idea 5): before arriving, three chips say how late — one tap tells the
                     customer and moves the arrival time; the words then say they were told. */}
-                {job.status === 'assigned' && !job.arrived_at && !awaitingProtection && isLateDay(job.scheduled_date) ? (
+                {beforeArrival && isLateDay(job.scheduled_date) ? (
                   <View style={styles.lateBlock}>
                     <Text style={[styles.lateLabel, job.late_minutes != null && styles.lateLabelTold]} numberOfLines={1}>
                       {job.late_minutes != null ? `${clientFirstName} was told ✓` : 'Running late?'}

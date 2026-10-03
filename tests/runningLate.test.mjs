@@ -82,7 +82,9 @@ test('[static] the app: the three chips inside the progress card, before arrivin
   // Idea 14 added series_id beside them.
   assert.match(jobs, /en_route_at, arrived_at, late_minutes, late_reported_at, series_id, completed_at`;/);
   const screen = flat(read('screens/WorkerJobScreen.tsx'));
-  assert.match(screen, /\{job\.status === 'assigned' && !job\.arrived_at && !awaitingProtection && isLateDay\(job\.scheduled_date\) \? \( <View style=\{styles\.lateBlock\}>/);
+  // F6: before arriving, once held — nextWorkerStep's 'en_route' / 'arrived' (lib/jobLifecycle.ts).
+  assert.match(screen, /const beforeArrival = step === 'en_route' \|\| step === 'arrived';/);
+  assert.match(screen, /\{beforeArrival && isLateDay\(job\.scheduled_date\) \? \( <View style=\{styles\.lateBlock\}>/);
   assert.match(screen, /const clientFirstName = client\?\.full_name\?\.trim\(\)\.split\(\/\\s\+\/\)\[0\] \|\| 'Your customer';/, 'never "They was told"');
   // The words sit over the chips, so the told line and the chosen check never push a chip down.
   assert.match(screen, /'Running late\?'\} <\/Text> <View style=\{styles\.lateRow\}>/);

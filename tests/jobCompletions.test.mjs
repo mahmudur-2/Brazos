@@ -177,7 +177,7 @@ test('7 · the worker’s job card shows the take, and the three-line breakdown 
   // Stripe only, and only on a held / released / paid_out row — never unfunded.
   assert.match(
     workerFlat,
-    /\{paymentsMode === 'stripe' && payment\.charge_amount_cents != null && \(payment\.status === 'held' \|\| payment\.status === 'released' \|\| payment\.status === 'paid_out'\) \? \(/
+    /\{paymentsMode === 'stripe' && payment\.charge_amount_cents != null && \(isHeld\(payment\) \|\| isReleased\(payment\)\) \? \(/
   );
   const breakdown = workerFlat.slice(workerFlat.indexOf('<View style={styles.breakdown}>'), workerFlat.indexOf('</View> ) : null} </Card>'));
   assert.ok(breakdown.length > 0);
@@ -187,7 +187,7 @@ test('7 · the worker’s job card shows the take, and the three-line breakdown 
   // status 'held', and the fee line carries the app's one fee name.
   assert.match(
     breakdown,
-    /<Text style=\{styles\.breakdownLabel\}> \{payment\.status === 'held' \? 'Customer’s payment · held' : 'Customer paid'\} <\/Text> <Text style=\{styles\.breakdownValue\}> \{formatBudget\(payment\.charge_amount_cents\)\}/
+    /<Text style=\{styles\.breakdownLabel\}> \{isHeld\(payment\) \? 'Customer’s payment · held' : 'Customer paid'\} <\/Text> <Text style=\{styles\.breakdownValue\}> \{formatBudget\(payment\.charge_amount_cents\)\}/
   );
   assert.doesNotMatch(breakdown, />Customer paid</, 'no unconditional "paid" label on the worker breakdown');
   assert.doesNotMatch(breakdown, /Brazos Protection/, 'one fee name: "Protection fee" (C4)');
@@ -205,9 +205,14 @@ test('8 · A8 — the worker is never offered a start the server refuses: no "St
   const sql = read('supabase/migrations/20260925000000_job_completions.sql');
   assert.match(sql, /if v_job\.status = 'assigned' and p_status = 'in_progress' then\s+if not exists \(\s+select 1 from public\.payments p\s+where p\.job_id = p_job_id and p\.kind = 'job_payment'[\s\S]*?and p\.status = 'held'/);
   assert.doesNotMatch(worker, /Start anyway|startAnyway/);
-  assert.match(workerFlat, /const canSkipToStart = live && job\?\.status === 'assigned' && !awaitingProtection && !job\?\.arrived_at;/);
+  // F6: the step is lib/jobLifecycle.ts's nextWorkerStep, fed the held fact (executed in
+  // tests/fixRunF.test.mjs: no 'start' and no trip step until held, arrival or not).
+  assert.match(workerFlat, /const step = live && job \? nextWorkerStep\(\{ job, held: !!payment && isHeld\(payment\) \}\) : null;/);
+  assert.match(workerFlat, /const awaitingProtection = step === 'message';/);
+  assert.match(workerFlat, /const beforeArrival = step === 'en_route' \|\| step === 'arrived'; const canSkipToStart = beforeArrival;/);
   // Unheld: the pinned primary is the conversation, and the note says what it waits for.
-  assert.match(workerFlat, /: awaitingProtection \? \{ title: `Message \$\{clientName\}`, onPress: \(\) => navigation\.navigate\('Chat', \{ jobId: job\.id \}\), loading: false \}/);
+  assert.match(workerFlat, /: step === 'message' \? \{ title: `Message \$\{clientName\}`, onPress: \(\) => navigation\.navigate\('Chat', \{ jobId: job\.id \}\), loading: false \}/);
+  assert.match(workerFlat, /: \{ title: 'Start job', onPress: handleStart,/, 'Start is the one remaining step, reached only past the held check');
   assert.match(worker, /Waiting for \$\{clientName\} to protect the payment\./);
 });
 
