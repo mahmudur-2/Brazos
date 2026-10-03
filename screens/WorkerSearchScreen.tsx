@@ -286,15 +286,15 @@ export function WorkerSearchScreen() {
           nothing behind a tab root); pushed from Home's "Browse workers" it
           is "Find help" with its way back. The tab root is the one mount
           that carries autoFocus: false (navigation/CustomerRoot.tsx). */}
-      {/* 2026-09-27 (the Lux remake, the operator's Discover picture): the
-          circle back button is back on the tab root too — it goes Home, as
-          `goBackOrHome` does — the title "Discover", no eyebrow. */}
       {/* 2026-09-28 (LUX-LIST-64 #27): Discover keeps the big left title even
           when it opens from Home with a back button — Back on its own row
-          above it, named "Home" when that is where it goes (#60). */}
+          above it, named "Home" when that is where it goes (#60).
+          Fix run D3 (2026-10-03): the tab root draws NO back button again —
+          a visible tab root has nothing behind it, and the bar is the way
+          out. The pushed "Find Help" keeps its way back. */}
       <ScreenHeader
         title={isTabRoot ? 'Discover' : 'Find Help'}
-        onBack={goBackOrHome}
+        onBack={isTabRoot ? undefined : goBackOrHome}
         palette={EMERALD_PALETTE}
         largeTitle
       />
