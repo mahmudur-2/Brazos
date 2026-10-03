@@ -19,6 +19,7 @@ import {
 import { DEFAULT_COUNTRY, type Country } from '../lib/countries';
 import { alertAsync } from '../lib/dialog';
 import type { AuthStackNavigation, AuthStackParamList } from '../lib/navigation';
+import { PHONE_ENTRY } from '../lib/phoneAuth';
 import { phoneValidationError, toE164 } from '../lib/phoneNumber';
 import { isValidEmail } from '../lib/validation';
 
@@ -241,18 +242,22 @@ export function EmailCreateAccountScreen() {
             onPress={handleCreateAccount}
             loading={loading}
           />
-          <AuthButton
-            title="Use Phone Number Instead"
-            variant="ghost"
-            themed
-            // popTo(), not navigate(): React Navigation 7's navigate() pushes
-            // when the target isn't current, which would stack a second
-            // CreateAccount over the one the user came from and throw away what
-            // they had already typed there.
-            onPress={() => navigation.popTo('CreateAccount')}
-            disabled={loading}
-            accessibilityHint="Go back to signing up with your phone number"
-          />
+          {/* Only while phone sign-up is live (B2): with SMS off, the phone
+              screen would end on "not switched on yet". */}
+          {PHONE_ENTRY.live && (
+            <AuthButton
+              title="Use Phone Number Instead"
+              variant="ghost"
+              themed
+              // popTo(), not navigate(): React Navigation 7's navigate() pushes
+              // when the target isn't current, which would stack a second
+              // CreateAccount over the one the user came from and throw away what
+              // they had already typed there.
+              onPress={() => navigation.popTo('CreateAccount')}
+              disabled={loading}
+              accessibilityHint="Go back to signing up with your phone number"
+            />
+          )}
         </View>
       </View>
     </AuthScaffold>

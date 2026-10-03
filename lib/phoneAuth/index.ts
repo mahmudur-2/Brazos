@@ -2,7 +2,7 @@ import { supabase } from '../supabase';
 import { updateProfile } from '../profiles';
 import { PHONE_AUTH_MESSAGES } from './errors';
 import { createMockPhoneAuthProvider } from './mock';
-import { resolvePhoneAuthMode } from './mode';
+import { phoneEntryRoutes, resolvePhoneAuthMode } from './mode';
 import { createSupabasePhoneAuthProvider } from './supabase';
 import type { ChallengeSnapshot, PhoneAuthProvider, RequestOtpResult } from './types';
 
@@ -32,6 +32,9 @@ export const phoneAuthMode = resolution.mode;
  * diagnosable from the screen instead of looking like a dead button.
  */
 export const phoneAuthConfigError = resolution.configError;
+
+/** Where the signed-out entry buttons go for this build (B2): only `supabase` is live. */
+export const PHONE_ENTRY = phoneEntryRoutes(resolution.mode);
 
 /**
  * The fail-closed provider. Every entry point answers the same way, so a

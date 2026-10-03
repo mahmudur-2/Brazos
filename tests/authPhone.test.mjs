@@ -307,3 +307,39 @@ test('a number is named back with only its last four digits', () => {
   // Not E.164 in the first place: shown as-is rather than mangled.
   assert.equal(maskE164('347-320-0610'), '347-320-0610');
 });
+
+// ===========================================================================
+// FIX-RUN B2 — the signed-out entry buttons never dead-end
+// ===========================================================================
+// lib/phoneAuth/mode.ts executed for real (its one import is type-only, which
+// stripping removes). Only the real provider is live; every other mode sends
+// "Continue with phone" to the email sign-up and "I already have an account"
+// to email sign-in, and hides "Use Phone Number Instead".
+
+const { phoneEntryRoutes } = await import(toDataUrl(strip('lib/phoneAuth/mode.ts')));
+
+test('B2 · phoneEntryRoutes: only supabase reaches the phone screens', () => {
+  for (const mode of ['disabled', 'mock']) {
+    assert.deepEqual(phoneEntryRoutes(mode), {
+      live: false,
+      createAccount: 'EmailCreateAccount',
+      signIn: 'EmailSignIn',
+    });
+  }
+  assert.deepEqual(phoneEntryRoutes('supabase'), {
+    live: true,
+    createAccount: 'CreateAccount',
+    signIn: 'SignIn',
+  });
+});
+
+test('B2 · Welcome routes through PHONE_ENTRY and the email screens gate their phone button on it', () => {
+  const welcome = read('screens/WelcomeScreen.tsx');
+  assert.match(welcome, /import \{ PHONE_ENTRY \} from '\.\.\/lib\/phoneAuth';/);
+  assert.doesNotMatch(welcome, /navigation\.navigate\('(CreateAccount|SignIn)'\)/);
+  assert.match(read('lib/phoneAuth/index.ts'), /export const PHONE_ENTRY = phoneEntryRoutes\(resolution\.mode\);/);
+  for (const path of ['screens/EmailSignInScreen.tsx', 'screens/EmailCreateAccountScreen.tsx']) {
+    const src = read(path);
+    assert.match(src, /\{PHONE_ENTRY\.live && \(\s*<AuthButton\s+title="Use Phone Number Instead"/, `${path} hides the phone button while SMS is off`);
+  }
+});

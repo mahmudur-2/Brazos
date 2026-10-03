@@ -41,7 +41,9 @@ test('n5 · Welcome leads with Continue with phone (the operator\'s ruling); ema
 
   // FIRST: phone, primary treatment, to CreateAccount — the operator's ruling.
   assert.match(buttons[0], /title="Continue with phone"/);
-  assert.match(buttons[0], /navigation\.navigate\('CreateAccount'\)/);
+  // FIX-RUN B2: the destination follows the phone-auth mode — the phone screen
+  // only while `supabase` is live, the email sign-up otherwise (phoneEntryRoutes).
+  assert.match(buttons[0], /navigation\.navigate\(PHONE_ENTRY\.createAccount\)/);
   assert.match(buttons[0], /accessibilityHint="Create an account with your phone number"/);
   assert.match(buttons[0], /\bthemed\b/);
   assert.doesNotMatch(buttons[0], /variant=/, 'the phone button is the primary treatment');
@@ -56,7 +58,7 @@ test('n5 · Welcome leads with Continue with phone (the operator\'s ruling); ema
   // THIRD: unchanged.
   assert.match(buttons[2], /title="I already have an account"/);
   assert.match(buttons[2], /variant="ghost"/);
-  assert.match(buttons[2], /navigation\.navigate\('SignIn'\)/);
+  assert.match(buttons[2], /navigation\.navigate\(PHONE_ENTRY\.signIn\)/);
 
   // The route the first button names is a registered signed-out route.
   assert.match(code('screens/AuthFlow.tsx'), /<Stack\.Screen name="EmailCreateAccount"/);

@@ -9,6 +9,7 @@ import { RimLight } from '../components/RimLight';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
 import { useLaunchComplete } from '../lib/launchContext';
+import { PHONE_ENTRY } from '../lib/phoneAuth';
 import type { AuthStackNavigation } from '../lib/navigation';
 import { fonts, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
@@ -321,8 +322,10 @@ export function WelcomeScreen() {
           tests/firstSession.test.mjs n5): phone leads, lit, carrying the rim
           light; email is the outlined second; sign-in is the page's text
           link. Phone auth resolves to `disabled` on every non-development
-          build (lib/phoneAuth/mode.ts), so on the Beta the phone screen shows
-          the notice and "Use Email Instead" until SMS is provisioned. */}
+          build (lib/phoneAuth/mode.ts), so until SMS is provisioned the phone
+          button opens the email sign-up (which asks for the number too) and
+          the sign-in link opens email sign-in — PHONE_ENTRY, FIX-RUN B2. The
+          labels stay, by the operator's ruling. */}
       <Animated.View
         style={[
           styles.actions,
@@ -337,7 +340,7 @@ export function WelcomeScreen() {
           lit
           icon="phone-portrait-outline"
           chevron
-          onPress={() => navigation.navigate('CreateAccount')}
+          onPress={() => navigation.navigate(PHONE_ENTRY.createAccount)}
           accessibilityHint="Create an account with your phone number"
           light={rimLight}
         />
@@ -356,7 +359,7 @@ export function WelcomeScreen() {
           themed
           hero
           chevron
-          onPress={() => navigation.navigate('SignIn')}
+          onPress={() => navigation.navigate(PHONE_ENTRY.signIn)}
           accessibilityHint="Sign in to an existing account"
         />
       </Animated.View>

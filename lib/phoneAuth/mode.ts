@@ -71,3 +71,22 @@ export function resolvePhoneAuthMode(env: PhoneAuthEnvironment): PhoneAuthModeRe
       'value for EXPO_PUBLIC_PHONE_AUTH_MODE (expected mock, supabase or disabled).',
   };
 }
+
+/**
+ * Where the signed-out entry buttons go (FIX-RUN B2, the operator's ruling:
+ * the labels stay). Only the real provider is live: while the mode is anything
+ * but `supabase`, "Continue with phone" opens the email sign-up (which asks for
+ * the phone number too), "I already have an account" opens email sign-in, and
+ * the "Use Phone Number Instead" buttons are hidden — so no reachable button
+ * ends on "Sign-in by text message is not switched on yet". Development's
+ * `mock` routes to email as well; the phone screens stay in the code and come
+ * back the moment SMS is provisioned.
+ */
+export function phoneEntryRoutes(mode: PhoneAuthMode) {
+  const live = mode === 'supabase';
+  return {
+    live,
+    createAccount: live ? 'CreateAccount' : 'EmailCreateAccount',
+    signIn: live ? 'SignIn' : 'EmailSignIn',
+  } as const;
+}

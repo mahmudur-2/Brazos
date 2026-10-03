@@ -148,8 +148,10 @@ test('the registry photographs where a category chip lands, in both schemes', ()
   // 60 through RUN SHOTS1, plus the two RUN JOBS1 populated-Home targets,
   // plus RUN n2's twelve signed-out and not-yet-set-up targets, plus RUN n5's
   // two Submit Bid targets, plus RUN figma-extract's six state variants,
-  // plus the 2026-09-21 Filters sheet and its budget popup, both schemes.
-  assert.equal(names.length, 86, `registry is ${names.length} targets, expected 86`);
+  // plus the 2026-09-21 Filters sheet and its budget popup, both schemes,
+  // less FIX-RUN B2's two phone-first auth targets (both schemes): with phone
+  // auth off, Welcome's buttons open the email screens those duplicated.
+  assert.equal(names.length, 82, `registry is ${names.length} targets, expected 82`);
 });
 
 test('that target is reached by tapping a chip, never by naming the route', async () => {
@@ -393,14 +395,9 @@ test('the populated Home targets exist, and are the only ones seeded with jobs',
 test('the auth and setup targets are listed, both schemes, and reach their trees by the two landing opt-outs', async () => {
   const names = registry();
   for (const scheme of ['dark', 'light']) {
-    for (const surface of [
-      'welcome',
-      'signin',
-      'email-signin',
-      'create-account',
-      'email-create-account',
-      'setup',
-    ]) {
+    // FIX-RUN B2: 'signin' and 'create-account' went — with phone auth off,
+    // Welcome's buttons open the email screens directly.
+    for (const surface of ['welcome', 'email-signin', 'email-create-account', 'setup']) {
       assert.ok(names.includes(`auth-${surface}-${scheme}`), `no auth-${surface}-${scheme} target`);
     }
   }
@@ -427,8 +424,8 @@ test('the auth and setup targets are listed, both schemes, and reach their trees
   // a capture run.
   const [welcome, signIn, createAccount, authButton, setup] = await Promise.all([
     read('screens/WelcomeScreen.tsx'),
-    read('screens/SignInScreen.tsx'),
-    read('screens/CreateAccountScreen.tsx'),
+    read('screens/EmailSignInScreen.tsx'),
+    read('screens/EmailCreateAccountScreen.tsx'),
     read('components/AuthButton.tsx'),
     read('screens/SetupScreen.tsx'),
   ]);
@@ -436,8 +433,9 @@ test('the auth and setup targets are listed, both schemes, and reach their trees
   assert.match(codeOnly(authButton), /accessibilityLabel=\{title\}/);
   assert.match(codeOnly(welcome), /title="Continue with phone"/);
   assert.match(codeOnly(welcome), /title="I already have an account"/);
-  assert.match(codeOnly(signIn), /title="Use Email Instead"/);
-  assert.match(codeOnly(createAccount), /title="Use Email Instead"/);
+  // …and the two email screens they open render the waits their targets name.
+  assert.match(codeOnly(signIn), /The email and password on your account./);
+  assert.match(codeOnly(createAccount), /Sign up with your email/);
   // 2026-09-28 (LUX-LIST-64 #9): the FINAL SETUP eyebrow is gone; the headline proves arrival.
   assert.match(codeOnly(setup), /Set up your experience/);
 });

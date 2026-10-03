@@ -23,8 +23,9 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "I already have an account"
     timeout: 60000
+# FIX-RUN B2: with phone auth off (the e2e-test build), this opens EmailSignIn
+# directly — there is no phone screen and no "Use Email Instead" in between.
 - tapOn: "I already have an account"
-- tapOn: "Use Email Instead"
 # AuthField labels both its caption and its input "Email"; the caption comes
 # first in the hierarchy, so index 1 is the input. Same for "Password".
 - tapOn:

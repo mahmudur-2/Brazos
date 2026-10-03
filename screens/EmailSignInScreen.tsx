@@ -18,6 +18,7 @@ import {
   type ColorPalette,
 } from '../lib/theme';
 import type { AuthStackNavigation } from '../lib/navigation';
+import { PHONE_ENTRY } from '../lib/phoneAuth';
 import { isValidEmail } from '../lib/validation';
 import { requestPasswordReset } from '../lib/passwordReset';
 import { userMessage } from '../lib/errorMessage';
@@ -139,20 +140,24 @@ export function EmailSignInScreen() {
   const footer = (
     <View style={styles.footer}>
       <AuthButton title="Continue" themed hero lit chevron onPress={handleContinue} loading={loading} />
-      <AuthButton
-        title="Use Phone Number Instead"
-        themed
-        hero
-        icon="phone-portrait-outline"
-        chevron
-        // popTo(), not navigate(): React Navigation 7 changed navigate() to
-        // push when the target isn't the current route, which would stack a
-        // second SignIn on top of the one the user came from and throw away
-        // the number they had already typed. popTo returns to that instance.
-        onPress={() => navigation.popTo('SignIn')}
-        disabled={loading}
-        accessibilityHint="Go back to signing in with your phone number"
-      />
+      {/* Only while phone sign-in is live (B2): with SMS off, the phone
+          screen would end on "not switched on yet". */}
+      {PHONE_ENTRY.live && (
+        <AuthButton
+          title="Use Phone Number Instead"
+          themed
+          hero
+          icon="phone-portrait-outline"
+          chevron
+          // popTo(), not navigate(): React Navigation 7 changed navigate() to
+          // push when the target isn't the current route, which would stack a
+          // second SignIn on top of the one the user came from and throw away
+          // the number they had already typed. popTo returns to that instance.
+          onPress={() => navigation.popTo('SignIn')}
+          disabled={loading}
+          accessibilityHint="Go back to signing in with your phone number"
+        />
+      )}
     </View>
   );
 

@@ -833,20 +833,10 @@ const TARGETS = [
       wait: 'Hire trusted local help',
     },
     {
-      // Phone-first sign in, by Welcome's own ghost button.
-      name: `auth-signin-${colorScheme}`,
-      mode: 'customer',
-      colorScheme,
-      session: false,
-      recipe: [
-        { expect: 'Hire trusted local help' },
-        { pressText: 'I already have an account' },
-      ],
-      wait: 'Use the phone number connected to your account.',
-    },
-    {
-      // …then the email route one tap below it — the path that actually
-      // authenticates anyone today.
+      // Sign in, by Welcome's own ghost button. FIX-RUN B2: with phone auth
+      // off (every non-development build, this export included) it opens the
+      // email sign-in directly — the phone-first targets that stood here
+      // would have photographed the same screen twice, so they went.
       name: `auth-email-signin-${colorScheme}`,
       mode: 'customer',
       colorScheme,
@@ -854,33 +844,17 @@ const TARGETS = [
       recipe: [
         { expect: 'Hire trusted local help' },
         { pressText: 'I already have an account' },
-        { expect: 'Use the phone number connected to your account.' },
-        { press: 'Use Email Instead' },
       ],
-      wait: 'Use the email and password connected to your account.',
+      wait: 'The email and password on your account.',
     },
     {
-      // Phone-first create account, by Welcome's primary button.
-      name: `auth-create-account-${colorScheme}`,
-      mode: 'customer',
-      colorScheme,
-      session: false,
-      recipe: [{ expect: 'Hire trusted local help' }, { press: 'Continue with phone' }],
-      wait: 'One account. Two ways to use it.',
-    },
-    {
-      // …then the email route below it. Welcome has no button of its own to
-      // this screen at this HEAD, so it is reached from CreateAccount's.
+      // Create account, by Welcome's primary button — the email + phone
+      // sign-up while phone auth is off (B2, the operator's ruling).
       name: `auth-email-create-account-${colorScheme}`,
       mode: 'customer',
       colorScheme,
       session: false,
-      recipe: [
-        { expect: 'Hire trusted local help' },
-        { press: 'Continue with phone' },
-        { expect: 'One account. Two ways to use it.' },
-        { press: 'Use Email Instead' },
-      ],
+      recipe: [{ expect: 'Hire trusted local help' }, { press: 'Continue with phone' }],
       wait: 'Sign up with your email',
     },
     {
