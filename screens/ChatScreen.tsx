@@ -57,7 +57,6 @@ import { askOpenSettings } from '../lib/permissionPrompt';
 import { isTombstonedName } from '../lib/rebook';
 import { userMessage } from '../lib/errorMessage';
 import {
-  ACTIVE_JOB_STATUSES,
   fetchCounterpartyReadStates,
   fetchDirectThreadWith,
   fetchSharedJobs,
@@ -66,6 +65,7 @@ import {
   visibleMessages,
   type SharedJob,
 } from '../lib/conversations';
+import { isLiveJob } from '../lib/jobLifecycle';
 import {
   BLOCK_DURATIONS,
   blockExpiryFrom,
@@ -474,7 +474,8 @@ export function ChatScreen() {
   const activeJobs = useMemo<ActiveJobCandidate[]>(
     () =>
       sharedJobs
-        .filter((shared) => ACTIVE_JOB_STATUSES.includes(shared.status))
+        // F6/F7: the one live rule (lib/jobLifecycle.ts), the same set the query reads.
+        .filter((shared) => isLiveJob(shared))
         .map((shared) => ({
           id: shared.id,
           title: shared.title,

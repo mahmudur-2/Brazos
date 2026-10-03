@@ -1,5 +1,9 @@
 import { supabase } from './supabase';
 import { track } from './observability/analytics';
+import type { Database } from './supabaseTypes';
+
+/** The row create_review() returns, as the generated types spell it (F7). */
+type CreateReviewRow = Database['public']['Functions']['create_review']['Returns'];
 
 /** Which side of a job the reviewee played. Reputation is kept per role
  *  (R8a D4) so hiring well and working well never blur into one number. */
@@ -60,12 +64,15 @@ export async function createReview(_reviewerId: string, input: NewReviewInput) {
   // device (tests/analyticsPrivacy.test.mjs rule 2).
   if (!error && data) track({ name: 'review_left', stars: input.rating });
 
+  // F7: create_review() returns ONE reviews row (not a set); .single() keeps the
+  // request exactly as it was, so the row is named once here, by the generated type.
+  const row = (data ?? null) as unknown as CreateReviewRow | null;
   return {
-    data: data
+    data: row
       ? ({
-          ...data,
-          photos: toPhotoArray((data as any).photos),
-          would_again: (data as any).would_again ?? null,
+          ...row,
+          photos: toPhotoArray(row.photos),
+          would_again: row.would_again ?? null,
         } as Review)
       : null,
     error,

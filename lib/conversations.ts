@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import type { ChatTarget } from './messages';
 import { LIVE_JOB_STATUSES } from './jobLifecycle';
+import type { JobStatusEnum } from './supabaseTypes';
 
 // One row per conversation with its latest message — backed by the
 // public.conversations view (phase9, widened by phase36), which already
@@ -224,7 +225,7 @@ export type ActiveJob = {
 };
 
 /** The statuses that mean "still being worked" — the resolver's window: the one live set (F6). */
-export const ACTIVE_JOB_STATUSES: string[] = [...LIVE_JOB_STATUSES];
+export const ACTIVE_JOB_STATUSES: readonly JobStatusEnum[] = LIVE_JOB_STATUSES;
 
 /** Every job the user currently holds with anyone, either side of it. */
 export async function fetchActiveJobs(userId: string) {
@@ -349,7 +350,7 @@ export async function fetchCounterpartyReadStates(otherId: string, jobIds: strin
 export async function markConversationRead(target: ChatTarget, userId: string) {
   if (!target.jobId) {
     const { error } = await supabase.rpc('mark_direct_thread_read', {
-      p_thread_id: target.directThreadId,
+      p_thread_id: target.directThreadId ?? null,
     });
     return { error };
   }

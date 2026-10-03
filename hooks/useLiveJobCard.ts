@@ -73,7 +73,8 @@ export function useLiveJobCard(userId: string | null | undefined) {
     const cardsNow = () => (loaded ??= readCards());
 
     async function sync() {
-      if (running || !active) return;
+      // (`!userId` again: a hoisted function does not keep the guard's narrowing — F7.)
+      if (running || !active || !userId) return;
       running = true;
       try {
         const since = new Date(Date.now() - FINISHED_WINDOW_MS).toISOString();

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { formatBudget } from './jobs';
+import type { TablesUpdate } from '../types/database';
 
 /**
  * Screens 64/25 — a worker's advertised services with optional pricing
@@ -76,7 +77,8 @@ export async function addWorkerService(workerId: string, input: ServiceInput) {
 }
 
 export async function updateWorkerService(serviceId: string, input: Partial<ServiceInput>) {
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  // F7: the generated Update type, so a misspelt column is a compile error.
+  const patch: TablesUpdate<'worker_services'> = { updated_at: new Date().toISOString() };
   if (input.title !== undefined) patch.title = input.title.trim();
   if (input.description !== undefined) patch.description = input.description?.trim() || null;
   if (input.category !== undefined) patch.category = input.category;

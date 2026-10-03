@@ -134,7 +134,9 @@ export const STRIPE_CASH_OUT_MESSAGE =
   'Payouts arrive on the provider’s own schedule once payout setup is complete — there is nothing to trigger here.';
 
 function createSandboxPaymentProvider(): PaymentProvider {
-  const call = async (fn: string, jobId: string): Promise<PaymentResult> => {
+  // F7: the three sandbox money functions by name, so the typed client checks each call.
+  type SandboxPaymentFn = 'sandbox_authorize_job_payment' | 'sandbox_hold_job_payment' | 'sandbox_release_job_payment';
+  const call = async (fn: SandboxPaymentFn, jobId: string): Promise<PaymentResult> => {
     const { data, error } = await supabase.rpc(fn, { p_job_id: jobId });
     if (error) return { data: null, error: { message: error.message } };
     return { data: (data ?? null) as Payment | null, error: null };
