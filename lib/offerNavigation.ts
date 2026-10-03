@@ -54,7 +54,7 @@ export type OfferJobTarget = {
  * stay non-tappable. Their job may be a draft/direct row the losing side can
  * no longer read once the negotiation ended, and offering a tap that lands on
  * a permission error is worse than offering none. Recorded as an autonomous
- * decision in DIAG_offer_negotiation_messaging.md.
+ * decision in docs/archive/diagnostics/DIAG_offer_negotiation_messaging.md.
  */
 export function isOfferJobOpenable(status: OfferStatus): boolean {
   return status === 'pending' || status === 'accepted';

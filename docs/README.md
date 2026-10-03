@@ -49,9 +49,9 @@ appears in no document.
 
 | File | Subject |
 | --- | --- |
-| `brazos-product-spec.md` | Product intent. Its "Status" line is a 2026-06 snapshot and is not current. |
+| `docs/archive/brazos-product-spec.md` | Product intent, archived from the root 2026-10-03 (fix run F23). Its "Status" line is a 2026-06 snapshot and is not current. |
 | `docs/archive/root-audits/AUDIT_2026-08-12.md`, `docs/archive/root-audits/SECURITY_AUDIT.md` | Read-only pre-release and staging-security audits (archived 2026-08-22); their open items feed `BRAZOS_MASTER_PLAN.md`. |
-| `docs/archive/diagnostics/DIAG_inbox_and_routes.md`, `DIAG_offer_negotiation_messaging.md` | Read-only diagnostics, 2026-08-12. The first is archived; the second stays at the root because `lib/offerNavigation.ts` cites it. |
+| `docs/archive/diagnostics/DIAG_inbox_and_routes.md`, `docs/archive/diagnostics/DIAG_offer_negotiation_messaging.md` | Read-only diagnostics, 2026-08-12, both archived (the second on 2026-10-03, fix run F23; `lib/offerNavigation.ts` cites its archive path). |
 | `REVIEW_GUIDE.md` | Ordered device checklist for a human review pass. |
 | `docs/LOCKED_FILE_PATCHES.md` | Authorized-ready diffs for locked files; none applied. |
 | `docs/emerald-v2/**` | The v2 redesign plan and Phase 0 audit. Planning material; implementation status lives in `docs/architecture.md`. |
