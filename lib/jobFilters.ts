@@ -1,4 +1,5 @@
 import type { JobCategory, OpenJob } from './jobs';
+import { dateOfDayKey, formatShortDay } from './time';
 
 /**
  * The worker-side job filter model (screen 50) — Phase 8, grown 2026-09-19.
@@ -160,9 +161,8 @@ export function scheduledDayLabel(scheduledDate: string | null, now: Date): stri
   if (!scheduledDate) return null;
   if (scheduledDate === localDateKey(now)) return 'Today';
   if (scheduledDate === localDateKeyAfter(now, 1)) return 'Tmrw';
-  const [y, m, d] = scheduledDate.split('-').map(Number);
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const date = dateOfDayKey(scheduledDate);
+  return date ? formatShortDay(date, { now }) : null;
 }
 
 /** The three preset windows a When row offers, as [on, until]. */

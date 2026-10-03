@@ -19,11 +19,15 @@
  * every confirmation repeats its button's verb and noun exactly ("Accept bid"
  * under "Accept bid ($110)").
  *
- * Pure by design — no imports at all, so the node test suite executes it
- * directly (the jobLifecycle / errorMessage precedent). Amounts arrive
- * already formatted by formatBudget(); this module never re-implements money
- * formatting, which stays the single rule in lib/jobs.ts.
+ * Pure by design — its one import is lib/time.ts, itself import-free, so the
+ * node test suite executes it with that one specifier pointed at the file
+ * (the jobLifecycle / errorMessage precedent). Amounts arrive already
+ * formatted by formatBudget(); this module never re-implements money
+ * formatting, which stays the single rule in lib/jobs.ts, and never
+ * re-implements a date, which stays the single rule in lib/time.ts (F19).
  */
+
+import { formatShortDay } from './time';
 
 /** The amber "whose move" pill beside the heading. */
 export const YOUR_MOVE_BADGE_LABEL = 'Your move';
@@ -150,7 +154,7 @@ export function offerResponseNote(input: {
  * "Aug 19" for an offer deadline, or null when the offer never lapses.
  *
  * Both actionable surfaces printed this inline with slightly different
- * `toLocaleDateString` calls; one rule here keeps the same offer from showing
+ * date calls; one rule here (through lib/time.ts) keeps the same offer from showing
  * two different deadlines. An unparseable value yields null rather than
  * "Invalid Date" reaching a card.
  */
@@ -158,7 +162,7 @@ export function offerExpiryLabel(expiresAt: string | null | undefined): string |
   if (!expiresAt) return null;
   const at = new Date(expiresAt);
   if (Number.isNaN(at.getTime())) return null;
-  return at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return formatShortDay(at);
 }
 
 /** Fix F — accept confirms with the exact amount, never a bare tap. */

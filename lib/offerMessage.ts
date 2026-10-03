@@ -1,6 +1,6 @@
 /**
- * Bid-composer availability chips (4D-3 §6.1) — pure, import-free, executed
- * by tests.
+ * Bid-composer availability chips (4D-3 §6.1) — pure, executed by tests; its
+ * one import is the import-free lib/time.ts (F19, the one date formatter).
  *
  * Two optional chip groups append ONE trailing line to the offer's message
  * ("Can start today · about 1-2h"). Zero selections leave the message
@@ -10,6 +10,8 @@
  * literal); the mirror here disables the chips with a written reason before
  * that cap can be hit. Never a truncated send, never a raw database error.
  */
+
+import { formatDay } from './time';
 
 export const OFFER_MESSAGE_MAX = 500;
 
@@ -113,11 +115,7 @@ export function upcomingStartDays(
     ).padStart(2, '0')}`;
     return {
       iso,
-      label: d.toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-      }),
+      label: formatDay(d, { now: from }),
     };
   });
 }

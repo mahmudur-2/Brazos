@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
@@ -71,4 +72,59 @@ test('[static] F24: the completed count names its unit, ReviewSection takes no p
   const tokens = strip(read('ui/tokens.ts'));
   const bar = tokens.slice(tokens.indexOf('export const navBar = {'));
   assert.doesNotMatch(bar.slice(0, bar.indexOf('\n} as const;')), /\n\s*(gold|glyphColorDark):/);
+});
+
+// ---------------------------------------------------------------------------
+// F19 — one date formatter. lib/time.ts imports nothing, so it loads from its
+// file URL; the formatters run against fixed dates and a fixed "now".
+// ---------------------------------------------------------------------------
+const time = await import(new URL('../lib/time.ts', import.meta.url).href);
+
+test('F19: formatDay and formatShortDay print one shape, with the year only when it is another one', () => {
+  const now = new Date(2026, 9, 3, 12);
+  assert.equal(time.formatDay(new Date(2026, 8, 30), { now }), 'Wed, Sep 30');
+  assert.equal(time.formatDay(new Date(2025, 8, 30), { now }), 'Tue, Sep 30, 2025');
+  assert.equal(time.formatShortDay(new Date(2026, 8, 30), { now }), 'Sep 30');
+  assert.equal(time.formatShortDay(new Date(2027, 0, 4), { now }), 'Jan 4, 2027');
+  assert.equal(time.formatWeekday(new Date(2026, 8, 30)), 'Wed');
+  assert.equal(time.formatMonthYear(new Date(2026, 7, 15)), 'Aug 2026');
+  assert.equal(time.formatClock(new Date(2026, 8, 30, 9, 30)), '9:30 AM');
+  assert.equal(time.formatClock(new Date(2026, 8, 30, 21, 5)), '9:05 PM');
+  // An unparseable date prints nothing, never "Invalid Date".
+  assert.equal(time.formatDay(new Date('nope')), '');
+  assert.equal(time.formatClock(new Date('nope')), '');
+});
+
+test('F19: a day key is read in the local calendar, and a bad key is null', () => {
+  const now = new Date(2026, 9, 3);
+  assert.equal(time.formatDayKey('2026-08-12', { now }), 'Wed, Aug 12');
+  assert.equal(time.dateOfDayKey('2026-08-12').getDate(), 12, 'never shifted a day west of UTC');
+  assert.equal(time.formatDayKey('not-a-date'), null);
+  assert.equal(time.formatDayKey(null), null);
+});
+
+test('F19: a time zone moves the day and the year rule with it', () => {
+  // 02:30 UTC on Jan 1 2027 is still Dec 31 2026 in New York.
+  const instant = new Date(Date.UTC(2027, 0, 1, 2, 30));
+  const now = new Date(Date.UTC(2026, 11, 31, 18));
+  assert.equal(time.formatDay(instant, { timeZone: 'America/New_York', now }), 'Thu, Dec 31');
+  assert.equal(time.formatClock(instant, { timeZone: 'America/New_York' }), '9:30 PM');
+});
+
+test('F19: the inbox stamp and the relative age fall back to the shared shapes', () => {
+  const now = new Date(2026, 9, 3, 12).getTime();
+  assert.equal(time.formatInboxStamp(new Date(2026, 8, 30, 12).toISOString(), now), 'Wed');
+  assert.equal(time.formatInboxStamp(new Date(2026, 8, 12, 12).toISOString(), now), 'Sep 12');
+  assert.equal(time.formatInboxStamp(new Date(2025, 8, 12, 12).toISOString(), now), '9/12/25');
+});
+
+test('[static] F19: no date or clock is formatted outside lib/time.ts', () => {
+  const files = execFileSync('git', ['ls-files', '--', '*.ts', '*.tsx'], { cwd: ROOT, encoding: 'utf8' })
+    .split('\n')
+    .filter((f) => f && !f.startsWith('supabase/') && !/\.web\.tsx?$/.test(f) && f !== 'lib/time.ts');
+  // lib/repeatJobs.ts imports nothing by its own fence (tests/jobSeries.test.mjs), so it spells formatDay's shape itself.
+  const EXEMPT = new Set(['lib/repeatJobs.ts']);
+  const offenders = files.filter((f) => !EXEMPT.has(f) && /\.toLocale(Date|Time)String\(/.test(strip(read(f))));
+  assert.deepEqual(offenders, [], 'format a day or a clock through lib/time.ts');
+  assert.equal((strip(read('lib/repeatJobs.ts')).match(/\.toLocaleDateString\(/g) ?? []).length, 1);
 });

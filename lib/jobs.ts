@@ -1,4 +1,5 @@
 import { LATE_CHOICES, lateShiftMinutes, movedWindow } from './runningLate';
+import { formatDayKey } from './time';
 import type { ComponentProps } from 'react';
 import type { Ionicons } from '@expo/vector-icons';
 import { categoryAccents } from '../ui/tokens';
@@ -894,17 +895,7 @@ export function arrivalWindowLabel(job: {
   arrived_at?: string | null;
   status?: string | null;
 }): string | null {
-  let dateLabel: string | null = null;
-  if (job.scheduled_date) {
-    const [y, m, d] = job.scheduled_date.split('-').map(Number);
-    if (y && m && d) {
-      dateLabel = new Date(y, m - 1, d).toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-      });
-    }
-  }
+  const dateLabel = formatDayKey(job.scheduled_date);
   const shift = lateShiftMinutes(job);
   const windowLabel =
     job.arrival_start_hour != null && job.arrival_end_hour != null

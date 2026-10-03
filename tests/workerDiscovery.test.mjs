@@ -461,7 +461,13 @@ const { deriveMatchReasons } = await (async () => {
   const js = stripTypeScriptTypes(await read('lib/matchReasons.ts'), { mode: 'strip' })
     .replace(
       "from './jobFilters'",
-      `from '${pathToFileURL(join(root, 'lib/jobFilters.ts')).href}'`
+      // F19: jobFilters itself imports lib/time.ts, so it runs from a data URL too.
+      `from '${toDataUrl(
+        stripTypeScriptTypes(await read('lib/jobFilters.ts'), { mode: 'strip' }).replace(
+          "from './time'",
+          `from '${pathToFileURL(join(root, 'lib/time.ts')).href}'`
+        )
+      )}'`
     )
     .replace(
       "from './discoveryFilter'",

@@ -44,8 +44,13 @@ const formattersModule = (async () => {
   // lib/runningLate.ts — itself pure, with no imports — so the span is evaluated beside it: the one
   // shift rule, executed, never a copy of it.
   const lateJs = stripTypeScriptTypes(await read('lib/runningLate.ts'), { mode: 'strip' });
-  return import(toDataUrl(`${lateJs}\n${jobsJs.slice(start, end)}`));
+  // F19: the span's day label is lib/time.ts's formatDayKey, imported from its file.
+  const timeImport = `import { formatDayKey } from '${pathToFileURL(join(root, 'lib/time.ts')).href}';`;
+  return import(toDataUrl(`${timeImport}\n${lateJs}\n${jobsJs.slice(start, end)}`));
 })();
+
+/** The dates below sit in the current year, so lib/time.ts's year rule leaves them bare. */
+const THIS_YEAR = new Date().getFullYear();
 
 const lifecycleUrl = pathToFileURL(join(root, 'lib/jobLifecycle.ts')).href;
 const { myJobsNextAction, JOB_LIFECYCLE_LABELS } = await import(lifecycleUrl);
@@ -57,13 +62,18 @@ const { myJobsNextAction, JOB_LIFECYCLE_LABELS } = await import(lifecycleUrl);
 test('4D-B2 · date + window renders "Day, Mon D · H AM–H AM"', async () => {
   const { arrivalWindowLabel } = await formattersModule;
   const label = arrivalWindowLabel({
-    scheduled_date: '2026-08-12',
+    scheduled_date: `${THIS_YEAR}-08-12`,
     arrival_start_hour: 8,
     arrival_end_hour: 11,
   });
   // The date half is locale-woven; what must hold is the local-parts parse
   // (Aug 12 stays Aug 12 in every timezone) and the exact window text.
   assert.match(label, /^[A-Z][a-z]{2}, Aug 12 · 8 AM–11 AM$/);
+  // F19: lib/time.ts's year rule — another year's date names its year.
+  assert.match(
+    arrivalWindowLabel({ scheduled_date: `${THIS_YEAR - 1}-08-12`, arrival_start_hour: 8, arrival_end_hour: 11 }),
+    new RegExp(`^[A-Z][a-z]{2}, Aug 12, ${THIS_YEAR - 1} · 8 AM–11 AM$`)
+  );
 });
 
 test('4D-B2 · idea 5: running late moves the window until the worker arrives', async () => {
@@ -80,7 +90,7 @@ test('4D-B2 · the window is both-or-neither: half an hour pair renders no windo
   const { arrivalWindowLabel } = await formattersModule;
   // Only a start hour: the window half must vanish, leaving the date alone.
   assert.match(
-    arrivalWindowLabel({ scheduled_date: '2026-08-12', arrival_start_hour: 8, arrival_end_hour: null }),
+    arrivalWindowLabel({ scheduled_date: `${THIS_YEAR}-08-12`, arrival_start_hour: 8, arrival_end_hour: null }),
     /^[A-Z][a-z]{2}, Aug 12$/
   );
   // Only an end hour, no date: nothing at all.

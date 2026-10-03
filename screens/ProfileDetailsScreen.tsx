@@ -31,6 +31,7 @@ import {
   touchSlop,
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
+import { formatMonthYear } from '../lib/time';
 
 const LANGUAGE_LABELS: Record<string, string> = { en: 'English', es: 'Español' };
 
@@ -39,10 +40,7 @@ function memberSince(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return null;
-  return `Member since ${at.toLocaleDateString(undefined, {
-    month: 'short',
-    year: 'numeric',
-  })}`;
+  return `Member since ${formatMonthYear(at)}`;
 }
 
 /**

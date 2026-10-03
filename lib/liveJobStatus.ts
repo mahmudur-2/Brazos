@@ -1,4 +1,5 @@
 import { lateShiftMinutes, movedWindow } from './runningLate';
+import { formatClock, formatWeekday } from './time';
 import {
   JOB_LIFECYCLE_LABELS,
   STAGE,
@@ -127,7 +128,7 @@ export function bookedWindow(
           ? null
           : diff === 1
             ? 'tomorrow'
-            : date.toLocaleDateString('en-US', { weekday: 'short' });
+            : formatWeekday(date);
     }
   }
   if (day && window) return `${day}, ${window}`;
@@ -140,7 +141,7 @@ function clockLabel(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return formatClock(date);
 }
 
 export function liveJobStatus(input: {

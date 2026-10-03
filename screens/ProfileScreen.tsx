@@ -62,6 +62,7 @@ import type {
 } from '../lib/navigation';
 import { useDialNumber } from '../lib/designOverrides';
 import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
+import { formatMonthYear } from '../lib/time';
 import {
   EYEBROW_TYPE,
   emeraldRadius,
@@ -657,10 +658,7 @@ export function ProfileScreen() {
   // something real to say.
   const totalCompletedJobs = jobStats.reduce((sum, s) => sum + s.count, 0);
   const memberSince = user?.created_at
-    ? new Date(user.created_at).toLocaleDateString(undefined, {
-        month: 'short',
-        year: 'numeric',
-      })
+    ? formatMonthYear(new Date(user.created_at)) || null
     : null;
   const workerSummary = roleSummaries?.worker ?? null;
   const customerSummary = roleSummaries?.customer ?? null;

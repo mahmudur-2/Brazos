@@ -68,7 +68,15 @@ const navModule = (async () =>
   ))();
 
 const copyModule = (async () =>
-  import(toDataUrl(stripTypeScriptTypes(await read('lib/offerCopy.ts'), { mode: 'strip' }))))();
+  import(
+    toDataUrl(
+      // F19: offerCopy's one import is the import-free lib/time.ts, pointed at its file.
+      stripTypeScriptTypes(await read('lib/offerCopy.ts'), { mode: 'strip' }).replace(
+        "from './time'",
+        `from '${new URL('../lib/time.ts', import.meta.url).href}'`,
+      ),
+    ),
+  ))();
 
 const CUSTOMER = 'customer-1';
 const WORKER = 'worker-1';

@@ -51,6 +51,7 @@ import {
   touchSlop,
 } from '../lib/theme';
 import { PalettePinContext } from '../hooks/useThemeColors';
+import { dateOfDayKey, formatDay, formatShortDay } from '../lib/time';
 
 /** The design's sheet: 28pt top corners, and its sage hairline in dark (the
  *  pane rim's own mint) where every other sheet draws `line` — 0.20 since
@@ -156,20 +157,15 @@ const DATE_POPOVER_WIDTH = 192;
 
 type PopoverKind = 'distance' | 'budget' | 'date' | 'sort';
 
-/** 'YYYY-MM-DD' → a Date in the local calendar, or null for a bad key. */
-function dateOfKey(key: string): Date | null {
-  const [y, m, d] = key.split('-').map(Number);
-  return y && m && d ? new Date(y, m - 1, d) : null;
-}
 /** "Sep 27" — the Custom pill's label. */
 function shortDate(key: string): string {
-  return dateOfKey(key)?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) ?? key;
+  const date = dateOfDayKey(key);
+  return date ? formatShortDay(date) : key;
 }
 /** "Sat, Sep 27" — the popup's rows. */
 function longDate(key: string): string {
-  return (
-    dateOfKey(key)?.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) ?? key
-  );
+  const date = dateOfDayKey(key);
+  return date ? formatDay(date) : key;
 }
 
 export function JobFilterSheet({
@@ -277,7 +273,7 @@ export function JobFilterSheet({
   const dateOptions: PickerOption<string>[] = dateKeys.map((key) => ({
     value: key,
     label: longDate(key),
-    dayNumber: dateOfKey(key)?.getDate(),
+    dayNumber: dateOfDayKey(key)?.getDate(),
   }));
   const sortOptions: PickerOption<JobSort>[] = JOB_SORTS.map((sort) => ({
     value: sort,

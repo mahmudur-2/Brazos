@@ -15,6 +15,17 @@ import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFile(join(root, rel), 'utf8');
+// F19: lib/jobFilters.ts formats its day word through lib/time.ts. node resolves
+// relative specifiers literally, so the module runs from a data URL with that one
+// value import pointed at the file (lib/time.ts imports nothing).
+const jobFiltersUrl =
+  'data:text/javascript;charset=utf-8;base64,' +
+  Buffer.from(
+    (await import('node:module'))
+      .stripTypeScriptTypes(await readFile(new URL('../lib/jobFilters.ts', import.meta.url), 'utf8'), { mode: 'strip' })
+      .replace("from './time'", `from '${new URL('../lib/time.ts', import.meta.url).href}'`),
+    'utf8',
+  ).toString('base64');
 
 const {
   DEFAULT_JOB_FILTERS,
@@ -29,7 +40,7 @@ const {
   localDateKeyAfter,
   isDefaultJobFilters,
   activeJobFilterCount,
-} = await import(pathToFileURL(join(root, 'lib/jobFilters.ts')).href);
+} = await import(jobFiltersUrl);
 const { DISTANCE_CUSTOM_VALUES, DISTANCE_FILTER_MAX, DISTANCE_FILTER_OPTIONS, isDistanceFilterMiles, distanceChipLabel } =
   await import(pathToFileURL(join(root, 'lib/discoveryFilter.ts')).href);
 // lib/jobs.ts reaches ui/tokens without an extension, which node's loader
@@ -243,7 +254,7 @@ test('the radius RPC’s clamp rose to 3,000 in an additive migration that resta
 // ---------------------------------------------------------------------------
 // The card's day word (2026-09-19, the Map design's "Assembly · Today").
 // ---------------------------------------------------------------------------
-const { scheduledDayLabel, localDateKey } = await import(pathToFileURL(join(root, 'lib/jobFilters.ts')).href);
+const { scheduledDayLabel, localDateKey } = await import(jobFiltersUrl);
 
 test('the day word is Today, Tmrw, the short date, or nothing — in the local calendar', () => {
   const now = new Date(2026, 8, 19, 22, 30); // late evening, so UTC would already be the 20th

@@ -31,10 +31,13 @@ const formatBudgetSource = (async () => {
  *  any) with the real formatBudget so the module stays pure and runnable. */
 async function importLibModule(path) {
   const js = stripTypeScriptTypes(await read(path), { mode: 'strip' });
-  const inlined = js.replace(
-    /import \{ formatBudget \} from '\.\/jobs';/,
-    () => '',
-  );
+  const inlined = js
+    .replace(
+      /import \{ formatBudget \} from '\.\/jobs';/,
+      () => '',
+    )
+    // F19: lib/time.ts imports nothing, so it is pointed at its file.
+    .replace("from './time'", `from '${new URL('../lib/time.ts', import.meta.url).href}'`);
   const withHelper = inlined.includes('formatBudget')
     ? `${await formatBudgetSource}\n${inlined}`
     : inlined;

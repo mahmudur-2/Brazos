@@ -31,6 +31,7 @@ import {
   acceptOfferConfirmTitle,
   declineOfferActionLabel,
   declineOfferConfirmTitle,
+  offerExpiryLabel,
 } from '../lib/offerCopy';
 import { fetchProfileReviewSummary, type ReviewSummary } from '../lib/reviews';
 import { formatTimeAgo } from '../lib/time';
@@ -211,10 +212,7 @@ export function BidDetailScreen() {
                       {offer.expires_at && effective === 'pending' ? (
                         <Text style={styles.expiry}>
                           Open until{' '}
-                          {new Date(offer.expires_at).toLocaleDateString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                          })}{' '}
+                          {offerExpiryLabel(offer.expires_at)}{' '}
                           — then it expires on its own.
                         </Text>
                       ) : null}

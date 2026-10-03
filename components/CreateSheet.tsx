@@ -28,6 +28,7 @@ import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import { attentionItems } from '../lib/homeAttention';
 import { budgetRangeLabel, JOB_CATEGORY_ICONS, type Job } from '../lib/jobs';
 import { reusableJobs, reuseCardFigure, reuseCardInstant, reuseCardWidth } from '../lib/reuseJobs';
+import { formatDay } from '../lib/time';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -400,11 +401,7 @@ function ReuseCard({ job, worker, onPick }: { job: Job; worker: string | null; o
   const styles = stylesFor(colors);
   const figure = reuseCardFigure(job);
   const price = figure === 'budget' ? budgetRangeLabel(job) : null;
-  const date = new Date(reuseCardInstant(job)).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  const date = formatDay(new Date(reuseCardInstant(job)));
   return (
     <Pressable
       onPress={() => onPick(job)}

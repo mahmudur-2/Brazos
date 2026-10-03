@@ -109,6 +109,7 @@ import { MediaUploader, Toggle, usePinnedFooterPadding, useScrollClearance } fro
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { Announce } from '../hooks/useAnnounce';
 import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
+import { formatDay } from '../lib/time';
 
 // Ten per the screen-13 spec; phase49 raised create_job's server cap to match.
 const MAX_PHOTOS = 10;
@@ -165,7 +166,7 @@ function upcomingDates(): { iso: string; label: string }[] {
         ? 'Today'
         : i === 1
           ? 'Tomorrow'
-          : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          : formatDay(d, { now });
     return { iso: toLocalIsoDate(d), label };
   });
 }

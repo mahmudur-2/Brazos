@@ -35,7 +35,12 @@ export type JobSeries = {
   status: 'active' | 'stopped';
 };
 
-/** "Tue, Oct 21" from a plain calendar date — local parts, never the Date-from-ISO constructor. */
+/**
+ * "Tue, Oct 21" from a plain calendar date — local parts, never the
+ * Date-from-ISO constructor. The one date call outside lib/time.ts (F19): this
+ * module imports nothing (tests/jobSeries.test.mjs), so it spells formatDay's
+ * own shape here; a visit is weeks away, so formatDay's year rule never bites.
+ */
 export function visitDayLabel(isoDate: string): string {
   const [y, m, d] = isoDate.split('-').map(Number);
   if (!y || !m || !d) return isoDate;

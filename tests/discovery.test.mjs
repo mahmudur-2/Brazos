@@ -22,7 +22,18 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFile(join(root, rel), 'utf8');
 
-const filtersUrl = pathToFileURL(join(root, 'lib/jobFilters.ts')).href;
+// F19: lib/jobFilters.ts formats its day word through lib/time.ts. node resolves
+// relative specifiers literally, so the module runs from a data URL with that one
+// value import pointed at the file (lib/time.ts imports nothing).
+const jobFiltersUrl =
+  'data:text/javascript;charset=utf-8;base64,' +
+  Buffer.from(
+    (await import('node:module'))
+      .stripTypeScriptTypes(await readFile(new URL('../lib/jobFilters.ts', import.meta.url), 'utf8'), { mode: 'strip' })
+      .replace("from './time'", `from '${new URL('../lib/time.ts', import.meta.url).href}'`),
+    'utf8',
+  ).toString('base64');
+const filtersUrl = jobFiltersUrl;
 const {
   DEFAULT_JOB_FILTERS,
   applyJobFilters,

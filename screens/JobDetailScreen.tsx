@@ -869,12 +869,7 @@ export function JobDetailScreen() {
                 ) : null}
                 <Text style={styles.bidNote}>
                   {activeBid.expires_at
-                    ? `The customer can accept it until ${new Date(
-                        activeBid.expires_at
-                      ).toLocaleDateString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                      })} — after that it expires on its own. Check My Jobs for updates.`
+                    ? `The customer can accept it until ${offerExpiryLabel(activeBid.expires_at)} — after that it expires on its own. Check My Jobs for updates.`
                     : 'You’ve already bid on this job. Check My Jobs for updates.'}
                 </Text>
                 {/* No Message CTA here. Free-form messaging does not exist

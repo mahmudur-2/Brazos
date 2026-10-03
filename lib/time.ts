@@ -1,3 +1,93 @@
+/**
+ * F19 (fix run, 2026-10-03) — ONE DATE FORMATTER. Every day, month and clock
+ * the app prints goes through this file, in en-US, through Intl.DateTimeFormat
+ * instances built once per shape and time zone (toLocaleDateString builds a
+ * new one on every call). Two day shapes, chosen by the room a surface has:
+ *
+ *   formatDay       "Wed, Sep 30"   the full day, wherever a line can hold it
+ *   formatShortDay  "Sep 30"        a row that may not grow (a chip, a stamp)
+ *
+ * Both add ", 2025" only when the year is not the current one. A screen never
+ * calls toLocaleDateString itself (tests/fixRunF.test.mjs).
+ *
+ * This file imports nothing, so a test can load it from its file URL.
+ */
+export type DateFormatOptions = {
+  /** An IANA zone, for a date the market's day decides. Default: the device's. */
+  timeZone?: string;
+  /** The "now" the year rule compares against. Default: the clock. */
+  now?: Date;
+};
+
+const FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+
+function formatter(shape: Intl.DateTimeFormatOptions, timeZone?: string): Intl.DateTimeFormat {
+  const key = `${JSON.stringify(shape)}|${timeZone ?? ''}`;
+  let made = FORMATTERS.get(key);
+  if (!made) {
+    made = new Intl.DateTimeFormat('en-US', timeZone ? { ...shape, timeZone } : shape);
+    FORMATTERS.set(key, made);
+  }
+  return made;
+}
+
+function isValid(date: Date): boolean {
+  return !Number.isNaN(date.getTime());
+}
+
+function yearIn(date: Date, timeZone?: string): number {
+  return timeZone ? Number(formatter({ year: 'numeric' }, timeZone).format(date)) : date.getFullYear();
+}
+
+function withYear(date: Date, shape: Intl.DateTimeFormatOptions, opts?: DateFormatOptions): string {
+  if (!isValid(date)) return '';
+  const tz = opts?.timeZone;
+  const other = yearIn(date, tz) !== yearIn(opts?.now ?? new Date(), tz);
+  return formatter(other ? { ...shape, year: 'numeric' } : shape, tz).format(date);
+}
+
+/** "Wed, Sep 30" — ", 2025" added only when the year is not the current one. */
+export function formatDay(date: Date, opts?: DateFormatOptions): string {
+  return withYear(date, { weekday: 'short', month: 'short', day: 'numeric' }, opts);
+}
+
+/** "Sep 30" — the compact day, for a row that may not grow; the same year rule. */
+export function formatShortDay(date: Date, opts?: DateFormatOptions): string {
+  return withYear(date, { month: 'short', day: 'numeric' }, opts);
+}
+
+/** "Wed". */
+export function formatWeekday(date: Date, opts?: DateFormatOptions): string {
+  return isValid(date) ? formatter({ weekday: 'short' }, opts?.timeZone).format(date) : '';
+}
+
+/** "Sep 2026" — Member since. */
+export function formatMonthYear(date: Date, opts?: DateFormatOptions): string {
+  return isValid(date) ? formatter({ month: 'short', year: 'numeric' }, opts?.timeZone).format(date) : '';
+}
+
+/** "9:30 AM". */
+export function formatClock(date: Date, opts?: DateFormatOptions): string {
+  return isValid(date) ? formatter({ hour: 'numeric', minute: '2-digit' }, opts?.timeZone).format(date) : '';
+}
+
+/**
+ * A plain 'YYYY-MM-DD' day key as a Date in the local calendar, or null for a
+ * malformed key — never through the Date-from-ISO-string constructor, which
+ * would shift "2026-08-12" a day for viewers west of UTC.
+ */
+export function dateOfDayKey(key: string | null | undefined): Date | null {
+  if (!key) return null;
+  const [y, m, d] = key.split('-').map(Number);
+  return y && m && d ? new Date(y, m - 1, d) : null;
+}
+
+/** "Wed, Sep 30" from a plain 'YYYY-MM-DD' key, or null for a missing or malformed one. */
+export function formatDayKey(key: string | null | undefined, opts?: DateFormatOptions): string | null {
+  const date = dateOfDayKey(key);
+  return date ? formatDay(date, opts) : null;
+}
+
 /** Compact relative time, e.g. "just now", "5 min ago", "2 h ago", "3 d ago". */
 export function formatTimeAgo(iso: string): string {
   return relativeAge(iso, 'long');
@@ -29,7 +119,7 @@ function relativeAge(iso: string, style: 'long' | 'short'): string {
   if (days < 7) return unit(days, 'd', 'd');
   const weeks = Math.floor(days / 7);
   if (weeks < 5) return unit(weeks, 'w', 'w');
-  return new Date(iso).toLocaleDateString();
+  return formatShortDay(new Date(iso));
 }
 
 /**
@@ -50,11 +140,12 @@ export function formatInboxStamp(iso: string, nowMs: number = Date.now()): strin
   if (hours < 24) return `${hours}h`;
   if (hours < 48) return '1d';
   const days = Math.floor(hours / 24);
-  if (days < 7) return then.toLocaleDateString('en-US', { weekday: 'short' });
+  if (days < 7) return formatWeekday(then);
   const now = new Date(nowMs);
+  // The 44pt column cannot hold "Sep 12, 2025", so another year is digits.
   return then.getFullYear() === now.getFullYear()
-    ? then.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : then.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
+    ? formatShortDay(then, { now })
+    : formatter({ month: 'numeric', day: 'numeric', year: '2-digit' }).format(then);
 }
 
 /**
@@ -72,7 +163,5 @@ export function greetingFor(date: Date): string {
 
 /** Clock time for a chat bubble, e.g. "3:45 PM". */
 export function formatClockTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return formatClock(new Date(iso));
 }
