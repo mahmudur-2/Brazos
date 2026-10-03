@@ -269,9 +269,13 @@ async function recordFailure(counts: Tally, kind: Kind, paymentId: string, outco
 async function runTransfers(): Promise<Tally> {
   const counts = tally();
   // A9 (2026-10-03): the drain reads transfers_READY — transfers_due minus the payees it could
-  // never pay (no ENABLED payout account), in the same order (20261003000000). Before, 25 blocked
-  // rows at the head of transfers_due hid every payable row behind them, tick after tick. The
-  // blocked count is now the whole difference between the two queues, not one batch's share.
+  // never pay (no ENABLED payout account) (20261003000000). Before, 25 blocked rows at the head of
+  // transfers_due hid every payable row behind them, tick after tick. The blocked count is now the
+  // whole difference between the two queues, not one batch's share. A9 review: the view's order
+  // is transfer_attempts, then release_requested_at (20261003001100) — a row never tried before
+  // any row the provider has refused — so 25 rows refused for a reason of their own (key rotated,
+  // retried every tick) cannot fill this read and starve the payable rows behind them. This
+  // function adds no order of its own: the view's is the queue's.
   counts.blocked = await countBlocked('transfers_due', 'transfers_ready');
   const rows = await getRows<TransferRow>(
     `transfers_ready?select=id,payee_id,transfer_cents,transfer_attempts&limit=${QUEUE_LIMIT}`

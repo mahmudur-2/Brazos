@@ -243,6 +243,16 @@ test('13 · the drain (raw text): refunds_due select names refund_attempts, both
     assert.match(migration, new RegExp(`revoke all on table public\\.${view} from public, anon, authenticated;\\s*grant select on table public\\.${view} to service_role;`), `${view}: service_role only`);
   }
   assert.doesNotMatch(migration, /\bdrop |\brename |truncate|delete from/i, 'additive — never destructive');
+  // A9 review (20261003001100): the LIVE transfers_ready orders by transfer_attempts first, then
+  // release_requested_at — a row never tried before any the provider refused, so refused rows
+  // cannot hold the head — with the column list (t.*) and the payee predicate unchanged, so
+  // CREATE OR REPLACE was legal and the drain's select still names what it names. The drain adds
+  // no order of its own: the view's is the queue's.
+  const reordered = readFileSync(new URL('../supabase/migrations/20261003001100_transfers_ready_fresh_first.sql', import.meta.url), 'utf8');
+  assert.match(reordered, /create or replace view public\.transfers_ready as\s+select t\.\*\s+from public\.transfers_due t\s+where exists \(\s+select 1\s+from public\.payment_accounts a\s+where a\.user_id = t\.payee_id\s+and a\.payouts_enabled\s+and a\.stripe_account_id is not null\s+\)\s+order by t\.transfer_attempts, t\.release_requested_at;/);
+  assert.match(reordered, /revoke all on table public\.transfers_ready from public, anon, authenticated;\s*grant select on table public\.transfers_ready to service_role;/, 'transfers_ready: still service_role only');
+  assert.doesNotMatch(reordered, /\bdrop |\brename |truncate|delete from/i, 'additive — never destructive');
+  assert.doesNotMatch(src, /transfers_ready\?select=[^`]*order=/, "the drain adds no order of its own: the view's is the queue's");
 
   // Both idempotency keys carry their counter, and the counter-less refund
   // key — the one that could not be rotated even by hand — is gone.

@@ -1,5 +1,7 @@
 -- 220_settlement_ready.sql — FIX-RUN A9's proofs: 20261003000000_settlement_queue_ready.sql proven
--- on the local stack before the pipeline applies it anywhere.
+-- on the local stack before the pipeline applies it anywhere; §5 proves its review,
+-- 20261003001100_transfers_ready_fresh_first.sql — a row the provider keeps refusing cannot hold
+-- the head of transfers_ready.
 --
 -- THE JAM IT PROVES CLOSED: process-settlements reads the queue with limit 25. Thirty rows whose
 -- payees have no enabled payout account sit AHEAD of one payable row; the old read (transfers_due,
@@ -19,7 +21,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(14);
+select plan(20);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated, service_role;
@@ -139,6 +141,79 @@ select ok(not has_table_privilege('authenticated', 'public.transfers_ready', 'SE
   '4c: neither authenticated nor anon may read transfers_ready');
 select ok(not has_table_privilege('authenticated', 'public.refunds_ready', 'SELECT') and not has_table_privilege('anon', 'public.refunds_ready', 'SELECT'),
   '4d: neither authenticated nor anon may read refunds_ready');
+
+-- ---------------------------------------------------------------------------
+-- 5. A9 review (20261003001100): twenty-five rows the provider keeps refusing — transfer_attempts > 0,
+--    the drain's recorder having rotated their keys — released EARLIER than one row never tried.
+--    Every payee here is ENABLED, so the payee filter hides none of them: this is the order alone.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_i integer;
+  v_worker uuid;
+  v_job uuid;
+  v_payment uuid;
+  v_customer uuid := (select v from fx where k = 'customer');
+begin
+  for v_i in 1..25 loop
+    v_worker := tests.create_user('a9r.refused' || v_i || '@brazos.test', 'Refused ' || v_i);
+    insert into public.payment_accounts (user_id, stripe_account_id, payouts_enabled, payouts_status)
+    values (v_worker, 'acct_a9r_refused_' || v_i, true, 'enabled');
+    insert into public.jobs (client_id, title, assigned_worker_id)
+    values (v_customer, 'A9r refused fixture ' || v_i, v_worker) returning id into v_job;
+    insert into public.payments (job_id, payer_id, payee_id, amount_cents, platform_fee_cents, provider, status)
+    values (v_job, v_customer, v_worker, 5000, 500, 'stripe', 'held') returning id into v_payment;
+    -- Released ten days ago, an hour apart, each refused one to three times.
+    update public.payments
+       set release_requested_at = now() - interval '10 days' + make_interval(hours => v_i),
+           transfer_cents = 4500,
+           transfer_attempts = 1 + (v_i % 3),
+           last_error = 'transfer: 400 account_invalid'
+     where id = v_payment;
+    insert into fx values ('refused_' || v_i, v_payment);
+  end loop;
+end $$;
+-- The one row never tried, released LAST — after every refused row.
+select tests.create_user('a9r.fresh@brazos.test', 'Fay Fresh') as fresh \gset
+insert into public.payment_accounts (user_id, stripe_account_id, payouts_enabled, payouts_status)
+values (:'fresh', 'acct_a9r_fresh', true, 'enabled');
+insert into public.jobs (client_id, title, assigned_worker_id)
+values (:'customer', 'A9r fresh fixture', :'fresh') returning id as j_fresh \gset
+insert into public.payments (job_id, payer_id, payee_id, amount_cents, platform_fee_cents, provider, status)
+values (:'j_fresh', :'customer', :'fresh', 6000, 600, 'stripe', 'held') returning id as p_fresh \gset
+update public.payments set release_requested_at = now() + interval '1 second', transfer_cents = 5400 where id = :'p_fresh';
+insert into fx values ('p_fresh', :'p_fresh');
+
+select is(
+  (select count(*) from public.transfers_ready r where r.id in (select v from fx where k like 'refused_%' or k = 'p_fresh')),
+  26::bigint,
+  '5a: all twenty-six fixture rows are ready — every payee is enabled, so only the order is in question'
+);
+select is(
+  (select count(*) from (select d.id from public.transfers_due d where d.id in (select v from fx where k like 'refused_%' or k = 'p_fresh') limit 25) head where head.id = :'p_fresh'),
+  0::bigint,
+  '5b: in transfers_due''s own order (release request) the fresh row is twenty-sixth — a read of 25 never reaches it: the jam'
+);
+select is(
+  (select r.id from public.transfers_ready r where r.id in (select v from fx where k like 'refused_%' or k = 'p_fresh') limit 1),
+  :'p_fresh'::uuid,
+  '5c: the fresh row is FIRST in transfers_ready — twenty-five refused rows ahead of it by release request hide nothing'
+);
+select ok(
+  (select bool_and(r.transfer_attempts > 0)
+     from (select r.transfer_attempts from public.transfers_ready r where r.id in (select v from fx where k like 'refused_%' or k = 'p_fresh') offset 1) r),
+  '5d: every row after it has been refused at least once — never tried comes before tried, whatever the dates'
+);
+select is(
+  (select r.id from public.transfers_ready r where r.id in (select v from fx where k like 'refused_%') limit 1),
+  (select v from fx where k = 'refused_3'),
+  '5e: within a tier the oldest release request still goes first — the first refused row is the oldest of those refused once'
+);
+select is(
+  (select array_agg(c.column_name::text order by c.ordinal_position) from information_schema.columns c where c.table_schema = 'public' and c.table_name = 'transfers_ready'),
+  (select array_agg(c.column_name::text order by c.ordinal_position) from information_schema.columns c where c.table_schema = 'public' and c.table_name = 'transfers_due'),
+  '5f: transfers_ready still carries transfers_due''s columns in their order — only the order of rows changed, so CREATE OR REPLACE was legal'
+);
 
 select * from finish();
 rollback;
