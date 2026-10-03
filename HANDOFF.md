@@ -11,7 +11,7 @@ the Lux drawing run's, the eighteen-item run's and the sittings before them, unc
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
 
-## FIX RUN — IN PROGRESS: groups A, B and C built and reviewed; D, E and F follow (2026-10-03, "build" given; the workflow's helpers run one after another)
+## FIX RUN — IN PROGRESS: groups A–E built and reviewed; F and the final sweep follow (2026-10-03, "build" given; the workflow's helpers run one after another)
 
 **Start here.** The brief is `docs/dispatch/FIX-RUN.md`; the operator's selection is its first
 section (OUT: A1, B10, C5, D1, D2, D4, D5, E6, F14; picks A10a, A12a, A18a, B1a, C1b, D13a). The
@@ -37,7 +37,7 @@ running log is `.shots/refresh/review/run/log.md` (gitignored), one line per ite
   shows (the app-review runbook corrected to match); `e567ba3` — three lines back on M-17 (Home's
   "Get bids", Compare bids' heading, JobDetail's bid push prompt); `870d5a4` — a doc comment.
   The legal versions stay `2026-10-03-draft2` (B1's bump, not yet in any OTA).
-- **Proof at this commit:** `npm run verify` 1539 pass, 0 fail; `npm run db:reset` then
+- **Proof at the B/C review (`5d80a58`):** `npm run verify` 1539 pass, 0 fail; `npm run db:reset` then
   `npm run db:test` Files=31, Tests=1861, PASS; `scripts/staging-scan.sh` reports no destructive
   shape in `20261003000700`–`20261003000900`.
 - **Only the operator (device checks from B and C):** an offline cold start and an offline
@@ -45,9 +45,32 @@ running log is `.shots/refresh/review/run/log.md` (gitignored), one line per ite
   updating across two phones (B14); a denied camera / microphone / location offering Open Settings
   (B11); the 3-D Secure test card 4000 0027 6000 3184 on the payment sheet (B16); the Maestro money
   walk's new caption wait (C4).
-- **Next:** the workflow's remaining helpers (E accessibility, F smooth, D one look, the final
-  sweep), then one OTA and the new Beta build. The parked reminders in DESIGN LOOP 3 below still
-  stand.
+- **Group D built:** D3, D6–D13 (D1, D2, D4, D5 are OUT and not built; pick D13a),
+  `17e4b39`…`4009553`, no migration. One light cream (#F4F1E8), one spacing and one corner scale
+  (`ui/tokens.ts` and `lib/theme.ts` read the same live groups), one eyebrow measure (12 / 700 /
+  1.5), the dark OFF switch knob, themed auth notices, no back on the Discover root, the
+  screenshot glitches (D11), the Divider adopted where a rule is its own view (D12: ListRow,
+  JobCard, StepHeader, MediaGrid not 1:1, left), the soft fade behind the bar.
+- **Group E built:** E1–E5, E7 (E6 is OUT and not built), `2408462`…`e4e16f6`, no migration.
+  Light and dark inks at 4.5:1, touchSlop to 44 pt, Dynamic Type floors, VoiceOver names /
+  headers / radios and `useAnnounce` on iOS, one loading spinner and one set of retry words.
+- **Groups D and E reviewed, five follow-ups:** `c19eba2` — the fade behind the bar began 56 pt
+  above the pill, so a list scrolled to its end kept its last row about two-thirds washed; its
+  clear edge is now the scroll-clearance line (`underBarFade()` in `lib/meltBarGeometry.ts`,
+  executed by `tests/meltTabBar.test.mjs`); `045037c` — the light Booked pill's ink was 4.49:1 on
+  its own tint, now #836010 (4.82:1), and the E1 fence checks each stage ink on its tint;
+  `190471f` — the shared spinner and skeleton are `accessible`, so iOS speaks their label;
+  `9410349` — Earnings' "TRANSFERRED" broke mid-word at the new eyebrow measure, now one line that
+  shrinks to fit (web truncates instead); `c622f6f` — the screenshot harness taps the first
+  visible, uncovered match and its stale recipes follow today's screens: 78 of 82 targets arrive.
+  Still not arriving: `workersearch-category-*` (Home's service rows now open Post a job; its
+  steps are pinned by `tests/shotHarness.test.mjs`) and `customer-appearance-*` (the Appearance
+  screen is reachable only behind the internal-build Design studio row).
+- **Left for F (seen, not built here):** the switch knob (D6), the inbox pill fade and the bar
+  fade ride core Animated on the native driver, not the 120 Hz path.
+- **Proof at this commit:** `npm run verify` 1570 pass, 0 fail. No migration in D or E.
+- **Next:** the workflow's remaining helpers (F smooth, the final sweep), then one OTA and the new
+  Beta build. The parked reminders in DESIGN LOOP 3 below still stand.
 
 ## DESIGN LOOP 3 — the review is planned; nothing built (2026-10-01/02, the first design chat after the build run; docs only, nothing in the app changed)
 
