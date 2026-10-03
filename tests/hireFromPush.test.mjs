@@ -86,6 +86,13 @@ test('[static] create-payment: the opt-in sets or clears the intent\'s future us
   assert.match(fn, /const nowStatus = intentNow\.ok \? intentNow\.body\.status : undefined;\s*if \(nowStatus === 'succeeded' \|\| nowStatus === 'processing' \|\| nowStatus === 'requires_capture'\) \{\s*return json\(\{ paymentId, confirmed: true \}\);\s*\}/);
   assert.match(fn, /const priorCharge = intentNow\.ok && typeof intentNow\.body\.latest_charge === 'string' \? intentNow\.body\.latest_charge : '';/);
   assert.ok(fn.indexOf('const nowStatus =') < fn.indexOf('const priorCharge ='), 'the settled check comes before any key is built');
+  // A15 review 2: an intent the bank is already holding for the customer (requires_action) is not
+  // confirmed again either — the same answer, 402 declined, and NOT the push again: a repeat confirm
+  // reads the provider's cached answer, and enqueue_payment_declined's dedupe key is stamped per
+  // call, so the push would otherwise go out on every tap.
+  assert.match(fn, /if \(nowStatus === 'requires_action'\) \{\s*return json\(\{ error: 'Your card was declined\. Protect the payment in Checkout\.', declined: true \}, 402\);\s*\}/);
+  assert.ok(fn.indexOf("nowStatus === 'requires_action'") < fn.indexOf('const priorCharge ='), 'the challenged check comes before any key is built');
+  assert.equal(fn.split("serviceRpc('enqueue_payment_declined'").length - 1, 1, 'the declined push has one call site: the first arrival of a decline or a challenge');
   assert.match(fn, /\{ payment_method: savedCardId, off_session: 'true', return_url: OFF_SESSION_RETURN_URL \},\s*`brazos-offsession-\$\{paymentId\}-\$\{savedCardId\}\$\{priorCharge \? `-\$\{priorCharge\}` : ''\}`/);
   assert.doesNotMatch(fn, /Date\.now\(\)|crypto\.randomUUID|Math\.random/, 'never a random key — that would be no idempotency at all');
   assert.doesNotMatch(fn, /latestSavedCard/, 'never "whichever card is newest"');

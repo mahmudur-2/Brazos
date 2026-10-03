@@ -81,7 +81,9 @@
 // ledger decides nothing new: begin_job_payment() still decides, as the
 // caller, and the webhook still marks the row held. A card decline — or a
 // card that needs the customer present — answers 402 with `declined: true`
-// and sends the push that opens Checkout (enqueue_payment_declined). Any other
+// and sends the push that opens Checkout (enqueue_payment_declined) — once: a
+// later tap on an intent the bank is already holding for the customer
+// (requires_action) gets the same answer and no second push. Any other
 // failure is the provider's: 502, no push; `ambiguous: true` when the charge's
 // outcome is unknown, so the app watches the ledger instead of guessing.
 // ============================================================================
@@ -379,6 +381,15 @@ Deno.serve(async (req) => {
       const nowStatus = intentNow.ok ? intentNow.body.status : undefined;
       if (nowStatus === 'succeeded' || nowStatus === 'processing' || nowStatus === 'requires_capture') {
         return json({ paymentId, confirmed: true });
+      }
+      // A15 review 2 (2026-10-03): an intent the bank has already CHALLENGED is not confirmed again
+      // either. requires_action — the bank wants the customer present — leaves no charge on the
+      // intent, so a second tap would build the same key, read the provider's cached answer as a
+      // fresh decline, and send the declined push again: enqueue_payment_declined's dedupe key is
+      // stamped per call (20260930001200_hire_from_push.sql), so it went out on every tap. The push
+      // went out when the challenge first arrived; this tap gets the same answer without it.
+      if (nowStatus === 'requires_action') {
+        return json({ error: 'Your card was declined. Protect the payment in Checkout.', declined: true }, 402);
       }
       const priorCharge = intentNow.ok && typeof intentNow.body.latest_charge === 'string' ? intentNow.body.latest_charge : '';
       const confirmed = await stripe(
