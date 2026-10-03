@@ -95,10 +95,10 @@ export type NotificationModeBridge = {
   ) => Promise<boolean>;
 };
 
-/** The cross-mode prompt's copy, per destination mode. */
 /** B8: how long a cold-start tap waits for the mode to resolve before the gate stands down. */
 export const MODE_WAIT_MS = 4000;
 
+/** The cross-mode prompt's copy, per destination mode. */
 const CROSS_MODE_CONFIRM: Record<AppMode, { title: string; message: string; confirmText: string }> =
   {
     customer: {
