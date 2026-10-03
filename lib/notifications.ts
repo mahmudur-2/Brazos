@@ -33,6 +33,19 @@ export async function fetchNotifications(userId: string) {
   return { data: (data ?? []) as AppNotification[], error };
 }
 
+/**
+ * F13 — how many are unread, asked as a COUNT: no rows come back (head) and no
+ * cap applies, so the bell can say 140 where the 100-row read said 100.
+ */
+export async function fetchUnreadNotificationCount(userId: string) {
+  const { count, error } = await supabase
+    .from('notification_outbox')
+    .select('id', { count: 'exact', head: true })
+    .eq('recipient_id', userId)
+    .is('read_at', null);
+  return { count: count ?? 0, error };
+}
+
 export async function markNotificationRead(id: string) {
   const { error } = await supabase
     .from('notification_outbox')

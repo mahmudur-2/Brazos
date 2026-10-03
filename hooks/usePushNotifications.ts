@@ -7,6 +7,7 @@ import { registerPushToken, settlePendingPushDeactivation } from '../lib/pushNot
 import { Sentry } from '../lib/observability/sentry';
 import { useAuth } from './useAuth';
 import { useNotificationModeBridge } from './useNotificationModeBridge';
+import { invalidateNotifications } from '../lib/queryClient';
 
 /**
  * Wires push notification taps to navigation, and keeps the device's token
@@ -99,6 +100,15 @@ export function usePushNotifications() {
     };
   }, [modeBridge]);
 
+  // F13 — a push that arrives while the app is open changes the bell's count.
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const subscription = Notifications.addNotificationReceivedListener(() => {
+      void invalidateNotifications();
+    });
+    return () => subscription.remove();
+  }, []);
+
   // --- Warm start: app was backgrounded or already open -------------------
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -106,6 +116,7 @@ export function usePushNotifications() {
       // Any tap arriving through this listener is a fresh one, so the
       // cold-start replay is no longer relevant.
       handledColdStart.current = true;
+      void invalidateNotifications();
       handleNotificationData(dataForAction(response.notification.request.content.data, response.actionIdentifier), modeBridge);
     });
 

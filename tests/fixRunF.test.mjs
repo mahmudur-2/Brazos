@@ -434,3 +434,35 @@ test('[static] F13: one client, provided inside AuthProvider around the launch g
   // The banner and the cache share the one NetInfo subscription.
   assert.match(strip(read('hooks/useOnline.ts')), /return subscribeOnline\(setOnline\);/);
 });
+
+test('F13: the bell asks for a count — head, exact, unread only — and every way it changes refreshes it', async () => {
+  const calls = [];
+  const builder = {
+    select: (columns, options) => (calls.push(['select', columns, options]), builder),
+    eq: (column, value) => (calls.push(['eq', column, value]), builder),
+    is: (column, value) => (calls.push(['is', column, value]), Promise.resolve({ count: 140, error: null })),
+  };
+  globalThis.__f13supabase = { from: (table) => (calls.push(['from', table]), builder) };
+  const js = stripTypeScriptTypes(read('lib/notifications.ts'), { mode: 'strip' }).replace(
+    /import \{ supabase \} from '\.\/supabase';/,
+    'const supabase = globalThis.__f13supabase;'
+  );
+  const lib = await import(toDataUrl(js));
+  const { count, error } = await lib.fetchUnreadNotificationCount('u1');
+  assert.equal(count, 140, 'no cap at 100');
+  assert.equal(error, null);
+  assert.deepEqual(calls, [
+    ['from', 'notification_outbox'],
+    ['select', 'id', { count: 'exact', head: true }],
+    ['eq', 'recipient_id', 'u1'],
+    ['is', 'read_at', null],
+  ]);
+
+  const hook = strip(read('hooks/useUnreadNotificationCount.ts'));
+  assert.match(hook, /queryKey: key, queryFn, enabled: !!userId/);
+  assert.doesNotMatch(hook, /fetchNotifications\(/, 'the bell never reads rows to count them');
+  const feed = strip(read('screens/NotificationsScreen.tsx'));
+  assert.match(feed, /void Promise\.all\(writes\)\.then\(invalidateNotifications\);/);
+  assert.match(feed, /await markAllNotificationsRead\(user\.id\);\s*void invalidateNotifications\(\);/);
+  assert.match(strip(read('hooks/usePushNotifications.ts')), /addNotificationReceivedListener\(\(\) => \{\s*void invalidateNotifications\(\);/);
+});

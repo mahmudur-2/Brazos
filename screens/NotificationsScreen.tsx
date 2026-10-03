@@ -30,6 +30,7 @@ import {
   touchSlop,
 } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
+import { invalidateNotifications } from '../lib/queryClient';
 
 /**
  * Keyed on `notification_outbox.type`, NOT on category — a category covers
@@ -160,11 +161,16 @@ export function NotificationsScreen() {
       setRows((prev) => prev?.map((n) => (unreadIds.includes(n.id) ? { ...n, read_at: readAt } : n)) ?? null);
       // Fire-and-forget by design: the focus reload self-heals a failed
       // write; the log keeps the failure observable (hardening A8).
+      const writes: Promise<void>[] = [];
       for (const id of unreadIds) {
-        void markNotificationRead(id).then(({ error }) => {
-          if (error) console.warn('[Notifications] mark-read failed', error.message);
-        });
+        writes.push(
+          markNotificationRead(id).then(({ error }) => {
+            if (error) console.warn('[Notifications] mark-read failed', error.message);
+          })
+        );
       }
+      // F13: the bell's cached count follows once the writes have landed.
+      void Promise.all(writes).then(invalidateNotifications);
     }
     // A folded row opens its newest (lead) row's subject: the job's bids.
     const notification = entry.lead;
@@ -175,6 +181,8 @@ export function NotificationsScreen() {
     if (!user) return;
     setRows((prev) => prev?.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })) ?? null);
     const { error } = await markAllNotificationsRead(user.id);
+    // F13: the bell's cached count follows, whichever way the write went.
+    void invalidateNotifications();
     if (error) {
       // Revert the optimistic lie to the server truth and say so.
       await alertAsync('Could not mark all read', userMessage(error));

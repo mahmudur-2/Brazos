@@ -36,3 +36,8 @@ focusManager.setEventListener((handleFocus) => {
 });
 
 onlineManager.setEventListener((setOnline) => subscribeOnline(setOnline));
+
+/** F13 — the bell's count (and anything else under 'notifications') is out of date. */
+export function invalidateNotifications(): Promise<void> {
+  return queryClient.invalidateQueries({ queryKey: ['notifications'] });
+}
