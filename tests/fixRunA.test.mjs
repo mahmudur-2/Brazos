@@ -88,6 +88,33 @@ test('A11 · a ban queues the refund it strands, and the customer\'s job page sh
   assert.doesNotMatch(detail, /job\.status === 'open' \|\| job\.status === 'cancelled'/);
 });
 
+test('A11 review · a ban voids the checkout it strands, as cancel_job() does — nothing unfunded or authorized outlives a cancelled job', () => {
+  const sql = read('supabase/migrations/20261003000600_ban_void_unfunded.sql');
+  assert.doesNotMatch(sqlCode(sql), ADDITIVE, 'additive — never a destructive shape');
+  assert.match(sql, /create or replace function public\.ban_user\(p_target uuid, p_report_id uuid default null\) returns void/);
+  // A11's refund stays byte for byte, and the void follows it in the same loop.
+  const flatSql = sql.replace(/\s+/g, ' ');
+  assert.match(
+    flatSql,
+    /update public\.payments set refund_cents = charge_amount_cents, transfer_cents = 0, refund_reason = 'account_suspended', status = case when provider = 'sandbox' then 'refunded'::public\.payment_status else status end, updated_at = v_now where job_id = v_job\.id and kind = 'job_payment' and status = 'held' and coalesce\(refund_cents, 0\) = 0 and coalesce\(transfer_cents, 0\) = 0 and release_requested_at is null;/
+  );
+  // cancel_job()'s own void, allow-listed: unfunded and authorized, nothing else.
+  assert.match(
+    flatSql,
+    /update public\.payments set status = 'voided', last_error = 'job cancelled before funding', updated_at = v_now where job_id = v_job\.id and kind = 'job_payment' and status in \('unfunded', 'authorized'\);/
+  );
+  assert.ok(flatSql.indexOf("refund_reason = 'account_suspended'") < flatSql.indexOf("status = 'voided'"), 'the refund first, then the void, both inside the loop');
+  assert.match(sql, /raise exception 'Only admins may ban users';/, 'the admin gate stays');
+  assert.match(sql, /revoke all on function public\.ban_user\(uuid, uuid\) from public, anon;\s*grant execute on function public\.ban_user\(uuid, uuid\) to authenticated;/);
+  // The same sentence cancel_job() writes, so the ledger reads one way.
+  assert.match(read('supabase/migrations/20260905000000_stripe_foundation.sql'), /set status = 'voided', last_error = 'job cancelled before funding', updated_at = v_now/);
+  // Proven on the local stack: the pgTAP file exists and asserts the deletion gate opens.
+  const tap = read('supabase/tests/270_ban_void_unfunded.sql');
+  assert.match(tap, /select plan\(10\);/);
+  assert.match(tap, /'2c: the unfunded card row is voided as cancel_job\(\) voids it — nothing captured, nothing refunded'/);
+  assert.match(tap, /'3b: neither voided row blocks the customer — the gate that kept the account alive for ever is gone'/);
+});
+
 test('A13 · the evening-before reminder follows the payment: held → both; unpaid → the customer is asked to protect it, the worker is not reminded', () => {
   const sql = read('supabase/migrations/20261003000200_reminders_payment_gate.sql');
   assert.doesNotMatch(sqlCode(sql), ADDITIVE);
