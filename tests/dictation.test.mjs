@@ -73,7 +73,8 @@ test('[static] both fields carry their mic, and the text keeps clear of it', () 
 
 test('[static] the usage strings name dictation, one microphone sentence for all three plugins', async () => {
   const config = read('app.config.ts');
-  const sentence = 'Brazos uses your microphone only while you search or dictate by voice, record a voice message or film a job video, and stops listening when you finish.';
+  // FIX-RUN B12: nothing films a video, so the sentence no longer says it.
+  const sentence = 'Brazos uses your microphone only while you search or dictate by voice or record a voice message, and stops listening when you finish.';
   assert.equal(config.split(`'${sentence}'`).length - 1, 3, 'expo-image-picker, expo-audio and expo-speech-recognition');
   assert.match(config, /into the words of a job you post\. Nothing is sent to a server\./);
 });

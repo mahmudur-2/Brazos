@@ -706,8 +706,9 @@ test('[static] app.config.ts registers the plugin with the two verbatim usage st
     // 2026-09-30 (the build run, idea 18): the same bounded, on-device sessions now also dictate
     // into Post a job's title and description, so both strings name it; the microphone sentence is
     // the ONE all three microphone plugins carry.
+    // FIX-RUN B12: no job video is ever filmed, so the sentence drops that claim.
     microphonePermission:
-      'Brazos uses your microphone only while you search or dictate by voice, record a voice message or film a job video, and stops listening when you finish.',
+      'Brazos uses your microphone only while you search or dictate by voice or record a voice message, and stops listening when you finish.',
     speechRecognitionPermission:
       'Speech is recognized on your device to turn what you say into a search, or into the words of a job you post. Nothing is sent to a server.',
   });

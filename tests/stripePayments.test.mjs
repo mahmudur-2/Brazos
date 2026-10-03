@@ -576,15 +576,20 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
 // 6e. app.config.ts (D8, D17) — Build A's config-only native changes
 // ---------------------------------------------------------------------------
 
-test('[static] app.config.ts carries the merchant identifier, no Google Pay, the Time Sensitive entitlement, and "Brazos" in every usage string', () => {
+test('[static] app.config.ts declares no unused entitlement (no merchant identifier, no Time Sensitive), no Google Pay, and "Brazos" in every usage string', () => {
   const config = stripComments(read('app.config.ts'));
   const flat = config.replace(/\s+/g, ' ');
-  assert.match(flat, /\[ '@stripe\/stripe-react-native', \{ merchantIdentifier: 'merchant\.app\.brazos\.mobile', enableGooglePay: false \}, \]/);
-  // The sheet never asks for Apple Pay (D8): the identifier ships, the wallet is not offered.
+  // FIX-RUN B13 (2026-10-03, operator switched on): still an options object (a
+  // bare string crashes withStripeIos), but without merchantIdentifier, so no
+  // Apple Pay entitlement is written for a wallet the sheet never offers.
+  assert.match(flat, /\['@stripe\/stripe-react-native', \{ enableGooglePay: false \}\]/);
+  assert.doesNotMatch(flat, /merchantIdentifier/);
+  // The sheet never asks for Apple Pay (D8).
   assert.doesNotMatch(stripComments(read('lib/payments/stripe.ts')), /applePay/);
-  // An ENTITLEMENT under ios, not an Info.plist key.
-  assert.match(flat, /entitlements: \{ 'com\.apple\.developer\.usernotifications\.time-sensitive': true, \}/);
-  assert.doesNotMatch(flat, /infoPlist: \{[^}]*time-sensitive/);
+  // Nothing sends a Time Sensitive notification, so nothing declares one —
+  // neither as an entitlement nor as an Info.plist key.
+  assert.doesNotMatch(flat, /time-sensitive/);
+  assert.doesNotMatch(flat, /entitlements:/);
   // D17: the six usage strings, and the app's own name unchanged.
   const usage = [...config.matchAll(/'(Brazos|BRAZOS) uses [^']+'/g)].map((m) => m[0]);
   assert.equal(usage.length, 6, `six usage strings (saw ${usage.length})`);

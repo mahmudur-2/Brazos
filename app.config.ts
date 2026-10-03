@@ -99,12 +99,11 @@ export default (_context: ConfigContext): ExpoConfig => ({
       // permission iOS offers to support a case the feature deliberately does
       // not serve — and App Review asks what uses them.
     },
-    // R6a (D8): Time Sensitive notifications are an ENTITLEMENT, not an
-    // Info.plist key, so they live here and Build A carries them — no second
-    // build for it. The matching capability sits on each variant's App ID.
-    entitlements: {
-      'com.apple.developer.usernotifications.time-sensitive': true,
-    },
+    // FIX-RUN B13 (2026-10-03, the operator switched it on): no entitlements
+    // block. R6a (D8) declared Time Sensitive notifications here, but nothing
+    // ever sends one (no interruptionLevel anywhere in lib/ or
+    // supabase/functions/), and App Review asks what a declared capability is
+    // for. expo-notifications still writes aps-environment itself.
   },
   android: {
     package: `com.brazos.app${BUNDLE_SUFFIX[VARIANT]}`,
@@ -149,24 +148,28 @@ export default (_context: ConfigContext): ExpoConfig => ({
       {
         photosPermission:
           'Brazos uses your photo library so you can attach photos and videos to jobs, messages, reviews, and your profile.',
+        // FIX-RUN B12: the camera takes photos only (launchCameraAsync in Chat
+        // and Profile); videos come from the library, which the line above says.
         cameraPermission:
-          'Brazos uses the camera to take photos and videos of jobs, completed work, and your profile.',
+          'Brazos uses the camera to take photos of jobs, completed work, and your profile.',
         microphonePermission:
-          'Brazos uses your microphone only while you search or dictate by voice, record a voice message or film a job video, and stops listening when you finish.',
+          'Brazos uses your microphone only while you search or dictate by voice or record a voice message, and stops listening when you finish.',
       },
     ],
     [
       'expo-location',
       {
+        // FIX-RUN B9: live location sharing in a chat is disclosed here as well
+        // as in the Privacy Policy (foreground only — no Always permission).
         locationWhenInUsePermission:
-          'Brazos uses your location to show nearby jobs and to place job locations on the map.',
+          'Brazos uses your location to show nearby jobs, to place jobs on the map, and to share your live position in a chat only while you choose to.',
       },
     ],
     [
       'expo-audio',
       {
         microphonePermission:
-          'Brazos uses your microphone only while you search or dictate by voice, record a voice message or film a job video, and stops listening when you finish.',
+          'Brazos uses your microphone only while you search or dictate by voice or record a voice message, and stops listening when you finish.',
       },
     ],
     [
@@ -177,12 +180,13 @@ export default (_context: ConfigContext): ExpoConfig => ({
     ],
     // 2026-09-30 (the build run, idea 18): expo-image-picker, expo-audio and this plugin each write
     // NSMicrophoneUsageDescription and one wins at prebuild, so all three carry the one complete
-    // sentence — search, dictation into Post a job, voice messages and job videos.
+    // sentence — search, dictation into Post a job and voice messages (FIX-RUN B12: nothing
+    // films a video, so the sentence no longer says it).
     [
       'expo-speech-recognition',
       {
         microphonePermission:
-          'Brazos uses your microphone only while you search or dictate by voice, record a voice message or film a job video, and stops listening when you finish.',
+          'Brazos uses your microphone only while you search or dictate by voice or record a voice message, and stops listening when you finish.',
         speechRecognitionPermission:
           'Speech is recognized on your device to turn what you say into a search, or into the words of a job you post. Nothing is sent to a server.',
       },
@@ -192,20 +196,14 @@ export default (_context: ConfigContext): ExpoConfig => ({
     // AN OPTIONS OBJECT, NOT A BARE STRING, and the difference is a crash:
     // withStripeIos destructures props.merchantIdentifier, so a bare string
     // passes undefined and `expo export` dies with a TypeError before Metro
-    // starts. R6a (D8): the merchant identifier writes the Apple Pay
-    // entitlement so Build A CARRIES it, but the payment sheet is initialised
-    // without any applePay parameter (lib/payments/stripe.ts) — only cards are
-    // offered, because the Apple Pay processing certificate does not exist
-    // yet. Enabling it later is that certificate plus the sheet parameter, no
-    // rebuild. enableGooglePay: false actively REMOVES the Google Pay
-    // meta-data from the Android manifest. If Build A fails at code signing,
-    // look at each variant's App ID capabilities (bundle ids are suffixed per
-    // variant): this merchant identifier and the Time Sensitive Notifications
-    // capability the entitlement below needs — EAS normally syncs both.
-    [
-      '@stripe/stripe-react-native',
-      { merchantIdentifier: 'merchant.app.brazos.mobile', enableGooglePay: false },
-    ],
+    // starts. FIX-RUN B13 (2026-10-03): no merchantIdentifier, so the plugin
+    // writes no Apple Pay (in-app-payments) entitlement — the payment sheet is
+    // initialised without any applePay parameter (lib/payments/stripe.ts) and
+    // offers cards only. Enabling Apple Pay later is the processing
+    // certificate, this identifier back, the sheet parameter and a new build.
+    // enableGooglePay: false actively REMOVES the Google Pay meta-data from
+    // the Android manifest.
+    ['@stripe/stripe-react-native', { enableGooglePay: false }],
     // SOURCE-MAP UPLOAD IS ON NOW, which is the whole reason this stopped
     // being a bare string. The plugin writes a sentry.properties the native
     // build steps read, and without the three values below sentry-cli has no
