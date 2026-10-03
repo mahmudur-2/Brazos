@@ -11,7 +11,7 @@ the Lux drawing run's, the eighteen-item run's and the sittings before them, unc
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
 
-## FIX RUN — IN PROGRESS: groups A–F built (A–E reviewed), the smooth pass with them; the final sweep follows (2026-10-03, "build" given; the workflow's helpers run one after another)
+## FIX RUN — IN PROGRESS: groups A–F built and reviewed, the smooth pass with them; the final sweep follows (2026-10-03, "build" given; the workflow's helpers run one after another)
 
 **Start here.** The brief is `docs/dispatch/FIX-RUN.md`; the operator's selection is its first
 section (OUT: A1, B10, C5, D1, D2, D4, D5, E6, F14; picks A10a, A12a, A18a, B1a, C1b, D13a). The
@@ -154,6 +154,26 @@ running log is `.shots/refresh/review/run/log.md` (gitignored), one line per ite
   at 120 Hz; the keyboard ride on Post a job, Send bid and the forms (drag-to-dismiss too); pinch,
   pan, double tap and swipe-away in the photo viewer and the posting's media viewer; the add menu
   opening the library; loops stopping off-screen.
+- **Group F and the smooth pass reviewed, five follow-ups (no migration):** `0450ce5` — on the New
+  Architecture a view its children do not overflow is hit-tested as clipped
+  (`RCTViewComponentView` `betterHitTest`), so every `PressScale` wrapper cut its Pressable's
+  hitSlop back to the drawn control (the header links, the pills and chips, the E3 44pt targets);
+  the wrapper now carries the slop on both paths. `f57b444` — the same loss on the three older
+  spring wrappers (SearchBar clear and mic, the Toggle), and `tests/touchTargets.test.mjs` scans
+  every `<Animated.View style={x.style}>` around a slopped Pressable. `f7467eb` — React Query's
+  default network mode paused every first read while NetInfo said unreachable (it can be wrongly
+  false), leaving Home / Worker Home / My Jobs on their loaders; `networkMode: 'always'` reads
+  regardless, as every screen did before the cache. `c72bb0d` — a push received or tapped now
+  refreshes the hub and the feed as well as the bell (`invalidateAfterPush`), since only own
+  mutations invalidated them. `31dc0eb` — structural sharing keeps an unchanged row array's
+  identity, so Home, My Jobs and the [+] sheet's `Date.now()` keyed on the rows froze every
+  countdown, offer expiry and auto-release bucket at the first read; they now key on the hub's
+  `readAt` (`dataUpdatedAt`). Read and sound: F1–F8, F10, F11, F13 (keys, account bridge, keep-on-error,
+  invalidation sites), F15, F16, F18–F20, F22–F24, the smooth-pass pieces; no OUT item built (F14:
+  PostJob and Chat unsplit). Still skipped or partial, as above: F17, F21, the F23 libraries, F9 7(b)/(c),
+  F1's cached-mode grace.
+- **Only the operator (device check from the F review):** on a device, a tap just outside a small
+  control (the header back link, a Filters or Inbox pill, the search clear, a switch) still lands.
 - **Next:** the workflow's remaining helper (the final sweep), then one OTA and the new Beta build.
   The parked reminders in DESIGN LOOP 3 below still stand.
 
