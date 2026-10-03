@@ -684,7 +684,7 @@ export function HomeScreen() {
                 ]}
                 maxFontSizeMultiplier={1.25}
               >
-                Take a task{'\n'}off your plate
+                Take a job{'\n'}off your plate
               </Text>
               {/* 2026-09-17: the breaks are EXPLICIT, the way the headline's is —
                   operator decision, not a wrap the 73% column happens to

@@ -365,7 +365,7 @@ function projectColumns(row, select) {
 
 /** Reaches step 1 (Media) of a fresh post from Customer Home. */
 const TO_MEDIA = [
-  { expect: 'Take a task' },
+  { expect: 'Take a job' },
   { press: 'Create' },
   { pressText: 'Post a job' },
   { expect: 'What needs doing?' },
@@ -405,7 +405,7 @@ const TO_REVIEW = [
  * pills do, so this is the chip path rather than a detour around it.
  */
 const TO_WORKER_SEARCH = [
-  { expect: 'Take a task' },
+  { expect: 'Take a job' },
   { press: 'Other services' },
   { expect: 'All services' },
   { press: 'Pet Sitting & Dog Walking' },
@@ -417,7 +417,7 @@ const TO_WORKER_SEARCH = [
  * "Profile" on every screen and could satisfy a wait without arriving.
  */
 const TO_CUSTOMER_PROFILE = [
-  { expect: 'Take a task' },
+  { expect: 'Take a job' },
   { pressText: 'Profile' },
   { expect: 'Choose which events can alert you.' },
 ];
@@ -434,7 +434,7 @@ const TO_ACCOUNT_SAFETY = [
 
 const HOME_LANDMARKS = [
   'Mahmudur',
-  'Take a task\noff your plate',
+  'Take a job\noff your plate',
   'Describe it.\nHire help.\nGet it handled.',
   'What do you need done?',
   'Post a job ›',
@@ -449,8 +449,8 @@ const TARGETS = [
   // headline and the sub-copy (their full strings, newlines included), the
   // card's title and pill, the two section titles, the first tile's label,
   // the empty row's title — against docs/mockups/html/home-redesign.html.
-  { name: 'customer-home-dark', mode: 'customer', colorScheme: 'dark', wait: 'Take a task', landmarks: HOME_LANDMARKS },
-  { name: 'customer-home-light', mode: 'customer', colorScheme: 'light', wait: 'Take a task', landmarks: HOME_LANDMARKS },
+  { name: 'customer-home-dark', mode: 'customer', colorScheme: 'dark', wait: 'Take a job', landmarks: HOME_LANDMARKS },
+  { name: 'customer-home-light', mode: 'customer', colorScheme: 'light', wait: 'Take a job', landmarks: HOME_LANDMARKS },
   // Worker Home in its OFFLINE state — the profile fixture's `accepting_work:
   // false` — and its empty feed. The ONLINE and populated states are their
   // own entries (RUN figma-extract, at the end of the registry). The wait is
@@ -540,7 +540,7 @@ const TARGETS = [
       name: `customer-discover-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [{ expect: 'Take a task' }, { pressText: 'Discover' }],
+      recipe: [{ expect: 'Take a job' }, { pressText: 'Discover' }],
       wait: 'Describe what you need',
     },
     {
@@ -548,7 +548,7 @@ const TARGETS = [
       name: `customer-create-sheet-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [{ expect: 'Take a task' }, { press: 'Create' }],
+      recipe: [{ expect: 'Take a job' }, { press: 'Create' }],
       wait: 'What do you need?',
     },
     {
@@ -556,7 +556,7 @@ const TARGETS = [
       name: `customer-services-sheet-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [{ expect: 'Take a task' }, { press: 'Other services' }],
+      recipe: [{ expect: 'Take a job' }, { press: 'Other services' }],
       wait: 'All services',
     },
     {
@@ -564,7 +564,7 @@ const TARGETS = [
       name: `customer-inbox-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [{ expect: 'Take a task' }, { pressText: 'Inbox' }],
+      recipe: [{ expect: 'Take a job' }, { pressText: 'Inbox' }],
       wait: 'No messages yet',
     },
     {
@@ -577,7 +577,7 @@ const TARGETS = [
       mode: 'customer',
       colorScheme,
       recipe: [
-        { expect: 'Take a task' },
+        { expect: 'Take a job' },
         { press: 'Create' },
         { pressText: 'My jobs' },
       ],
@@ -589,7 +589,7 @@ const TARGETS = [
       name: `customer-profile-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [{ expect: 'Take a task' }, { pressText: 'Profile' }],
+      recipe: [{ expect: 'Take a job' }, { pressText: 'Profile' }],
       wait: 'Choose which events can alert you.',
     },
     {

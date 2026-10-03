@@ -209,8 +209,9 @@ test('[static] C3 · no screen or component says "client" or calls a job a "task
       const texts = [...line.matchAll(/'([^'\n]*)'|"([^"\n]*)"|`([^`\n]*)`|>([^<>{}\n]+)</g)].map(
         (m) => m[1] ?? m[2] ?? (m[3] != null ? m[3].replace(/\$\{[^}]*\}/g, '') : m[4])
       );
-      // A JSX text line on its own (no code punctuation).
-      if (/^\s*[A-Z][^=;(){}<>]*$/.test(line)) texts.push(line);
+      // A JSX text line on its own (no code punctuation once its {…} pieces are out).
+      const bare = line.replace(/\{[^{}]*\}/g, ' ');
+      if (/^\s*[A-Z][^=;(){}<>]*$/.test(bare)) texts.push(bare);
       for (const text of texts) {
         if (WORD.test(text) && !/^[a-z_./-]+$/.test(text.trim())) hits.push(`${relative(root, join(root, file))}:${index + 1}: ${text.trim()}`);
       }

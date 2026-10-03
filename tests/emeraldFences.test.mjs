@@ -606,7 +606,7 @@ test('home(2) fence: the task card holds the title, the field and the pill, and 
 
   // THE ORDER ON THE SCREEN (dispatch C4): hero -> the task card -> the tile
   // row -> the attention block -> "Your jobs".
-  const order = ['Take a task', 'What do you need done?', '<ServiceTileRow', 'Needs your attention', '>Your jobs</Text>'].map(
+  const order = ['Take a job', 'What do you need done?', '<ServiceTileRow', 'Needs your attention', '>Your jobs</Text>'].map(
     (needle) => flat.indexOf(needle)
   );
   assert.ok(order.every((at) => at > -1), 'every landmark is on the screen');
@@ -1352,8 +1352,8 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
   // measured 210.0 at 30pt was for the line WITH it, so it stays a safe bound.
   assert.match(
     flat,
-    /Take a task\{'\\n'\}off your plate\s*<\/Text>/,
-    "the headline is two lines, broken after 'task' by the operator, with no period"
+    /Take a job\{'\\n'\}off your plate\s*<\/Text>/,
+    "the headline is two lines, broken where the operator broke it (C3: 'task' became 'job'), with no period"
   );
   assert.ok(
     hero <= ladder('heroHeadline'),

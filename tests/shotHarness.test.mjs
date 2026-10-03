@@ -163,7 +163,7 @@ test('that target is reached by tapping a chip, never by naming the route', asyn
 
   // Home first, then the sheet, then the dog-walking row. Order matters: the
   // sheet is Home's only tap path to a category outside the four visible pills.
-  assert.match(steps, /\{ expect: 'Take a task' \}/);
+  assert.match(steps, /\{ expect: 'Take a job' \}/);
   assert.match(steps, /\{ press: 'Other services' \}/);
   assert.match(steps, /\{ expect: 'All services' \}/);
   assert.match(steps, /\{ press: 'Pet Sitting & Dog Walking' \}/);
