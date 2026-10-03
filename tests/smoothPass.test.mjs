@@ -93,6 +93,9 @@ test('[static] F10: photo zoom is one component, on the UI thread where the bina
   assert.match(fast, /Gesture\.Simultaneous\(pinch, pan, Gesture\.Exclusive\(doubleTap, longPress\)\)/);
   assert.match(fast, /\.enabled\(zoomed \|\| dismissable\)/, 'the pan leaves a pager its swipe at 1x');
   assert.match(fast, /runOnJS\(letGo\)\(\)/);
+  // A gesture that was ever two fingers is a pinch's: it never lets the photo go.
+  assert.match(fast, /\.onBegin\(\(\) => \{\s*twoFingers\.value = false;/);
+  assert.match(fast, /if \(dismissable && !twoFingers\.value && /);
   assert.doesNotMatch(fast, /PanResponder/);
   // The fallback is the PanResponder, and both read one set of numbers.
   assert.match(fallback, /PanResponder\.create\(/);

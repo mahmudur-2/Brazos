@@ -58,6 +58,8 @@ export function ZoomableImage({
   const x = useSharedValue(0);
   const y = useSharedValue(0);
   const fade = useSharedValue(1);
+  // Set once a pan has had two fingers on it: from then on it is a pinch's, never a swipe-away.
+  const twoFingers = useSharedValue(false);
   const boxWidth = useSharedValue(width);
   const boxHeight = useSharedValue(height);
   const [zoomed, setZoomed] = useState(false);
@@ -128,7 +130,11 @@ export function ZoomableImage({
   const pan = Gesture.Pan()
     .enabled(zoomed || dismissable)
     .averageTouches(true)
+    .onBegin(() => {
+      twoFingers.value = false;
+    })
     .onChange((event) => {
+      if (event.numberOfPointers > 1) twoFingers.value = true;
       if (scale.value > ZOOMED_AT) {
         // Zoomed: the photo travels with the fingers, one or two.
         x.value += event.changeX;
@@ -136,7 +142,7 @@ export function ZoomableImage({
         return;
       }
       // At 1x a two-finger move is a pinch's; one finger previews letting the photo go.
-      if (!dismissable || event.numberOfPointers > 1) return;
+      if (!dismissable || twoFingers.value) return;
       x.value = event.translationX * DRAG_X_DAMPING;
       y.value = event.translationY;
       fade.value = dragFade(event.translationY);
@@ -146,8 +152,9 @@ export function ZoomableImage({
         intoBounds();
         return;
       }
+      // A gesture that was ever a pinch never lets the photo go, wherever its fingers drifted.
       const flicked = Math.abs(event.velocityY) / 1000 > DISMISS_VELOCITY;
-      if (dismissable && (Math.abs(event.translationY) > DISMISS_DISTANCE || flicked)) {
+      if (dismissable && !twoFingers.value && (Math.abs(event.translationY) > DISMISS_DISTANCE || flicked)) {
         fade.value = withTiming(0, { duration: DISMISS_MS });
         y.value = withTiming(
           event.translationY > 0 ? boxHeight.value : -boxHeight.value,
