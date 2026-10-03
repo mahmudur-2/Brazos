@@ -101,6 +101,7 @@ import {
   type ColorPalette,
   edgeFade,
   screenGround,
+  slopRoom,
   touchSlop,
 } from '../lib/theme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
@@ -211,6 +212,9 @@ export function MessagesInboxScreen() {
   // 2026-09-28 (LUX-LIST-64 #54, #55): the pills 8 apart, the reference's; the
   // rows carry no gap of their own — a hairline parts them — so its dial went.
   const filterRowGap = useDialNumber('messages.filterRow.gap') ?? spacing.sm;
+  // E3 review: the scroller's room for the pills' slop (lib/theme.ts slopRoom) — it follows the
+  // dial exactly as the slop itself does.
+  const pillRoom = slopRoom(filterPillHeight);
   const listPaddingX = useDialNumber('messages.list.paddingX') ?? spacing.lg;
   const navigation = useNavigation<MessagesStackNavigation>();
   const { user } = useAuth();
@@ -1024,12 +1028,15 @@ export function MessagesInboxScreen() {
           tall, 14 either side, 14/600, 8 apart; a faint rim at rest and, when
           chosen, the mint rim over a soft tint. NO check: the one exception to
           #35's chosen-chip tick. */}
+      {/* E3 review (2026-10-03): a ScrollView rejects a touch outside its own frame, so the
+          pills' 44pt slop ended at this row's 34pt edge. slopRoom() grows the frame by the slop
+          (margin out, padding back) and nothing drawn moves. */}
       <View style={styles.filterWrap}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={[styles.filterRow, { gap: filterRowGap }]}
+        style={[styles.filterScroll, pillRoom.scroller]}
+        contentContainerStyle={[styles.filterRow, pillRoom.content, { gap: filterRowGap }]}
         keyboardShouldPersistTaps="handled"
         scrollEventThrottle={16}
         onLayout={(event) => {

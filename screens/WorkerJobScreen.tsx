@@ -114,8 +114,14 @@ import {
   withAlpha,
   type ColorPalette,
   screenGround,
+  slopRoom,
   touchSlop,
 } from '../lib/theme';
+
+/** The done-photo ⨯ button: drawn 30, slopped to 44 (E3), and its row makes room for that slop
+ *  (E3 review: a ScrollView rejects a touch outside its own frame). */
+const PHOTO_REMOVE = 30;
+const PHOTO_REMOVE_ROOM = slopRoom(PHOTO_REMOVE);
 
 /** Same cap as a job posting's photos, for consistency. */
 const MAX_DONE_PHOTOS = 5;
@@ -1017,7 +1023,7 @@ export function WorkerJobScreen() {
                           <Pressable
                             style={styles.photoRemove}
                             onPress={() => removeDonePhoto(url)}
-                            hitSlop={touchSlop(30, 30)}
+                            hitSlop={touchSlop(PHOTO_REMOVE, PHOTO_REMOVE)}
                             accessibilityRole="button"
                             accessibilityLabel="Remove photo"
                           >
@@ -1586,9 +1592,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     position: 'absolute',
     top: spacing.sm,
     right: spacing.sm,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: PHOTO_REMOVE,
+    height: PHOTO_REMOVE,
+    borderRadius: PHOTO_REMOVE / 2,
     backgroundColor: withAlpha(colors.text, 0.6),
     alignItems: 'center',
     justifyContent: 'center',
@@ -1598,11 +1604,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.md,
     backgroundColor: colors.border,
   },
+  // E3 review: the row makes room for the ⨯ buttons' slop (margin out, padding back), and its own
+  // gap above is kept net of that room — an edge margin beats marginVertical — so nothing drawn moves.
   donePhotoScroll: {
-    marginTop: spacing.md,
+    ...PHOTO_REMOVE_ROOM.scroller,
+    marginTop: spacing.md - PHOTO_REMOVE_ROOM.slop,
   },
   donePhotoRow: {
     gap: spacing.sm,
+    ...PHOTO_REMOVE_ROOM.content,
   },
   noticeCard: {
     flexDirection: 'row',

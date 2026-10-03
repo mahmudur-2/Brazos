@@ -60,11 +60,16 @@ test('E3: the Filters pill draws one height and slops from that same constant', 
   assert.match(sheet, /hitSlop=\{touchSlop\(PILL_HEIGHT\)\}/);
 });
 
-// F12 review — A PRESS WRAPPER CARRIES ITS PRESSABLE'S SLOP. On the New Architecture a view whose
-// children do not overflow it is hit-tested as if it clipped (RCTViewComponentView betterHitTest:
-// overflowInset == {} counts as clipping). A spring wrapper is exactly its Pressable's size, so a
-// slop on the Pressable alone dies at the wrapper's edge and the 44pt target shrinks back to the
-// glyph. Every `<Animated.View style={x.style}>` that wraps a slopped Pressable wears a slop too.
+// F12 review — A PRESS WRAPPER CARRIES ITS PRESSABLE'S SLOP. Pinned as the spring wrappers' shape
+// (SearchBar's clear and mic, the Toggle, PressScale on both paths) — but NOT for the reason first
+// given. On the New Architecture a parent whose overflow is visible does not clip a child's
+// hitSlop: Yoga folds every child's hitSlop into the parent's overflow inset
+// (YogaLayoutableShadowNode.cpp getContentBounds), so RCTViewComponentView's betterHitTest — which
+// treats only an EMPTY inset as clipping — lets the touch through to the Pressable's own slop. What
+// cuts a slop is an ancestor whose inset is empty by construction, `overflow: scroll` (every
+// ScrollView) or `overflow: hidden` — the fence after this one. The wrapper's slop costs nothing;
+// every `<Animated.View style={x.style}>` around a slopped Pressable keeps wearing it so the two
+// views never disagree.
 
 test('[static] F12 review: a press wrapper around a slopped Pressable carries the slop', () => {
   const files = execFileSync('git', ['ls-files', '--', 'components', 'screens', 'ui'], {
@@ -89,4 +94,79 @@ test('[static] F12 review: a press wrapper around a slopped Pressable carries th
   for (const file of ['components/PressScale.tsx', 'components/PressScale.motion120.tsx']) {
     assert.match(read(file), /onLayout=\{onLayout\} hitSlop=\{hitSlop\}>/, `${file} wrapper carries the slop`);
   }
+});
+
+// E3 review (2026-10-03) — A HORIZONTAL SCROLLER MAKES ROOM FOR ITS PILLS' SLOP. A hitSlop reaches
+// through a parent whose overflow is visible (the fence above says why), but a ScrollView is
+// `overflow: scroll`: its overflow inset is empty by construction (YogaLayoutableShadowNode.cpp
+// computes one only for overflow visible), and iOS rejects any touch outside its frame
+// (RCTScrollViewComponentView betterHitTest); an `overflow: hidden` ancestor clips the same way. So
+// a slopped pill inside a horizontal ScrollView stayed its drawn height — the Inbox filters and the
+// Filters sheet rows, 34pt. Every horizontal ScrollView that holds a `hitSlop={touchSlop(` control —
+// lexically, or through the `children` it is handed — wears `slopRoom()` (lib/theme.ts): its
+// `.scroller` on the ScrollView's `style`, its `.content` on the `contentContainerStyle`, inline or
+// spread into the StyleSheet entries those props name.
+
+/** The JSX opening tag that starts at `start`, braces balanced. */
+const tagAt = (source, start, path) => {
+  let depth = 0;
+  for (let i = start; i < source.length; i += 1) {
+    const c = source[i];
+    if (c === '{') depth += 1;
+    else if (c === '}') depth -= 1;
+    else if (c === '>' && depth === 0 && source[i - 1] !== '=') return source.slice(start, i + 1);
+  }
+  throw new Error(`${path}: unterminated tag at ${start}`);
+};
+
+/** The text inside the braces of `prop={…}` on a tag, or null when the tag has no such prop. */
+const propValue = (tag, prop) => {
+  const at = tag.indexOf(`${prop}={`);
+  if (at < 0) return null;
+  let depth = 0;
+  for (let i = at + prop.length + 1; i < tag.length; i += 1) {
+    if (tag[i] === '{') depth += 1;
+    else if (tag[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return tag.slice(at + prop.length + 2, i);
+    }
+  }
+  return null;
+};
+
+test('[static] E3 review: a horizontal ScrollView holding slopped pills makes room for the slop', () => {
+  const files = execFileSync('git', ['ls-files', '--', 'components', 'screens', 'ui'], {
+    cwd: new URL('..', import.meta.url),
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter((file) => /\.tsx$/.test(file) && !/\.web\.tsx$/.test(file));
+  let scrollers = 0;
+  for (const file of files) {
+    const source = read(file);
+    if (!/hitSlop=\{touchSlop\(/.test(source)) continue;
+    const rooms = [...source.matchAll(/const (\w+) = slopRoom\(/g)].map((match) => match[1]);
+    const wears = (tag, prop, key) => {
+      const value = propValue(tag, prop);
+      if (value === null) return false;
+      if (rooms.some((room) => value.includes(`${room}.${key}`))) return true;
+      // The prop names StyleSheet entries; one of them spreads the room.
+      return [...value.matchAll(/styles\.(\w+)/g)].some(([, name]) => {
+        const entry = new RegExp(`\\b${name}: \\{([^}]*)\\}`).exec(source);
+        return entry !== null && rooms.some((room) => entry[1].includes(`...${room}.${key}`));
+      });
+    };
+    const open = /<ScrollView\b/g;
+    for (let match = open.exec(source); match; match = open.exec(source)) {
+      const tag = tagAt(source, match.index, file);
+      if (!/\bhorizontal\b/.test(tag)) continue;
+      const close = source.indexOf('</ScrollView>', match.index + tag.length);
+      const inner = source.slice(match.index + tag.length, close < 0 ? source.length : close);
+      if (!/hitSlop=\{touchSlop\(/.test(inner) && !/\bchildren\b/.test(inner)) continue;
+      scrollers += 1;
+      assert.ok(wears(tag, 'style', 'scroller'), `${file}: the horizontal ScrollView at ${match.index} holds slopped controls but its style carries no slopRoom().scroller`);
+      assert.ok(wears(tag, 'contentContainerStyle', 'content'), `${file}: the horizontal ScrollView at ${match.index} holds slopped controls but its contentContainerStyle carries no slopRoom().content`);
+    }
+  }
+  assert.ok(scrollers >= 2, 'the Inbox filter row and the Filters sheet rows are among the scrollers checked');
 });

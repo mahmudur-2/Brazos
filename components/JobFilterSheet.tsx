@@ -50,6 +50,7 @@ import {
   useThemeColors,
   withAlpha,
   type ColorPalette,
+  slopRoom,
   textLine,
   touchSlop,
 } from '../lib/theme';
@@ -66,6 +67,8 @@ const SHEET_HAIRLINE_ALPHA = 0.2;
 const SHEET_EDGE = 'top' as const;
 /** A filter pill's drawn height at the default text size (a floor since E5); E3 lifts its touch area to 44 with touchSlop. */
 const PILL_HEIGHT = 34;
+/** E3 review: the room a scrolling row makes for its pills' slop (lib/theme.ts slopRoom) — a ScrollView rejects a touch outside its own frame. */
+const PILL_ROOM = slopRoom(PILL_HEIGHT);
 
 /**
  * THE FILTERS SHEET — the approved design (docs/mockups/html/map-explore-
@@ -718,14 +721,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       flexWrap: 'wrap',
       gap: spacing.xs + 1,
     },
-    // The categories: one row, scrolling past the sheet's edge.
+    // The categories: one row, scrolling past the sheet's edge. E3 review: and past its own
+    // height by the pills' slop — margin out, padding back — so the slop stays inside the frame
+    // the scroller hit-tests against; nothing drawn moves.
     scrollRow: {
       marginHorizontal: -spacing.lg,
+      ...PILL_ROOM.scroller,
     },
     scrollRowContent: {
       flexDirection: 'row',
       gap: spacing.xs + 1,
       paddingHorizontal: spacing.lg,
+      ...PILL_ROOM.content,
     },
     // A fill row: the content is never narrower than the row, and each cell
     // takes an equal share of what is left after every pill has its width.

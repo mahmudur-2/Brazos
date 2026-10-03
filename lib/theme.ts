@@ -970,6 +970,33 @@ export function touchSlop(height: number, width?: number): Insets {
   return insets;
 }
 
+/** One answer per drawn size, as touchSlop(): the two styles keep their identity across renders. */
+const slopRoomCache = new Map<number, { scroller: ViewStyle; content: ViewStyle; slop: number }>();
+
+/**
+ * E3 review (2026-10-03) — THE ROOM A HORIZONTAL SCROLLER MAKES FOR ITS PILLS' SLOP. A hitSlop
+ * reaches through a parent whose overflow is visible: Yoga folds every child's hitSlop into the
+ * parent's overflow inset (YogaLayoutableShadowNode.cpp, getContentBounds), and the hit test lets
+ * a touch past such a parent's edge. A ScrollView is `overflow: scroll`, so its inset is empty and
+ * iOS rejects any touch outside its frame (RCTScrollViewComponentView betterHitTest); an
+ * `overflow: hidden` ancestor clips the same way. So a 34pt pill in a horizontal row stayed a
+ * 34pt target whatever its slop said. The scroller takes the slop as a negative vertical margin
+ * and the content container gives it back as padding: the scroller's frame grows by the slop on
+ * each side, the pills' slop now ends at that frame, and nothing drawn moves. `scroller` goes on
+ * the ScrollView's `style`, `content` on its `contentContainerStyle`
+ * (tests/touchTargets.test.mjs scans every horizontal scroller that holds a slopped control);
+ * `slop` is the number itself, for a scroller with a vertical margin of its own to keep that
+ * margin net of the room (an edge margin beats `marginVertical`).
+ */
+export function slopRoom(height: number): { scroller: ViewStyle; content: ViewStyle; slop: number } {
+  const cached = slopRoomCache.get(height);
+  if (cached) return cached;
+  const slop = touchSlop(height).top ?? 0;
+  const room = { scroller: { marginVertical: 0 - slop }, content: { paddingVertical: slop }, slop };
+  slopRoomCache.set(height, room);
+  return room;
+}
+
 /** The height one line of `style` draws: its lineHeight, else the platform's ~1.2 em. */
 export function textLine(style: TextStyle): number {
   return style.lineHeight ?? Math.ceil((style.fontSize ?? 14) * 1.2);

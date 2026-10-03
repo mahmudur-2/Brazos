@@ -925,6 +925,14 @@ test('E3 touchSlop: any drawn size reaches the 44pt floor on each axis it is giv
   assert.deepEqual(touchSlop(34), { top: 5, bottom: 5, left: 0, right: 0 }, 'no width: a text link keeps its sides');
   assert.deepEqual(touchSlop(48, 60), { top: 0, bottom: 0, left: 0, right: 0 }, 'at the floor: nothing');
   assert.equal(touchSlop(34), touchSlop(34), 'one object per size, so the prop never churns');
+  // E3 review (2026-10-03): the room a horizontal scroller makes for its pills' slop — the slop as
+  // a negative vertical margin on the scroller, given back as padding on its content, so nothing
+  // drawn moves; one object per size, as touchSlop().
+  const { slopRoom } = await themeModule;
+  assert.deepEqual(slopRoom(34), { scroller: { marginVertical: -5 }, content: { paddingVertical: 5 }, slop: 5 }, 'a 34pt row: 5 out, 5 back');
+  assert.deepEqual(slopRoom(48), { scroller: { marginVertical: 0 }, content: { paddingVertical: 0 }, slop: 0 }, 'at the floor: no room');
+  assert.equal(slopRoom(34).content.paddingVertical, touchSlop(34).top, 'the room is exactly the slop');
+  assert.equal(slopRoom(34), slopRoom(34), 'one object per size, so the props never churn');
   assert.equal(textLine({ fontSize: 14 }), 17);
   assert.equal(textLine({ fontSize: 13, lineHeight: 18 }), 18);
 });

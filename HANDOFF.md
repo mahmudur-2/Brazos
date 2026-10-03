@@ -154,13 +154,18 @@ running log is `.shots/refresh/review/run/log.md` (gitignored), one line per ite
   at 120 Hz; the keyboard ride on Post a job, Send bid and the forms (drag-to-dismiss too); pinch,
   pan, double tap and swipe-away in the photo viewer and the posting's media viewer; the add menu
   opening the library; loops stopping off-screen.
-- **Group F and the smooth pass reviewed, five follow-ups (no migration):** `0450ce5` — on the New
-  Architecture a view its children do not overflow is hit-tested as clipped
-  (`RCTViewComponentView` `betterHitTest`), so every `PressScale` wrapper cut its Pressable's
-  hitSlop back to the drawn control (the header links, the pills and chips, the E3 44pt targets);
-  the wrapper now carries the slop on both paths. `f57b444` — the same loss on the three older
-  spring wrappers (SearchBar clear and mic, the Toggle), and `tests/touchTargets.test.mjs` scans
-  every `<Animated.View style={x.style}>` around a slopped Pressable. `f7467eb` — React Query's
+- **Group F and the smooth pass reviewed, five follow-ups (no migration):** `0450ce5` — every
+  `PressScale` wrapper carries its Pressable's hitSlop on both paths, and `f57b444` the three older
+  spring wrappers (SearchBar clear and mic, the Toggle) too, with `tests/touchTargets.test.mjs`
+  scanning every `<Animated.View style={x.style}>` around a slopped Pressable. MECHANISM CORRECTED
+  (fix-run review, 2026-10-03): the reason first given — that on the New Architecture a view its
+  children do not overflow is hit-tested as clipped (`RCTViewComponentView` `betterHitTest`), so a
+  wrapper cut its Pressable's slop back to the drawn control — was wrong: Yoga folds a child's
+  hitSlop into a visible-overflow parent's overflow inset (`YogaLayoutableShadowNode.cpp`
+  `getContentBounds`), so the wrapper never clipped it and its slop is harmless. What clips a slop
+  is an `overflow: scroll` or `overflow: hidden` ancestor — every ScrollView — so the pills inside
+  horizontal scrollers (the Inbox filters, the Filters sheet rows) were the E3 targets still short;
+  `slopRoom()` (`lib/theme.ts`) gives those scrollers the room, fenced in the same test. `f7467eb` — React Query's
   default network mode paused every first read while NetInfo said unreachable (it can be wrongly
   false), leaving Home / Worker Home / My Jobs on their loaders; `networkMode: 'always'` reads
   regardless, as every screen did before the cache. `c72bb0d` — a push received or tapped now

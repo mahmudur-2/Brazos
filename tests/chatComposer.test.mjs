@@ -1052,7 +1052,8 @@ test('[static] the filter pills measure themselves, not their scroller', () => {
     /flexGrow: 0/,
     "the scroller must not grow — RN's baseHorizontal gives it flexGrow: 1 otherwise",
   );
-  assert.match(flat, /<ScrollView horizontal[^>]*style=\{styles\.filterScroll\}/, 'and it must be mounted');
+  // E3 review (2026-10-03): the scroller also wears the pills' slop room beside its own style.
+  assert.match(flat, /<ScrollView horizontal[^>]*style=\{\[styles\.filterScroll, pillRoom\.scroller\]\}/, 'and it must be mounted');
 
   const filterRow = /filterRow: \{([^}]*)\}/.exec(screen);
   assert.ok(filterRow, 'the filter row style must exist');

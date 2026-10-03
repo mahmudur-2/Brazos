@@ -15,13 +15,17 @@
  * on the Pressable, and lets the Pressable fill the wrapper, so the resting layout is the same
  * box it always was.
  *
- * THE WRAPPER CARRIES THE PRESSABLE'S hitSlop TOO (review fix). On the New Architecture a view
- * whose children do not overflow it is hit-tested as if it clipped (RCTViewComponentView's
- * `betterHitTest`: `overflowInset == {}` counts as clipping), and the Pressable fills the wrapper
- * exactly, so a touch in the Pressable's slop but outside the wrapper never reached it — every
- * 44pt target E3 built from a smaller control and a slop shrank back to the control. The same
- * slop on the wrapper lets the touch in, and the Pressable's own slop then claims it: the target
- * is the one it was before the wrapper existed.
+ * THE WRAPPER CARRIES THE PRESSABLE'S hitSlop TOO (review fix; mechanism corrected 2026-10-03). It
+ * was added on the belief that a view its children do not overflow is hit-tested as clipped
+ * (RCTViewComponentView's `betterHitTest` treats an empty `overflowInset` as clipping) and that
+ * the Pressable, filling the wrapper exactly, left the wrapper's inset empty. It does not: Yoga
+ * folds every child's hitSlop into its parent's overflow inset (YogaLayoutableShadowNode.cpp,
+ * `getContentBounds`), so a slopped Pressable gives its wrapper a non-empty inset and the touch
+ * passes through to the Pressable's own slop on its own. What does cut a slop is an ancestor
+ * whose inset is empty by construction — `overflow: scroll` (every ScrollView) or `overflow:
+ * hidden`; a horizontal row of pills makes room for its slop with `slopRoom()` (lib/theme.ts).
+ * The wrapper keeps the slop: it is harmless, and tests/smoothPass and tests/touchTargets pin the
+ * shape so the two views never disagree.
  */
 import { StyleSheet, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
