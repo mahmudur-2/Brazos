@@ -101,8 +101,8 @@ are entered into Stripe's own payment form and never reach Brazos.
   automatically. While an issue is open, the payment stays held until Brazos
   resolves it.
 - Workers are paid through Stripe. A Worker receives the agreed price less
-  Brazos's service fee, which is shown in the app, into the payout account the
-  Worker sets up with Stripe. Stripe's own schedule decides when that money
+  Brazos's fee, which the app shows before the Worker bids, into the payout
+  account the Worker sets up with Stripe. Stripe's own schedule decides when that money
   reaches the Worker's bank.
 - Cancelling. A Customer may cancel a booked job. Cancelling is free more than
   24 hours before the arrival window starts, within 15 minutes of hiring, or

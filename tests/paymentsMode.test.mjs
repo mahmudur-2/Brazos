@@ -263,7 +263,9 @@ const SANDBOX_STRINGS = {
     'TEST MODE',
     'What test mode does',
   ],
-  'screens/TrackWorkerScreen.tsx': ['TEST MODE — NO REAL MONEY'],
+  // C4 review (2026-10-03): its eyebrow is paymentEyebrow() too, so its sandbox arm is the
+  // lib/moneyCopy.ts entry above; the screen stays listed so its guard is still checked.
+  'screens/TrackWorkerScreen.tsx': [],
   // 2026-09-29 (LUX-LIST-2 #7): the Payment methods row moved from Account & safety to the hub.
   'screens/ProfileScreen.tsx': ['Test mode · no stored card.'],
   // Its own "development build" sentence is gone (A5); the shared body above is what it renders.
@@ -321,7 +323,8 @@ test('every sandbox string still renders in sandbox mode — verbatim — and no
     // D18: nothing gates the other way round (stripe would be locked out).
     assert.doesNotMatch(code, /paymentsMode !== 'sandbox'/, `${file} must not lock stripe out with a sandbox-only gate`);
   }
-  assert.ok(strings > 40, `the verbatim list is real (saw ${strings})`);
+  // C4 review: TrackWorker's eyebrow joined paymentEyebrow() (its sandbox arm is counted once, under lib/moneyCopy.ts).
+  assert.ok(strings >= 40, `the verbatim list is real (saw ${strings})`);
   // JobDetail dropped its sandbox sentence outright (D11): none may return.
   assert.doesNotMatch(stripComments(read('screens/JobDetailScreen.tsx')), /sandbox/i);
 });

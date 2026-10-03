@@ -100,7 +100,7 @@ test('[static] C4 · MoneyText and StatusPill hold no money words of their own; 
   ]) {
     const code = stripComments(read(file));
     assert.match(code, /paymentEyebrow\(/, `${file} uses the one eyebrow`);
-    assert.doesNotMatch(code, /'(HELD PAYMENT|PROTECTED PAYMENT|PAYMENT PROTECTED|PAYMENT RELEASED|APPROVED · [A-Z ]+)/, `${file} spells a state eyebrow`);
+    assert.doesNotMatch(code, /'(HELD PAYMENT|PROTECTED PAYMENT|PAYMENT PROTECTED|PAYMENT RELEASED|APPROVED · [A-Z ]+|TEST MODE — NO REAL MONEY)/, `${file} spells a state eyebrow`);
   }
   // One fee name and one action word on Checkout.
   const checkout = stripComments(read('screens/CheckoutScreen.tsx'));

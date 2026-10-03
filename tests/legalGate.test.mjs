@@ -362,7 +362,9 @@ test('B1 · Terms and Privacy state the payment facts, name every processor, and
   assert.match(terms, /within 72\s+hours of being told the work is complete, the payment is released\s+automatically/);
   assert.match(terms, /Cancelling is free more than\s+24 hours before the arrival window starts, within 15 minutes of hiring/);
   assert.match(terms, /The Protection fee is refunded in full whenever a job is\s+cancelled/);
-  assert.match(terms, /payout account the\s+Worker sets up with Stripe/);
+  assert.match(terms, /payout\s+account the Worker sets up with Stripe/);
+  // C4 review: one fee name — the app says "Protection fee" and "after the fee", never "service fee".
+  assert.doesNotMatch(terms, /service fee/i, 'the Terms name no fee the app never shows');
 
   // Privacy: every processor by name, live location, on-device speech, the
   // 90-day prune, and deletion as A18a built it.

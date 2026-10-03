@@ -266,10 +266,11 @@ export function TrackWorkerScreen() {
                 title: 'Payment',
                 content: (
                   <View style={[styles.paymentCard, litCardStyle(isDark)]}>
-                    {/* D16 (R6a): the sandbox label renders in sandbox mode
-                        only; the card path names the money state. */}
+                    {/* C4: PAYMENT over the amount, as on every money card — the
+                        sandbox arm ("PAYMENT · TEST MODE") is paymentEyebrow()'s,
+                        and the caption under the amount carries the state. */}
                     <Text style={[styles.eyebrow, isDark && styles.eyebrowDark, paymentsMode === 'stripe' && payment.status === 'held' && styles.eyebrowGold]}>
-                      {paymentsMode === 'sandbox' ? 'TEST MODE — NO REAL MONEY' : paymentEyebrow(false)}
+                      {paymentEyebrow(paymentsMode === 'sandbox')}
                     </Text>
                     <MoneyText
                       cents={customerChargeCents(payment)}
