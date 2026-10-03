@@ -102,7 +102,8 @@ test('My Jobs exposes recovery and a real Post Job route without dropping worker
   assert.match(hub, /bidItems\.map/);
   assert.match(hub, /navigation\.navigate\('PostJob'\)/);
   assert.match(hub, /Post another job/);
-  assert.match(hub, /'Retry'/);
+  // Fix run E7: the retry reads the one shared word.
+  assert.match(hub, /STATE_COPY\.retry/);
   assert.match(hub, /RefreshControl/);
   assert.match(hubHook, /runId !== runRef\.current/);
   assert.match(hubHook, /if \(!postedRes\.error\) setPosted/);

@@ -1,4 +1,4 @@
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { EmptyState } from '../primitives';
 import { layout, radius, spacing } from '../tokens';
 import { metricStyles, useThemeColors } from '../../lib/theme';
@@ -19,6 +19,25 @@ import { Skeleton } from '../../components/Skeleton';
  * error surface rather than a blank frame.
  */
 
+/**
+ * Fix run E7 — THE words for a screen that did not load, in one place. Every
+ * load retry in the app reads `STATE_COPY.retry` (tests/screenStates.test.mjs
+ * keeps "Retry" and "Refresh" out); a re-check of a payment or payout state
+ * says "Check again" instead, because nothing failed.
+ */
+export const STATE_COPY = {
+  errorTitle: 'Couldn’t load this',
+  errorBody: 'It’s usually temporary.',
+  retry: 'Try again',
+  offlineTitle: 'You’re offline',
+  offlineBody: 'Reconnect to load this. Anything you’ve typed is kept.',
+} as const;
+
+/** The error title for a named thing: `loadErrorTitle('jobs')` → "Couldn’t load jobs". */
+export function loadErrorTitle(noun?: string): string {
+  return noun ? `Couldn’t load ${noun}` : STATE_COPY.errorTitle;
+}
+
 export type ScreenState =
   | { kind: 'ready' }
   | {
@@ -29,6 +48,8 @@ export type ScreenState =
       variant?: 'skeleton' | 'spinner';
       /** Skeleton rows to draw. Ignored by the spinner variant. */
       rows?: number;
+      /** A line under the spinner ("Loading your jobs…"); also what VoiceOver says. */
+      label?: string;
     }
   | {
       kind: 'empty';
@@ -39,6 +60,8 @@ export type ScreenState =
     }
   | {
       kind: 'error';
+      /** `loadErrorTitle(noun)` when the screen can name what failed. */
+      title?: string;
       /** Prefer a plain-language sentence over a raw error string. */
       message?: string;
       onRetry?: () => void;
@@ -58,15 +81,19 @@ export function isReady(state: ScreenState | undefined): boolean {
   return !state || state.kind === 'ready';
 }
 
+/** The full-screen wait every screen shares (E7): one spinner, one place. */
+export const SPINNER_STATE = { kind: 'loading', variant: 'spinner' } as const satisfies ScreenState;
+
 export function ScreenStateView({ state }: { state: Exclude<ScreenState, { kind: 'ready' }> }) {
   const styles = stylesFor();
-  const { emerald: colors } = useThemeColors();
+  const { emerald: colors, palette } = useThemeColors();
   switch (state.kind) {
     case 'loading':
       if (state.variant === 'spinner') {
         return (
-          <View style={styles.centered}>
+          <View style={styles.centered} accessibilityLabel={state.label ?? 'Loading'}>
             <ActivityIndicator size="large" color={colors.forest} />
+            {state.label ? <Text style={[styles.spinnerLabel, { color: palette.textMuted }]}>{state.label}</Text> : null}
           </View>
         );
       }
@@ -94,9 +121,9 @@ export function ScreenStateView({ state }: { state: Exclude<ScreenState, { kind:
         <EmptyState
           icon="alert-circle-outline"
           tone="attention"
-          title="Something went wrong"
-          body={state.message ?? 'That did not load. It is usually temporary.'}
-          actionLabel={state.onRetry ? 'Try again' : undefined}
+          title={state.title ?? STATE_COPY.errorTitle}
+          body={state.message ?? STATE_COPY.errorBody}
+          actionLabel={state.onRetry ? STATE_COPY.retry : undefined}
           onAction={state.onRetry}
         />
       );
@@ -106,9 +133,9 @@ export function ScreenStateView({ state }: { state: Exclude<ScreenState, { kind:
         <EmptyState
           icon="cloud-offline-outline"
           tone="attention"
-          title="You are offline"
-          body="Reconnect to load this. Anything you have already typed is kept."
-          actionLabel={state.onRetry ? 'Try again' : undefined}
+          title={STATE_COPY.offlineTitle}
+          body={STATE_COPY.offlineBody}
+          actionLabel={state.onRetry ? STATE_COPY.retry : undefined}
           onAction={state.onRetry}
         />
       );
@@ -134,7 +161,12 @@ const stylesFor = metricStyles(() => StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.md,
     padding: layout.screenGutter,
+  },
+  spinnerLabel: {
+    fontSize: 14,
+    textAlign: 'center',
   },
   skeletonWrap: {
     flex: 1,

@@ -41,6 +41,7 @@ import {
 } from '../lib/theme';
 import { Surface } from '../ui/primitives/Surface';
 import { VideoTile } from '../ui/primitives/MediaUploader';
+import { STATE_COPY } from '../ui/templates/ScreenStates';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 type Kind = 'photo' | 'video';
@@ -423,7 +424,7 @@ export function JobSummaryCard({
           {failed ? (
             <View style={[styles.overlay, styles.overlayFail]}>
               <Ionicons name="refresh" size={20} color={colors.danger} />
-              <Text style={styles.retry}>Retry</Text>
+              <Text style={styles.retry}>{STATE_COPY.retry}</Text>
             </View>
           ) : null}
           {more ? (

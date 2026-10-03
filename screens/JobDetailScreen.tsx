@@ -96,6 +96,7 @@ import {
   screenGround,
 } from '../lib/theme';
 import { usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
+import { STATE_COPY } from '../ui/templates/ScreenStates';
 
 /**
  * The worker's take on this job — "$45–$54" / "$54" — comes from
@@ -931,7 +932,7 @@ export function JobDetailScreen() {
                     and retry.
                   </Text>
                   <Button
-                    title="Retry"
+                    title={STATE_COPY.retry}
                     size="sm"
                     variant="secondary"
                     onPress={() => setPosterReadAttempt((attempt) => attempt + 1)}

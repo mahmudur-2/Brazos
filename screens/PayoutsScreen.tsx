@@ -213,12 +213,13 @@ export function PayoutsScreen() {
   const setupNotice = status && rows ? payoutSetupNotice(status, rows) : null;
 
   /** The one button of the action bar: the setup CTA for none and
-   *  action_needed, Refresh for under_review, nothing when enabled. */
+   *  action_needed, "Check again" for under_review (a re-check of a status, not a
+   *  failed load — E7), nothing when enabled. */
   const actionButton = view?.cta ? (
     <Button title={view.cta} onPress={() => void openSetup()} loading={opening} disabled={opening} />
   ) : view?.refresh ? (
     <Button
-      title="Refresh"
+      title="Check again"
       variant="secondary"
       onPress={() => void refresh()}
       loading={refreshing}

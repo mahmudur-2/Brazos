@@ -14,7 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
-import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ReportContentLink } from '../components/ReportContentLink';
@@ -46,6 +45,7 @@ import {
   screenGround,
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
+import { SPINNER_STATE, ScreenStateView, loadErrorTitle } from '../ui/templates/ScreenStates';
 
 const PAGE_SIZE = 20;
 const STARS = [5, 4, 3, 2, 1] as const;
@@ -223,19 +223,9 @@ export function ProfileReviewsScreen() {
       />
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <ScreenStateView state={SPINNER_STATE} />
       ) : error && reviews.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Button
-            title="Try again"
-            variant="secondary"
-            onPress={load}
-            style={styles.retry}
-          />
-        </View>
+        <ScreenStateView state={{ kind: 'error', title: loadErrorTitle('reviews'), message: error, onRetry: load }} />
       ) : (
         <FlatList
           data={visibleReviews}
@@ -423,20 +413,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   safe: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  errorText: {
-    fontSize: 14,
-    color: colors.danger,
-    textAlign: 'center',
-  },
-  retry: {
-    marginTop: spacing.lg,
   },
   listContent: {
     padding: spacing.lg,

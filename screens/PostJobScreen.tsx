@@ -108,6 +108,7 @@ import {
 import { MediaUploader, Toggle, usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { Announce } from '../hooks/useAnnounce';
+import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 
 // Ten per the screen-13 spec; phase49 raised create_job's server cap to match.
 const MAX_PHOTOS = 10;
@@ -1547,9 +1548,7 @@ export function PostJobScreen() {
       />
 
       {loadingJob ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={colors.emerald} />
-        </View>
+        <ScreenStateView state={SPINNER_STATE} />
       ) : (
       <KeyboardAvoidingView
         style={styles.flex}
@@ -2270,11 +2269,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   flex: {
     flex: 1,
-  },
-  loadingWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     paddingTop: spacing.sm,

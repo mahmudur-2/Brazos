@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -56,6 +55,7 @@ import {
   touchSlop,
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
+import { SPINNER_STATE, ScreenStateView, loadErrorTitle } from '../ui/templates/ScreenStates';
 
 /**
  * Read-only view of another user's profile — the public face of a worker's
@@ -252,14 +252,9 @@ export function WorkerProfileScreen() {
       <ScreenHeader title="Worker Profile" onBack={goBackOrHome} />
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <ScreenStateView state={SPINNER_STATE} />
       ) : error ? (
-        <View style={styles.center}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Button title="Try again" variant="secondary" onPress={load} style={styles.retryBtn} />
-        </View>
+        <ScreenStateView state={{ kind: 'error', title: loadErrorTitle('this profile'), message: error, onRetry: load }} />
       ) : (
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
@@ -576,22 +571,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   safe: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  errorText: {
-    fontSize: 14,
-    color: colors.danger,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  retryBtn: {
-    marginTop: spacing.lg,
-    minWidth: 140,
   },
   content: {
     padding: spacing.lg,

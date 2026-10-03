@@ -237,9 +237,10 @@ test('[static] 6 · PayoutsScreen opens the link in the system browser, refreshe
   assert.doesNotMatch(code, /'Stripe'|"Stripe"|Stripe /, 'no user-facing string names the provider');
 
   // Both CTAs are the mapping's string and the one setup action; under
-  // review offers Refresh; enabled offers nothing.
+  // review offers "Check again" (fix run E7: a status re-check, not a failed
+  // load, so not the retry word); enabled offers nothing.
   assert.match(code, /view\?\.cta \? \(\s*<Button title=\{view\.cta\} onPress=\{\(\) => void openSetup\(\)\}/);
-  assert.match(code, /\) : view\?\.refresh \? \(\s*<Button\s*title="Refresh"/);
+  assert.match(code, /\) : view\?\.refresh \? \(\s*<Button\s*title="Check again"/);
   assert.match(code, /payoutsCta\(status\)/);
 
   // Outside the card path the screen says why there is nothing here.

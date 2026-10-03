@@ -38,6 +38,7 @@ import {
   type PushRegistration,
 } from '../lib/pushNotifications';
 import { skillCategoryLabel } from '../lib/skillCategories';
+import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 import {
   fonts,
   radius,
@@ -225,9 +226,7 @@ export function NotificationSettingsScreen() {
       <ScreenHeader title="Notification Settings" onBack={goBackOrHome} />
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <ScreenStateView state={SPINNER_STATE} />
       ) : (
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}>
           {loadError && (
@@ -393,11 +392,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   safe: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     padding: spacing.lg,

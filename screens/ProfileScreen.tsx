@@ -61,6 +61,7 @@ import type {
   ProfileStackParamList,
 } from '../lib/navigation';
 import { useDialNumber } from '../lib/designOverrides';
+import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 import {
   EYEBROW_TYPE,
   emeraldRadius,
@@ -842,9 +843,7 @@ export function ProfileScreen() {
       )}
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <ScreenStateView state={SPINNER_STATE} />
       ) : (
         <ScrollView
           contentContainerStyle={[styles.content, { gap: contentGap, paddingBottom: navClearance }]}
@@ -1361,11 +1360,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   safe: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     paddingHorizontal: spacing.lg,

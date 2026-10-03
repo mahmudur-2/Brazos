@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Divider, useScrollClearance } from '../ui/primitives';
 import { useNavigation } from '@react-navigation/native';
@@ -23,6 +23,7 @@ import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import type { MessagesStackNavigation } from '../lib/navigation';
 import { goBackOrHome } from '../lib/navigationRef';
+import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 import {
   fonts,
   spacing,
@@ -170,9 +171,7 @@ export function HiddenChatsScreen() {
       {error ? <Text style={styles.error}>{userMessage(error)}</Text> : null}
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <ScreenStateView state={SPINNER_STATE} />
       ) : (
         <FlatList
           data={rows}
@@ -230,11 +229,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     safe: {
       flex: 1,
       backgroundColor: colors.background,
-    },
-    center: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
     listContent: {
       paddingHorizontal: spacing.lg,

@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useScrollClearance } from '../ui/primitives';
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -53,6 +52,7 @@ import {
   screenGround,
 } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
+import { STATE_COPY, ScreenStateView, type ScreenState } from '../ui/templates/ScreenStates';
 import { postedCardLive } from '../lib/liveJobStatus';
 
 /** "Cleaning · Bushwick" — the same category+location line the browse feed's
@@ -70,6 +70,9 @@ function metaLineFor(job: { category: string; location: string | null }): string
  * next action.
  */
 type Filter = MyJobsTab;
+
+/** The hub's first read: the shared spinner, with the hub's own line under it (E7). */
+const HUB_LOADING = { kind: 'loading', variant: 'spinner', label: 'Loading your jobs…' } as const satisfies ScreenState;
 
 const FILTERS: { label: string; value: Filter }[] = [
   { label: 'Active', value: 'active' },
@@ -288,10 +291,7 @@ export function MyJobsHubScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={accent} />
-          <Text style={styles.loadingText}>Loading your jobs…</Text>
-        </View>
+        <ScreenStateView state={HUB_LOADING} />
       ) : (
         <ScrollView
           contentContainerStyle={[styles.content, { gap: contentGap, paddingBottom: navClearance }]}
@@ -321,7 +321,7 @@ export function MyJobsHubScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Try loading jobs again"
               >
-                <Text style={styles.retryText}>{refreshing ? 'Trying…' : 'Retry'}</Text>
+                <Text style={styles.retryText}>{refreshing ? 'Trying…' : STATE_COPY.retry}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -572,16 +572,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // 2026-09-27 (the operator's review): the segmented bar's own styles are
   // gone — it is the shared Lux segment (components/SegmentedControl.tsx).
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: colors.textMuted,
-  },
   content: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -23,6 +22,7 @@ import { spacing, themedStyles, useThemeColors, type ColorPalette,
   screenGround,
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
+import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 
 const REFRESH_DEBOUNCE_MS = 1500;
 
@@ -109,9 +109,7 @@ export function CellJobsScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <ScreenStateView state={SPINNER_STATE} />
       ) : (
         <FlatList
           data={jobs}
@@ -153,11 +151,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   safe: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   listContent: {
     padding: spacing.lg,

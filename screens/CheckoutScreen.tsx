@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DetailScreen } from '../ui/templates/DetailScreen';
-import type { ScreenState } from '../ui/templates/ScreenStates';
+import { STATE_COPY, type ScreenState } from '../ui/templates/ScreenStates';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
@@ -708,7 +708,7 @@ export function CheckoutScreen() {
                     {quoteError && !figures ? (
                       <>
                         <Text style={styles.explainText}>{quoteError}</Text>
-                        <Button title="Retry" onPress={() => void loadQuote()} loading={quoteLoading} />
+                        <Button title={STATE_COPY.retry} onPress={() => void loadQuote()} loading={quoteLoading} />
                       </>
                     ) : null}
                   </>

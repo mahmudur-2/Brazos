@@ -3,6 +3,7 @@ import { Button } from './Button';
 import { ConfirmDialog } from './ConfirmDialog';
 import { useJobOwnerActions } from '../hooks/useJobOwnerActions';
 import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { STATE_COPY } from '../ui/templates/ScreenStates';
 
 type JobOwnerActionsProps = {
   jobId: string;
@@ -49,7 +50,7 @@ export function JobOwnerActions({ jobId, posterId, status, style }: JobOwnerActi
           now.
         </Text>
         <Button
-          title="Retry"
+          title={STATE_COPY.retry}
           size="sm"
           variant="secondary"
           onPress={retryManageCheck}

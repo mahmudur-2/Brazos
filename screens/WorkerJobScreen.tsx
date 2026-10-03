@@ -87,6 +87,7 @@ import {
 } from '../lib/storage';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { useDialNumber } from '../lib/designOverrides';
+import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 
 /** The stepper's crossfade into a done stage (2026-09-27, the Lux remake, ruling 14). */
 const STAGE_FILL_MS = 220;
@@ -690,13 +691,11 @@ export function WorkerJobScreen() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {loading || !job ? (
+      {loading ? (
+        <ScreenStateView state={SPINNER_STATE} />
+      ) : !job ? (
         <View style={styles.center}>
-          {loading ? (
-            <ActivityIndicator size="large" color={colors.primary} />
-          ) : (
-            <Text style={styles.muted}>Job not found.</Text>
-          )}
+          <Text style={styles.muted}>Job not found.</Text>
         </View>
       ) : (
         <KeyboardAvoidingView

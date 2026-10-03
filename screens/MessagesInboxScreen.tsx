@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Divider, useScrollClearance } from '../ui/primitives';
 import {
-  ActivityIndicator,
   Animated,
   FlatList,
   Linking,
@@ -100,6 +99,7 @@ import {
   touchSlop,
 } from '../lib/theme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
+import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 
 /** Idea 4: how long an everyday action's Undo stands. */
 const UNDO_MS = 5000;
@@ -1091,9 +1091,7 @@ export function MessagesInboxScreen() {
       {error ? <Text style={styles.error}>{userMessage(error)}</Text> : null}
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <ScreenStateView state={SPINNER_STATE} />
       ) : (
         <FlatList
           data={visibleRows}
@@ -1324,11 +1322,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   pillLabelActive: {
     color: colors.emeraldBright,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   listContent: {
     paddingTop: 18,

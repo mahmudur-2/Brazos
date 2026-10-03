@@ -20,5 +20,5 @@ export type { DetailSection } from './DetailScreen';
 export { SuccessScreen } from './SuccessScreen';
 export type { SuccessAction } from './SuccessScreen';
 
-export { ScreenStateView, isReady } from './ScreenStates';
+export { ScreenStateView, isReady, STATE_COPY, SPINNER_STATE, loadErrorTitle } from './ScreenStates';
 export type { ScreenState } from './ScreenStates';

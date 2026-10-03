@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Keyboard,
   Pressable,
@@ -137,6 +136,7 @@ import { radius, spacing, themedStyles, useThemeColors, type ColorPalette,
   touchSlop,
 } from '../lib/theme';
 import { Divider, usePillReserve } from '../ui/primitives';
+import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 
 /** One entry in the merged timeline: a message, or the job it belongs to. */
 type TimelineItem =
@@ -1817,9 +1817,7 @@ export function ChatScreen() {
           style={styles.flex}
         >
           {loading || (threadsLoading && targets.length === 0) ? (
-            <View style={styles.center}>
-              <ActivityIndicator size="large" color={colors.primary} />
-            </View>
+            <ScreenStateView state={SPINNER_STATE} />
           ) : (
             <FlatList
               ref={listRef}
@@ -2264,11 +2262,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   keyboardClip: {
     flex: 1,
     overflow: 'hidden',
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   list: {
     flex: 1,

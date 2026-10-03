@@ -118,6 +118,7 @@ import {
 } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 import { Announce } from '../hooks/useAnnounce';
+import { STATE_COPY } from '../ui/templates/ScreenStates';
 
 export function ClientJobDetailScreen() {
   const { palette: colors, isDark } = useThemeColors();
@@ -872,7 +873,7 @@ export function ClientJobDetailScreen() {
                   </Text>
                 </View>
                 <Button
-                  title="Retry"
+                  title={STATE_COPY.retry}
                   size="sm"
                   variant="secondary"
                   palette={emeraldColors}
@@ -939,7 +940,7 @@ export function ClientJobDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="Retry loading bids"
             >
-              <Text style={styles.retryText}>{refreshing ? 'Trying…' : 'Retry'}</Text>
+              <Text style={styles.retryText}>{refreshing ? 'Trying…' : STATE_COPY.retry}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -1091,7 +1092,7 @@ export function ClientJobDetailScreen() {
                     </Text>
                   </View>
                   <Button
-                    title="Retry"
+                    title={STATE_COPY.retry}
                     size="sm"
                     variant="secondary"
                     palette={emeraldColors}
@@ -1187,7 +1188,7 @@ export function ClientJobDetailScreen() {
                   </Text>
                 </View>
                 <Button
-                  title="Retry"
+                  title={STATE_COPY.retry}
                   size="sm"
                   variant="secondary"
                   palette={emeraldColors}
