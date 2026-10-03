@@ -72,7 +72,9 @@ test('[static] one state → stage mapping, read by the rail, the Home bar and t
   assert.match(live, /export function liveTone\(state: JobLifecycleState\): LiveTone \| null \{/);
   assert.match(live, /const tone = liveTone\(state\);\s*if \(!tone\) return null;/, 'liveJobStatus reads the one mapping');
   assert.equal((live.match(/tone: '(assigned|progress|review)'/g) ?? []).length, 0, 'no tone is spelled a second time');
-  assert.match(live, /assigned: 'Assigned',\s*progress: 'In progress',\s*review: 'Review work',/);
+  // C1: the chip's word is the lifecycle label — no second vocabulary of its own.
+  assert.doesNotMatch(live, /STAGE_WORDS/);
+  assert.match(live, /return tone \? \{ word: JOB_LIFECYCLE_LABELS\[state\], tone \} : null;/);
   assert.match(live, /export function inboxStage\(state: JobLifecycleState\)/);
 });
 

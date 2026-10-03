@@ -27,6 +27,7 @@ import {
 import {
   deriveJobLifecycle,
   deriveMyJobsTab,
+  jobPillLabel,
   myJobsNextAction,
   releaseDeadlineMs,
   type MyJobsTab,
@@ -388,6 +389,7 @@ export function MyJobsHubScreen() {
                       // shows as "You get" off the ledger row.
                       priceLabel={job.final_amount_cents != null ? 'Agreed price:' : 'Budget:'}
                       status={job.status}
+                      statusLabel={jobPillLabel(lifecycleOf(job), payments[job.id]?.status)}
                       nextAction={myJobsNextAction({
                         perspective: 'worker',
                         state: lifecycleOf(job),
@@ -435,6 +437,7 @@ export function MyJobsHubScreen() {
                         timeLabel={formatTimeAgo(job.created_at)}
                         priceCents={job.final_amount_cents ?? job.budget_cents}
                         status={job.status}
+                        statusLabel={jobPillLabel(state, payments[job.id]?.status)}
                         live={live}
                         onChat={live ? () => navigation.navigate('Chat', { jobId: job.id }) : undefined}
                         chatLabel={chatLabel}

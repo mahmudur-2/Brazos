@@ -16,6 +16,7 @@ import { fetchOpenJobDispute } from '../lib/disputes';
 import { fetchProfileById } from '../lib/profiles';
 import { arrivalWindowLabel } from '../lib/jobs';
 import {
+  STAGE,
   deriveJobLifecycle,
   trackStepIndex,
   type JobLifecycleState,
@@ -41,11 +42,11 @@ import { formatTimeAgo } from '../lib/time';
  */
 
 const TIMELINE: { state: JobLifecycleState; label: string; caption: string }[] = [
-  { state: 'confirmed', label: 'Hired', caption: 'You accepted their offer' },
-  { state: 'en_route', label: 'On the way', caption: 'Declared by the worker' },
-  { state: 'arrived', label: 'Arrived', caption: 'Declared by the worker' },
-  { state: 'in_progress', label: 'Working', caption: 'The job is in progress' },
-  { state: 'completed', label: 'Done', caption: 'Finished work submitted' },
+  { state: 'confirmed', label: STAGE.booked, caption: 'You accepted their bid' },
+  { state: 'en_route', label: STAGE.onTheWay, caption: 'Declared by the worker' },
+  { state: 'arrived', label: STAGE.here, caption: 'Declared by the worker' },
+  { state: 'in_progress', label: STAGE.working, caption: 'The job is in progress' },
+  { state: 'completed', label: STAGE.done, caption: 'Finished work submitted' },
 ];
 
 export function TrackWorkerScreen() {

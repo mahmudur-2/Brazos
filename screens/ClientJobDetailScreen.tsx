@@ -79,7 +79,7 @@ import {
 import { jobStage } from '../lib/jobStage';
 import {
   deriveJobLifecycle,
-  JOB_LIFECYCLE_LABELS,
+  jobPillLabel,
   releaseCountdownLabel,
   releaseDeadlineMs,
   trackStepIndex,
@@ -708,7 +708,7 @@ export function ClientJobDetailScreen() {
               status={stage.statusKey}
               label={
                 hasLifecycle && !statusReadError && lifecycle !== 'unknown'
-                  ? JOB_LIFECYCLE_LABELS[lifecycle]
+                  ? jobPillLabel(lifecycle, payment?.status) ?? stage.label
                   : stage.label
               }
             />

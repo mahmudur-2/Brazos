@@ -40,7 +40,7 @@ import {
 import { NotificationBell } from '../components/NotificationBell';
 import { alertAsync } from '../lib/dialog';
 import { ATTENTION_CAP, attentionItems } from '../lib/homeAttention';
-import { deriveJobLifecycle, releaseDeadlineMs } from '../lib/jobLifecycle';
+import { deriveJobLifecycle, jobPillLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
 import { firstNameOf, liveJobStatus, pickLiveBarItem, postedCardLive } from '../lib/liveJobStatus';
 import { navigateAcrossTabs } from '../lib/navigationRef';
 import { openOwnJob } from '../lib/ownJobCard';
@@ -948,6 +948,7 @@ export function HomeScreen() {
                       timeLabel={formatTimeAgo(job.created_at)}
                       priceCents={job.final_amount_cents ?? job.budget_cents}
                       status={job.status}
+                      statusLabel={jobPillLabel(state, payments[job.id]?.status)}
                       nextAction={line}
                       live={live}
                       onChat={live ? () => openChat(job) : undefined}
@@ -997,7 +998,8 @@ export function HomeScreen() {
             {yourJobs.length > 0 ? (
               <View style={styles.cardList}>
                 {yourJobs.map((job) => {
-                  const { live, chatLabel, moneyNote } = cardLive(job, lifecycleOf(job));
+                  const state = lifecycleOf(job);
+                  const { live, chatLabel, moneyNote } = cardLive(job, state);
                   return (
                   <HubCard
                     key={`posted-${job.id}`}
@@ -1009,6 +1011,7 @@ export function HomeScreen() {
                     timeLabel={formatTimeAgo(job.created_at)}
                     priceCents={job.final_amount_cents ?? job.budget_cents}
                     status={job.status}
+                    statusLabel={jobPillLabel(state, payments[job.id]?.status)}
                     // NO nextAction, and that is the difference between this
                     // list and the attention block: a recency list makes no
                     // claim about what is owed, so the card falls back to its

@@ -1,12 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { deriveJobLifecycle, trackStepIndex } from '../lib/jobLifecycle';
+import { STAGE, deriveJobLifecycle, trackStepIndex } from '../lib/jobLifecycle';
 import { metricStyles, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
 
 const STEPS = [
-  { key: 'assigned', label: 'Assigned' },
-  { key: 'in_progress', label: 'In progress' },
-  { key: 'completed', label: 'Completed' },
+  { key: 'assigned', label: STAGE.booked },
+  { key: 'in_progress', label: STAGE.working },
+  { key: 'completed', label: STAGE.done },
 ] as const;
 
 export function JobProgress({
@@ -28,7 +28,7 @@ export function JobProgress({
   const track = trackStepIndex(deriveJobLifecycle({ job: { status }, payment: null }));
   // Off the track (open, cancelled, a status this client cannot classify):
   // claim NOTHING — every step stays pending, never a fall-through that
-  // draws "Assigned" as done for a job that was not.
+  // draws "Booked" as done for a job that was not.
   const current = track < 0 ? -1 : track <= 2 ? 0 : track === 3 ? 1 : 2;
   // Masters 6 and 17 draw the stepper as line-work: a done node is the deep
   // green disc inside a GOLD ring with a gold check, a pending node is a bare

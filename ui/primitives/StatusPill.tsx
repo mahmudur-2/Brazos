@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
 import { metricStyles, useThemeColors, withAlpha } from '../../lib/theme';
 import { useOverrideNumber } from '../../lib/designOverrides';
+import { JOB_LIFECYCLE_LABELS } from '../../lib/jobLifecycle';
 
 /**
  * The enum-driven status pill (§I).
@@ -19,6 +20,8 @@ import { useOverrideNumber } from '../../lib/designOverrides';
  * JOB_LIFECYCLE_LABELS; this pill's job arm speaks §H's plan vocabulary and
  * currently has no kind="job" caller. Every label here is frozen by
  * tests/statusVocabulary.test.mjs — changing one is an operator decision.
+ * C1 (2026-10-03, pick C1b): the states both vocabularies share read THE
+ * lifecycle labels, so a job's stage has one set of words wherever it shows.
  */
 
 /** §H.1 job lifecycle, including its branches. */
@@ -86,13 +89,13 @@ const JOB_LABELS: Record<JobStatus, string> = {
   draft: 'Draft',
   published: 'Published',
   pending_payment: 'Awaiting payment',
-  confirmed: 'Confirmed',
-  en_route: 'On the way',
-  arrived: 'Arrived',
-  in_progress: 'In progress',
+  confirmed: JOB_LIFECYCLE_LABELS.confirmed,
+  en_route: JOB_LIFECYCLE_LABELS.en_route,
+  arrived: JOB_LIFECYCLE_LABELS.arrived,
+  in_progress: JOB_LIFECYCLE_LABELS.in_progress,
   completion_submitted: 'Completion submitted',
   approved: 'Approved',
-  completed: 'Completed',
+  completed: JOB_LIFECYCLE_LABELS.completed,
   expired: 'Expired',
   cancelled_by_customer: 'Cancelled by customer',
   cancelled_by_worker: 'Cancelled by worker',

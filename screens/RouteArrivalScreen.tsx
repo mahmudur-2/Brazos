@@ -17,10 +17,7 @@ import {
   updateJobStatus,
   type JobPrivateLocation,
 } from '../lib/jobs';
-import {
-  deriveJobLifecycle,
-  JOB_LIFECYCLE_LABELS,
-} from '../lib/jobLifecycle';
+import { deriveJobLifecycle, paymentBlindStageLabel } from '../lib/jobLifecycle';
 import type { MyJobsStackParamList } from '../lib/navigation';
 import { litCardStyle, radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
@@ -131,7 +128,7 @@ export function RouteArrivalScreen() {
                   <View style={[styles.statusCard, litCardStyle(isDark)]}>
                     <Text style={styles.eyebrow}>WHERE THINGS STAND</Text>
                     <Text style={styles.statusLabel}>
-                      {lifecycle ? JOB_LIFECYCLE_LABELS[lifecycle] : ''}
+                      {lifecycle ? paymentBlindStageLabel(lifecycle) : ''}
                     </Text>
                     <Text style={styles.statusNote}>
                       The customer sees these two taps and nothing else. Brazos
@@ -194,7 +191,7 @@ export function RouteArrivalScreen() {
                     />
                     <StepRow
                       done={arrivedDone}
-                      label="Arrived"
+                      label="I’m here"
                       doneNote={job.arrived_at ? 'Declared — the customer can see it' : null}
                     />
                     {!beforeStart ? (
@@ -222,7 +219,7 @@ export function RouteArrivalScreen() {
             />
           ) : !arrivedDone ? (
             <Button
-              title="I’ve arrived"
+              title="I’m here"
               onPress={() => mark('arrived')}
               loading={marking === 'arrived'}
               disabled={marking !== null}

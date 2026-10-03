@@ -41,7 +41,7 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 const lifecycleSource = read('lib/jobLifecycle.ts');
 
 // Executed against the real canonical module, not its prose.
-const { JOB_LIFECYCLE_LABELS } = await import(
+const { JOB_LIFECYCLE_LABELS, STAGE_TRACK, jobPillLabel, paymentBlindStageLabel } = await import(
   pathToFileURL(join(root, 'lib/jobLifecycle.ts')).href
 );
 
@@ -211,17 +211,17 @@ function parseLabelMap(source, name, file) {
 
 test('label snapshot · StatusPill maps are byte-frozen', () => {
   const pill = read('ui/primitives/StatusPill.tsx');
+  // C1 (pick C1b): the shared states read THE lifecycle labels — asserted as
+  // references here, and their words are frozen by the lifecycle snapshot below.
+  for (const key of ['confirmed', 'en_route', 'arrived', 'in_progress', 'completed']) {
+    assert.match(pill, new RegExp(`^  ${key}: JOB_LIFECYCLE_LABELS\\.${key},\\r?$`, 'm'), `StatusPill ${key} reads the lifecycle label`);
+  }
   assert.deepEqual(parseLabelMap(pill, 'JOB_LABELS', 'StatusPill'), {
     draft: 'Draft',
     published: 'Published',
     pending_payment: 'Awaiting payment',
-    confirmed: 'Confirmed',
-    en_route: 'On the way',
-    arrived: 'Arrived',
-    in_progress: 'In progress',
     completion_submitted: 'Completion submitted',
     approved: 'Approved',
-    completed: 'Completed',
     expired: 'Expired',
     cancelled_by_customer: 'Cancelled by customer',
     cancelled_by_worker: 'Cancelled by worker',
@@ -314,13 +314,14 @@ test('label snapshot · jobStage renders exactly the frozen stage labels', () =>
   assert.deepEqual(jobStage('open', 0, false), { statusKey: 'open', label: 'Open' });
   assert.deepEqual(jobStage('open', 3, true), { statusKey: 'pending', label: 'Bids Pending (3)' });
   assert.deepEqual(jobStage('open', 1, false), { statusKey: 'pending', label: 'Bids Pending (1)' });
-  assert.deepEqual(jobStage('assigned', null, true), { statusKey: 'assigned', label: 'Assigned' });
-  assert.deepEqual(jobStage('assigned', null, false), { statusKey: 'assigned', label: 'Assigned' });
-  assert.deepEqual(jobStage('in_progress', null, true), { statusKey: 'in_progress', label: 'In Progress' });
+  // C1 (pick C1b, 2026-10-03): Assigned → Booked, In Progress → Working, Completed → Done.
+  assert.deepEqual(jobStage('assigned', null, true), { statusKey: 'assigned', label: 'Booked' });
+  assert.deepEqual(jobStage('assigned', null, false), { statusKey: 'assigned', label: 'Booked' });
+  assert.deepEqual(jobStage('in_progress', null, true), { statusKey: 'in_progress', label: 'Working' });
   // The privacy rule: everyone but the poster sees a merely-assigned job.
-  assert.deepEqual(jobStage('in_progress', null, false), { statusKey: 'assigned', label: 'Assigned' });
-  assert.deepEqual(jobStage('completed', null, true), { statusKey: 'completed', label: 'Completed' });
-  assert.deepEqual(jobStage('completed', null, false), { statusKey: 'completed', label: 'Completed' });
+  assert.deepEqual(jobStage('in_progress', null, false), { statusKey: 'assigned', label: 'Booked' });
+  assert.deepEqual(jobStage('completed', null, true), { statusKey: 'completed', label: 'Done' });
+  assert.deepEqual(jobStage('completed', null, false), { statusKey: 'completed', label: 'Done' });
   assert.deepEqual(jobStage('cancelled', null, true), { statusKey: 'cancelled', label: 'Cancelled' });
   assert.deepEqual(jobStage('draft', null, true), { statusKey: 'draft', label: 'Draft' });
   // A status this client cannot classify keeps the raw-status fallback — it
@@ -332,15 +333,62 @@ test('label snapshot · the canonical lifecycle labels are byte-frozen', () => {
   assert.deepEqual(JOB_LIFECYCLE_LABELS, {
     draft: 'Draft',
     open: 'Open',
-    pending_payment: 'Awaiting payment protection',
-    confirmed: 'Confirmed',
+    // C1 (pick C1b, 2026-10-03): Booked · On the way · Here · Working · Done.
+    pending_payment: 'Awaiting payment',
+    confirmed: 'Booked',
     en_route: 'On the way',
-    arrived: 'Arrived',
-    in_progress: 'In progress',
-    awaiting_approval: 'Awaiting your approval',
+    arrived: 'Here',
+    in_progress: 'Working',
+    awaiting_approval: 'Done',
     disputed: 'Issue reported',
-    completed: 'Completed',
+    completed: 'Done',
     cancelled: 'Cancelled',
     unknown: 'Unknown',
   });
+});
+
+test('C1 · one set of stage words (pick C1b), and a pill says Paid only once the ledger says released', () => {
+  assert.deepEqual([...STAGE_TRACK], ['Booked', 'On the way', 'Here', 'Working', 'Done']);
+  // Paid: completed AND released / paid_out. Allow-listed, never block-listed.
+  assert.equal(jobPillLabel('completed', 'released'), 'Paid');
+  assert.equal(jobPillLabel('completed', 'paid_out'), 'Paid');
+  for (const status of ['held', 'authorized', 'unfunded', 'failed', 'voided', 'refunded', 'partially_refunded', 'mystery', null, undefined]) {
+    assert.equal(jobPillLabel('completed', status), 'Done', `completed + ${status} is Done, never Paid`);
+  }
+  // A released row on any other state (a stale read) is still never Paid.
+  for (const state of Object.keys(JOB_LIFECYCLE_LABELS).filter((s) => s !== 'completed' && s !== 'unknown')) {
+    assert.equal(jobPillLabel(state, 'released'), JOB_LIFECYCLE_LABELS[state]);
+  }
+  // An unclassifiable status claims no stage: the badge keeps its raw fallback.
+  assert.equal(jobPillLabel('unknown', 'released'), undefined);
+  // The pill list the operator picked, every word reachable.
+  const pills = new Set(['open', 'confirmed', 'en_route', 'arrived', 'in_progress', 'completed', 'cancelled'].map((s) => jobPillLabel(s, null)));
+  pills.add(jobPillLabel('completed', 'released'));
+  assert.deepEqual([...pills].sort(), ['Booked', 'Cancelled', 'Done', 'Here', 'On the way', 'Open', 'Paid', 'Working']);
+  // An unfunded hire is never called Booked when the payment was read…
+  assert.equal(JOB_LIFECYCLE_LABELS.pending_payment, 'Awaiting payment');
+  // …and a payment-blind caller never claims "Awaiting payment" it did not read.
+  assert.equal(paymentBlindStageLabel('pending_payment'), 'Booked');
+  assert.equal(paymentBlindStageLabel('arrived'), 'Here');
+});
+
+test('[static] C1 · every stage surface reads its words from lib/jobLifecycle.ts — no second vocabulary', () => {
+  const OLD = /['"`>](Hired|Assigned|In [Pp]rogress|Arrived|Started|Finished|Completed|Confirmed|Review work)['"`<]/;
+  for (const file of [
+    'lib/liveJobStatus.ts',
+    'lib/jobStage.ts',
+    'components/JobProgress.tsx',
+    'screens/TrackWorkerScreen.tsx',
+    'screens/WorkerJobScreen.tsx',
+    'screens/RouteArrivalScreen.tsx',
+    'ui/primitives/StatusPill.tsx',
+  ]) {
+    const source = read(file).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    assert.doesNotMatch(source, OLD, `${file} spells an old stage word`);
+    assert.match(source, /from '\.\.?\/(\.\.\/)?lib\/jobLifecycle'|from '\.\/jobLifecycle'/, `${file} reads lib/jobLifecycle`);
+  }
+  // The job cards' pills: the hub, the Home and the worker's job screen pass the shared label.
+  for (const file of ['screens/MyJobsHubScreen.tsx', 'screens/HomeScreen.tsx', 'screens/WorkerJobScreen.tsx', 'screens/ClientJobDetailScreen.tsx']) {
+    assert.match(read(file), /jobPillLabel\(/, `${file} labels its job pill through jobPillLabel()`);
+  }
 });

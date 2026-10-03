@@ -14,7 +14,7 @@ const SHIMMER_WIDTH = 28;
 /**
  * 2026-09-28 (LUX-LIST-64 #45, option A "Stage rail", refs/live-job-cards.html) —
  * where an assigned job stands, on its card, without opening it: four bars
- * (Hired · On the way · Working · Done) whose current step fills with a moving
+ * (Booked · On the way · Working · Done) whose current step fills with a moving
  * sheen, the four words under them, and ONE status line — a live dot while
  * someone is on the way or working, the stage in bold, then what the job itself
  * says ("booked 6–8 PM", "Arrived · 9:02 AM") — and the chat button, since

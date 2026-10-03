@@ -75,7 +75,7 @@ import {
 } from '../lib/payments';
 import { fetchMyPayoutsStatus } from '../lib/payments/stripe';
 import { fetchOpenJobDispute } from '../lib/disputes';
-import { JOB_LIFECYCLE_LABELS, deriveJobLifecycle, trackStepIndex } from '../lib/jobLifecycle';
+import { JOB_LIFECYCLE_LABELS, STAGE_TRACK, deriveJobLifecycle, jobPillLabel, trackStepIndex } from '../lib/jobLifecycle';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
 import {
@@ -507,7 +507,7 @@ export function WorkerJobScreen() {
         : !job.en_route_at && !job.arrived_at
           ? { title: 'I’m on my way', onPress: () => void handleMark('en_route'), loading: marking === 'en_route', disabled: marking !== null || working }
           : !job.arrived_at
-            ? { title: 'I’ve arrived', onPress: () => void handleMark('arrived'), loading: marking === 'arrived', disabled: marking !== null || working }
+            ? { title: 'I’m here', onPress: () => void handleMark('arrived'), loading: marking === 'arrived', disabled: marking !== null || working }
             : { title: 'Start job', onPress: handleStart, loading: working, disabled: marking !== null };
   // Declaring the trip is optional, never a gate: before arriving, "Start job"
   // stays one tap away under the primary — once the payment is held (A8).
@@ -523,7 +523,8 @@ export function WorkerJobScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.intent, addressLine, job?.id]);
   const windowLabel = job ? arrivalWindowLabel(job) : null;
-  const STAGES = ['On my way', 'Arrived', 'Started', 'Finished'];
+  // C1b: the stepper names the four stages after the hire, in the one vocabulary.
+  const STAGES = STAGE_TRACK.slice(1);
   // 2026-09-27 (the Lux remake, ruling 14): the stepper's dots and connectors
   // fill with a short native-driver crossfade as the job moves on — one
   // opacity per stage, the done fill drawn over the idle ring; reduced motion
@@ -749,7 +750,7 @@ export function WorkerJobScreen() {
                   {job.location ? ` · ${job.location}` : ''}
                 </Text>
               </View>
-              <StatusBadge status={job.status} />
+              <StatusBadge status={job.status} label={lifecycle ? jobPillLabel(lifecycle, payment?.status) : undefined} />
             </View>
             <View style={styles.jobFooter}>
               <Text style={styles.amount}>

@@ -1,5 +1,11 @@
 import { lateShiftMinutes, movedWindow } from './runningLate';
-import { releaseCountdownLabel, releaseDeadlineMs, type JobLifecycleState } from './jobLifecycle';
+import {
+  JOB_LIFECYCLE_LABELS,
+  STAGE,
+  releaseCountdownLabel,
+  releaseDeadlineMs,
+  type JobLifecycleState,
+} from './jobLifecycle';
 
 /**
  * 2026-09-28 (LUX-LIST-64 #45, #62) — WHERE A HIRED JOB STANDS, in words and a
@@ -16,13 +22,13 @@ import { releaseCountdownLabel, releaseDeadlineMs, type JobLifecycleState } from
  * appears only with a real checklist count. Nothing here guesses.
  */
 
-/** The four steps the rail draws, in order. */
-export const LIVE_RAIL_STEPS = ['Hired', 'On the way', 'Working', 'Done'] as const;
+/** The four steps the rail draws, in order — C1b's stage words (Here shares Working's bar). */
+export const LIVE_RAIL_STEPS = [STAGE.booked, STAGE.onTheWay, STAGE.working, STAGE.done] as const;
 
 export type LiveTone = 'assigned' | 'progress' | 'review';
 
 export type LiveJobStatus = {
-  /** The rail step that is current: 0 Hired, 1 On the way, 2 Working, 3 Done. */
+  /** The rail step that is current: 0 Booked, 1 On the way, 2 Working (Here included), 3 Done. */
   step: 0 | 1 | 2 | 3;
   /** How much of each of the four bars is filled, 0..1. */
   fills: readonly [number, number, number, number];
@@ -60,20 +66,15 @@ export function liveTone(state: JobLifecycleState): LiveTone | null {
   }
 }
 
-/** The stage words, one per tone (#54): the Inbox chip says these, in its colour. */
-export const STAGE_WORDS: Record<LiveTone, string> = {
-  assigned: 'Assigned',
-  progress: 'In progress',
-  review: 'Review work',
-};
-
 /**
  * 2026-09-28 (LUX-LIST-64 #54) — THE INBOX JOB CHIP's stage: the word and its
  * tone, or null — a finished (or not yet hired) job's chip shows its title only.
+ * C1 (2026-10-03): the word is the lifecycle label, the one vocabulary — the
+ * chip's own three words (Assigned / In progress / Review work) are gone.
  */
 export function inboxStage(state: JobLifecycleState): { word: string; tone: LiveTone } | null {
   const tone = liveTone(state);
-  return tone ? { word: STAGE_WORDS[tone], tone } : null;
+  return tone ? { word: JOB_LIFECYCLE_LABELS[state], tone } : null;
 }
 
 /** "8 AM" / "12 PM". */
@@ -174,7 +175,7 @@ export function liveJobStatus(input: {
       return {
         step: 0,
         fills: [0.55, 0, 0, 0],
-        head: 'Hired',
+        head: STAGE.booked,
         detail: lateOnly ? `running ${window}` : window ? `starts ${window}` : 'time to agree in chat',
         live: false,
         tone,
@@ -183,7 +184,7 @@ export function liveJobStatus(input: {
       return {
         step: 1,
         fills: [1, 0.55, 0, 0],
-        head: 'On the way',
+        head: STAGE.onTheWay,
         // The bar is one slim line beside "Message Sam ›", so it names the
         // window bare ("6–8 PM"); the card has the room to say "booked".
         detail:
@@ -203,7 +204,7 @@ export function liveJobStatus(input: {
       return {
         step: 2,
         fills: [1, 1, 0.08, 0],
-        head: 'Arrived',
+        head: STAGE.here,
         detail: clockLabel(job.arrived_at) ?? 'at your door',
         live: false,
         tone,
@@ -214,7 +215,7 @@ export function liveJobStatus(input: {
       return {
         step: 2,
         fills: [1, 1, counted ? Math.max(0.08, Math.min(1, list!.done / list!.total)) : 0.5, 0],
-        head: 'Working',
+        head: STAGE.working,
         // No checklist read, no count: "on the job" says what is known and no more.
         detail: counted ? `${list!.done} of ${list!.total} tasks done` : 'on the job',
         live: true,
@@ -229,7 +230,7 @@ export function liveJobStatus(input: {
       return {
         step: 3,
         fills: [1, 1, 1, 0.55],
-        head: 'Done',
+        head: STAGE.done,
         detail:
           surface === 'bar'
             ? 'check the work'

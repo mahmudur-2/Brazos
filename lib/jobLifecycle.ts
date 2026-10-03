@@ -139,21 +139,76 @@ export function deriveJobLifecycle(
   }
 }
 
-/** Display labels for every derived state, in the app's plain voice. */
+/**
+ * C1 (2026-10-03, pick C1b) — THE STAGE WORDS. One set, everywhere a hired
+ * job's progress is named: the pills, the steppers, the rail, Track and the
+ * Inbox chip all read these. Booked · On the way · Here · Working · Done.
+ */
+export const STAGE = {
+  booked: 'Booked',
+  onTheWay: 'On the way',
+  here: 'Here',
+  working: 'Working',
+  done: 'Done',
+} as const;
+
+/** The five stages in order — the full track (Track worker). */
+export const STAGE_TRACK = [STAGE.booked, STAGE.onTheWay, STAGE.here, STAGE.working, STAGE.done] as const;
+
+/**
+ * Display labels for every derived state, in the app's plain voice.
+ *
+ * Two states sit outside the five stage words on purpose. pending_payment is
+ * "Awaiting payment", never "Booked": an unfunded hire called booked is a
+ * faked payment state (CLAUDE.md's money invariant). disputed stays "Issue
+ * reported". Nothing here ever says paid — that word belongs to
+ * jobPillLabel(), and only once the ledger says released.
+ */
 export const JOB_LIFECYCLE_LABELS: Record<JobLifecycleState, string> = {
   draft: 'Draft',
   open: 'Open',
-  pending_payment: 'Awaiting payment protection',
-  confirmed: 'Confirmed',
-  en_route: 'On the way',
-  arrived: 'Arrived',
-  in_progress: 'In progress',
-  awaiting_approval: 'Awaiting your approval',
+  pending_payment: 'Awaiting payment',
+  confirmed: STAGE.booked,
+  en_route: STAGE.onTheWay,
+  arrived: STAGE.here,
+  in_progress: STAGE.working,
+  awaiting_approval: STAGE.done,
   disputed: 'Issue reported',
-  completed: 'Completed',
+  completed: STAGE.done,
   cancelled: 'Cancelled',
   unknown: 'Unknown',
 };
+
+/** The payment states in which the worker has actually been paid. */
+const PAID_PAYMENT_STATUSES: readonly string[] = ['released', 'paid_out'];
+
+/**
+ * C1b — A JOB CARD'S PILL: the lifecycle label, except that a completed job
+ * whose payment has actually released reads "Paid". Allow-listed: held (with
+ * or without a release request), a failed read, no row — every one of them
+ * stays "Done". Undefined for a status this client cannot classify, so the
+ * badge keeps its raw-status fallback and never claims a stage.
+ */
+export function jobPillLabel(
+  state: JobLifecycleState,
+  paymentStatus: string | null | undefined
+): string | undefined {
+  if (state === 'unknown') return undefined;
+  if (state === 'completed' && paymentStatus != null && PAID_PAYMENT_STATUSES.includes(paymentStatus)) {
+    return 'Paid';
+  }
+  return JOB_LIFECYCLE_LABELS[state];
+}
+
+/**
+ * The stage word for a derivation run WITHOUT the payment (a worker's route
+ * screen): raw assigned arrives as pending_payment there whether or not the
+ * money is held, so it reads the hire's stage word, Booked — never "Awaiting
+ * payment", which would claim a funding fact this caller never read.
+ */
+export function paymentBlindStageLabel(state: JobLifecycleState): string {
+  return state === 'pending_payment' ? STAGE.booked : JOB_LIFECYCLE_LABELS[state];
+}
 
 /**
  * The tracking timeline (screens 33/56): the ordered march from hire to done.
@@ -269,11 +324,11 @@ export function myJobsNextAction(input: {
         : 'Mark arrived when you get there';
     case 'arrived':
       return perspective === 'customer'
-        ? 'Worker has arrived'
+        ? 'Your worker is here'
         : 'Start the job when you begin';
     case 'in_progress':
       return perspective === 'customer'
-        ? 'Work in progress — track progress'
+        ? 'Working — track progress'
         : 'Mark complete when you finish';
     case 'awaiting_approval':
       if (perspective === 'customer') {
