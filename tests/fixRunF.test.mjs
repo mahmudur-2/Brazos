@@ -56,3 +56,19 @@ test('[static] F18: the shell ground re-renders only its own view, and PostJob b
   assert.match(post, /const dayKey = toLocalIsoDate\(new Date\(\)\);\s*const scheduleDates = useMemo\(upcomingDates, \[dayKey\]\);/);
   assert.doesNotMatch(post, /const scheduleDates = upcomingDates\(\)/);
 });
+
+test('[static] F24: the completed count names its unit, ReviewSection takes no prompt, the orphan bar tokens are gone', () => {
+  assert.match(strip(read('screens/ProfileDetailsScreen.tsx')), /\{completed\} \{completed === 1 \? 'job' : 'jobs'\} completed/);
+  const section = strip(read('components/ReviewSection.tsx'));
+  assert.doesNotMatch(section, /\bprompt\??:/, 'the dead prop is gone from the props type');
+  assert.match(section, /Thanks for rating \{revieweeFirstName\}\./);
+  assert.match(section, /placeholder=\{`Share how it went with \$\{revieweeFirstName\}…`\}/);
+  for (const host of ['screens/ClientJobDetailScreen.tsx', 'screens/ReviewAndTipScreen.tsx', 'screens/WorkerJobScreen.tsx']) {
+    const src = strip(read(host));
+    const block = src.slice(src.indexOf('<ReviewSection'));
+    assert.doesNotMatch(block.slice(0, block.indexOf('/>')), /\bprompt=/, `${host} passes no prompt`);
+  }
+  const tokens = strip(read('ui/tokens.ts'));
+  const bar = tokens.slice(tokens.indexOf('export const navBar = {'));
+  assert.doesNotMatch(bar.slice(0, bar.indexOf('\n} as const;')), /\n\s*(gold|glyphColorDark):/);
+});

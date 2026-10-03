@@ -1412,38 +1412,22 @@ export const navBar = {
    */
   ringColorDark: '#E6D19A',
   /**
-   * RUN N3 (2026-09-08) — THREE DARK-ONLY HUES THE OPERATOR DIALLED ON THE
-   * DEVICE, declared HERE for exactly the reason `ringColorDark` is: they
-   * are the bar's and the centre control's own values, not roles either
-   * theme resolves, and ui/tokens.ts is the one file a new hex may be
-   * spelled in.
+   * RUN N3 (2026-09-08) — THE FOCUSED TAB'S DARK GREEN, dialled by the
+   * operator on the device, declared HERE for exactly the reason
+   * `ringColorDark` is: it is the bar's own value, not a role either theme
+   * resolves, and ui/tokens.ts is the one file a new hex may be spelled in.
    *
-   * NARROW BY CONSTRUCTION. Each of the three replaced a SHARED token at the
-   * call site, and moving that token would have repainted the whole tree:
+   * NARROW BY CONSTRUCTION. It replaced `dark.emerald` (#5FAE81) at the one
+   * call site — the palette's live-state green, which also draws prices, Open
+   * and every "live" mark. Untouched: only the focused tab reads this instead.
+   * Light reads none of it; its call site keeps its light branch.
    *
-   *   activeColorDark  was `dark.emerald` (#5FAE81) — the palette's
-   *                    live-state green, which also draws prices, Open and
-   *                    every "live" mark. Untouched: only the focused tab
-   *                    reads this instead.
-   *   gold             was `dark.gold` (#D4A24C) — the Prestige metal, which
-   *                    is line-work everywhere else in the tree. Untouched.
-   *   glyphColorDark   was `postPillGreen` (= brand.emerald, #0D6B52), which
-   *                    is THEME-CONSTANT and also fills light's [ + ].
-   *                    Untouched, so light's tile is the colour it was.
-   *
-   * LIGHT READS NONE OF THESE. Every call site keeps its light branch
-   * exactly as it was, so light renders unchanged.
-   *
-   * WHY THE FILL IS NAMED `gold` AND NOT `fillColorDark`: tests/goldOnForest
-   * sweeps the tree for `backgroundColor: <something>.gold` and holds the
-   * dark [ + ] as one of two recorded exceptions to "gold is line-work,
-   * never a fill". A property named anything else would slip out of that
-   * sweep and the exception would go stale — the fence would stop seeing the
-   * one gold fill it exists to watch. The name keeps it sighted.
+   * N3 declared two more dark hues here, `gold` (the [ + ] fill) and
+   * `glyphColorDark` (its glyph). 2026-09-17 gave the dark [ + ]
+   * `postPillGreen` / `onForest` instead, and fix run F24 removed the two
+   * orphans.
    */
   activeColorDark: '#49C481',
-  gold: '#D8A448',
-  glyphColorDark: '#107257',
   /**
    * RUN N3 — the centre control's corner, dialled to 18. It read
    * `radius.lg` (17), a scale step a great deal of the tree draws; 18 is not

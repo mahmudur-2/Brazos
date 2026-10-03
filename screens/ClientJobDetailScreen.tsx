@@ -1472,7 +1472,6 @@ export function ClientJobDetailScreen() {
                   revieweeId={job.assigned_worker_id}
                   revieweeName={workerName}
                   revieweeRole="worker"
-                  prompt={`How was ${workerName}’s work?`}
                   scrollRef={scrollRef}
                   palette={emeraldColors}
                 />

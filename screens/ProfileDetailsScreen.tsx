@@ -199,7 +199,7 @@ export function ProfileDetailsScreen() {
             ) : null}
             {completed != null ? (
               <Text style={styles.metaText}>
-                {completed} completed
+                {completed} {completed === 1 ? 'job' : 'jobs'} completed
               </Text>
             ) : statsReadFailed ? (
               // The failed read, named as itself — never "0 completed".

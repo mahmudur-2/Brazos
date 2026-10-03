@@ -69,15 +69,6 @@ type ReviewSectionProps = {
    *  the heading ("…'s work" vs "working with …") and the would-you-again
    *  wording ("hire" vs "work for"). */
   revieweeRole: 'worker' | 'customer';
-  /**
-   * NO LONGER RENDERED (DECISIONS 2026-09-01). The heading is built here from
-   * revieweeName instead, so one screen prints one form of one person's name;
-   * a host-supplied sentence arrives with the full name already inside it.
-   * Still accepted so the three hosts — ClientJobDetailScreen,
-   * ReviewAndTipScreen, WorkerJobScreen — keep compiling; dropping it from
-   * them is a follow-up.
-   */
-  prompt: string;
   onSubmitted?: () => void;
   /**
    * The ScrollView this card is rendered inside. Given one, focusing the
@@ -128,8 +119,11 @@ export function ReviewSection({
   // The heading and the would-you-again question both address the person the
   // way a message to them would — first name, or the whole string when there
   // is only one. ONE derivation, so the two lines can never disagree about
-  // what to call the same person (DECISIONS 2026-09-01).
-  const revieweeFirstName = revieweeName.trim().split(/\s+/)[0] || revieweeName;
+  // what to call the same person (DECISIONS 2026-09-01). A host's fallback
+  // description ("the worker") is not a name, so it is kept whole.
+  const revieweeFirstName = /^the\s/.test(revieweeName)
+    ? revieweeName
+    : revieweeName.trim().split(/\s+/)[0] || revieweeName;
 
   function cleanupDraftPhotos() {
     for (const url of draftPhotosRef.current) {
@@ -378,7 +372,7 @@ export function ReviewSection({
           </ScrollViewRN>
         )}
         <Text style={[styles.doneNote, { color: palette.textSubtle }]}>
-          Thanks for rating {revieweeName}.
+          Thanks for rating {revieweeFirstName}.
         </Text>
       </Card>
     );
@@ -441,7 +435,7 @@ export function ReviewSection({
         hint={`${comment.length}/${MAX_COMMENT_LENGTH}`}
         maxLength={MAX_COMMENT_LENGTH}
         editable={!submitting}
-        placeholder={`Share how it went with ${revieweeName}…`}
+        placeholder={`Share how it went with ${revieweeFirstName}…`}
         autoCapitalize="sentences"
         multiline
         numberOfLines={3}
