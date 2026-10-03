@@ -60,7 +60,7 @@ import { PalettePinContext } from '../hooks/useThemeColors';
 const SHEET_TOP_RADIUS = 28;
 const SHEET_HAIRLINE_ALPHA = 0.2;
 const SHEET_EDGE = 'top' as const;
-/** A filter pill's drawn height; fix run E3 lifts its touch area to 44 with touchSlop. */
+/** A filter pill's drawn height at the default text size (a floor since E5); E3 lifts its touch area to 44 with touchSlop. */
 const PILL_HEIGHT = 34;
 
 /**
@@ -715,7 +715,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       alignItems: 'center',
       justifyContent: 'center',
       gap: spacing.xs + 2,
-      height: PILL_HEIGHT,
+      // A floor (E5): a pill set large by Dynamic Type grows instead of clipping its word.
+      minHeight: PILL_HEIGHT,
       paddingHorizontal: spacing.sm + 2,
       borderRadius: radius.pill,
       borderWidth: 1,

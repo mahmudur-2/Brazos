@@ -221,7 +221,8 @@ test('[static] the hero dress on AuthButton is opt-in and absent renders the con
   assert.match(button, /litBetween\(\{ top: palette\.authCtaTop, bottom: palette\.authCtaBottom, flat: !isDark \}\)/);
   assert.match(button, /borderColor: withAlpha\(palette\.authGold, HERO\.hairlineAlpha\)/);
   assert.match(button, /hairlineAlpha: 0\.62,/);
-  assert.match(button, /height: authSizes\.heroButton,\s*borderRadius: authRadius\.heroButton,/);
+  // Fix run E5: the 52 is a floor (minHeight), so a large Dynamic Type label wraps and the button grows.
+  assert.match(button, /minHeight: authSizes\.heroButton,\s*borderRadius: authRadius\.heroButton,/);
   assert.doesNotMatch(stripComments(button).replace(/authColors\.\w+/g, ''), /#[0-9a-fA-F]{6}\b/, 'no hex colour enters the button');
   const authTheme = await read('lib/authTheme.ts');
   // 2026-09-28 (LUX-LIST-64 #6): every auth button is 52 tall and fully round (26).

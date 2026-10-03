@@ -620,13 +620,16 @@ export function WorkerHomeScreen() {
                       beside the 52pt toggle holds 91pt of word; "Open" fits at 30,
                       "Paused" is SET at 24 (0.8 × 30) rather than left to the
                       platform's shrink — which web never runs and a larger text
-                      size outgrew — and the word never scales past the toggle. */}
+                      size outgrew — and the word never scales past the toggle.
+                      Fix run E5: it now follows Dynamic Type as far as the 0.87
+                      auto-fit can bring it back to the column (1.14 × 0.87 < 1),
+                      so a larger text size grows it and it is still whole. */}
                   <Text
                     style={[styles.statusWord, !accepting && styles.statusWordPaused]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                     minimumFontScale={0.87}
-                    maxFontSizeMultiplier={1}
+                    maxFontSizeMultiplier={1.14}
                   >
                     {accepting ? 'Open' : 'Paused'}
                   </Text>

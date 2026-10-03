@@ -155,11 +155,14 @@ export function AuthButton({
     ? isLink
       ? styles.heroLink
       : {
-          height: authSizes.heroButton,
+          // Fix run E5: a floor, not a height — at large Dynamic Type the label
+          // wraps to a second line and the button grows round it; the side
+          // padding keeps a wrapped label clear of the absolute chevron.
+          minHeight: authSizes.heroButton,
           borderRadius: authRadius.heroButton,
           borderColor: withAlpha(palette.authGold, HERO.hairlineAlpha),
           backgroundColor: lit ? palette.authCtaBottom : 'transparent',
-          paddingHorizontal: 0,
+          paddingHorizontal: chevron ? HERO.chevronInset + HERO.chevron : 0,
         }
     : null;
   const heroFill = hero && lit ? litBetween({ top: palette.authCtaTop, bottom: palette.authCtaBottom, flat: !isDark }) : undefined;
@@ -237,7 +240,7 @@ export function AuthButton({
                   hero && (isLink ? styles.linkLabel : styles.heroLabel),
                   { color: labelTint },
                 ]}
-                numberOfLines={1}
+                numberOfLines={2}
               >
                 {title}
               </Text>
@@ -273,7 +276,9 @@ export function AuthButton({
 
 const styles = StyleSheet.create({
   base: {
-    height: authSizes.button,
+    // Fix run E5: floors, so a label set large by Dynamic Type wraps and the button grows.
+    minHeight: authSizes.button,
+    paddingVertical: authSpacing.sm,
     borderRadius: authRadius.button,
     alignItems: 'center',
     justifyContent: 'center',
@@ -293,6 +298,9 @@ const styles = StyleSheet.create({
   },
   label: {
     ...authType.button,
+    // Two lines at most (E5): it shrinks inside a glyph row and stays centred when it wraps.
+    flexShrink: 1,
+    textAlign: 'center',
   },
   labelSemibold: {
     fontWeight: '600',
@@ -307,7 +315,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.display,
   },
   heroLink: {
-    height: authSizes.heroLink,
+    minHeight: authSizes.heroLink,
     marginTop: -3,
     borderRadius: 0,
     borderColor: 'transparent',

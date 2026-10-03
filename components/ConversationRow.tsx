@@ -214,7 +214,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 7,
-      height: 21,
+      minHeight: 21,
     },
     name: {
       flexShrink: 1,
@@ -228,7 +228,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // The count: 20 tall, round, the accent under its ink.
     badge: {
       minWidth: 20,
-      height: 20,
+      minHeight: 20,
       paddingHorizontal: 6,
       borderRadius: 10,
       alignItems: 'center',
@@ -270,7 +270,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     more: {
       width: RIGHT_COLUMN,
-      height: 20,
+      minHeight: 20,
       alignItems: 'flex-end',
       justifyContent: 'center',
     },
@@ -282,7 +282,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      height: 24,
+      minHeight: 24,
       paddingLeft: 8,
       paddingRight: 9,
       borderRadius: 12,

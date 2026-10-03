@@ -2152,7 +2152,8 @@ test('RUN H2 fence: the renamed sections, the unread marker and the offline dot'
   // count is counted, never made up: unread with nothing counted, the mark
   // alone (a plain accent dot), and the number caps at 99+.
   const row = flatten(read('components/ConversationRow.tsx'));
-  assert.match(row, /badge: \{ minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: 10,/);
+  // Fix run E5: 20 is the badge's floor, so a count set large by Dynamic Type grows it.
+  assert.match(row, /badge: \{ minWidth: 20, minHeight: 20, paddingHorizontal: 6, borderRadius: 10,/);
   assert.match(row, /<View style=\{\[styles\.badge, \{ backgroundColor: colors\.emerald \}\]\}>/);
   assert.match(row, /\{count > COUNT_CAP \? `\$\{COUNT_CAP\}\+` : count\}/);
   assert.match(row, /const count = unread && unreadCount != null && unreadCount > 0 \? unreadCount : null;/);
