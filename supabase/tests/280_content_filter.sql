@@ -13,7 +13,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(20);
+select plan(23);
 
 select tests.create_user('b3.customer@brazos.test', 'Cara Customer') as customer \gset
 select tests.create_user('b3.worker@brazos.test',   'Wren Worker')   as worker   \gset
@@ -83,6 +83,25 @@ select lives_ok(
   format($$ select public.create_offer(p_amount_cents := 4500, p_job_id := %L, p_message := 'Can do Saturday.') $$, :'job'),
   '3b: a clean bid message goes through'
 );
+
+-- ---------------------------------------------------------------------------
+-- 3c. Service listings (20261003000900), as the worker on the app's own path — direct RLS
+--     DML (lib/services.ts): the title and the description.
+-- ---------------------------------------------------------------------------
+select throws_ok(
+  $$ insert into public.worker_services (worker_id, title, category, published) values (auth.uid(), 'Porn shelf install', 'other', true) $$,
+  'P0001', 'That includes words Brazos doesn''t allow. Edit it and try again.',
+  '3c: a blocked word in a service title is refused'
+);
+insert into public.worker_services (worker_id, title, description, category, published)
+  values (:'worker', 'TV mounting', 'Any wall, flame retardant brackets', 'tv_mounting', true)
+  returning id as service \gset
+select ok(:'service'::uuid is not null, '3d: a clean service listing publishes — "retardant" only contains a term');
+select throws_ok(
+  format($$ update public.worker_services set description = 'no whores' where id = %L $$, :'service'),
+  'P0001', 'That includes words Brazos doesn''t allow. Edit it and try again.',
+  '3e: an edit that puts a blocked word in a service description is refused'
+);
 select tests.clear_auth();
 
 -- ---------------------------------------------------------------------------
@@ -145,8 +164,8 @@ select ok(
 select is(
   (select count(*)::int from pg_trigger t join pg_proc p on p.oid = t.tgfoid
     where p.proname = 'reject_blocked_terms' and not t.tgisinternal),
-  6,
-  '6c: the filter guards exactly the six surfaces'
+  7,
+  '6c: the filter guards exactly the seven surfaces (20261003000900 added service listings)'
 );
 
 select * from finish();
