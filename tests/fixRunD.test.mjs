@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -108,4 +108,59 @@ test('[static] D13: a soft fade sits behind the floating bar, takes no touch, an
   assert.match(nav, /navigation\.addListener\('focus', focus\)/);
   assert.match(nav, /navigation\.addListener\('blur', blur\)/);
   assert.match(strip(read('navigation/ModeShell.tsx')), /<PinnedFootProvider>[\s\S]*?<WorkerRoot \/> : <CustomerRoot \/>[\s\S]*?<\/PinnedFootProvider>/);
+});
+
+test('[static] D12: a rule drawn as a view of its own is the Divider; nothing hand-draws a hairline view', () => {
+  const divider = strip(read('ui/primitives/Divider.tsx'));
+  assert.match(divider, /thickness\?: number;/);
+  assert.match(divider, /const thickness = fixedThickness \?\? \(dialled > 0 \? dialled : StyleSheet\.hairlineWidth\);/);
+
+  // The adopted rules, each at the thickness and colour it drew before.
+  const adopted = [
+    ['screens/ChatScreen.tsx', /<Divider thickness=\{1\} style=\{styles\.jobDividerRule\} \/>/],
+    ['screens/MessagesInboxScreen.tsx', /<Divider thickness=\{1\} color=\{withAlpha\(colors\.inboxRule, isDark \? 0\.11 : 1\)\} \/>/],
+    ['screens/HiddenChatsScreen.tsx', /<Divider thickness=\{1\} color=\{withAlpha\(colors\.inboxRule, isDark \? 0\.11 : 1\)\} \/>/],
+    ['components/GlassDropdown.tsx', /<Divider thickness=\{1\} color=\{rule\} style=\{styles\.rule\} \/>/],
+    ['components/JobLivePage.tsx', /<Divider thickness=\{1\} style=\{styles\.hr\} \/>/],
+    ['components/JobSummaryCard.tsx', /<Divider thickness=\{1\} style=\{styles\.divider\} \/>/],
+    ['components/JobSummaryCard.tsx', /<Divider color=\{withAlpha\(isDark \? colors\.white : colors\.ink, 0\.1\)\} style=\{styles\.menuSep\} \/>/],
+    ['screens/WorkerHomeScreen.tsx', /<Divider orientation="vertical" thickness=\{1\} style=\{styles\.summaryDivider\} \/>/],
+  ];
+  for (const [file, wear] of adopted) assert.match(strip(read(file)), wear, `${file} wears the Divider`);
+
+  // CATCHES a new hand-drawn rule: a style named as a rule whose shape is a 1 pt or hairline
+  // stroke, or any hairline-tall view. Edge borders on rows (borderTopWidth) are not views and
+  // stay where they are — a row's own rule sits inside its pressed fill and its hit box.
+  const ALLOW = {
+    'screens/WorkerHomeScreen.tsx:searchDivider':
+      "a 26 pt tick inside the SearchBar's trailing slot, placed by that row; the Divider's stretch would re-place it",
+  };
+  const RULE_KEY = /(rule|Rule|divider|Divider|^hr$|Sep$|separator|Separator)/;
+  const seen = new Set();
+  for (const dir of ['screens', 'components']) {
+    for (const name of readdirSync(join(ROOT, dir))) {
+      if (!name.endsWith('.tsx') || name.includes('.web.')) continue;
+      const file = `${dir}/${name}`;
+      const source = strip(read(file));
+      for (const m of source.matchAll(/^[ \t]+(\w+): \{([^{}]*)\}/gm)) {
+        const [, key, body] = m;
+        const stroke = /\b(height|width): (1|StyleSheet\.hairlineWidth),/.test(body);
+        const hairlineView = /\bheight: StyleSheet\.hairlineWidth\b/.test(body);
+        if (!(hairlineView || (stroke && RULE_KEY.test(key)))) continue;
+        seen.add(`${file}:${key}`);
+        assert.ok(ALLOW[`${file}:${key}`], `${file} ${key}: draw the rule with ui/primitives/Divider`);
+      }
+    }
+  }
+  for (const [where, reason] of Object.entries(ALLOW)) {
+    assert.ok(reason.length > 30, `${where} needs a real reason`);
+    assert.ok(seen.has(where), `${where} is allowed but no longer drawn — drop it from the list`);
+  }
+});
+
+test('[static] D12: the reaction picker is the frosted PopModal, a backdrop tap still closing it', () => {
+  const picker = strip(read('components/ReactionPicker.tsx'));
+  assert.match(picker, /<PopModal\s+visible=\{visible\}\s+onRequestClose=\{onClose\}\s+onBackdropPress=\{onClose\}/);
+  assert.doesNotMatch(picker, /<Modal\b/);
+  assert.match(picker, /<Pressable style=\{styles\.sheet\} onPress=\{\(\) => \{\}\}>/, 'the card absorbs its own taps');
 });

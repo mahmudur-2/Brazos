@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useScrollClearance } from '../ui/primitives';
+import { Divider, useScrollClearance } from '../ui/primitives';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { ConversationRow } from '../components/ConversationRow';
@@ -194,7 +194,7 @@ export function HiddenChatsScreen() {
           // 2026-09-28 (LUX-LIST-64 #54): the Inbox's clean list — a hairline
           // between rows, no card gap.
           ItemSeparatorComponent={() => (
-            <View style={[styles.rowRule, { backgroundColor: withAlpha(colors.inboxRule, isDark ? 0.11 : 1) }]} />
+            <Divider thickness={1} color={withAlpha(colors.inboxRule, isDark ? 0.11 : 1)} />
           )}
           contentContainerStyle={[
             rows.length === 0 ? styles.emptyContainer : styles.listContent,
@@ -240,9 +240,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.sm,
       paddingBottom: spacing.lg,
-    },
-    rowRule: {
-      height: 1,
     },
     emptyContainer: {
       flexGrow: 1,

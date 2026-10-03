@@ -3,6 +3,7 @@ import { Animated, Easing, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
+import { Divider } from '../ui/primitives/Divider';
 import { Chip } from './Chip';
 import { DrawnCheck } from './DrawnCheck';
 import { PostJobBar } from './PostJobBar';
@@ -148,7 +149,7 @@ export function JobLivePage({
             <Text style={styles.jobTitle} numberOfLines={2}>
               {job.title}
             </Text>
-            <View style={styles.hr} />
+            <Divider thickness={1} style={styles.hr} />
             <View style={styles.grid}>
               <View style={styles.cell}>
                 <Text style={styles.label}>CATEGORY</Text>
@@ -314,10 +315,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       letterSpacing: -0.2,
       color: colors.ink,
     },
+    // The Divider draws the 1 pt border-role rule; this is only its offset.
     hr: {
-      height: 1,
       marginTop: 14,
-      backgroundColor: colors.border,
     },
     grid: {
       marginTop: 12,

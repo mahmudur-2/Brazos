@@ -18,6 +18,7 @@ import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { PANEL_SCALE_FROM, panelTravelFor } from './DropMenu.shared';
 import type { PopoverAnchor } from './PickerPopover';
 import { Surface } from '../ui/primitives/Surface';
+import { Divider } from '../ui/primitives/Divider';
 import { paneFills, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -163,7 +164,7 @@ export function GlassDropdown({
             .filter((group) => group.length > 0)
             .map((group, index) => (
               <View key={group[0].key}>
-                {index > 0 ? <View style={[styles.rule, { backgroundColor: rule }]} /> : null}
+                {index > 0 ? <Divider thickness={1} color={rule} style={styles.rule} /> : null}
                 {group.map((item) => (
                   <Pressable
                     key={item.key}
@@ -218,8 +219,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       fontWeight: '600',
       color: colors.ink,
     },
+    // The Divider draws the 1 pt rule in the ruled colour; this is only where it sits.
     rule: {
-      height: 1,
       marginVertical: 4,
       marginHorizontal: 8,
     },

@@ -21,6 +21,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Card } from './Card';
+import { Divider } from '../ui/primitives/Divider';
 import { MediaViewer, type ViewerItem } from './MediaViewer';
 import { RemoteImage } from './RemoteImage';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -528,7 +529,7 @@ export function JobSummaryCard({
         {editing && atLimit ? <Text style={styles.note}>That’s the limit. Remove one to add another.</Text> : null}
       </View>
 
-      <View style={styles.divider} />
+      <Divider thickness={1} style={styles.divider} />
 
       <View style={styles.details}>
         <SummaryCell onPress={() => onEdit('category')} label="Category" glyph="grid-outline">
@@ -585,7 +586,7 @@ export function JobSummaryCard({
                 const allowed = kind === 'photo' ? canAddPhoto : canAddVideo;
                 return (
                   <View key={kind}>
-                    {i > 0 ? <View style={[styles.menuSep, { backgroundColor: withAlpha(isDark ? colors.white : colors.ink, 0.1) }]} /> : null}
+                    {i > 0 ? <Divider color={withAlpha(isDark ? colors.white : colors.ink, 0.1)} style={styles.menuSep} /> : null}
                     <Pressable
                       onPress={() => void add(kind)}
                       disabled={!allowed}
@@ -791,11 +792,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       lineHeight: 18,
       color: colors.textMuted,
     },
+    // The Divider draws the 1 pt border-role rule; this is only its offset.
     divider: {
-      height: 1,
       marginTop: 20,
       marginBottom: 2,
-      backgroundColor: colors.border,
     },
     details: {
       flexDirection: 'row',
@@ -856,8 +856,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     menu: {
       padding: 6,
     },
+    // The Divider draws the platform hairline; this is only where it sits.
     menuSep: {
-      height: StyleSheet.hairlineWidth,
       marginHorizontal: 8,
       marginVertical: 2,
     },

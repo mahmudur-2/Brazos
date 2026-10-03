@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useScrollClearance } from '../ui/primitives';
+import { Divider, useScrollClearance } from '../ui/primitives';
 import {
   ActivityIndicator,
   Animated,
@@ -1144,7 +1144,7 @@ export function MessagesInboxScreen() {
           // between rows, the same 16 either side and 18 under the pills at any
           // length (the "sparse" roomier variant went with the cards).
           ItemSeparatorComponent={() => (
-            <View style={[styles.rowRule, { backgroundColor: withAlpha(colors.inboxRule, isDark ? 0.11 : 1) }]} />
+            <Divider thickness={1} color={withAlpha(colors.inboxRule, isDark ? 0.11 : 1)} />
           )}
           contentContainerStyle={[
             visibleRows.length === 0
@@ -1333,9 +1333,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingBottom: 0,
   },
   // #54 — the hairline between two rows (colour set per theme at the list).
-  rowRule: {
-    height: 1,
-  },
   emptyContainer: {
     flexGrow: 1,
     alignItems: 'center',

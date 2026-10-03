@@ -1,5 +1,6 @@
 import { useModalPresence } from '../hooks/useModalPresence';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { PopModal } from './PopModal';
 import { REACTION_EMOJIS } from '../lib/reactions';
 import {
   radius,
@@ -33,8 +34,14 @@ export function ReactionPicker({
   useModalPresence(visible);
   const styles = stylesFor(colors);
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={[styles.backdrop, isDark && styles.backdropDark]} onPress={onClose}>
+    // Fix run D12: the frosted pop-up the other dialogs wear (PopModal) — the dim and its blur at
+    // once, the card popping in at full opacity, a backdrop tap still closing.
+    <PopModal
+      visible={visible}
+      onRequestClose={onClose}
+      onBackdropPress={onClose}
+      backdropStyle={[styles.backdrop, isDark && styles.backdropDark]}
+    >
         {/* Empty onPress absorbs taps so they don't bubble to the backdrop. */}
         <Pressable style={styles.sheet} onPress={() => {}}>
           <Text style={styles.title}>React</Text>
@@ -58,8 +65,7 @@ export function ReactionPicker({
             </Pressable>
           )}
         </Pressable>
-      </Pressable>
-    </Modal>
+    </PopModal>
   );
 }
 

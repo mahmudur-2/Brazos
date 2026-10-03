@@ -66,7 +66,7 @@ import {
   screenGround,
 } from '../lib/theme';
 import { useDialNumber } from '../lib/designOverrides';
-import { SearchBar, Toggle, useScrollClearance } from '../ui/primitives';
+import { Divider, SearchBar, Toggle, useScrollClearance } from '../ui/primitives';
 import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 
 // Master 43's hero crop, mounted in BOTH themes since the 2026-08-22 parity
@@ -668,7 +668,7 @@ export function WorkerHomeScreen() {
                   </Text>
                 </View>
               </View>
-              <View style={styles.summaryDivider} />
+              <Divider orientation="vertical" thickness={1} style={styles.summaryDivider} />
               <View style={styles.earningsHalf}>
                 {/* Tier A (C6): the summed budgets of the open jobs beside
                     their count — a fact about demand, not a promise of pay. */}
@@ -979,11 +979,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   summaryRow: { flexDirection: 'row' },
   availabilityHalf: { flex: 1, gap: 6 },
+  // The Divider draws the 1 pt vertical rule, stretched to the row; this is only its air.
   summaryDivider: {
-    width: 1,
-    alignSelf: 'stretch',
     marginHorizontal: 14,
-    backgroundColor: colors.border,
   },
   earningsHalf: { flex: 1, gap: 6 },
   // One eyebrow style for both columns — the shared rhythm is the point.

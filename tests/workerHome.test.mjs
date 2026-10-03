@@ -366,10 +366,11 @@ test('4D-6 left column: shared eyebrow, serif status word beside the toggle, pul
   // itself. 2026-09-21: the hook is useScrollClearance — by route, the bar's
   // footprint on the two homes and one spacing step everywhere else. The
   // assertion this line makes is unchanged — the shared Toggle and SearchBar
-  // come from ui/primitives, not from a local re-implementation.
+  // come from ui/primitives, not from a local re-implementation. Fix run D12
+  // adds the Divider (the summary card's column rule) to the same import.
   assert.match(
     code,
-    /import \{ SearchBar, Toggle, useScrollClearance \} from '\.\.\/ui\/primitives'/
+    /import \{ Divider, SearchBar, Toggle, useScrollClearance \} from '\.\.\/ui\/primitives'/
   );
   assert.match(code, /<Toggle\b/);
   assert.doesNotMatch(code, /<Switch\b/);
@@ -430,10 +431,10 @@ test('4D-6 card geometry: padding 14, 14pt row gap, 1pt divider at 14pt margins,
   // fallback. Both numbers are still pinned here; only their address moved.
   assert.match(code, /useDialNumber\('workerHome\.summaryCard\.gap'\) \?\? 14/);
   assert.match(code, /useDialNumber\('workerHome\.summaryCard\.radius'\) \?\? radius\.lg/);
-  assert.match(
-    code,
-    /summaryDivider: \{\s*width: 1,\s*alignSelf: 'stretch',\s*marginHorizontal: 14,\s*backgroundColor: colors\.border,\s*\}/
-  );
+  // Fix run D12: the 1 pt vertical rule is the Divider now (its width, its stretch, the border
+  // role); the style keeps only its 14 of air either side.
+  assert.match(code, /<Divider orientation="vertical" thickness=\{1\} style=\{styles\.summaryDivider\} \/>/);
+  assert.match(code, /summaryDivider: \{\s*marginHorizontal: 14,\s*\}/);
   assert.match(code, /summaryRow: \{ flexDirection: 'row' \}/);
   assert.match(code, /availabilityHalf: \{ flex: 1, gap: 6 \}/);
   assert.match(code, /earningsHalf: \{ flex: 1, gap: 6 \}/);

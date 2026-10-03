@@ -135,7 +135,7 @@ import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette,
   screenGround,
 } from '../lib/theme';
-import { usePillReserve } from '../ui/primitives';
+import { Divider, usePillReserve } from '../ui/primitives';
 
 /** One entry in the merged timeline: a message, or the job it belongs to. */
 type TimelineItem =
@@ -1838,11 +1838,11 @@ export function ChatScreen() {
                 if (entry.kind === 'divider') {
                   return (
                     <View style={styles.jobDivider}>
-                      <View style={styles.jobDividerRule} />
+                      <Divider thickness={1} style={styles.jobDividerRule} />
                       <Text style={styles.jobDividerLabel} numberOfLines={1}>
                         {entry.title}
                       </Text>
-                      <View style={styles.jobDividerRule} />
+                      <Divider thickness={1} style={styles.jobDividerRule} />
                     </View>
                   );
                 }
@@ -2312,10 +2312,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
     marginVertical: spacing.md,
   },
+  // The rule's thickness and colour are the Divider's (1 pt, the border role); this is its share of the row.
   jobDividerRule: {
     flex: 1,
-    height: 1,
-    backgroundColor: colors.border,
+    // The row centres its children; the Divider's own stretch would pin a fixed-height rule to the top.
+    alignSelf: 'center',
   },
   jobDividerLabel: {
     flexShrink: 1,
