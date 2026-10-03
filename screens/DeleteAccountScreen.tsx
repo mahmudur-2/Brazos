@@ -94,17 +94,28 @@ export function DeleteAccountScreen() {
     if (!ok) return;
 
     setDeleting(true);
+    // A18a review (2026-10-03): the server's gate — account_deletion_blockers(), the same function
+    // delete_my_account() applies — is read again HERE, before any card is touched. The list on
+    // screen is a courtesy that may have aged, and a refusal AFTER the cards were detached would
+    // leave a live account with no saved card. A read that fails keeps the user here, cards intact.
+    const gate = await fetchAccountDeletionBlockers();
+    if (gate.error) {
+      setDeleting(false);
+      await alertAsync('Could not delete this account', userMessage(gate.error));
+      return;
+    }
     // A18a (2026-10-03): the saved cards go with the account — detached at the provider through
     // payment-methods, the one path that removes a card, before the row is deleted. Best effort:
     // a card that cannot be reached now does not keep the account alive, and the provider's
     // customer object, like every payment record, no longer identifies the person once the
     // profile is a tombstone. The payout account is NOT closed: money still owed to a worker
     // reaches it after deletion (process-settlements pays payment_accounts, not profiles).
-    if (paymentsMode === 'stripe') {
+    if (gate.data.length === 0 && paymentsMode === 'stripe') {
       const { data: cards } = await listSavedCards();
       await Promise.all(cards.map((card) => removeSavedCard(card.id).catch(() => null)));
     }
-    const { blocked, error } = await deleteMyAccount();
+    const { blocked, error } =
+      gate.data.length > 0 ? { blocked: true, error: null } : await deleteMyAccount();
 
     if (blocked) {
       // Something changed between the list loading and the tap. Show what

@@ -169,8 +169,14 @@ test('A18 · deleting the account removes the saved cards and keeps the payout a
   const screen = code('screens/DeleteAccountScreen.tsx');
   assert.match(screen, /import \{ listSavedCards, removeSavedCard \} from '\.\.\/lib\/paymentMethods';/);
   // Before the row goes, on the card path, every saved card is detached through payment-methods —
-  // best effort, never a reason to keep the account alive.
-  assert.match(screen, /setDeleting\(true\); if \(paymentsMode === 'stripe'\) \{ const \{ data: cards \} = await listSavedCards\(\); await Promise\.all\(cards\.map\(\(card\) => removeSavedCard\(card\.id\)\.catch\(\(\) => null\)\)\); \} const \{ blocked, error \} = await deleteMyAccount\(\);/);
+  // best effort, never a reason to keep the account alive. A18a review: the server's own gate is
+  // read again first, so a block raised since the list loaded leaves the cards in place; a read
+  // that fails keeps the user here, cards intact; and no card is touched on a blocked account.
+  assert.match(
+    screen,
+    /setDeleting\(true\); const gate = await fetchAccountDeletionBlockers\(\); if \(gate\.error\) \{ setDeleting\(false\); await alertAsync\('Could not delete this account', userMessage\(gate\.error\)\); return; \} if \(gate\.data\.length === 0 && paymentsMode === 'stripe'\) \{ const \{ data: cards \} = await listSavedCards\(\); await Promise\.all\(cards\.map\(\(card\) => removeSavedCard\(card\.id\)\.catch\(\(\) => null\)\)\); \} const \{ blocked, error \} = gate\.data\.length > 0 \? \{ blocked: true, error: null \} : await deleteMyAccount\(\);/
+  );
+  assert.ok(screen.indexOf('await fetchAccountDeletionBlockers();') < screen.indexOf('await listSavedCards();'), 'the gate is read before any card is touched');
   // The copy says both halves.
   assert.match(screen, /Any card you saved for one-tap hiring\. It is removed from the payment provider before the account goes\./);
   assert.match(screen, /Your payout account stays open until every payment still owed to you has reached it/);
