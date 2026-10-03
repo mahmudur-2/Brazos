@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { fetchJobById, fetchOpenJobById, type Job, type OpenJob } from '../lib/jobs';
+import { useJobLive } from './useJobLive';
 
 /**
  * The canonical read for a job that was reached through a navigation param.
@@ -47,10 +48,18 @@ export function useOpenJobDetail(snapshot: OpenJob) {
  * (WorkerJob) and therefore has a real `loading`/null phase. Here the caller
  * already holds a usable row, so there is never a spinner — only a silent
  * correction once the canonical read lands.
+ *
+ * FIX-RUN B14: it also stays live while open (hooks/useJobLive.ts). A
+ * realtime UPDATE on this one job and the app returning to the foreground
+ * both re-read the row in place, and a DELETE marks it missing. `version`
+ * bumps after each of those reads lands, so a screen can re-read what hangs
+ * off the job (the payment, the dispute) on the same beat. Focus reads do
+ * not bump it — a screen's own focus effects already cover focus.
  */
 export function useOwnedJobDetail(snapshot: Job) {
   const [job, setJob] = useState<Job>(snapshot);
   const [missing, setMissing] = useState(false);
+  const [version, setVersion] = useState(0);
   const runRef = useRef(0);
 
   const refresh = useCallback(async () => {
@@ -90,10 +99,24 @@ export function useOwnedJobDetail(snapshot: Job) {
     }, [refresh])
   );
 
+  // B14: a change made elsewhere (the worker's stage taps, a cancel, a ban)
+  // lands here without leaving the screen.
+  const liveRefresh = useCallback(() => {
+    void refresh().then((result) => {
+      if (!result.error) setVersion((n) => n + 1);
+    });
+  }, [refresh]);
+
+  useJobLive(snapshot.id, liveRefresh, () => {
+    runRef.current += 1;
+    setMissing(true);
+  });
+
   const isCurrentRoute = job.id === snapshot.id;
   return {
     job: isCurrentRoute ? job : snapshot,
     missing: isCurrentRoute ? missing : false,
     refresh,
+    version,
   };
 }

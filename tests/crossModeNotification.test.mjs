@@ -193,6 +193,44 @@ test('while mode resolution is pending, the gate stands down and routing proceed
   assert.deepEqual(calls.navigate, [['MyJobs', 'WorkerJob', { jobId: 'job-5' }]]);
 });
 
+// FIX-RUN B14 — a push for a job that is gone lands on its tab AND says so.
+test('B14 · a deleted job: the tab, then one plain alert; a failed read says to check the connection', async () => {
+  resetCalls();
+  fetchResult = { data: null, error: null };
+  await handleNotificationData({ screen: 'ClientJobDetail', jobId: 'gone-1' }, makeBridge('customer', async () => true));
+  assert.deepEqual(calls.navigate, [['MyJobs', undefined, undefined]]);
+  assert.deepEqual(calls.alerts, [
+    { title: 'This job is no longer available', message: 'It may have been cancelled or removed.' },
+  ]);
+
+  resetCalls();
+  fetchResult = { data: null, error: { message: 'Network request failed' } };
+  await handleNotificationData({ screen: 'ClientJobDetail', jobId: 'gone-2' }, makeBridge('customer', async () => true));
+  assert.deepEqual(calls.navigate, [['MyJobs', undefined, undefined]]);
+  assert.deepEqual(calls.alerts, [{ title: 'Couldn’t open this job', message: 'Check your connection and try again.' }]);
+  fetchResult = { data: null, error: null };
+});
+
+test('B14 · the owner\'s job screens stay live: a per-mount channel filtered to this job, DELETE marks missing, foreground re-reads', () => {
+  const live = read('hooks/useJobLive.ts');
+  assert.match(live, /\.channel\(`public:jobs:detail:\$\{jobId\}:\$\{instanceId\}:\$\{runRef\.current\+\+\}`\)/);
+  assert.match(live, /\{ event: 'UPDATE', schema: 'public', table: 'jobs', filter: `id=eq\.\$\{jobId\}` \}/);
+  assert.match(live, /if \(\(payload\.old as \{ id\?: string \} \| null\)\?\.id === jobId\) handlers\.current\.onDelete\(\);/);
+  assert.match(live, /if \(state === 'active'\) handlers\.current\.onChange\(\);/);
+  assert.match(live, /void supabase\.removeChannel\(channel\);/);
+  const hook = read('hooks/useJobDetail.ts');
+  assert.match(hook, /useJobLive\(snapshot\.id, liveRefresh, \(\) => \{\s*runRef\.current \+= 1;\s*setMissing\(true\);\s*\}\);/);
+  for (const path of ['screens/TrackWorkerScreen.tsx', 'screens/ClientJobDetailScreen.tsx']) {
+    const src = read(path);
+    assert.match(src, /useFocusedPoll\(!!payment && isReleaseRequested\(payment\) && !isReleased\(payment\), \(\) =>/, `${path} polls a settling payment`);
+  }
+  assert.match(read('screens/TrackWorkerScreen.tsx'), /\[job\.id, readAttempt, version\]/);
+  assert.match(read('screens/TrackWorkerScreen.tsx'), /setStatusReads\(\(prev\) => \(prev === 'ready' \? prev : 'loading'\)\);/);
+  assert.match(read('screens/ClientJobDetailScreen.tsx'), /\[job\.id, job\.status, statusReadAttempt, jobVersion\]/);
+  const poll = read('hooks/useFocusedPoll.ts');
+  assert.match(poll, /if \(!enabled\) return;\s*const timer = setInterval\(\(\) => tick\.current\(\), ms\);\s*return \(\) => clearInterval\(timer\);/);
+});
+
 // FIX-RUN B8 — a push opened from a closed app waits for the mode, then the
 // switch prompt applies; a bridge whose wait times out keeps the stand-down.
 test('B8 · cold start: the gate waits for the mode, then prompts the switch once and routes after confirm', async () => {

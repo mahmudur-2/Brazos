@@ -8,9 +8,10 @@ import type { ScreenState } from '../ui/templates/ScreenStates';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
+import { useFocusedPoll } from '../hooks/useFocusedPoll';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentsMode } from '../lib/adapters/payments';
-import { fetchJobPaymentState, type Payment } from '../lib/payments';
+import { fetchJobPaymentState, isReleased, isReleaseRequested, type Payment } from '../lib/payments';
 import { fetchOpenJobDispute } from '../lib/disputes';
 import { fetchProfileById } from '../lib/profiles';
 import { arrivalWindowLabel } from '../lib/jobs';
@@ -54,7 +55,8 @@ export function TrackWorkerScreen() {
   const styles = stylesFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'TrackWorker'>>();
-  const { job, missing } = useOwnedJobDetail(params.job);
+  // B14: `version` bumps when the job changes elsewhere (realtime, foreground).
+  const { job, missing, version } = useOwnedJobDetail(params.job);
   const { user } = useAuth();
 
   const [payment, setPayment] = useState<Payment | null>(null);
@@ -74,7 +76,10 @@ export function TrackWorkerScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      setStatusReads('loading');
+      // B14: a re-read of a screen already showing its rows updates them in
+      // place — the loading state shows only before the first answer or after
+      // a failed one.
+      setStatusReads((prev) => (prev === 'ready' ? prev : 'loading'));
       Promise.all([fetchJobPaymentState(job.id), fetchOpenJobDispute(job.id)]).then(
         ([paymentResult, disputeResult]) => {
           if (!active) return;
@@ -86,7 +91,13 @@ export function TrackWorkerScreen() {
       return () => {
         active = false;
       };
-    }, [job.id, readAttempt])
+    }, [job.id, readAttempt, version])
+  );
+
+  // B14: approved and on its way — re-read every 30 s while this screen is on
+  // top, so "released" shows without leaving.
+  useFocusedPoll(!!payment && isReleaseRequested(payment) && !isReleased(payment), () =>
+    setReadAttempt((attempt) => attempt + 1)
   );
 
   useFocusEffect(

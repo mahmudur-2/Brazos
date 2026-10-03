@@ -44,6 +44,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { useAuth } from '../hooks/useAuth';
 import { useJobOffers } from '../hooks/useJobOffers';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
+import { useFocusedPoll } from '../hooks/useFocusedPoll';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import {
   canOfferJobFunding,
@@ -136,7 +137,8 @@ export function ClientJobDetailScreen() {
   // edit made in PostJob (title, budget, location, photos, videos) is reflected
   // here the moment the poster comes back, instead of the card's snapshot from
   // whenever the hub last loaded.
-  const { job, missing, refresh: refreshJob } = useOwnedJobDetail(params.job);
+  // B14: `version` bumps when the job changes elsewhere (realtime, foreground).
+  const { job, missing, refresh: refreshJob, version: jobVersion } = useOwnedJobDetail(params.job);
 
   const { user } = useAuth();
   // n7 — `summaries` is the shared hook's ONE profile_review_summaries() call
@@ -410,7 +412,13 @@ export function ClientJobDetailScreen() {
       return () => {
         active = false;
       };
-    }, [job.id, job.status, statusReadAttempt])
+    }, [job.id, job.status, statusReadAttempt, jobVersion])
+  );
+
+  // B14: approved and on its way — re-read every 30 s while this screen is on
+  // top, so the card moves to released without leaving.
+  useFocusedPoll(!!payment && isReleaseRequested(payment) && !isReleased(payment), () =>
+    setStatusReadAttempt((attempt) => attempt + 1)
   );
 
   useFocusEffect(

@@ -315,6 +315,12 @@ export async function handleNotificationData(
       },
     });
     navigateChecked(target.tab);
+    // FIX-RUN B14: the landing says why — never a silent tab.
+    if (error) {
+      await alertAsync('Couldn’t open this job', 'Check your connection and try again.');
+    } else {
+      await alertAsync('This job is no longer available', 'It may have been cancelled or removed.');
+    }
     return;
   }
 
