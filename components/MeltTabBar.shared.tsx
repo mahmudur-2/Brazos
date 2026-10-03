@@ -11,15 +11,18 @@
  * out, with no mask library. A cut-out does the reverse: a circle of the pill's own ground and the
  * grey row, carving the concave waist of a neck.
  */
-import { useMemo, type ComponentProps, type ComponentType } from 'react';
-import { Image, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions, type ViewStyle } from 'react-native';
+import { useEffect, useMemo, useRef, type ComponentProps, type ComponentType } from 'react';
+import { Animated, Image, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CommonActions } from '@react-navigation/native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { tap } from '../lib/haptics';
-import { litCardStyle, meltBar, metricStyles, useThemeColors, withAlpha } from '../lib/theme';
-import { BOTTOM_NAV_TABS, CUSTOMER_CREATE_SLOT, type BottomNavTabKey } from '../ui/primitives/BottomNav';
+import { edgeFade, litCardStyle, meltBar, metricStyles, useThemeColors, withAlpha } from '../lib/theme';
+import { BOTTOM_NAV_TABS, CUSTOMER_CREATE_SLOT, usePinnedFootActive, type BottomNavTabKey } from '../ui/primitives/BottomNav';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { usePillTop } from '../hooks/useNavInset';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { pillBottomOffset, slotCentres } from '../lib/meltBarGeometry';
 
 export type MeltTabBarProps = BottomTabBarProps & {
@@ -193,6 +196,49 @@ export function pillGround(isDark: boolean): ViewStyle {
 }
 
 /** The pill itself: the lit card at the bar's corner. */
+/**
+ * Fix run D13 (pick a) — THE SOFT FADE BEHIND THE FLOATING BAR. Every scene runs full height under
+ * the pill, so a scroller's rows showed in the margins round it — a second outline under the bar.
+ * This strip, drawn by the bar BEFORE the pill (so the pill sits on it), ramps from nothing at
+ * `meltBar.fadeAbove` over the pill's top to the page ground at 48 % and stays solid to the edge:
+ * the rows end in the ground. The ground is the light cream, or in dark the bottom stop of the
+ * Lux diagonal the screens paint (`screenGround()`), so its foot matches the page's.
+ *
+ * OFF where it would cover something: the Map tab (no page ground, the map is the ground), and any
+ * focused screen that pins a footer or composer over the pill (`usePinnedFootActive()`). It takes
+ * no touch. Its opacity rides the native driver; Reduce Motion lands it at once.
+ */
+export function UnderBarFade({ state }: { state: BottomTabBarProps['state'] }) {
+  const styles = stylesFor();
+  const { palette, isDark } = useThemeColors();
+  const pillTop = usePillTop();
+  const footPinned = usePinnedFootActive();
+  const reduceMotion = useReducedMotion();
+  const onMap = state.routes[state.index]?.name === 'Map';
+  const shown = !onMap && !footPinned;
+  const opacity = useRef(new Animated.Value(shown ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduceMotion !== false) {
+      opacity.setValue(shown ? 1 : 0);
+      return;
+    }
+    const fade = Animated.timing(opacity, {
+      toValue: shown ? 1 : 0,
+      duration: 160,
+      useNativeDriver: USE_NATIVE_DRIVER,
+    });
+    fade.start();
+    return () => fade.stop();
+  }, [opacity, shown, reduceMotion]);
+  const ground = isDark ? palette.authGroundBottom : palette.background;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.underBarFade, { height: pillTop + meltBar.fadeAbove, opacity }, edgeFade(ground, 180, 48)]}
+    />
+  );
+}
+
 export function pillStyle(isDark: boolean, width: number, bottom: number): ViewStyle[] {
   const styles = stylesFor();
   return [styles.pill, { width, bottom }, litCardStyle(isDark), { borderRadius: meltBar.radius }];
@@ -285,6 +331,7 @@ export function meltStyles() {
 }
 
 const stylesFor = metricStyles(() => StyleSheet.create({
+  underBarFade: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   /** A holder that clips what it carries: a bubble, a connector or a cut-out. */
   clip: { position: 'absolute', left: 0, top: 0, overflow: 'hidden' },
   /** A copy of a row or of the pill's ground, laid at the pill's origin inside its holder. */

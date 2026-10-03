@@ -1,5 +1,6 @@
-import { useContext } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 import type { ComponentProps } from 'react';
+import { NavigationContext } from '@react-navigation/native';
 import type { Ionicons } from '@expo/vector-icons';
 import { BottomTabBarHeightContext, type BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { layout, spacing } from '../../lib/theme';
@@ -155,5 +156,65 @@ export function usePinnedFooterPadding(): number {
 export function usePillReserve(): number {
   const inTabs = useContext(BottomTabBarHeightContext) !== undefined;
   const pillTop = usePillTop();
+  useRegisterPinnedFoot(inTabs);
   return inTabs ? pillTop : 0;
+}
+
+/**
+ * Fix run D13 — WHO IS PINNED TO THE FOOT RIGHT NOW. The bar draws a soft fade behind itself
+ * (components/MeltTabBar.shared.tsx `UnderBarFade`) so a scroller's rows end in the ground rather
+ * than showing round the pill; over a PINNED footer or composer that fade would wash the very
+ * controls the footer pins. Every such surface already asks `usePillReserve()` (directly, or
+ * through `usePinnedFooterPadding()`) for its lift over the pill, so that one hook registers it,
+ * scoped to the screen's FOCUS the way lib/shellGround.tsx is (a blurred screen stays mounted).
+ *
+ * A COUNT, not a flag: on a push the incoming screen focuses before the outgoing one blurs, and
+ * a flag set true then false in that order would end false over a pinned footer. The registry is
+ * a stable callback; only the bar's fade reads the count, so nothing else re-renders for it.
+ * Outside a navigator (the catalog, a fixture) there is no NavigationContext and nothing registers.
+ */
+const PinnedFootRegistry = createContext<((delta: 1 | -1) => void) | null>(null);
+const PinnedFootCount = createContext(0);
+
+/** Mounted once above both trees (navigation/ModeShell.tsx), so the screens and the bar share it. */
+export function PinnedFootProvider({ children }: PropsWithChildren) {
+  const [count, setCount] = useState(0);
+  const register = useCallback((delta: 1 | -1) => setCount((current) => Math.max(0, current + delta)), []);
+  return (
+    <PinnedFootRegistry.Provider value={register}>
+      <PinnedFootCount.Provider value={count}>{children}</PinnedFootCount.Provider>
+    </PinnedFootRegistry.Provider>
+  );
+}
+
+/** True while a focused screen pins something to its foot over the pill. */
+export function usePinnedFootActive(): boolean {
+  return useContext(PinnedFootCount) > 0;
+}
+
+function useRegisterPinnedFoot(active: boolean) {
+  const register = useContext(PinnedFootRegistry);
+  const navigation = useContext(NavigationContext);
+  useEffect(() => {
+    if (!active || !register || !navigation) return;
+    let on = false;
+    const focus = () => {
+      if (on) return;
+      on = true;
+      register(1);
+    };
+    const blur = () => {
+      if (!on) return;
+      on = false;
+      register(-1);
+    };
+    if (navigation.isFocused()) focus();
+    const offFocus = navigation.addListener('focus', focus);
+    const offBlur = navigation.addListener('blur', blur);
+    return () => {
+      offFocus();
+      offBlur();
+      blur();
+    };
+  }, [active, register, navigation]);
 }

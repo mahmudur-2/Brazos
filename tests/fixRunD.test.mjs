@@ -82,3 +82,30 @@ test('[static] D11.7-10: the evidence title says what it holds, the hired name s
   assert.match(strip(read('screens/ProfileDetailsScreen.tsx')), /title="Profile Details"/);
   assert.match(strip(read('screens/WorkerProfileScreen.tsx')), /<ScreenHeader title="Worker Profile" onBack=\{goBackOrHome\} \/>/);
 });
+
+test('[static] D13: a soft fade sits behind the floating bar, takes no touch, and steps aside for Map and pinned footers', () => {
+  const shared = strip(read('components/MeltTabBar.shared.tsx'));
+  const fade = shared.slice(shared.indexOf('export function UnderBarFade'), shared.indexOf('export function pillStyle'));
+  assert.ok(fade.length > 0, 'UnderBarFade lives beside the pill style');
+  assert.match(fade, /<Animated\.View\s+pointerEvents="none"/, 'the fade takes no touch');
+  assert.match(fade, /edgeFade\(ground, 180, 48\)/, 'it reads the shared edge-fade helper, solid from 48 %');
+  assert.match(fade, /height: pillTop \+ meltBar\.fadeAbove/);
+  assert.match(fade, /const ground = isDark \? palette\.authGroundBottom : palette\.background;/, "the ground is the page's own foot");
+  assert.match(fade, /const onMap = state\.routes\[state\.index\]\?\.name === 'Map';/);
+  assert.match(fade, /const shown = !onMap && !footPinned;/, 'off on the Map tab and over a pinned footer');
+  assert.match(fade, /useNativeDriver: USE_NATIVE_DRIVER/);
+  assert.match(shared, /underBarFade: \{ position: 'absolute', left: 0, right: 0, bottom: 0 \}/);
+  assert.match(strip(read('ui/tokens.ts')), /fadeAbove: 56,/);
+
+  // Drawn by the wrapper BEFORE the bar, so both paths' pill sits on it and each root still paints nothing.
+  const wrapper = strip(read('components/MeltTabBar.tsx'));
+  assert.match(wrapper, /<>\s*<UnderBarFade state=\{props\.state\} \/>\s*<Bar \{\.\.\.props\} \/>\s*<\/>/);
+
+  // Every pinned surface asks usePillReserve() for its lift, and that hook registers it, by focus, as a count.
+  const nav = strip(read('ui/primitives/BottomNav.tsx'));
+  assert.match(nav, /export function usePinnedFooterPadding\(\): number \{\s*return usePillReserve\(\) \+ PINNED_FOOTER_BOTTOM_PADDING;/);
+  assert.match(nav, /const register = useCallback\(\(delta: 1 \| -1\) => setCount\(\(current\) => Math\.max\(0, current \+ delta\)\), \[\]\);/);
+  assert.match(nav, /navigation\.addListener\('focus', focus\)/);
+  assert.match(nav, /navigation\.addListener\('blur', blur\)/);
+  assert.match(strip(read('navigation/ModeShell.tsx')), /<PinnedFootProvider>[\s\S]*?<WorkerRoot \/> : <CustomerRoot \/>[\s\S]*?<\/PinnedFootProvider>/);
+});

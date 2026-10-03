@@ -679,10 +679,11 @@ test('[executed] the chat column counts the pill once at rest and the keyboard o
     assert.match(stripComments(read(tree)), /tabBar=\{\(props\) =>/, `${tree} draws the floating bar`);
   }
   // What a pinned surface reserves is the pill's top edge under the tab navigator, and nothing
-  // outside it.
+  // outside it. Fix run D13: the same hook registers the surface as pinned (under the tabs only),
+  // so the bar's soft fade steps aside for it.
   assert.match(
     bottomNav.replace(/\s+/g, ' '),
-    /export function usePillReserve\(\): number \{ const inTabs = useContext\(BottomTabBarHeightContext\) !== undefined; const pillTop = usePillTop\(\); return inTabs \? pillTop : 0; \}/
+    /export function usePillReserve\(\): number \{ const inTabs = useContext\(BottomTabBarHeightContext\) !== undefined; const pillTop = usePillTop\(\); useRegisterPinnedFoot\(inTabs\); return inTabs \? pillTop : 0; \}/
   );
   assert.match(
     stripComments(read('hooks/useNavInset.ts')).replace(/\s+/g, ' '),

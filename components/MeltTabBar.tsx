@@ -29,6 +29,7 @@ import {
   pillStyle,
   PlusGlyph,
   pressTab,
+  UnderBarFade,
   useMeltMetrics,
   type MeltTabBarProps,
 } from './MeltTabBar.shared';
@@ -179,9 +180,17 @@ const Impl = resolveMotion120<ComponentType<MeltTabBarProps>>(
   MeltTabBarFallback
 );
 
-/** The bar both trees pass as `tabBar`. Reduce Motion takes the fallback's plain slide. */
+/**
+ * The bar both trees pass as `tabBar`. Reduce Motion takes the fallback's plain slide. The soft
+ * fade (fix run D13) is drawn first, so the pill of either path sits on it.
+ */
 export function MeltTabBar(props: MeltTabBarProps) {
   const reduced = useReducedMotion() === true;
   const Bar = reduced ? MeltTabBarFallback : Impl;
-  return <Bar {...props} />;
+  return (
+    <>
+      <UnderBarFade state={props.state} />
+      <Bar {...props} />
+    </>
+  );
 }
