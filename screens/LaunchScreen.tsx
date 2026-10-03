@@ -17,7 +17,8 @@ import { USE_NATIVE_DRIVER } from '../lib/motion';
 // is the whole reason the source is passed explicitly rather than left to
 // BrandLogo's default; see that component's SOURCE comment.
 //
-// It replaces assets/brand/app-icon-v2.png, whose ~18.7% corner radius was
+// It replaces assets/brand/app-icon-v2.png (removed by fix run F23; git
+// history keeps it), whose ~18.7% corner radius was
 // baked into an alpha channel. This export has no alpha channel at all, so it
 // carries no baked radius and no transparent corners: a full-bleed opaque
 // square, which is what Apple requires of an icon and what iOS masks for

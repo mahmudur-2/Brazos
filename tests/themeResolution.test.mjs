@@ -454,7 +454,7 @@ const BAKED_ART = {
   //
   // WHAT STILL HOLDS. The bake measurement is untouched and still enforced by
   // the alpha sweep below (it is the same 400x351 RGBA file, byte for byte).
-  // assets/prestige/brazos_b_drape.png, hero_toolbox_worker.png and
+  // assets/prestige/brazos_b_drape.png (removed since), hero_toolbox_worker.png and
   // home-atmosphere-dark.png stay gated, so the dark-only decision is intact
   // everywhere it is still true — this is one asset leaving the set by a
   // decision, not the set being emptied to make a mount pass.
@@ -549,8 +549,8 @@ const BAKED_ART = {
   // promo card became the task card, which carries no mark; screens/
   // HomeScreen.tsx no longer requires it, so it leaves this roster BECAUSE the
   // added-or-removed assertion below demands exactly that of a raster the app
-  // stops mounting. The file stays on disk, byte for byte, required by
-  // nothing — the change is one `git revert` away.
+  // stops mounting. Fix run F23 removed the file; git history keeps it, so
+  // the change is still one `git revert` away.
   // 2026-09-28 (LUX-LIST-64 #61) — THE GATE COMES OFF THE TOOLBOX, and it is the
   // RECORD catching up with a decision a month old, not a rule relaxed. Worker
   // Home has mounted this crop in BOTH themes since the 2026-08-22 parity pass
@@ -644,15 +644,16 @@ const BAKED_ART = {
   // transparent corners, 3.37% of its samples cut out. It was the LaunchScreen
   // mark and nothing else required it, so it leaves this roster BECAUSE the
   // added-or-removed assertion above demands exactly that of a raster the app
-  // stops mounting. The file stays on disk, unmodified and required by
-  // nothing, so the previous icon stays revertible. 'brand-mark' leaves the
+  // stops mounting. Fix run F23 removed the file; git history keeps it, so
+  // the previous icon stays revertible. 'brand-mark' leaves the
   // bake vocabulary with it — it was that one asset's word.
   'assets/brand/app-icon-b-leaf.png': { bake: 'opaque-brand', gate: false },
   // 2026-09-21 — the two mode-transition sheets (transition-customer.png,
   // transition-worker.png) left this roster with the artwork switch they
   // belonged to: the glass wipe (components/ModeTransitionOverlay.shared.tsx)
-  // draws the app's own ground and mounts no raster. The files stay on disk,
-  // unmodified and required by nothing, so the artwork switch stays revertible.
+  // draws the app's own ground and mounts no raster. Fix run F23 removed
+  // transition-customer.png (git history keeps it); transition-worker.png stays
+  // on disk because docs/mockups/html/lux/lux.build.mjs draws it.
 };
 
 /** How far back from a mount the palette test may sit and still be its guard. */
@@ -1174,7 +1175,10 @@ test('[static] T1 (D6): every eligible sheet is lazy, and the exclusions are nam
   // to `themedStyles`, which is the other lazy factory. Nothing went eager.
   // 2026-09-30 (the build run): 21 -> 24 — the Melt-through tab bar's three files
   // (components/MeltTabBar.tsx, .motion120.tsx, .shared.tsx) are born lazy.
-  assert.equal(lazy.length, 24, 'the D6 conversion set is 24 files');
+  // 2026-10-03 (fix run F23): 24 -> 22 — components/BrazosMonogram.tsx and
+  // components/PulseDot.tsx, both lazy and both imported by nothing, were
+  // removed. Nothing went eager.
+  assert.equal(lazy.length, 22, 'the D6 conversion set is 22 files');
   for (const path of lazy) {
     const source = await read(path);
     assert.match(source, /^\s*const styles = stylesFor\(\);$/m, `${path} must read its sheet inside the component`);

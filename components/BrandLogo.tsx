@@ -18,7 +18,7 @@ import { metricStyles } from '../lib/theme';
 // (~21.5% of width, measured from its alpha channel), which is measurably
 // more rounded than the export it was measured against
 // (assets/brand/app-icon-v2.png, ~18.7% — the app icon and the launch mark
-// until 2026-08-24, now neither) — that file went through an extra masking
+// until 2026-08-24, now neither; removed by fix run F23) — that file went through an extra masking
 // pass this one didn't. Left as the default here so Sign In/Create Account,
 // the only other callers, are untouched; LaunchScreen passes the shipped app
 // icon explicitly instead of this component's default changing under it. See

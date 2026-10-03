@@ -106,8 +106,9 @@ const CTA_EDGE_ALPHA = 0.38;
 //
 // 2026-09-18: the gold B mark is GONE FROM THIS SCREEN. Both of its files —
 // assets/brand/brazos_b_drape.png (light, home(1)) and
-// assets/prestige/brazos_b_drape.png (dark) — stay on disk, required by
-// nothing, and left tests/themeResolution's BAKED_ART roster with their
+// assets/prestige/brazos_b_drape.png (dark) — were required by nothing
+// (removed by fix run F23; git history keeps them), and left
+// tests/themeResolution's BAKED_ART roster with their
 // mounts, which is what that roster's added-or-removed assertion demands of a
 // raster the app stops drawing. They drew the promo card's mark, and the
 // promo card is the task card now (see the card below).
