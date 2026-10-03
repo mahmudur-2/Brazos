@@ -20,10 +20,11 @@ import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
 import { OtpInput, type OtpInputHandle } from '../components/OtpInput';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { authColors, authRadius, authSpacing, authType } from '../lib/authTheme';
+import { authRadius, authSpacing, authType } from '../lib/authTheme';
 import type { AuthStackNavigation, AuthStackParamList } from '../lib/navigation';
 import { OTP_LENGTH, isOtpToken, phoneAuth } from '../lib/phoneAuth';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
+import { authSurface, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Verify phone — reference screen 05.
@@ -42,6 +43,13 @@ import { USE_NATIVE_DRIVER } from '../lib/motion';
  * mount, which also gives the screen its staleness check: a reload drops the
  * in-memory challenge, `inspectChallenge` returns null, and the user is told
  * to start again rather than typing into a field nothing can accept.
+ *
+ * Fix run D9 (2026-10-03): on the themed auth path like its siblings — the
+ * resolved palette through authSurface(), the `themed` opt-in on the scaffold,
+ * every AuthButton and the code field. It was the last auth screen on the
+ * frozen light constant, so in dark it rendered a cream page one tap from a
+ * dark one. Phone sign-in is off outside development (lib/phoneAuth/mode.ts),
+ * so a fence, not a shot, proves it.
  */
 
 const ENTER_MS = 320;
@@ -56,6 +64,9 @@ export function VerifyPhoneScreen() {
   const { params } = useRoute<RouteProp<AuthStackParamList, 'VerifyPhone'>>();
   const reducedMotion = useReducedMotion();
   const otpRef = useRef<OtpInputHandle>(null);
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
+  const surface = authSurface(colors, isDark);
 
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -283,13 +294,14 @@ export function VerifyPhoneScreen() {
       titleVariant="large"
       onBack={() => leaveChallenge(() => navigation.goBack())}
       backdrop="soft"
+      themed
     >
       <Animated.View style={[styles.body, animatedStyle]}>
         <View style={styles.icon}>
           <Ionicons
             name={mockVerified ? 'checkmark' : 'lock-closed-outline'}
             size={30}
-            color={authColors.emerald}
+            color={colors.emerald}
           />
         </View>
 
@@ -311,7 +323,7 @@ export function VerifyPhoneScreen() {
           />
         ) : (
           <>
-            <Text style={styles.eyebrow}>VERIFY YOUR NUMBER</Text>
+            <Text style={[styles.eyebrow, { color: surface.accent }]}>VERIFY YOUR NUMBER</Text>
             <Text style={styles.title} maxFontSizeMultiplier={1.5}>
               Enter the {OTP_LENGTH}-digit code
             </Text>
@@ -340,6 +352,7 @@ export function VerifyPhoneScreen() {
                 invalid={Boolean(error)}
                 editable={!busy}
                 onSubmitEditing={handleVerify}
+                themed
               />
             </View>
 
@@ -358,6 +371,7 @@ export function VerifyPhoneScreen() {
             <View style={styles.actions}>
               <AuthButton
                 title="Verify and continue"
+                themed
                 onPress={handleVerify}
                 loading={submitting}
                 disabled={resending}
@@ -390,6 +404,7 @@ export function VerifyPhoneScreen() {
               <AuthButton
                 title="Change phone number"
                 variant="ghost"
+                themed
                 onPress={() => leaveChallenge(() => navigation.goBack())}
                 disabled={busy}
                 accessibilityHint="Go back and enter a different phone number"
@@ -416,9 +431,12 @@ function MockComplete({
   onContinue: () => void;
   onWelcome: () => void;
 }) {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
+  const surface = authSurface(colors, isDark);
   return (
     <>
-      <Text style={styles.eyebrow}>MOCK MODE</Text>
+      <Text style={[styles.eyebrow, { color: surface.accent }]}>MOCK MODE</Text>
       <Text style={styles.title} maxFontSizeMultiplier={1.5}>
         Verification flow passed
       </Text>
@@ -430,9 +448,10 @@ function MockComplete({
       <View style={styles.actions}>
         <AuthButton
           title={intent === 'sign-up' ? 'Continue with email sign up' : 'Continue with email sign in'}
+          themed
           onPress={onContinue}
         />
-        <AuthButton title="Back to welcome" variant="ghost" onPress={onWelcome} />
+        <AuthButton title="Back to welcome" variant="ghost" themed onPress={onWelcome} />
       </View>
     </>
   );
@@ -448,9 +467,12 @@ function StaleChallenge({
   onRestart: () => void;
   onWelcome: () => void;
 }) {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
+  const surface = authSurface(colors, isDark);
   return (
     <>
-      <Text style={styles.eyebrow}>START AGAIN</Text>
+      <Text style={[styles.eyebrow, { color: surface.accent }]}>START AGAIN</Text>
       <Text style={styles.title} maxFontSizeMultiplier={1.5}>
         That code request has ended
       </Text>
@@ -459,14 +481,15 @@ function StaleChallenge({
       </Text>
 
       <View style={styles.actions}>
-        <AuthButton title="Back to phone number" onPress={onRestart} />
-        <AuthButton title="Back to welcome" variant="ghost" onPress={onWelcome} />
+        <AuthButton title="Back to phone number" themed onPress={onRestart} />
+        <AuthButton title="Back to welcome" variant="ghost" themed onPress={onWelcome} />
       </View>
     </>
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   // alignItems:center is the reference's `.auth.center`; the children that
   // must span the column set their own width:'100%'.
   body: {
@@ -480,25 +503,25 @@ const styles = StyleSheet.create({
     width: 66,
     height: 66,
     borderRadius: 23,
-    backgroundColor: authColors.mint,
+    backgroundColor: colors.mint,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: authSpacing.md,
   },
+  // Colour comes from surface.accent at render — emerald in light, gold in dark.
   eyebrow: {
     ...authType.eyebrow,
-    color: authColors.emerald,
     textAlign: 'center',
   },
   title: {
     ...authType.title,
-    color: authColors.ink,
+    color: colors.ink,
     marginTop: authSpacing.sm,
     textAlign: 'center',
   },
   subtitle: {
     ...authType.body,
-    color: authColors.muted,
+    color: colors.textMuted,
     marginTop: authSpacing.sm,
     textAlign: 'center',
   },
@@ -509,18 +532,18 @@ const styles = StyleSheet.create({
     borderRadius: authRadius.field,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: authColors.gold,
-    backgroundColor: authColors.goldSoft,
+    borderColor: colors.gold,
+    backgroundColor: colors.goldSoft,
     gap: 4,
   },
   devBannerLabel: {
     ...authType.badge,
     letterSpacing: 1,
-    color: '#7A5A18',
+    color: colors.eyebrowGold,
   },
   devBannerNote: {
     ...authType.note,
-    color: '#7A5A18',
+    color: colors.eyebrowGold,
   },
   otp: {
     width: '100%',
@@ -536,7 +559,7 @@ const styles = StyleSheet.create({
   },
   error: {
     ...authType.note,
-    color: authColors.danger,
+    color: colors.danger,
     textAlign: 'center',
   },
   // marginTop:'auto' — spare height on a tall phone falls between the copy and
@@ -555,15 +578,16 @@ const styles = StyleSheet.create({
   // Available: the reference's danger token, not the emerald used for every
   // other link on this surface. Resending is the one control here that
   // invalidates something — the code already sent — so it reads as a
-  // correction rather than as the next step. #9C3F35 is the palette's own
-  // restrained brick, not a signal red.
+  // correction rather than as the next step. The palette's `danger` is its own
+  // restrained brick in both themes, not a signal red.
   resendText: {
     fontSize: 14,
     fontWeight: '700',
-    color: authColors.danger,
+    color: colors.danger,
   },
   // Counting down: no colour at all, because there is nothing to act on yet.
   resendTextWaiting: {
-    color: authColors.muted,
+    color: colors.textMuted,
   },
-});
+}),
+);

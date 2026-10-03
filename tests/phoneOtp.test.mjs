@@ -847,14 +847,15 @@ test('resend is the danger token when pressable, and muted while counting down',
   const enabled = styles.slice(styles.indexOf('  resendText: {'));
   assert.match(
     enabled.slice(0, enabled.indexOf('  },')),
-    /color: authColors\.danger/,
+    // Fix run D9: the resolved palette's danger, on the themed auth path.
+    /color: colors\.danger,/,
     'the pressable resend uses the semantic danger token'
   );
 
   const waiting = styles.slice(styles.indexOf('  resendTextWaiting: {'));
   assert.match(
     waiting.slice(0, waiting.indexOf('  },')),
-    /color: authColors\.muted/,
+    /color: colors\.textMuted,/,
     'the countdown stays muted — there is nothing to act on yet'
   );
 

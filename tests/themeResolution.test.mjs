@@ -249,12 +249,10 @@ const LITERAL_FILE_ALLOWLIST = {
   // path, so THEIR allowances are gone too — the entries that used to sit here
   // were removed rather than kept as dead permissions. Every remaining auth
   // screen has no master and stays as it is.
-  'screens/VerifyPhoneScreen.tsx': 'LOCKED screen',
   'screens/SetupScreen.tsx': 'LOCKED screen',
   'screens/LegalGateScreen.tsx': 'LOCKED screen',
-  // Auth surface (stays light this run; lib/authTheme.ts is never-modified,
-  // so these cannot move into tokens yet — logged as the authTheme follow-up).
-  'components/AuthNotice.tsx': 'auth surface; token home is frozen authTheme',
+  // Fix run D9: VerifyPhone and AuthNotice follow the theme now and hold no
+  // literal, so their allowances are gone.
 };
 
 test('[static] the auth flow is one design system, and authTheme stayed frozen', async () => {
@@ -324,12 +322,36 @@ test('[static] the auth flow is one design system, and authTheme stayed frozen',
     'screens/SignInScreen.tsx',
     'screens/EmailSignInScreen.tsx',
     'screens/SetupScreen.tsx',
+    // Fix run D9: the last auth screen on the frozen constant joins the path.
+    'screens/VerifyPhoneScreen.tsx',
   ]) {
     assert.match(stripCommentsForScan(await read(path)), /\bthemed\b/, `${path} must opt in`);
   }
+  // Fix run D9: and the opt-in is whole — every shared control on Setup and
+  // VerifyPhone takes it, or the screen is dark chrome around light controls.
+  for (const path of ['screens/SetupScreen.tsx', 'screens/VerifyPhoneScreen.tsx']) {
+    const code = stripCommentsForScan(await read(path));
+    let buttons = 0;
+    for (const [, props] of code.matchAll(/<AuthButton\b([^>]*?)\/?>/g)) {
+      buttons += 1;
+      assert.match(props, /\bthemed\b/, `${path}: every AuthButton opts in (${props.trim().slice(0, 40)})`);
+    }
+    assert.ok(buttons >= 1, `${path}: the AuthButton scan must find the buttons`);
+  }
+  const verify = stripCommentsForScan(await read('screens/VerifyPhoneScreen.tsx'));
+  assert.match(verify, /const surface = authSurface\(colors, isDark\);/);
+  assert.match(verify, /const stylesFor = themedStyles\(\(colors: ColorPalette\) =>/);
+  assert.match(verify, /<AuthScaffold[\s\S]{0,200}?themed\s*>/, 'VerifyPhone scaffold');
+  assert.match(verify, /<OtpInput\s[\s\S]{0,500}?themed\s*\/>/, 'the code field opts in too');
+  assert.doesNotMatch(verify, /\bauthColors\b/, 'VerifyPhone reads no Heritage constant');
+  // AuthNotice is on every themed sign-in path, so it reads the palette itself.
+  const notice = stripCommentsForScan(await read('components/AuthNotice.tsx'));
+  assert.match(notice, /const \{ palette, isDark \} = useThemeColors\(\);/);
+  assert.match(notice, /backgroundColor: colors\.mint,/);
+  assert.match(notice, /backgroundColor: colors\.dangerBg,/);
+  assert.doesNotMatch(notice, /\bauthColors\b|#[0-9A-Fa-f]{3,8}\b/, 'AuthNotice carries no light literal');
   assert.match(stripCommentsForScan(await read('screens/LegalGateScreen.tsx')), /useThemeColors\(\)/);
   for (const path of [
-    'screens/VerifyPhoneScreen.tsx',
     'screens/LaunchScreen.tsx',
   ]) {
     assert.doesNotMatch(
@@ -1102,7 +1124,6 @@ const MODULE_SCOPE_SHEET_EXCLUSIONS = {
   'components/AuthBackdrop.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
   'components/AuthButton.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
   'components/AuthField.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
-  'components/AuthNotice.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
   'components/AuthScaffold.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
   'components/HotspotMap.web.tsx': 'frozen web surface (CLAUDE.md) — a *.web.tsx file is never edited',
 };

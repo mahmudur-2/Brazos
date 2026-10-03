@@ -262,6 +262,7 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
           <AuthButton
             title="Finish setup"
             weight="semibold"
+            themed
             onPress={handleFinish}
             disabled={!canFinish}
             loading={saving}

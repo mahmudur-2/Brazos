@@ -2,7 +2,7 @@ import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { authColors, authRadius, authSizes } from '../lib/authTheme';
 import { OTP_LENGTH } from '../lib/phoneAuth';
-import { metricStyles } from '../lib/theme';
+import { authSurface, metricStyles, useThemeColors, withAlpha } from '../lib/theme';
 
 /**
  * The six-cell code field.
@@ -37,6 +37,13 @@ type OtpInputProps = {
   invalid?: boolean;
   editable?: boolean;
   onSubmitEditing?: () => void;
+  /**
+   * Fix run D9: the auth flow's opt-in, the same one AuthField takes. On, the
+   * cells resolve through authSurface() — the Lux well in dark, the palette's
+   * surface in light — instead of the frozen Heritage constant. Off, every
+   * Heritage value below is untouched.
+   */
+  themed?: boolean;
 };
 
 // Wide enough to separate the cells, tight enough that six of them plus five
@@ -44,10 +51,26 @@ type OtpInputProps = {
 const CELL_GAP = 10;
 
 export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpInput(
-  { value, onChangeText, invalid = false, editable = true, onSubmitEditing },
+  { value, onChangeText, invalid = false, editable = true, onSubmitEditing, themed = false },
   ref
 ) {
   const styles = stylesFor();
+  const { palette, isDark } = useThemeColors();
+  const surface = authSurface(palette, isDark);
+  // One resolved set per render, read only when the screen opted in.
+  const tone = themed
+    ? {
+        cell: {
+          borderColor: surface.line,
+          backgroundColor: isDark ? withAlpha(palette.white, 0.06) : surface.surface,
+        },
+        filled: { borderColor: surface.line },
+        active: { borderColor: palette.emerald },
+        invalid: { borderColor: surface.danger },
+        text: { color: surface.ink },
+        textInvalid: { color: surface.danger },
+      }
+    : null;
   const inputRef = useRef<TextInput>(null);
 
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }), []);
@@ -75,12 +98,13 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpIn
             key={index}
             style={[
               styles.cell,
-              editable && index === activeIndex && value.length < OTP_LENGTH && styles.cellActive,
-              char !== '' && styles.cellFilled,
-              invalid && styles.cellInvalid,
+              tone?.cell,
+              editable && index === activeIndex && value.length < OTP_LENGTH && [styles.cellActive, tone?.active],
+              char !== '' && [styles.cellFilled, tone?.filled],
+              invalid && [styles.cellInvalid, tone?.invalid],
             ]}
           >
-            <Text style={[styles.cellText, invalid && styles.cellTextInvalid]}>{char}</Text>
+            <Text style={[styles.cellText, tone?.text, invalid && [styles.cellTextInvalid, tone?.textInvalid]]}>{char}</Text>
           </View>
         ))}
       </View>
