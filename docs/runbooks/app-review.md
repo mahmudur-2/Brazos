@@ -27,7 +27,7 @@ Prove it with `node scripts/verify-schema.mjs` pointed at production by the oper
 | Setting | Choose | Why |
 |-|-|-|
 | `EXPO_PUBLIC_PAYMENTS_MODE` (EAS `production` environment) | `stripe` | The card path, the one Apple must see. Unset resolves to `disabled` on a release build and the reviewer could not pay. |
-| Stripe keys on the production project | Test-mode keys until Stripe live activation is approved; live keys after | With test keys the reviewer pays with Stripe's test card and no real money moves; the app says "Test mode" wherever that applies. |
+| Stripe keys on the production project | Test-mode keys until Stripe live activation is approved; live keys after | With test keys the reviewer pays with Stripe's test card and no real money moves. The card path shows no "Test mode" label (those belong to sandbox mode), so the Review Notes below are where the reviewer reads it. |
 | `EXPO_PUBLIC_PHONE_AUTH_MODE` | `disabled` (or unset) | No SMS service is provisioned. Welcome's buttons then open the email screens (B2). |
 | Receipt email (`RESEND_API_KEY`, `RECEIPT_FROM`) | Set if the domain exists; otherwise leave unset | Unset, receipts are skipped and logged; nothing else waits on them. |
 
@@ -74,7 +74,8 @@ customer was told it was done, so job 3 needs re-seeding if the review runs long
 >
 > Reporting and blocking: every job post, profile, review and portfolio photo has "Report"; the
 > report sheet can also block the person. Chats and the inbox have Report and Block in their
-> menus. Posts, bios, bids, reviews and messages are checked against a word list on the server.
+> menus. Posts, bios, service listings, bids, reviews and messages are checked against a word list
+> on the server.
 >
 > Account deletion: Profile → Account & safety → Delete Account.
 >

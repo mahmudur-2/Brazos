@@ -118,8 +118,8 @@ are entered into Stripe's own payment form and never reach Brazos.
   hiring. The card is stored by Stripe, not by Brazos, and can be removed at
   any time in Payment methods.
 
-Before launch, the app may run payments in a test mode in which no real money
-moves; the app says so wherever that applies.
+Before launch, payments may run in a test mode, in which test cards are used
+and no real money moves.
 
 Payments arranged outside Brazos are outside these Terms, and Brazos is not
 responsible for non-payment, underpayment, or any other dispute about them.
