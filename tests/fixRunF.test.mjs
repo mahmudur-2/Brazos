@@ -467,7 +467,14 @@ test('F13: the bell asks for a count — head, exact, unread only — and every 
   const feed = strip(read('screens/NotificationsScreen.tsx'));
   assert.match(feed, /void Promise\.all\(writes\)\.then\(invalidateNotifications\);/);
   assert.match(feed, /await markAllNotificationsRead\(user\.id\);\s*void invalidateNotifications\(\);/);
-  assert.match(strip(read('hooks/usePushNotifications.ts')), /addNotificationReceivedListener\(\(\) => \{\s*void invalidateNotifications\(\);/);
+  // A push arriving or tapped means someone else changed something: the bell AND the jobs it is about.
+  const push = strip(read('hooks/usePushNotifications.ts'));
+  assert.match(push, /addNotificationReceivedListener\(\(\) => \{\s*invalidateAfterPush\(\);/);
+  assert.match(push, /handledColdStart\.current = true;\s*invalidateAfterPush\(\);/);
+  assert.match(
+    strip(read('lib/queryClient.ts')),
+    /export function invalidateAfterPush\(\): void \{\s*void invalidateNotifications\(\);\s*invalidateJobs\(\);\s*\}/
+  );
 });
 
 test('[static] F13: the feed is one cached query with one counted channel, and its writes land in the cache', () => {

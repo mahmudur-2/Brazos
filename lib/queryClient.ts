@@ -63,3 +63,14 @@ export function invalidateJobs(): void {
   void queryClient.invalidateQueries({ queryKey: ['myJobsHub'] });
   void queryClient.invalidateQueries({ queryKey: queryKeys.openJobs });
 }
+
+/**
+ * F13 review — a push arrived or was tapped: SOMEONE ELSE changed something (a
+ * bid, a booking, a payment released, a job nearby). The bell is out of date,
+ * and so are the hub and the feed the push is about — within their freshness
+ * window a focus would otherwise keep showing what was true before it.
+ */
+export function invalidateAfterPush(): void {
+  void invalidateNotifications();
+  invalidateJobs();
+}
