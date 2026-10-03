@@ -564,3 +564,27 @@ test('[static] F1: the mode reads start with the session; the decision and the l
   const armed = provider.slice(provider.indexOf('if (!armed || !userId || resolvedFor === userId) return;'));
   assert.ok(armed.indexOf('consumePendingLanding()') < armed.indexOf('await reads'), 'the landing is taken at arm time');
 });
+
+// ---------------------------------------------------------------------------
+// F7 — the typed client.
+// ---------------------------------------------------------------------------
+test('[static] F7: the client is typed over the generated types, with one stated correction', () => {
+  const client = strip(read('lib/supabase.ts'));
+  assert.match(client, /export const supabase = createClient<Database>\(/);
+  assert.match(client, /import type \{ Database \} from '\.\/supabaseTypes';/);
+  assert.equal((client.match(/storage: secureSessionStorage/g) ?? []).length, 1);
+  const types = strip(read('lib/supabaseTypes.ts'));
+  assert.match(types, /import type \{ Database as GeneratedDatabase \} from '\.\.\/types\/database';/);
+  // The one correction: a function argument also accepts null. Rows, inserts, updates,
+  // views, enums and returns are the generator's own.
+  assert.match(types, /type NullableArgs<A> = A extends Record<string, unknown> \? \{ \[K in keyof A\]: A\[K\] \| null \} : A;/);
+  assert.match(types, /P extends 'Args' \? NullableArgs<F\[N\]\[P\]> : F\[N\]\[P\]/);
+  assert.match(types, /P extends 'Functions' \? WithNullableFunctionArgs<F> : GeneratedDatabase\[S\]\[P\]/);
+  // The frozen web client stays untyped and untouched.
+  assert.doesNotMatch(read('lib/supabase.web.ts'), /createClient</);
+  // No `as any` stands at a .from / .rpc call site.
+  for (const file of execFileSync('git', ['ls-files', '--', 'lib/*.ts', 'hooks/*.ts', 'screens/*.tsx', 'components/*.tsx'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean)) {
+    if (/\.web\.tsx?$/.test(file)) continue;
+    assert.doesNotMatch(strip(read(file)), /\.(from|rpc)\([^)]*\)[^;]*\bas any\b/, `${file} casts a query to any`);
+  }
+});
