@@ -73,8 +73,9 @@ export const colors = {
   bg: '#F4F1E8',
   /** --surface — cards and sheets. */
   surface: '#FFFFFF',
-  /** --muted — secondary text. */
-  muted: '#6E7771',
+  /** --muted — secondary text. Fix run E1: #6E7771 (4.1:1 on the cream) became
+   *  #56605A (5.8:1); every light text ink clears 4.5:1 (tests/themeTokens). */
+  muted: '#56605A',
   /** --line — hairline borders and dividers. */
   line: '#DDE2DD',
   /** --danger — destructive text and icons. */
@@ -82,16 +83,17 @@ export const colors = {
 
   /** Hot-amber warning accent — delete-account gates, warning headings
    *  (Prestige masters 31/32/41). A warning is amber in BOTH palettes and is
-   *  never the danger red; the masters draw no red control at all. */
-  warn: '#9A6B1F',
+   *  never the danger red; the masters draw no red control at all. Fix run E1:
+   *  one step deeper (#9A6B1F was 4.1:1), so it reads on the cream and goldSoft. */
+  warn: '#845D1B',
 
   /** §I: "danger surfaces #F5E7E4 / border #E9CAC5". */
   dangerSurface: '#F5E7E4',
   dangerBorder: '#E9CAC5',
   /** §I: "secondary border #CBE0D7" — the outline on mint/secondary controls. */
   secondaryBorder: '#CBE0D7',
-  /** §I: "inactive nav #839087". */
-  navInactive: '#839087',
+  /** §I: "inactive nav #839087" — deepened by fix run E1 to the subtle ink (2.9:1 → 5.2:1). */
+  navInactive: '#5E6859',
 
   /** Content colour on a forest/emerald fill. Not a §I token — §I names the
    *  primary button "forest/white", so this is that white, given a name so
@@ -174,7 +176,7 @@ export const colors = {
    * equal (`litBetween` flat), never on a colour fork in a screen.
    */
   authInk: '#13201B',
-  authMuted: '#6E7771',
+  authMuted: '#56605A',
   authAccent: '#0D6B52',
   authGold: '#C8A15B',
   authGlintCore: '#FFF6DE',
@@ -225,13 +227,14 @@ export const colors = {
   mark: '#064C3B',
   /** 2026-09-28 (LUX-LIST-64) — THE GREY the operator names #909594: a quiet
    *  state that is not text — an unchosen Start-in tile (#9), the Inbox's empty
-   *  glyph (#26), the media limit pills' words (#33). One value, both themes. */
-  grey: '#909594',
+   *  glyph (#26), the media limit pills' words (#33). Fix run E1: light deepens to the
+   *  subtle ink #5E6859 (the tile's title is text, and #909594 was 2.7:1); dark keeps it. */
+  grey: '#5E6859',
   /** 2026-09-28 (#10, #41) — A PRIMARY THAT IS WAITING: its fill and ink until it
    *  can be tapped (the job-summary page's `.publish:disabled`). Light is the
    *  app's own disabled fill (`neutralBg`, emerald D7) under the same grey. */
   waitingFill: '#EDE7DA',
-  waitingInk: '#909594',
+  waitingInk: '#5E6859',
   /** 2026-09-28 (#41) — THE POSTING BAR (refs/bottom-bar.html): its ground and
    *  top line, and the quiet Save draft button's fill, rim and ink. Light: the
    *  light tab bar's own ground and line (refs/home-tucked-in.html), a white
@@ -248,10 +251,10 @@ export const colors = {
   publishInk: '#F4F1E8',
   /** 2026-09-28 (#54) — THE INBOX ROW (refs/inbox-clean-list.html, version 9):
    *  the message under the name (#2E3A35 light, #D5DED9 dark), the job chip's
-   *  quiet ink (#6B7A73 / #93A59D), and the hairline between rows (#E6DFD3 in
+   *  quiet ink (light #5E6859 since fix run E1, was #6B7A73; dark #93A59D), and the hairline between rows (#E6DFD3 in
    *  light; dark draws #C8FFE6 at .11 — the alpha rides at the call site). */
   inboxPreview: '#2E3A35',
-  inboxChipInk: '#6B7A73',
+  inboxChipInk: '#5E6859',
   inboxRule: '#E6DFD3',
   /** 2026-09-28 (#53) — THE ••• GLASS DROPDOWN's glyphs (#4E6A5F light, #9CC9B6
    *  dark), its red rows (#A8432B light, #E36A53 dark — the reference's own red,
@@ -1483,7 +1486,8 @@ export const meltBar = {
   labelGap: 2,
   /** A tab column is the pill's height square. */
   column: 64,
-  restInkAlpha: { dark: 0.6, light: 0.5 },
+  /** A resting tab's ink alpha. Fix run E1: light 0.5 → 0.64, so its label clears 4.5:1 on the pill. */
+  restInkAlpha: { dark: 0.6, light: 0.64 },
   /** Springs as [stiffness, damping], mass 1. */
   springs: {
     circles: [

@@ -820,6 +820,57 @@ test('G1 materials: the web-fallback scrim on pure white keeps primary text ≥4
 });
 
 // ---------------------------------------------------------------------------
+// Fix run E1 / E2 — TEXT CONTRAST, COMPUTED. Every ink a screen sets as text
+// clears WCAG AA (4.5:1) on the grounds it sits on, in both palettes. The
+// palettes are the EXECUTED modules above, so a token edit that drops an ink
+// under the line fails here with its ratio, not on a phone.
+// ---------------------------------------------------------------------------
+
+/** `hex` at `alpha` over the opaque `ground`, back to #RRGGBB. */
+const over = (hex, alpha, ground) => {
+  const byte = (h, at) => parseInt(h.slice(at, at + 2), 16);
+  const mix = [1, 3, 5]
+    .map((at) => Math.round(alpha * byte(hex, at) + (1 - alpha) * byte(ground, at)))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `#${mix}`;
+};
+
+const assertAA = (ink, ground, what) => {
+  const ratio = contrastOf(ink, ground);
+  assert.ok(ratio >= 4.5, `${what}: ${ink} on ${ground} is ${ratio.toFixed(2)}:1 — below 4.5:1`);
+};
+
+test('E1 contrast: every light text ink clears 4.5:1 on the cream, the white card and the chip', async () => {
+  const { colors } = await themeModule;
+  const { light, meltBar, litCard } = await tokensModule;
+  const pages = { background: colors.background, surface: colors.surface };
+  const chips = { ...pages, neutralBg: colors.neutralBg, mint: light.mint };
+
+  // lib/theme `colors`, the screens' surface.
+  for (const key of ['text', 'textMuted', 'textSubtle', 'navInactive', 'success', 'warning', 'danger', 'info', 'neutral', 'eyebrowGold', 'homeSlate']) {
+    for (const [name, ground] of Object.entries(pages)) assertAA(colors[key], ground, `light colors.${key} on ${name}`);
+  }
+  // ui/tokens `colors`, the new screens' surface.
+  for (const key of ['ink', 'muted', 'authMuted', 'danger', 'warn', 'navInactive', 'eyebrowGold', 'inboxPreview', 'inboxChipInk', 'grey', 'waitingInk', 'dropGlyph', 'dropDanger', 'draftInk', 'money', 'mark', 'stageAssigned', 'stageProgress', 'stageReview']) {
+    for (const [name, ground] of Object.entries(pages)) assertAA(light[key], ground, `light tokens.${key} on ${name}`);
+  }
+  // The secondary inks that sit on a chip fill as well as on the page.
+  for (const [ink, key] of [[colors.textMuted, 'textMuted'], [colors.textSubtle, 'textSubtle'], [light.muted, 'muted'], [light.inboxChipInk, 'inboxChipInk']]) {
+    for (const [name, ground] of Object.entries(chips)) assertAA(ink, ground, `light ${key} on ${name}`);
+  }
+  // Each status ink on its own tint, and the waiting primary's ink on its fill.
+  for (const key of ['success', 'warning', 'danger', 'info', 'neutral']) {
+    assertAA(colors[key], colors[`${key}Bg`], `light ${key} on ${key}Bg`);
+  }
+  assertAA(light.waitingInk, light.waitingFill, 'light waitingInk on waitingFill');
+  // A resting tab label: the ink at the rest alpha over the white pill, at both of its stops.
+  for (const stop of [litCard.light.top, litCard.light.bottom]) {
+    assertAA(over(light.ink, meltBar.restInkAlpha.light, stop), stop, 'a resting light tab label on the pill');
+  }
+});
+
+// ---------------------------------------------------------------------------
 // RUN G1 (C2) — the live override layer resolves to the static tokens when
 // no dial is set. Identity, not merely equality: unchanged inputs must come
 // back as the SAME objects, so palette-keyed style caches keep working and a

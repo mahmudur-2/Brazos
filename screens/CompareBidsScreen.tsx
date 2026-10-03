@@ -372,7 +372,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   protectedPillText: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.gold,
+    color: colors.eyebrowGold,
   },
   headerTitle: {
     fontFamily: fonts.display,

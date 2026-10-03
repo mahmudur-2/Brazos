@@ -598,7 +598,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // Master 20 sets the "0/20" count itself in gold, the rest of the line
   // muted — the count is what the screen is about.
-  subtitleCount: { color: colors.gold, fontWeight: '700' },
+  subtitleCount: { color: colors.eyebrowGold, fontWeight: '700' },
   center: {
     flex: 1,
     alignItems: 'center',

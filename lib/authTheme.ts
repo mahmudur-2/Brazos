@@ -35,7 +35,7 @@ export const authColors = {
   /** --surface */
   surface: '#FFFFFF',
   /** --muted */
-  muted: '#6E7771',
+  muted: '#56605A',
   /** --line */
   line: '#DDE2DD',
   /** --danger */

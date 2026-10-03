@@ -472,7 +472,7 @@ test('4D-6 light palette: every value the card reads is byte-identical', async (
   assert.match(tokens, /ink: '#13201B'/);
   // The light-only keys the card reads come from lib/theme's `colors`.
   const theme = await read('lib/theme.ts');
-  assert.match(theme, /textMuted: '#6B7566'/);
+  assert.match(theme, /textMuted: '#4E5949'/);
   assert.match(theme, /border: '#DDD6C4'/);
   assert.match(theme, /danger: '#A8432B'/);
   assert.match(theme, /surface: '#FFFFFF'/);

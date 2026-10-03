@@ -184,8 +184,11 @@ export const colors = {
   secondaryBorder: emeraldLight.secondaryBorder,
 
   text: '#1F2E22',
-  textMuted: '#6B7566',
-  textSubtle: '#9AA38F',
+  /** Fix run E1: every light text ink clears WCAG AA (4.5:1) on the cream,
+   *  the white card and the chip fill — tests/themeTokens.test.mjs computes it.
+   *  Muted was #6B7566 (4.26:1), subtle #9AA38F (2.3:1). */
+  textMuted: '#4E5949',
+  textSubtle: '#5E6859',
 
   background: '#F4F1E8',
   surface: '#FFFFFF',
@@ -194,15 +197,16 @@ export const colors = {
   /** Inactive bottom-nav items (§I "inactive nav"; decision 4 names the
    *  role). Distinct from textSubtle so the bar can be tuned without moving
    *  every tertiary caption with it. */
-  navInactive: '#839087',
+  navInactive: '#5E6859',
 
   // Status palette (text + background pairs), warmed to sit naturally in the
   // forest/earth palette. Kept clearly distinct from `primary` (which is a
   // deep blue-green) so status badges still read at a glance — success leans
-  // olive/moss, danger leans terracotta, etc.
-  success: '#4C7A3D',
+  // olive/moss, danger leans terracotta, etc. Fix run E1 deepened success and
+  // warning a step so each clears 4.5:1 on the cream and on its own tint.
+  success: '#457038',
   successBg: '#E6EDD9',
-  warning: '#9A5B1E',
+  warning: '#8C531B',
   warningBg: '#F3E3C4',
   danger: '#A8432B',
   dangerBg: '#F3DCD2',

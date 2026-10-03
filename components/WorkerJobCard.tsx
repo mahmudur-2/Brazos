@@ -551,7 +551,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   breakIceText: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.gold,
+    color: colors.eyebrowGold,
   },
   payBlock: {
     position: 'absolute',
