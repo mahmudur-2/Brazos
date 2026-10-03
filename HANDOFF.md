@@ -11,30 +11,43 @@ the Lux drawing run's, the eighteen-item run's and the sittings before them, unc
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
 
-## FIX RUN — IN PROGRESS: group A (money & safety) built and reviewed; groups B–F follow (2026-10-03, "build" given; the workflow's helpers run one after another)
+## FIX RUN — IN PROGRESS: groups A, B and C built and reviewed; D, E and F follow (2026-10-03, "build" given; the workflow's helpers run one after another)
 
 **Start here.** The brief is `docs/dispatch/FIX-RUN.md`; the operator's selection is its first
 section (OUT: A1, B10, C5, D1, D2, D4, D5, E6, F14; picks A10a, A12a, A18a, B1a, C1b, D13a). The
 running log is `.shots/refresh/review/run/log.md` (gitignored), one line per item.
 
-- **Group A built:** A2–A20 (A1 is OUT), commits `1cfc1ae`…`e4a4729` on `af28bce`, six additive
-  migrations `20261003000000`–`20261003000500` (settlement *_ready views, the ban's refund, the
-  reminder's payment gate, partially_refunded as terminal, money_label() in the counter push, the
-  payment_events prune), fenced by `tests/fixRunA.test.mjs` and pgTAP 220–260.
-- **Group A reviewed (this section's run), three follow-ups, each its own commit:** `25ca1cc` —
-  Delete Account reads account_deletion_blockers() BEFORE detaching any saved card (a late block no
-  longer leaves a live account with no card); `738579e` — create-payment never re-confirms a
-  settled intent (a retry after a success gets `confirmed: true`, not a 502); `9f6af4b` — migration
-  `20261003000600_ban_void_unfunded.sql`: the ban voids an unfunded / authorized checkout row as
-  cancel_job() does, so the counterparty's deletion is not blocked (pgTAP `270_ban_void_unfunded.sql`).
-  Read and found sound: A2, A3, A4, A5/A16, A6, A7, A8, A9, A10, A12, A13, A14, A17, A19, A20; the
-  staging scan reports no destructive shape in any of the seven migrations. Not done, by fence:
-  A6's "Sam received $74" sub-line (`workerTakeCents` is fenced off ClientJobDetail).
-- **Proof at this commit:** `npm run verify` 1491 pass, 0 fail; `npm run db:reset` then
-  `npm run db:test` Files=30, Tests=1838, PASS.
-- **Next:** the workflow's remaining helpers (B App Store & bad days, E accessibility, F smooth,
-  then C and D on their picks, the money review's sibling reviews, the final sweep), then one OTA
-  and the new Beta build. The parked reminders in DESIGN LOOP 3 below still stand.
+- **Group A built and reviewed:** A2–A20 (A1 is OUT), on `af28bce`, migrations
+  `20261003000000`–`20261003000600`, fenced by `tests/fixRunA.test.mjs` and pgTAP 220–270. The
+  review's three follow-ups: `25ca1cc` (deletion reads its blockers before detaching a card),
+  `738579e` (create-payment never re-confirms a settled intent), `9f6af4b` (the ban voids an
+  unfunded checkout row). Not done, by fence: A6's "Sam received $74" sub-line.
+- **Group B built:** B1–B16 (B10 is OUT and not built), `c3bfe95`…`49654fd`, migration
+  `20261003000700_ugc_moderation.sql` (report subjects, the `inappropriate` reason, the server word
+  filter). B9, B12 and B13 change `app.config.ts` and ship only in the new Beta build.
+- **Group C built:** C1 (pick C1b), C3, C4, C6, C7, C8 (C5 is OUT), `a792d71`…`3d5e22d`, migration
+  `20261003000800_job_completed_copy.sql`. C2 is no change by ruling H ("the bid wording stays";
+  M-17's customer-reads-bid / worker-reads-offer stands).
+- **Groups B and C reviewed (this section's run), six follow-ups:** `08a1099` — migration
+  `20261003000900_service_listing_filter.sql`: the word filter now covers worker_services title and
+  description, the one public text surface it missed (pgTAP 280, 23 assertions); `ed322dd` — the
+  Notification settings notice and the share alerts no longer show the device's or server's own
+  error text; `ab71985` — Track's sandbox eyebrow is paymentEyebrow()'s, and the Terms name no
+  "service fee"; `cfb9936` — the Terms no longer promise a "Test mode" label the card path never
+  shows (the app-review runbook corrected to match); `e567ba3` — three lines back on M-17 (Home's
+  "Get bids", Compare bids' heading, JobDetail's bid push prompt); `870d5a4` — a doc comment.
+  The legal versions stay `2026-10-03-draft2` (B1's bump, not yet in any OTA).
+- **Proof at this commit:** `npm run verify` 1539 pass, 0 fail; `npm run db:reset` then
+  `npm run db:test` Files=31, Tests=1861, PASS; `scripts/staging-scan.sh` reports no destructive
+  shape in `20261003000700`–`20261003000900`.
+- **Only the operator (device checks from B and C):** an offline cold start and an offline
+  sign-out (B6); a push opened from a closed app in the other mode (B8); Track and the job page
+  updating across two phones (B14); a denied camera / microphone / location offering Open Settings
+  (B11); the 3-D Secure test card 4000 0027 6000 3184 on the payment sheet (B16); the Maestro money
+  walk's new caption wait (C4).
+- **Next:** the workflow's remaining helpers (E accessibility, F smooth, D one look, the final
+  sweep), then one OTA and the new Beta build. The parked reminders in DESIGN LOOP 3 below still
+  stand.
 
 ## DESIGN LOOP 3 — the review is planned; nothing built (2026-10-01/02, the first design chat after the build run; docs only, nothing in the app changed)
 
