@@ -4,7 +4,6 @@ import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-
 import { Avatar } from '../components/Avatar';
 import { SuccessScreen } from '../ui/templates/SuccessScreen';
 import { MoneyText } from '../ui/primitives/MoneyText';
-import { StatusPill } from '../ui/primitives/StatusPill';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { paymentsMode } from '../lib/adapters/payments';
@@ -125,15 +124,16 @@ export function JobConfirmedScreen() {
           <View style={styles.paymentBlock}>
             {/* Tier A (C2, D-4): the customer's held figure is the row's own
                 charge_amount_cents — what the card was charged. */}
+            {/* C8: the caption under the figure says the state once — no pill
+                beside it repeating "held in protection". */}
             <MoneyText cents={customerChargeCents(payment)} state={payment.status} size="lg" />
-            <StatusPill kind="payment" status={payment.status} />
             {/* D16: the sandbox note renders only in sandbox mode; the card
                 path states the money fact — the row reads held, which is the
                 only state this screen renders over. */}
             <Text style={styles.sandboxNote}>
               {paymentsMode === 'sandbox'
                 ? 'Test mode — no real money moved.'
-                : 'Your card was charged and the funds are held in protection until you approve the finished work.'}
+                : 'Your card was charged. Nothing reaches the worker until you approve the finished work.'}
             </Text>
           </View>
         </View>

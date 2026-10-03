@@ -929,9 +929,11 @@ export function WorkerJobScreen() {
               {job.status === 'in_progress' ? (
                 <Card>
                   <Text style={styles.actionTitle}>Finish up</Text>
+                  {/* C8: the counter says the limit and the line by the button
+                      says a photo is required — this hint says neither again. */}
                   <Text style={styles.actionText}>
-                    Add at least one photo of the finished work — up to {MAX_DONE_PHOTOS},
-                    plus one short video if you like — then mark it complete.
+                    Add photos of the finished work, plus one short video if you
+                    like — then mark it complete.
                   </Text>
 
                   {doneVideo && (

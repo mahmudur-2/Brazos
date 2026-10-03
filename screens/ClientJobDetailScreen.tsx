@@ -1229,11 +1229,11 @@ export function ClientJobDetailScreen() {
                 <Text style={styles.paymentNote}>
                   Charged to your card · {formatBudget(job.final_amount_cents ?? job.budget_cents)} agreed price
                 </Text>
-                <Text style={styles.paymentNote}>
-                  {paymentsMode === 'sandbox'
-                    ? 'Funds stay held until you approve the finished work. Test mode — no real money moves.'
-                    : 'Funds stay held until you approve the finished work.'}
-                </Text>
+                {/* C8: the caption already says "Held in protection — released when you
+                    approve"; the sandbox keeps only its test-mode line. */}
+                {paymentsMode === 'sandbox' ? (
+                  <Text style={styles.paymentNote}>Test mode — no real money moves.</Text>
+                ) : null}
               </Card>
               </HeldPulse>
             ) : payment && fundingWindowClosed ? (

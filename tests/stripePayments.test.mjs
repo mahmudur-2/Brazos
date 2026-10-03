@@ -579,7 +579,9 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   // JobConfirmed's note is mode-aware too.
   const confirmed = stripComments(read('screens/JobConfirmedScreen.tsx'));
   assert.match(confirmed, /paymentsMode === 'sandbox'\s*\?\s*'Test mode — no real money moved\.'/);
-  assert.match(confirmed, /Your card was charged and the funds are held in protection/);
+  // C8: the caption carries "held in protection"; the note says what it means, once.
+  assert.match(confirmed, /Your card was charged\. Nothing reaches the worker until you approve the finished work\./);
+  assert.doesNotMatch(confirmed, /<StatusPill/);
 });
 
 // ---------------------------------------------------------------------------

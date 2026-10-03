@@ -227,7 +227,7 @@ const SANDBOX_STRINGS = {
     'One tip per job. Test mode — no real money moves.',
   ],
   'screens/ClientJobDetailScreen.tsx': [
-    'Funds stay held until you approve the finished work. Test mode — no real money moves.',
+    'Test mode — no real money moves.',
   ],
   // C4 (2026-10-03): every payment eyebrow is paymentEyebrow(); its sandbox arm lives here.
   'lib/moneyCopy.ts': ['PAYMENT · TEST MODE'],

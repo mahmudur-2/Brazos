@@ -59,7 +59,10 @@ test('1 · the complete flow requires a photo before the call, and passes the up
   assert.match(workerFlat, /if \(error\) \{ await alertAsync\('Could not complete job', userMessage\(error\)\); return; \}/);
   // The caption and the card copy say the rule before the tap.
   assert.match(workerFlat, /A photo of the finished work is required to mark it complete\./);
-  assert.match(workerFlat, /Add at least one photo of the finished work — up to \{MAX_DONE_PHOTOS\}, plus one short video if you like — then mark it complete\./);
+  // C8: the hint no longer repeats the limit (the counter) or the requirement (the line above).
+  assert.match(workerFlat, /Add photos of the finished work, plus one short video if you like — then mark it complete\./);
+  assert.match(workerFlat, /\{donePhotos\.length\}\/\{MAX_DONE_PHOTOS\} photos/);
+  assert.equal((workerFlat.match(/Add at least one photo|up to \{MAX_DONE_PHOTOS\}/g) ?? []).length, 0);
   // The uploader is the existing job-photos path.
   assert.match(worker, /uploadJobPhoto\(params\.jobId, asset\)/);
   assert.match(read('lib/storage.ts'), /const BUCKET = 'job-photos';/);
@@ -206,4 +209,18 @@ test('8 · A8 — the worker is never offered a start the server refuses: no "St
   // Unheld: the pinned primary is the conversation, and the note says what it waits for.
   assert.match(workerFlat, /: awaitingProtection \? \{ title: `Message \$\{clientName\}`, onPress: \(\) => navigation\.navigate\('Chat', \{ jobId: job\.id \}\), loading: false \}/);
   assert.match(worker, /Waiting for \$\{clientName\} to protect the payment\./);
+});
+
+test('[static] C8 · a screen says each money and photo sentence once', () => {
+  const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  // Job confirmed: the caption under the charge is the one "held" — no pill beside it.
+  const confirmed = strip(readFileSync(join(root, 'screens/JobConfirmedScreen.tsx'), 'utf8'));
+  assert.doesNotMatch(confirmed, /StatusPill/);
+  assert.equal((confirmed.match(/held in protection/gi) ?? []).length, 0, 'the caption carries it');
+  // The customer's held card: the caption says "released when you approve"; no second sentence does.
+  const client = strip(readFileSync(join(root, 'screens/ClientJobDetailScreen.tsx'), 'utf8'));
+  assert.doesNotMatch(client, /Funds stay held until you approve/);
+  // The worker's finish card: the limit once (the counter), the requirement once (by the button).
+  assert.equal((workerFlat.match(/MAX_DONE_PHOTOS\}/g) ?? []).length >= 1, true);
+  assert.equal((workerFlat.match(/is required to mark it complete/g) ?? []).length, 1);
 });
