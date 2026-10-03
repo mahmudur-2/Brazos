@@ -1,7 +1,7 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-10-01 (DESIGN LOOP 3, the first section below, is the next session's start — then
-THE TAB BAR FIX — then BUILD RUN — DONE, the run it followed — then the BUILD RUN's planning section as it was written before "build", superseded by the first —
+WRITTEN: 2026-10-03 (FIX RUN — IN PROGRESS, the first section below, is the current state — then
+DESIGN LOOP 3, the sitting that planned it — then THE TAB BAR FIX — then BUILD RUN — DONE, the run it followed — then the BUILD RUN's planning section as it was written before "build", superseded by the first —
 then THE VIEWER'S PREP FIXED, AND THE TAB BAR EXPLORED, the DESIGN LOOP section, BUILD IT, the
 LUX-LIST-2 run's, LUX-LIST-64's, the NEXT SESSION primer of 2026-09-27 (the pipeline, the fences and
 the traps), THE OPERATOR'S REVIEW OF THE LUX AFTER, THE LUX REMAKE, the brief's own section, THE
@@ -10,6 +10,31 @@ the Lux drawing run's, the eighteen-item run's and the sittings before them, unc
 
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
+
+## FIX RUN — IN PROGRESS: group A (money & safety) built and reviewed; groups B–F follow (2026-10-03, "build" given; the workflow's helpers run one after another)
+
+**Start here.** The brief is `docs/dispatch/FIX-RUN.md`; the operator's selection is its first
+section (OUT: A1, B10, C5, D1, D2, D4, D5, E6, F14; picks A10a, A12a, A18a, B1a, C1b, D13a). The
+running log is `.shots/refresh/review/run/log.md` (gitignored), one line per item.
+
+- **Group A built:** A2–A20 (A1 is OUT), commits `1cfc1ae`…`e4a4729` on `af28bce`, six additive
+  migrations `20261003000000`–`20261003000500` (settlement *_ready views, the ban's refund, the
+  reminder's payment gate, partially_refunded as terminal, money_label() in the counter push, the
+  payment_events prune), fenced by `tests/fixRunA.test.mjs` and pgTAP 220–260.
+- **Group A reviewed (this section's run), three follow-ups, each its own commit:** `25ca1cc` —
+  Delete Account reads account_deletion_blockers() BEFORE detaching any saved card (a late block no
+  longer leaves a live account with no card); `738579e` — create-payment never re-confirms a
+  settled intent (a retry after a success gets `confirmed: true`, not a 502); `9f6af4b` — migration
+  `20261003000600_ban_void_unfunded.sql`: the ban voids an unfunded / authorized checkout row as
+  cancel_job() does, so the counterparty's deletion is not blocked (pgTAP `270_ban_void_unfunded.sql`).
+  Read and found sound: A2, A3, A4, A5/A16, A6, A7, A8, A9, A10, A12, A13, A14, A17, A19, A20; the
+  staging scan reports no destructive shape in any of the seven migrations. Not done, by fence:
+  A6's "Sam received $74" sub-line (`workerTakeCents` is fenced off ClientJobDetail).
+- **Proof at this commit:** `npm run verify` 1491 pass, 0 fail; `npm run db:reset` then
+  `npm run db:test` Files=30, Tests=1838, PASS.
+- **Next:** the workflow's remaining helpers (B App Store & bad days, E accessibility, F smooth,
+  then C and D on their picks, the money review's sibling reviews, the final sweep), then one OTA
+  and the new Beta build. The parked reminders in DESIGN LOOP 3 below still stand.
 
 ## DESIGN LOOP 3 — the review is planned; nothing built (2026-10-01/02, the first design chat after the build run; docs only, nothing in the app changed)
 
