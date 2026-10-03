@@ -418,8 +418,8 @@ const TO_WORKER_SEARCH = [
  */
 const TO_CUSTOMER_PROFILE = [
   { expect: 'Take a job' },
-  { pressText: 'Profile' },
-  { expect: 'Choose which events can alert you.' },
+  { press: 'Profile' },
+  { expect: 'Job, offer and payment updates.' },
 ];
 
 /**
@@ -540,7 +540,7 @@ const TARGETS = [
       name: `customer-discover-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [{ expect: 'Take a job' }, { pressText: 'Discover' }],
+      recipe: [{ expect: 'Take a job' }, { press: 'Discover' }],
       wait: 'Describe what you need',
     },
     {
@@ -564,7 +564,7 @@ const TARGETS = [
       name: `customer-inbox-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [{ expect: 'Take a job' }, { pressText: 'Inbox' }],
+      recipe: [{ expect: 'Take a job' }, { press: 'Inbox' }],
       wait: 'No messages yet',
     },
     {
@@ -589,8 +589,8 @@ const TARGETS = [
       name: `customer-profile-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [{ expect: 'Take a job' }, { pressText: 'Profile' }],
-      wait: 'Choose which events can alert you.',
+      recipe: [{ expect: 'Take a job' }, { press: 'Profile' }],
+      wait: 'Job, offer and payment updates.',
     },
     {
       // Profile → the details page. "No bio yet" is that page's own honest
@@ -757,7 +757,7 @@ const TARGETS = [
       name: `worker-myjobs-${colorScheme}`,
       mode: 'worker',
       colorScheme,
-      recipe: [{ expect: 'Get hired.' }, { pressText: 'My Jobs' }],
+      recipe: [{ expect: 'Get hired.' }, { press: 'My Jobs' }],
       wait: 'Nothing here yet',
     },
     {
@@ -765,7 +765,7 @@ const TARGETS = [
       name: `worker-inbox-${colorScheme}`,
       mode: 'worker',
       colorScheme,
-      recipe: [{ expect: 'Get hired.' }, { pressText: 'Inbox' }],
+      recipe: [{ expect: 'Get hired.' }, { press: 'Inbox' }],
       wait: 'No messages yet',
     },
     {
@@ -774,7 +774,7 @@ const TARGETS = [
       name: `worker-profile-${colorScheme}`,
       mode: 'worker',
       colorScheme,
-      recipe: [{ expect: 'Get hired.' }, { pressText: 'Profile' }],
+      recipe: [{ expect: 'Get hired.' }, { press: 'Profile' }],
       wait: 'Choose which events can alert you.',
     },
   ]),
