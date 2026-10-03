@@ -84,3 +84,32 @@ test('[static] F11: the add-media menu is the anchored glass dropdown, and no fr
   // onClosed runs after the panel and its presence report are gone.
   assert.match(menu, /useModalPresence\(mounted && !!anchor, false\);[\s\S]*?useEffect\(\(\) => \{\s*if \(mounted\) \{[\s\S]*?onClosedRef\.current\?\.\(\);/);
 });
+
+test('[static] F10: photo zoom is one component, on the UI thread where the binary can, and MediaViewer zooms too', () => {
+  const fallback = strip(read('components/ZoomableImage.tsx'));
+  const fast = strip(read('components/ZoomableImage.motion120.tsx'));
+  const shared = strip(read('components/ZoomableImage.shared.tsx'));
+  // The fast path: recognisers together, settled by springs, the JS thread told only the outcome.
+  assert.match(fast, /Gesture\.Simultaneous\(pinch, pan, Gesture\.Exclusive\(doubleTap, longPress\)\)/);
+  assert.match(fast, /\.enabled\(zoomed \|\| dismissable\)/, 'the pan leaves a pager its swipe at 1x');
+  assert.match(fast, /runOnJS\(letGo\)\(\)/);
+  assert.doesNotMatch(fast, /PanResponder/);
+  // The fallback is the PanResponder, and both read one set of numbers.
+  assert.match(fallback, /PanResponder\.create\(/);
+  for (const source of [fallback, fast]) {
+    assert.match(source, /from '\.\/ZoomableImage\.shared'/);
+    assert.match(source, /ZOOM_SPRING/);
+    assert.match(source, /dragFade\(/);
+    assert.match(source, /panBound\(/);
+  }
+  for (const name of ['clampTo', 'panBound', 'dragFade']) {
+    assert.match(shared, new RegExp(String.raw`export function ${name}\([^)]*\): number \{\s*'worklet';`), `${name} is a worklet`);
+  }
+  // PhotoViewer no longer carries a gesture body of its own; MediaViewer's photos zoom and lock the pager.
+  const viewer = strip(read('components/PhotoViewer.tsx'));
+  assert.doesNotMatch(viewer, /PanResponder|Animated\./);
+  assert.match(viewer, /<ZoomableImage[\s\S]*?onDismiss=\{onClose\}[\s\S]*?<\/ZoomableImage>/);
+  const media = strip(read('components/MediaViewer.tsx'));
+  assert.match(media, /scrollEnabled=\{!zoomed\}/);
+  assert.match(media, /<ZoomableImage[\s\S]*?onZoomedChange=\{setZoomed\}[\s\S]*?<RemoteImage/);
+});

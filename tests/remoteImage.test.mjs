@@ -16,12 +16,12 @@ const ROOT_FILES = ['App.tsx', 'index.ts'];
 
 /**
  * The ONE remote photo left on react-native's Image, with its reason recorded
- * in the file beside it. The gesture-driven viewer drives scale and translate
- * on the element itself through Animated.createAnimatedComponent, so a wrapper
- * between the animated values and the picture would stop the gestures moving
- * it — and the picture is already in cache when the viewer opens.
+ * in the file beside it. The full-screen viewer's picture is already in cache
+ * when it opens, and its zoom (components/ZoomableImage, fix run F10) scales
+ * it to 4x, which wants the picture undecimated rather than downscaled to its
+ * 1x box.
  */
-const EXCEPTIONS = { 'components/PhotoViewer.tsx': 'Animated.Image, gesture-driven' };
+const EXCEPTIONS = { 'components/PhotoViewer.tsx': 'the zoomed full-screen picture, already cached' };
 
 function* walk(dir) {
   for (const entry of readdirSync(join(root, dir))) {

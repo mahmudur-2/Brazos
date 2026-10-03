@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { RemoteImage } from './RemoteImage';
+import { ZoomableImage } from './ZoomableImage';
 import { spacing, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 
 export type ViewerItem = { kind: 'photo' | 'video'; url: string };
@@ -38,7 +39,9 @@ function VideoPage({ url, active, width, height }: { url: string; active: boolea
  * 2026-09-28 (LUX-LIST-64 #38) — THE POSTING'S MEDIA, FULL SCREEN: the review
  * summary's tiles open here (refs/job-summary.html `.viewer`). A swipe between
  * pages, "2 / 3" and the kind at the top, a round close, and dots under the
- * media; a clip plays from its native controls. Always on the media chrome —
+ * media; a clip plays from its native controls, and a photo pinches, pans and
+ * double-taps to zoom (components/ZoomableImage, FIX-RUN F10) with the pager
+ * held still while it is zoomed. Always on the media chrome —
  * the near-black every photo viewer in the app sits on — in either theme.
  */
 export function MediaViewer({
@@ -59,6 +62,8 @@ export function MediaViewer({
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [page, setPage] = useState(index);
+  // FIX-RUN F10 — a zoomed photo holds the pager still, so one finger pans the photo instead.
+  const [zoomed, setZoomed] = useState(false);
   const listRef = useRef<FlatList<ViewerItem>>(null);
 
   useEffect(() => {
@@ -97,6 +102,7 @@ export function MediaViewer({
           data={items}
           horizontal
           pagingEnabled
+          scrollEnabled={!zoomed}
           showsHorizontalScrollIndicator={false}
           initialScrollIndex={Math.min(index, Math.max(0, items.length - 1))}
           getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
@@ -106,7 +112,14 @@ export function MediaViewer({
           renderItem={({ item, index: i }) => (
             <View style={[styles.page, { width }]}>
               {item.kind === 'photo' ? (
-                <RemoteImage uri={item.url} style={{ width, height: mediaHeight }} contentFit="contain" />
+                <ZoomableImage
+                  width={width}
+                  height={mediaHeight}
+                  resetKey={visible && i === page ? item.url : null}
+                  onZoomedChange={setZoomed}
+                >
+                  <RemoteImage uri={item.url} style={{ width, height: mediaHeight }} contentFit="contain" />
+                </ZoomableImage>
               ) : (
                 <VideoPage url={item.url} active={i === page} width={width} height={mediaHeight} />
               )}

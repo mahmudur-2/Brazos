@@ -1085,6 +1085,16 @@ const SIBLINGS = [
     shared: 'components/KeyboardAway.shared.tsx',
     needs: 'reanimated',
   },
+  {
+    // 2026-10-03 (fix run F10) — a photo's pinch, pan, double tap and swipe-away (PhotoViewer,
+    // MediaViewer): recognisers AND worklets, the PeekSheet AND; the fallback is the PanResponder
+    // PhotoViewer always had, on the same shared numbers.
+    name: 'ZoomableImage',
+    fallback: 'components/ZoomableImage.tsx',
+    fast: 'components/ZoomableImage.motion120.tsx',
+    shared: 'components/ZoomableImage.shared.tsx',
+    needs: 'gestures',
+  },
 ];
 
 test('[executed] every sibling is taken when its native is present and skipped when it is absent', () => {
@@ -2235,6 +2245,9 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       // 2026-09-30 (the build run, idea 23) — the chosen category tile's check slot: one shared
       // value, 0 → 1, the slot's width and the box's opacity computed from it on the UI thread.
       'components/TileCheck.motion120.tsx',
+      // 2026-10-03 (fix run F10) — the zoomable photo: a pinch, a pan, a double tap and a long
+      // press over shared values; its clamps are 'worklet's in ZoomableImage.shared.tsx.
+      'components/ZoomableImage.motion120.tsx',
     ],
     'the fast-path roster changed — bring the new sibling into this fence deliberately'
   );
