@@ -466,3 +466,14 @@ test('F13: the bell asks for a count — head, exact, unread only — and every 
   assert.match(feed, /await markAllNotificationsRead\(user\.id\);\s*void invalidateNotifications\(\);/);
   assert.match(strip(read('hooks/usePushNotifications.ts')), /addNotificationReceivedListener\(\(\) => \{\s*void invalidateNotifications\(\);/);
 });
+
+test('[static] F13: the feed is one cached query with one counted channel, and its writes land in the cache', () => {
+  const feed = strip(read('hooks/useOpenJobs.ts'));
+  assert.match(feed, /useQuery\(\{ queryKey: queryKeys\.openJobs, queryFn: readFeed \}\)/);
+  assert.match(feed, /feedMounts \+= 1;\s*if \(feedMounts === 1\) \{\s*feedChannel = supabase\s*\.channel\(`public:jobs:open:\$\{instanceId\}:\$\{runRef\.current\+\+\}`\)/);
+  assert.match(feed, /feedMounts -= 1;\s*if \(feedMounts === 0 && feedChannel\) \{\s*supabase\.removeChannel\(feedChannel\);/);
+  assert.equal((feed.match(/\.channel\(/g) ?? []).length, 1, 'one channel for every mount');
+  assert.doesNotMatch(feed, /useState/, 'no per-mount copy of the rows');
+  assert.match(feed, /queryClient\.setQueryData<OpenJob\[\]>\(queryKeys\.openJobs,/);
+  assert.match(feed, /const error = query\.error \? userMessage\(query\.error\) : null;/);
+});

@@ -1,8 +1,34 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useHiddenUserIds } from './useHiddenUserIds';
 import { userMessage } from '../lib/errorMessage';
 import { fetchOpenJobs, toOpenJob, type OpenJob } from '../lib/jobs';
+import { queryClient } from '../lib/queryClient';
+import { queryKeys } from '../lib/queryKeys';
 import { supabase } from '../lib/supabase';
+
+/**
+ * F13 — ONE FEED, ONE CHANNEL. The feed is mounted by Worker Home, Worker
+ * Results, the Map and Job Detail at once; each mount used to make its own
+ * read and open its own whole-table realtime channel. Now the rows are one
+ * cached query (lib/queryKeys.ts openJobs) and the channel is opened by the
+ * first mount, shared, and closed when the last one leaves. Its writes land in
+ * the cache, so every screen sees the same feed.
+ */
+let feedMounts = 0;
+let feedChannel: RealtimeChannel | null = null;
+
+/** Write one realtime change into the cached feed; nothing before the first read lands. */
+function updateFeed(change: (previous: OpenJob[]) => OpenJob[]) {
+  queryClient.setQueryData<OpenJob[]>(queryKeys.openJobs, (previous) => (previous ? change(previous) : previous));
+}
+
+async function readFeed(): Promise<OpenJob[]> {
+  const { data, error } = await fetchOpenJobs();
+  if (error) throw error;
+  return data;
+}
 
 /**
  * Live feed of open jobs (newest first). Does an initial fetch, then keeps the
@@ -29,61 +55,62 @@ export function useOpenJobs() {
   // never resurrect a still-tearing-down channel.
   const instanceId = useId();
   const runRef = useRef(0);
-  const [jobs, setJobs] = useState<OpenJob[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  const query = useQuery({ queryKey: queryKeys.openJobs, queryFn: readFeed });
+  const { refetch } = query;
+  // Pull-to-refresh: a forced read, whatever the cache's age.
   const refresh = useCallback(async () => {
-    setError(null);
-    const { data, error } = await fetchOpenJobs();
-    if (error) setError(userMessage(error));
-    else setJobs(data);
-    setLoading(false);
-  }, []);
+    await refetch();
+  }, [refetch]);
+  const jobs = query.data ?? EMPTY_FEED;
+  const loading = query.isPending;
+  const error = query.error ? userMessage(query.error) : null;
 
+  // The one channel, counted: the first mount opens it, the last closes it.
   useEffect(() => {
-    setLoading(true);
-    refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel(`public:jobs:open:${instanceId}:${runRef.current++}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'jobs' },
-        (payload) => {
-          const job = toOpenJob(payload.new);
-          if (job.status !== 'open') return;
-          setJobs((prev) => (prev.some((j) => j.id === job.id) ? prev : [job, ...prev]));
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'jobs' },
-        (payload) => {
-          const job = toOpenJob(payload.new);
-          setJobs((prev) => {
-            const without = prev.filter((j) => j.id !== job.id);
-            if (job.status !== 'open') return without;
-            return [job, ...without].sort((a, b) =>
-              b.created_at.localeCompare(a.created_at)
-            );
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'jobs' },
-        (payload) => {
-          const oldId = (payload.old as { id?: string })?.id;
-          if (oldId) setJobs((prev) => prev.filter((j) => j.id !== oldId));
-        }
-      )
-      .subscribe();
+    feedMounts += 1;
+    if (feedMounts === 1) {
+      feedChannel = supabase
+        .channel(`public:jobs:open:${instanceId}:${runRef.current++}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'jobs' },
+          (payload) => {
+            const job = toOpenJob(payload.new);
+            if (job.status !== 'open') return;
+            updateFeed((prev) => (prev.some((j) => j.id === job.id) ? prev : [job, ...prev]));
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'jobs' },
+          (payload) => {
+            const job = toOpenJob(payload.new);
+            updateFeed((prev) => {
+              const without = prev.filter((j) => j.id !== job.id);
+              if (job.status !== 'open') return without;
+              return [job, ...without].sort((a, b) =>
+                b.created_at.localeCompare(a.created_at)
+              );
+            });
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'jobs' },
+          (payload) => {
+            const oldId = (payload.old as { id?: string })?.id;
+            if (oldId) updateFeed((prev) => prev.filter((j) => j.id !== oldId));
+          }
+        )
+        .subscribe();
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      feedMounts -= 1;
+      if (feedMounts === 0 && feedChannel) {
+        supabase.removeChannel(feedChannel);
+        feedChannel = null;
+      }
     };
   }, [instanceId]);
 
@@ -97,3 +124,6 @@ export function useOpenJobs() {
 
   return { jobs: visible, loading, error, refresh };
 }
+
+/** One empty feed, so a screen waiting on the first read sees a stable array. */
+const EMPTY_FEED: OpenJob[] = [];
