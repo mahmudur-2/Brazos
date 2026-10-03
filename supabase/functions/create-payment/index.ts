@@ -371,6 +371,15 @@ Deno.serve(async (req) => {
       // same attempt still shares its key. An unreadable intent keeps the fixed key — never a
       // random one, which would be no idempotency at all.
       const intentNow = await stripeGet(`/v1/payment_intents/${encodeURIComponent(intentId)}`);
+      // A15 review: a SETTLED intent is never confirmed again. A retry that lost the first answer
+      // (a dropped connection, a second tap after the first went through) would otherwise read the
+      // successful charge as its "prior" charge, send a new key, and be refused by the provider for
+      // an intent already succeeded. It gets the answer the first attempt got; the webhook marks the
+      // row held exactly as before.
+      const nowStatus = intentNow.ok ? intentNow.body.status : undefined;
+      if (nowStatus === 'succeeded' || nowStatus === 'processing' || nowStatus === 'requires_capture') {
+        return json({ paymentId, confirmed: true });
+      }
       const priorCharge = intentNow.ok && typeof intentNow.body.latest_charge === 'string' ? intentNow.body.latest_charge : '';
       const confirmed = await stripe(
         `/v1/payment_intents/${encodeURIComponent(intentId)}/confirm`,

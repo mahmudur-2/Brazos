@@ -80,7 +80,12 @@ test('[static] create-payment: the opt-in sets or clears the intent\'s future us
   // A15 (2026-10-03): the key carries the charge the intent had BEFORE this attempt, so a retry
   // after a decline is a new request while a repeated tap still shares its key; an unreadable
   // intent keeps the fixed key.
-  assert.match(fn, /const intentNow = await stripeGet\(`\/v1\/payment_intents\/\$\{encodeURIComponent\(intentId\)\}`\);\s*const priorCharge = intentNow\.ok && typeof intentNow\.body\.latest_charge === 'string' \? intentNow\.body\.latest_charge : '';/);
+  assert.match(fn, /const intentNow = await stripeGet\(`\/v1\/payment_intents\/\$\{encodeURIComponent\(intentId\)\}`\);/);
+  // A15 review: a settled intent is never confirmed again — the retry that lost the first answer
+  // gets that answer, instead of a new key refused for an intent already succeeded.
+  assert.match(fn, /const nowStatus = intentNow\.ok \? intentNow\.body\.status : undefined;\s*if \(nowStatus === 'succeeded' \|\| nowStatus === 'processing' \|\| nowStatus === 'requires_capture'\) \{\s*return json\(\{ paymentId, confirmed: true \}\);\s*\}/);
+  assert.match(fn, /const priorCharge = intentNow\.ok && typeof intentNow\.body\.latest_charge === 'string' \? intentNow\.body\.latest_charge : '';/);
+  assert.ok(fn.indexOf('const nowStatus =') < fn.indexOf('const priorCharge ='), 'the settled check comes before any key is built');
   assert.match(fn, /\{ payment_method: savedCardId, off_session: 'true', return_url: OFF_SESSION_RETURN_URL \},\s*`brazos-offsession-\$\{paymentId\}-\$\{savedCardId\}\$\{priorCharge \? `-\$\{priorCharge\}` : ''\}`/);
   assert.doesNotMatch(fn, /Date\.now\(\)|crypto\.randomUUID|Math\.random/, 'never a random key — that would be no idempotency at all');
   assert.doesNotMatch(fn, /latestSavedCard/, 'never "whichever card is newest"');
