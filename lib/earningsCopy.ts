@@ -70,7 +70,7 @@ export function earningsRowMeta(
     const deadline = row.releaseDeadlineMs;
     if (deadline == null) return 'Held in protection';
     if (deadline > nowMs) {
-      return `Held in protection — releases in ${f.countdown(deadline, nowMs)} unless approved first`;
+      return `Held in protection — releases ${f.countdown(deadline, nowMs)} unless approved first`;
     }
     // The clock has run. The server's timer releases when its own gate allows
     // — told by any channel, or the unconditional fallback — and this client

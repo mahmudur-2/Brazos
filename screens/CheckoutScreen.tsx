@@ -28,7 +28,7 @@ import {
   CHECKOUT_POLL_TIMEOUT_MS,
   classifyCheckoutPoll,
 } from '../lib/payments/stripeRules';
-import { releaseCountdownLabel } from '../lib/jobLifecycle';
+import { releaseAtLabel } from '../lib/jobLifecycle';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { fetchProfileById } from '../lib/profiles';
 import { arrivalWindowLabel, formatBudget } from '../lib/jobs';
@@ -699,7 +699,7 @@ export function CheckoutScreen() {
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Pay by</Text>
                         <Text style={styles.summaryValue}>
-                          closes in {releaseCountdownLabel(fundingDueMs as number, nowMs)}
+                          {releaseAtLabel(fundingDueMs as number, nowMs)}
                         </Text>
                       </View>
                     ) : null}

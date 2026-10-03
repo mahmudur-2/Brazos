@@ -608,7 +608,7 @@ test('D11/PJ1-C7 · the area card is deleted, and the privacy fact still reads t
   );
   assert.match(
     flat,
-    /Never shown until you hire — can see after job is accepted\./,
+    /Only the worker you hire sees it\./,
     'the address caption still states the privacy rule'
   );
 
@@ -663,7 +663,7 @@ test('D12 · the address caption is below the field, and the label row carries o
   // The caption is a plain line under the field, verbatim.
   assert.match(
     field,
-    /<Text style=\{styles\.fieldHint\}> Never shown until you hire — can see after job is accepted\. <\/Text>/
+    /<Text style=\{styles\.fieldHint\}> Only the worker you hire sees it\. <\/Text>/
   );
   assert.ok(
     !flat.includes('Never shown while workers browse'),

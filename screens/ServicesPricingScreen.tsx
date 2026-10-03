@@ -206,7 +206,7 @@ export function ServicesPricingScreen() {
           <View style={styles.availabilityCopy}>
             <Text style={styles.cardTitle}>Taking new work</Text>
             <Text style={styles.cardNote}>
-              On your profile. Off won’t block offers.
+              Shown on your profile. Turning it off doesn’t stop new offers.
             </Text>
           </View>
           <Toggle

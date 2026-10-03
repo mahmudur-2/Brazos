@@ -1846,8 +1846,8 @@ export function PostJobScreen() {
                   privacy fact still reads twice on this same step: the step
                   subtitle ("Workers browsing see only the area. The exact
                   address stays private until you hire someone.") and the
-                  address field's caption ("Never shown until you hire — can
-                  see after job is accepted."). */}
+                  address field's caption ("Only the worker you hire sees
+                  it."). */}
 
               {/* The exact address and timing are meaningless for a direct
                   offer (the negotiation carries its own terms — Phase 5's
@@ -1875,7 +1875,7 @@ export function PostJobScreen() {
                       autoCapitalize="words"
                     />
                     <Text style={styles.fieldHint}>
-                      Never shown until you hire — can see after job is accepted.
+                      Only the worker you hire sees it.
                     </Text>
                   </View>
               )}

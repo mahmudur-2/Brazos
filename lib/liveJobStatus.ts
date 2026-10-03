@@ -2,7 +2,7 @@ import { lateShiftMinutes, movedWindow } from './runningLate';
 import {
   JOB_LIFECYCLE_LABELS,
   STAGE,
-  releaseCountdownLabel,
+  releaseAtLabel,
   releaseDeadlineMs,
   type JobLifecycleState,
 } from './jobLifecycle';
@@ -157,7 +157,7 @@ export function liveJobStatus(input: {
   checklist?: { done: number; total: number } | null;
   /** From releaseDeadlineMs(); the approval countdown. */
   releaseDeadline?: number | null;
-  /** The card says what to do ("approve, or it releases in 63h"); the Home bar,
+  /** The card says what to do ("approve, or it releases Sat at 3 PM"); the Home bar,
    *  what has happened ("check the work"). */
   surface: 'card' | 'bar';
   nowMs: number;
@@ -223,9 +223,9 @@ export function liveJobStatus(input: {
       };
     }
     case 'awaiting_approval': {
-      const countdown =
+      const releasesAt =
         input.releaseDeadline != null && input.releaseDeadline > nowMs
-          ? releaseCountdownLabel(input.releaseDeadline, nowMs)
+          ? releaseAtLabel(input.releaseDeadline, nowMs)
           : null;
       return {
         step: 3,
@@ -234,8 +234,8 @@ export function liveJobStatus(input: {
         detail:
           surface === 'bar'
             ? 'check the work'
-            : countdown
-              ? `approve, or it releases in ${countdown}`
+            : releasesAt
+              ? `approve, or it releases ${releasesAt}`
               : 'approve the work',
         live: false,
         tone,

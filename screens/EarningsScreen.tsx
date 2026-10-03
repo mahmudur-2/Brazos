@@ -17,7 +17,7 @@ import { payoutSetupNotice, payoutsCta, workerTakeCents, type PayoutsStatus } fr
 import { fetchMyPayoutsStatus } from '../lib/payments/stripe';
 import { deriveEarnings, fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
 import { earningsRowMeta } from '../lib/earningsCopy';
-import { releaseCountdownLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
+import { releaseAtLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
 import { formatBudget } from '../lib/jobs';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import { formatTimeAgo } from '../lib/time';
@@ -222,7 +222,7 @@ export function EarningsScreen() {
                                     waitingOnPayoutSetup: payoutSetupNotice(payouts, [row]) !== null,
                                   },
                                   nowMs,
-                                  { countdown: releaseCountdownLabel, timeAgo: formatTimeAgo }
+                                  { countdown: releaseAtLabel, timeAgo: formatTimeAgo }
                                 )}
                               </Text>
                             </View>

@@ -32,6 +32,7 @@ const {
   deriveMyJobsTab,
   myJobsNextAction,
   releaseCountdownLabel,
+  releaseAtLabel,
   releaseDeadlineMs,
   trackStepIndex,
   JOB_LIFECYCLE_LABELS,
@@ -198,7 +199,7 @@ test('next-action lines derive from lifecycle facts, and Review never means rati
       releaseDeadline: now + 41 * HOUR + 1,
       nowMs: now,
     }),
-    'Approval needed — releases in 41h'
+    `Approval needed — releases ${releaseAtLabel(now + 41 * HOUR + 1, now)}`
   );
   assert.equal(
     myJobsNextAction({ perspective: 'customer', state: 'completed', reviewedByMe: false }),
@@ -408,4 +409,38 @@ test('verify-schema covers phase51', async () => {
   ]) {
     assert.ok(src.includes(`'${rpc}'`), `verify-schema must probe ${rpc}`);
   }
+});
+
+test('C6 · releaseAtLabel names the moment, in the device\'s time — today, tomorrow, the weekday, then the date', () => {
+  const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const now = new Date(2026, 9, 3, 12, 0).getTime();
+  assert.equal(releaseAtLabel(new Date(2026, 9, 3, 15, 40).getTime(), now), 'today at 3:40 PM');
+  assert.equal(releaseAtLabel(new Date(2026, 9, 3, 12, 5).getTime(), now), 'today at 12:05 PM');
+  assert.equal(releaseAtLabel(new Date(2026, 9, 4, 9, 0).getTime(), now), 'tomorrow at 9 AM');
+  assert.equal(releaseAtLabel(new Date(2026, 9, 4, 0, 30).getTime(), now), 'tomorrow at 12:30 AM');
+  const sat = new Date(2026, 9, 6, 15, 0);
+  assert.equal(releaseAtLabel(sat.getTime(), now), `${WEEKDAYS[sat.getDay()]} at 3 PM`);
+  assert.equal(releaseAtLabel(new Date(2026, 9, 9, 15, 0).getTime(), now), `${WEEKDAYS[new Date(2026, 9, 9).getDay()]} at 3 PM`);
+  // A week or more out: the date.
+  assert.equal(releaseAtLabel(new Date(2026, 9, 10, 15, 0).getTime(), now), 'Oct 10 at 3 PM');
+  // The minute is floored — never a time later than the real one.
+  assert.equal(releaseAtLabel(new Date(2026, 9, 3, 15, 40, 59).getTime(), now), 'today at 3:40 PM');
+  // The 72h release clock always lands within the week.
+  assert.doesNotMatch(releaseAtLabel(now + 72 * 3_600_000, now), /\d+h|left/);
+  // Every surface that named "66h" now names the moment through it.
+  for (const line of [
+    myJobsNextAction({ perspective: 'customer', state: 'awaiting_approval', releaseDeadline: now + 66 * 3_600_000, nowMs: now }),
+    myJobsNextAction({ perspective: 'worker', state: 'awaiting_approval', releaseDeadline: now + 66 * 3_600_000, nowMs: now }),
+  ]) {
+    assert.match(line, /releases (today|tomorrow|Sun|Mon|Tue|Wed|Thu|Fri|Sat) at \d{1,2}(:\d{2})? (AM|PM)$/);
+  }
+});
+
+test('[static] C6 · no screen says "66h left" — every release and funding clock reads releaseAtLabel', async () => {
+  for (const file of ['screens/ClientJobDetailScreen.tsx', 'screens/CheckoutScreen.tsx', 'screens/ApproveOrDisputeScreen.tsx', 'screens/EarningsScreen.tsx', 'lib/liveJobStatus.ts']) {
+    const source = await read(file);
+    assert.doesNotMatch(source, /releaseCountdownLabel/, `${file} still counts hours`);
+    assert.match(source, /releaseAtLabel/, `${file} names the moment`);
+  }
+  assert.doesNotMatch(await read('lib/jobLifecycle.ts'), /Mark en route|Mark arrived/);
 });

@@ -81,7 +81,7 @@ const HOUR = 3_600_000;
 const NOW = Date.parse('2026-09-05T12:00:00Z');
 // Injected formatters, fixed: the countdown and the relative time belong to
 // lib/jobLifecycle.ts and lib/time.ts, and this module must not restate either.
-const FAKE = { countdown: () => '41h', timeAgo: () => '2 h ago' };
+const FAKE = { countdown: () => 'Sat at 3 PM', timeAgo: () => '2 h ago' };
 
 const facts = (over = {}) => ({
   status: 'held',
@@ -106,7 +106,7 @@ test('a6 · every payment state gets its own sentence, and nothing else gets one
   // so the helper carries no time literal of its own.
   assert.equal(
     earningsRowMeta(facts({ releaseDeadlineMs: NOW + 41 * HOUR }), NOW, FAKE),
-    `Held in protection ${EM} releases in 41h unless approved first`
+    `Held in protection ${EM} releases Sat at 3 PM unless approved first`
   );
   // The clock has run: due, with no time named — the server's gate decides
   // when, and this client cannot know which branch it takes.

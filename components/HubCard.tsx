@@ -49,7 +49,7 @@ type HubCardProps = {
   statusLabel?: string;
   /**
    * The card's derived NEXT-ACTION line ("3 bids to review", "Approval
-   * needed — releases in 41h") — the primary label of the card's action
+   * needed — releases Sat at 3 PM") — the primary label of the card's action
    * area; "View details" demotes to a secondary line beneath it. Derived by
    * the caller through lib/jobLifecycle.ts, never invented here.
    */
@@ -71,7 +71,7 @@ type HubCardProps = {
 
 /**
  * 2026-09-27 (the operator's review): a next-action label that carries a
- * detail after an em dash — "Approval needed — releases in 66h", "Worker on
+ * detail after an em dash — "Approval needed — releases Sat at 3 PM", "Worker on
  * the way — track progress" — breaks THERE, the action on the first line and
  * the detail under it, instead of wherever the column happens to run out
  * ("66h" alone on a second line). A label without a dash is untouched.

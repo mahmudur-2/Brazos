@@ -65,7 +65,7 @@ const SHEET_EDGE = 'top' as const;
  *
  * FIVE ROWS, each a row of pills: Distance (Any · 2 · 5 · 10 · 25 mi ·
  * Custom), Minimum budget (Any · $25 · $50 · $100 · $250 · Custom), When
- * (Any · Today · Tomorrow · This week · Custom), Categories (Best Match and
+ * (Any · Today · Tomorrow · This week · Custom), Categories (My skills and
  * the eleven real categories under their short names), and Sort — one pill,
  * "Sort by <rule>", opening the five rules with the sentence each one
  * follows. A Custom pill opens a checkmark list (components/PickerPopover)
@@ -115,7 +115,7 @@ export type JobFilterSheetProps = {
   /** Whether the rows this sheet filters carry a distance — the Distance
    *  SORT is offered inert, with its reason, when they do not. */
   distanceAvailable: boolean;
-  /** The worker's advertised categories — the Best Match pill. */
+  /** The worker's advertised categories — the My skills pill. */
   skills?: ReadonlySet<JobCategory>;
   /**
    * 2026-09-20 (sitting 2) — WHY the skills may be empty, so the Categories
@@ -482,7 +482,9 @@ export function JobFilterSheet({
         >
           {skills && skills.size > 0 ? (
             <Pill
-              label="Best Match"
+              // C6: "My skills", not "Best Match" — it selects your categories, and the
+              // sort beside it is Smart Match; two "Match" names read as one thing.
+              label="My skills"
               on={bestMatchOn}
               lead={<Ionicons name="checkmark" size={15} color={colors.emeraldBright} />}
               onPress={() =>
@@ -491,7 +493,7 @@ export function JobFilterSheet({
                   categories: bestMatchOn ? new Set<JobCategory>() : new Set(skills),
                 }))
               }
-              accessibilityLabel="Best Match — the categories in your skills"
+              accessibilityLabel="My skills — the categories in your skills"
             />
           ) : null}
           {JOB_CATEGORY_CHIP_ORDER.map((category) => (
@@ -525,7 +527,7 @@ export function JobFilterSheet({
 }
 
 /**
- * The Categories note. Best Match present: the one line. Absent: the line
+ * The Categories note. My skills present: the one line. Absent: the line
  * plus WHY — the phone walk (2026-09-20) showed "Pick job categories…" on an
  * account that had picked them, and a note that assumes the cause hides the
  * cause. Exported for the fence.
@@ -537,8 +539,8 @@ export function categoriesNote(
   const base = 'Nothing selected means every category.';
   if (skills && skills.size > 0) return base;
   if (state === 'loading') return `${base} Loading your profile…`;
-  if (state === 'error') return `${base} Couldn't load your profile, so Best Match is off for now.`;
-  return `${base} Pick job categories on your profile to unlock Best Match.`;
+  if (state === 'error') return `${base} Couldn't load your profile, so My skills is off for now.`;
+  return `${base} Pick job categories on your profile to filter by your skills.`;
 }
 
 /** A row of the sheet: its eyebrow, its pills, and an optional note under them. */

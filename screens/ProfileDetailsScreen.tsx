@@ -242,7 +242,7 @@ export function ProfileDetailsScreen() {
               />
             </View>
             <View style={styles.cardHeadCopy}>
-              <Text style={styles.eyebrow}>SHARED IDENTITY</Text>
+              <Text style={styles.eyebrow}>BOTH MODES</Text>
               <Text style={styles.cardTitle}>Profile details</Text>
             </View>
             <Pressable

@@ -212,7 +212,7 @@
     note(601, 'messages', 'message', 'Sam Okafor', 'On my way now, about 15 minutes.', { job_id: J.shelves }, ago(12 * 60e3), false),
     note(602, 'bids', 'bid_received', 'New bid on Assemble a three-seat sofa and an armchair', 'Priya Natarajan bid $135.00', { screen: 'ClientJobDetail', jobId: J.sofa }, ago(1.2 * H), false),
     note(603, 'bids', 'bid_received', 'New bid on Assemble a three-seat sofa and an armchair', 'Sam Okafor bid $120.00', { screen: 'ClientJobDetail', jobId: J.sofa }, ago(2.5 * H), false),
-    note(604, 'job_updates', 'job_completed', 'Work marked complete', 'Review and approve Mount a 65-inch TV above the fireplace.', { job_id: J.tv }, ago(5 * H), true),
+    note(604, 'jobs', 'job_completed', 'Sam finished the job', '“Mount a 65-inch TV above the fireplace” is done. Check the work and approve.', { job_id: J.tv }, ago(5 * H), true),
     note(605, 'messages', 'message', 'Dana Whitfield', 'The boxes are in the bedroom on the left. The buzzer code is 2B.', { job_id: J.wardrobe }, ago(2 * H), true),
     note(606, 'job_updates', 'payment_released', 'Payment released', '$55.50 for Fix a squeaky bedroom door is on its way to your payouts.', { job_id: J.door }, ago(8.9 * D), true),
   ];

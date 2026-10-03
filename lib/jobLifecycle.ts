@@ -275,6 +275,36 @@ export function releaseCountdownLabel(deadlineMs: number, nowMs: number): string
   return `${Math.floor(remainingMs / 3_600_000)}h`;
 }
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+
+/**
+ * C6 (2026-10-03) — WHEN A CLOCK RUNS OUT, as a person says it, in the
+ * device's own time: "today at 3:40 PM", "tomorrow at 9 AM", "Sat at 3 PM"
+ * (within the week), "Oct 9 at 3 PM". A whole hour drops its ":00". The
+ * minute is floored, so the time named is never later than the real one.
+ * "66h" made the reader do the sum; this names the moment.
+ */
+export function releaseAtLabel(deadlineMs: number, nowMs: number): string {
+  const at = new Date(deadlineMs);
+  const hour = at.getHours();
+  const minute = at.getMinutes();
+  const clock = `${hour % 12 || 12}${minute === 0 ? '' : `:${String(minute).padStart(2, '0')}`} ${hour < 12 ? 'AM' : 'PM'}`;
+  const now = new Date(nowMs);
+  const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  // Rounded, so a daylight-saving day (23 or 25 hours) still counts as one.
+  const days = Math.round((dayStart(at) - dayStart(now)) / 86_400_000);
+  const day =
+    days === 0
+      ? 'today'
+      : days === 1
+        ? 'tomorrow'
+        : days > 1 && days < 7
+          ? WEEKDAYS[at.getDay()]
+          : `${MONTHS[at.getMonth()]} ${at.getDate()}`;
+  return `${day} at ${clock}`;
+}
+
 export type MyJobsPerspective = 'customer' | 'worker';
 
 /**
@@ -298,9 +328,9 @@ export function myJobsNextAction(input: {
 }): string {
   const { perspective, state, bidCount = 0, reviewedByMe = false } = input;
   const nowMs = input.nowMs ?? Date.now();
-  const countdown =
+  const releasesAt =
     input.releaseDeadline != null && input.releaseDeadline > nowMs
-      ? releaseCountdownLabel(input.releaseDeadline, nowMs)
+      ? releaseAtLabel(input.releaseDeadline, nowMs)
       : null;
 
   switch (state) {
@@ -317,11 +347,11 @@ export function myJobsNextAction(input: {
     case 'confirmed':
       return perspective === 'customer'
         ? 'Booked — waiting on your worker'
-        : 'Mark en route when you head out';
+        : 'Tap I’m on my way when you leave';
     case 'en_route':
       return perspective === 'customer'
         ? 'Worker on the way — track progress'
-        : 'Mark arrived when you get there';
+        : 'Tap I’m here when you arrive';
     case 'arrived':
       return perspective === 'customer'
         ? 'Your worker is here'
@@ -332,12 +362,12 @@ export function myJobsNextAction(input: {
         : 'Mark complete when you finish';
     case 'awaiting_approval':
       if (perspective === 'customer') {
-        return countdown
-          ? `Approval needed — releases in ${countdown}`
+        return releasesAt
+          ? `Approval needed — releases ${releasesAt}`
           : 'Approval needed — review the finished work';
       }
-      return countdown
-        ? `Waiting on approval — releases in ${countdown}`
+      return releasesAt
+        ? `Waiting on approval — releases ${releasesAt}`
         : 'Waiting on customer approval';
     case 'disputed':
       return 'Issue reported — release is frozen';

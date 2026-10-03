@@ -80,7 +80,7 @@ import { jobStage } from '../lib/jobStage';
 import {
   deriveJobLifecycle,
   jobPillLabel,
-  releaseCountdownLabel,
+  releaseAtLabel,
   releaseDeadlineMs,
   trackStepIndex,
 } from '../lib/jobLifecycle';
@@ -529,7 +529,7 @@ export function ClientJobDetailScreen() {
         return {
           label:
             approvalDeadline != null
-              ? `Review & approve · ${releaseCountdownLabel(approvalDeadline, Date.now())} left`
+              ? `Review & approve · releases ${releaseAtLabel(approvalDeadline, Date.now())}`
               : 'Review & approve the work',
           onPress: () => navigation.navigate('ApproveOrDispute', { job }),
         };
@@ -1194,7 +1194,7 @@ export function ClientJobDetailScreen() {
                   {/* D14: the remaining funding window, in the app's plain
                       voice, off the one countdown formatter. */}
                   {fundingWindowOpen
-                    ? ` The funding window closes in ${releaseCountdownLabel(
+                    ? ` The funding window closes ${releaseAtLabel(
                         fundingDueMs as number,
                         Date.now()
                       )}.`

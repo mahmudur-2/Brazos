@@ -71,8 +71,8 @@ test('[static] the Filters note names the state, and the three screens read the 
   const sheet = await read('components/JobFilterSheet.tsx');
   assert.match(sheet, /export function categoriesNote\(/);
   assert.match(sheet, /Loading your profile…/);
-  assert.match(sheet, /Couldn't load your profile, so Best Match is off for now\./);
-  assert.match(sheet, /Pick job categories on your profile to unlock Best Match\./);
+  assert.match(sheet, /Couldn't load your profile, so My skills is off for now\./);
+  assert.match(sheet, /Pick job categories on your profile to filter by your skills\./);
   assert.match(sheet, /note=\{categoriesNote\(skills, skillsState\)\}/);
   assert.match(sheet, /skillsState = 'ready',/, 'older callers are treated as ready');
 

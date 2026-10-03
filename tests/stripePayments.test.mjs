@@ -461,7 +461,8 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
   assert.doesNotMatch(code, /platformFeeCents|PLATFORM_FEE_RATE|workerPayoutCents|\* 0\.|\/ 100 \*/);
   assert.match(code, /payment\.platform_fee_cents > 0/);
   // D14: the countdown reuses the one formatter; a closed window has no CTA.
-  assert.match(code, /releaseCountdownLabel\(fundingDueMs as number, nowMs\)/);
+  // C6: the window names the moment it closes, off the one formatter.
+  assert.match(code, />Pay by<\/Text>\s*<Text style=\{styles\.summaryValue\}>\s*\{releaseAtLabel\(fundingDueMs as number, nowMs\)\}/);
   assert.match(code, /canOfferJobFunding\(\{ viewerId: user\?\.id, job, payment, nowMs \}\)/);
   assert.match(code, /windowClosed = hasWindow && nowMs >= /);
   // D15: the kill switch is read on focus and hides the CTA in every mode.
@@ -549,7 +550,7 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   );
   // D14: the countdown reuses the one formatter; a closed window has no CTA
   // and a re-read.
-  assert.match(code, /releaseCountdownLabel\(\s*fundingDueMs as number,\s*Date\.now\(\)\s*\)/);
+  assert.match(code, /releaseAtLabel\(\s*fundingDueMs as number,\s*Date\.now\(\)\s*\)/);
   assert.match(code, /payment && fundingWindowClosed \? \(/);
   const closedCard = code.slice(code.indexOf('payment && fundingWindowClosed ? ('), code.indexOf(') : payment ? ('));
   // FIX-RUN B5: the closed window reads as a payment that didn't go through in time.

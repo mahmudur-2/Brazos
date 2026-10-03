@@ -350,8 +350,8 @@ test('the Filters sheet draws the five rows from the ruled lists, and every clos
   assert.match(sheet, /\{scroll \|\| fill \? \(\s*<ScrollView\s+horizontal/);
   // The Show button is the mockup's capsule in the Post-a-job green.
   assert.match(sheet, /show: \{\s*flex: 1,\s*borderRadius: radius\.pill,\s*backgroundColor: colors\.postPillGreen,\s*\}/);
-  // The note tells the worker why Best Match is absent.
-  assert.match(sheet, /Pick job categories on your profile to unlock Best Match\./);
+  // The note tells the worker why My skills is absent.
+  assert.match(sheet, /Pick job categories on your profile to filter by your skills\./);
   // The sort popup carries the six rules with their sentences; Reset alone
   // carries a pill wording and is drawn grey.
   for (const sort of JOB_SORTS) {

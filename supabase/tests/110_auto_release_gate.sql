@@ -310,9 +310,12 @@ select is((select count(*) from public.notification_outbox where recipient_id = 
   '8: worker completes — the job_completed row for the customer STILL exists');
 select is((select category from public.notification_outbox where recipient_id = :'customer' and type = 'job_completed' and data ->> 'jobId' = :'j8'::text), 'jobs',
   '8: … under category jobs');
-select ok((select dedupe_key = 'job_completed:' || :'j8'::text and data ->> 'screen' = 'ClientJobDetail' and title = 'Job marked complete'
+-- C6 (20261003000800): the words changed — "<first name> finished the job" over "“<title>” is done. Check the work and approve."
+select ok((select dedupe_key = 'job_completed:' || :'j8'::text and data ->> 'screen' = 'ClientJobDetail'
+                  and title ~ '^\S+ finished the job$' and title !~ 'marked complete'
+                  and body = '“' || left((select j.title from public.jobs j where j.id = :'j8'), 60) || '” is done. Check the work and approve.'
            from public.notification_outbox where recipient_id = :'customer' and type = 'job_completed' and data ->> 'jobId' = :'j8'::text),
-  '8: … with the type, the dedupe key, the screen and the title unchanged — the feed and lib/notificationRoutes.ts key on type and data, not on category');
+  '8: … with the type, the dedupe key and the screen unchanged, and the words a person would write (C6) — the feed and lib/notificationRoutes.ts key on type and data, not on category or copy');
 
 -- ---------------------------------------------------------------------------
 -- §9. IDEMPOTENT: nothing released above releases twice, and nothing else is due.

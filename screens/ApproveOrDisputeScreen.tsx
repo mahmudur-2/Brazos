@@ -37,7 +37,7 @@ import {
 } from '../lib/disputes';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { completionPhotosOf, completionVideosOf, formatBudget } from '../lib/jobs';
-import { releaseCountdownLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
+import { releaseAtLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import {
   radius,
@@ -333,8 +333,8 @@ export function ApproveOrDisputeScreen() {
             <MoneyText cents={customerChargeCents(payment)} state={payment.status} size="lg" />
             {held && releaseDeadlineMs(job) != null ? (
               <Text style={styles.paymentNote}>
-                Releases automatically in{' '}
-                {releaseCountdownLabel(releaseDeadlineMs(job) as number, Date.now())} if you do
+                Releases automatically{' '}
+                {releaseAtLabel(releaseDeadlineMs(job) as number, Date.now())} if you do
                 nothing.
               </Text>
             ) : null}
