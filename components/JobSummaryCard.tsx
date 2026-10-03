@@ -10,25 +10,24 @@ import {
 import {
   Animated,
   Easing,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
   type LayoutChangeEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Card } from './Card';
 import { Divider } from '../ui/primitives/Divider';
+import { GlassDropdown, type GlassDropdownItem, type GlassDropdownRequest } from './GlassDropdown';
 import { MediaViewer, type ViewerItem } from './MediaViewer';
 import { RemoteImage } from './RemoteImage';
 import { useLoopActive } from '../hooks/useLoopActive';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { userMessage } from '../lib/errorMessage';
-import { useModalPresence } from '../hooks/useModalPresence';
 import { formatBudget } from '../lib/jobs';
+import { modalSettleDelay } from '../lib/modalPresence';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import {
   EYEBROW_TYPE,
@@ -40,7 +39,6 @@ import {
   withAlpha,
   type ColorPalette,
 } from '../lib/theme';
-import { Surface } from '../ui/primitives/Surface';
 import { VideoTile } from '../ui/primitives/MediaUploader';
 import { STATE_COPY } from '../ui/templates/ScreenStates';
 
@@ -58,7 +56,6 @@ export type SummaryTarget = 'describe' | 'category' | 'area' | 'timing' | 'addre
 const UNDO_MS = 4000;
 /** The add menu's width (#39: ~150, was 210). */
 const MENU_WIDTH = 150;
-const MENU_ROW = 46;
 
 /** "3 photos, 1 video" — each side pluralised on its own, an empty side omitted. */
 export function mediaCountText(photos: number, videos: number): string {
@@ -228,16 +225,16 @@ export function JobSummaryCard({
   /** The card's corner — Post a Job's `postJob.reviewCard.radius` dial. */
   cornerRadius?: number;
 }) {
-  const { palette: colors, isDark } = useThemeColors();
+  const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   const [editing, setEditing] = useState(false);
   const [pending, setPending] = useState<Pending[]>([]);
-  const [menu, setMenu] = useState<{ left: number; top: number } | null>(null);
-  // #64 (M-31): on screen or not — the one confirm engine never stacks a second modal on iOS.
-  useModalPresence(menu != null);
+  // FIX-RUN F11 — the add menu is the app's anchored glass dropdown (it reports its own Modal).
+  // The kind a row chose waits for the menu to be gone before the library opens over it.
+  const [menu, setMenu] = useState<GlassDropdownRequest | null>(null);
+  const chosen = useRef<Kind | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [gridWidth, setGridWidth] = useState(0);
-  const window = useWindowDimensions();
   const nextId = useRef(1);
   const cancelled = useRef<Set<number>>(new Set());
   const addRef = useRef<View>(null);
@@ -366,14 +363,29 @@ export function JobSummaryCard({
 
   function openMenu() {
     if (disabled || !canAdd) return;
-    addRef.current?.measureInWindow((x, y, width, height) => {
-      // #39 — centred under the +, shifted only as far as the screen's gutter needs.
-      const centre = x + width / 2;
-      setMenu({
-        left: Math.max(20, Math.min(centre - MENU_WIDTH / 2, window.width - 20 - MENU_WIDTH)),
-        top: y + height + 8,
-      });
+    // #39 — centred under the +, shifted only as far as the screen's gutter needs.
+    setMenu({
+      key: String(Date.now()),
+      width: MENU_WIDTH,
+      measure: (done) => addRef.current?.measureInWindow((x, y, width, height) => done({ x, y, width, height })),
     });
+  }
+
+  const menuRow = (kind: Kind): GlassDropdownItem => ({
+    key: kind,
+    label: kind === 'photo' ? 'Add a photo' : 'Add a video',
+    icon: kind === 'photo' ? 'image-outline' : 'videocam-outline',
+    // Shown honestly when the limit is reached: it does not fire.
+    disabled: kind === 'photo' ? !canAddPhoto : !canAddVideo,
+    onPress: () => {
+      chosen.current = kind;
+    },
+  });
+
+  function onMenuClosed() {
+    const kind = chosen.current;
+    chosen.current = null;
+    if (kind) setTimeout(() => void add(kind), modalSettleDelay());
   }
 
   const gap = 10;
@@ -581,33 +593,13 @@ export function JobSummaryCard({
         </SummaryCell>
       </View>
 
-      <Modal visible={menu != null} transparent animationType="fade" onRequestClose={() => setMenu(null)} statusBarTranslucent>
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenu(null)} accessibilityRole="button" accessibilityLabel="Close" />
-        {menu ? (
-          <View style={[styles.menuFrame, { left: menu.left, top: menu.top }]}>
-            <Surface material="menu" radius={radius.lg} corners="all" style={styles.menu}>
-              {(['photo', 'video'] as const).map((kind, i) => {
-                const allowed = kind === 'photo' ? canAddPhoto : canAddVideo;
-                return (
-                  <View key={kind}>
-                    {i > 0 ? <Divider color={withAlpha(isDark ? colors.white : colors.ink, 0.1)} style={styles.menuSep} /> : null}
-                    <Pressable
-                      onPress={() => void add(kind)}
-                      disabled={!allowed}
-                      style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed, !allowed && styles.menuRowOff]}
-                      accessibilityRole="menuitem"
-                      accessibilityState={{ disabled: !allowed }}
-                    >
-                      <Ionicons name={kind === 'photo' ? 'image-outline' : 'videocam-outline'} size={20} color={colors.emerald} />
-                      <Text style={styles.menuText}>{kind === 'photo' ? 'Add a photo' : 'Add a video'}</Text>
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </Surface>
-          </View>
-        ) : null}
-      </Modal>
+      <GlassDropdown
+        request={menu}
+        groups={[[menuRow('photo')], [menuRow('video')]]}
+        onClose={() => setMenu(null)}
+        onClosed={onMenuClosed}
+        accessibilityLabel="Add photos or videos"
+      />
 
       <MediaViewer
         visible={viewerIndex != null}
@@ -847,43 +839,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     pressed: {
       opacity: 0.72,
-    },
-    menuFrame: {
-      position: 'absolute',
-      width: MENU_WIDTH,
-      shadowColor: colors.black,
-      shadowOpacity: 0.45,
-      shadowRadius: 17,
-      shadowOffset: { width: 0, height: 14 },
-      elevation: 10,
-    },
-    menu: {
-      padding: 6,
-    },
-    // The Divider draws the platform hairline; this is only where it sits.
-    menuSep: {
-      marginHorizontal: 8,
-      marginVertical: 2,
-    },
-    // At #39's 150 wide, "Add a photo" keeps one line: 8 either side, 8 after the glyph.
-    menuRow: {
-      height: MENU_ROW,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-      paddingHorizontal: spacing.sm,
-      borderRadius: 10,
-    },
-    menuRowPressed: {
-      backgroundColor: colors.primarySoft,
-    },
-    menuRowOff: {
-      opacity: 0.4,
-    },
-    menuText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: colors.ink,
     },
   })
 );

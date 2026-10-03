@@ -124,7 +124,6 @@ test('[static] D12: a rule drawn as a view of its own is the Divider; nothing ha
     ['components/GlassDropdown.tsx', /<Divider thickness=\{1\} color=\{rule\} style=\{styles\.rule\} \/>/],
     ['components/JobLivePage.tsx', /<Divider thickness=\{1\} style=\{styles\.hr\} \/>/],
     ['components/JobSummaryCard.tsx', /<Divider thickness=\{1\} style=\{styles\.divider\} \/>/],
-    ['components/JobSummaryCard.tsx', /<Divider color=\{withAlpha\(isDark \? colors\.white : colors\.ink, 0\.1\)\} style=\{styles\.menuSep\} \/>/],
     ['screens/WorkerHomeScreen.tsx', /<Divider orientation="vertical" thickness=\{1\} style=\{styles\.summaryDivider\} \/>/],
   ];
   for (const [file, wear] of adopted) assert.match(strip(read(file)), wear, `${file} wears the Divider`);

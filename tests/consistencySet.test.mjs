@@ -73,7 +73,6 @@ test('[static] M-31 — one confirm engine: confirmAsync draws the host, the sys
     'components/DistanceChips.tsx',
     'components/EditBudgetDialog.tsx',
     'components/GlassDropdown.tsx',
-    'components/JobSummaryCard.tsx',
     'components/MediaViewer.tsx',
     'components/PhotoViewer.tsx',
     'components/PriceDropdown.tsx',

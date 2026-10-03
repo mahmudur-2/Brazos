@@ -60,3 +60,27 @@ test('[static] F16: every endless loop stops when its screen is covered or the a
   assert.match(hook, /AppState\.addEventListener\('change'/);
   assert.match(hook, /return focused && foreground;/);
 });
+
+test('[static] F11: the add-media menu is the anchored glass dropdown, and no frosted pop-up fades as a Modal', () => {
+  for (const path of ['components/JobSummaryCard.tsx', 'components/ReportDialog.tsx', 'components/ReactionPicker.tsx']) {
+    assert.doesNotMatch(strip(read(path)), /animationType="fade"/, `${path} must not fade a Modal (the blur stutters)`);
+  }
+  const card = strip(read('components/JobSummaryCard.tsx'));
+  assert.doesNotMatch(card, /<Modal\b/, 'the card renders no Modal of its own');
+  assert.match(card, /<GlassDropdown\s+request=\{menu\}\s+groups=\{\[\[menuRow\('photo'\)\], \[menuRow\('video'\)\]\]\}/);
+  // Centred under the + at #39's width; the Video limit stays honest; the library waits for the menu.
+  assert.match(card, /width: MENU_WIDTH,/);
+  assert.match(card, /disabled: kind === 'photo' \? !canAddPhoto : !canAddVideo,/);
+  assert.match(card, /onClosed=\{onMenuClosed\}/);
+  assert.match(card, /if \(kind\) setTimeout\(\(\) => void add\(kind\), modalSettleDelay\(\)\);/);
+
+  const menu = strip(read('components/GlassDropdown.tsx'));
+  assert.match(menu, /disabled=\{item\.disabled\}/);
+  assert.match(menu, /item\.disabled && styles\.rowOff/);
+  assert.match(menu, /rowOff: \{\s*opacity: 0\.5,/);
+  // A centred panel keeps the page gutter; the default keeps its 8pt right edge.
+  assert.match(menu, /fixedWidth != null[\s\S]*?left: Math\.max\(\s*CENTRED_GUTTER,/);
+  assert.match(menu, /: \{ top, right: SCREEN_EDGE \+ insets\.right \};/);
+  // onClosed runs after the panel and its presence report are gone.
+  assert.match(menu, /useModalPresence\(mounted && !!anchor, false\);[\s\S]*?useEffect\(\(\) => \{\s*if \(mounted\) \{[\s\S]*?onClosedRef\.current\?\.\(\);/);
+});

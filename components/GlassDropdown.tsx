@@ -29,6 +29,11 @@ export type GlassDropdownItem = {
   icon: IoniconName;
   /** Drawn in the dropdown's red. */
   destructive?: boolean;
+  /**
+   * FIX-RUN F11 — shown, honestly, but not available (Post a job's "Add a video" once the one
+   * video is in): drawn at half strength and it does not fire.
+   */
+  disabled?: boolean;
   onPress: () => void;
 };
 
@@ -36,11 +41,16 @@ export type GlassDropdownItem = {
  * What opens the menu, and under what: `measure` finds the control (the row's
  * •••) in window points when the menu opens; `delayMs` waits that long first —
  * a row swiped open is still springing shut when its More tile is tapped.
+ *
+ * `width` (FIX-RUN F11) fixes the panel's width and CENTRES it under the control, shifted only
+ * as far as the page gutter needs — Post a job's add menu under its + (LUX-LIST-64 #39). Without
+ * it the panel is as wide as its longest row and its right edge sits 8pt from the screen's.
  */
 export type GlassDropdownRequest = {
   key: string;
   measure: (done: (anchor: PopoverAnchor) => void) => void;
   delayMs?: number;
+  width?: number;
 };
 
 /** refs/inbox-clean-list.html `.menu` / `.mi`: 40pt rows inside 5 of padding. */
@@ -52,6 +62,8 @@ const RULE_SPACE = 9;
 const SCREEN_EDGE = 8;
 const ANCHOR_GAP = 10;
 const RADIUS = 18;
+/** A centred panel (`request.width`) keeps the page gutter, as #39's add menu did. */
+const CENTRED_GUTTER = 20;
 
 /**
  * 2026-09-28 (LUX-LIST-64 #53) — THE ••• GLASS DROPDOWN, right under the control
@@ -69,11 +81,18 @@ export function GlassDropdown({
   request,
   groups,
   onClose,
+  onClosed,
   accessibilityLabel,
 }: {
   request: GlassDropdownRequest | null;
   groups: GlassDropdownItem[][];
   onClose: () => void;
+  /**
+   * FIX-RUN F11 — the panel has gone and its Modal with it. A row that presents something of
+   * its own (the photo library) waits for this, because iOS dismissing a Modal also dismisses
+   * whatever was presented over it.
+   */
+  onClosed?: () => void;
   accessibilityLabel: string;
 }) {
   const { palette: colors, isDark } = useThemeColors();
@@ -83,10 +102,14 @@ export function GlassDropdown({
   const reducedMotion = useReducedMotion();
   const progress = useRef(new Animated.Value(0)).current;
   const [anchor, setAnchor] = useState<PopoverAnchor | null>(null);
+  const [fixedWidth, setFixedWidth] = useState<number | undefined>(undefined);
   const [mounted, setMounted] = useState(false);
   const requestKey = request?.key ?? null;
   const requestRef = useRef(request);
   requestRef.current = request;
+  const onClosedRef = useRef(onClosed);
+  onClosedRef.current = onClosed;
+  const wasMounted = useRef(false);
 
   // A request finds its control (after its delay), then the panel comes up.
   useEffect(() => {
@@ -96,6 +119,7 @@ export function GlassDropdown({
       requestRef.current?.measure((next) => {
         if (!alive) return;
         setAnchor(next);
+        setFixedWidth(requestRef.current?.width);
         setMounted(true);
       });
     const delay = requestRef.current?.delayMs ?? 0;
@@ -128,6 +152,17 @@ export function GlassDropdown({
   // #64 (M-31): on screen or not — the one confirm engine never stacks a second modal on iOS.
   useModalPresence(mounted && !!anchor, false);
 
+  // A passive effect, so it runs after the presence report above has recorded the close.
+  useEffect(() => {
+    if (mounted) {
+      wasMounted.current = true;
+      return;
+    }
+    if (!wasMounted.current) return;
+    wasMounted.current = false;
+    onClosedRef.current?.();
+  }, [mounted]);
+
   if (!mounted || !anchor) return null;
 
   const rows = groups.reduce((sum, group) => sum + group.length, 0);
@@ -150,12 +185,23 @@ export function GlassDropdown({
   };
   const pressedFill = withAlpha(isDark ? colors.emeraldBright : colors.emerald, isDark ? 0.1 : 0.06);
   const rule = withAlpha(colors.dropRule, 0.12);
+  const place =
+    fixedWidth != null
+      ? {
+          top,
+          width: fixedWidth,
+          left: Math.max(
+            CENTRED_GUTTER,
+            Math.min(anchor.x + anchor.width / 2 - fixedWidth / 2, window.width - CENTRED_GUTTER - fixedWidth)
+          ),
+        }
+      : { top, right: SCREEN_EDGE + insets.right };
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
       <Animated.View
-        style={[styles.frame, { top, right: SCREEN_EDGE + insets.right }, panelMotion]}
+        style={[styles.frame, place, panelMotion]}
         accessibilityViewIsModal
         accessibilityLabel={accessibilityLabel}
       >
@@ -172,9 +218,15 @@ export function GlassDropdown({
                       onClose();
                       item.onPress();
                     }}
-                    style={({ pressed }) => [styles.row, pressed && { backgroundColor: pressedFill }]}
+                    disabled={item.disabled}
+                    style={({ pressed }) => [
+                      styles.row,
+                      pressed && { backgroundColor: pressedFill },
+                      item.disabled && styles.rowOff,
+                    ]}
                     accessibilityRole="menuitem"
                     accessibilityLabel={item.label}
+                    accessibilityState={item.disabled ? { disabled: true } : undefined}
                   >
                     <Ionicons
                       name={item.icon}
@@ -213,6 +265,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       gap: 10,
       paddingHorizontal: 11,
       borderRadius: 12,
+    },
+    rowOff: {
+      opacity: 0.5,
     },
     label: {
       fontSize: 15,
