@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { Animated, Easing, View, type LayoutChangeEvent } from 'react-native';
 import { motionCapability, resolveMotion120 } from '../lib/motion120';
+import { useLoopActive } from '../hooks/useLoopActive';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { useThemeColors } from '../lib/theme';
@@ -21,9 +22,11 @@ export function RimLightNative({ radius }: RimLightProps) {
   const { palette, isDark } = useThemeColors();
   const [box, setBox] = useState<{ width: number; height: number } | null>(null);
   const progress = useRef(new Animated.Value(0)).current;
+  // FIX-RUN F16: the loop runs only while its screen is on top and the app is in front.
+  const loopActive = useLoopActive();
 
   useEffect(() => {
-    if (!box) return;
+    if (!box || !loopActive) return;
     progress.setValue(0);
     const lap = Animated.loop(
       Animated.timing(progress, {
@@ -35,7 +38,7 @@ export function RimLightNative({ radius }: RimLightProps) {
     );
     lap.start();
     return () => lap.stop();
-  }, [box, progress]);
+  }, [box, loopActive, progress]);
 
   const samples = useMemo(
     () => (box ? rimSamples(box.width, box.height, radius) : null),

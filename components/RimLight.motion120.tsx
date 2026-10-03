@@ -8,6 +8,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
+import { useLoopActive } from '../hooks/useLoopActive';
 import { useThemeColors } from '../lib/theme';
 import {
   RIM_INSET,
@@ -35,8 +36,11 @@ export function RimLight({ radius }: RimLightProps) {
   const { palette, isDark } = useThemeColors();
   const [box, setBox] = useState<{ width: number; height: number } | null>(null);
   const progress = useSharedValue(0);
+  // FIX-RUN F16: the loop runs only while its screen is on top and the app is in front.
+  const loopActive = useLoopActive();
 
   useEffect(() => {
+    if (!loopActive) return;
     progress.value = 0;
     progress.value = withRepeat(
       withTiming(1, { duration: RIM_LAP_MS, easing: Easing.linear }),
@@ -44,7 +48,7 @@ export function RimLight({ radius }: RimLightProps) {
       false
     );
     return () => cancelAnimation(progress);
-  }, [progress]);
+  }, [loopActive, progress]);
 
   const width = box?.width ?? 0;
   const height = box?.height ?? 0;

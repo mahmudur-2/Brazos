@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Animated, Easing, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, AppState, Easing, StyleSheet, type NativeEventSubscription, type StyleProp, type ViewStyle } from 'react-native';
 import { radius, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 
@@ -12,6 +12,20 @@ import { USE_NATIVE_DRIVER } from '../lib/motion';
 const pulse = new Animated.Value(1);
 let mounted = 0;
 let loop: Animated.CompositeAnimation | null = null;
+/**
+ * FIX-RUN F16 — the one module loop pauses while the app is in the background and picks up again
+ * when it comes back, for as long as any placeholder is still mounted. It is one loop for the whole
+ * app (above), so it asks the app's state rather than a screen's focus.
+ */
+let appState: NativeEventSubscription | null = null;
+
+function onAppState(state: string) {
+  if (state === 'active') {
+    if (mounted > 0) start();
+  } else {
+    stop();
+  }
+}
 
 function start() {
   if (loop) return;
@@ -52,12 +66,15 @@ export function Skeleton({ style }: { style?: StyleProp<ViewStyle> }) {
   // rather than ticking for the life of the process.
   useEffect(() => {
     mounted += 1;
-    start();
+    if (!appState) appState = AppState.addEventListener('change', onAppState);
+    if (AppState.currentState !== 'background') start();
     return () => {
       mounted -= 1;
       if (mounted <= 0) {
         mounted = 0;
         stop();
+        appState?.remove();
+        appState = null;
       }
     };
   }, []);

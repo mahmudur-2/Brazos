@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { useLoopActive } from '../hooks/useLoopActive';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { metricStyles } from '../lib/theme';
@@ -39,11 +40,14 @@ export function LiveDot({
   const reducedMotion = useReducedMotion();
   const progress = useRef(new Animated.Value(0)).current;
   const moving = motion !== 'still' && reducedMotion === false;
+  // FIX-RUN F16: the loop runs only while its screen is on top and the app is in front.
+  const loopActive = useLoopActive();
+  const running = moving && loopActive;
 
   useEffect(() => {
     progress.stopAnimation();
     progress.setValue(0);
-    if (!moving) return;
+    if (!running) return;
     const loop =
       motion === 'breathe'
         ? Animated.loop(
@@ -72,7 +76,7 @@ export function LiveDot({
           );
     loop.start();
     return () => loop.stop();
-  }, [moving, motion, progress]);
+  }, [running, motion, progress]);
 
   const dot = { width: size, height: size, borderRadius: size / 2, backgroundColor: color };
 

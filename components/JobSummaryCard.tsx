@@ -24,6 +24,7 @@ import { Card } from './Card';
 import { Divider } from '../ui/primitives/Divider';
 import { MediaViewer, type ViewerItem } from './MediaViewer';
 import { RemoteImage } from './RemoteImage';
+import { useLoopActive } from '../hooks/useLoopActive';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { userMessage } from '../lib/errorMessage';
 import { useModalPresence } from '../hooks/useModalPresence';
@@ -115,14 +116,16 @@ function SummaryCell({
 function UploadRing({ color, track }: { color: string; track: string }) {
   const spin = useRef(new Animated.Value(0)).current;
   const reducedMotion = useReducedMotion();
+  // FIX-RUN F16: the loop runs only while its screen is on top and the app is in front.
+  const loopActive = useLoopActive();
   useEffect(() => {
-    if (reducedMotion !== false) return;
+    if (reducedMotion !== false || !loopActive) return;
     const loop = Animated.loop(
       Animated.timing(spin, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: USE_NATIVE_DRIVER })
     );
     loop.start();
     return () => loop.stop();
-  }, [reducedMotion, spin]);
+  }, [loopActive, reducedMotion, spin]);
   return (
     <Animated.View
       style={{

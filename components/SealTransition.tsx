@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { DrawnCheck } from './DrawnCheck';
+import { useLoopActive } from '../hooks/useLoopActive';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 
@@ -51,6 +52,8 @@ export function SealTransition({
   const reveal = useRef(new Animated.Value(0)).current;
   const gone = useRef(new Animated.Value(1)).current;
   const [revealing, setRevealing] = useState(false);
+  // FIX-RUN F16: the loop runs only while its screen is on top and the app is in front.
+  const loopActive = useLoopActive();
 
   // The pill's centre, and where the circle settles: the middle of the bar row.
   const cx = from.x + from.width / 2;
@@ -70,12 +73,16 @@ export function SealTransition({
         Animated.timing(lit, { toValue: 0, duration: 180, useNativeDriver: USE_NATIVE_DRIVER }),
       ]),
     ]).start();
+  }, [lit, ring, shrink]);
+
+  useEffect(() => {
+    if (!loopActive) return;
     const loop = Animated.loop(
       Animated.timing(spin, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: USE_NATIVE_DRIVER })
     );
     loop.start();
     return () => loop.stop();
-  }, [lit, ring, shrink, spin]);
+  }, [loopActive, spin]);
 
   useEffect(() => {
     if (phase === 'saved') {

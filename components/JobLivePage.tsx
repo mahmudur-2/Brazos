@@ -7,6 +7,7 @@ import { Divider } from '../ui/primitives/Divider';
 import { Chip } from './Chip';
 import { DrawnCheck } from './DrawnCheck';
 import { PostJobBar } from './PostJobBar';
+import { useLoopActive } from '../hooks/useLoopActive';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { arrivalWindowLabel, formatBudget, JOB_CATEGORY_LABELS, type Job } from '../lib/jobs';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
@@ -78,6 +79,8 @@ export function JobLivePage({
   const tick = useRef(new Animated.Value(still ? 1 : 0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
   const [stepperWidth, setStepperWidth] = useState(0);
+  // FIX-RUN F16: the loop runs only while its screen is on top and the app is in front.
+  const loopActive = useLoopActive();
 
   useEffect(() => {
     if (still) {
@@ -95,12 +98,16 @@ export function JobLivePage({
       Animated.delay(260),
       Animated.timing(tick, { toValue: 1, duration: 420, easing: Easing.out(Easing.quad), useNativeDriver: USE_NATIVE_DRIVER }),
     ]).start();
+  }, [beats, still, tick]);
+
+  useEffect(() => {
+    if (still || !loopActive) return;
     const loop = Animated.loop(
       Animated.timing(pulse, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: USE_NATIVE_DRIVER })
     );
     loop.start();
     return () => loop.stop();
-  }, [beats, pulse, still, tick]);
+  }, [loopActive, pulse, still]);
 
   const rise = (beat: Animated.Value, from = 14) => ({
     opacity: beat,

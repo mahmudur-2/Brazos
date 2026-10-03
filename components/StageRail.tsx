@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useLoopActive } from '../hooks/useLoopActive';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { LIVE_RAIL_STEPS, type LiveJobStatus } from '../lib/liveJobStatus';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
@@ -75,16 +76,18 @@ function RailBar({ fill, current }: { fill: number; current: boolean }) {
   const [width, setWidth] = useState(0);
   const lap = useRef(new Animated.Value(0)).current;
   const shimmering = current && fill > 0 && reducedMotion === false && width > 0;
+  // FIX-RUN F16: the loop runs only while its screen is on top and the app is in front.
+  const loopActive = useLoopActive();
 
   useEffect(() => {
     lap.setValue(0);
-    if (!shimmering) return;
+    if (!shimmering || !loopActive) return;
     const loop = Animated.loop(
       Animated.timing(lap, { toValue: 1, duration: SHIMMER_MS, easing: Easing.linear, useNativeDriver: USE_NATIVE_DRIVER })
     );
     loop.start();
     return () => loop.stop();
-  }, [lap, shimmering]);
+  }, [lap, loopActive, shimmering]);
 
   const filled = Math.max(0, Math.min(1, fill)) * width;
   const sheen = `linear-gradient(90deg, ${withAlpha(colors.white, 0)} 0%, ${withAlpha(colors.white, 0.55)} 50%, ${withAlpha(colors.white, 0)} 100%)`;
