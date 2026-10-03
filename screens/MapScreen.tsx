@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { PressScale } from '../components/PressScale';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -239,7 +240,7 @@ function MapJobsSheet({
           </Text>
         }
         footer={
-          <Pressable
+          <PressScale
             onPress={onSeeAll}
             hitSlop={8}
             style={({ pressed }) => [styles.seeAll, pressed && styles.pressed]}
@@ -248,7 +249,7 @@ function MapJobsSheet({
           >
             <Text style={[styles.seeAllText, isDark && styles.seeAllTextDark]}>Open the full list</Text>
             <Ionicons name="chevron-forward" size={18} color={isDark ? colors.gold : colors.ink} />
-          </Pressable>
+          </PressScale>
         }
         radius={sheetRadius}
         paddingX={sheetPaddingX}
@@ -659,7 +660,7 @@ export function MapScreen() {
                       : styles.chipShellSelected),
                 ]}
               >
-                <Pressable
+                <PressScale
                   onPress={toggleToday}
                   hitSlop={touchSlop(MAP_CHIP_HEIGHT - 2)}
                   style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
@@ -682,7 +683,7 @@ export function MapScreen() {
                   >
                     Today
                   </Text>
-                </Pressable>
+                </PressScale>
               </Surface>
             </View>
           ) : null}

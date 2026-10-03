@@ -208,6 +208,9 @@ test('[static] F12: the most-pressed controls sink on the one press spring, the 
     'screens/WorkerJobScreen.tsx': /<PressScale\s+haptic=\{false\}/,
     'screens/WorkerHomeScreen.tsx': /<PressScale\s+haptic=\{false\}/,
     'components/JobSummaryCard.tsx': /<PressScale\s+haptic=\{false\}/,
+    'screens/ServicesPricingScreen.tsx': /<PressScale\s+style=\{\[styles\.addButton/,
+    'screens/MapScreen.tsx': /<PressScale\s+onPress=\{toggleToday\}/,
+    'screens/ClientJobDetailScreen.tsx': /<PressScale\s+style=\{\(\{ pressed \}\) => \[\s*styles\.workerRow/,
   };
   for (const [path, wear] of Object.entries(WEARERS)) assert.match(strip(read(path)), wear, `${path} wears the shared press`);
   // The static snaps the spring replaced are gone.

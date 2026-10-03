@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { PressScale } from '../components/PressScale';
 import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -1105,7 +1106,7 @@ export function ClientJobDetailScreen() {
                   />
                 </View>
               ) : null}
-              <Pressable
+              <PressScale
                 style={({ pressed }) => [
                   styles.workerRow,
                   isDark && styles.workerRowDark,
@@ -1150,7 +1151,7 @@ export function ClientJobDetailScreen() {
                 {job.assigned_worker_id && (
                   <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
                 )}
-              </Pressable>
+              </PressScale>
             </Card>
 
             {job.assigned_worker_id && (

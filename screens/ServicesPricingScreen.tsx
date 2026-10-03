@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { PressScale } from '../components/PressScale';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { GlowTextInput } from '../components/GlowTextInput';
@@ -318,7 +319,7 @@ export function ServicesPricingScreen() {
               maxLength={8}
               accessibilityLabel="Price in dollars"
             />
-            <Pressable
+            <PressScale
               style={styles.unitToggle}
               onPress={() => setPriceUnit((u) => (u === 'flat' ? 'hourly' : 'flat'))}
               accessibilityRole="button"
@@ -327,7 +328,7 @@ export function ServicesPricingScreen() {
               <Text style={styles.unitToggleText}>
                 {priceUnit === 'flat' ? 'flat' : '/hr'}
               </Text>
-            </Pressable>
+            </PressScale>
           </View>
         ) : (
           <Text style={styles.cardNote}>
@@ -340,7 +341,7 @@ export function ServicesPricingScreen() {
         ) : null}
         <View style={styles.categoryWrap}>
           {JOB_CATEGORIES.map((c) => (
-            <Pressable
+            <PressScale
               key={c}
               style={[
                 styles.categoryChip,
@@ -363,10 +364,10 @@ export function ServicesPricingScreen() {
               >
                 {JOB_CATEGORY_LABELS[c]}
               </Text>
-            </Pressable>
+            </PressScale>
           ))}
         </View>
-        <Pressable
+        <PressScale
           style={[styles.addButton, !canAdd && styles.addButtonDisabled]}
           onPress={addService}
           disabled={!canAdd}
@@ -376,7 +377,7 @@ export function ServicesPricingScreen() {
           <Text style={[styles.addButtonText, !canAdd && styles.addButtonTextDisabled]}>
             {adding ? 'Adding…' : 'Add service'}
           </Text>
-        </Pressable>
+        </PressScale>
       </View>
     </FormScreen>
   );
