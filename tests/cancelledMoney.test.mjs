@@ -94,4 +94,6 @@ test('[static] the predicates are re-exported, and both job screens and MoneyTex
   assert.match(note, /This job was cancelled\. \$\{clientName\}’s payment goes back to them\./);
   assert.match(worker, /isHeld\(payment\) && !isRefundQueued\(payment\) && !isReleaseRequested\(payment\) && !isReleased\(payment\) && styles\.eyebrowGold/);
   assert.match(worker, /\(\(isHeld\(payment\) && !isRefundQueued\(payment\)\) \|\| isReleased\(payment\)\)/);
+  // The payout nudge names what still travels: the fee on a late cancellation, the take otherwise.
+  assert.match(worker, /<PayoutNudge cents=\{isCancellationFeeKept\(payment\) \? payment\.transfer_cents \?\? 0 : workerTakeCents\(payment\)\}/);
 });

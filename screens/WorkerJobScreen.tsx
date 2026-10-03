@@ -684,7 +684,9 @@ export function WorkerJobScreen() {
         {waitingOnSetup ? (
           <View style={styles.payoutNudge}>
             <PayoutNudge
-              cents={workerTakeCents(payment)}
+              // Final sweep: on a late cancellation the money still travelling is the fee
+              // (transfer_cents), never the whole take.
+              cents={isCancellationFeeKept(payment) ? payment.transfer_cents ?? 0 : workerTakeCents(payment)}
               onPress={() => navigateAcrossTabs('Profile', 'Payouts', {})}
             />
           </View>
