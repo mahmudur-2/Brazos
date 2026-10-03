@@ -578,3 +578,14 @@ project." The popup, their answers: smoothness → "Every screen, full pass (Rec
 money / major bugs / unforeseeable bugs )"; updates → "Doesn't matter the run is fully autonomous (so
 whichever works better + higher quality output)" → push per group, one OTA at the end.
 The revised plan was APPROVED (2026-10-03) — that approval is the operator's "build".
+After the run's OTA, a phone screenshot (Post a Job: only its header, centred; nothing else) with
+their words: "WTH this doesn’t even work at all as well as the reuse dropdown etc can u make sure
+the app has no bugs then push it etc? (On the old beta build) or do I have to install new build
+right now?" → answered: the old build takes the fix as an update; the new build carries the same
+code. Then: "Ok fix all of these bugs then send me link to new updated build (please 100% make
+sure deeply no bugs (atleast try your best) and make sure everything works normally then send me
+new build link". Popup answers: Reduce Motion ON → "Still blank"; the reuse row → "Nothing at
+all"; other screens → "Not sure, id need you to directly check everything... to make sure then
+implement correct fix in the best way so it doesnt happen in the future". → FIXED (`e341b01`,
+`3b47d74`, HANDOFF "THE PHONE FIX"); the screens walk written for the future
+(`.maestro/screens-walk.yml`), blocked by Expo's paid-plan requirement (operator decision).

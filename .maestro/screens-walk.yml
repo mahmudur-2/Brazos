@@ -1,0 +1,132 @@
+# .maestro/screens-walk.yml — THE SCREENS WALK: the real app on an iOS simulator, screen by
+# screen, each proven by the text it renders. The web harness (scripts/shots.mjs) renders the
+# FALLBACK branch of every motion piece and no native module at all, so a defect in a
+# device-only path (a *.motion120.tsx sibling, keyboard-controller, a Platform.OS === 'ios'
+# branch, real insets) is invisible to it — the 2026-10-03 blank Post a Job is the lesson. This
+# flow runs through .eas/workflows/screens-walk-ios.yml; its job log is the record (one line per
+# command, ⚠ for an optional assertion that failed), and every screen leaves a screenshot.
+#
+# Non-optional steps are the walk's spine (a sign-in, a tap that opens a screen); the
+# assertions on what a screen renders are `optional: true`, so one bad screen does not hide
+# the next — the log says which texts arrived and which did not.
+#
+# Same rules as money-walk.yml: the two staging accounts sign in through sign-in.yml with the
+# MAESTRO_E2E_* variables (never a credential here — tests/maestroFlows.test.mjs); selectors are
+# whole-label regular expressions over text the screens render.
+appId: app.brazos.mobile.preview
+---
+# ─── The customer ──────────────────────────────────────────────────────────
+- runFlow:
+    file: sign-in.yml
+    env:
+      EMAIL: ${MAESTRO_E2E_CUSTOMER_EMAIL}
+      PASSWORD: ${MAESTRO_E2E_CUSTOMER_PASSWORD}
+      START_IN: Hire help
+      HOME_MARK: Post a job
+- takeScreenshot: c-home
+- assertVisible:
+    text: "What do you need done?"
+    optional: true
+- assertVisible:
+    text: ".*Describe your task.*"
+    optional: true
+- assertVisible:
+    text: "Assembly"
+    optional: true
+
+# The + sheet and the Reuse row (the operator: "the reuse dropdown doesn't work").
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "Reuse a past job"
+    timeout: 15000
+- takeScreenshot: c-create-sheet
+- tapOn: "Reuse a past job"
+- extendedWaitUntil:
+    visible: "The jobs you post show here.*|E2E .*"
+    timeout: 15000
+    optional: true
+- takeScreenshot: c-reuse-open
+- tapOn: "Close"
+
+# Post a job, step 1 (the operator: only the header rendered, centred, nothing else).
+- tapOn: "Post a job"
+- extendedWaitUntil:
+    visible: "STEP 1 OF 4"
+    timeout: 30000
+    optional: true
+- takeScreenshot: c-post-step1
+- assertVisible:
+    text: "What needs doing?"
+    optional: true
+- assertVisible:
+    text: ".*Walk my dog on weekdays.*"
+    optional: true
+- assertVisible:
+    text: ".*Describe what you need done.*"
+    optional: true
+- assertVisible:
+    text: "Assembly"
+    optional: true
+- swipe:
+    direction: UP
+    duration: 400
+- takeScreenshot: c-post-step1-scrolled
+- tapOn:
+    text: "Home"
+    index: 0
+
+# The other customer tabs.
+- tapOn: "Discover"
+- extendedWaitUntil:
+    visible: "Discover"
+    timeout: 15000
+    optional: true
+- takeScreenshot: c-discover
+- tapOn: "Inbox"
+- extendedWaitUntil:
+    visible: "All conversations"
+    timeout: 15000
+    optional: true
+- takeScreenshot: c-inbox
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Payment methods"
+    timeout: 15000
+    optional: true
+- takeScreenshot: c-profile
+- assertVisible:
+    text: ".*Account & safety.*"
+    optional: true
+
+# ─── The worker ────────────────────────────────────────────────────────────
+- runFlow:
+    file: sign-in.yml
+    env:
+      EMAIL: ${MAESTRO_E2E_WORKER_EMAIL}
+      PASSWORD: ${MAESTRO_E2E_WORKER_PASSWORD}
+      START_IN: Find work
+      HOME_MARK: Search for jobs or areas
+- takeScreenshot: w-home
+- assertVisible:
+    text: ".*Taking new work.*"
+    optional: true
+- tapOn: "My Jobs"
+- extendedWaitUntil:
+    visible: "Active"
+    timeout: 15000
+    optional: true
+- takeScreenshot: w-myjobs
+- tapOn: "Map"
+- extendedWaitUntil:
+    visible: ".*Explore nearby jobs.*"
+    timeout: 15000
+    optional: true
+- takeScreenshot: w-map
+- tapOn: "Inbox"
+- takeScreenshot: w-inbox
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: ".*Earnings.*"
+    timeout: 15000
+    optional: true
+- takeScreenshot: w-profile

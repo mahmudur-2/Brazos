@@ -11,6 +11,43 @@ the Lux drawing run's, the eighteen-item run's and the sittings before them, unc
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
 
+## THE PHONE FIX — the fix run's OTA blanked every header-link screen on the iPhone; two layout fixes shipped (2026-10-03, after the fix run; `e341b01`, `3b47d74`)
+
+**Start here.** On the operator's Beta, Post a Job showed only its header — vertically centred —
+and nothing below; "Reuse a past job" in the + sheet did nothing. Both are iPhone-only layout
+defects the web harness cannot show (react-native-web lays out with CSS flexbox; the phone with
+Yoga under React Native's legacy stretch rule):
+- `e341b01` — `components/PressScale.shared.tsx` gave every wrapped Pressable `{ flexGrow: 1 }`
+  (F12a, 24eca65). On the phone a growing child inside an auto-height wrapper takes the wrapper's
+  whole AVAILABLE height: the header's Back link grew to the screen, the header row with it, and
+  the `flex: 1` content below got 0 pt — on EVERY screen with a header link (the arithmetic:
+  852 − 59 inset = 793; 4 + 781/2 + 59 = 453.5 pt, the screenshot's header centre). `FILL` is now
+  `{}`; width fills by the column's stretch; a numeric height or minHeight stays on the Pressable.
+  `tests/smoothPass.test.mjs` pins it. Found by the Opus investigator from the screenshot's
+  geometry; confirmed by reading Yoga's `YGErrataAll` default in RN 0.81.5.
+- `3b47d74` — `components/DropdownReveal.motion120.tsx`: the growing body measured its content IN
+  the flow of the animated box (0 pt before it opens), so Yoga clamped the strip's horizontal list
+  to 0 and `contentHeight` never left 0. The content now measures in an absolute layer (top and
+  both sides pinned, height free). The reuse strip was built 2026-09-30 and had never been opened
+  on a phone.
+- **Shipped:** OTA update group `1013e951-2984-4537-99db-ddf2c559935e`, iOS update
+  `01a10368-24ee-7c2e-8015-0c0628c07c7c` (3b47d74). `npm run verify` 1619/1619. CI green. The new
+  Beta build with the fix embedded: EAS `91103602-e990-44c5-873f-5118ec85783c`
+  (https://expo.dev/accounts/mah_r2/projects/BRAZOS/builds/91103602-e990-44c5-873f-5118ec85783c);
+  build `64abe85b` (3fcce2b's JS) is superseded.
+- **Not yet confirmed on the phone** — the operator's next tap: Post a Job, the + sheet's Reuse
+  row, a job page, Profile → Account & safety, the Inbox pills, Delete account's button row.
+- **The lesson, standing:** a device-only path (a `*.motion120.tsx` sibling, keyboard-controller,
+  real Yoga) is NEVER proven by the web harness. The Maestro screens walk is written for it —
+  `.maestro/screens-walk.yml` + `.eas/workflows/screens-walk-ios.yml` (every tab and the + sheet
+  on an iOS simulator, one log line per assertion) — but `eas workflow:validate` refuses it:
+  "Running maestro_test jobs requires a paid plan" (the September money walks ran on a plan since
+  lapsed). Operator decision: subscribe, or every OTA keeps relying on the phone walk. Until then
+  no OTA ships a new device-only path without the operator's phone check first.
+- Reviewer's other device-only notes, unverified, cosmetic: the EntranceView first-frame flash on
+  a late-attached style; KeyboardAvoid's `frameBottom` is parent-relative (off inside sheets);
+  the pinned-foot registration on Post a Job's steps 1–3 (fade off).
+
 ## FIX RUN — DONE: groups A–F, the smooth pass, the final sweep and six review fixes are on `mainexpo`, shipped as one OTA; the new Beta build was started (2026-10-03, "build" given; the workflow's helpers ran one after another)
 
 **Start here.** The brief is `docs/dispatch/FIX-RUN.md`; the operator's selection is its first

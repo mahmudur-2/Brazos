@@ -1,0 +1,37 @@
+# .eas/workflows/screens-walk-ios.yml — the screens walk (.maestro/screens-walk.yml) on an iOS
+# simulator build of the `e2e-test` profile: the real app on a real iOS runtime, screen by
+# screen, before an update ships. The web harness exercises only the fallback branches, so
+# this is the one check that reaches the device-only code (2026-10-03: the blank Post a Job).
+#
+# Same shape and the same rules as e2e-ios.yml: workflow_dispatch ONLY (D-10), an optional
+# `build_id` to rerun the walk on the last simulator build, the four MAESTRO_E2E_* values from
+# the EAS `preview` environment, nothing here carries a credential. Start it with:
+#   npx eas-cli@latest workflow:run .eas/workflows/screens-walk-ios.yml
+#   npx eas-cli@latest workflow:run .eas/workflows/screens-walk-ios.yml -F build_id=<id>
+name: Screens walk iOS
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        type: string
+        required: false
+jobs:
+  build_ios_simulator:
+    if: ${{ !inputs.build_id }}
+    type: build
+    params:
+      platform: ios
+      profile: e2e-test
+  screens_walk:
+    after: [build_ios_simulator]
+    type: maestro
+    environment: preview
+    env:
+      MAESTRO_E2E_CUSTOMER_EMAIL: ${{ env.MAESTRO_E2E_CUSTOMER_EMAIL }}
+      MAESTRO_E2E_CUSTOMER_PASSWORD: ${{ env.MAESTRO_E2E_CUSTOMER_PASSWORD }}
+      MAESTRO_E2E_WORKER_EMAIL: ${{ env.MAESTRO_E2E_WORKER_EMAIL }}
+      MAESTRO_E2E_WORKER_PASSWORD: ${{ env.MAESTRO_E2E_WORKER_PASSWORD }}
+    params:
+      build_id: ${{ inputs.build_id || after.build_ios_simulator.outputs.build_id }}
+      flow_path: .maestro/screens-walk.yml
+      record_screen: true
