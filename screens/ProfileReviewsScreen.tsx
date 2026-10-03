@@ -9,6 +9,8 @@ import {
   Text,
   View,
 } from 'react-native';
+import { EntranceView } from '../components/EntranceView';
+import { entranceSlot, useEntered } from '../hooks/useEntrance';
 import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, type RouteProp } from '@react-navigation/native';
@@ -210,6 +212,8 @@ export function ProfileReviewsScreen() {
     () => (hidden.size ? reviews.filter((review) => !hidden.has(review.reviewer_id)) : reviews),
     [reviews, hidden]
   );
+  // FIX-RUN F12: the first batch of rows cascades in, once (hooks/useEntrance.ts useEntered).
+  const reviewsEntered = useEntered(visibleReviews.length > 0);
 
   const firstName = params.name?.trim().split(/\s+/)[0];
   const summary = activeRole === 'customer' ? summaries.customer : summaries.worker;
@@ -337,7 +341,8 @@ export function ProfileReviewsScreen() {
               <ActivityIndicator color={colors.primary} style={styles.footerSpinner} />
             ) : null
           }
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
+            <EntranceView index={entranceSlot(index)} skip={reviewsEntered}>
             <Card style={styles.reviewCard}>
               <View style={styles.reviewHeader}>
                 <Avatar name={item.reviewer_name} uri={item.reviewer_avatar_url} size={36} />
@@ -394,6 +399,7 @@ export function ProfileReviewsScreen() {
                 label="Report this review"
               />
             </Card>
+            </EntranceView>
           )}
         />
       )}

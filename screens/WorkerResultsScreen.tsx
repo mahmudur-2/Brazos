@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { EntranceView } from '../components/EntranceView';
+import { entranceSlot, useEntered } from '../hooks/useEntrance';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -315,6 +317,8 @@ export function WorkerResultsScreen() {
     () => applyJobFilters(base, filters, sortContext),
     [base, filters, sortContext]
   );
+  // FIX-RUN F12: the first batch of rows cascades in, once (hooks/useEntrance.ts useEntered).
+  const resultsEntered = useEntered(results.length > 0);
 
   const filterCount = activeJobFilterCount(filters);
 
@@ -411,12 +415,13 @@ export function WorkerResultsScreen() {
         <FlatList
           data={results}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             // Radius results are jobs_within_radius rows carrying the
             // server-computed distance; the plain feed carries none. Unknown
             // renders nothing on the card — never a client-side guess.
             const distance = (item as { distance_miles?: unknown }).distance_miles;
             return (
+              <EntranceView index={entranceSlot(index)} skip={resultsEntered}>
               <WorkerJobCard
                 job={item}
                 bidCount={bidCounts[item.id]}
@@ -424,6 +429,7 @@ export function WorkerResultsScreen() {
                 distanceMiles={typeof distance === 'number' ? distance : null}
                 onPress={() => navigation.navigate('JobDetail', { job: item })}
               />
+              </EntranceView>
             );
           }}
           contentContainerStyle={[styles.listContent, { paddingBottom: navClearance }]}

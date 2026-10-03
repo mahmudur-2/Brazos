@@ -53,22 +53,29 @@ export type EntranceStyle =
   | { opacity: Animated.Value; transform: [{ translateY: Animated.AnimatedInterpolation<number> }] }
   | undefined;
 
-export function useEntrance(index = 0): EntranceStyle {
+export function useEntrance(index = 0, skip = false): EntranceStyle {
   const progress = useRef(new Animated.Value(0)).current;
   const reducedMotion = useReducedMotion();
-  const animated = reducedMotion === false;
+  // FIX-RUN F12 — read once, at mount: a row that mounts after its list's first batch (scrolled
+  // back into view, added by a refresh) is simply there, and a row that started its entrance
+  // keeps it when the list's flag flips.
+  const skipped = useRef(skip).current;
+  // The stagger slot is the mount's too: a list row whose index shifts (a row added above it)
+  // must not replay its entrance.
+  const slot = useRef(index).current;
+  const animated = reducedMotion === false && !skipped;
 
   useEffect(() => {
     if (!animated) return;
     const animation = Animated.spring(progress, {
       toValue: 1,
-      delay: index * STAGGER_MS,
+      delay: slot * STAGGER_MS,
       ...ENTRANCE_SPRING,
       useNativeDriver: USE_NATIVE_DRIVER,
     });
     animation.start();
     return () => animation.stop();
-  }, [animated, index, progress]);
+  }, [animated, slot, progress]);
 
   if (!animated) return undefined;
   return {
@@ -82,4 +89,24 @@ export function useEntrance(index = 0): EntranceStyle {
       },
     ],
   };
+}
+
+/**
+ * FIX-RUN F12 — A LIST'S ROWS ENTER ONCE. True once the list has drawn its first batch of rows:
+ * pass it as `skip` to each row's EntranceView, so only the first data arrival cascades in and a
+ * row that mounts later (recycled, scrolled back, a pull-to-refresh) never replays it. Read on the
+ * render that draws the rows; it turns true on the commit after the first one that had any.
+ */
+export function useEntered(hasRows: boolean): boolean {
+  const entered = useRef(false);
+  const skip = entered.current;
+  useEffect(() => {
+    if (hasRows) entered.current = true;
+  }, [hasRows]);
+  return skip;
+}
+
+/** The stagger slot for a list row: the first seven cascade, the rest arrive with the seventh. */
+export function entranceSlot(index: number): number {
+  return Math.min(index, 6);
 }

@@ -11,6 +11,8 @@ import {
   Text,
   View,
 } from 'react-native';
+import { EntranceView } from '../components/EntranceView';
+import { entranceSlot, useEntered } from '../hooks/useEntrance';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -945,6 +947,8 @@ export function MessagesInboxScreen() {
   // The pill's slice of the list, and the ONLY thing the pills change. They
   // are a view over the rows the inbox already built, never a second fetch.
   const visibleRows = useMemo(() => filterRows(rows, filter), [rows, filter]);
+  // FIX-RUN F12: the first batch of rows cascades in, once (hooks/useEntrance.ts useEntered).
+  const rowsEntered = useEntered(!loading && visibleRows.length > 0);
 
   // #55 — the resting pill: a faint mint-white rim in dark, the warm line in
   // light; its words the ink at .85. Chosen: styles.pillActive.
@@ -1100,12 +1104,13 @@ export function MessagesInboxScreen() {
         <FlatList
           data={visibleRows}
           keyExtractor={(item) => item.key}
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             // TWO MECHANICS, ONE ACTION MODEL. On a build with gesture-handler
             // this reveals Mute / Report / More on a swipe left; on every build
             // shipped so far it renders the row unwrapped and the long press
             // below is the only entry. Both take their actions from
             // `actionsFor`, so neither can offer something the other cannot.
+            <EntranceView index={entranceSlot(index)} skip={rowsEntered}>
             <SwipeableRow actions={swipeActionsFor(item.otherId)} enabled={!item.isSelf}>
             <ConversationRow
               name={item.name}
@@ -1143,6 +1148,7 @@ export function MessagesInboxScreen() {
               accessibilityHint={item.isSelf ? undefined : rowActionHint}
             />
             </SwipeableRow>
+            </EntranceView>
           )}
           // 2026-09-28 (LUX-LIST-64 #54) — THE CLEAN LIST: no cards, a hairline
           // between rows, the same 16 either side and 18 under the pills at any

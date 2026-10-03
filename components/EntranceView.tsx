@@ -12,8 +12,8 @@ import type { EntranceViewProps } from './EntranceView.shared';
 
 export type { EntranceViewProps } from './EntranceView.shared';
 
-function EntranceViewFallback({ index = 0, style, children }: EntranceViewProps) {
-  const entrance = useEntrance(index);
+function EntranceViewFallback({ index = 0, skip = false, style, children }: EntranceViewProps) {
+  const entrance = useEntrance(index, skip);
   return <Animated.View style={[style, entrance]}>{children}</Animated.View>;
 }
 

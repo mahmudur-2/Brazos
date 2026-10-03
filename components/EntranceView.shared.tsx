@@ -9,6 +9,11 @@ import type { StyleProp, ViewStyle } from 'react-native';
 export type EntranceViewProps = {
   /** The stagger slot: 0 arrives first. */
   index?: number;
+  /**
+   * FIX-RUN F12 — read at mount: true and the section is simply there (a list row mounting after
+   * its list's first batch; hooks/useEntrance.ts useEntered).
+   */
+  skip?: boolean;
   style?: StyleProp<ViewStyle>;
   children?: ReactNode;
 };

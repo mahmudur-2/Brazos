@@ -8,6 +8,8 @@ import { layout, radius, spacing, type EmeraldPalette } from '../tokens';
 import { EYEBROW_TYPE, screenGround, themedStyles, useThemeColors } from '../../lib/theme';
 import { useOverrideNumber } from '../../lib/designOverrides';
 import { ScreenStateView, isReady, type ScreenState } from './ScreenStates';
+import { EntranceView } from '../../components/EntranceView';
+import { entranceSlot, useEntered } from '../../hooks/useEntrance';
 
 /**
  * The detail template (§I): optional media header, stacked sections, and a
@@ -68,6 +70,8 @@ export function DetailScreen({
   // the pill's real footprint — the action bar when there is one, otherwise
   // the scroller.
   const navClearance = useScrollClearance();
+  // FIX-RUN F12: the sections arrive once, on the first render that draws them.
+  const sectionsEntered = useEntered(isReady(state) && sections.length > 0);
   const footerPad = usePinnedFooterPadding();
   // RUN S2 (C9) — the layout dials, live across every template screen.
   const pagePadDial = useOverrideNumber('layout.pagePadding');
@@ -103,11 +107,18 @@ export function DetailScreen({
               <RemoteImage uri={mediaUri} style={styles.hero} contentFit="cover" />
             ) : null}
 
+            {/* FIX-RUN F12: the sections arrive in reading order, once (EntranceView; a section that
+                appears later, or under Reduce Motion, is simply there). */}
             {sections.map((section, index) => (
-              <View key={section.title ?? `section-${index}`} style={styles.section}>
+              <EntranceView
+                key={section.title ?? `section-${index}`}
+                index={entranceSlot(index)}
+                skip={sectionsEntered}
+                style={styles.section}
+              >
                 {section.title ? <Text accessibilityRole="header" style={[styles.sectionTitle, section.titleTone === 'gold' && styles.sectionTitleGold]}>{section.title}</Text> : null}
                 {section.content}
-              </View>
+              </EntranceView>
             ))}
           </ScrollView>
 

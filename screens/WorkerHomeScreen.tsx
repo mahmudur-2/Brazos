@@ -8,6 +8,8 @@ import {
   Text,
   View,
 } from 'react-native';
+import { EntranceView } from '../components/EntranceView';
+import { entranceSlot, useEntered } from '../hooks/useEntrance';
 import { PressScale } from '../components/PressScale';
 import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -270,6 +272,8 @@ export function WorkerHomeScreen() {
       })
       .slice(0, PREVIEW_COUNT);
   }, [jobs, myCategories]);
+  // FIX-RUN F12: the first batch of rows cascades in, once (hooks/useEntrance.ts useEntered).
+  const jobsEntered = useEntered(previewJobs.length > 0);
 
   const bidCounts = useBidCounts(useMemo(() => previewJobs.map((j) => j.id), [previewJobs]));
 
@@ -815,13 +819,14 @@ export function WorkerHomeScreen() {
             </Text>
           ) : (
             <View style={styles.cardList}>
-              {previewJobs.map((job) => (
+              {previewJobs.map((job, index) => (
+                <EntranceView key={job.id} index={entranceSlot(index)} skip={jobsEntered}>
                 <WorkerJobCard
-                  key={job.id}
                   job={job}
                   bidCount={bidCounts[job.id]}
                   onPress={() => navigation.navigate('JobDetail', { job })}
                 />
+                </EntranceView>
               ))}
             </View>
           )}

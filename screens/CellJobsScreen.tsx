@@ -6,6 +6,8 @@ import {
   Text,
   View,
 } from 'react-native';
+import { EntranceView } from '../components/EntranceView';
+import { entranceSlot, useEntered } from '../hooks/useEntrance';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +36,8 @@ export function CellJobsScreen() {
   const navigation = useNavigation<MapStackNavigation>();
   const { params } = useRoute<RouteProp<MapStackParamList, 'CellJobs'>>();
   const [jobs, setJobs] = useState<OpenJob[]>([]);
+  // FIX-RUN F12: the first batch of rows cascades in, once (hooks/useEntrance.ts useEntered).
+  const jobsEntered = useEntered(jobs.length > 0);
   // Same batched source the full list uses, so a job shows the same count
   // whichever surface it was opened from.
   const bidCounts = useOfferCounts(jobs.map((j) => j.id));
@@ -114,12 +118,14 @@ export function CellJobsScreen() {
         <FlatList
           data={jobs}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
+            <EntranceView index={entranceSlot(index)} skip={jobsEntered}>
             <BrowseJobCard
               job={item}
               bidCount={bidCounts[item.id]}
               onPress={() => navigation.navigate('JobDetail', { job: item })}
             />
+            </EntranceView>
           )}
           contentContainerStyle={[
             jobs.length === 0 ? styles.emptyContainer : styles.listContent,

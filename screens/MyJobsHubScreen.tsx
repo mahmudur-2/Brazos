@@ -8,6 +8,8 @@ import {
   Text,
   View,
 } from 'react-native';
+import { EntranceView } from '../components/EntranceView';
+import { useEntered } from '../hooks/useEntrance';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -247,6 +249,8 @@ export function MyJobsHubScreen() {
           ...settledBids,
         ]
       : [];
+  // FIX-RUN F12: the sections arrive in order, once (hooks/useEntrance.ts useEntered).
+  const hubEntered = useEntered(workingItems.length + postedItems.length + bidItems.length + closedBidItems.length > 0);
   const showDraft = isCustomer && filter === 'active' && draft != null;
 
   const isEmpty =
@@ -372,6 +376,7 @@ export function MyJobsHubScreen() {
               ) : null}
 
               {workingItems.length > 0 && (
+                <EntranceView index={0} skip={hubEntered}>
                 <View style={styles.section}>
                   <SectionHeading
                     title={filter === 'closed' ? 'Work history' : 'You’re working'}
@@ -407,9 +412,11 @@ export function MyJobsHubScreen() {
                     />
                   ))}
                 </View>
+                </EntranceView>
               )}
 
               {postedItems.length > 0 && (
+                <EntranceView index={1} skip={hubEntered}>
                 <View style={styles.section}>
                   <SectionHeading title="You posted" count={postedItems.length} />
                   {postedItems.map((job) => {
@@ -461,9 +468,11 @@ export function MyJobsHubScreen() {
                     );
                   })}
                 </View>
+                </EntranceView>
               )}
 
               {bidItems.length > 0 && (
+                <EntranceView index={2} skip={hubEntered}>
                 <View style={styles.section}>
                   <SectionHeading title="Pending bids" count={bidItems.length} gold />
                   {bidItems.map((bid) => {
@@ -514,9 +523,11 @@ export function MyJobsHubScreen() {
                     );
                   })}
                 </View>
+                </EntranceView>
               )}
 
               {closedBidItems.length > 0 && (
+                <EntranceView index={3} skip={hubEntered}>
                 <View style={styles.section}>
                   <SectionHeading title="Settled bids" count={closedBidItems.length} />
                   {closedBidItems.map((bid) => {
@@ -542,6 +553,7 @@ export function MyJobsHubScreen() {
                     );
                   })}
                 </View>
+                </EntranceView>
               )}
 
             </>

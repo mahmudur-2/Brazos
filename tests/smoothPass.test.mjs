@@ -260,6 +260,33 @@ test('[static] F12: a mark arrives on a spring, and a tapped star swells', () =>
   assert.match(strip(read('components/StarRating.tsx')), /testID=\{`review-star-\$\{star\}`\}/);
 });
 
+test('[static] F12: a list\'s first rows cascade in once, and never replay', () => {
+  const hook = strip(read('hooks/useEntrance.ts'));
+  assert.match(hook, /export function useEntered\(hasRows: boolean\): boolean \{/);
+  assert.match(hook, /const skipped = useRef\(skip\)\.current;/, 'skip is read at mount');
+  assert.match(hook, /return Math\.min\(index, 6\);/);
+  const fast = strip(read('components/EntranceView.motion120.tsx'));
+  assert.match(fast, /const skipped = useRef\(skip\)\.current;/);
+  assert.match(fast, /useSharedValue\(animated \? 0 : 1\)/, 'hidden from its first frame when it will enter');
+  assert.match(fast, /animated \? motion : undefined/, 'no identity transform on a still section');
+  const LISTS = {
+    'ui/templates/DetailScreen.tsx': /<EntranceView\s+key=\{section\.title \?\? `section-\$\{index\}`\}\s+index=\{entranceSlot\(index\)\}\s+skip=\{sectionsEntered\}/,
+    'screens/MessagesInboxScreen.tsx': /<EntranceView index=\{entranceSlot\(index\)\} skip=\{rowsEntered\}>\s*<SwipeableRow/,
+    'screens/WorkerResultsScreen.tsx': /<EntranceView index=\{entranceSlot\(index\)\} skip=\{resultsEntered\}>\s*<WorkerJobCard/,
+    'screens/ProfileReviewsScreen.tsx': /<EntranceView index=\{entranceSlot\(index\)\} skip=\{reviewsEntered\}>\s*<Card/,
+    'screens/CellJobsScreen.tsx': /<EntranceView index=\{entranceSlot\(index\)\} skip=\{jobsEntered\}>\s*<BrowseJobCard/,
+    'screens/WorkerHomeScreen.tsx': /<EntranceView key=\{job\.id\} index=\{entranceSlot\(index\)\} skip=\{jobsEntered\}>\s*<WorkerJobCard/,
+    'screens/MyJobsHubScreen.tsx': /<EntranceView index=\{3\} skip=\{hubEntered\}>/,
+  };
+  for (const [path, wear] of Object.entries(LISTS)) {
+    const source = strip(read(path));
+    assert.match(source, wear, `${path} cascades its first rows`);
+    assert.match(source, /= useEntered\(/, `${path} reads the first-batch flag`);
+  }
+  // Never in Chat: a conversation's messages are not an entrance.
+  assert.doesNotMatch(strip(read('screens/ChatScreen.tsx')), /<EntranceView/);
+});
+
 test('[executed] F12: a fade to or from nothing keeps its hue (clearAlpha)', async () => {
   const { stripTypeScriptTypes } = await import('node:module');
   const js = stripTypeScriptTypes(read('ui/colorAlpha.ts'), { mode: 'strip' });
