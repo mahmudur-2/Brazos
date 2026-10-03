@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { fetchReactionsForJob, type Reaction } from '../lib/reactions';
 import { supabase } from '../lib/supabase';
 
@@ -15,6 +15,15 @@ import { supabase } from '../lib/supabase';
  */
 export function useReactions(jobId: string | null) {
   const [reactions, setReactions] = useState<Reaction[]>([]);
+  // A3 (2026-10-03): the topic was `reactions:job:${jobId}` with nothing
+  // unique per mount. supabase.channel() dedupes by topic string and
+  // removeChannel() tears down asynchronously, so opening the same job's
+  // chat twice in quick succession (Messages → Chat → offer card → job →
+  // Message) handed the second mount the first mount's already-subscribed
+  // channel, `.on('postgres_changes')` threw, and AppErrorBoundary reset the
+  // app. See hooks/useOpenJobs.ts for the mitigation: id + per-run counter.
+  const instanceId = useId();
+  const runRef = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!jobId) {
@@ -32,7 +41,7 @@ export function useReactions(jobId: string | null) {
   useEffect(() => {
     if (!jobId) return;
     const channel = supabase
-      .channel(`reactions:job:${jobId}`)
+      .channel(`reactions:job:${jobId}:${instanceId}:${runRef.current++}`)
       .on(
         'postgres_changes',
         {

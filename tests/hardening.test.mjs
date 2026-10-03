@@ -492,12 +492,12 @@ test('every realtime channel topic is unique per mount', () => {
   // it backs a tab screen, where remount is the ordinary gesture.
   const SUFFIX = /\$\{instanceId\}:\$\{runRef\.current\+\+\}`/;
 
-  // The ONE remaining fixed-topic subscription, recorded rather than excused.
-  // It is keyed per job, so two different jobs cannot collide — but a fast
-  // remount on the SAME job still can. Not fixed here because it is outside
-  // this run's scope; listed so a new fixed topic cannot hide among the
-  // existing ones, and so removing it from this list is the whole fix.
-  const KNOWN_FIXED_TOPIC = ['hooks/useReactions.ts'];
+  // No fixed-topic subscription remains. hooks/useReactions.ts was the last
+  // one (keyed per job, so a fast remount on the SAME job collided — opening
+  // a job's chat twice crashed the app, FIX-RUN A3, 2026-10-03); its suffix
+  // is asserted below. The list stays, empty, so a new fixed topic cannot be
+  // excused by adding itself here without a reviewer seeing it.
+  const KNOWN_FIXED_TOPIC = [];
 
   const sources = [];
   for (const dir of ['hooks', 'screens', 'components', 'lib']) {
@@ -532,6 +532,12 @@ test('every realtime channel topic is unique per mount', () => {
   // The sweep must actually be finding call sites; a rename that emptied it
   // would otherwise pass silently.
   assert.ok(checked >= 7, `the channel sweep must stay wired (saw ${checked} call sites)`);
+
+  // The reactions hook specifically (A3): the per-job key stays, so the
+  // filter still scopes the subscription, and the per-mount suffix follows.
+  const reactions = read('hooks/useReactions.ts');
+  assert.match(reactions, /\.channel\(`reactions:job:\$\{jobId\}:\$\{instanceId\}:\$\{runRef\.current\+\+\}`\)/);
+  assert.doesNotMatch(reactions, /\.channel\(`reactions:job:\$\{jobId\}`\)/, 'the fixed per-job topic must not come back');
 
   // And the inbox specifically, since it is the one this run moved: unique
   // topic, debounced refresh, and a teardown that cancels the pending timer
