@@ -56,6 +56,8 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 const TRACK_WIDTH = 52;
 const TRACK_HEIGHT = 32;
 const KNOB = 26;
+/** 32pt track + 8 above and below: the 44pt floor (worn by the press wrapper and the Pressable). */
+const TOGGLE_SLOP = { top: 8, bottom: 8, left: 6, right: 6 };
 /** Border (1) + inner padding (2) on each side. */
 const INSET = 3;
 
@@ -128,14 +130,15 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
   return (
     // MOTION1 (C1): the shared press spring, on a wrapper so the track's own
     // fixed geometry is untouched and the knob's translate stays independent
-    // of it.
-    <Animated.View style={press.style}>
+    // of it. The wrapper carries the slop too: on the New Architecture a view
+    // its child does not overflow hit-tests as clipped (PressScale.shared.tsx).
+    <Animated.View style={press.style} hitSlop={TOGGLE_SLOP}>
     <Pressable
       onPress={() => onValueChange(!value)}
       onPressIn={press.onPressIn}
       onPressOut={press.onPressOut}
       disabled={disabled}
-      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+      hitSlop={TOGGLE_SLOP}
       accessibilityRole="switch"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ checked: value, disabled }}

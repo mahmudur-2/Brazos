@@ -335,7 +335,9 @@ export function SearchBar({
         accessibilityLabel={accessibilityLabel ?? placeholder}
       />
       {value.length > 0 && !disableClear ? (
-        <Animated.View style={clearPress.style}>
+        // The wrapper carries the slop too: on the New Architecture a view its
+        // child does not overflow hit-tests as clipped (components/PressScale.shared.tsx).
+        <Animated.View style={clearPress.style} hitSlop={touchSlop(18, 18)}>
           <Pressable
             onPress={() => onChangeText('')}
             onPressIn={clearPress.onPressIn}
@@ -362,7 +364,7 @@ export function SearchBar({
           <Ionicons name="search" size={22} color={isDark ? colors.emerald : colors.navInactive} />
         </Pressable>
       ) : voiceReady && !disableVoiceSearch ? (
-        <Animated.View style={micPress.style}>
+        <Animated.View style={micPress.style} hitSlop={8}>
           <Pressable
             // Tap-to-talk: one tap starts the bounded session, a second stops
             // it. The session cannot outlive the boundary's silence detector or

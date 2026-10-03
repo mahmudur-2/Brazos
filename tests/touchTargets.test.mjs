@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
@@ -57,4 +58,35 @@ test('E3: the Filters pill draws one height and slops from that same constant', 
   const sheet = read('components/JobFilterSheet.tsx');
   assert.match(sheet, /const PILL_HEIGHT = 34;/);
   assert.match(sheet, /hitSlop=\{touchSlop\(PILL_HEIGHT\)\}/);
+});
+
+// F12 review — A PRESS WRAPPER CARRIES ITS PRESSABLE'S SLOP. On the New Architecture a view whose
+// children do not overflow it is hit-tested as if it clipped (RCTViewComponentView betterHitTest:
+// overflowInset == {} counts as clipping). A spring wrapper is exactly its Pressable's size, so a
+// slop on the Pressable alone dies at the wrapper's edge and the 44pt target shrinks back to the
+// glyph. Every `<Animated.View style={x.style}>` that wraps a slopped Pressable wears a slop too.
+
+test('[static] F12 review: a press wrapper around a slopped Pressable carries the slop', () => {
+  const files = execFileSync('git', ['ls-files', '--', 'components', 'screens', 'ui'], {
+    cwd: new URL('..', import.meta.url),
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter((file) => /\.tsx$/.test(file) && !/\.web\.tsx$/.test(file));
+  let wrappers = 0;
+  for (const file of files) {
+    const source = read(file);
+    const wrapper = /<Animated\.View style=\{\w+\.style\}([^>]*)>\s*<Pressable\b/g;
+    for (let match = wrapper.exec(source); match; match = wrapper.exec(source)) {
+      const tag = pressableTagWith(source.slice(match.index + match[0].length - '<Pressable'.length), '<Pressable', file);
+      if (!/hitSlop=/.test(tag)) continue;
+      wrappers += 1;
+      assert.match(match[1], /hitSlop=/, `${file}: the press wrapper at ${match.index} drops its Pressable's slop`);
+    }
+  }
+  assert.ok(wrappers >= 3, 'the SearchBar clear and mic and the Toggle are among the wrappers checked');
+  // The shared press passes it to both views, on both paths (tests/smoothPass.test.mjs pins the shape).
+  for (const file of ['components/PressScale.tsx', 'components/PressScale.motion120.tsx']) {
+    assert.match(read(file), /onLayout=\{onLayout\} hitSlop=\{hitSlop\}>/, `${file} wrapper carries the slop`);
+  }
 });
