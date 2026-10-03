@@ -4,7 +4,7 @@
  * thread. The body hands back to JS once, when a close has finished, to unmount its rows.
  */
 import { useEffect, useState } from 'react';
-import { View, type LayoutChangeEvent } from 'react-native';
+import { View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { DROPDOWN_CLOSE_MS, DROPDOWN_OPEN_MS } from '../hooks/useDropdownPresence';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -50,14 +50,23 @@ export function DropdownBody({ open, style, children, grow = false }: DropdownRe
   const measure = (event: LayoutChangeEvent) => {
     contentHeight.value = event.nativeEvent.layout.height;
   };
+  // 2026-10-03 (the operator's phone): the content is measured in a layer of its own — absolute,
+  // pinned to the top and both sides, free in height — never in the flow of the animated box.
+  // In the flow, Yoga measures it against the box's current height, 0 before it opens, and a
+  // scroller inside (the reuse strip's horizontal list) is clamped to what is available: it
+  // reported 0, `contentHeight` stayed 0, and the strip never opened. Web flexbox never clamps,
+  // so the harness saw it open. The box still animates to the measured height and clips.
   return (
     <Animated.View style={motion}>
-      <View style={style} onLayout={measure}>
+      <View style={[style, MEASURING_LAYER]} onLayout={measure}>
         {children}
       </View>
     </Animated.View>
   );
 }
+
+/** Position only, no metric — a plain object, outside the lazy-sheet rule (tests/themeResolution). */
+const MEASURING_LAYER: ViewStyle = { position: 'absolute', left: 0, right: 0, top: 0 };
 
 export function DropdownChevron({ open, style, children }: DropdownRevealProps) {
   const progress = useOpenProgress(open);
