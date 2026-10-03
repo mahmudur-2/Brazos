@@ -666,13 +666,17 @@ export function WorkerJobScreen() {
           payment.status === 'paid_out') ? (
           <View style={styles.breakdown}>
             <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>Customer paid</Text>
+              {/* A2 — held is held: the money is the customer's until it is
+                  released, so "paid" is never written on a held row. */}
+              <Text style={styles.breakdownLabel}>
+                {payment.status === 'held' ? 'Customer’s payment · held' : 'Customer paid'}
+              </Text>
               <Text style={styles.breakdownValue}>
                 {formatBudget(payment.charge_amount_cents)}
               </Text>
             </View>
             <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>Brazos Protection</Text>
+              <Text style={styles.breakdownLabel}>Protection fee</Text>
               <Text style={styles.breakdownValue}>{formatBudget(brazosFeeCents(payment))}</Text>
             </View>
             <View style={styles.breakdownRow}>

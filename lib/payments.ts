@@ -132,7 +132,7 @@ export function workerTakeLine(
 }
 
 /**
- * R6c (D7): the "Brazos Protection" line of the worker's breakdown — the
+ * R6c (D7): the "Protection fee" line of the worker’s breakdown — the
  * customer's protection fee plus the worker-side fee, both read off the row.
  * A sum of two ledger columns, beside workerTakeCents and nowhere else; the
  * rates that produced each live in the database's fee_schedule.

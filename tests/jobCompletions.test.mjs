@@ -176,8 +176,17 @@ test('7 · the worker’s job card shows the take, and the three-line breakdown 
   );
   const breakdown = workerFlat.slice(workerFlat.indexOf('<View style={styles.breakdown}>'), workerFlat.indexOf('</View> ) : null} </Card>'));
   assert.ok(breakdown.length > 0);
-  assert.match(breakdown, /Customer paid<\/Text> <Text style=\{styles\.breakdownValue\}> \{formatBudget\(payment\.charge_amount_cents\)\}/);
-  assert.match(breakdown, /Brazos Protection<\/Text> <Text style=\{styles\.breakdownValue\}>\{formatBudget\(brazosFeeCents\(payment\)\)\}/);
+  // A2 (2026-10-03): the first line is "paid" ONLY once the money has left
+  // protection — a held row reads "held", because the money is still the
+  // customer's. The branch is fenced as written so no "paid" can render on
+  // status 'held', and the fee line carries the app's one fee name.
+  assert.match(
+    breakdown,
+    /<Text style=\{styles\.breakdownLabel\}> \{payment\.status === 'held' \? 'Customer’s payment · held' : 'Customer paid'\} <\/Text> <Text style=\{styles\.breakdownValue\}> \{formatBudget\(payment\.charge_amount_cents\)\}/
+  );
+  assert.doesNotMatch(breakdown, />Customer paid</, 'no unconditional "paid" label on the worker breakdown');
+  assert.doesNotMatch(breakdown, /Brazos Protection/, 'one fee name: "Protection fee" (C4)');
+  assert.match(breakdown, /Protection fee<\/Text> <Text style=\{styles\.breakdownValue\}>\{formatBudget\(brazosFeeCents\(payment\)\)\}/);
   assert.match(breakdown, /You receive<\/Text> <Text style=\{styles\.breakdownStrongValue\}> \{formatBudget\(workerTakeCents\(payment\)\)\}/);
   // The customer-facing held-amount surfaces are R7's and untouched here.
   for (const file of ['screens/JobConfirmedScreen.tsx', 'screens/ClientJobDetailScreen.tsx', 'screens/ApproveOrDisputeScreen.tsx']) {
