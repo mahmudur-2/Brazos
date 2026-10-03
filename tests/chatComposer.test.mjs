@@ -96,9 +96,13 @@ test('[static] the right mic is DICTATION and the voice MESSAGE moved into the m
   // Dictation goes through the same on-device boundary the search bars use.
   assert.match(source, /import \{ voiceSearch, type VoiceSession \} from '\.\.\/lib\/voiceSearch'/);
   assert.match(source, /voiceSearch\.beginSession\(\{/);
-  // The transcript's ONE egress is the caller's onChangeText — the boundary's
-  // own contract, and it must not gain a second consumer here.
-  assert.match(source, /onTranscript: \(phrase\) => onChangeText\(joinDictation\(baseTextRef\.current, phrase\)\)/);
+  // The transcript's ONE egress is the draft's setter — the boundary's own
+  // contract, and it must not gain a second consumer here. F3: the composer
+  // owns the draft, so that setter is its own; the field types into the same one.
+  assert.match(source, /onTranscript: \(phrase\) => setText\(joinDictation\(baseTextRef\.current, phrase\)\)/);
+  assert.match(source, /const \[text, setText\] = useState\(\(\) => draft\?\.current \?\? ''\);/);
+  assert.match(source, /onChangeText=\{setText\}/);
+  assert.equal((source.match(/onTranscript:/g) ?? []).length, 1);
   // A second tap stops and commits, and an unmount cancels without committing.
   assert.match(source, /sessionRef\.current\.stop\(\);/);
   assert.match(source, /return \(\) => sessionRef\.current\?\.cancel\(\);/);

@@ -69,9 +69,19 @@ const SEND_GLYPH_SIZE = 22;
 const MORPH_MS = 140;
 
 type ChatComposerProps = {
-  text: string;
-  onChangeText: (text: string) => void;
-  onSend: () => void;
+  /**
+   * F3 (fix run): the composer owns the draft, so a keystroke re-renders this
+   * row and nothing above it. Sends the trimmed text; resolves false on a
+   * failed send, and the composer puts the words back (unless the person has
+   * already started typing something new).
+   */
+  onSend: (content: string) => Promise<boolean>;
+  /**
+   * The screen's slot for an unsent draft: read when the composer mounts and
+   * written when it unmounts, so a draft survives the row going away (the
+   * messaging lock flipping) and coming back.
+   */
+  draft?: { current: string };
   sending: boolean;
   onPickCamera: () => void;
   onPickLibrary: () => void;
@@ -152,9 +162,8 @@ function joinDictation(base: string, phrase: string): string {
 }
 
 export function ChatComposer({
-  text,
-  onChangeText,
   onSend,
+  draft,
   sending,
   onPickCamera,
   onPickLibrary,
@@ -184,6 +193,27 @@ export function ChatComposer({
   // and the near-black that reads as its opposite number in light. One token,
   // both themes, no fork.
   const glyph = isDark ? colors.gold : colors.primary;
+
+  // --- the draft (F3) ------------------------------------------------------
+  const [text, setText] = useState(() => draft?.current ?? '');
+  const latestText = useRef(text);
+  useEffect(() => {
+    latestText.current = text;
+  }, [text]);
+  useEffect(() => {
+    return () => {
+      if (draft) draft.current = latestText.current;
+    };
+  }, [draft]);
+
+  async function handleSend() {
+    const content = text.trim();
+    if (!content) return;
+    // Cleared at once, so the row answers the tap before the network does.
+    setText('');
+    const sent = await onSend(content);
+    if (!sent) setText((current) => (current.trim() ? current : content));
+  }
 
   const isArming = recorderPhase === 'pending';
   const isRecording = recorderPhase === 'recording';
@@ -227,7 +257,7 @@ export function ChatComposer({
     baseTextRef.current = text;
     setListening(true);
     sessionRef.current = voiceSearch.beginSession({
-      onTranscript: (phrase) => onChangeText(joinDictation(baseTextRef.current, phrase)),
+      onTranscript: (phrase) => setText(joinDictation(baseTextRef.current, phrase)),
       onInterimTranscript: setInterim,
       onEnd: () => {
         sessionRef.current = null;
@@ -390,7 +420,7 @@ export function ChatComposer({
             keyboardAppearance={isDark ? 'dark' : 'light'}
             style={[styles.input, listening && interim != null && styles.inputInterim]}
             value={listening && interim != null ? joinDictation(baseTextRef.current, interim) : text}
-            onChangeText={onChangeText}
+            onChangeText={setText}
             placeholder={listening ? 'Listening…' : 'Message…'}
             placeholderTextColor={colors.textSubtle}
             multiline
@@ -440,7 +470,7 @@ export function ChatComposer({
               pointerEvents={showSend ? 'auto' : 'none'}
             >
               <Pressable
-                onPress={onSend}
+                onPress={() => void handleSend()}
                 disabled={sendDisabled}
                 style={[styles.iconBtn, sendDisabled && styles.iconBtnDisabled]}
                 hitSlop={6}

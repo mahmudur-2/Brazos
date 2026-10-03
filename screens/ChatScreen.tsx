@@ -172,7 +172,10 @@ export function ChatScreen() {
 
   const [counterparty, setCounterparty] = useState<Profile | null>(null);
   const [relation, setRelation] = useState<RelationState>(EMPTY_RELATION);
-  const [text, setText] = useState('');
+  // F3: the draft lives in the composer; this slot only carries it across the
+  // composer unmounting (the messaging lock flipping) and a failed send that
+  // unmounted it.
+  const draftRef = useRef('');
   const [sending, setSending] = useState(false);
   const [reactionTarget, setReactionTarget] = useState<string | null>(null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
@@ -1188,11 +1191,9 @@ export function ChatScreen() {
     await alertAsync(title, userMessage(error));
   }
 
-  async function handleSendText() {
-    const content = text.trim();
-    if (!content || !user || sending || !sendTarget) return;
+  async function handleSendText(content: string): Promise<boolean> {
+    if (!content || !user || sending || !sendTarget) return false;
     const quoted = replyTo;
-    setText('');
     setReplyTo(null);
     setSending(true);
     const { data, error } = await sendMessage({
@@ -1205,12 +1206,15 @@ export function ChatScreen() {
     if (error) {
       await reportSendFailure('Could not send message', error);
       // Restore the draft AND the reply target, so a failure doesn't silently
-      // turn a reply into a standalone message on the next attempt.
-      setText(content);
+      // turn a reply into a standalone message on the next attempt. The
+      // composer puts the words back itself; the slot covers a refusal that
+      // unmounted it (MESSAGING_LOCKED hides the row).
+      draftRef.current = content;
       setReplyTo(quoted);
-      return;
+      return false;
     }
     if (data) addLocal(data);
+    return true;
   }
 
   async function respondToRequest(
@@ -2047,9 +2051,8 @@ export function ChatScreen() {
               )}
 
               <ChatComposer
-                text={text}
-                onChangeText={setText}
                 onSend={handleSendText}
+                draft={draftRef}
                 sending={sending}
                 onPickCamera={pickFromCamera}
                 onPickLibrary={pickFromLibrary}

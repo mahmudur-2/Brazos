@@ -228,3 +228,19 @@ test('[static] F20: ProfileDetails keeps one door to the editor — the header p
   assert.equal((details.match(/navigation\.navigate\('ProfileMain', \{ edit: true \}\)/g) ?? []).length, 1);
   assert.doesNotMatch(details, />Edit profile</, 'the card chip is gone');
 });
+
+// ---------------------------------------------------------------------------
+// F3 — the chat draft lives in the composer.
+// ---------------------------------------------------------------------------
+test('[static] F3: a keystroke re-renders the composer, not the chat screen; a failed send restores the words', () => {
+  const chat = strip(read('screens/ChatScreen.tsx'));
+  const composer = strip(read('components/ChatComposer.tsx'));
+  assert.doesNotMatch(chat, /const \[text, setText\] = useState/, 'the screen holds no draft state');
+  assert.match(chat, /<ChatComposer\s+onSend=\{handleSendText\}\s+draft=\{draftRef\}/);
+  assert.match(chat, /async function handleSendText\(content: string\): Promise<boolean> \{/);
+  // A failure keeps the reply target and the words (the slot covers an unmounted composer).
+  assert.match(chat, /draftRef\.current = content;\s*setReplyTo\(quoted\);\s*return false;/);
+  assert.match(composer, /onSend: \(content: string\) => Promise<boolean>;/);
+  assert.match(composer, /setText\(''\);\s*const sent = await onSend\(content\);\s*if \(!sent\) setText\(\(current\) => \(current\.trim\(\) \? current : content\)\);/);
+  assert.match(composer, /if \(draft\) draft\.current = latestText\.current;/);
+});
