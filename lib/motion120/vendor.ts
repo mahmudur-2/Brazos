@@ -32,11 +32,12 @@ import { resolveCapability, type MotionCapability } from './types';
  * start resolving. Nothing downstream has to change when that happens, which
  * is the property the boundary exists to buy.
  *
- * AT THE TIME OF WRITING all three are in package.json and NONE of their
- * native modules is in the installed binary. Every capability therefore
- * resolves false on the operator's device today, the app boots, and every
- * surface runs its fallback. That is the designed state, not a degraded one,
- * and it is the state `npm run verify` and the fences below hold the tree to.
+ * All three are in package.json. Reanimated, worklets and gesture-handler are
+ * in every binary built since d2ccc7f; keyboard-controller's native module is
+ * detected at run time below. A binary without one still boots and runs that
+ * surface's fallback — the state `npm run verify` and the fences below hold
+ * the tree to. (Corrected by fix run F22: this paragraph used to say no native
+ * module was in the installed binary.)
  */
 
 function loadReanimated(): unknown {

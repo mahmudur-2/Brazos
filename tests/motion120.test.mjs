@@ -940,10 +940,11 @@ test('[static] every feature flag either gates something or says plainly that it
 // ===========================================================================
 // THE FAST-PATH SIBLINGS — 2026-08-23, once the natives were installed.
 //
-// Four surfaces gained a `.motion120` sibling. None is reachable on the
-// operator's current build: the packages are in package.json and node_modules
-// but NOT in the dev build, so both capabilities still resolve false and every
-// surface runs its fallback. That is the designed state, not a degraded one.
+// Four surfaces gained a `.motion120` sibling then; the roster below is every
+// one since. Reanimated, worklets and gesture-handler are in every binary built
+// since d2ccc7f, so those fast paths run on the operator's builds; a binary
+// without a native still runs that surface's fallback, which is the designed
+// state, not a degraded one. (Fix run F22 corrected this note.)
 //
 // What these tests can and cannot do. They cannot render a worklet — there is
 // no native module here and no renderer under `node --test`. What they CAN do
