@@ -241,6 +241,14 @@ export function ClientJobDetailScreen() {
   const completionPhotos = completionPhotosOf(job);
   const completionVideos = completionVideosOf(job);
   const hasCompletionEvidence = completionPhotos.length > 0 || completionVideos.length > 0;
+  // Fix run D11: the section names what it actually holds — "Before & after"
+  // only when there IS a before (the poster's own media) and an after.
+  const hasBefore = job.photos.length + job.videos.length > 0;
+  const evidenceTitle = hasCompletionEvidence
+    ? hasBefore
+      ? 'Before & after'
+      : 'Finished work'
+    : 'Your original media';
   // Always the poster's own view of their job, so isPoster is unconditionally
   // true here — this is the one screen that legitimately shows "In Progress".
   const actionableBidCount = loading && bids.length === 0 ? null : visibleBidCount;
@@ -664,7 +672,7 @@ export function ClientJobDetailScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
-        title={canAccept ? 'Job & Bids' : 'Job Detail'}
+        title={canAccept ? 'Job & Bids' : 'Job Details'}
         onBack={goBackOrHome}
         palette={emeraldColors}
       />
@@ -1059,10 +1067,10 @@ export function ClientJobDetailScreen() {
             ) : null}
 
             <Card palette={emeraldColors} style={[styles.workerCard, isDark && styles.hairlineDark]}>
+              {/* Fix run D11: the worker's name shows ONCE in this card — on
+                  the row below, beside the avatar. The card's own title used
+                  to repeat it, so the same name sat twice, a line apart. */}
               <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>ASSIGNED WORKER</Text>
-              <Text style={styles.sectionTitle}>
-                {assignedWorker?.full_name ?? 'Your worker'}
-              </Text>
               {workerError ? (
                 <View style={styles.errorBanner} accessibilityRole="alert">
                   <Ionicons name="cloud-offline-outline" size={20} color={colors.danger} />
@@ -1291,11 +1299,11 @@ export function ClientJobDetailScreen() {
                 worker submitted on completion. Rendered as soon as the worker
                 marks the job done, so the client reviews the finished work
                 here rather than having to ask for it. */}
-            {(job.photos.length > 0 || job.videos.length > 0 || hasCompletionEvidence) && (
+            {(hasBefore || hasCompletionEvidence) && (
               <Card palette={emeraldColors} style={[styles.evidenceCard, isDark && styles.hairlineDark]}>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>WORK EVIDENCE</Text>
                 <Text style={styles.sectionTitle}>
-                  {hasCompletionEvidence ? 'Before & after' : 'Your original media'}
+                  {evidenceTitle}
                 </Text>
                 {job.photos.length > 0 && (
                   <View style={styles.photoGroup}>

@@ -108,6 +108,8 @@ export function FormScreen({
   // padding, so the pinned action sits on the keyboard.
   const pillReserve = usePillReserve();
 
+  const destructiveUnarmed = submitVariant === 'destructive' && submitDisabled && !submitLoading;
+
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
       <ScreenHeader title={title} subtitle={subtitle} onBack={onBack} />
@@ -186,13 +188,20 @@ export function FormScreen({
                     // even next to a secondary with a longer label.
                     secondaryLabel ? styles.primaryWithSecondary : null,
                     pressed && styles.pressed,
-                    (submitDisabled || submitLoading) && styles.disabled,
+                    // Fix run D11: a destructive submit that is not armed yet
+                    // (Delete my account before DELETE is typed) is an OUTLINE
+                    // in the danger colour at full strength — a half-opacity
+                    // coral fill read as broken. Armed, it is the fill again;
+                    // while it works it dims like any other.
+                    destructiveUnarmed
+                      ? styles.destructiveUnarmed
+                      : (submitDisabled || submitLoading) && styles.disabled,
                   ]}
                   accessibilityRole="button"
                   accessibilityLabel={submitLabel}
                   accessibilityState={{ disabled: submitDisabled || submitLoading }}
                 >
-                  <Text style={[styles.buttonLabel, styles.primaryLabel]}>
+                  <Text style={[styles.buttonLabel, styles.primaryLabel, destructiveUnarmed && styles.destructiveUnarmedLabel]}>
                     {submitLoading ? 'Working…' : submitLabel}
                   </Text>
                 </Pressable>
@@ -245,6 +254,14 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   },
   destructive: {
     backgroundColor: colors.danger,
+  },
+  destructiveUnarmed: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.danger,
+  },
+  destructiveUnarmedLabel: {
+    color: colors.danger,
   },
   primaryWithSecondary: {
     flex: 2,

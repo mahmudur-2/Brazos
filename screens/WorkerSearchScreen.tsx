@@ -721,17 +721,25 @@ function WorkerResultCard({
             </Text>
           </View>
 
-          <View style={styles.proofRow}>
-            <Ionicons name="star" size={13} color={starColors(colors, isDark).filled} />
-            <Text style={styles.proofStrong}>{ratingText}</Text>
-            <Text style={styles.proofMuted} numberOfLines={1}>
-              {ratingCount == null
-                ? ''
-                : ratingCount > 0
-                  ? `(${ratingCount} ${ratingCount === 1 ? 'review' : 'reviews'})`
-                  : 'no reviews yet'}
-            </Text>
-          </View>
+          {/* Fix run D11: no lone star. The star and its figure draw only when
+              there is a figure; an unknown summary draws no proof row at all. */}
+          {summary != null ? (
+            <View style={styles.proofRow}>
+              {ratingText !== '' ? (
+                <>
+                  <Ionicons name="star" size={13} color={starColors(colors, isDark).filled} />
+                  <Text style={styles.proofStrong}>{ratingText}</Text>
+                </>
+              ) : null}
+              <Text style={styles.proofMuted} numberOfLines={1}>
+                {ratingCount == null
+                  ? ''
+                  : ratingCount > 0
+                    ? `(${ratingCount} ${ratingCount === 1 ? 'review' : 'reviews'})`
+                    : 'no reviews yet'}
+              </Text>
+            </View>
+          ) : null}
         </View>
       </View>
 

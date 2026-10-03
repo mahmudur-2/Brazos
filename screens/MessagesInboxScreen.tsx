@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useScrollClearance } from '../ui/primitives';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Linking,
   Pressable,
@@ -26,6 +27,7 @@ import { PhotoViewer } from '../components/PhotoViewer';
 import { ReportDialog } from '../components/ReportDialog';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConversations } from '../hooks/useConversations';
 import {
   clearedBy,
@@ -93,8 +95,10 @@ import {
   useThemeColors,
   withAlpha,
   type ColorPalette,
+  edgeFade,
   screenGround,
 } from '../lib/theme';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 /** Idea 4: how long an everyday action's Undo stands. */
 const UNDO_MS = 5000;
@@ -160,6 +164,35 @@ export function MessagesInboxScreen() {
   }
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // Fix run D11: the pill row is wider than the phone, and the last pill was
+  // cut at the edge with no cue that the row scrolls. A 28 pt fade into the
+  // ground sits over the right edge while more pills lie past it, and leaves
+  // once the row is scrolled to its end (or fits). The state flips only at
+  // those edges, and the fade's opacity rides the native driver.
+  const reduceMotion = useReducedMotion();
+  const pillRowRef = useRef({ offset: 0, view: 0, content: 0 });
+  const pillFade = useRef(new Animated.Value(0)).current;
+  const [pillsMoreRight, setPillsMoreRight] = useState(false);
+  const measurePillRow = useCallback(() => {
+    const { offset, view, content } = pillRowRef.current;
+    const next = view > 0 && content - view > 1 && offset + view < content - 1;
+    setPillsMoreRight((prev) => (prev === next ? prev : next));
+  }, []);
+  useEffect(() => {
+    if (reduceMotion !== false) {
+      pillFade.setValue(pillsMoreRight ? 1 : 0);
+      return;
+    }
+    const fade = Animated.timing(pillFade, {
+      toValue: pillsMoreRight ? 1 : 0,
+      duration: 160,
+      useNativeDriver: USE_NATIVE_DRIVER,
+    });
+    fade.start();
+    return () => fade.stop();
+  }, [pillFade, pillsMoreRight, reduceMotion]);
+  // The ground the row sits on: the top stop of the dark diagonal, the cream in light.
+  const pillFadeTo = isDark ? colors.authGroundTop : colors.background;
   // RUN T2 (C6) — THE INBOX'S OWN FOUR. The filter pill's height keeps the
   // named constant it has always had as its fallback, so the number is still
   // spelled exactly once in this file and the fence that prices it against
@@ -1000,12 +1033,26 @@ export function MessagesInboxScreen() {
           tall, 14 either side, 14/600, 8 apart; a faint rim at rest and, when
           chosen, the mint rim over a soft tint. NO check: the one exception to
           #35's chosen-chip tick. */}
+      <View style={styles.filterWrap}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.filterScroll}
         contentContainerStyle={[styles.filterRow, { gap: filterRowGap }]}
         keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={16}
+        onLayout={(event) => {
+          pillRowRef.current.view = event.nativeEvent.layout.width;
+          measurePillRow();
+        }}
+        onContentSizeChange={(width) => {
+          pillRowRef.current.content = width;
+          measurePillRow();
+        }}
+        onScroll={(event) => {
+          pillRowRef.current.offset = event.nativeEvent.contentOffset.x;
+          measurePillRow();
+        }}
       >
         {INBOX_FILTERS.map((pill) => {
           const active = filter === pill.key;
@@ -1030,6 +1077,11 @@ export function MessagesInboxScreen() {
           );
         })}
       </ScrollView>
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.filterFade, edgeFade(pillFadeTo, 90), { opacity: pillFade }]}
+        />
+      </View>
 
       {/* useConversations is a LOCKED hook and still stores the raw message;
           the wrap happens here at the render seam instead (raw-error sweep,
@@ -1202,9 +1254,20 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // this it keeps RN's `baseHorizontal` flexGrow of 1 and swallows the free
   // vertical space between the header and the list — which is the height the
   // pills were then stretched to.
+  filterWrap: {
+    position: 'relative',
+  },
   filterScroll: {
     flexGrow: 0,
     flexShrink: 0,
+  },
+  // Fix run D11: the 28 pt cue that the pill row scrolls on.
+  filterFade: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: 28,
   },
   filterRow: {
     flexDirection: 'row',

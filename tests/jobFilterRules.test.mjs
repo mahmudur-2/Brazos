@@ -423,7 +423,9 @@ test('the Filters sheet draws the five rows from the ruled lists, and every clos
   // own bar, flashed once on open; light-grey dividers; the date popup 192.
   assert.match(sheet, /ref\.current\?\.measureInWindow\(\(x, y, width, height\) => \{/);
   assert.doesNotMatch(popover, /<Modal/, 'a nested Modal is what broke the popups on the phone');
-  assert.match(popover, /<Surface material="menu" radius=\{radius\.lg\} corners="all" style=\{styles\.material\}>/);
+  // Fix run D11: and OPAQUE — the menu's solid fallback, so the rows behind a
+  // picker never read through the rows in front (the see-through budget list).
+  assert.match(popover, /<Surface material="menu" radius=\{radius\.lg\} corners="all" opaque style=\{styles\.material\}>/);
   assert.doesNotMatch(popover, /material="pane"|fill=\{/, 'the popup never wears the sheet\'s glass or its gradient');
   assert.match(popover, /const TICK_ZONE = TICK_INSET \+ TICK_SIZE;/);
   assert.match(popover, /rowCentred: \{\s*justifyContent: 'center',\s*paddingHorizontal: TICK_ZONE,\s*\}/);

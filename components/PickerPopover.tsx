@@ -226,7 +226,7 @@ export function PickerPopover<V>({
         accessibilityViewIsModal
         accessibilityLabel={accessibilityLabel}
       >
-        <Surface material="menu" radius={radius.lg} corners="all" style={styles.material}>
+        <Surface material="menu" radius={radius.lg} corners="all" opaque style={styles.material}>
           <FlatList
             ref={listRef}
             data={options}

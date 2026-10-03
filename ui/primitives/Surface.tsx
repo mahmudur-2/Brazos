@@ -97,6 +97,14 @@ export type SurfaceProps = PropsWithChildren<{
    * glowing surface at once.
    */
   glowColor?: string;
+  /**
+   * Fix run D11 — draw the material's SOLID fallback even where blur could
+   * draw: no blur, the material's `fallbackScrimAlpha` (1 for `menu`), no
+   * gradient, no sheen. For a list that floats over rows of its own kind
+   * (the pickers), where frosted glass showed the rows behind through the
+   * rows in front. Light is already opaque and is unchanged.
+   */
+  opaque?: boolean;
 }>;
 
 /**
@@ -144,6 +152,7 @@ export function Surface({
   halo: haloSpec,
   fill: fillSpec,
   glowColor,
+  opaque = false,
   children,
 }: SurfaceProps) {
   const styles = stylesFor();
@@ -162,7 +171,7 @@ export function Surface({
   const rimWidth = rim?.width === 'hairline' ? StyleSheet.hairlineWidth : rim?.width ?? 1;
   const hairline: ViewStyle = border === 'top' ? { borderTopWidth: rimWidth } : { borderWidth: rimWidth };
 
-  const flat = reduceTransparency || !canBlur;
+  const flat = opaque || reduceTransparency || !canBlur;
   // 2026-09-18 — WHICH RECIPE THIS THEME WEARS. Dark: the material itself.
   // Light: the material's `light` block when it carries one (only `clear`
   // does), else no glass at all — the flat theme surface, exactly as before.

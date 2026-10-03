@@ -2,7 +2,6 @@ import { useModalPresence } from '../hooks/useModalPresence';
 import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
+import { PopModal } from './PopModal';
 import { TextField } from './TextField';
 import { Toggle } from '../ui/primitives';
 import { alertAsync } from '../lib/dialog';
@@ -138,13 +138,16 @@ export function ReportDialog({
   }
 
   return (
-    <Modal
+    // Fix run D11: the frosted pop-up every other dialog wears (PopModal) — the
+    // dim and its blur at once, the card moving in at full opacity. It was a
+    // plain fade Modal over a bare scrim, which on the dark ground read as no
+    // dim at all. No backdrop tap closes it: a stray tap must not throw away
+    // a half-written report; Cancel does that.
+    <PopModal
       visible={visible}
-      transparent
-      animationType="fade"
       onRequestClose={onClose}
+      backdropStyle={[styles.backdrop, isDark && styles.backdropDark]}
     >
-      <View style={[styles.backdrop, isDark && styles.backdropDark]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.centerWrap}
@@ -253,8 +256,7 @@ export function ReportDialog({
             )}
           </View>
         </KeyboardAvoidingView>
-      </View>
-    </Modal>
+    </PopModal>
   );
 }
 

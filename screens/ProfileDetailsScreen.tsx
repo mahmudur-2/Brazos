@@ -148,7 +148,7 @@ export function ProfileDetailsScreen() {
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader
-        title="Profile"
+        title="Profile Details"
         onBack={goBackOrHome}
         right={
           <Pressable

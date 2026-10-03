@@ -248,7 +248,7 @@ export function WorkerProfileScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
-      <ScreenHeader title="Profile" onBack={goBackOrHome} />
+      <ScreenHeader title="Worker Profile" onBack={goBackOrHome} />
 
       {loading ? (
         <View style={styles.center}>

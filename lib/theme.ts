@@ -925,6 +925,22 @@ export function screenGround(
     : ({ experimental_backgroundImage: gradient } as ViewStyle);
 }
 
+/**
+ * Fix run D11 / D13 — AN EDGE FADE: a gradient from the ground's own colour at
+ * zero alpha to that colour, solid from `solidAt` percent on, along `angle`
+ * (CSS degrees: 90 runs left → right, 180 top → bottom). Laid over the edge of
+ * something that scrolls under it — the inbox pills' right edge, the strip
+ * under the floating tab bar — so content ends in the ground rather than at a
+ * cut. Zero alpha of the SAME colour, never `transparent`, so the ramp never
+ * passes through grey. The same platform branch as `screenGround()`.
+ */
+export function edgeFade(to: string, angle = 90, solidAt = 100): ViewStyle {
+  const gradient = `linear-gradient(${angle}deg, ${alpha(to, 0)} 0%, ${to} ${solidAt}%)`;
+  return Platform.OS === 'web'
+    ? ({ backgroundImage: gradient } as unknown as ViewStyle)
+    : ({ experimental_backgroundImage: gradient } as ViewStyle);
+}
+
 export function typographyFor(palette: ColorPalette): Record<keyof typeof typography, TextStyle> {
   return {
     title: { ...typography.title, color: palette.text },
