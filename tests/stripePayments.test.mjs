@@ -337,11 +337,12 @@ test('[static] the pure rules modules carry no runtime import, and the boundary 
   const paymentRules = stripComments(read('lib/paymentRules.ts'));
   assert.doesNotMatch(paymentRules, /^\s*import\s+(?!type\b)/m, 'lib/paymentRules.ts may import types only');
   assert.doesNotMatch(paymentRules, /require\(/);
-  // And lib/payments.ts re-exports the four names, so no importer moved.
+  // And lib/payments.ts re-exports the six names (the final sweep's two cancellation
+  // predicates beside D24's four), so no importer moved.
   const payments = stripComments(read('lib/payments.ts'));
   assert.match(
     payments,
-    /export \{\s*canOfferJobFunding,\s*isHeld,\s*isReleased,\s*isReleaseRequested,?\s*\} from '\.\/paymentRules';/
+    /export \{\s*canOfferJobFunding,\s*isCancellationFeeKept,\s*isHeld,\s*isRefundQueued,\s*isReleased,\s*isReleaseRequested,?\s*\} from '\.\/paymentRules';/
   );
 });
 
@@ -559,7 +560,10 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   // and a re-read.
   assert.match(code, /releaseAtLabel\(\s*fundingDueMs as number,\s*Date\.now\(\)\s*\)/);
   assert.match(code, /payment && fundingWindowClosed \? \(/);
-  const closedCard = code.slice(code.indexOf('payment && fundingWindowClosed ? ('), code.indexOf(') : payment ? ('));
+  // The slice ends at the card's OWN `: payment ? (` — the cancelled branch above it (final
+  // sweep) has one of its own, so the search starts at the card.
+  const closedAt = code.indexOf('payment && fundingWindowClosed ? (');
+  const closedCard = code.slice(closedAt, code.indexOf(') : payment ? (', closedAt));
   // FIX-RUN B5: the closed window reads as a payment that didn't go through in time.
   assert.match(closedCard, />\{paymentEyebrow\(paymentsMode === 'sandbox'\)\}</);
   assert.match(closedCard, /Your payment didn’t go through in time\. Nothing was charged\./);
@@ -568,8 +572,9 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   // D15: the checkout CTA is behind the kill switch.
   // 2026-09-26: the checkout CTA is the pinned primary, still behind the kill switch.
   assert.match(code, /canFundNow \? \(paymentsEnabled \? \{ label: 'Protect payment in checkout'/);
-  // D16 → C4: one eyebrow in every state, its sandbox arm in lib/moneyCopy.ts.
-  assert.equal((code.match(/paymentEyebrow\(paymentsMode === 'sandbox'\)/g) ?? []).length, 3);
+  // D16 → C4: one eyebrow in every state, its sandbox arm in lib/moneyCopy.ts — the protected,
+  // window-closed and approved cards, and (final sweep) the cancelled job's.
+  assert.equal((code.match(/paymentEyebrow\(paymentsMode === 'sandbox'\)/g) ?? []).length, 4);
   assert.doesNotMatch(code, /PROTECTED PAYMENT|APPROVED · PAYOUT ON ITS WAY/);
   // A5 (2026-10-03): the accept confirm's body is the one shared text in lib/offerCopy.ts, which
   // the job page renders with the resolved mode; the checkout sentence lives there.

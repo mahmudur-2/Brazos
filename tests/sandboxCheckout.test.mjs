@@ -180,7 +180,7 @@ test('money can only be labelled released where the ledger truthfully is', async
   assert.doesNotMatch(moneyText, /const CAPTIONS|VIEWER_CAPTIONS|PAYMENT_LABELS/, 'no second state-caption map');
   assert.doesNotMatch(moneyText.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, ''), /'[A-Z][a-z]+ [a-z]/, 'no caption literal of its own');
   assert.match(moneyText, /const perspective = useModePerspective\(\);/);
-  assert.match(moneyText, /paymentCaption\(\s*\{ status: state, releaseRequested, issueOpen, waitingOnPayoutSetup, tip, counterpartFirstName \},\s*perspective\s*\)/);
+  assert.match(moneyText, /paymentCaption\(\s*\{ status: state, releaseRequested, issueOpen, waitingOnPayoutSetup, refundQueued, feeKept, tip, counterpartFirstName \},\s*perspective\s*\)/);
   assert.doesNotMatch(moneyText, /viewer\??:|perspective\??:/, 'the viewer is never a prop');
 
   // The pre-release surfaces (checkout, the held celebration) still cannot

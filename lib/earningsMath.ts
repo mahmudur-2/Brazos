@@ -32,8 +32,16 @@ export function deriveEarnings(rows: EarningsRow[]): EarningsSummary {
   let transferredCents = 0;
   let feeCents = 0;
   for (const row of rows) {
-    if (row.status === 'held') pendingCents += row.amount_cents;
-    else if (row.status === 'released') availableCents += row.amount_cents;
+    // Final sweep (2026-10-03): a held row the ledger has directed home — a
+    // cancelled job's refund queued on the card path (refund_cents set, the
+    // status waiting for charge.refunded) — is not pending earnings. Only what
+    // the ledger says still travels to the worker counts: the late-cancel fee
+    // (transfer_cents), nothing on a full refund. Same predicate as the
+    // screens (lib/paymentRules.ts isRefundQueued), spelled on the columns
+    // because this module imports nothing.
+    if (row.status === 'held') {
+      pendingCents += (row.refund_cents ?? 0) > 0 ? row.transfer_cents ?? 0 : row.amount_cents;
+    } else if (row.status === 'released') availableCents += row.amount_cents;
     else if (row.status === 'paid_out') transferredCents += row.amount_cents;
     feeCents += row.platform_fee_cents;
   }

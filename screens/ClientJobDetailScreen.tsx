@@ -51,7 +51,9 @@ import { invalidateJobs } from '../lib/queryClient';
 import {
   canOfferJobFunding,
   fetchJobPaymentState,
+  isCancellationFeeKept,
   isHeld,
+  isRefundQueued,
   isReleased,
   isReleaseRequested,
   quoteJobPrice,
@@ -679,6 +681,52 @@ export function ClientJobDetailScreen() {
     );
   }
 
+  // The failed reads' surface (F-026): every card that renders from the
+  // payment/dispute rows is held back behind this retry rather than treating
+  // the absent rows as truth. One element, used on the live job and on the
+  // cancelled one alike.
+  const statusReadBanner = (
+    <View style={styles.errorBanner} accessibilityRole="alert">
+      <Ionicons name="cloud-offline-outline" size={20} color={colors.danger} />
+      <View style={styles.errorCopy}>
+        <Text style={styles.errorTitle}>Couldn’t load payment details</Text>
+        <Text style={styles.errorMessage}>
+          This job’s payment and issue-report info didn’t load, so
+          what’s shown may be incomplete. Check your connection and
+          retry.
+        </Text>
+      </View>
+      <Button
+        title={STATE_COPY.retry}
+        size="sm"
+        variant="secondary"
+        palette={emeraldColors}
+        onPress={() => setStatusReadAttempt((attempt) => attempt + 1)}
+      />
+    </View>
+  );
+
+  // Final sweep (2026-10-03): A11 made this screen READ the payment on a
+  // cancelled job; this is where it is SHOWN. The ledger's cancellation shape
+  // — a held card row directed home (refund_cents set), or the late-cancel
+  // fee beside it — reads through the one predicate pair in lib/paymentRules.ts
+  // and the glossary's own sentences, never "held in protection" on a job
+  // that is over.
+  const cancelledMoneyNote = (() => {
+    if (!payment) return null;
+    if (paymentsMode === 'sandbox') return 'Test mode — no real money moves.';
+    if (isCancellationFeeKept(payment)) {
+      return `The cancellation fee goes to ${workerFirstName}; the rest goes back to your card — usually within 5–10 business days.`;
+    }
+    if (isRefundQueued(payment)) {
+      return 'It goes back to your card — usually within 5–10 business days.';
+    }
+    if (payment.status === 'refunded' || payment.status === 'partially_refunded') {
+      return 'It went back to your card.';
+    }
+    return null;
+  })();
+
   // The hero's bid count: shown as it changes, and spoken on iOS (E4) where the live region is not.
   const bidCountLine =
     loading && bids.length === 0
@@ -1062,17 +1110,43 @@ export function ClientJobDetailScreen() {
         ) : (
           <>
             {job.status === 'cancelled' ? (
-              <Card palette={emeraldColors} style={[styles.cancelledCard, isDark && styles.hairlineDark]}>
-                <View style={styles.cancelledIcon}>
-                  <Ionicons name="close" size={22} color={colors.neutral} />
-                </View>
-                <View style={styles.errorCopy}>
-                  <Text style={styles.cancelledTitle}>This job was cancelled</Text>
-                  <Text style={styles.cancelledText}>
-                    No further action is needed. The job remains here for your records.
-                  </Text>
-                </View>
-              </Card>
+              <>
+                <Card palette={emeraldColors} style={[styles.cancelledCard, isDark && styles.hairlineDark]}>
+                  <View style={styles.cancelledIcon}>
+                    <Ionicons name="close" size={22} color={colors.neutral} />
+                  </View>
+                  <View style={styles.errorCopy}>
+                    <Text style={styles.cancelledTitle}>This job was cancelled</Text>
+                    <Text style={styles.cancelledText}>
+                      {payment
+                        ? 'The job remains here for your records; what happened to the payment is below.'
+                        : 'No further action is needed. The job remains here for your records.'}
+                    </Text>
+                  </View>
+                </Card>
+                {/* The money on a cancelled job (A11, final sweep): the refund the
+                    ban or the cancellation queued, in the glossary's own words. */}
+                {statusReadError ? (
+                  statusReadBanner
+                ) : payment ? (
+                  <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
+                    <View style={styles.paymentShield}>
+                      <Ionicons name="shield-outline" size={22} color={colors.mark} />
+                    </View>
+                    <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
+                      {paymentEyebrow(paymentsMode === 'sandbox')}
+                    </Text>
+                    <MoneyText
+                      cents={customerChargeCents(payment)}
+                      state={payment.status}
+                      refundQueued={isRefundQueued(payment)}
+                      feeKept={isCancellationFeeKept(payment)}
+                      counterpartFirstName={workerFirstName}
+                    />
+                    {cancelledMoneyNote ? <Text style={styles.paymentNote}>{cancelledMoneyNote}</Text> : null}
+                  </Card>
+                ) : null}
+              </>
             ) : (
               <>
             {hasLifecycle ? (
@@ -1180,27 +1254,7 @@ export function ClientJobDetailScreen() {
                 checkout. It never renders over a held/released/refunded or
                 otherwise unclassifiable row — that is the double-charge line. */}
             {statusReadError ? (
-              // The failed reads' surface (F-026): every card below that
-              // renders from the payment/dispute rows is held back behind
-              // this retry rather than treating the absent rows as truth.
-              <View style={styles.errorBanner} accessibilityRole="alert">
-                <Ionicons name="cloud-offline-outline" size={20} color={colors.danger} />
-                <View style={styles.errorCopy}>
-                  <Text style={styles.errorTitle}>Couldn’t load payment details</Text>
-                  <Text style={styles.errorMessage}>
-                    This job’s payment and issue-report info didn’t load, so
-                    what’s shown may be incomplete. Check your connection and
-                    retry.
-                  </Text>
-                </View>
-                <Button
-                  title={STATE_COPY.retry}
-                  size="sm"
-                  variant="secondary"
-                  palette={emeraldColors}
-                  onPress={() => setStatusReadAttempt((attempt) => attempt + 1)}
-                />
-              </View>
+              statusReadBanner
             ) : canFundNow ? (
               <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>PAYMENT NOT PROTECTED YET</Text>

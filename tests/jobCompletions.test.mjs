@@ -172,12 +172,14 @@ test('6 · Earnings buckets and rows read the take through the helper, bucketed 
 
 test('7 · the worker’s job card shows the take, and the three-line breakdown off the row’s columns once the charge landed', () => {
   // C4: the caption's facts ride along (approval, issue, payout setup) — the figure is the take.
-  assert.match(worker, /<MoneyText\s+cents=\{workerTakeCents\(payment\)\}\s+state=\{payment\.status\}\s+releaseRequested=\{isReleaseRequested\(payment\)\}\s+issueOpen=\{issueOpen\}\s+waitingOnPayoutSetup=\{waitingOnSetup\}\s+\/>/);
+  // Final sweep: the cancellation facts ride along too (tests/cancelledMoney.test.mjs).
+  assert.match(worker, /<MoneyText\s+cents=\{workerTakeCents\(payment\)\}\s+state=\{payment\.status\}\s+releaseRequested=\{isReleaseRequested\(payment\)\}\s+issueOpen=\{issueOpen\}\s+waitingOnPayoutSetup=\{waitingOnSetup\}\s+refundQueued=\{isRefundQueued\(payment\)\}\s+feeKept=\{isCancellationFeeKept\(payment\)\}\s+\/>/);
   assert.doesNotMatch(worker, /cents=\{payment\.amount_cents\}/);
-  // Stripe only, and only on a held / released / paid_out row — never unfunded.
+  // Stripe only, and only on a held / released / paid_out row — never unfunded, and (final
+  // sweep) never on a held row whose refund is queued: a cancelled job's money is going home.
   assert.match(
     workerFlat,
-    /\{paymentsMode === 'stripe' && payment\.charge_amount_cents != null && \(isHeld\(payment\) \|\| isReleased\(payment\)\) \? \(/
+    /\{paymentsMode === 'stripe' && payment\.charge_amount_cents != null && \(\(isHeld\(payment\) && !isRefundQueued\(payment\)\) \|\| isReleased\(payment\)\) \? \(/
   );
   const breakdown = workerFlat.slice(workerFlat.indexOf('<View style={styles.breakdown}>'), workerFlat.indexOf('</View> ) : null} </Card>'));
   assert.ok(breakdown.length > 0);

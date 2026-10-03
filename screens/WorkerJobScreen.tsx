@@ -67,7 +67,9 @@ import { paymentEyebrow } from '../lib/moneyCopy';
 import {
   brazosFeeCents,
   fetchJobPaymentState,
+  isCancellationFeeKept,
   isHeld,
+  isRefundQueued,
   isReleased,
   isReleaseRequested,
   PAYOUT_SETUP_NOTICE,
@@ -599,7 +601,7 @@ export function WorkerJobScreen() {
             the payout is on its way; MoneyText keeps the row's real
             status, and nothing here says released before it is. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-        <Text style={[styles.paymentEyebrow, isDark && styles.paymentEyebrowDark, isHeld(payment) && !isReleaseRequested(payment) && !isReleased(payment) && styles.eyebrowGold]}>
+        <Text style={[styles.paymentEyebrow, isDark && styles.paymentEyebrowDark, isHeld(payment) && !isRefundQueued(payment) && !isReleaseRequested(payment) && !isReleased(payment) && styles.eyebrowGold]}>
           {/* C4: PAYMENT in every state; the caption under the take says which. */}
           {paymentEyebrow(paymentsMode === 'sandbox')}
         </Text>
@@ -616,6 +618,10 @@ export function WorkerJobScreen() {
           releaseRequested={isReleaseRequested(payment)}
           issueOpen={issueOpen}
           waitingOnPayoutSetup={waitingOnSetup}
+          // Final sweep: the cancellation shape outranks every held sentence
+          // (lib/paymentRules.ts) — a cancelled job's row is money going home.
+          refundQueued={isRefundQueued(payment)}
+          feeKept={isCancellationFeeKept(payment)}
         />
         <Text style={styles.paymentNote}>
           {(() => {
@@ -623,6 +629,20 @@ export function WorkerJobScreen() {
             // point; the money predicates stay payment vocabulary.
             const lifecycle = deriveJobLifecycle({ job, payment, hasOpenDispute: issueOpen });
             const sandbox = paymentsMode === 'sandbox';
+            // Final sweep: a cancelled job first — its row is the ledger's
+            // cancellation shape (refund queued, or the late-cancel fee), and
+            // none of the live sentences below may describe it.
+            if (lifecycle === 'cancelled') {
+              if (isCancellationFeeKept(payment)) {
+                return `This job was cancelled late. The cancellation fee is on its way to you; the rest goes back to ${clientName}.`;
+              }
+              if (isRefundQueued(payment) || payment.status === 'refunded' || payment.status === 'partially_refunded') {
+                return sandbox
+                  ? `This job was cancelled. ${clientName}’s payment goes back to them. Test mode — no real money.`
+                  : `This job was cancelled. ${clientName}’s payment goes back to them.`;
+              }
+              return 'This job was cancelled. Nothing is held for it.';
+            }
             if (isReleased(payment)) {
               return payment.release_reason === 'auto_approved'
                 ? sandbox
@@ -675,7 +695,7 @@ export function WorkerJobScreen() {
             only: the sandbox ledger carries no charge figure. */}
         {paymentsMode === 'stripe' &&
         payment.charge_amount_cents != null &&
-        (isHeld(payment) || isReleased(payment)) ? (
+        ((isHeld(payment) && !isRefundQueued(payment)) || isReleased(payment)) ? (
           <View style={styles.breakdown}>
             <View style={styles.breakdownRow}>
               {/* A2 — held is held: the money is the customer's until it is

@@ -47,6 +47,10 @@ test('C4 · every state × viewer has a caption, and none says paid or received 
     { issueOpen: true },
     { tip: true },
     { counterpartFirstName: 'Sam' },
+    // The cancellation shape (final sweep): a refund queued, with or without the late-cancel fee.
+    { refundQueued: true },
+    { refundQueued: true, feeKept: true },
+    { refundQueued: true, feeKept: true, releaseRequested: true, counterpartFirstName: 'Sam' },
   ];
   for (const status of STATUSES) {
     for (const viewer of ['customer', 'worker']) {
@@ -83,6 +87,19 @@ test('C4 · the table says the right thing for the states that matter most', () 
   assert.equal(paymentCaption({ status: 'released', tip: true }, 'worker'), 'Tip received');
   // A whitespace name falls back rather than printing "to  ".
   assert.equal(paymentCaption({ status: 'held', releaseRequested: true, counterpartFirstName: '  ' }, 'customer'), 'Approved — on its way to your worker');
+  // The cancellation shape (final sweep): a refund queued on a held row is money going home — it
+  // outranks the protection sentence, the issue sentence AND the approval one (the late-cancel fee
+  // sets release_requested_at too, and a fee is not an approval of finished work).
+  assert.equal(paymentCaption({ status: 'held', refundQueued: true }, 'customer'), 'Refund on its way — back on your card in a few days');
+  assert.equal(paymentCaption({ status: 'held', refundQueued: true }, 'worker'), 'Refund on its way to the customer');
+  assert.equal(paymentCaption({ status: 'held', refundQueued: true, issueOpen: true }, 'customer'), 'Refund on its way — back on your card in a few days');
+  assert.equal(
+    paymentCaption({ status: 'held', refundQueued: true, feeKept: true, releaseRequested: true, counterpartFirstName: 'Sam' }, 'customer'),
+    'Partly refunded — the cancellation fee goes to Sam'
+  );
+  assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true, releaseRequested: true }, 'worker'), 'Cancellation fee — on its way to you');
+  // Off a held row the facts say nothing: a settled refund keeps its own words.
+  assert.equal(paymentCaption({ status: 'refunded', refundQueued: true }, 'customer'), 'Refunded');
 });
 
 test('[static] C4 · MoneyText and StatusPill hold no money words of their own; the screens use the glossary', () => {

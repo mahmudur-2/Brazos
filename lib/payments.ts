@@ -20,7 +20,9 @@ import { formatBudget } from './jobs';
 
 export {
   canOfferJobFunding,
+  isCancellationFeeKept,
   isHeld,
+  isRefundQueued,
   isReleased,
   isReleaseRequested,
 } from './paymentRules';

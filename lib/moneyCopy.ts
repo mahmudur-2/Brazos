@@ -52,6 +52,14 @@ export type PaymentCaptionFacts = {
   issueOpen?: boolean;
   /** #63: approved, but the worker's payout account is not set up yet. */
   waitingOnPayoutSetup?: boolean;
+  /**
+   * The cancellation shape (lib/paymentRules.ts isRefundQueued): a held row the
+   * ledger has directed home — the job was cancelled and the money is on its
+   * way back. Outranks every other held sentence.
+   */
+  refundQueued?: boolean;
+  /** With refundQueued: a late cancellation kept a fee for the worker (isCancellationFeeKept). */
+  feeKept?: boolean;
   /** The row is a tip, not the job's payment. */
   tip?: boolean;
   /** The other person's first name, when the screen has it. */
@@ -78,7 +86,18 @@ export function paymentCaption(facts: PaymentCaptionFacts, viewer: MoneyViewer):
     case 'authorized':
       return customer ? 'Card authorized — not charged yet' : 'Waiting on the customer’s payment';
     case 'held':
-      // D23 first: approval is a decision already made, so the protection
+      // The cancellation shape first: a refund queued on a held row is money
+      // going home, never protection and never an approval — the late-cancel
+      // fee sets release_requested_at too, which is why this is checked first.
+      if (facts.refundQueued) {
+        if (facts.feeKept) {
+          return customer
+            ? `Partly refunded — the cancellation fee goes to ${name ?? 'your worker'}`
+            : 'Cancellation fee — on its way to you';
+        }
+        return customer ? 'Refund on its way — back on your card in a few days' : 'Refund on its way to the customer';
+      }
+      // D23 next: approval is a decision already made, so the protection
       // sentence never describes that row.
       if (facts.releaseRequested) {
         if (customer) return `Approved — on its way to ${name ?? 'your worker'}`;

@@ -38,6 +38,33 @@ export function isReleaseRequested(
 }
 
 /**
+ * Final sweep (2026-10-03) — THE CANCELLATION SHAPE. cancel_job() and ban_user()
+ * direct a held card payment home by setting `refund_cents` on the row while its
+ * status stays `held` until the provider's charge.refunded lands (a sandbox row
+ * goes `refunded` at once and never reads true here). Nothing about such a row
+ * is "held in protection" or "approved" any more: the money is on its way back.
+ * One predicate, so the customer's page, the worker's page and Earnings agree.
+ */
+export function isRefundQueued(
+  payment: Pick<Payment, 'status'> & { refund_cents?: number | null }
+): boolean {
+  return payment.status === 'held' && (payment.refund_cents ?? 0) > 0;
+}
+
+/**
+ * The late-cancellation shape: a refund queued beside a cancellation fee going
+ * to the worker (cancel_job()'s customer_cancelled_late branch sets both
+ * `refund_cents` and `transfer_cents`, with release_requested_at for the fee's
+ * transfer). isReleaseRequested is true on that row too, so a caller asks this
+ * FIRST — the fee is not an approval of finished work.
+ */
+export function isCancellationFeeKept(
+  payment: Pick<Payment, 'status'> & { refund_cents?: number | null; transfer_cents?: number | null }
+): boolean {
+  return isRefundQueued(payment) && (payment.transfer_cents ?? 0) > 0;
+}
+
+/**
  * Whether the funding CTA (Checkout) may be offered for this job — THE one
  * derivation for every surface that can show it (AUD-P1-02; the lifecycle
  * derivation drifted into a duplicate once already, so this predicate exists
