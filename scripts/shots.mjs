@@ -830,7 +830,7 @@ const TARGETS = [
       mode: 'customer',
       colorScheme,
       session: false,
-      wait: 'Hire trusted local help',
+      wait: 'Hire local help or find nearby work.',
     },
     {
       // Sign in, by Welcome's own ghost button. FIX-RUN B2: with phone auth
@@ -842,7 +842,7 @@ const TARGETS = [
       colorScheme,
       session: false,
       recipe: [
-        { expect: 'Hire trusted local help' },
+        { expect: 'Hire local help or find nearby work.' },
         { pressText: 'I already have an account' },
       ],
       wait: 'The email and password on your account.',
@@ -854,7 +854,7 @@ const TARGETS = [
       mode: 'customer',
       colorScheme,
       session: false,
-      recipe: [{ expect: 'Hire trusted local help' }, { press: 'Continue with phone' }],
+      recipe: [{ expect: 'Hire local help or find nearby work.' }, { press: 'Continue with phone' }],
       wait: 'Sign up with your email',
     },
     {
@@ -1125,8 +1125,17 @@ function legalVersions() {
  * unreachable without it. `accepting` is threaded the same way and flips one
  * field of the profile fixture, nothing else.
  */
-function stubResponse({ pathname, query, headers, postData, jobs, accepting }) {
+function stubResponse({ pathname, query, headers, postData, jobs, accepting, setupTrace = true }) {
   const single = String(headers.accept ?? '').includes('vnd.pgrst.object');
+
+  // FIX-RUN B16: with no device record, useSetupStatus asks whether this
+  // account EVER accepted (lib/legal hasAnyLegalAcceptance, the one `limit=1`
+  // read of this table). A target that opts out of the setup record is an
+  // account that never finished Setup, so that read is answered empty; the
+  // version read below still passes, so Setup's legal row reads as reviewed.
+  if (pathname.includes('/rest/v1/legal_acceptances') && !setupTrace && query.get('limit') === '1') {
+    return { status: 200, body: [] };
+  }
 
   // The legal gate, answered by PASSING it with the versions the app itself
   // considers current — see legalVersions() for why they are read, not
@@ -1395,6 +1404,8 @@ async function main() {
           jobs: shot.jobs === true,
           // THE AVAILABILITY FIXTURE, read the same way (RUN figma-extract).
           accepting: shot.accepting === true,
+          // B16: the setup opt-out also means no server trace of Setup.
+          setupTrace: shot.setup !== false,
         });
         return route.fulfill({
           status: stub.status,
