@@ -109,3 +109,38 @@ moves in one of the two moving tiers.
    Home's three sections arrive.
 4. The pinned bars (Send a bid, Send, Add step, the next-step button) riding the keyboard through
    `KeyboardRisingColumn`, as the sign-in footers and Chat's composer do.
+
+## 2026-10-03 — the fix run's smooth pass (F9–F12, F16): what the later pass became
+
+The four items above are built, each as a `lib/motion120` sibling set (a `.motion120.tsx` fast
+path on Reanimated / gesture-handler / keyboard-controller, a native-driver fallback, one
+`.shared.tsx` body; `tests/motion120.test.mjs` SIBLINGS and roster, `tests/smoothPass.test.mjs`):
+
+1. **The press** — `components/PressScale` (the press spring on the UI thread). On it: Button
+   (its opacity dial kept), the FormScreen footer, ScreenHeader's links, PostJobBar, Chip, the
+   Filters and Inbox pills, ConversationRow, CategoryTileRow, HireAgainRow, CategoryAccordion,
+   SetupChoiceCard, OfferCard and the Profile / WorkerJob / WorkerHome / JobSummaryCard rows. The
+   wrapper takes the caller's place and, when sized, its border and padding (`splitPressStyle`),
+   so no row's layout moves. Rows in a scroller pass `haptic={false}`.
+2. **The chip selection** — `components/Selection`: SelectionTint and SelectionText fade a
+   chip's (and the Filters / Inbox pills') fill, rim and label on the UI thread with
+   `interpolateColor`; the fallback crossfades two layers by opacity. SegmentedControl's chosen
+   fill is one SelectionThumb that slides. `components/SelectMark` makes radio dots, ticks and
+   checks arrive on a spring and pops a tapped star.
+3. **List entrances** — EntranceView gained `skip` (read at mount) and `useEntered`: the first
+   batch of Inbox, Available jobs, the cell's jobs, reviews and Worker Home's preview cascades
+   once; every DetailScreen's sections (Notifications, Saved, Earnings, Payouts, Checkout…) and
+   My Jobs' sections arrive in order. Never in Chat.
+4. **The keyboard** — `components/KeyboardAvoid`: the thirteen keyboard-avoiding views pad on
+   the UI thread from keyboard-controller's per-frame height, so pinned bars ride with it.
+
+Also: the Post-a-job add menu is the anchored GlassDropdown (F11); photo zoom is
+`components/ZoomableImage` on gesture-handler (F10), and MediaViewer's photos zoom too; every
+endless loop pauses off-screen and in the background (`hooks/useLoopActive`, F16).
+
+Not built, each with its reason (HANDOFF and `.shots/refresh/review/run/log.md`): F17 (chip and
+tile checks and the + sheet's strip still animate width / height on the UI thread — a layout
+transition needs the device check the spec names); the tab-switch fade (every tab screen wears
+frosted surfaces, and iOS cannot fade a blur — the stutter PopModal.shared.tsx describes); the
+Toggle knob's face crossfade (optional; the knob already springs). 120 Hz feel is the
+operator's device check.

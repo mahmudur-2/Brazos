@@ -11,7 +11,7 @@ the Lux drawing run's, the eighteen-item run's and the sittings before them, unc
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
 
-## FIX RUN — IN PROGRESS: groups A–E built and reviewed; F and the final sweep follow (2026-10-03, "build" given; the workflow's helpers run one after another)
+## FIX RUN — IN PROGRESS: groups A–F built (A–E reviewed), the smooth pass with them; the final sweep follows (2026-10-03, "build" given; the workflow's helpers run one after another)
 
 **Start here.** The brief is `docs/dispatch/FIX-RUN.md`; the operator's selection is its first
 section (OUT: A1, B10, C5, D1, D2, D4, D5, E6, F14; picks A10a, A12a, A18a, B1a, C1b, D13a). The
@@ -92,7 +92,7 @@ running log is `.shots/refresh/review/run/log.md` (gitignored), one line per ite
   (i18next, react-i18next, i18next-parser, expo-linking, expo-localization) were NOT removed: the
   dependency guard blocks `npm uninstall` — the operator runs it. `transition-worker.png` and
   `home-atmosphere-dark.webp` stay (the lux and refresh mockup scripts read them). F22 —
-  `docs/dispatch/MOTION-INVENTORY.md` waits for F9–F12 / F16–F17, not built yet.
+  `docs/dispatch/MOTION-INVENTORY.md` now carries the smooth pass's record (its last section).
 - **F22 — CLAUDE.md edits for the operator (operator-owned, NOT applied):**
   1. §Workflow — replace "Flag new dependencies before adding; no animation libraries (built-in
      `Animated` with `useNativeDriver: Platform.OS !== 'web'`). No unrelated cleanup." with: "Flag
@@ -122,8 +122,40 @@ running log is `.shots/refresh/review/run/log.md` (gitignored), one line per ite
   Home within 30 s makes no read, and signing out and in as another account shows none of the first
   one's rows (F13).
 - **Proof at `bcf3529`:** `npm run verify` 1603 pass, 0 fail.
-- **Next:** the workflow's remaining helpers (F smooth, the final sweep), then one OTA and the new
-  Beta build. The parked reminders in DESIGN LOOP 3 below still stand.
+- **The smooth pass built (F9–F12, F16; spec `.shots/refresh/review/run/spec-DE-smooth.md`),**
+  `63a3b92`…the HANDOFF commit, no migration, each piece a `lib/motion120` sibling set (fast path +
+  native-driver fallback + shared body; `tests/motion120.test.mjs` SIBLINGS and roster, and the new
+  `tests/smoothPass.test.mjs`): **F16** `hooks/useLoopActive` — every endless loop (LiveDot, StageRail,
+  JobLivePage, RimLight ×2, SealTransition, the upload ring) runs only while its screen is on top and
+  the app in front; Skeleton's module loop pauses on background. **F11** the Post-a-job add menu is
+  the anchored GlassDropdown (centred under the + by `request.width`, the Video row `disabled`,
+  the library opened from `onClosed`). **F10** `components/ZoomableImage` — pinch, pan, double tap
+  and swipe-away on gesture-handler + Reanimated, the old PanResponder as fallback; MediaViewer's
+  photos zoom too (the pager holds while zoomed). **F9** `components/KeyboardAvoid` — the thirteen
+  keyboard-avoiding views pad on the UI thread from keyboard-controller's per-frame height (RN's
+  view is the fallback, and the only importer of it). **F12** `components/PressScale` (the press
+  spring on Button, the form footers, header links, the post bar, chips, pills, rows across 20
+  files; the wrapper takes the caller's place and, sized, its border and padding), `components/
+  Selection` (chip and pill colours fade by `interpolateColor`; SegmentedControl's thumb slides),
+  `components/SelectMark` (radio dots, ticks and checks arrive on a spring; a tapped star pops),
+  and list entrances (EntranceView `skip` + `useEntered`: Inbox, Available jobs, cell jobs,
+  reviews, Worker Home's preview, My Jobs' sections, every DetailScreen's sections; never Chat).
+  Shots: the full set from fresh exports against a pre-run baseline — no layout change (only the
+  clock's greeting, the known tab-pill AA noise and a few sub-pixel or Chrome text-AA spots).
+- **Not built in the smooth pass, with reasons:** F17 (the chip and tile checks and the + sheet's
+  strip still animate width / height, on the UI thread) — a LinearTransition replacement needs the
+  device check the spec itself names; the tab-switch fade — every tab screen wears frosted
+  surfaces and iOS cannot fade a blur (PopModal.shared.tsx's stutter); spec 7(b)/(c) (transform
+  footers, native insets on Home) — iOS's automatic inset stops short of a risen bar, and
+  `.claude/rules/native-ui.md` asks every input screen for a keyboard-avoiding view; the Toggle
+  knob face crossfade (optional); the stars' group label (it would hide the star buttons and their
+  E2E testIDs). WorkerJob's payout link stays a plain Pressable (a money fence pins its tag).
+- **Only the operator (device checks from the smooth pass):** the press, fade, thumb and mark feel
+  at 120 Hz; the keyboard ride on Post a job, Send bid and the forms (drag-to-dismiss too); pinch,
+  pan, double tap and swipe-away in the photo viewer and the posting's media viewer; the add menu
+  opening the library; loops stopping off-screen.
+- **Next:** the workflow's remaining helper (the final sweep), then one OTA and the new Beta build.
+  The parked reminders in DESIGN LOOP 3 below still stand.
 
 ## DESIGN LOOP 3 — the review is planned; nothing built (2026-10-01/02, the first design chat after the build run; docs only, nothing in the app changed)
 
