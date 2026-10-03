@@ -9,6 +9,8 @@ import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { supabase } from '../lib/supabase';
 import { deleteMyAccount, fetchAccountDeletionBlockers } from '../lib/accountDeletion';
+import { paymentsMode } from '../lib/adapters/payments';
+import { listSavedCards, removeSavedCard } from '../lib/paymentMethods';
 import { formatBlockerList, type BlockerRow } from '../lib/accountDeletionBlockers';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import {
@@ -92,6 +94,16 @@ export function DeleteAccountScreen() {
     if (!ok) return;
 
     setDeleting(true);
+    // A18a (2026-10-03): the saved cards go with the account — detached at the provider through
+    // payment-methods, the one path that removes a card, before the row is deleted. Best effort:
+    // a card that cannot be reached now does not keep the account alive, and the provider's
+    // customer object, like every payment record, no longer identifies the person once the
+    // profile is a tombstone. The payout account is NOT closed: money still owed to a worker
+    // reaches it after deletion (process-settlements pays payment_accounts, not profiles).
+    if (paymentsMode === 'stripe') {
+      const { data: cards } = await listSavedCards();
+      await Promise.all(cards.map((card) => removeSavedCard(card.id).catch(() => null)));
+    }
     const { blocked, error } = await deleteMyAccount();
 
     if (blocked) {
@@ -166,6 +178,7 @@ export function DeleteAccountScreen() {
         <Line text="Your name, phone number, photo, bio and categories." />
         <Line text="Your services, availability and portfolio." />
         <Line text="Your saved workers, notification settings and this device’s push registration." />
+        <Line text="Any card you saved for one-tap hiring. It is removed from the payment provider before the account goes." />
         <Line text="Your open job postings. Any job still taking offers is cancelled when the account is deleted — it does not stay on the marketplace without you." />
         <Line text="Your sign-in. You will not be able to sign back in with this account." />
       </View>
@@ -178,6 +191,7 @@ export function DeleteAccountScreen() {
         <Line
           text="Payment records are kept for tax and legal reasons, but they no longer identify you."
         />
+        <Line text="Your payout account stays open until every payment still owed to you has reached it — nothing you earned is lost with the account." />
         <Line text="Messages and jobs stay in the other person’s history, under “Deleted user”." />
       </View>
 
