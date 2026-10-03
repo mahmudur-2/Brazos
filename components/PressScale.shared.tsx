@@ -80,8 +80,18 @@ const PLACE_KEYS = new Set<string>([
   'marginInlineEnd',
 ]);
 
-/** The Pressable fills the wrapper, whatever the wrapper was given. */
-const FILL: ViewStyle = { flexGrow: 1 };
+/**
+ * The Pressable fills the wrapper's WIDTH through the column's own `alignItems: stretch`, and
+ * NOTHING ELSE — no `flexGrow`. 2026-10-03, found on the operator's phone: `{ flexGrow: 1 }`
+ * here blanked every screen with a header link. Yoga runs with React Native's legacy stretch
+ * rule (`YGErrataAll`): a growing child inside an auto-height wrapper takes the wrapper's whole
+ * AVAILABLE height, so the header's Back link grew to the screen's height, the header row with
+ * it, and the `flex: 1` content below got 0 pt. react-native-web lays out with CSS flexbox,
+ * where an auto-height box has no free space to hand out — which is why the screenshot
+ * harness never saw it. A numeric `height` or `minHeight` stays on the Pressable (it is not a
+ * placing key), so a sized control is still exactly its size.
+ */
+const FILL: ViewStyle = {};
 
 /** The keys that size a box among its siblings — where a box's own border and padding count. */
 const SIZING_KEYS = ['flex', 'flexGrow', 'flexShrink', 'flexBasis', 'width', 'minWidth', 'maxWidth'];

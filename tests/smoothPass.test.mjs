@@ -187,7 +187,12 @@ test('[static] F12: the most-pressed controls sink on the one press spring, the 
     assert.match(source, /onLayout=\{onLayout\} hitSlop=\{hitSlop\}>/);
     assert.match(source, /<Pressable\s+\{\.\.\.rest\}\s+hitSlop=\{hitSlop\}/);
   }
-  assert.match(shared, /const FILL: ViewStyle = \{ flexGrow: 1 \};/);
+  // 2026-10-03 (the operator's phone): the Pressable fills the wrapper's width by stretch and
+  // takes NO flexGrow — under Yoga's legacy stretch rule a growing child inside an auto-height
+  // wrapper takes the wrapper's whole available height (the header's Back link grew to the
+  // screen, and every screen with a header link went blank). Web flexbox never shows it.
+  assert.match(shared, /const FILL: ViewStyle = \{\};/);
+  assert.doesNotMatch(shared, /flexGrow: 1/);
   // A sized or flexed wrapper wears the Pressable's border and padding, and the Pressable steps
   // back over them, so the share each sibling gets is the share it always got.
   assert.match(shared, /if \(SIZING_KEYS\.some\(\(key\) => key in outer\)\) mirrorBox\(flat, outer, inner\);/);
