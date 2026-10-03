@@ -193,3 +193,15 @@ test('7 · the worker’s job card shows the take, and the three-line breakdown 
     assert.doesNotMatch(read(file), /workerTakeCents|brazosFeeCents/, `${file} is not a worker-facing surface`);
   }
 });
+
+test('8 · A8 — the worker is never offered a start the server refuses: no "Start anyway" before the payment is held', () => {
+  // transition_job_status() refuses assigned → in_progress unless a job_payment row is held
+  // (20260925000000_job_completions.sql), so a start offered before held could only fail.
+  const sql = read('supabase/migrations/20260925000000_job_completions.sql');
+  assert.match(sql, /if v_job\.status = 'assigned' and p_status = 'in_progress' then\s+if not exists \(\s+select 1 from public\.payments p\s+where p\.job_id = p_job_id and p\.kind = 'job_payment'[\s\S]*?and p\.status = 'held'/);
+  assert.doesNotMatch(worker, /Start anyway|startAnyway/);
+  assert.match(workerFlat, /const canSkipToStart = live && job\?\.status === 'assigned' && !awaitingProtection && !job\?\.arrived_at;/);
+  // Unheld: the pinned primary is the conversation, and the note says what it waits for.
+  assert.match(workerFlat, /: awaitingProtection \? \{ title: `Message \$\{clientName\}`, onPress: \(\) => navigation\.navigate\('Chat', \{ jobId: job\.id \}\), loading: false \}/);
+  assert.match(worker, /Waiting for \$\{clientName\} to protect the payment\./);
+});

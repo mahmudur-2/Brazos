@@ -491,8 +491,11 @@ export function WorkerJobScreen() {
   const track = lifecycle ? trackStepIndex(lifecycle) : -1;
   const live = !!job && isWorker && (job.status === 'assigned' || job.status === 'in_progress');
   // M-27 — hired is not paid. Until the customer's payment is protected the
-  // primary is the conversation, not the trip; starting stays possible behind
-  // a confirm that says what it risks.
+  // primary is the conversation, not the trip. A8 (2026-10-03): starting is
+  // not offered at all until the payment is held — transition_job_status()
+  // refuses assigned → in_progress on an unheld row
+  // (supabase/migrations/20260925000000_job_completions.sql), so "Start
+  // anyway" could only ever fail.
   const awaitingProtection = lifecycle === 'pending_payment';
   const stageAction: { title: string; onPress: () => void; loading: boolean; disabled?: boolean } | null =
     !live || !job
@@ -507,18 +510,8 @@ export function WorkerJobScreen() {
             ? { title: 'I’ve arrived', onPress: () => void handleMark('arrived'), loading: marking === 'arrived', disabled: marking !== null || working }
             : { title: 'Start job', onPress: handleStart, loading: working, disabled: marking !== null };
   // Declaring the trip is optional, never a gate: before arriving, "Start job"
-  // stays one tap away under the primary.
-  const canSkipToStart = live && job?.status === 'assigned' && (awaitingProtection || !job?.arrived_at);
-
-  async function startAnyway() {
-    const ok = await confirmAsync({
-      title: 'Start before the payment is protected?',
-      message: `${clientName} hasn’t put the payment in protection yet. You can start, but nothing is held for this job until they do.`,
-      confirmText: 'Start anyway',
-      cancelText: 'Wait',
-    });
-    if (ok) await handleStart();
-  }
+  // stays one tap away under the primary — once the payment is held (A8).
+  const canSkipToStart = live && job?.status === 'assigned' && !awaitingProtection && !job?.arrived_at;
   const addressLine = location?.address_line ?? null;
   // Idea 6: arriving from the reminder's Route button, the directions open once the address is known.
   const routedRef = useRef(false);
@@ -902,7 +895,7 @@ export function WorkerJobScreen() {
                 ) : null}
                 <Text style={styles.stageNote}>
                   {awaitingProtection
-                    ? `Waiting on ${clientName} to protect the payment. Until it’s held, sort out the details in chat.`
+                    ? `Waiting for ${clientName} to protect the payment. Until it’s held, sort out the details in chat.`
                     : `Each tap tells ${clientName} where things stand — nothing tracks your location.`}
                 </Text>
               </Card>
@@ -1105,16 +1098,14 @@ export function WorkerJobScreen() {
             />
             {canSkipToStart ? (
               <Pressable
-                onPress={awaitingProtection ? () => void startAnyway() : handleStart}
+                onPress={handleStart}
                 disabled={working || marking !== null}
                 hitSlop={8}
                 style={({ pressed }) => [styles.skipLink, pressed && styles.pressed]}
                 accessibilityRole="button"
-                accessibilityLabel={awaitingProtection ? 'Start anyway' : 'Start job now'}
+                accessibilityLabel="Start job now"
               >
-                <Text style={styles.skipLinkText}>
-                  {awaitingProtection ? 'Start anyway' : 'Already there? Start the job'}
-                </Text>
+                <Text style={styles.skipLinkText}>Already there? Start the job</Text>
               </Pressable>
             ) : null}
           </View>
