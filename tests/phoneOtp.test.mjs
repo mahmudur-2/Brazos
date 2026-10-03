@@ -49,8 +49,8 @@ const { resolvePhoneAuthMode } = await import(modeUrl);
 const { createMockPhoneAuthProvider } = await import(mockUrl);
 const { createSupabasePhoneAuthProvider } = await import(supabaseUrl);
 
-const PHONE = '+13473200610';
-const OTHER_PHONE = '+13473200611';
+const PHONE = '+17185550123';
+const OTHER_PHONE = '+17185550124';
 
 /** A mock provider on a clock the test drives, with a code it chooses. */
 function mockHarness(codes = ['111111']) {
@@ -391,7 +391,7 @@ test('starting over replaces the live challenge rather than adding a second', as
 
 test('a malformed number never becomes a challenge', async () => {
   const { provider } = mockHarness();
-  for (const bad of ['3473200610', '+1', '', '+0123456789', 'not a number']) {
+  for (const bad of ['7185550123', '+1', '', '+0123456789', 'not a number']) {
     const result = await provider.requestOtp({ phone: bad, intent: 'sign-in' });
     assert.equal(result.status, 'error', `${bad} must not produce a challenge`);
     assert.equal(result.code, 'invalid-phone');

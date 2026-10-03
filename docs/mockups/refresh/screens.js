@@ -51,7 +51,7 @@
     { id: 'create-email', group: 'Sign-up & sign-in', name: 'Create account (email)', land: 'welcome', steps: [{ press: 'Continue with email' }],
       after: ['One line: “One account. Hire help and accept work.”', '#3: the whole form fits one screen without scrolling — Full name, Phone number, Email and Password, their labels and icons mint — and there is no CREATE ACCOUNT eyebrow (the bar already says Create Account). #4: the “Private until a job is confirmed.” pill is gone. #6 / LUX-LIST-2 #2: 52-tall buttons, corners 22.'] },
     { id: 'verify', group: 'Sign-up & sign-in', name: 'Verify phone', land: 'welcome',
-      steps: [{ press: 'Continue with phone' }, { fill: 'Carlos Reyes', value: 'Mahmudur Rahman' }, { fill: '347 320 0610', value: '3473200610' }, { press: 'Create account' }],
+      steps: [{ press: 'Continue with phone' }, { fill: 'Carlos Reyes', value: 'Mahmudur Rahman' }, { fill: '718 555 0123', value: '7185550123' }, { press: 'Create account' }],
       stand: 'Text-message sign-up is switched off, so the code screen never opens — this is what tapping Create account shows today.',
       after: ['#6 / LUX-LIST-2 #2: the buttons are 52 tall, corners 22.'] },
     { id: 'legal', group: 'Sign-up & sign-in', name: 'Terms & Privacy (legal gate)', land: 'legal', steps: [],

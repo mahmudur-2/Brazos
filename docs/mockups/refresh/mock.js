@@ -42,7 +42,7 @@
   };
   var db = {
     profiles: [
-      profile(ME, 'Mahmudur Rahman', { phone: '+13473200610', categories: ['furniture_assembly', 'handyman'], accepting_work: R.mode === 'worker', availability_note: 'Evenings and weekends.', bio: 'I help out with assembly and small fixes around Brooklyn.' }),
+      profile(ME, 'Mahmudur Rahman', { phone: '+17185550123', categories: ['furniture_assembly', 'handyman'], accepting_work: R.mode === 'worker', availability_note: 'Evenings and weekends.', bio: 'I help out with assembly and small fixes around Brooklyn.' }),
       profile(DANA, 'Dana Whitfield'),
       profile(SAM, 'Sam Okafor', { role: 'worker', bio: 'Flat-pack and wall-mounting work most evenings and weekends. I bring my own tools and clear the packaging away.', categories: ['furniture_assembly', 'tv_mounting', 'handyman'], accepting_work: true, availability_note: 'Evenings and weekends.' }),
       profile(PRIYA, 'Priya Natarajan', { role: 'worker', bio: 'Moving help and careful furniture handling. Stairs are no problem.', categories: ['moving', 'packing', 'furniture_assembly'], accepting_work: true, availability_note: 'Weekday mornings.' }),

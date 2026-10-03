@@ -114,7 +114,7 @@ export function phoneValidationError(country: Country, input: string): string | 
 
 /**
  * How the national part is shown while typing. NANP gets the reference's
- * '347 320 0610' grouping; everywhere else the digits are left alone rather
+ * '718 555 0123' grouping; everywhere else the digits are left alone rather
  * than forced into a grouping that would be wrong for that country.
  */
 export function formatNational(country: Country, digits: string): string {
@@ -135,7 +135,7 @@ export function clampNational(country: Country, digits: string): string {
 
 /**
  * The number as the verify screen names it back: calling code, the last four
- * digits, and bullets for everything between — '+1 ••• ••• 0610'.
+ * digits, and bullets for everything between — '+1 ••• ••• 0123'.
  *
  * Enough for the user to recognise their own number and catch a typo, not
  * enough to be worth reading off a shoulder. The masked part reuses

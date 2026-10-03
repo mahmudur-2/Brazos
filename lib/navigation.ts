@@ -64,7 +64,7 @@ export type AuthStackParamList = {
 export type VerifyPhoneParams = {
   /** E.164, already normalised by lib/phoneNumber.ts. */
   phone: string;
-  /** Display only — '+1 ••• ••• 0610', from maskE164(). */
+  /** Display only — '+1 ••• ••• 0123', from maskE164(). */
   maskedPhone: string;
   /** Sign-in and sign-up challenges are never interchangeable. */
   intent: PhoneAuthIntent;

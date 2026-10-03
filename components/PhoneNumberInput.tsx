@@ -49,7 +49,7 @@ type PhoneNumberInputProps = {
  * Displaying and storing the calling code separately from the national digits
  * is what makes a duplicated '+1' structurally impossible — the national field
  * never holds a calling code at all. When a value arrives that does (a paste of
- * '+1 347 320 0610', say), splitInternational peels the code off, moves the
+ * '+1 718 555 0123', say), splitInternational peels the code off, moves the
  * country control to match, and keeps only the national part.
  */
 export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
@@ -185,7 +185,7 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
               onChangeText={handleChangeText}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
-              placeholder={isNanp(country) ? '347 320 0610' : 'Phone number'}
+              placeholder={isNanp(country) ? '718 555 0123' : 'Phone number'}
               placeholderTextColor={themed ? surface.placeholder : authColors.placeholder}
               keyboardType="phone-pad"
               inputMode="tel"

@@ -76,22 +76,22 @@ test('every country carries a usable ISO code and calling code', async () => {
 
 test('a calling code is never emitted twice, however the number arrives', () => {
   // Typed plainly.
-  assert.equal(toE164(US, '3473200610'), '+13473200610');
+  assert.equal(toE164(US, '7185550123'), '+17185550123');
   // Typed with the reference's own display grouping.
-  assert.equal(toE164(US, '347 320 0610'), '+13473200610');
+  assert.equal(toE164(US, '718 555 0123'), '+17185550123');
   // Typed with a leading trunk 1.
-  assert.equal(toE164(US, '13473200610'), '+13473200610');
+  assert.equal(toE164(US, '17185550123'), '+17185550123');
   // Pasted in every common US shape.
   for (const pasted of [
-    '+1 347 320 0610',
-    '+1 (347) 320-0610',
-    '+13473200610',
-    '1-347-320-0610',
-    '(347) 320-0610',
+    '+1 718 555 0123',
+    '+1 (718) 555-0123',
+    '+17185550123',
+    '1-718-555-0123',
+    '(718) 555-0123',
   ]) {
     const split = splitInternational(pasted);
     const [country, national] = split ? [split.country, split.national] : [US, pasted];
-    assert.equal(toE164(country, national), '+13473200610', `failed for ${pasted}`);
+    assert.equal(toE164(country, national), '+17185550123', `failed for ${pasted}`);
   }
 });
 
@@ -106,7 +106,7 @@ test('a pasted international number moves the country control instead of stackin
   assert.equal(splitInternational('+18681234567').country.code, 'TT');
   // …but a plain +1 number stays on the default rather than on whichever
   // NANP entry happens to sort first.
-  assert.equal(splitInternational('+13473200610').country.code, 'US');
+  assert.equal(splitInternational('+17185550123').country.code, 'US');
 });
 
 test('a leading zero is a trunk prefix, not part of the E.164 number', () => {
@@ -140,9 +140,9 @@ test('the national part can never overflow E.164', () => {
 
 test('validation names the actual problem', () => {
   assert.equal(phoneValidationError(US, ''), 'Enter your phone number.');
-  assert.equal(phoneValidationError(US, '347320'), 'Enter a 10-digit phone number.');
-  assert.equal(phoneValidationError(US, '3473200610'), null);
-  assert.equal(phoneValidationError(US, '347 320 0610'), null);
+  assert.equal(phoneValidationError(US, '718555'), 'Enter a 10-digit phone number.');
+  assert.equal(phoneValidationError(US, '7185550123'), null);
+  assert.equal(phoneValidationError(US, '718 555 0123'), null);
   // Non-NANP countries have no single national length to assert, so only
   // obvious nonsense is rejected.
   assert.equal(phoneValidationError(GB, '7911123456'), null);
@@ -160,7 +160,7 @@ test('an incomplete number never reaches the backend as a half-value', () => {
 // ---------------------------------------------------------------------------
 
 test('NANP numbers use the reference grouping and other countries are left alone', () => {
-  assert.equal(formatNational(US, '3473200610'), '347 320 0610');
+  assert.equal(formatNational(US, '7185550123'), '718 555 0123');
   assert.equal(formatNational(US, '347'), '347');
   assert.equal(formatNational(US, '3473'), '347 3');
   // Nothing is invented for a country whose grouping we don't know.
@@ -168,13 +168,13 @@ test('NANP numbers use the reference grouping and other countries are left alone
 });
 
 test('a stored E.164 value round-trips back into the field', () => {
-  const parsed = fromE164('+13473200610');
+  const parsed = fromE164('+17185550123');
   assert.equal(parsed.country.code, 'US');
-  assert.equal(parsed.national, '3473200610');
-  assert.equal(toE164(parsed.country, parsed.national), '+13473200610');
+  assert.equal(parsed.national, '7185550123');
+  assert.equal(toE164(parsed.country, parsed.national), '+17185550123');
 
   // Anything that isn't E.164 falls back to the default rather than guessing.
-  assert.equal(fromE164('347-320-0610').country.code, 'US');
+  assert.equal(fromE164('718-555-0123').country.code, 'US');
 });
 
 // ---------------------------------------------------------------------------
@@ -288,11 +288,11 @@ test('the phone screen never fakes a session, and email still does the real sign
 test('a number is named back with only its last four digits', () => {
   // Enough to recognise your own number and catch a typo; not enough to be
   // worth reading over a shoulder.
-  assert.equal(maskE164('+13473200610'), '+1 ••• ••• 0610');
+  assert.equal(maskE164('+17185550123'), '+1 ••• ••• 0123');
   assert.equal(maskE164('+447911123456'), '+44 ••••••3456');
 
   // The visible tail is always exactly the last four digits.
-  for (const value of ['+13473200610', '+447911123456', '+3161234567']) {
+  for (const value of ['+17185550123', '+447911123456', '+3161234567']) {
     const masked = maskE164(value);
     assert.ok(masked.endsWith(value.slice(-4)), `${masked} should end in the real last four`);
     const revealed = masked.replace(/[^\d]/g, '');
@@ -305,7 +305,7 @@ test('a number is named back with only its last four digits', () => {
   }
 
   // Not E.164 in the first place: shown as-is rather than mangled.
-  assert.equal(maskE164('347-320-0610'), '347-320-0610');
+  assert.equal(maskE164('718-555-0123'), '718-555-0123');
 });
 
 // ===========================================================================
@@ -360,4 +360,32 @@ test('B15 · EXPO_PUBLIC_PHONE_AUTH_MODE: the schema enum is the resolver\'s rec
   // Both read the value trimmed and lower-cased.
   assert.match(resolver, /\.trim\(\)\.toLowerCase\(\)/);
   assert.match(env, /function normalized\(value: unknown\): unknown \{\s*return typeof value === 'string' \? value\.trim\(\)\.toLowerCase\(\) : value;/);
+});
+
+test('C7 · no tracked file shows a real phone number — the placeholder and every fixture use 555-01xx', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const placeholder = read('components/PhoneNumberInput.tsx');
+  assert.match(placeholder, /placeholder=\{isNanp\(country\) \? '718 555 0123' : 'Phone number'\}/);
+  // Built from pieces so this file never carries the number it hunts for.
+  const real = new RegExp(['347', '320', '0610'].join('[ -]?') + '|' + ['347', '320', '0610'].join(''));
+  // Left out on purpose: the operator's own mockup tree (its builder is the
+  // operator's working copy), the brief that names the defect, and a recorded
+  // historical patch.
+  const excluded = [/^docs\/mockups\/html\/lux\//, /^docs\/dispatch\//, /^docs\/mockups\/refresh\/after\.patch$/];
+  const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
+    .split('\0')
+    .filter((file) => file && !excluded.some((re) => re.test(file)));
+  assert.ok(tracked.length > 100, `expected a populated tracked-file list, got ${tracked.length}`);
+  const hits = [];
+  for (const file of tracked) {
+    let text;
+    try {
+      text = readFileSync(join(root, file), 'utf8');
+    } catch {
+      continue;
+    }
+    if (text.includes('\0')) continue;
+    if (real.test(text)) hits.push(file);
+  }
+  assert.deepEqual(hits, []);
 });
