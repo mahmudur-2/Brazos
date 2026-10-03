@@ -32,6 +32,21 @@ export function pillFootprint(
   return m.height + pillBottomOffset(insetBottom, m.bottomTuck, m.bottomMin) + m.breathing;
 }
 
+/**
+ * The soft fade behind the bar (fix run D13): its height and the percent from its top where it
+ * turns solid. Its clear top edge sits exactly on the line a scroller's content clears
+ * (`pillFootprint`), so a list scrolled to its end is never washed; it is solid from the pill's
+ * centre line down, so rows behind the pill's margins end in the ground.
+ */
+export function underBarFade(
+  insetBottom: number,
+  m: { height: number; bottomTuck: number; bottomMin: number; breathing: number }
+): { height: number; solidAt: number } {
+  const height = pillFootprint(insetBottom, m);
+  const solidAt = Math.round(((m.breathing + m.height / 2) / height) * 1000) / 10;
+  return { height, solidAt };
+}
+
 /** The slot nearest `x`. */
 export function nearestSlot(x: number, centres: readonly number[]): number {
   'worklet';

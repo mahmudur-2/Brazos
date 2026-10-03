@@ -88,14 +88,15 @@ test('[static] D13: a soft fade sits behind the floating bar, takes no touch, an
   const fade = shared.slice(shared.indexOf('export function UnderBarFade'), shared.indexOf('export function pillStyle'));
   assert.ok(fade.length > 0, 'UnderBarFade lives beside the pill style');
   assert.match(fade, /<Animated\.View\s+pointerEvents="none"/, 'the fade takes no touch');
-  assert.match(fade, /edgeFade\(ground, 180, 48\)/, 'it reads the shared edge-fade helper, solid from 48 %');
-  assert.match(fade, /height: pillTop \+ meltBar\.fadeAbove/);
+  assert.match(fade, /const fadeStops = underBarFade\(insets\.bottom, meltBar\);/, 'its stops come from the pure geometry tests/meltTabBar.test.mjs executes');
+  assert.match(fade, /edgeFade\(ground, 180, fadeStops\.solidAt\)/, 'it reads the shared edge-fade helper, solid from the pill centre');
+  assert.match(fade, /height: fadeStops\.height/, 'no taller than the line content clears, so a list at its end is never washed');
   assert.match(fade, /const ground = isDark \? palette\.authGroundBottom : palette\.background;/, "the ground is the page's own foot");
   assert.match(fade, /const onMap = state\.routes\[state\.index\]\?\.name === 'Map';/);
   assert.match(fade, /const shown = !onMap && !footPinned;/, 'off on the Map tab and over a pinned footer');
   assert.match(fade, /useNativeDriver: USE_NATIVE_DRIVER/);
   assert.match(shared, /underBarFade: \{ position: 'absolute', left: 0, right: 0, bottom: 0 \}/);
-  assert.match(strip(read('ui/tokens.ts')), /fadeAbove: 56,/);
+  assert.doesNotMatch(strip(read('ui/tokens.ts')), /fadeAbove/, 'the fade has no reach of its own above the clearance line');
 
   // Drawn by the wrapper BEFORE the bar, so both paths' pill sits on it and each root still paints nothing.
   const wrapper = strip(read('components/MeltTabBar.tsx'));

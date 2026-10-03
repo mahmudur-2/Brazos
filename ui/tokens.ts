@@ -1471,8 +1471,6 @@ export const meltBar = {
   bottomMin: 12,
   /** Room a scroller keeps between its last row and the pill's top. */
   breathing: 8,
-  /** Fix run D13: how far above the pill's top the soft fade behind the bar begins. */
-  fadeAbove: 56,
   /** The moving bubble's three circles, and the + bubble. */
   bubble: [54, 45, 36] as const,
   plus: 44,

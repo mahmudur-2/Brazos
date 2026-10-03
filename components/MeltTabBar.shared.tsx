@@ -21,9 +21,8 @@ import { tap } from '../lib/haptics';
 import { edgeFade, litCardStyle, meltBar, metricStyles, useThemeColors, withAlpha } from '../lib/theme';
 import { BOTTOM_NAV_TABS, CUSTOMER_CREATE_SLOT, usePinnedFootActive, type BottomNavTabKey } from '../ui/primitives/BottomNav';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { usePillTop } from '../hooks/useNavInset';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
-import { pillBottomOffset, slotCentres } from '../lib/meltBarGeometry';
+import { pillBottomOffset, slotCentres, underBarFade } from '../lib/meltBarGeometry';
 
 export type MeltTabBarProps = BottomTabBarProps & {
   /** The tree's drawn tabs, in order (CUSTOMER_BAR_TABS / WORKER_BAR_TABS). */
@@ -195,14 +194,15 @@ export function pillGround(isDark: boolean): ViewStyle {
   };
 }
 
-/** The pill itself: the lit card at the bar's corner. */
 /**
  * Fix run D13 (pick a) — THE SOFT FADE BEHIND THE FLOATING BAR. Every scene runs full height under
  * the pill, so a scroller's rows showed in the margins round it — a second outline under the bar.
- * This strip, drawn by the bar BEFORE the pill (so the pill sits on it), ramps from nothing at
- * `meltBar.fadeAbove` over the pill's top to the page ground at 48 % and stays solid to the edge:
- * the rows end in the ground. The ground is the light cream, or in dark the bottom stop of the
- * Lux diagonal the screens paint (`screenGround()`), so its foot matches the page's.
+ * This strip, drawn by the bar BEFORE the pill (so the pill sits on it), ramps from nothing at the
+ * line scrolling content clears (the pill's top plus its breathing room, `underBarFade()`) to the
+ * page ground at the pill's centre line, and stays solid to the edge: the rows end in the ground,
+ * and a list scrolled to its end is never washed (the strip once began 56 pt higher and faded the
+ * last row by two thirds). The ground is the light cream, or in dark the bottom stop of the Lux
+ * diagonal the screens paint (`screenGround()`), so its foot matches the page's.
  *
  * OFF where it would cover something: the Map tab (no page ground, the map is the ground), and any
  * focused screen that pins a footer or composer over the pill (`usePinnedFootActive()`). It takes
@@ -211,7 +211,8 @@ export function pillGround(isDark: boolean): ViewStyle {
 export function UnderBarFade({ state }: { state: BottomTabBarProps['state'] }) {
   const styles = stylesFor();
   const { palette, isDark } = useThemeColors();
-  const pillTop = usePillTop();
+  const insets = useSafeAreaInsets();
+  const fadeStops = underBarFade(insets.bottom, meltBar);
   const footPinned = usePinnedFootActive();
   const reduceMotion = useReducedMotion();
   const onMap = state.routes[state.index]?.name === 'Map';
@@ -234,11 +235,12 @@ export function UnderBarFade({ state }: { state: BottomTabBarProps['state'] }) {
   return (
     <Animated.View
       pointerEvents="none"
-      style={[styles.underBarFade, { height: pillTop + meltBar.fadeAbove, opacity }, edgeFade(ground, 180, 48)]}
+      style={[styles.underBarFade, { height: fadeStops.height, opacity }, edgeFade(ground, 180, fadeStops.solidAt)]}
     />
   );
 }
 
+/** The pill itself: the lit card at the bar's corner. */
 export function pillStyle(isDark: boolean, width: number, bottom: number): ViewStyle[] {
   const styles = stylesFor();
   return [styles.pill, { width, bottom }, litCardStyle(isDark), { borderRadius: meltBar.radius }];

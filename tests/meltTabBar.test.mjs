@@ -53,6 +53,19 @@ test('[executed] the pill sits 24pt up on a 34pt inset, and content clears 96pt'
   assert.equal(geo.pillFootprint(0, m), 84);
 });
 
+test('[executed] D13: the fade behind the bar starts at the line content clears and is solid from the pill centre', () => {
+  const m = { height: num('height'), bottomTuck: num('bottomTuck'), bottomMin: num('bottomMin'), breathing: num('breathing') };
+  for (const inset of [34, 0]) {
+    const fade = geo.underBarFade(inset, m);
+    // Its clear top edge is exactly where a list's last row stops, so a list scrolled to its end is never washed.
+    assert.equal(fade.height, geo.pillFootprint(inset, m));
+    // Solid from the pill's centre line: from the strip's top, the breathing room plus half the pill.
+    const solidFromTop = (fade.solidAt / 100) * fade.height;
+    assert.ok(Math.abs(solidFromTop - (m.breathing + m.height / 2)) < 0.1, `solid ${solidFromTop}pt down on a ${inset}pt inset`);
+  }
+  assert.deepEqual(geo.underBarFade(34, m), { height: 96, solidAt: 41.7 });
+});
+
 test('[executed] the + joint joins at contact and pinches shut between a 15 and a 19pt gap', () => {
   // The moving bubble leaving the +: its trailing 36pt circle is the end facing it.
   const tail = bubble[2] / 2;
