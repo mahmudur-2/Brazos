@@ -22,7 +22,7 @@ appears in no document.
 | `docs/emerald-v2/` | The v2 redesign plan, Phase 0 audit, and its `DECISIONS.md`. |
 | `docs/handoff-archive/` | Per-run HANDOFF records, verbatim, indexed by `INDEX.md`; `HANDOFF.md` at the root keeps only the live edge. |
 | `docs/mockups/` | The numbered golden-master PNGs (binding), their manifest and run report; `rejected/` holds the operator-rejected word-named renders. |
-| `docs/runbooks/` | Procedures meant to be executed (currently the phase67 account-deletion apply). |
+| `docs/runbooks/` | Procedures meant to be executed: the phase67 account-deletion apply, and `dispute-resolution.md` — how the operator resolves a reported issue (A12). |
 
 ## Active
 
@@ -40,7 +40,7 @@ appears in no document.
 | `HANDOFF.md` | Current operational context: last work, blockers, next steps. |
 | `docs/architecture.md` | Implemented architecture, reconstructed from source. |
 | `BRAZOS_MASTER_PLAN.md` | Roadmap and priorities — intent, never current state. |
-| `docs/runbooks/` | Procedures meant to be executed; currently the phase67 account-deletion apply. |
+| `docs/runbooks/` | Procedures meant to be executed: the phase67 account-deletion apply, and `dispute-resolution.md` (resolving a reported issue). |
 | `PROD_APPLY.md` | Human-executed production migration queue; production still has none of it. Its "source of truth" pointer now resolves to `docs/archive/BRAZOS_BUILD_STATE_2026-08.md`. |
 | `docs/phone-auth-activation.md` | How to turn on SMS sign-in once a provider is paid for. |
 | `WEB_DEPLOYMENT.md` | Frozen web/PWA surface. Never modified by product work. |

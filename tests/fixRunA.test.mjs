@@ -42,3 +42,25 @@ test('A10 · "payout on its way" says what it waits for; the tip opens once the 
   // The held-row rule is untouched: payoutSetupNotice stays the ONE derivation of "waiting on setup".
   assert.match(worker, /const waitingOnSetup = payment \? payoutSetupNotice\(payouts, \[payment\]\) !== null : false;/);
 });
+
+test('A12 · a reported issue says who decides and how fast; the operator has a runbook; no admin UI', () => {
+  // Pick A12a, verbatim.
+  const approve = code('screens/ApproveOrDisputeScreen.tsx');
+  assert.ok(
+    approve.includes('The payment stays held while this report is open — including the automatic release timer. Brazos will look at it and reply by email within 2 business days. Withdraw it below if things get sorted out.'),
+    'the dispute note names who decides and the reply time'
+  );
+  // The resolver stays service_role only — the app never calls it.
+  const sql = read('supabase/migrations/20260905000000_stripe_foundation.sql');
+  assert.ok(sql.includes('grant execute on function public.resolve_job_dispute(uuid, text, text) to service_role;'));
+  assert.doesNotMatch(read('lib/disputes.ts'), /resolve_job_dispute/, 'no client wrapper for the resolver');
+  assert.doesNotMatch(code('screens/ApproveOrDisputeScreen.tsx'), /resolve_job_dispute/, 'the screen never calls it');
+  assert.ok(existsSync(join(root, 'docs/runbooks/dispute-resolution.md')), 'the runbook exists');
+  // The runbook exists, runs the resolver by name, and keeps the promise's clock.
+  const runbook = read('docs/runbooks/dispute-resolution.md');
+  assert.match(runbook, /resolve_job_dispute\(p_job_id, p_in_favour_of, p_note\)/);
+  assert.match(runbook, /2 business\s+days/);
+  assert.match(runbook, /'worker'/);
+  assert.match(runbook, /'customer'/);
+  assert.match(read('docs/README.md'), /dispute-resolution\.md/);
+});

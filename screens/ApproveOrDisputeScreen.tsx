@@ -298,9 +298,13 @@ export function ApproveOrDisputeScreen() {
             {dispute.details ? (
               <Text style={styles.disputeDetails}>{dispute.details}</Text>
             ) : null}
+            {/* A12a (2026-10-03): who decides, and how fast. The resolution itself is
+                resolve_job_dispute(), service_role only, run by the operator from
+                docs/runbooks/dispute-resolution.md — never from the app. */}
             <Text style={styles.disputeNote}>
               The payment stays held while this report is open — including the
-              automatic release timer. Withdraw it below if things get sorted
+              automatic release timer. Brazos will look at it and reply by email
+              within 2 business days. Withdraw it below if things get sorted
               out.
             </Text>
           </View>
