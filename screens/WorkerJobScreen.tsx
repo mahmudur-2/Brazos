@@ -913,6 +913,24 @@ export function WorkerJobScreen() {
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </Pressable>
 
+              {/* A10 (2026-10-03): the nudge at the hire — before any payment row exists — so
+                  the payout account is ready by the time the money is, instead of the customer
+                  watching "payout on its way" while nothing can land. Card path only; gone once
+                  enabled; the held-row PayoutNudge above takes over once there is a figure. */}
+              {live && paymentsMode === 'stripe' && payouts !== null && payouts !== 'enabled' && !waitingOnSetup ? (
+                <Pressable
+                  onPress={() => navigateAcrossTabs('Profile', 'Payouts', {})}
+                  style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Set up payouts"
+                  accessibilityHint="Opens Payouts so the payment can reach you"
+                >
+                  <Ionicons name="wallet-outline" size={20} color={colors.emerald} />
+                  <Text style={styles.linkRowText}>Set up payouts so the payment can reach you</Text>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </Pressable>
+              ) : null}
+
               {job.status === 'in_progress' ? (
                 <Card>
                   <Text style={styles.actionTitle}>Finish up</Text>

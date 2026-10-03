@@ -592,10 +592,13 @@ export function ReviewAndTipScreen() {
                   </Text>
                 ) : !released ? (
                   // D23: approved, payout pending — begin_tip_payment refuses
-                  // until the transfer lands. Its own sentence, then R6a's.
+                  // until the transfer lands. A10a (2026-10-03): the tip opens
+                  // once the payment reaches the worker, and the screen says
+                  // why — and what the wait is, when it is their payout setup.
                   <Text style={styles.cardNote}>
-                    The job payment releases first — then a tip can be added. Your
-                    approved payment is on its way to the worker.
+                    A tip can be added once the job payment reaches {workerName ?? 'the worker'}.
+                    Yours is approved and on its way — if they haven’t set up payouts yet, it
+                    lands the moment they do.
                   </Text>
                 ) : !stripeReady() ? (
                   <Text style={styles.cardNote}>{STRIPE_UNAVAILABLE_MESSAGE}</Text>

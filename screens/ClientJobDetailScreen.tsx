@@ -1259,6 +1259,17 @@ export function ClientJobDetailScreen() {
                       : 'PAYMENT'}
                 </Text>
                 <MoneyText cents={customerChargeCents(payment)} state={payment.status} />
+                {/* A10 (2026-10-03): "on its way" says what it waits for. The transfer lands only
+                    once the worker's payout account is enabled; until then the row stays here
+                    with release requested, and the worker's own job screen nudges them to set
+                    it up. Card path only — the sandbox releases on approval. */}
+                {stripe && releaseRequested ? (
+                  <Text style={styles.paymentNote}>
+                    The payment reaches {workerFirstName} once their payout account is ready — it
+                    shows as released when the transfer lands. If they haven’t set up payouts yet,
+                    their job screen asks them to.
+                  </Text>
+                ) : null}
               </Card>
             ) : null}
 
