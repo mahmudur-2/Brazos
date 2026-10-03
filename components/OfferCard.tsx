@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
@@ -128,9 +129,10 @@ type ThreadProps = {
 
 export type OfferCardProps = ListProps | ThreadProps;
 
-export function OfferCard(props: OfferCardProps) {
+/** F3: memoised — a card re-renders only when its own props change. */
+export const OfferCard = memo(function OfferCard(props: OfferCardProps) {
   return props.variant === 'list' ? <OfferListCard {...props} /> : <OfferThreadCard {...props} />;
-}
+});
 
 // ---------------------------------------------------------------------------
 // List — the customer's compare-and-accept surface

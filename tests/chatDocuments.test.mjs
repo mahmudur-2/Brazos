@@ -475,7 +475,10 @@ test('[static] the send path is the resolved target, either thread kind', async 
 
   // Both props are wired, or the flag would produce a dead row.
   assert.match(chat, /onPickDocument=\{pickDocument\}/);
-  assert.match(chat, /onPressDocument=\{openDocument\}/);
+  // F3: the row reaches openDocument through the one stable wrapper, so memo can skip rows.
+  assert.match(chat, /onPressDocument=\{pressDocument\}/);
+  assert.match(chat, /const pressDocument = useCallback\(\(message: Message\) => void rowHandlers\.current\.openDocument\(message\), \[\]\);/);
+  assert.match(chat, /rowHandlers\.current = \{ openDocument, openOfferJob \};/);
   // Opening uses the already-signed URL; the bucket is never made public. What
   // is DONE with that URL is section 9's — it used to be Linking.openURL.
   assert.match(chat, /const url = message\.document_url;/);

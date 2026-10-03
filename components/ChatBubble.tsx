@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,7 +36,13 @@ type ChatBubbleProps = {
   senderName?: string | null;
   senderAvatarUrl?: string | null;
   reactions?: Reaction[];
-  onLongPress?: () => void;
+  /**
+   * F3: the screen passes ONE stable callback for every row, given the
+   * message, so memo can skip a row whose own props did not change. An
+   * unsent placeholder offers nothing to react to or reply to, so the bubble
+   * withholds the long-press itself.
+   */
+  onLongPressMessage?: (message: Message) => void;
   onPressImage?: (url: string) => void;
   /**
    * Open the document attachment. The bubble draws itself from the row's
@@ -57,28 +64,32 @@ type ChatBubbleProps = {
   replyTo?: Message | null;
   /** Display name for the quoted message's sender. */
   replyToName?: string | null;
-  /** Long-press on the counterparty's avatar — opens it full-screen. */
-  onLongPressAvatar?: () => void;
+  /** Long-press on the counterparty's avatar — opens it full-screen. Stable, given the URI (F3). */
+  onLongPressAvatarUri?: (uri: string) => void;
 };
 
-export function ChatBubble({
+/** F3: memoised — a row re-renders only when its own props change. */
+export const ChatBubble = memo(function ChatBubble({
   message,
   isOwn,
   delivery,
   senderName,
   senderAvatarUrl,
   reactions = [],
-  onLongPress,
+  onLongPressMessage,
   onPressImage,
   onPressDocument,
   documentBusy = false,
   replyTo,
   replyToName,
-  onLongPressAvatar,
+  onLongPressAvatarUri,
 }: ChatBubbleProps) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const isUnsent = !!message.unsent_at;
+  const onLongPress = onLongPressMessage && !isUnsent ? () => onLongPressMessage(message) : undefined;
+  const onLongPressAvatar =
+    onLongPressAvatarUri && senderAvatarUrl ? () => onLongPressAvatarUri(senderAvatarUrl) : undefined;
 
   return (
     <View
@@ -271,7 +282,7 @@ export function ChatBubble({
       </Pressable>
     </View>
   );
-}
+});
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({

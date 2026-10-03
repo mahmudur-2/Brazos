@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   FlatList,
   Keyboard,
+  type ListRenderItemInfo,
   Pressable,
   StyleSheet,
   Text,
@@ -142,6 +143,9 @@ import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 type TimelineItem =
   | { kind: 'divider'; key: string; title: string }
   | { kind: 'message'; key: string; message: Message };
+
+/** A row with no offer chain shares one empty list, so memo sees the same prop (F3). */
+const NO_OFFERS: OfferWithJob[] = [];
 
 export function ChatScreen() {
   const { palette: colors, isDark } = useThemeColors();
@@ -1675,6 +1679,141 @@ export function ChatScreen() {
     if (!result.ok) await alertAsync('Could not open document', result.message);
   }
 
+  // F3: ONE row renderer, memoised on what a row reads, so state the rows do
+  // not show (the menus, the reply bar, a send in flight) re-renders no row.
+  // The two handlers that read screen state reach it through a ref, which
+  // keeps them — and so this renderer — stable.
+  const rowHandlers = useRef({ openDocument, openOfferJob });
+  useEffect(() => {
+    rowHandlers.current = { openDocument, openOfferJob };
+  });
+  const pressDocument = useCallback((message: Message) => void rowHandlers.current.openDocument(message), []);
+  const openOfferJobFromRow = useCallback(
+    (request: OfferWithJob) => void rowHandlers.current.openOfferJob(request),
+    []
+  );
+  // Each negotiation's chain, grouped once rather than filtered per row.
+  const chainsByRoot = useMemo(() => {
+    const byRoot: Record<string, OfferWithJob[]> = {};
+    for (const offer of threadOffers) (byRoot[offer.root_offer_id] ??= []).push(offer);
+    return byRoot;
+  }, [threadOffers]);
+  const renderItem = useCallback(
+    ({ item: entry }: ListRenderItemInfo<TimelineItem>) => {
+      // The job context changed here. Not a section header — the same
+      // job can head several of these when two conversations
+      // interleave, which is what actually happened.
+      if (entry.kind === 'divider') {
+        return (
+          <View style={styles.jobDivider}>
+            <Divider thickness={1} style={styles.jobDividerRule} />
+            <Text style={styles.jobDividerLabel} numberOfLines={1}>
+              {entry.title}
+            </Text>
+            <Divider thickness={1} style={styles.jobDividerRule} />
+          </View>
+        );
+      }
+
+      const item = entry.message;
+      // A hire-request event renders as a negotiation card instead of
+      // an ordinary bubble — same thread, no separate screen.
+      const offerId = offerIdOf(item);
+      if (offerId) {
+        const request = requestsById[offerId];
+        const isOwn = item.sender_id === user?.id;
+        return (
+          <View
+            style={[
+              styles.requestRow,
+              isOwn ? styles.requestRowOwn : styles.requestRowOther,
+            ]}
+          >
+            <OfferCard
+              variant="thread"
+              message={item}
+              offer={request}
+              chain={request ? chainsByRoot[request.root_offer_id] ?? NO_OFFERS : NO_OFFERS}
+              job={request?.job ?? null}
+              isLatest={latestMessageIdByRequest[offerId] === item.id}
+              currentUserId={user?.id ?? ''}
+              counterpartyName={counterparty?.full_name}
+              busy={respondingId === offerId}
+              onAccept={() =>
+                request && setConfirmResponse({ request, action: 'accept' })
+              }
+              onDecline={() =>
+                request && setConfirmResponse({ request, action: 'decline' })
+              }
+              onCounter={() => request && setCounterTarget(request)}
+              onWithdraw={() =>
+                request && setConfirmResponse({ request, action: 'withdraw' })
+              }
+              // Live and accepted offers alike lead to the job they
+              // are about; offerJobTarget() is the single rule for
+              // whether there is a destination and which one.
+              onOpenJob={
+                request && offerJobTarget(request, user?.id)
+                  ? () => openOfferJobFromRow(request)
+                  : undefined
+              }
+            />
+          </View>
+        );
+      }
+
+      return (
+        <ChatBubble
+          message={item}
+          isOwn={item.sender_id === user?.id}
+          // THE FLAG GUARDS THE ASSEMBLY, not the element. Undefined
+          // resolves to `sent` — one tick — which is exactly what an
+          // unflipped build has always shown. Own messages only:
+          // a tick on theirs would claim to know what YOU did with
+          // THEIR message.
+          delivery={
+            READ_TICKS && item.sender_id === user?.id
+              ? deliveryFor(item, readPositions)
+              : undefined
+          }
+          senderName={counterparty?.full_name}
+          senderAvatarUrl={counterparty?.avatar_url}
+          reactions={reactionsByMessage[item.id]}
+          // Nothing to react to or reply to on an already-unsent placeholder:
+          // the bubble withholds the long-press itself (F3).
+          onLongPressMessage={setMenuTarget}
+          onPressImage={setViewerUri}
+          onPressDocument={pressDocument}
+          documentBusy={openingDocumentId === item.id}
+          replyTo={item.reply_to_id ? messagesById[item.reply_to_id] : null}
+          replyToName={
+            item.reply_to_id
+              ? messagesById[item.reply_to_id]?.sender_id === user?.id
+                ? 'You'
+                : counterparty?.full_name ?? 'Them'
+              : null
+          }
+          onLongPressAvatarUri={setAvatarUri}
+        />
+      );
+    },
+    [
+      styles,
+      user?.id,
+      requestsById,
+      chainsByRoot,
+      latestMessageIdByRequest,
+      counterparty,
+      respondingId,
+      readPositions,
+      reactionsByMessage,
+      openingDocumentId,
+      messagesById,
+      pressDocument,
+      openOfferJobFromRow,
+    ]
+  );
+
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       {/* THE HEADER LAYER. `zIndex` is load-bearing: the overflow menu
@@ -1818,110 +1957,7 @@ export function ChatScreen() {
               style={styles.list}
               data={items}
               keyExtractor={(entry) => entry.key}
-              renderItem={({ item: entry }) => {
-                // The job context changed here. Not a section header — the same
-                // job can head several of these when two conversations
-                // interleave, which is what actually happened.
-                if (entry.kind === 'divider') {
-                  return (
-                    <View style={styles.jobDivider}>
-                      <Divider thickness={1} style={styles.jobDividerRule} />
-                      <Text style={styles.jobDividerLabel} numberOfLines={1}>
-                        {entry.title}
-                      </Text>
-                      <Divider thickness={1} style={styles.jobDividerRule} />
-                    </View>
-                  );
-                }
-
-                const item = entry.message;
-                // A hire-request event renders as a negotiation card instead of
-                // an ordinary bubble — same thread, no separate screen.
-                const offerId = offerIdOf(item);
-                if (offerId) {
-                  const request = requestsById[offerId];
-                  const isOwn = item.sender_id === user?.id;
-                  return (
-                    <View
-                      style={[
-                        styles.requestRow,
-                        isOwn ? styles.requestRowOwn : styles.requestRowOther,
-                      ]}
-                    >
-                      <OfferCard
-                        variant="thread"
-                        message={item}
-                        offer={request}
-                        chain={threadOffers.filter(
-                          (o) => o.root_offer_id === request?.root_offer_id
-                        )}
-                        job={request?.job ?? null}
-                        isLatest={latestMessageIdByRequest[offerId] === item.id}
-                        currentUserId={user?.id ?? ''}
-                        counterpartyName={counterparty?.full_name}
-                        busy={respondingId === offerId}
-                        onAccept={() =>
-                          request && setConfirmResponse({ request, action: 'accept' })
-                        }
-                        onDecline={() =>
-                          request && setConfirmResponse({ request, action: 'decline' })
-                        }
-                        onCounter={() => request && setCounterTarget(request)}
-                        onWithdraw={() =>
-                          request && setConfirmResponse({ request, action: 'withdraw' })
-                        }
-                        // Live and accepted offers alike lead to the job they
-                        // are about; offerJobTarget() is the single rule for
-                        // whether there is a destination and which one.
-                        onOpenJob={
-                          request && offerJobTarget(request, user?.id)
-                            ? () => openOfferJob(request)
-                            : undefined
-                        }
-                      />
-                    </View>
-                  );
-                }
-
-                return (
-                  <ChatBubble
-                    message={item}
-                    isOwn={item.sender_id === user?.id}
-                    // THE FLAG GUARDS THE ASSEMBLY, not the element. Undefined
-                    // resolves to `sent` — one tick — which is exactly what an
-                    // unflipped build has always shown. Own messages only:
-                    // a tick on theirs would claim to know what YOU did with
-                    // THEIR message.
-                    delivery={
-                      READ_TICKS && item.sender_id === user?.id
-                        ? deliveryFor(item, readPositions)
-                        : undefined
-                    }
-                    senderName={counterparty?.full_name}
-                    senderAvatarUrl={counterparty?.avatar_url}
-                    reactions={reactionsByMessage[item.id]}
-                    // Nothing to react to or reply to on an already-unsent
-                    // placeholder.
-                    onLongPress={item.unsent_at ? undefined : () => setMenuTarget(item)}
-                    onPressImage={setViewerUri}
-                    onPressDocument={openDocument}
-                    documentBusy={openingDocumentId === item.id}
-                    replyTo={item.reply_to_id ? messagesById[item.reply_to_id] : null}
-                    replyToName={
-                      item.reply_to_id
-                        ? messagesById[item.reply_to_id]?.sender_id === user?.id
-                          ? 'You'
-                          : counterparty?.full_name ?? 'Them'
-                        : null
-                    }
-                    onLongPressAvatar={
-                      counterparty?.avatar_url
-                        ? () => setAvatarUri(counterparty.avatar_url!)
-                        : undefined
-                    }
-                  />
-                );
-              }}
+              renderItem={renderItem}
               contentContainerStyle={styles.messages}
               // A legacy jobId entry owns the initial scroll (see
               // scrollTargetIndex) — sticking to the bottom here would undo it

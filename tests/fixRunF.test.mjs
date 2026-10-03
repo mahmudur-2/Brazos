@@ -244,3 +244,19 @@ test('[static] F3: a keystroke re-renders the composer, not the chat screen; a f
   assert.match(composer, /setText\(''\);\s*const sent = await onSend\(content\);\s*if \(!sent\) setText\(\(current\) => \(current\.trim\(\) \? current : content\)\);/);
   assert.match(composer, /if \(draft\) draft\.current = latestText\.current;/);
 });
+
+test('[static] F3: the rows are memoised — one stable renderer, memo bubbles, one chain map', () => {
+  const chat = strip(read('screens/ChatScreen.tsx'));
+  assert.match(chat, /const renderItem = useCallback\(\s*\(\{ item: entry \}: ListRenderItemInfo<TimelineItem>\) => \{/);
+  assert.match(chat, /renderItem=\{renderItem\}/);
+  assert.doesNotMatch(chat, /threadOffers\.filter\(/, 'a chain is looked up, not filtered per row');
+  assert.match(chat, /chain=\{request \? chainsByRoot\[request\.root_offer_id\] \?\? NO_OFFERS : NO_OFFERS\}/);
+  // The bubble's long-press handlers are one stable function each, given the message or the URI.
+  assert.match(chat, /onLongPressMessage=\{setMenuTarget\}/);
+  assert.match(chat, /onLongPressAvatarUri=\{setAvatarUri\}/);
+  const bubble = strip(read('components/ChatBubble.tsx'));
+  assert.match(bubble, /export const ChatBubble = memo\(function ChatBubble\(/);
+  // An unsent placeholder still offers no long-press: the rule moved into the bubble, intact.
+  assert.match(bubble, /const onLongPress = onLongPressMessage && !isUnsent \? \(\) => onLongPressMessage\(message\) : undefined;/);
+  assert.match(strip(read('components/OfferCard.tsx')), /export const OfferCard = memo\(function OfferCard\(/);
+});
