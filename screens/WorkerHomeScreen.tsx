@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Image,
   Platform,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { PressScale } from '../components/PressScale';
 import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -457,21 +457,22 @@ export function WorkerHomeScreen() {
                   <Text style={styles.needsYouTitle}>Needs you</Text>
                 </View>
                 {needsYou.length > (payoutWaitCents != null ? 1 : 2) ? (
-                  <Pressable
+                  <PressScale
                     onPress={() => navigateAcrossTabs('MyJobs')}
                     hitSlop={touchSlop(textLine(styles.needsYouAll))}
                     accessibilityRole="button"
                     accessibilityLabel="See all in My Jobs"
                   >
                     <Text style={styles.needsYouAll}>See all ({needsYou.length})</Text>
-                  </Pressable>
+                  </PressScale>
                 ) : null}
               </View>
               <View style={[styles.needsCard, litCardStyle(isDark)]}>
                 {/* #63 (M-14) — money approved and waiting on the worker's own
                     payout setup: first, one tap to Payouts (it was three). */}
                 {payoutWaitCents != null ? (
-                  <Pressable
+                  <PressScale
+                    haptic={false}
                     onPress={() => navigateAcrossTabs('Profile', 'Payouts', {})}
                     style={({ pressed }) => [styles.needsRow, pressed && styles.pillPressed]}
                     accessibilityRole="button"
@@ -489,7 +490,7 @@ export function WorkerHomeScreen() {
                       </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-                  </Pressable>
+                  </PressScale>
                 ) : null}
                 {needsYou.slice(0, payoutWaitCents != null ? 1 : 2).map((entry, index) => {
                   // A counter opens the offer on its job; a hired job opens the
@@ -501,7 +502,8 @@ export function WorkerHomeScreen() {
                     ? `${client.split(/\s+/)[0] || client} sent you a counter-offer — respond`
                     : entry.item.line;
                   return (
-                    <Pressable
+                    <PressScale
+                      haptic={false}
                       key={isCounter ? `counter-${entry.bid.id}` : `move-${job.id}`}
                       onPress={() =>
                         isCounter
@@ -531,7 +533,7 @@ export function WorkerHomeScreen() {
                         </Text>
                       </View>
                       <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-                    </Pressable>
+                    </PressScale>
                   );
                 })}
               </View>
@@ -555,7 +557,7 @@ export function WorkerHomeScreen() {
             trailing={
               <>
                 <View style={styles.searchDivider} />
-                <Pressable
+                <PressScale
                   onPress={submitSearch}
                   hitSlop={10}
                   style={({ pressed }) => [styles.searchGo, pressed && styles.searchGoPressed]}
@@ -571,7 +573,7 @@ export function WorkerHomeScreen() {
                     size={16}
                     color={isDark ? colors.background : colors.onForest}
                   />
-                </Pressable>
+                </PressScale>
               </>
             }
           />
@@ -706,7 +708,7 @@ export function WorkerHomeScreen() {
             </View>
 
             <View style={styles.pillRow}>
-              <Pressable
+              <PressScale
                 onPress={() =>
                   hasSkills
                     ? navigation.navigate('WorkerResults', { mode: 'skills' })
@@ -730,8 +732,8 @@ export function WorkerHomeScreen() {
                     matchLabel
                   )}
                 </Text>
-              </Pressable>
-              <Pressable
+              </PressScale>
+              <PressScale
                 onPress={() =>
                   navigation.navigate('WorkerResults', {
                     mode: 'nearby',
@@ -756,10 +758,11 @@ export function WorkerHomeScreen() {
                     nearbyLabel
                   )}
                 </Text>
-              </Pressable>
+              </PressScale>
             </View>
             {alertsLine ? (
-              <Pressable
+              <PressScale
+                haptic={false}
                 onPress={() => navigateAcrossTabs('Profile', 'NotificationSettings')}
                 hitSlop={8}
                 style={({ pressed }) => [styles.alertsRow, pressed && styles.pillPressed]}
@@ -773,7 +776,7 @@ export function WorkerHomeScreen() {
                 />
                 <Text style={styles.alertsText} numberOfLines={1}>{alertsLine}</Text>
                 <Ionicons name="chevron-forward" size={14} color={colors.textSubtle} />
-              </Pressable>
+              </PressScale>
             ) : null}
           </View>
 
@@ -783,7 +786,7 @@ export function WorkerHomeScreen() {
             <View style={styles.feedTitleRow}>
               <Text accessibilityRole="header" style={styles.sectionTitle}>Available Jobs</Text>
             </View>
-            <Pressable
+            <PressScale
               onPress={() => navigation.navigate('WorkerResults', { mode: 'all' })}
               style={({ pressed }) => [styles.viewAll, pressed && styles.viewAllPressed]}
               accessibilityRole="button"
@@ -791,7 +794,7 @@ export function WorkerHomeScreen() {
             >
               <Text style={[styles.viewAllText, isDark && styles.viewAllTextDark]}>View all</Text>
               <Ionicons name="chevron-forward" size={18} color={accent} />
-            </Pressable>
+            </PressScale>
           </View>
 
           {loading ? (
@@ -802,9 +805,9 @@ export function WorkerHomeScreen() {
           ) : error ? (
             <View style={styles.notice}>
               <Text style={styles.noticeError}>Couldn’t load open jobs.</Text>
-              <Pressable onPress={() => void onRefresh()} hitSlop={touchSlop(textLine(styles.retry))} accessibilityRole="button">
+              <PressScale onPress={() => void onRefresh()} hitSlop={touchSlop(textLine(styles.retry))} accessibilityRole="button">
                 <Text style={[styles.retry, isDark && styles.retryDark]}>Try again</Text>
-              </Pressable>
+              </PressScale>
             </View>
           ) : previewJobs.length === 0 ? (
             <Text style={styles.empty}>

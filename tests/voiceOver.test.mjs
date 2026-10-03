@@ -39,11 +39,12 @@ test('E4: every Pressable that draws only a glyph or a picture carries an access
   const unnamed = [];
   for (const path of sources) {
     const source = read(path);
-    for (const match of source.matchAll(/<Pressable\b/g)) {
-      const end = openTagEnd(source, match.index + 10);
+    // Fix run F12: a control on the shared press (<PressScale>) is a Pressable too.
+    for (const match of source.matchAll(/<(Pressable|PressScale)\b/g)) {
+      const end = openTagEnd(source, match.index + match[0].length);
       const tag = source.slice(match.index, end + 1);
       if (tag.endsWith('/>')) continue;
-      const body = source.slice(end + 1, source.indexOf('</Pressable>', end)).trim();
+      const body = source.slice(end + 1, source.indexOf(`</${match[1]}>`, end)).trim();
       const pictorial = /<Ionicons\b|<Image\b|<RemoteImage\b|<Avatar\b/.test(body);
       const worded = /<Text\b|<Animated\.Text\b|^\{[a-zA-Z]+\}$/.test(body);
       if (pictorial && !worded && !/accessibilityLabel/.test(tag)) {

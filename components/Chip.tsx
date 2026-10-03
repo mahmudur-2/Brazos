@@ -1,5 +1,4 @@
 import {
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -11,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CategoryGlyph } from './CategoryGlyph';
 import type { ComponentProps } from 'react';
 import { ChipCheck } from './ChipCheck';
+import { PressScale } from './PressScale';
 import {
   glow,
   radius,
@@ -231,8 +231,9 @@ export function Chip({
   // that does nothing when activated.
   if (!onPress) return <View style={shape} onLayout={onLayout}>{content}</View>;
 
+  // FIX-RUN F12: the shared press spring under the finger, the dim kept.
   return (
-    <Pressable
+    <PressScale
       onPress={onPress}
       onLayout={onLayout}
       style={({ pressed }) => [...shape, pressed && styles.pressed]}
@@ -242,7 +243,7 @@ export function Chip({
       accessibilityState={{ selected }}
     >
       {content}
-    </Pressable>
+    </PressScale>
   );
 }
 

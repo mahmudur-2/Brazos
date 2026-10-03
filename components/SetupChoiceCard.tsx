@@ -1,6 +1,7 @@
 import type { ComponentProps } from 'react';
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, Text, View } from 'react-native';
+import { PressScale } from './PressScale';
 import { Ionicons } from '@expo/vector-icons';
 import { authRadius, authShadows, authSpacing, authType } from '../lib/authTheme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
@@ -71,7 +72,7 @@ export function SetupChoiceCard({
   }, [fade, reducedMotion, selected]);
 
   return (
-    <Pressable
+    <PressScale
       onPress={onSelect}
       style={styles.pressable}
       accessibilityRole="radio"
@@ -103,7 +104,7 @@ export function SetupChoiceCard({
           {subtitle}
         </Text>
       </View>
-    </Pressable>
+    </PressScale>
   );
 }
 

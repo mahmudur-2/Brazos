@@ -1,5 +1,6 @@
 import { type Ref } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { PressScale } from './PressScale';
 import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from './AvatarPressable';
 import { toneColor } from './HomeLiveBar';
@@ -104,7 +105,8 @@ export function ConversationRow({
   const stageColor = job?.stage ? toneColor(colors, job.stage.tone) : null;
 
   return (
-    <Pressable
+    <PressScale
+      haptic={false}
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={350}
@@ -186,7 +188,7 @@ export function ConversationRow({
           </Text>
         </View>
       ) : null}
-    </Pressable>
+    </PressScale>
   );
 }
 

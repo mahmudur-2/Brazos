@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -10,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { fonts, metricStyles, radius, shadows, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
+import { PressScale } from './PressScale';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -193,8 +193,10 @@ export function Button({
           : null),
       };
 
+  // FIX-RUN F12: the shared press — it sinks on a spring (the 120 Hz path where the binary has
+  // worklets) and the pressed opacity dial still dims it.
   return (
-    <Pressable
+    <PressScale
       onPress={onPress}
       disabled={isDisabled}
       style={(state) => [
@@ -265,7 +267,7 @@ export function Button({
           {title}
         </Text>
       )}
-    </Pressable>
+    </PressScale>
   );
 }
 

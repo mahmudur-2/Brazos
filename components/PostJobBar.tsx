@@ -1,6 +1,7 @@
 import { useRef, type ComponentProps, type Ref } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { PressScale } from './PressScale';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { spacing, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
@@ -75,9 +76,9 @@ export function PostJobBar({
   return (
     <View style={[styles.bar, { paddingBottom: footerPad }]}>
       {secondary ? (
-        <Pressable
+        <PressScale
           onPress={secondary.onPress}
-          style={({ pressed }) => [styles.button, styles.secondary, hideSecondary && styles.hidden, pressed && styles.pressed]}
+          style={[styles.button, styles.secondary, hideSecondary && styles.hidden]}
           accessibilityRole="button"
           accessibilityLabel={secondary.accessibilityLabel ?? secondary.label}
           disabled={hideSecondary}
@@ -86,20 +87,19 @@ export function PostJobBar({
           <Text style={styles.secondaryText} numberOfLines={1}>
             {secondary.label}
           </Text>
-        </Pressable>
+        </PressScale>
       ) : null}
       <View ref={primaryRef} collapsable={false} style={styles.primarySlot}>
-        <Pressable
+        <PressScale
           onPress={primary.onPress}
           onPressIn={() => press(1)}
           onPressOut={() => press(0)}
           disabled={primaryDisabled || hidePrimary}
-          style={({ pressed }) => [
+          style={[
             styles.button,
             styles.primary,
             primaryDisabled ? styles.primaryWaiting : styles.primaryLive,
             hidePrimary && styles.hidden,
-            pressed && styles.pressed,
           ]}
           accessibilityRole="button"
           accessibilityLabel={primary.accessibilityLabel ?? primary.label}
@@ -121,7 +121,7 @@ export function PostJobBar({
             {primary.label}
           </Text>
           {primaryTrailingIcon ? <Ionicons name={primaryTrailingIcon} size={18} color={ink} /> : null}
-        </Pressable>
+        </PressScale>
       </View>
     </View>
   );
@@ -184,9 +184,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     hidden: {
       opacity: 0,
-    },
-    pressed: {
-      transform: [{ scale: 0.98 }],
     },
   })
 );

@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { ConversationRow } from '../components/ConversationRow';
+import { PressScale } from '../components/PressScale';
 import { GlassDropdown, type GlassDropdownItem, type GlassDropdownRequest } from '../components/GlassDropdown';
 import { personSafetyItems } from '../lib/chatMenus';
 import { UndoToast } from '../components/UndoToast';
@@ -1038,9 +1039,11 @@ export function MessagesInboxScreen() {
       >
         {INBOX_FILTERS.map((pill) => {
           const active = filter === pill.key;
+          // FIX-RUN F12: the shared press spring; no haptic, since a swipe along the row starts on a pill.
           return (
-            <Pressable
+            <PressScale
               key={pill.key}
+              haptic={false}
               onPress={() => setFilter(pill.key)}
               hitSlop={touchSlop(filterPillHeight)}
               style={({ pressed }) => [
@@ -1056,7 +1059,7 @@ export function MessagesInboxScreen() {
               <Text style={[styles.pillLabel, { color: pillInk }, active && styles.pillLabelActive]}>
                 {pill.label}
               </Text>
-            </Pressable>
+            </PressScale>
           );
         })}
       </ScrollView>

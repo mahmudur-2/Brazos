@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { PressScale } from './PressScale';
 import { Ionicons } from '@expo/vector-icons';
 import { GlowTextInput } from '../components/GlowTextInput';
 import { SKILL_CATEGORIES } from '../lib/skillCategories';
@@ -53,7 +54,7 @@ export function CategoryAccordion({
 
   return (
     <View>
-      <Pressable
+      <PressScale
         style={styles.summaryRow}
         onPress={() => setExpanded((e) => !e)}
         hitSlop={touchSlop(2 * (spacing.sm + 2) + textLine(styles.summaryText))}
@@ -69,14 +70,15 @@ export function CategoryAccordion({
           size={18}
           color={colors.textMuted}
         />
-      </Pressable>
+      </PressScale>
 
       {expanded && (
         <View style={styles.list}>
           {SKILL_CATEGORIES.map((c) => {
             const isSelected = selected.includes(c.key);
             return (
-              <Pressable
+              <PressScale
+                haptic={false}
                 key={c.key}
                 style={styles.row}
                 onPress={() => onToggle(c.key)}
@@ -90,7 +92,7 @@ export function CategoryAccordion({
                   size={20}
                   color={isSelected ? colors.primary : colors.textSubtle}
                 />
-              </Pressable>
+              </PressScale>
             );
           })}
 

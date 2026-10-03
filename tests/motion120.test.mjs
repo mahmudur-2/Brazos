@@ -1092,6 +1092,15 @@ const SIBLINGS = [
     // 2026-10-03 (fix run F9) — the keyboard-avoiding view every input screen wraps itself in: the
     // padding computed on the UI thread from the keyboard's own frames; the fallback is React
     // Native's KeyboardAvoidingView. Keyboard AND worklets, the KeyboardRisingColumn AND.
+    // 2026-10-03 (fix run F12) — the press as a component: the shared spring down to 0.97 and back
+    // on the UI thread; the fallback is hooks/usePressFeedback on the native driver. Worklets alone.
+    name: 'PressScale',
+    fallback: 'components/PressScale.tsx',
+    fast: 'components/PressScale.motion120.tsx',
+    shared: 'components/PressScale.shared.tsx',
+    needs: 'reanimated',
+  },
+  {
     name: 'KeyboardAvoid',
     fallback: 'components/KeyboardAvoid.tsx',
     fast: 'components/KeyboardAvoid.motion120.tsx',
@@ -2247,6 +2256,9 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       'components/ModeTransitionOverlay.motion120.tsx',
       'components/PeekSheet.motion120.tsx',
       'components/PopModal.motion120.tsx',
+      // 2026-10-03 (fix run F12) — the press: one shared value sprung by withSpring, one
+      // useAnimatedStyle for its scale.
+      'components/PressScale.motion120.tsx',
       // 2026-09-21 — the Welcome hero button's rim light, the operator's pick
       // (f) from six rendered motions; one shared value, the lap's progress,
       // and `rimPoint` — a 'worklet' in RimLight.shared.tsx — computing the

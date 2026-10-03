@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { ChipCheck } from './ChipCheck';
+import { PressScale } from './PressScale';
 import {
   PickerPopover,
   POPOVER_ROW_HEIGHT,
@@ -631,8 +632,9 @@ function Pill({
   // added where it has none, its slot gliding open (components/ChipCheck.tsx,
   // the motion boundary).
   const checked = on && check;
+  // FIX-RUN F12: the shared press spring under the finger, the dim kept.
   return (
-    <Pressable
+    <PressScale
       onPress={onPress}
       hitSlop={touchSlop(PILL_HEIGHT)}
       style={({ pressed }) => [
@@ -660,7 +662,7 @@ function Pill({
         {label}
       </Text>
       {trailing}
-    </Pressable>
+    </PressScale>
   );
 }
 

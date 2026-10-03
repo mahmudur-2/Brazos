@@ -16,6 +16,7 @@ import {
   View,
   type LayoutChangeEvent,
 } from 'react-native';
+import { PressScale } from './PressScale';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Card } from './Card';
@@ -94,7 +95,8 @@ function SummaryCell({
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   return (
-    <Pressable
+    <PressScale
+      haptic={false}
       onPress={onPress}
       style={({ pressed }) => [styles.cell, wide ? styles.cellWide : styles.cellHalf, pressed && styles.pressed]}
       accessibilityRole="button"
@@ -105,7 +107,7 @@ function SummaryCell({
         <Text style={styles.label}>{label.toUpperCase()}</Text>
       </View>
       {children}
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -404,7 +406,8 @@ export function JobSummaryCard({
     const doneIndex = tile.status === 'done' ? viewerItems.findIndex((v) => v.url === tile.url) : -1;
     return (
       <View key={tile.url ?? `pending-${tile.pendingId}`} style={{ width: tileWidth, height: tileHeight }}>
-        <Pressable
+        <PressScale
+          haptic={false}
           onPress={() => {
             if (failed && tile.pendingId != null) retry(tile.pendingId);
             else if (tile.status === 'done') setViewerIndex(more ? 3 : doneIndex);
@@ -447,7 +450,7 @@ export function JobSummaryCard({
               <Text style={styles.moreText}>+{more}</Text>
             </View>
           ) : null}
-        </Pressable>
+        </PressScale>
         {editing ? (
           <Pressable
             onPress={() => remove(tile)}
@@ -470,7 +473,8 @@ export function JobSummaryCard({
         <Text style={styles.hint}>Tap any detail to edit</Text>
       </View>
 
-      <Pressable
+      <PressScale
+        haptic={false}
         onPress={() => onEdit('describe')}
         style={({ pressed }) => [styles.intro, pressed && styles.pressed]}
         accessibilityRole="button"
@@ -480,7 +484,7 @@ export function JobSummaryCard({
         <Text style={styles.description} numberOfLines={5}>
           {description}
         </Text>
-      </Pressable>
+      </PressScale>
 
       <View style={styles.media}>
         <View style={styles.mediaHead}>
@@ -499,7 +503,7 @@ export function JobSummaryCard({
             </Text>
           </View>
           {tiles.length > 0 ? (
-            <Pressable
+            <PressScale
               onPress={() => {
                 setMenu(null);
                 setEditing((on) => !on);
@@ -509,13 +513,13 @@ export function JobSummaryCard({
               accessibilityLabel={editing ? 'Done editing media' : 'Edit media'}
             >
               <Text style={[styles.link, editing && styles.linkStrong]}>{editing ? 'Done' : 'Edit'}</Text>
-            </Pressable>
+            </PressScale>
           ) : null}
         </View>
 
         {tiles.length === 0 ? (
           <View ref={addRef} collapsable={false}>
-            <Pressable
+            <PressScale
               onPress={openMenu}
               style={({ pressed }) => [styles.addWide, menu && styles.addOpen, pressed && styles.pressed]}
               accessibilityRole="button"
@@ -523,21 +527,21 @@ export function JobSummaryCard({
             >
               <Ionicons name="add" size={18} color={colors.emerald} />
               <Text style={styles.addWideText}>Add photos or videos</Text>
-            </Pressable>
+            </PressScale>
           </View>
         ) : (
           <View style={styles.grid} onLayout={onGridLayout}>
             {gridWidth > 0 ? shownTiles.map(renderTile) : null}
             {editing && canAdd && gridWidth > 0 ? (
               <View ref={addRef} collapsable={false} style={{ width: tileWidth, height: tileWidth }}>
-                <Pressable
+                <PressScale
                   onPress={openMenu}
                   style={({ pressed }) => [styles.tile, styles.addTile, menu && styles.addOpen, pressed && styles.pressed]}
                   accessibilityRole="button"
                   accessibilityLabel="Add a photo or video"
                 >
                   <Ionicons name="add" size={26} color={colors.emerald} />
-                </Pressable>
+                </PressScale>
               </View>
             ) : null}
           </View>

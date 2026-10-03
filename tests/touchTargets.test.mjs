@@ -12,11 +12,13 @@ import test from 'node:test';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
-/** The <Pressable …> opening tag that contains `marker`, braces balanced. */
+/** The <Pressable …> opening tag that contains `marker`, braces balanced. A control on the
+ *  shared press (components/PressScale, fix run F12) opens as <PressScale and passes every
+ *  Pressable prop through, so its tag is the one read. */
 const pressableTagWith = (source, marker, path) => {
   const at = source.indexOf(marker);
   assert.ok(at >= 0, `${path}: marker ${marker} not found`);
-  const start = source.lastIndexOf('<Pressable', at);
+  const start = Math.max(source.lastIndexOf('<Pressable', at), source.lastIndexOf('<PressScale', at));
   assert.ok(start >= 0, `${path}: no <Pressable before ${marker}`);
   let depth = 0;
   for (let i = start; i < source.length; i += 1) {

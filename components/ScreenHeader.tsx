@@ -2,6 +2,7 @@ import { useContext, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { NavigationContext } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { PressScale } from './PressScale';
 import {
   discs,
   fonts,
@@ -197,14 +198,10 @@ export function ScreenHeader({
   // hit slop, and (n5, 2026-09-04) a role with a name either way, so
   // VoiceOver says "Back" for the bare disc too.
   const backControl = onBack ? (
-    <Pressable
+    <PressScale
       onPress={onBack}
       hitSlop={10}
-      style={({ pressed }) => [
-        styles.link,
-        backOffsetDial != null && { marginLeft: backOffsetDial },
-        pressed && styles.pressed,
-      ]}
+      style={[styles.link, backOffsetDial != null && { marginLeft: backOffsetDial }]}
       accessibilityRole="button"
       accessibilityLabel={backLabel ? `Back to ${backLabel}` : 'Back'}
     >
@@ -221,18 +218,18 @@ export function ScreenHeader({
           {backLabel}
         </Text>
       ) : null}
-    </Pressable>
+    </PressScale>
   ) : null;
 
   // Disabled is a MUTED link, never a hidden one: the step you cannot reach
   // yet has to stay visible or the header loses a control between renders.
   const rightControl =
     rightLabel && onPressRight ? (
-      <Pressable
+      <PressScale
         onPress={onPressRight}
         disabled={rightDisabled}
         hitSlop={10}
-        style={({ pressed }) => [styles.link, pressed && styles.pressed]}
+        style={styles.link}
         accessibilityRole="button"
         accessibilityLabel={`Continue to ${rightLabel}`}
         accessibilityState={{ disabled: rightDisabled }}
@@ -248,7 +245,7 @@ export function ScreenHeader({
             style={styles.chevronForward}
           />
         </View>
-      </Pressable>
+      </PressScale>
     ) : right ? (
       right
     ) : null;
@@ -371,9 +368,8 @@ const stylesFor = metricStyles(() => StyleSheet.create({
     gap: spacing.sm,
     minHeight: 44,
   },
-  // A press settles the control a touch — a scale, never a fade (a muted
-  // control is a colour, so a dim would read as disabled).
-  pressed: { transform: [{ scale: 0.96 }] },
+  // A press settles the control a touch — a scale, never a fade (a muted control is a colour, so
+  // a dim would read as disabled): FIX-RUN F12 made it the shared press spring (PressScale).
   // 2026-09-28 (#30): the side labels speak at the title's own 17/700.
   linkLabel: {
     fontSize: 17,

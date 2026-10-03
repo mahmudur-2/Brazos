@@ -1,6 +1,5 @@
 import {
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +9,7 @@ import { KeyboardAvoid } from '../../components/KeyboardAvoid';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { PressScale } from '../../components/PressScale';
 import { StepHeader, usePillReserve, usePinnedFooterPadding, useScrollClearance } from '../primitives';
 import {
   controls,
@@ -164,7 +164,7 @@ export function FormScreen({
               {footerNote ? <View style={styles.footerNote}>{footerNote}</View> : null}
               <View style={styles.footerRow}>
                 {secondaryLabel && onSecondary ? (
-                  <Pressable
+                  <PressScale
                     onPress={onSecondary}
                     style={({ pressed }) => [
                       styles.button,
@@ -177,9 +177,9 @@ export function FormScreen({
                     <Text style={[styles.buttonLabel, styles.secondaryLabel]}>
                       {secondaryLabel}
                     </Text>
-                  </Pressable>
+                  </PressScale>
                 ) : null}
-                <Pressable
+                <PressScale
                   onPress={onSubmit}
                   disabled={submitDisabled || submitLoading}
                   style={({ pressed }) => [
@@ -205,7 +205,7 @@ export function FormScreen({
                   <Text style={[styles.buttonLabel, styles.primaryLabel, destructiveUnarmed && styles.destructiveUnarmedLabel]}>
                     {submitLoading ? 'Working…' : submitLabel}
                   </Text>
-                </Pressable>
+                </PressScale>
               </View>
             </View>
           ) : null}

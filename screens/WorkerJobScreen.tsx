@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { PressScale } from '../components/PressScale';
 import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -790,7 +791,7 @@ export function WorkerJobScreen() {
                 <View style={styles.thereHead}>
                   <Text style={[styles.stageEyebrow, isDark && styles.stageEyebrowDark]}>GETTING THERE</Text>
                   {/* The client, one compact tap away beside the facts. */}
-                  <Pressable
+                  <PressScale
                     onPress={() => navigation.navigate('Chat', { jobId: job.id })}
                     hitSlop={8}
                     style={({ pressed }) => [styles.messagePill, pressed && styles.pressed]}
@@ -799,10 +800,11 @@ export function WorkerJobScreen() {
                   >
                     <Ionicons name="chatbubble-outline" size={15} color={colors.emerald} />
                     <Text style={styles.messagePillText}>Message</Text>
-                  </Pressable>
+                  </PressScale>
                 </View>
                 {addressLine || job.location ? (
-                  <Pressable
+                  <PressScale
+                    haptic={false}
                     onPress={addressLine ? () => void openDirections(addressLine) : undefined}
                     disabled={!addressLine}
                     style={({ pressed }) => [styles.thereRow, pressed && styles.pressed]}
@@ -826,7 +828,7 @@ export function WorkerJobScreen() {
                         <Text style={styles.directionsText}>Directions</Text>
                       </View>
                     ) : null}
-                  </Pressable>
+                  </PressScale>
                 ) : null}
                 {windowLabel ? (
                   <View style={styles.thereRow}>
@@ -913,7 +915,8 @@ export function WorkerJobScreen() {
 
               {/* M-3 — the checklist is one fixed row that never moves,
                   whatever the stage. */}
-              <Pressable
+              <PressScale
+                haptic={false}
                 onPress={() => navigation.navigate('WorkChecklist', { jobId: job.id })}
                 style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
                 accessibilityRole="button"
@@ -922,7 +925,7 @@ export function WorkerJobScreen() {
                 <Ionicons name="list-outline" size={20} color={colors.emerald} />
                 <Text style={styles.linkRowText}>Work checklist</Text>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </Pressable>
+              </PressScale>
 
               {/* A10 (2026-10-03): the nudge at the hire — before any payment row exists — so
                   the payout account is ready by the time the money is, instead of the customer
@@ -1004,7 +1007,7 @@ export function WorkerJobScreen() {
                   )}
 
                   {canAddMedia && (
-                    <Pressable
+                    <PressScale
                       style={styles.photoPicker}
                       onPress={pickCompletionMedia}
                       disabled={uploadingMedia}
@@ -1019,7 +1022,7 @@ export function WorkerJobScreen() {
                       <Text style={styles.photoPickerText}>
                         {uploadingMedia ? 'Uploading…' : 'Add photos or video'}
                       </Text>
-                    </Pressable>
+                    </PressScale>
                   )}
 
                   {(donePhotos.length > 0 || doneVideo) && (
@@ -1138,7 +1141,7 @@ export function WorkerJobScreen() {
               disabled={stageAction.disabled}
             />
             {canSkipToStart ? (
-              <Pressable
+              <PressScale
                 onPress={handleStart}
                 disabled={working || marking !== null}
                 hitSlop={8}
@@ -1147,7 +1150,7 @@ export function WorkerJobScreen() {
                 accessibilityLabel="Start job now"
               >
                 <Text style={styles.skipLinkText}>Already there? Start the job</Text>
-              </Pressable>
+              </PressScale>
             ) : null}
           </View>
         ) : null}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { PressScale } from './PressScale';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from './Avatar';
 import { firstNameOf } from '../lib/liveJobStatus';
@@ -58,7 +59,8 @@ export function HireAgainRow({
 
   return (
     <>
-      <Pressable
+      <PressScale
+        haptic={false}
         onPress={() => (items.length === 1 ? onHire(items[0]) : setOpen(true))}
         style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
         accessibilityRole="button"
@@ -81,7 +83,7 @@ export function HireAgainRow({
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-      </Pressable>
+      </PressScale>
 
       <Sheet visible={open} onClose={() => setOpen(false)} title="Hire again">
         <Text style={styles.sheetLead}>Pick someone to send a new job to.</Text>
@@ -89,7 +91,8 @@ export function HireAgainRow({
           {items.map((item, index) => {
             const name = item.name?.trim() || 'Worker';
             return (
-              <Pressable
+              <PressScale
+                haptic={false}
                 key={item.id}
                 onPress={() => pick(item)}
                 style={({ pressed }) => [styles.person, index > 0 && styles.personDivided, pressed && styles.rowPressed]}
@@ -106,7 +109,7 @@ export function HireAgainRow({
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={17} color={colors.textSubtle} />
-              </Pressable>
+              </PressScale>
             );
           })}
         </View>

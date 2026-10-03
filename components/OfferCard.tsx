@@ -1,5 +1,6 @@
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { PressScale } from './PressScale';
 import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from './AvatarPressable';
@@ -181,7 +182,8 @@ function OfferListCard({
   return (
     <Card palette={palette} style={styles.card}>
       <View style={styles.headerRow}>
-        <Pressable
+        <PressScale
+          haptic={false}
           style={({ pressed }) => [styles.profileHit, pressed && styles.profilePressed]}
           onPress={onViewProfile}
           disabled={!onViewProfile}
@@ -222,7 +224,7 @@ function OfferListCard({
               )}
             </View>
           </View>
-        </Pressable>
+        </PressScale>
 
         <View style={styles.priceBlock}>
           {/* This card only ever renders on the job owner's own screen, so the
@@ -291,7 +293,8 @@ function OfferListCard({
       )}
 
       {onOpenDetail && !isAccepted ? (
-        <Pressable
+        <PressScale
+          haptic={false}
           onPress={onOpenDetail}
           disabled={disabled}
           style={({ pressed }) => [styles.detailLink, pressed && styles.profilePressed]}
@@ -300,7 +303,7 @@ function OfferListCard({
         >
           <Text style={styles.detailLinkText}>Full bid · counter or decline</Text>
           <Ionicons name="chevron-forward" size={14} color={colors.emerald} />
-        </Pressable>
+        </PressScale>
       ) : null}
     </Card>
   );
@@ -397,7 +400,8 @@ function OfferThreadCard({
         !isLatest && styles.threadCardHistoric,
       ]}
     >
-      <Pressable
+      <PressScale
+        haptic={false}
         onPress={openable ? onOpenJob : undefined}
         disabled={!openable}
         accessibilityRole={openable ? 'button' : undefined}
@@ -483,7 +487,7 @@ function OfferThreadCard({
         {settledNote && <Text style={styles.settledNote}>{settledNote}</Text>}
         {waitingNote && <Text style={styles.waitingNote}>{waitingNote}</Text>}
         {openable && <Text style={styles.openHint}>Tap to view the job</Text>}
-      </Pressable>
+      </PressScale>
 
       {canWithdraw && (
         <Button

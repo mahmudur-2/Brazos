@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { PressScale } from './PressScale';
 import { Ionicons } from '@expo/vector-icons';
 import { CategoryGlyph } from './CategoryGlyph';
 import { DROPDOWN_SETTLE } from './DropdownReveal.shared';
@@ -137,7 +138,8 @@ export function CategoryTileRow({
         const chosen = category === selected;
         return (
           <View key={category}>
-            <Pressable
+            <PressScale
+              haptic={false}
               onPress={() => onSelect(category)}
               style={({ pressed }) => pressed && styles.tilePressed}
               accessibilityRole="button"
@@ -160,7 +162,7 @@ export function CategoryTileRow({
                   </Text>
                 </View>
               </View>
-            </Pressable>
+            </PressScale>
             {chosen ? (
               <TileArrow
                 open={questionsOpen}

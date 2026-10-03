@@ -163,3 +163,54 @@ test('[executed] F9: keyboardPadding is React Native\'s padding arithmetic', asy
   assert.equal(keyboardPadding(400, 852, 336, 0), 0);
   assert.equal(keyboardPadding(852, 852, 0, 40), 0);
 });
+
+test('[static] F12: the most-pressed controls sink on the one press spring, the 120 Hz path where it can', () => {
+  const fallback = strip(read('components/PressScale.tsx'));
+  const fast = strip(read('components/PressScale.motion120.tsx'));
+  const shared = strip(read('components/PressScale.shared.tsx'));
+  // One spring, both paths: the hook's own numbers.
+  assert.match(fallback, /usePressFeedback\(\{ haptic \}\)/);
+  assert.match(fast, /withSpring\(PRESS_SCALE, PRESS_SPRING\)/);
+  assert.match(fast, /withSpring\(1, PRESS_SPRING\)/);
+  assert.match(strip(read('hooks/usePressFeedback.ts')), /export const PRESS_SPRING = \{/);
+  // Reduce Motion (or not yet known): no transform at all, the harness's byte-stable contract.
+  assert.match(fast, /const animated = useReducedMotion\(\) === false;/);
+  assert.match(fast, /animated \? motion : undefined/);
+  // The wrapper takes the caller's place and its layout callback; the Pressable keeps what draws it.
+  for (const source of [fallback, fast]) {
+    assert.match(source, /pressStyles\(style\)/);
+    assert.match(source, /onLayout=\{onLayout\}>/);
+  }
+  assert.match(shared, /const FILL: ViewStyle = \{ flexGrow: 1 \};/);
+  // A sized or flexed wrapper wears the Pressable's border and padding, and the Pressable steps
+  // back over them, so the share each sibling gets is the share it always got.
+  assert.match(shared, /if \(SIZING_KEYS\.some\(\(key\) => key in outer\)\) mirrorBox\(flat, outer, inner\);/);
+  assert.match(shared, /inner\[`margin\$\{side\}`\] = -\(border \+ pad\);/);
+  assert.match(shared, /if \(any\) outer\.borderColor = 'transparent';/);
+  // The haptic is the hook's option: rows inside a scroller pass false.
+  assert.match(strip(read('hooks/usePressFeedback.ts')), /if \(haptic\) tap\(\);/);
+
+  const WEARERS = {
+    'components/Button.tsx': /<PressScale\s+onPress=\{onPress\}/,
+    'components/Chip.tsx': /<PressScale\s+onPress=\{onPress\}\s+onLayout=\{onLayout\}/,
+    'components/ScreenHeader.tsx': /const backControl = onBack \? \(\s*<PressScale/,
+    'components/PostJobBar.tsx': /<PressScale\s+onPress=\{primary\.onPress\}/,
+    'ui/templates/FormScreen.tsx': /<PressScale\s+onPress=\{onSubmit\}/,
+    'components/JobFilterSheet.tsx': /<PressScale\s+onPress=\{onPress\}\s+hitSlop=\{touchSlop\(PILL_HEIGHT\)\}/,
+    'screens/MessagesInboxScreen.tsx': /<PressScale\s+key=\{pill\.key\}\s+haptic=\{false\}/,
+    'components/ConversationRow.tsx': /<PressScale\s+haptic=\{false\}\s+onPress=\{onPress\}/,
+    'components/HireAgainRow.tsx': /<PressScale\s+haptic=\{false\}/,
+    'components/CategoryTileRow.tsx': /<PressScale\s+haptic=\{false\}/,
+    'components/CategoryAccordion.tsx': /<PressScale\s+style=\{styles\.summaryRow\}/,
+    'components/SetupChoiceCard.tsx': /<PressScale\s+onPress=\{onSelect\}/,
+    'components/OfferCard.tsx': /<PressScale\s+haptic=\{false\}/,
+    'screens/ProfileScreen.tsx': /<PressScale\s+haptic=\{false\}/,
+    'screens/WorkerJobScreen.tsx': /<PressScale\s+haptic=\{false\}/,
+    'screens/WorkerHomeScreen.tsx': /<PressScale\s+haptic=\{false\}/,
+    'components/JobSummaryCard.tsx': /<PressScale\s+haptic=\{false\}/,
+  };
+  for (const [path, wear] of Object.entries(WEARERS)) assert.match(strip(read(path)), wear, `${path} wears the shared press`);
+  // The static snaps the spring replaced are gone.
+  assert.doesNotMatch(strip(read('components/ScreenHeader.tsx')), /pressed: \{ transform: \[\{ scale: 0\.96 \}\] \}/);
+  assert.doesNotMatch(strip(read('components/PostJobBar.tsx')), /transform: \[\{ scale: 0\.98 \}\]/);
+});

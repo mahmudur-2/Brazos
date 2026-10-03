@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { PressScale } from '../components/PressScale';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   useFocusEffect,
@@ -743,7 +744,8 @@ export function ProfileScreen() {
     const people = row.trail === 'people' ? peopleLine(rehirePeople) : null;
     const showUnread = row.trail === 'unread' && unread > 0;
     return (
-      <Pressable
+      <PressScale
+        haptic={false}
         key={row.label}
         style={({ pressed }) => [
           styles.row,
@@ -782,7 +784,7 @@ export function ProfileScreen() {
           </View>
         ) : null}
         <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-      </Pressable>
+      </PressScale>
     );
   };
 
@@ -856,7 +858,7 @@ export function ProfileScreen() {
               opens the edit surface in place. */}
           {!isEditing ? (
             <View style={styles.topGroup}>
-              <Pressable
+              <PressScale
                 onPress={() => navigation.navigate('ProfileDetails')}
                 style={({ pressed }) => [
                   styles.identityCard,
@@ -906,7 +908,7 @@ export function ProfileScreen() {
                     <Ionicons name="chevron-forward" size={12} color={colors.emerald} />
                   </View>
                 </View>
-                <Pressable
+                <PressScale
                   onPress={editFromHub}
                   hitSlop={6}
                   accessibilityRole="button"
@@ -915,8 +917,8 @@ export function ProfileScreen() {
                 >
                   <Ionicons name="pencil" size={14} color={colors.emerald} />
                   <Text style={styles.editPillText}>Edit</Text>
-                </Pressable>
-              </Pressable>
+                </PressScale>
+              </PressScale>
 
               {/* M-8 — THE MODE, AND THE WAY TO CHANGE IT, the same in both
                   modes; switching confirms first, as the [+] sheet's row does. */}
@@ -936,7 +938,8 @@ export function ProfileScreen() {
                     </Text>
                   </View>
                   {completeness.steps.map((step) => (
-                    <Pressable
+                    <PressScale
+                      haptic={false}
                       key={step.key}
                       style={styles.meterRow}
                       disabled={step.done}
@@ -956,7 +959,7 @@ export function ProfileScreen() {
                       {!step.done ? (
                         <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
                       ) : null}
-                    </Pressable>
+                    </PressScale>
                   ))}
                 </Card>
               ) : null}
@@ -1012,7 +1015,7 @@ export function ProfileScreen() {
                 EITHER role's revealed total: a customer-only account has
                 reviews worth reading even with no worker rating to show. */}
             {reviewTotal > 0 && user && (
-              <Pressable
+              <PressScale
                 onPress={() =>
                   navigation.navigate('ProfileReviews', {
                     userId: user.id,
@@ -1029,7 +1032,7 @@ export function ProfileScreen() {
                   See {reviewTotal === 1 ? 'your review' : 'all your reviews'}
                 </Text>
                 <Ionicons name="chevron-forward" size={13} color={colors.primary} />
-              </Pressable>
+              </PressScale>
             )}
           </View>
           ) : null}
@@ -1161,7 +1164,8 @@ export function ProfileScreen() {
                       studio exist (internal builds), and never drawn anywhere
                       else. */}
                   {designStudioAvailable ? (
-                    <Pressable
+                    <PressScale
+                      haptic={false}
                       style={({ pressed }) => [styles.row, { minHeight: settingsRowHeight }, styles.rowDivider, pressed && styles.rowPressed]}
                       onPress={() => navigation.navigate('Appearance')}
                       accessibilityRole="button"
@@ -1173,11 +1177,12 @@ export function ProfileScreen() {
                         <Text style={styles.rowSub} numberOfLines={1}>Internal builds only.</Text>
                       </View>
                       <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-                    </Pressable>
+                    </PressScale>
                   ) : null}
 
                   {/* Legal opens in place to its two documents. */}
-                  <Pressable
+                  <PressScale
+                    haptic={false}
                     style={({ pressed }) => [styles.row, { minHeight: settingsRowHeight }, styles.rowDivider, pressed && styles.rowPressed]}
                     onPress={() => setLegalOpen((open) => !open)}
                     accessibilityRole="button"
@@ -1194,10 +1199,11 @@ export function ProfileScreen() {
                     <DropdownChevron open={legalOpen}>
                       <Ionicons name="chevron-down" size={18} color={colors.textSubtle} />
                     </DropdownChevron>
-                  </Pressable>
+                  </PressScale>
                   <DropdownBody open={legalOpen}>
                       {LEGAL_ROWS.map((doc) => (
-                        <Pressable
+                        <PressScale
+                          haptic={false}
                           key={doc.document}
                           style={({ pressed }) => [styles.subRow, styles.rowDivider, pressed && styles.rowPressed]}
                           onPress={() => navigation.navigate('LegalDocument', { document: doc.document })}
@@ -1207,14 +1213,15 @@ export function ProfileScreen() {
                         >
                           <Text style={styles.subRowTitle} numberOfLines={1}>{doc.label}</Text>
                           <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
-                        </Pressable>
+                        </PressScale>
                       ))}
                   </DropdownBody>
 
                   {rowsOf(HUB_ACCOUNT.slice(1)).map((row) => renderRow(row, true))}
 
                   {/* The other mode's rows, behind one row that opens in place. */}
-                  <Pressable
+                  <PressScale
+                    haptic={false}
                     style={({ pressed }) => [styles.row, { minHeight: settingsRowHeight }, styles.rowDivider, pressed && styles.rowPressed]}
                     onPress={() => setToolsOpen((open) => !open)}
                     accessibilityRole="button"
@@ -1231,7 +1238,7 @@ export function ProfileScreen() {
                     <DropdownChevron open={toolsOpen}>
                       <Ionicons name="chevron-down" size={18} color={colors.textSubtle} />
                     </DropdownChevron>
-                  </Pressable>
+                  </PressScale>
                   <DropdownBody open={toolsOpen}>
                       {toolsRows.map((row) => renderRow(row, true))}
                   </DropdownBody>
@@ -1240,7 +1247,7 @@ export function ProfileScreen() {
 
               {/* SIGN OUT — the only place it lives, quiet, and it confirms
                   first (Account & safety's "Log out", moved). */}
-              <Pressable
+              <PressScale
                 onPress={() => void handleSignOut()}
                 disabled={signingOut}
                 style={({ pressed }) => [styles.signOut, isDark && styles.signOutDark, pressed && styles.rowPressed]}
@@ -1253,7 +1260,7 @@ export function ProfileScreen() {
                 ) : (
                   <Text style={styles.signOutLabel}>Sign out</Text>
                 )}
-              </Pressable>
+              </PressScale>
             </>
           ) : null}
         </ScrollView>

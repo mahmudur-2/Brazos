@@ -51,7 +51,7 @@ export const PRESS_SCALE = 0.97;
  * Stiff and well damped: about 120ms to settle with no visible overshoot. A
  * bouncy press reads as a toy; this reads as the surface taking the weight.
  */
-const PRESS_SPRING = {
+export const PRESS_SPRING = {
   stiffness: 320,
   damping: 26,
   mass: 0.6,
@@ -64,7 +64,15 @@ export type PressFeedback = {
   onPressOut: () => void;
 };
 
-export function usePressFeedback(): PressFeedback {
+export type PressFeedbackOptions = {
+  /**
+   * FIX-RUN F12 — the light tap as the finger lands. Default true; a row inside a scroller passes
+   * false, so a scroll that happens to start on a row does not buzz.
+   */
+  haptic?: boolean;
+};
+
+export function usePressFeedback({ haptic = true }: PressFeedbackOptions = {}): PressFeedback {
   const scale = useRef(new Animated.Value(1)).current;
   const reducedMotion = useReducedMotion();
   const animated = reducedMotion === false;
@@ -82,9 +90,9 @@ export function usePressFeedback(): PressFeedback {
   );
 
   const onPressIn = useCallback(() => {
-    tap();
+    if (haptic) tap();
     spring(PRESS_SCALE);
-  }, [spring]);
+  }, [haptic, spring]);
 
   const onPressOut = useCallback(() => spring(1), [spring]);
 
