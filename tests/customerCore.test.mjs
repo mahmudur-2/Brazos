@@ -87,7 +87,8 @@ test('Customer text inputs are protected by keyboard-avoiding layouts', async ()
     assert.match(screen, /Platform\.OS === 'ios' \? 'padding' : undefined/);
   }
 
-  assert.match(screens[1], /Keyboard\.addListener\('keyboardDidShow'/);
+  // F8: the keyboard is still listened for — on the iOS WILL events, so the page moves with it.
+  assert.match(screens[1], /Keyboard\.addListener\(Platform\.OS === 'ios' \? 'keyboardWillShow' : 'keyboardDidShow'/);
   assert.match(screens[1], /useWindowDimensions\(\)/);
 });
 

@@ -371,3 +371,23 @@ test('[static] F5: a page is fifty, the realtime path keeps its single resolver,
   assert.match(strip(read('components/RemoteImage.tsx')), /source=\{cacheKey \? \{ uri, cacheKey \} : \{ uri \}\}/);
   assert.match(strip(read('screens/ChatScreen.tsx')), /onEndReached=\{\(\) => void loadOlder\(\)\}/);
 });
+
+test('[static] F8: Discover listens on the iOS WILL events and fades its blocks instead of snapping', () => {
+  const search = strip(read('screens/WorkerSearchScreen.tsx'));
+  assert.match(search, /Platform\.OS === 'ios' \? 'keyboardWillShow' : 'keyboardDidShow'/);
+  assert.match(search, /Platform\.OS === 'ios' \? 'keyboardWillHide' : 'keyboardDidHide'/);
+  assert.doesNotMatch(search, /addListener\('keyboardDidHide'|addListener\('keyboardDidShow'/, 'no DID event on the iOS path');
+  // The two blocks leave by fading over the keyboard's duration; the blocks below travel.
+  assert.match(search, /<KeyboardAway hidden=\{keyboardVisible \|\| windowHeight < 650\} durationMs=\{keyboardMs\} style=\{styles\.intro\}>/);
+  assert.match(search, /<KeyboardAway hidden=\{keyboardVisible\} durationMs=\{keyboardMs\} style=\{styles\.serviceSection\}>/);
+  assert.equal((search.match(/<KeyboardShift durationMs=\{keyboardMs\}/g) ?? []).length, 2);
+  assert.doesNotMatch(search, /\{!keyboardVisible \? \(/, 'no block mounts and unmounts on the keyboard flag');
+  // The KeyboardAvoidingView stays until F9 swaps it (the native-ui rule still asks for one).
+  assert.match(search, /<KeyboardAvoidingView/);
+  // The fast path is a Reanimated layout animation, never React Native's LayoutAnimation.
+  const fast = strip(read('components/KeyboardAway.motion120.tsx'));
+  assert.match(fast, /entering=\{reduced \|\| firstMount\.current \? undefined : entering\}/);
+  assert.match(fast, /function fadeOutOver\(durationMs: number\) \{\s*return \(\) => \{\s*'worklet';/);
+  assert.match(fast, /layout=\{reduced \? undefined : LinearTransition\.duration\(durationMs\)\}/);
+  assert.doesNotMatch(fast, /LayoutAnimation\./);
+});

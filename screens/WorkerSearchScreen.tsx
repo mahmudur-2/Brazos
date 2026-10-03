@@ -12,6 +12,7 @@ import {
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
+  type KeyboardEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -28,6 +29,8 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Chip } from '../components/Chip';
 import { FadeIn } from '../components/FadeIn';
+import { KeyboardAway, KeyboardShift } from '../components/KeyboardAway';
+import { KEYBOARD_FALLBACK_MS } from '../hooks/useKeyboardOffset';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useHiddenUserIds } from '../hooks/useHiddenUserIds';
@@ -133,6 +136,7 @@ export function WorkerSearchScreen() {
     null
   );
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardMs, setKeyboardMs] = useState(KEYBOARD_FALLBACK_MS);
   // §4.4 — the Saved / Worked-for-you-before sections collapsed into one
   // horizontal strip at the top of this surface's landing state.
   // 2026-09-28 (LUX-LIST-64 #62): the one rebook read, shared with the Home's
@@ -240,9 +244,20 @@ export function WorkerSearchScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // F8: the WILL events on iOS, which fire as the keyboard starts to move —
+  // the DID events fire after it has stopped, which is what made the page snap
+  // a beat late. The blocks fade over the keyboard's own duration.
   useEffect(() => {
-    const shown = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const hidden = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    const durationOf = (event?: KeyboardEvent) =>
+      event?.duration && event.duration > 0 ? event.duration : KEYBOARD_FALLBACK_MS;
+    const shown = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (event) => {
+      setKeyboardMs(durationOf(event));
+      setKeyboardVisible(true);
+    });
+    const hidden = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', (event) => {
+      setKeyboardMs(durationOf(event));
+      setKeyboardVisible(false);
+    });
     return () => {
       shown.remove();
       hidden.remove();
@@ -310,20 +325,19 @@ export function WorkerSearchScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.discoveryHeader}>
-          {!keyboardVisible && windowHeight >= 650 ? (
-            <View style={styles.intro}>
-              {/* 2026-09-27 (the Lux remake): no eyebrow, and the subtitle on
-                  one line at 393 wide (ruling 10). */}
-              <Text style={styles.introText}>
-                Describe the job, or pick a service below.
-              </Text>
-            </View>
-          ) : null}
+          <KeyboardAway hidden={keyboardVisible || windowHeight < 650} durationMs={keyboardMs} style={styles.intro}>
+            {/* 2026-09-27 (the Lux remake): no eyebrow, and the subtitle on
+                one line at 393 wide (ruling 10). */}
+            <Text style={styles.introText}>
+              Describe the job, or pick a service below.
+            </Text>
+          </KeyboardAway>
 
           {/* The shared SearchBar (mic included when the device supports it).
               Its standard clear control performs exactly what the old custom
               one did: onChangeText('') resets the run guard, the results and
               the pinned chip. */}
+          <KeyboardShift durationMs={keyboardMs}>
           <SearchBar
             style={[styles.searchRow, isDark && styles.searchRowDark, isDark && shadows.cardDark]}
             value={query}
@@ -377,8 +391,9 @@ export function WorkerSearchScreen() {
             }
           />
 
-          {!keyboardVisible ? (
-            <View style={styles.serviceSection}>
+          </KeyboardShift>
+
+          <KeyboardAway hidden={keyboardVisible} durationMs={keyboardMs} style={styles.serviceSection}>
               <View style={styles.serviceHeadingRow}>
                 <Text style={styles.serviceHeading}>Popular services</Text>
                 <Text style={[styles.serviceHint, isDark && styles.serviceHintDark]}>
@@ -441,10 +456,11 @@ export function WorkerSearchScreen() {
                   );
                 })}
               </ScrollView>
-            </View>
-          ) : null}
+          </KeyboardAway>
         </View>
 
+        {/* F8: the results travel up and down with the blocks above them. */}
+        <KeyboardShift durationMs={keyboardMs} style={styles.flex}>
         {state.kind === 'loading' ? (
           <SearchStateScroll resetKey="loading">
             <SearchStateCard
@@ -589,6 +605,7 @@ export function WorkerSearchScreen() {
             />
           </FadeIn>
         )}
+        </KeyboardShift>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

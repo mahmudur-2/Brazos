@@ -1074,6 +1074,16 @@ const SIBLINGS = [
     shared: 'components/TileCheck.shared.tsx',
     needs: 'reanimated',
   },
+  {
+    // 2026-10-03 (fix run F8) — Discover's intro and services row step aside for the keyboard on
+    // the WILL events: a Reanimated fade with the block below gliding on a LinearTransition; the
+    // fallback fades on the native driver and the block below follows.
+    name: 'KeyboardAway',
+    fallback: 'components/KeyboardAway.tsx',
+    fast: 'components/KeyboardAway.motion120.tsx',
+    shared: 'components/KeyboardAway.shared.tsx',
+    needs: 'reanimated',
+  },
 ];
 
 test('[executed] every sibling is taken when its native is present and skipped when it is absent', () => {
@@ -2199,6 +2209,9 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       // 2026-09-30 — the smoothness pass's four (SheetCard, PopModal, EntranceView, DropdownReveal).
       'components/DropdownReveal.motion120.tsx',
       'components/EntranceView.motion120.tsx',
+      // 2026-10-03 (fix run F8) — Discover's blocks stepping aside for the keyboard: Reanimated
+      // layout animations (FadeIn / FadeOut / LinearTransition) and no worklet body of its own.
+      'components/KeyboardAway.motion120.tsx',
       'components/KeyboardRisingColumn.motion120.tsx',
       // 2026-09-30 — the Melt-through tab bar (docs/dispatch/MELT-TAB-BAR.md): one frame loop
       // stepping every spring, and a Pan; the geometry it calls is lib/meltBarGeometry.ts, every
