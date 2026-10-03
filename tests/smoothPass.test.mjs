@@ -182,7 +182,10 @@ test('[static] F12: the most-pressed controls sink on the one press spring, the 
   // The wrapper takes the caller's place and its layout callback; the Pressable keeps what draws it.
   for (const source of [fallback, fast]) {
     assert.match(source, /pressStyles\(style\)/);
-    assert.match(source, /onLayout=\{onLayout\}>/);
+    // The wrapper also carries the slop: on the New Architecture a view its children do not
+    // overflow hit-tests as clipped, so a slop on the Pressable alone dies at the wrapper's edge.
+    assert.match(source, /onLayout=\{onLayout\} hitSlop=\{hitSlop\}>/);
+    assert.match(source, /<Pressable\s+\{\.\.\.rest\}\s+hitSlop=\{hitSlop\}/);
   }
   assert.match(shared, /const FILL: ViewStyle = \{ flexGrow: 1 \};/);
   // A sized or flexed wrapper wears the Pressable's border and padding, and the Pressable steps

@@ -12,13 +12,14 @@ import { pressStyles, type PressScaleProps } from './PressScale.shared';
 
 export type { PressScaleProps } from './PressScale.shared';
 
-function PressScaleFallback({ haptic = true, style, onPressIn, onPressOut, onLayout, ...rest }: PressScaleProps) {
+function PressScaleFallback({ haptic = true, style, onPressIn, onPressOut, onLayout, hitSlop, ...rest }: PressScaleProps) {
   const press = usePressFeedback({ haptic });
   const { outer, inner } = pressStyles(style);
   return (
-    <Animated.View style={[outer, press.style]} onLayout={onLayout}>
+    <Animated.View style={[outer, press.style]} onLayout={onLayout} hitSlop={hitSlop}>
       <Pressable
         {...rest}
+        hitSlop={hitSlop}
         style={inner}
         onPressIn={(event) => {
           press.onPressIn();

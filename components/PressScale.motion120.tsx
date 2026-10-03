@@ -14,15 +14,16 @@ import { pressStyles, type PressScaleProps } from './PressScale.shared';
  * its velocity into the reverse on the display's own frames. Under Reduce Motion (and until it
  * is known) no transform is written at all, the hook's contract.
  */
-export function PressScale({ haptic = true, style, onPressIn, onPressOut, onLayout, ...rest }: PressScaleProps) {
+export function PressScale({ haptic = true, style, onPressIn, onPressOut, onLayout, hitSlop, ...rest }: PressScaleProps) {
   const animated = useReducedMotion() === false;
   const scale = useSharedValue(1);
   const motion = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const { outer, inner } = pressStyles(style);
   return (
-    <Animated.View style={[outer, animated ? motion : undefined]} onLayout={onLayout}>
+    <Animated.View style={[outer, animated ? motion : undefined]} onLayout={onLayout} hitSlop={hitSlop}>
       <Pressable
         {...rest}
+        hitSlop={hitSlop}
         style={inner}
         onPressIn={(event) => {
           if (haptic) tap();

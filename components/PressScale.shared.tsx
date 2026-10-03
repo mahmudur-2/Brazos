@@ -14,6 +14,14 @@
  * the keys that place a box among its siblings to the wrapper, leaves everything that draws it
  * on the Pressable, and lets the Pressable fill the wrapper, so the resting layout is the same
  * box it always was.
+ *
+ * THE WRAPPER CARRIES THE PRESSABLE'S hitSlop TOO (review fix). On the New Architecture a view
+ * whose children do not overflow it is hit-tested as if it clipped (RCTViewComponentView's
+ * `betterHitTest`: `overflowInset == {}` counts as clipping), and the Pressable fills the wrapper
+ * exactly, so a touch in the Pressable's slop but outside the wrapper never reached it — every
+ * 44pt target E3 built from a smaller control and a slop shrank back to the control. The same
+ * slop on the wrapper lets the touch in, and the Pressable's own slop then claims it: the target
+ * is the one it was before the wrapper existed.
  */
 import { StyleSheet, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
