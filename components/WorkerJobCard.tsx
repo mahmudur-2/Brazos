@@ -120,7 +120,7 @@ export function WorkerJobCard({
    *  `distanceMiles` (passed by the results list alone) tells them apart.
    *  'peek' (2026-09-19) is the approved Map design's row inside the jobs
    *  sheet: a round photo, one-line title, the short category chip beside
-   *  the day word, the approximate location, EST. PAY and a chevron — the
+   *  the day word, the approximate location, BUDGET and a chevron — the
    *  operator's own field list for that surface. */
   variant?: 'compact' | 'full' | 'peek';
   /** Server-computed distance (jobs_within_radius' half-mile-snapped
@@ -309,11 +309,14 @@ export function WorkerJobCard({
         ) : null}
       </View>
 
-      {/* Eyebrow law: EST. PAY is a structural label (gold), the figure is a
+      {/* A7 (2026-10-03): the figure is the customer's stated BUDGET, labelled as
+          such — "EST. PAY" read as the worker's pay, which is the take after the
+          fee and is shown as "You get" wherever the quote or the ledger gives it.
+          Eyebrow law: BUDGET is a structural label (gold), the figure is a
           money value (emerald) — the B-4 split between masters 12/43 green
           and 13 gold resolves to green everywhere. */}
       <View style={styles.payBlock} onLayout={(event) => setPayWidth(event.nativeEvent.layout.width)}>
-        <Text style={[styles.payCaption, isDark && styles.payCaptionDark]}>EST. PAY</Text>
+        <Text style={[styles.payCaption, isDark && styles.payCaptionDark]}>BUDGET</Text>
         <Text style={[styles.payValue, isDark && styles.payValueDark]} numberOfLines={1}>
           {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
         </Text>
@@ -419,7 +422,7 @@ function PeekRow({ job, onPress }: { job: OpenJob; onPress: () => void }) {
           pointerEvents="none"
           onLayout={(event) => setPayWidth(event.nativeEvent.layout.width)}
         >
-          <Text style={styles.peekPayCaption}>EST. PAY</Text>
+          <Text style={styles.peekPayCaption}>BUDGET</Text>
           <Text style={[styles.peekPayValue, isDark && styles.peekPayValueDark]} numberOfLines={1}>
             {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
           </Text>

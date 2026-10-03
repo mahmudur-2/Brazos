@@ -673,7 +673,7 @@ export function WorkerJobScreen() {
               <Text style={styles.breakdownValue}>{formatBudget(brazosFeeCents(payment))}</Text>
             </View>
             <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownStrongLabel}>You receive</Text>
+              <Text style={styles.breakdownStrongLabel}>You get</Text>
               <Text style={styles.breakdownStrongValue}>
                 {formatBudget(workerTakeCents(payment))}
               </Text>

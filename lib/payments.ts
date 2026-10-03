@@ -128,7 +128,7 @@ export function workerTakeLine(
   if (!quote) return null;
   const cents = quote.worker_receives_cents;
   if (!Number.isInteger(cents) || cents < 0) return null;
-  return `You receive ${formatBudget(cents)} after the fee`;
+  return `You get ${formatBudget(cents)} after the fee`;
 }
 
 /**

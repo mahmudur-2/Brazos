@@ -187,7 +187,7 @@ test('7 · the worker’s job card shows the take, and the three-line breakdown 
   assert.doesNotMatch(breakdown, />Customer paid</, 'no unconditional "paid" label on the worker breakdown');
   assert.doesNotMatch(breakdown, /Brazos Protection/, 'one fee name: "Protection fee" (C4)');
   assert.match(breakdown, /Protection fee<\/Text> <Text style=\{styles\.breakdownValue\}>\{formatBudget\(brazosFeeCents\(payment\)\)\}/);
-  assert.match(breakdown, /You receive<\/Text> <Text style=\{styles\.breakdownStrongValue\}> \{formatBudget\(workerTakeCents\(payment\)\)\}/);
+  assert.match(breakdown, /You get<\/Text> <Text style=\{styles\.breakdownStrongValue\}> \{formatBudget\(workerTakeCents\(payment\)\)\}/);
   // The customer-facing held-amount surfaces are R7's and untouched here.
   for (const file of ['screens/JobConfirmedScreen.tsx', 'screens/ClientJobDetailScreen.tsx', 'screens/ApproveOrDisputeScreen.tsx']) {
     assert.doesNotMatch(read(file), /workerTakeCents|brazosFeeCents/, `${file} is not a worker-facing surface`);

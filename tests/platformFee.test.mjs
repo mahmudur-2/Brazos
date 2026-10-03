@@ -188,3 +188,21 @@ test('a worker is never quoted less than the ledger pays them — the figure is 
   assert.doesNotMatch(label, /[-*\/]\s*\d|Math\./, 'the label performs no arithmetic');
   assert.match(jobDetail, /receives = \(quotes as JobPriceQuote\[\]\)\.map\(\(quote\) => quote\.worker_receives_cents\)/);
 });
+
+test('A7 (2026-10-03) — the worker reads one vocabulary for one job: the budget is labelled BUDGET, the take after the fee is "You get"', async () => {
+  // Cards once said "EST. PAY $75" over the customer's budget, Job details "EST. PAYOUT AFTER FEE
+  // $69.37", and the job screen "You receive $64.75" — three labels, and the first read a budget
+  // as pay. The budget is named as the budget everywhere a worker sees it; the only after-fee
+  // figure is "You get", read from the quote or the ledger row, never derived.
+  for (const file of ['components/WorkerJobCard.tsx', 'ui/primitives/JobCard.tsx', 'screens/JobDetailScreen.tsx', 'screens/WorkerJobScreen.tsx', 'lib/payments.ts', 'components/HubCard.tsx', 'screens/MyJobsHubScreen.tsx']) {
+    const src = stripComments(await read(file));
+    assert.doesNotMatch(src, /EST\. PAY\b|Est\. payout|You receive\b/, `${file} keeps the one vocabulary`);
+  }
+  assert.match(stripComments(await read('components/WorkerJobCard.tsx')), />BUDGET</);
+  assert.match(stripComments(await read('ui/primitives/JobCard.tsx')), /isWorker \? 'BUDGET' : 'EST\. PRICE'/);
+  assert.match(stripComments(await read('screens/JobDetailScreen.tsx')), /\? 'You get, after the fee'\s*: 'You get'\}/);
+  assert.match(stripComments(await read('screens/WorkerJobScreen.tsx')), />You get</);
+  assert.match(stripComments(await read('lib/payments.ts')), /return `You get \$\{formatBudget\(cents\)\} after the fee`;/);
+  // The hub names its figure: the agreed price once hired, else the budget — never a take.
+  assert.match(stripComments(await read('screens/MyJobsHubScreen.tsx')), /priceLabel=\{job\.final_amount_cents != null \? 'Agreed price:' : 'Budget:'\}/);
+});

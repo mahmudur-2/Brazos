@@ -36,7 +36,7 @@ import { usePressFeedback } from '../../hooks/usePressFeedback';
  * CLAUDE.md: "JobCard perspective comes from ModeContext, never a hand-passed
  * prop." There is no `mode` / `perspective` / `isWorker` prop below and there
  * must never be one: the perspective is read from useModePerspective(), so a
- * customer surface *cannot* be made to render EST. PAY or a bid affordance by
+ * customer surface *cannot* be made to render BUDGET or a bid affordance by
  * passing the wrong value — there is no value to pass. §P.5.
  *
  * WHAT IS DELIBERATELY NOT HERE YET
@@ -113,10 +113,13 @@ export function JobCard({
   const thumbUrl = jobThumbnailUrl(job);
   const showImage = !!thumbUrl && !imageFailed;
 
-  // §I / CLAUDE.md: "Customer surfaces: EST. PRICE ... Worker surfaces: EST.
-  // PAY". Two labels for the same number because they are not the same fact —
-  // one is what it costs, the other is what it earns.
-  const moneyLabel = isWorker ? 'EST. PAY' : 'EST. PRICE';
+  // §I / CLAUDE.md: "Customer surfaces: EST. PRICE ... Worker surfaces" — the
+  // worker's label was EST. PAY. A7 (2026-10-03): the number is the customer's
+  // stated budget, not the worker's pay (the take after the fee, shown as "You
+  // get" wherever a quote or the ledger gives it), so the worker reads BUDGET.
+  // Two labels for the same number because they are not the same fact — one
+  // is what it costs, the other is what is on offer.
+  const moneyLabel = isWorker ? 'BUDGET' : 'EST. PRICE';
 
   // Worker-only nudge for a job nobody has bid on yet. Only meaningful to
   // someone who could place that first bid, so it does not exist for customers

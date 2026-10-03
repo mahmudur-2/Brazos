@@ -383,6 +383,10 @@ export function MyJobsHubScreen() {
                       metaLine={metaLineFor(job)}
                       timeLabel={formatTimeAgo(job.created_at)}
                       priceCents={job.final_amount_cents ?? job.budget_cents}
+                      // A7 (2026-10-03): the figure is named — the agreed price once hired, else the
+                      // customer's budget — so it is never read as the take, which the job screen
+                      // shows as "You get" off the ledger row.
+                      priceLabel={job.final_amount_cents != null ? 'Agreed price:' : 'Budget:'}
                       status={job.status}
                       nextAction={myJobsNextAction({
                         perspective: 'worker',

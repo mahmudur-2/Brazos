@@ -599,7 +599,8 @@ test('JobCard reads its perspective from ModeContext and offers no override', ()
     'JobCard must not accept its perspective as a prop'
   );
   // Both labels exist, and each is bound to the perspective, not to a caller.
-  assert.match(jobCard, /isWorker \? 'EST\. PAY' : 'EST\. PRICE'/);
+  // A7 (2026-10-03): the worker's label is BUDGET — the figure is the customer's stated budget.
+  assert.match(jobCard, /isWorker \? 'BUDGET' : 'EST\. PRICE'/);
   // Worker-only affordances are gated on the perspective, not on the prop
   // being supplied.
   assert.match(jobCard, /const showBreakTheIce = isWorker &&/);

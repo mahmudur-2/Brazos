@@ -187,10 +187,10 @@ test('n5 · workerTakeLine renders the quoted take as returned, and null for any
     worker_fee_cents: 375,
     worker_receives_cents: 4625,
   };
-  assert.equal(workerTakeLine(quote), 'You receive $46.25 after the fee');
+  assert.equal(workerTakeLine(quote), 'You get $46.25 after the fee');
   // formatBudget's own tiers: whole dollars bare, cents to two places.
-  assert.equal(workerTakeLine({ worker_receives_cents: 5000 }), 'You receive $50 after the fee');
-  assert.equal(workerTakeLine({ worker_receives_cents: 0 }), 'You receive $0 after the fee');
+  assert.equal(workerTakeLine({ worker_receives_cents: 5000 }), 'You get $50 after the fee');
+  assert.equal(workerTakeLine({ worker_receives_cents: 0 }), 'You get $0 after the fee');
   // Unknown is null, never a number.
   assert.equal(workerTakeLine(null), null);
   assert.equal(workerTakeLine(undefined), null);

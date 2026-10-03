@@ -970,8 +970,8 @@ export function JobDetailScreen() {
                     {payoutQuote === 'failed'
                       ? 'Stated budget'
                       : payoutQuote !== 'loading' && payoutQuote.fee
-                        ? 'Est. payout after fee'
-                        : 'Est. payout'}
+                        ? 'You get, after the fee'
+                        : 'You get'}
                   </Text>
                   <Text style={styles.payoutAmount}>{payoutEstimateLabel(job)}</Text>
                   <Text style={styles.payoutNote}>
