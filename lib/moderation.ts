@@ -79,6 +79,7 @@ export async function blockUser(userId: string, otherId: string) {
   const { error } = await supabase
     .from('blocks')
     .insert({ blocker_id: userId, blocked_id: otherId });
+  if (!error) hideUser(otherId);
   return { error };
 }
 
@@ -88,7 +89,68 @@ export async function unblockUser(userId: string, otherId: string) {
     .delete()
     .eq('blocker_id', userId)
     .eq('blocked_id', otherId);
+  // Still hidden if THEY blocked this user too; a reload settles it.
+  if (!error) void loadHiddenUsers(userId);
   return { error };
+}
+
+// ---------------------------------------------------------------------------
+// Hidden people (FIX-RUN B3, Apple 1.2): a blocked person's posts, profile and
+// reviews leave the viewer's feeds. A block either way hides — the database's
+// is_blocked_between() already gates bidding, messages and notifications both
+// ways, so the feeds agree with it. Client-side and read-only: one shared set,
+// loaded once per signed-in user, updated in place by blockUser() above.
+// hooks/useHiddenUserIds.ts is the React face of it.
+// ---------------------------------------------------------------------------
+
+let hiddenIds: ReadonlySet<string> = new Set();
+let hiddenFor: string | null = null;
+let hiddenLoad: Promise<void> | null = null;
+const hiddenListeners = new Set<() => void>();
+
+function setHidden(next: ReadonlySet<string>) {
+  hiddenIds = next;
+  for (const listener of hiddenListeners) listener();
+}
+
+/** The current set — the same object until it changes (useSyncExternalStore). */
+export function hiddenUserIds(): ReadonlySet<string> {
+  return hiddenIds;
+}
+
+export function subscribeHiddenUsers(listener: () => void): () => void {
+  hiddenListeners.add(listener);
+  return () => {
+    hiddenListeners.delete(listener);
+  };
+}
+
+/** Load (or reload) the set for this user. A failed read keeps what is there:
+ *  hiding is a courtesy on top of the server's gates, never the gate itself. */
+export function loadHiddenUsers(userId: string): Promise<void> {
+  if (hiddenFor !== userId) {
+    hiddenFor = userId;
+    if (hiddenIds.size) setHidden(new Set());
+  }
+  const load = fetchMyModerationLists(userId)
+    .then(({ blocking, blockedBy }) => {
+      if (hiddenFor !== userId) return;
+      setHidden(new Set([...blocking, ...blockedBy]));
+    })
+    .catch(() => undefined);
+  hiddenLoad = load;
+  return load;
+}
+
+/** Load once per user; later calls share the first. */
+export function ensureHiddenUsers(userId: string): Promise<void> {
+  if (hiddenFor === userId && hiddenLoad) return hiddenLoad;
+  return loadHiddenUsers(userId);
+}
+
+function hideUser(otherId: string) {
+  if (hiddenIds.has(otherId)) return;
+  setHidden(new Set([...hiddenIds, otherId]));
 }
 
 export async function muteUser(userId: string, otherId: string) {
@@ -111,15 +173,25 @@ export async function unmuteUser(userId: string, otherId: string) {
 // Reports
 // ---------------------------------------------------------------------------
 
+// The values are the database's reports_reason_valid allow-list, exactly
+// (20261003000700_ugc_moderation.sql; tests/moderationEntryPoints.test.mjs
+// compares the two).
 export const REPORT_REASONS = [
   { value: 'no_show', label: 'No-show' },
   { value: 'unsafe', label: 'Unsafe' },
   { value: 'harassment', label: 'Harassment' },
+  { value: 'inappropriate', label: 'Inappropriate content' },
   { value: 'scam', label: 'Scam / non-payment' },
   { value: 'other', label: 'Other' },
 ] as const;
 
 export type ReportReason = (typeof REPORT_REASONS)[number]['value'];
+
+/** What a report is about, beyond the person (FIX-RUN B3, Apple 1.2): the
+ *  database's reports_subject_valid allow-list, exactly. */
+export const REPORT_SUBJECT_KINDS = ['job', 'profile', 'review', 'portfolio_item', 'message'] as const;
+
+export type ReportSubject = { kind: (typeof REPORT_SUBJECT_KINDS)[number]; id: string };
 
 export async function createReport(params: {
   reporterId: string;
@@ -127,6 +199,7 @@ export async function createReport(params: {
   jobId?: string | null;
   reason: ReportReason;
   description?: string;
+  subject?: ReportSubject | null;
 }) {
   const { error } = await supabase.from('reports').insert({
     reporter_id: params.reporterId,
@@ -134,6 +207,9 @@ export async function createReport(params: {
     job_id: params.jobId ?? null,
     reason: params.reason,
     description: params.description?.trim() || null,
+    // Only when there is one: a person-only report (chat, the inbox) writes
+    // exactly the columns it always did.
+    ...(params.subject ? { subject_kind: params.subject.kind, subject_id: params.subject.id } : {}),
   });
   return { error };
 }

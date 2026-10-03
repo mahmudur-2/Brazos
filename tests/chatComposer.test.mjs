@@ -785,7 +785,9 @@ test('[executed] every pill has its OWN empty state, and each one is true', () =
   }
   assert.equal(inbox.emptyStateFor('archived').title, 'Nothing archived yet');
   assert.equal(inbox.emptyStateFor('requests').title, 'No requests yet');
-  assert.equal(inbox.emptyStateFor('support').title, 'Support coming soon');
+  // FIX-RUN B3: Support offers a real contact, not a promise.
+  assert.equal(inbox.emptyStateFor('support').title, 'Talk to the Brazos team');
+  assert.equal(inbox.emptyStateFor('support').action, 'Contact support');
 });
 
 test('[executed] a refresh between opening the sheet and tapping it moves the action', () => {

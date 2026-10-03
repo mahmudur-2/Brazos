@@ -18,6 +18,7 @@ import { PastWork } from '../components/PastWork';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
+import { ReportContentLink } from '../components/ReportContentLink';
 import {
   fetchProfileById,
   isProfileActive,
@@ -476,6 +477,15 @@ export function WorkerProfileScreen() {
           )}
 
           <PastWork workerId={params.workerId} />
+
+          {/* FIX-RUN B3 (Apple 1.2): the profile can be reported, and its
+              owner blocked, from the profile itself. Hidden on your own. */}
+          <ReportContentLink
+            subject={{ kind: 'profile', id: params.workerId }}
+            reportedId={params.workerId}
+            reportedName={name}
+            label="Report this profile"
+          />
         </ScrollView>
       )}
 

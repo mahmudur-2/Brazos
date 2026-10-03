@@ -17,6 +17,7 @@ import { Toggle } from '../ui/primitives';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { blockUser, createReport, REPORT_REASONS, type ReportReason } from '../lib/moderation';
+import type { ReportSubject } from '../lib/moderation';
 import {
   radius,
   shadows,
@@ -39,6 +40,9 @@ type ReportDialogProps = {
   reportedId: string;
   reportedName: string;
   jobId?: string | null;
+  /** What is being reported beyond the person — a job post, a profile, a
+   *  review, a portfolio photo (FIX-RUN B3). Omitted in chat and the inbox. */
+  subject?: ReportSubject | null;
   onClose: () => void;
   onSubmitted?: () => void;
 };
@@ -49,6 +53,7 @@ export function ReportDialog({
   reportedId,
   reportedName,
   jobId,
+  subject,
   onClose,
   onSubmitted,
 }: ReportDialogProps) {
@@ -97,6 +102,7 @@ export function ReportDialog({
       jobId,
       reason,
       description,
+      subject,
     });
 
     if (error) {

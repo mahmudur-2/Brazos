@@ -28,6 +28,12 @@ type PhotoViewerProps = {
    * isn't an affordance this app should hand out, so those get view-only.
    */
   allowShare?: boolean;
+  /**
+   * FIX-RUN B3 (Apple 1.2): when set, a "Report photo" control sits in the
+   * chrome. The viewer closes first and the host opens its ReportDialog once
+   * this modal has settled — iOS never stacks the two.
+   */
+  onReport?: () => void;
 };
 
 const MIN_SCALE = 1;
@@ -65,6 +71,7 @@ export function PhotoViewer({
   uri,
   onClose,
   allowShare = true,
+  onReport,
 }: PhotoViewerProps) {
   const { palette: colors } = useThemeColors();
   // #64 (M-31): on screen or not — the one confirm engine never stacks a second modal on iOS.
@@ -372,6 +379,21 @@ export function PhotoViewer({
             )}
           </Pressable>
         )}
+
+        {onReport ? (
+          <Pressable
+            onPress={() => {
+              onClose();
+              onReport();
+            }}
+            style={[styles.chromeBtn, styles.reportBtn]}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Report photo"
+          >
+            <Ionicons name="flag-outline" size={22} color={colors.onPrimary} />
+          </Pressable>
+        ) : null}
       </Animated.View>
     </Modal>
   );
@@ -399,6 +421,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   shareBtn: {
     left: 20,
+  },
+  reportBtn: {
+    left: 20,
+    bottom: 48,
   },
   }),
 );

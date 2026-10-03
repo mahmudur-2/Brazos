@@ -26,6 +26,7 @@ import { MarketJobPreview } from '../components/MarketJobPreview';
 import { Card } from '../components/Card';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JobOwnerActions } from '../components/JobOwnerActions';
+import { ReportContentLink } from '../components/ReportContentLink';
 import { JobVideo } from '../components/JobVideo';
 import { OfferResponseActions } from '../components/OfferResponseActions';
 import { PhotoViewer } from '../components/PhotoViewer';
@@ -780,7 +781,17 @@ export function JobDetailScreen() {
 
             {isOwnJob ? (
               <JobOwnerActions jobId={job.id} posterId={job.client_id} status={job.status} />
-            ) : null}
+            ) : (
+              // FIX-RUN B3 (Apple 1.2): someone else's post can be reported
+              // (and its poster blocked) where it is read.
+              <ReportContentLink
+                subject={{ kind: 'job', id: job.id }}
+                reportedId={job.client_id}
+                reportedName={poster?.full_name ?? 'this customer'}
+                jobId={job.id}
+                label="Report this job"
+              />
+            )}
             </View>
 
           {isOwnJob ? (

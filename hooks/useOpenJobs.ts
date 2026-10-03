@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useHiddenUserIds } from './useHiddenUserIds';
 import { userMessage } from '../lib/errorMessage';
 import { fetchOpenJobs, toOpenJob, type OpenJob } from '../lib/jobs';
 import { supabase } from '../lib/supabase';
@@ -86,5 +87,13 @@ export function useOpenJobs() {
     };
   }, [instanceId]);
 
-  return { jobs, loading, error, refresh };
+  // FIX-RUN B3 (Apple 1.2): a blocked person's posts leave the feed — a block
+  // either way. Same array identity while nothing is hidden.
+  const hidden = useHiddenUserIds();
+  const visible = useMemo(
+    () => (hidden.size ? jobs.filter((job) => !hidden.has(job.client_id)) : jobs),
+    [jobs, hidden]
+  );
+
+  return { jobs: visible, loading, error, refresh };
 }

@@ -3,6 +3,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
+import { ReportContentLink } from '../components/ReportContentLink';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { DELETED_USER_LABEL } from '../lib/rebook';
 import { fetchBothRoleSummaries, type ReviewSummary } from '../lib/reviews';
@@ -128,6 +129,15 @@ export function PublicProfileScreen({ userId }: PublicProfileScreenProps) {
                 </Text>
               </View>
             ) : null}
+            {/* FIX-RUN B3 (Apple 1.2): signed in and not your own — report
+                the profile, and block its owner, from here. */}
+            <ReportContentLink
+              subject={{ kind: 'profile', id: state.profile.id }}
+              reportedId={state.profile.id}
+              reportedName={state.profile.full_name ?? DELETED_USER_LABEL}
+              label="Report this profile"
+              style={styles.reportLink}
+            />
           </View>
         ) : (
           <View style={styles.card}>
@@ -149,6 +159,7 @@ export function PublicProfileScreen({ userId }: PublicProfileScreenProps) {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  reportLink: { alignSelf: 'center' },
     safe: {
       flex: 1,
       backgroundColor: colors.background,

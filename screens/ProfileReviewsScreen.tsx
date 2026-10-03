@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -17,6 +17,8 @@ import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { PhotoViewer } from '../components/PhotoViewer';
+import { ReportContentLink } from '../components/ReportContentLink';
+import { useHiddenUserIds } from '../hooks/useHiddenUserIds';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StarRating } from '../components/StarRating';
 import { userMessage } from '../lib/errorMessage';
@@ -201,6 +203,14 @@ export function ProfileReviewsScreen() {
     }
   }
 
+  // FIX-RUN B3 (Apple 1.2): a review by someone blocked either way leaves the
+  // list. Paging still counts the server's rows (`reviews`), never this view.
+  const hidden = useHiddenUserIds();
+  const visibleReviews = useMemo(
+    () => (hidden.size ? reviews.filter((review) => !hidden.has(review.reviewer_id)) : reviews),
+    [reviews, hidden]
+  );
+
   const firstName = params.name?.trim().split(/\s+/)[0];
   const summary = activeRole === 'customer' ? summaries.customer : summaries.worker;
   const total = summary?.total ?? 0;
@@ -228,10 +238,10 @@ export function ProfileReviewsScreen() {
         </View>
       ) : (
         <FlatList
-          data={reviews}
+          data={visibleReviews}
           keyExtractor={(item) => item.id}
           contentContainerStyle={[
-            reviews.length === 0 ? styles.emptyContainer : styles.listContent,
+            visibleReviews.length === 0 ? styles.emptyContainer : styles.listContent,
             { paddingBottom: navClearance },
           ]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -384,6 +394,15 @@ export function ProfileReviewsScreen() {
                   ))}
                 </ScrollView>
               )}
+
+              {/* FIX-RUN B3 (Apple 1.2): a review can be reported, and its
+                  writer blocked, from the review. Never on your own. */}
+              <ReportContentLink
+                subject={{ kind: 'review', id: item.id }}
+                reportedId={item.reviewer_id}
+                reportedName={item.reviewer_name ?? 'this reviewer'}
+                label="Report this review"
+              />
             </Card>
           )}
         />

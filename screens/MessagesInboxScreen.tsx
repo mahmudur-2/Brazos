@@ -3,6 +3,7 @@ import { useScrollClearance } from '../ui/primitives';
 import {
   ActivityIndicator,
   FlatList,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -18,6 +19,8 @@ import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { ConversationRow } from '../components/ConversationRow';
 import { GlassDropdown, type GlassDropdownItem, type GlassDropdownRequest } from '../components/GlassDropdown';
 import { UndoToast } from '../components/UndoToast';
+import { Button } from '../components/Button';
+import { SUPPORT_EMAIL, supportMailtoUrl } from '../lib/appLinks';
 import { SwipeableRow, type SwipeAction } from '../components/SwipeableRow';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ReportDialog } from '../components/ReportDialog';
@@ -120,6 +123,16 @@ const FILTER_PILL_HEIGHT = 34;
 
 /** A row swiped open springs shut before its More tile's menu measures the •••. */
 const SWIPE_SETTLE_MS = 320;
+
+/** The Support pill's Contact support (FIX-RUN B3): the Profile hub's opener,
+ *  the house shape — a failure still publishes the address, through lib/dialog. */
+async function openSupportMail(): Promise<void> {
+  try {
+    await Linking.openURL(supportMailtoUrl());
+  } catch {
+    await alertAsync('Could not open your mail app', `Write to ${SUPPORT_EMAIL}.`);
+  }
+}
 
 /**
  * What the sheets act on. `jobId` is null in a direct thread (phase36), so
@@ -1115,6 +1128,15 @@ export function MessagesInboxScreen() {
                   would be a different and untrue statement. */}
               <Text style={styles.emptyTitle}>{emptyStateFor(filter).title}</Text>
               <Text style={styles.emptyText}>{emptyStateFor(filter).body}</Text>
+              {emptyStateFor(filter).action ? (
+                <Button
+                  title={emptyStateFor(filter).action ?? ''}
+                  variant="secondary"
+                  icon="mail-outline"
+                  onPress={() => void openSupportMail()}
+                  style={styles.emptyAction}
+                />
+              ) : null}
             </View>
           }
         />
@@ -1283,6 +1305,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     textAlign: 'center',
     lineHeight: 20,
   },
+  emptyAction: { marginTop: spacing.sm, alignSelf: 'stretch' },
   error: {
     color: colors.danger,
     backgroundColor: colors.dangerBg,

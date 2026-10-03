@@ -79,7 +79,9 @@ export function filterRows<T extends FilterableRow>(rows: T[], filter: InboxFilt
   }
 }
 
-export type InboxEmptyState = { title: string; body: string };
+/** `action` names a button the empty state offers (FIX-RUN B3: Support's
+ *  "Contact support", which opens the support email). */
+export type InboxEmptyState = { title: string; body: string; action?: string };
 
 /**
  * What an empty list says, per pill.
@@ -104,7 +106,12 @@ export function emptyStateFor(filter: InboxFilter): InboxEmptyState {
         body: 'Job requests and offers waiting on your answer appear here.',
       };
     case 'support':
-      return { title: 'Support coming soon', body: 'You will be able to reach the Brazos team here.' };
+      // FIX-RUN B3 (Apple 1.2): a real way to reach the team, not a promise.
+      return {
+        title: 'Talk to the Brazos team',
+        body: 'Email us and Brazos will reply within 2 business days.',
+        action: 'Contact support',
+      };
     case 'all':
     default:
       return { title: 'No messages yet', body: 'Conversations start once a bid is accepted.' };

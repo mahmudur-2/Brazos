@@ -32,6 +32,8 @@ const OFFLINE =
 const DENIED = 'You don’t have access to this.';
 const MISSING = 'This isn’t available anymore.';
 const CONFLICT = 'That was already done.';
+/** FIX-RUN B3: the word filter's refusal (20261003000700_ugc_moderation.sql). */
+const BLOCKED = 'That includes words Brazos doesn’t allow. Edit it and try again.';
 
 function rawOf(error: ErrorLike): string {
   if (!error) return '';
@@ -58,7 +60,9 @@ export function userMessage(error: ErrorLike, fallback?: string): string {
 
   let friendly: string;
 
-  if (
+  if (lower.includes('blocked_content') || lower.includes("words brazos doesn't allow")) {
+    friendly = BLOCKED;
+  } else if (
     // undefined_column / undefined_table / undefined_function, and
     // PostgREST's schema-cache misses — all mean app-vs-database skew.
     code === '42703' ||

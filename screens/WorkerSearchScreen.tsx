@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ComponentProps,
@@ -29,6 +30,7 @@ import { Chip } from '../components/Chip';
 import { FadeIn } from '../components/FadeIn';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
+import { useHiddenUserIds } from '../hooks/useHiddenUserIds';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { useRebookWorkers } from '../hooks/useRebookWorkers';
@@ -109,7 +111,17 @@ export function WorkerSearchScreen() {
   const [pinnedCategory, setPinnedCategory] = useState<string | null>(
     params?.category ?? null
   );
-  const [state, setState] = useState<SearchState>({ kind: 'idle' });
+  const [searched, setState] = useState<SearchState>({ kind: 'idle' });
+  // FIX-RUN B3 (Apple 1.2): a blocked worker leaves the results — a block
+  // either way — the moment the block lands, without a second search.
+  const hidden = useHiddenUserIds();
+  const state = useMemo<SearchState>(
+    () =>
+      searched.kind === 'results' && hidden.size
+        ? { ...searched, matches: searched.matches.filter((match) => !hidden.has(match.profile.id)) }
+        : searched,
+    [searched, hidden]
+  );
   // The result cards' rating (n7): ONE profile_review_summaries() call over
   // the ids the list renders — worker role, revealed reviews only — re-run
   // only when that id set changes. Null until it answers (or when it failed):

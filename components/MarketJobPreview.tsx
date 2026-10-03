@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { JobVideo } from './JobVideo';
+import { ReportContentLink } from './ReportContentLink';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import { navigateAcrossTabs } from '../lib/navigationRef';
 import { useModeSwitch } from '../modes';
@@ -163,11 +164,21 @@ export function MarketJobPreview({ job, poster, onBack }: MarketJobPreviewProps)
               {
                 title: 'Posted by',
                 content: (
-                  <View style={styles.posterRow}>
-                    <Avatar name={poster.full_name} uri={poster.avatar_url} size={44} />
-                    <Text style={styles.posterName} numberOfLines={1}>
-                      {poster.full_name ?? 'Customer'}
-                    </Text>
+                  <View>
+                    <View style={styles.posterRow}>
+                      <Avatar name={poster.full_name} uri={poster.avatar_url} size={44} />
+                      <Text style={styles.posterName} numberOfLines={1}>
+                        {poster.full_name ?? 'Customer'}
+                      </Text>
+                    </View>
+                    {/* FIX-RUN B3 (Apple 1.2): report the post where it is read. */}
+                    <ReportContentLink
+                      subject={{ kind: 'job', id: job.id }}
+                      reportedId={job.client_id}
+                      reportedName={poster.full_name ?? 'this customer'}
+                      jobId={job.id}
+                      label="Report this job"
+                    />
                   </View>
                 ),
               },

@@ -12,6 +12,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { Card } from './Card';
 import { PhotoViewer } from './PhotoViewer';
+import { ReportDialog } from './ReportDialog';
+import { useAuth } from '../hooks/useAuth';
+import { modalSettleDelay } from '../lib/modalPresence';
 import { JOB_CATEGORY_LABELS } from '../lib/jobs';
 import {
   categoriesInPortfolio,
@@ -65,7 +68,22 @@ export function PastWork({
   const [stats, setStats] = useState<CategoryStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>(ALL);
-  const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [viewerItem, setViewerItem] = useState<PortfolioItem | null>(null);
+  const viewerUri = viewerItem?.photo_url ?? null;
+  // FIX-RUN B3 (Apple 1.2): a visitor can report a portfolio photo from the
+  // viewer. The viewer closes first; the dialog opens once it has settled.
+  const { user } = useAuth();
+  const canReport = !editable && !!user && user.id !== workerId;
+  const [pendingReport, setPendingReport] = useState<PortfolioItem | null>(null);
+  const [reportItem, setReportItem] = useState<PortfolioItem | null>(null);
+  useEffect(() => {
+    if (!pendingReport || viewerItem) return;
+    const timer = setTimeout(() => {
+      setReportItem(pendingReport);
+      setPendingReport(null);
+    }, modalSettleDelay());
+    return () => clearTimeout(timer);
+  }, [pendingReport, viewerItem]);
 
   const load = useCallback(async () => {
     const [portfolio, jobStats] = await Promise.all([
@@ -184,7 +202,7 @@ export function PastWork({
               >
                 {visible.map((item) => (
                   <View key={item.id} style={styles.tile}>
-                    <Pressable onPress={() => setViewerUri(item.photo_url)}>
+                    <Pressable onPress={() => setViewerItem(item)}>
                       <RemoteImage uri={item.photo_url} style={styles.photo} />
                     </Pressable>
 
@@ -221,8 +239,20 @@ export function PastWork({
       <PhotoViewer
         visible={!!viewerUri}
         uri={viewerUri}
-        onClose={() => setViewerUri(null)}
+        onClose={() => setViewerItem(null)}
+        onReport={canReport && viewerItem ? () => setPendingReport(viewerItem) : undefined}
       />
+      {canReport && user && reportItem ? (
+        <ReportDialog
+          visible
+          reporterId={user.id}
+          reportedId={workerId}
+          reportedName="this worker"
+          jobId={reportItem.source_job_id ?? null}
+          subject={{ kind: 'portfolio_item', id: reportItem.id }}
+          onClose={() => setReportItem(null)}
+        />
+      ) : null}
     </Card>
   );
 }
