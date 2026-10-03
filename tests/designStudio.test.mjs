@@ -1173,7 +1173,7 @@ test('chrome and layout dials: defaults mirror the shipped values; spacing/divid
 
   assert.equal(byKey.get('layout.pagePadding').defaultValue(ctx), tokens.layout.screenGutter);
   assert.equal(byKey.get('layout.formSectionGap').defaultValue(ctx), tokens.spacing.lg);
-  assert.equal(byKey.get('layout.detailSectionGap').defaultValue(ctx), tokens.spacing.xl);
+  assert.equal(byKey.get('layout.detailSectionGap').defaultValue(ctx), 20, 'the detail gap ships at its 20 (lg + xs on the one scale, fix run D8)');
 
   // S2 left this category honestly empty because there was no shared divider
   // to dial. RUN T1 (C4) built one, so the assertion FLIPS: the category must
@@ -1193,7 +1193,8 @@ test('chrome and layout dials: defaults mirror the shipped values; spacing/divid
   // silently do nothing" while every token was consumed at stylesheet-build
   // time. T1 (C2) removed the premise — the tokens resolve at read time and
   // the style caches key on the metric generation — so the assertion FLIPS
-  // here too. Both scales, because this repo carries two.
+  // here too. ONE scale since fix run D8: the §I `spacing.*` dials were the
+  // same live group under a second name, so they are gone.
   const spacingKeys = schema.STUDIO_REGISTRY.filter((entry) => entry.category === 'spacing').map(
     (entry) => entry.key,
   );
@@ -1202,10 +1203,8 @@ test('chrome and layout dials: defaults mirror the shipped values; spacing/divid
     [
       'theme.spacing.xs', 'theme.spacing.sm', 'theme.spacing.md',
       'theme.spacing.lg', 'theme.spacing.xl', 'theme.spacing.xxl',
-      'spacing.xs', 'spacing.sm', 'spacing.md', 'spacing.lg',
-      'spacing.xl', 'spacing.xxl', 'spacing.xxxl',
     ],
-    'Spacing must carry both live scales, app first — it is the one that moves the app',
+    'Spacing must carry the one live scale',
   );
 });
 
@@ -1218,7 +1217,7 @@ test('T1 (C5): every metric dial mirrors its shipped table, floors hold, and pil
 
   /** Every dial that writes the metric bag, and the table it must mirror. */
   const TABLES = {
-    spacing: 'SPACING_DEFAULTS',
+    // Fix run D8: no §I 'spacing' group — it is 'theme.spacing' below.
     radius: 'RADIUS_DEFAULTS',
     controls: 'CONTROL_DEFAULTS',
     layout: 'LAYOUT_METRIC_DEFAULTS',
@@ -1241,7 +1240,7 @@ test('T1 (C5): every metric dial mirrors its shipped table, floors hold, and pil
       checked += 1;
     }
   }
-  assert.equal(checked, 30, 'all six live scales are dialled, end to end');
+  assert.equal(checked, 23, 'every live scale is dialled, end to end');
 
   // THE TOUCH FLOOR IS NOT NEGOTIABLE (CLAUDE.md). No control-height dial may
   // be turned below 44 — the schema range is the enforcement, because
@@ -1280,8 +1279,8 @@ test('T1 (C5/D9): an untouched child follows its parent, and its reset returns i
   assert.ok(chains.length >= 20, 'the mechanism must carry real chains, not one demo');
 
   const child = byKey.get('header.padX');
-  const parent = byKey.get('spacing.lg');
-  assert.equal(child.inheritsFrom, 'spacing.lg', 'the header padding is the Emerald large gap');
+  const parent = byKey.get('theme.spacing.lg');
+  assert.equal(child.inheritsFrom, 'theme.spacing.lg', 'the header padding is the one scale’s large gap');
 
   const base = await contextFor();
   const shipped = parent.defaultValue(base);

@@ -495,39 +495,22 @@ export function metricGroup<L extends Record<string, number>, F extends Record<s
 }
 
 // ---------------------------------------------------------------------------
-// Spacing (§I: 4-base — 4/8/12/16/20/24/32)
+// Spacing — ONE scale (fix run D8, 2026-10-03): 4/8/12/16/24/32
 // ---------------------------------------------------------------------------
 
 /**
- * The shipped scale, spelled ONCE. `spacing` below resolves through it, and
- * the studio registry reads its defaults from it — so "reset" always lands on
- * this table and a dialled value can never be mistaken for the shipped one.
- */
-export const SPACING_DEFAULTS = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
-} as const;
-
-export const spacing = metricGroup('spacing', SPACING_DEFAULTS, {});
-
-/**
- * RUN T1 (C5) — THE OTHER SCALE, DECLARED HERE FOR THE SAME REASON `brand` IS.
+ * THE SHIPPED SPACING SCALE, spelled ONCE, and the only one.
  *
- * lib/theme.ts exports its own older spacing and radius scales — different
- * numbers from §I's above (`xl` 24 against 20; `radius.sm` 8 against 13) — and
- * they are what 92 of this tree's files import, against 17 for the Emerald
- * scale. The two are NOT merged: pointing one at the other would move pixels
- * in all 92, and reconciling them is a screen-by-screen migration.
+ * Until fix run D8 this tree carried two: §I's (`xl` 20, `xxl` 24, `xxxl` 32),
+ * read by the ui/ primitives and templates, and lib/theme's older one (`xl` 24,
+ * `xxl` 32), read by 92 files — so `spacing.xl` meant 20 or 24 depending on
+ * the import. They are one now. The numbers are lib/theme's, because that is
+ * what most of the app already draws; the §I call sites were re-spelled so
+ * their pixels stayed (`xl` 20 → `lg + xs`, `xxl` 24 → `xl`, `xxxl` 32 →
+ * `xxl`). `spacing` below and lib/theme's `spacing` are the SAME live group,
+ * addressed by the studio as `theme.spacing.*`.
  *
- * The VALUES live here anyway, because this file is the token definition layer
- * (CLAUDE.md) and because the studio registry has to read both scales'
- * defaults from one place. lib/theme.ts builds its live groups from these, so
- * there is still exactly one spelling of each number.
+ * `SPACING_DEFAULTS` survives as a name for the same table (nothing deleted).
  */
 export const THEME_SPACING_DEFAULTS = {
   xs: 4,
@@ -537,6 +520,12 @@ export const THEME_SPACING_DEFAULTS = {
   xl: 24,
   xxl: 32,
 } as const;
+
+/** The same table under its older §I name (fix run D8: one scale). */
+export const SPACING_DEFAULTS = THEME_SPACING_DEFAULTS;
+
+/** THE one live spacing group. lib/theme.ts re-exports this binding. */
+export const spacing = metricGroup('theme.spacing', THEME_SPACING_DEFAULTS, {});
 
 export const THEME_RADIUS_DEFAULTS = {
   sm: 8,

@@ -89,7 +89,7 @@ const themeModule = (async () => {
       // 2026-09-18 added `light as emeraldLight`: the task card's three roles
       // are defined once in ui/tokens.ts and lib/theme.ts takes BOTH palettes'
       // values by reference, the light side included.
-      'const { brand, dark: emeraldDark, light: emeraldLight, constantAccents, metricGeneration, metricGroup, shadows: tokenShadows, THEME_RADIUS_DEFAULTS, THEME_SPACING_DEFAULTS, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
+      'const { brand, dark: emeraldDark, light: emeraldLight, constantAccents, metricGeneration, metricGroup, shadows: tokenShadows, spacing, THEME_RADIUS_DEFAULTS, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
     )
     .replace(/export \{[^}]*\} from '\.\.\/ui\/tokens';\n/g, '')
     .replace(/export \{[^}]*\} from '\.\.\/hooks\/useThemeColors';\n/g, '');
@@ -942,14 +942,15 @@ test('T1 tokens: a live metric resolves at READ time, and the fixed members are 
     assert.equal(theme.radius[key], value);
   }
 
-  // The two scales are deliberately DIFFERENT and neither aliases the other:
-  // pointing one at the other would have moved pixels in 92 files.
-  assert.notEqual(tokens.spacing.xl, theme.spacing.xl, 'the Emerald and app scales differ at xl');
-  assert.equal(tokens.spacing.xl, 20);
-  assert.equal(theme.spacing.xl, 24);
+  // ONE SPACING SCALE (fix run D8): ui/tokens' `spacing` and lib/theme's are
+  // the SAME live group, so `xl` is 24 from either import and a dial on one
+  // is a dial on both.
+  assert.equal(tokens.spacing, theme.spacing, 'lib/theme re-exports the one spacing group');
+  assert.equal(tokens.spacing.xl, 24);
+  assert.equal(tokens.SPACING_DEFAULTS, tokens.THEME_SPACING_DEFAULTS, 'the §I name is the same table');
 
   try {
-    o.setMetricOverride('spacing.lg', 30);
+    o.setMetricOverride('theme.spacing.lg', 30);
     o.setMetricOverride('theme.radius.md', 4);
     o.setMetricOverride('controls.buttonHeight', 52);
     o.setMetricOverride('layout.cardGap', 18);
@@ -958,7 +959,7 @@ test('T1 tokens: a live metric resolves at READ time, and the fixed members are 
     assert.equal(tokens.controls.buttonHeight, 52);
     assert.equal(tokens.layout.cardGap, 18);
     assert.equal(tokens.spacing.md, 12, 'an untouched key keeps its shipped value');
-    assert.equal(theme.spacing.lg, 16, 'and the two scales are addressed separately');
+    assert.equal(theme.spacing.lg, 30, 'and lib/theme reads the same group');
 
     // FIXED MEMBERS ARE NOT DIALS. A capsule is a shape and the touch floor is
     // non-negotiable, so neither answers to the bag at all.
@@ -995,7 +996,7 @@ test('T1 cache: a stylesheet is the SAME OBJECT until a metric moves, and a fres
   assert.equal(first.card.padding, 16, 'carrying the shipped default');
 
   try {
-    o.setMetricOverride('spacing.lg', 28);
+    o.setMetricOverride('theme.spacing.lg', 28);
     const moved = stylesFor(palette);
     assert.notEqual(moved, first, 'a metric write must produce a fresh stylesheet');
     assert.equal(moved.card.padding, 28, 'carrying the new number');

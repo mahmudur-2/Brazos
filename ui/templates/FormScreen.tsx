@@ -238,7 +238,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg + spacing.xs,
   },
   primary: {
     backgroundColor: colors.forest,

@@ -471,7 +471,7 @@ test('[static] the creation sheet clears the home indicator', () => {
     /paddingBottom: insets\.bottom \+ \(footer \? 0 : spacing\.lg\)/,
     'the two sheets must reserve the inset the same way; a footer supplies its own air'
   );
-  assert.match(stripComments(read('ui/primitives/Sheet.tsx')), /footer: \{\s*paddingHorizontal: layout\.screenGutter,\s*paddingTop: spacing\.xl \+ 2,/);
+  assert.match(stripComments(read('ui/primitives/Sheet.tsx')), /footer: \{\s*paddingHorizontal: layout\.screenGutter,\s*paddingTop: spacing\.lg \+ spacing\.xs \+ 2,/);
   // The ground that was showing through is painted, in one place, for both trees.
   assert.match(
     stripComments(read('navigation/ModeShell.tsx')),

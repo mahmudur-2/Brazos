@@ -143,7 +143,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   },
   content: {
     padding: layout.screenGutter,
-    gap: spacing.xl,
+    gap: spacing.lg + spacing.xs,
   },
   media: {
     gap: spacing.sm,

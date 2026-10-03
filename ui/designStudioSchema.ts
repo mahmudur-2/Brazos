@@ -24,7 +24,6 @@ import {
   shadows as tokenShadows,
   RADIUS_DEFAULTS,
   spacing,
-  SPACING_DEFAULTS,
   THEME_RADIUS_DEFAULTS,
   THEME_SPACING_DEFAULTS,
   type MaterialName,
@@ -450,7 +449,7 @@ function sheetDialEntries(): StudioEntry[] {
     }),
     docked({
       key: 'sheet.footerPad',
-      inheritsFrom: 'spacing.lg',
+      inheritsFrom: 'theme.spacing.lg',
       plainLabel: 'Footer padding',
       technicalKey: 'sheet.footerPad',
       description: 'Padding under the sheet content, added to the safe-area inset.',
@@ -465,7 +464,7 @@ function sheetDialEntries(): StudioEntry[] {
     }),
     docked({
       key: 'sheet.sectionGap',
-      inheritsFrom: 'spacing.md',
+      inheritsFrom: 'theme.spacing.md',
       plainLabel: 'Section spacing',
       technicalKey: 'sheet.sectionGap',
       description: 'The gap between the rows and sections inside a sheet.',
@@ -585,7 +584,7 @@ function sheetDialEntries(): StudioEntry[] {
     }),
     handle({
       key: 'sheet.handleSpaceAbove',
-      inheritsFrom: 'spacing.sm',
+      inheritsFrom: 'theme.spacing.sm',
       plainLabel: 'Space above the handle',
       technicalKey: 'sheet.handleSpaceAbove',
       description: 'Between the sheet’s top edge and the handle.',
@@ -600,7 +599,7 @@ function sheetDialEntries(): StudioEntry[] {
     }),
     handle({
       key: 'sheet.handleSpaceBelow',
-      inheritsFrom: 'spacing.sm',
+      inheritsFrom: 'theme.spacing.sm',
       plainLabel: 'Space below the handle',
       technicalKey: 'sheet.handleSpaceBelow',
       description: 'Between the handle and the sheet’s header.',
@@ -680,7 +679,7 @@ function menuDialEntries(): StudioEntry[] {
     }),
     rows({
       key: 'menu.itemPaddingX',
-      inheritsFrom: 'spacing.lg',
+      inheritsFrom: 'theme.spacing.lg',
       plainLabel: 'Row side padding',
       technicalKey: 'menu.itemPaddingX',
       description: 'Each menu row’s horizontal padding.',
@@ -814,13 +813,13 @@ function cardDialEntries(): StudioEntry[] {
       { key: 'card.shadowRadius', label: 'Shadow blur', description: 'How soft the card’s shadow spreads.', tier: 'advanced', scope: 'local', min: 0, max: 40, step: 1, defaultValue: (ctx) => (ctx.isDark ? 16 : 14) },
       { key: 'card.shadowOffsetX', label: 'Shadow X offset', description: 'Moves the shadow sideways.', tier: 'advanced', scope: 'local', min: -20, max: 20, step: 1, defaultValue: 0 },
       { key: 'card.shadowOffsetY', label: 'Shadow Y offset', description: 'Moves the shadow down.', tier: 'advanced', scope: 'local', min: -20, max: 20, step: 1, defaultValue: (ctx) => (ctx.isDark ? 6 : 5) },
-      { key: 'card.gap', label: 'Title-body gap', description: 'The vertical rhythm between the card’s rows.', tier: 'basic', scope: 'token', min: 0, max: 32, step: 1, inheritsFrom: 'spacing.md', defaultValue: spacing.md },
+      { key: 'card.gap', label: 'Title-body gap', description: 'The vertical rhythm between the card’s rows.', tier: 'basic', scope: 'token', min: 0, max: 32, step: 1, inheritsFrom: 'theme.spacing.md', defaultValue: spacing.md },
       { key: 'card.liftScale', label: 'Lift wash strength', description: 'Scales every lit surface’s diagonal wash — 1 is today’s calibration.', tier: 'advanced', scope: 'token', kind: 'decimal', min: 0, max: 3, step: 0.05, defaultValue: 1 },
     ]),
     ...dialEntries('cards', 'List row', [
       { key: 'listRow.paddingX', label: 'Side padding', description: 'The settings/list row’s horizontal padding.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, inheritsFrom: 'layout.screenGutter', defaultValue: layout.screenGutter },
-      { key: 'listRow.paddingY', label: 'Top/bottom padding', description: 'The settings/list row’s vertical padding.', tier: 'basic', scope: 'token', min: 0, max: 32, step: 1, inheritsFrom: 'spacing.md', defaultValue: spacing.md },
-      { key: 'listRow.gap', label: 'Column gap', description: 'Between the glyph, the text block and the trailing control.', tier: 'advanced', scope: 'local', min: 0, max: 24, step: 1, inheritsFrom: 'spacing.md', defaultValue: spacing.md },
+      { key: 'listRow.paddingY', label: 'Top/bottom padding', description: 'The settings/list row’s vertical padding.', tier: 'basic', scope: 'token', min: 0, max: 32, step: 1, inheritsFrom: 'theme.spacing.md', defaultValue: spacing.md },
+      { key: 'listRow.gap', label: 'Column gap', description: 'Between the glyph, the text block and the trailing control.', tier: 'advanced', scope: 'local', min: 0, max: 24, step: 1, inheritsFrom: 'theme.spacing.md', defaultValue: spacing.md },
       { key: 'listRow.textGap', label: 'Title-subtitle gap', description: 'Between a row’s title and its subtitle.', tier: 'advanced', scope: 'local', min: 0, max: 12, step: 1, defaultValue: 2 },
       { key: 'listRow.minHeight', label: 'Row height', description: 'The row’s minimum height — never below the 44pt touch floor.', tier: 'advanced', scope: 'local', min: 44, max: 72, step: 1, defaultValue: controls.minTouchTarget },
       {
@@ -907,7 +906,7 @@ function buttonDialEntries(): StudioEntry[] {
   }
   entries.push(
     ...dialEntries('buttons', 'All buttons', [
-      { key: 'button.iconGap', label: 'Icon-text gap', description: 'Between a button’s glyph and its label.', tier: 'advanced', scope: 'token', min: 0, max: 20, step: 1, inheritsFrom: 'spacing.sm', defaultValue: spacing.sm },
+      { key: 'button.iconGap', label: 'Icon-text gap', description: 'Between a button’s glyph and its label.', tier: 'advanced', scope: 'token', min: 0, max: 20, step: 1, inheritsFrom: 'theme.spacing.sm', defaultValue: spacing.sm },
       { key: 'button.pressedOpacity', label: 'Pressed opacity', description: 'How a held button dims.', tier: 'advanced', scope: 'token', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: 0.85 },
       { key: 'button.pressedScale', label: 'Pressed scale', description: 'How a held button shrinks — 1 is no scale.', tier: 'advanced', scope: 'token', kind: 'decimal', min: 0.8, max: 1.2, step: 0.02, defaultValue: 1 },
       { key: 'button.disabledOpacity', label: 'Disabled opacity', description: 'Dims the flat disabled fill — 1 keeps decision 3’s flat treatment.', tier: 'advanced', scope: 'token', kind: 'decimal', min: 0.2, max: 1, step: 0.02, defaultValue: 1 },
@@ -921,7 +920,7 @@ function buttonDialEntries(): StudioEntry[] {
       { key: 'chip.minHeight', label: 'Tappable height', description: 'Interactive chips’ minimum height — never below the 44pt touch floor.', tier: 'advanced', scope: 'local', min: 44, max: 64, step: 1, defaultValue: 44 },
     ]),
     ...dialEntries('buttons', 'Status pill', [
-      { key: 'pill.paddingX', label: 'Side padding', description: 'Inside the status pill, left and right.', tier: 'advanced', scope: 'local', min: 0, max: 24, step: 1, inheritsFrom: 'spacing.md', defaultValue: spacing.md },
+      { key: 'pill.paddingX', label: 'Side padding', description: 'Inside the status pill, left and right.', tier: 'advanced', scope: 'local', min: 0, max: 24, step: 1, inheritsFrom: 'theme.spacing.md', defaultValue: spacing.md },
       { key: 'pill.paddingY', label: 'Top/bottom padding', description: 'Inside the status pill, above and below.', tier: 'advanced', scope: 'local', min: 0, max: 16, step: 1, defaultValue: spacing.xs + 2 },
       { key: 'pill.radius', label: 'Corner roundness', description: 'The status pill’s corners — 999 is the full pill.', tier: 'advanced', scope: 'local', min: 0, max: 999, step: 2, defaultValue: tokenRadius.pill },
       { key: 'pill.borderWidth', label: 'Border width', description: 'The status pill’s hairline weight.', tier: 'advanced', scope: 'local', min: 0, max: 3, step: 1, defaultValue: 1 },
@@ -935,8 +934,8 @@ function inputDialEntries(): StudioEntry[] {
     ...dialEntries('inputs', 'Search field', [
       { key: 'search.height', label: 'Height', description: 'The search pill’s minimum height — never below the 44pt touch floor.', tier: 'basic', scope: 'token', min: 44, max: 64, step: 1, inheritsFrom: 'controls.fieldHeight', defaultValue: controls.fieldHeight },
       { key: 'search.radius', label: 'Corner roundness', description: 'The search pill’s corners — 999 is the full pill.', tier: 'basic', scope: 'token', min: 0, max: 999, step: 2, defaultValue: tokenRadius.pill },
-      { key: 'search.paddingX', label: 'Side padding', description: 'Inside the search pill, left and right.', tier: 'advanced', scope: 'local', min: 0, max: 32, step: 1, inheritsFrom: 'spacing.lg', defaultValue: spacing.lg },
-      { key: 'search.gap', label: 'Icon-text gap', description: 'Between the glyph, the text and the trailing controls.', tier: 'advanced', scope: 'local', min: 0, max: 20, step: 1, inheritsFrom: 'spacing.sm', defaultValue: spacing.sm },
+      { key: 'search.paddingX', label: 'Side padding', description: 'Inside the search pill, left and right.', tier: 'advanced', scope: 'local', min: 0, max: 32, step: 1, inheritsFrom: 'theme.spacing.lg', defaultValue: spacing.lg },
+      { key: 'search.gap', label: 'Icon-text gap', description: 'Between the glyph, the text and the trailing controls.', tier: 'advanced', scope: 'local', min: 0, max: 20, step: 1, inheritsFrom: 'theme.spacing.sm', defaultValue: spacing.sm },
       {
         key: 'search.fill',
         label: 'Fill',
@@ -1005,8 +1004,8 @@ function chromeDialEntries(): StudioEntry[] {
   const step = (row: DialRow[]) => dialEntries('chrome', 'Wizard header', row);
   return [
     ...header([
-      { key: 'header.padX', label: 'Side padding', description: 'Inside the screen header, left and right.', tier: 'basic', scope: 'token', min: 0, max: 32, step: 1, inheritsFrom: 'spacing.lg', defaultValue: spacing.lg },
-      { key: 'header.padY', label: 'Top/bottom padding', description: 'Inside the screen header, above and below.', tier: 'basic', scope: 'token', min: 0, max: 24, step: 1, inheritsFrom: 'spacing.md', defaultValue: spacing.md },
+      { key: 'header.padX', label: 'Side padding', description: 'Inside the screen header, left and right.', tier: 'basic', scope: 'token', min: 0, max: 32, step: 1, inheritsFrom: 'theme.spacing.lg', defaultValue: spacing.lg },
+      { key: 'header.padY', label: 'Top/bottom padding', description: 'Inside the screen header, above and below.', tier: 'basic', scope: 'token', min: 0, max: 24, step: 1, inheritsFrom: 'theme.spacing.md', defaultValue: spacing.md },
       { key: 'header.minHeight', label: 'Height', description: 'A minimum header height — 0 keeps today’s content-driven height.', tier: 'advanced', scope: 'local', min: 0, max: 96, step: 2, defaultValue: 0 },
       { key: 'header.titleAlign', label: 'Title position', description: 'Auto follows each screen’s own choice; left and centre force it.', tier: 'basic', scope: 'token', kind: 'enum', options: ['auto', 'left', 'center'], defaultValue: 'auto' },
       { key: 'header.backSize', label: 'Back chevron size', description: 'The bare back chevron (labelled links keep their 20pt glyph).', tier: 'advanced', scope: 'local', min: 16, max: 36, step: 1, defaultValue: 26 },
@@ -1025,7 +1024,7 @@ function chromeDialEntries(): StudioEntry[] {
     ]),
     ...step([
       { key: 'header.stepPadX', label: 'Side padding', description: 'Inside the wizard progress header.', tier: 'advanced', scope: 'local', min: 0, max: 32, step: 1, inheritsFrom: 'layout.screenGutter', defaultValue: layout.screenGutter },
-      { key: 'header.stepPadY', label: 'Top/bottom padding', description: 'Inside the wizard progress header.', tier: 'advanced', scope: 'local', min: 0, max: 24, step: 1, inheritsFrom: 'spacing.md', defaultValue: spacing.md },
+      { key: 'header.stepPadY', label: 'Top/bottom padding', description: 'Inside the wizard progress header.', tier: 'advanced', scope: 'local', min: 0, max: 24, step: 1, inheritsFrom: 'theme.spacing.md', defaultValue: spacing.md },
       { key: 'header.stepBarHeight', label: 'Progress bar height', description: 'The segmented progress bar’s thickness.', tier: 'advanced', scope: 'local', min: 1, max: 10, step: 1, defaultValue: 4 },
     ]),
   ];
@@ -1036,12 +1035,12 @@ function chromeDialEntries(): StudioEntry[] {
 // ---------------------------------------------------------------------------
 
 /**
- * THE SCALES THEMSELVES, and there are TWO of them because this repo has two.
+ * THE SCALE ITSELF — ONE since fix run D8 (2026-10-03).
  *
- * lib/theme.ts exports the scale 92 files import; ui/tokens.ts exports §I's
- * Emerald scale, which 17 do. They are genuinely different numbers — `xl` is
- * 24 in one and 20 in the other — so they are two sets of dials, not one.
- * The app scale is listed first because it is the one that moves the app.
+ * Until D8 lib/theme.ts and ui/tokens.ts exported two spacing scales with the
+ * same names and different numbers (`xl` 24 against 20), so the studio carried
+ * two sets of dials. They are one live group now, `theme.spacing.*`, and every
+ * file that imports `spacing` from either surface reads it.
  *
  * S2 left this category empty and said why: a spacing dial "would silently do
  * nothing" while every token was consumed at stylesheet-build time. C2 fixed
@@ -1059,15 +1058,7 @@ function spacingDialEntries(): StudioEntry[] {
       { key: 'theme.spacing.xl', label: 'Extra large gap', description: 'Between the major blocks of a screen.', tier: 'advanced', scope: 'token', min: 0, max: 48, step: 1, defaultValue: THEME_SPACING_DEFAULTS.xl },
       { key: 'theme.spacing.xxl', label: 'Section gap', description: 'The widest standing gap — above a screen’s first block and below its last.', tier: 'advanced', scope: 'token', min: 0, max: 64, step: 1, defaultValue: THEME_SPACING_DEFAULTS.xxl },
     ]),
-    ...metricDials('spacing', 'Emerald scale (§I tokens)', [
-      { key: 'spacing.xs', label: 'Extra small gap', description: 'The Emerald scale’s tightest rhythm — templates and the newer primitives.', tier: 'advanced', scope: 'token', min: 0, max: 16, step: 1, defaultValue: SPACING_DEFAULTS.xs },
-      { key: 'spacing.sm', label: 'Small gap', description: 'Between a glyph and its label on the Emerald surfaces.', tier: 'advanced', scope: 'token', min: 0, max: 24, step: 1, defaultValue: SPACING_DEFAULTS.sm },
-      { key: 'spacing.md', label: 'Medium gap', description: 'The Emerald surfaces’ standard row gap; sheets and menus read it.', tier: 'basic', scope: 'token', min: 0, max: 32, step: 1, defaultValue: SPACING_DEFAULTS.md },
-      { key: 'spacing.lg', label: 'Large gap', description: 'The Emerald padding — sheet footers, menu rows, form section gaps.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, defaultValue: SPACING_DEFAULTS.lg },
-      { key: 'spacing.xl', label: 'Extra large gap', description: 'Between the sections of a detail screen.', tier: 'advanced', scope: 'token', min: 0, max: 48, step: 1, defaultValue: SPACING_DEFAULTS.xl },
-      { key: 'spacing.xxl', label: 'Section gap', description: 'The Emerald scale’s wide gap; the centred header inset is three of these.', tier: 'advanced', scope: 'token', min: 0, max: 64, step: 1, defaultValue: SPACING_DEFAULTS.xxl },
-      { key: 'spacing.xxxl', label: 'Page gap', description: 'The widest Emerald step, for the space between whole blocks.', tier: 'advanced', scope: 'token', min: 0, max: 80, step: 1, defaultValue: SPACING_DEFAULTS.xxxl },
-    ]),
+    // Fix run D8: the §I 'Emerald scale' group is gone — it is the same live group as the app scale above.
     ...metricDials('layout', 'Screen and card metrics', [
       { key: 'layout.screenGutter', label: 'Screen gutter', description: 'The horizontal margin every template screen keeps from the edges.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, defaultValue: LAYOUT_METRIC_DEFAULTS.screenGutter },
       { key: 'layout.cardPadding', label: 'Card padding', description: 'The breathing room inside every card.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, defaultValue: LAYOUT_METRIC_DEFAULTS.cardPadding },
@@ -1161,8 +1152,9 @@ function layoutDialEntries(): StudioEntry[] {
   return dialEntries('layout', 'Template screens', [
     { key: 'layout.pagePadding', label: 'Page side padding', description: 'The horizontal gutter on every template screen (17 screens read it live).', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, inheritsFrom: 'layout.screenGutter', defaultValue: layout.screenGutter },
     { key: 'layout.contentTopPad', label: 'Content top spacing', description: 'Between the header and the first content block on template screens.', tier: 'basic', scope: 'token', min: 0, max: 48, step: 1, inheritsFrom: 'layout.screenGutter', defaultValue: layout.screenGutter },
-    { key: 'layout.formSectionGap', label: 'Form section gap', description: 'Between the sections of every form template screen.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, inheritsFrom: 'spacing.lg', defaultValue: spacing.lg },
-    { key: 'layout.detailSectionGap', label: 'Detail section gap', description: 'Between the sections of every detail template screen.', tier: 'basic', scope: 'token', min: 0, max: 48, step: 1, inheritsFrom: 'spacing.xl', defaultValue: spacing.xl },
+    { key: 'layout.formSectionGap', label: 'Form section gap', description: 'Between the sections of every form template screen.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, inheritsFrom: 'theme.spacing.lg', defaultValue: spacing.lg },
+    // Fix run D8: the detail gap is 20, which is lg + xs on the one scale — no single step is 20, so it has no parent.
+    { key: 'layout.detailSectionGap', label: 'Detail section gap', description: 'Between the sections of every detail template screen.', tier: 'basic', scope: 'token', min: 0, max: 48, step: 1, defaultValue: spacing.lg + spacing.xs },
   ]);
 }
 

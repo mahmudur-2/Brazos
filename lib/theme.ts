@@ -9,7 +9,7 @@ import {
   shadows as tokenShadows,
   litCard as tokenLitCard,
   THEME_RADIUS_DEFAULTS,
-  THEME_SPACING_DEFAULTS,
+  spacing,
   withAlpha as alpha,
   type EmeraldPalette,
 } from '../ui/tokens';
@@ -384,28 +384,18 @@ export const darkColors: ColorPalette = {
 } as const;
 
 /**
- * RUN T1 (C2) — THE SCALE THE SCREENS ACTUALLY READ, AND WHY IT IS LIVE TOO.
+ * THE SCALE THE SCREENS READ (RUN T1 C2; fix run D8, 2026-10-03).
  *
- * D1 names ui/tokens.ts's `spacing` and `radius`, and those are live. But this
- * file exports its OWN two scales — a different, older set of numbers
- * (`xl` is 24 here and 20 there; `radius.sm` is 8 here and 13 there) — and a
- * census of the tracked tree at the start of this run found 92 files importing
- * `spacing`/`radius` from HERE against 17 from ui/tokens.ts. Turning only the
- * Emerald scale live would have shipped a spacing dial that moves a sixth of
- * the app while the operator watches the other five sixths sit still, so both
- * surfaces resolve through the same slot, under their own keys
- * (`theme.spacing.*` / `theme.radius.*`) and their own shipped defaults.
+ * Spacing is ONE live group now: ui/tokens.ts's `spacing`, re-exported here,
+ * so `spacing.xl` is 24 whichever surface a file imports it from. Before D8
+ * this file built its own group from the same table while ui/tokens.ts kept
+ * §I's older numbers (`xl` 20) under the same names. The studio addresses the
+ * one group as `theme.spacing.*`.
  *
- * The two scales are NOT merged and NOT aliased: their values genuinely
- * differ, and pointing one at the other would have moved rendered pixels in
- * every one of those 92 files. Merging them is a screen-by-screen migration,
- * which is not this run.
- *
- * The NUMBERS live in ui/tokens.ts beside §I's, because that file is the token
- * definition layer and the studio registry has to read both scales' defaults
- * from one place. What lives here is the live binding every screen imports.
+ * Radius is still this file's own group, built from ui/tokens.ts's
+ * THEME_RADIUS_DEFAULTS and addressed as `theme.radius.*`.
  */
-export const spacing = metricGroup('theme.spacing', THEME_SPACING_DEFAULTS, {});
+export { spacing };
 
 export const radius = metricGroup('theme.radius', THEME_RADIUS_DEFAULTS, {
   /** A capsule, not a size — see ui/tokens.ts's `radius.pill`. No dial. */

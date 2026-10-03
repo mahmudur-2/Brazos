@@ -162,7 +162,7 @@ export function ComponentCatalog() {
       />
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: navClearance + spacing.xxl }]}
+        contentContainerStyle={[styles.content, { paddingBottom: navClearance + spacing.xl }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: layout.screenGutter,
-    gap: spacing.xxl,
+    gap: spacing.xl,
   },
   section: {
     gap: spacing.md,

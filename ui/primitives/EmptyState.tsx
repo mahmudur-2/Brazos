@@ -79,7 +79,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     gap: spacing.md,
     paddingHorizontal: layout.screenGutter,
     // Keeps a long body from running edge to edge on a large phone.
-    paddingVertical: spacing.xxxl,
+    paddingVertical: spacing.xxl,
   },
   glyph: {
     width: 56,
@@ -102,7 +102,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   action: {
     minHeight: controls.buttonHeightSmall,
     justifyContent: 'center',
-    paddingHorizontal: spacing.xxl,
+    paddingHorizontal: spacing.xl,
     borderRadius: radius.pill,
     backgroundColor: colors.forest,
     marginTop: spacing.xs,

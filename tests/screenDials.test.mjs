@@ -298,7 +298,7 @@ const TOKENS_SOURCE = await read('ui/tokens.ts');
 const TABLE_FOR = {
   'theme.spacing': 'THEME_SPACING_DEFAULTS',
   'theme.radius': 'THEME_RADIUS_DEFAULTS',
-  spacing: 'SPACING_DEFAULTS',
+  // Fix run D8: one spacing scale — 'theme.spacing' is the only spacing table.
   radius: 'RADIUS_DEFAULTS',
 };
 function shippedMetric(metricKey) {

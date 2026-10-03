@@ -211,7 +211,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     justifyContent: 'center',
     alignItems: 'center',
     padding: layout.screenGutter,
-    gap: spacing.xl,
+    gap: spacing.lg + spacing.xs,
   },
   glyph: {
     width: 88,
@@ -260,7 +260,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg + spacing.xs,
   },
   // A row's buttons share the width; the label shrinks rather than the pill,
   // so the two keep one height and one radius.

@@ -285,7 +285,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   footer: {
     paddingHorizontal: layout.screenGutter,
     // 22 — the button centred between the divider and the home indicator.
-    paddingTop: spacing.xl + 2,
+    paddingTop: spacing.lg + spacing.xs + 2,
     borderTopWidth: 1,
     borderTopColor: colors.line,
   },
