@@ -83,6 +83,14 @@ test('[static] D7: every section label spreads EYEBROW_TYPE and sets no size, we
   assert.ok(labels >= 35, `the census must actually find the labels (found ${labels})`);
 });
 
+test('[static] D7 review: a label in a third-of-the-phone tile shrinks to one line rather than breaking mid-word', () => {
+  // Earnings' three buckets: "TRANSFERRED" at the one measure is wider than its tile.
+  assert.match(
+    read('screens/EarningsScreen.tsx'),
+    /<Text style=\{styles\.bucketLabel\} numberOfLines=\{1\} adjustsFontSizeToFit minimumFontScale=\{0\.75\}>/,
+  );
+});
+
 test('[static] D7: the Filters section label is the eyebrow colour, not the muted grey', () => {
   assert.match(read('components/JobFilterSheet.tsx'), /sectionLabel: \{\s*\.\.\.EYEBROW_TYPE,\s*color: colors\.eyebrow,\s*\}/);
 });

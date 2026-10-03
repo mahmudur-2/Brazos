@@ -303,7 +303,11 @@ function Bucket({
       <View style={[styles.bucketGlyph, isDark && styles.bucketGlyphDark]}>
         <Ionicons name={icon} size={16} color={isDark ? colors.gold : colors.emerald} />
       </View>
-      <Text style={styles.bucketLabel}>{label}</Text>
+      {/* Fix run D7 review: the one eyebrow measure (12 / 1.5) is wider than a third of the
+          phone, so "TRANSFERRED" broke mid-word ("TRANSFERR / ED"). One line, shrunk to fit. */}
+      <Text style={styles.bucketLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+        {label}
+      </Text>
       <Text style={styles.bucketAmount}>{formatBudget(cents)}</Text>
       <Text style={styles.bucketNote}>{note}</Text>
     </View>
