@@ -129,12 +129,24 @@ test('[static] the app: the buttons registered, the intents allow-listed, the co
   assert.match(checkout, /paymentProvider\.beginJobCheckout\(job\.id, \{ saveCard: saveCard && !savedCard \}\)/);
   // One-tap: only with oneTap, a saved card, a fundable job, figures, payments on, and nothing in flight —
   // and it watches the ledger reach held exactly as after the sheet.
+  // A4 (2026-10-03): the saved card pays at once ONLY when the arrival carries the card id an in-app
+  // confirm named (`oneTapCard === savedCard.id`). Any other one-tap arrival — a repeat visit's
+  // Confirm push, which gave no in-app confirm — opens the Pay & protect confirm on the saved-card
+  // path, which names the card and the amount; no charge happens out of sight.
   assert.match(
     checkout,
-    /if \(!params\.oneTap \|\| oneTapRef\.current \|\| !stripe \|\| !cardsRead \|\| !savedCard\) return; \/\/ [^]*?if \(params\.oneTapCard && params\.oneTapCard !== savedCard\.id\) return; if \(!canFund \|\| !figures \|\| !paymentsEnabled \|\| phase !== 'idle' \|\| funding\) return; oneTapRef\.current = true; void fundBySavedCard\(\);/
+    /if \(!params\.oneTap \|\| oneTapRef\.current \|\| !stripe \|\| !cardsRead \|\| !savedCard\) return; if \(!canFund \|\| !figures \|\| !paymentsEnabled \|\| phase !== 'idle' \|\| funding\) return; oneTapRef\.current = true; \/\/ [^]*?if \(params\.oneTapCard === savedCard\.id\) \{ void fundBySavedCard\(\); return; \} setDialogPath\('saved'\); setConfirmVisible\(true\);/
   );
   assert.match(checkout, /const result = await confirmWithSavedCard\(job\.id, savedCard\.id\); \/\/ [^]*?if \(result\.confirmed \|\| result\.ambiguous\) \{ await confirmPayment\(\); return; \}/);
-  assert.match(checkout, /if \(params\.oneTapCard && params\.oneTapCard !== savedCard\.id\) return;/);
+  // fundBySavedCard has exactly two callers: the matched-card branch above and the confirm's own
+  // onConfirm — never a bare one-tap flag.
+  const checkoutCode = read('screens/CheckoutScreen.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  const savedCardCalls = checkoutCode.match(/fundBySavedCard\b/g) ?? [];
+  assert.equal(savedCardCalls.length, 3, 'one definition and two callers (the named-card branch, the confirm)');
+  assert.match(checkout, /onConfirm=\{stripe \? \(dialogPath === 'saved' && savedCard \? fundBySavedCard : fundByCard\) : fundProtection\}/);
+  assert.doesNotMatch(checkout, /if \(params\.oneTapCard && params\.oneTapCard !== savedCard\.id\) return;/, 'a missing oneTapCard must not fall through to a charge');
+  // The confirm it opens names the card and the total.
+  assert.match(checkout, /`Charge \$\{formatBudget\(figures\?\.total \?\? null\)\} to \$\{dialogPath === 'saved' && savedCard \? cardLabel\(savedCard\) : 'your card'\}\?`/);
   // Money is integer cents, through formatBudget, and the button names the card.
   assert.match(checkout, /title=\{`Protect \$\{formatBudget\(figures\.total\)\} with card ···· \$\{savedCard\.last4\}`\}/);
   // The saved card is read before the page paints, and one-tap is one spinner until held.

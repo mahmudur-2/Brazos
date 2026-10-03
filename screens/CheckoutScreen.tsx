@@ -426,15 +426,22 @@ export function CheckoutScreen() {
     }
   }
 
-  // Idea 20: arriving from "Accept & pay" or a push's Confirm — the confirmation already given — the
-  // saved card pays at once. Without one, this is ordinary Checkout.
+  // Idea 20: arriving from "Accept & pay" — the confirmation already given, naming this card — the
+  // saved card pays at once. A4 (2026-10-03): every other one-tap arrival (a repeat visit's Confirm
+  // push, which gave no in-app confirm) opens the Pay & protect confirm instead, naming the card and
+  // the amount; the charge runs only from that confirm. No charge ever happens out of sight (the
+  // build run's ruling 1). Without a saved card, this is ordinary Checkout.
   useEffect(() => {
     if (!params.oneTap || oneTapRef.current || !stripe || !cardsRead || !savedCard) return;
-    // The card the accept's confirm named, and no other.
-    if (params.oneTapCard && params.oneTapCard !== savedCard.id) return;
     if (!canFund || !figures || !paymentsEnabled || phase !== 'idle' || funding) return;
     oneTapRef.current = true;
-    void fundBySavedCard();
+    // The card the accept's confirm named, and no other, pays without a second confirm.
+    if (params.oneTapCard === savedCard.id) {
+      void fundBySavedCard();
+      return;
+    }
+    setDialogPath('saved');
+    setConfirmVisible(true);
     // fundBySavedCard is this render's own; the gate above is what the effect waits on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.oneTap, cardsRead, savedCard, canFund, figures, paymentsEnabled, phase, funding]);
