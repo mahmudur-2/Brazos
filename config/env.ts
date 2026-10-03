@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+/** Trimmed and lower-cased, as the mode resolvers read their variable. */
+function normalized(value: unknown): unknown {
+  return typeof value === 'string' ? value.trim().toLowerCase() : value;
+}
+
 /**
  * THE ONE PLACE THE APP READS ITS ENVIRONMENT.
  *
@@ -63,13 +68,13 @@ const EnvSchema = z.object({
   EXPO_PUBLIC_SUPABASE_KEY: z.string().min(20),
 
   /**
-   * Declared, never inferred from the build type. Note that the SHAPE
-   * accepted here is deliberately wider than the BEHAVIOUR
-   * lib/adapters/paymentsMode.ts implements: 'stripe' parses as a legal value
-   * and the resolver still fails closed on it, because a real provider is not
-   * wired. The schema says what may be written; the resolver says what runs.
+   * Declared, never inferred from the build type. The schema says what may be
+   * written; lib/adapters/paymentsMode.ts says what runs (unset: sandbox in
+   * development, disabled otherwise; 'stripe' is the card path, R6a). FIX-RUN
+   * B15: the value is trimmed and lower-cased first, as the resolver reads it,
+   * so a value the resolver accepts can never crash the launch here.
    */
-  EXPO_PUBLIC_PAYMENTS_MODE: z.enum(['sandbox', 'stripe', 'disabled']).default('disabled'),
+  EXPO_PUBLIC_PAYMENTS_MODE: z.preprocess(normalized, z.enum(['sandbox', 'stripe', 'disabled']).default('disabled')),
 
   /** Publishable only. A secret key here would ship in the bundle. */
   EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().startsWith('pk_').optional(),
@@ -80,8 +85,14 @@ const EnvSchema = z.object({
   /** Absent means product analytics is off, which is a valid configuration. */
   EXPO_PUBLIC_POSTHOG_KEY: z.string().optional(),
 
-  /** Which phone-auth backend the OTP flow uses. Mock until the real one is on. */
-  EXPO_PUBLIC_PHONE_AUTH_MODE: z.enum(['mock', 'supabase']).default('mock'),
+  /**
+   * Which phone-auth backend the OTP flow uses — lib/phoneAuth/mode.ts decides
+   * (unset: mock in development, disabled otherwise; mock is refused outside
+   * development). FIX-RUN B15: `disabled` is a value the resolver accepts, and
+   * the old enum without it threw at module load — a launch crash for a
+   * correct setting. No default here: the resolver's own is the only one.
+   */
+  EXPO_PUBLIC_PHONE_AUTH_MODE: z.preprocess(normalized, z.enum(['mock', 'supabase', 'disabled']).optional()),
 });
 
 const parsed = EnvSchema.safeParse({

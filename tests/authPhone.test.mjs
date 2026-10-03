@@ -343,3 +343,21 @@ test('B2 · Welcome routes through PHONE_ENTRY and the email screens gate their 
     assert.match(src, /\{PHONE_ENTRY\.live && \(\s*<AuthButton\s+title="Use Phone Number Instead"/, `${path} hides the phone button while SMS is off`);
   }
 });
+
+// ===========================================================================
+// FIX-RUN B15 — the env schema accepts every value the resolver accepts
+// ===========================================================================
+
+test('B15 · EXPO_PUBLIC_PHONE_AUTH_MODE: the schema enum is the resolver\'s recognised set, normalised the same way', () => {
+  const env = read('config/env.ts');
+  const schema = env.match(/EXPO_PUBLIC_PHONE_AUTH_MODE: z\.preprocess\(normalized, z\.enum\(\[([^\]]+)\]\)\.optional\(\)\)/);
+  assert.ok(schema, 'the phone-auth entry is a normalised, optional enum with no default of its own');
+  const accepted = [...schema[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]).sort();
+  const resolver = read('lib/phoneAuth/mode.ts');
+  const recognised = [...resolver.matchAll(/raw === '([a-z]+)'/g)].map((m) => m[1]).sort();
+  assert.deepEqual(accepted, recognised);
+  assert.deepEqual(accepted, ['disabled', 'mock', 'supabase']);
+  // Both read the value trimmed and lower-cased.
+  assert.match(resolver, /\.trim\(\)\.toLowerCase\(\)/);
+  assert.match(env, /function normalized\(value: unknown\): unknown \{\s*return typeof value === 'string' \? value\.trim\(\)\.toLowerCase\(\) : value;/);
+});
