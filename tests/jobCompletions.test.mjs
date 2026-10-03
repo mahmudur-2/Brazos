@@ -168,7 +168,8 @@ test('6 · Earnings buckets and rows read the take through the helper, bucketed 
 });
 
 test('7 · the worker’s job card shows the take, and the three-line breakdown off the row’s columns once the charge landed', () => {
-  assert.match(worker, /<MoneyText cents=\{workerTakeCents\(payment\)\} state=\{payment\.status\} \/>/);
+  // C4: the caption's facts ride along (approval, issue, payout setup) — the figure is the take.
+  assert.match(worker, /<MoneyText\s+cents=\{workerTakeCents\(payment\)\}\s+state=\{payment\.status\}\s+releaseRequested=\{isReleaseRequested\(payment\)\}\s+issueOpen=\{issueOpen\}\s+waitingOnPayoutSetup=\{waitingOnSetup\}\s+\/>/);
   assert.doesNotMatch(worker, /cents=\{payment\.amount_cents\}/);
   // Stripe only, and only on a held / released / paid_out row — never unfunded.
   assert.match(

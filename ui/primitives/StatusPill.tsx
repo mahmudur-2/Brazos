@@ -3,6 +3,7 @@ import { radius, spacing, type EmeraldPalette, type as typeScale } from '../toke
 import { metricStyles, useThemeColors, withAlpha } from '../../lib/theme';
 import { useOverrideNumber } from '../../lib/designOverrides';
 import { JOB_LIFECYCLE_LABELS } from '../../lib/jobLifecycle';
+import { PAYMENT_STATE_WORDS } from '../../lib/moneyCopy';
 
 /**
  * The enum-driven status pill (§I).
@@ -134,20 +135,12 @@ const PAYMENT_TONES: Record<PaymentStatus, Tone> = {
 
 /**
  * §H.3's mandatory wording. "Paid" must never appear before `released` — that
- * is a hard product rule, not a copy preference, so these strings live here
- * next to the type rather than being passed in by each caller.
+ * is a hard product rule, not a copy preference, so these strings are a fixed
+ * map rather than being passed in by each caller. C4 (2026-10-03): the map is
+ * the money glossary's viewer-neutral state words (lib/moneyCopy.ts), so the
+ * pill and every caption speak one vocabulary.
  */
-export const PAYMENT_LABELS: Record<PaymentStatus, string> = {
-  unfunded: 'Not funded',
-  authorized: 'Payment authorized — not charged yet',
-  held: 'Funds held in protection',
-  released: 'Released to worker',
-  paid_out: 'Paid out',
-  failed: 'Payment failed',
-  voided: 'Payment voided',
-  refunded: 'Refunded',
-  partially_refunded: 'Partially refunded',
-};
+export const PAYMENT_LABELS: Record<PaymentStatus, string> = PAYMENT_STATE_WORDS;
 
 type StatusPillProps =
   | { kind: 'job'; status: JobStatus }

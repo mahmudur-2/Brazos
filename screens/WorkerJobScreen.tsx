@@ -61,6 +61,7 @@ import {
 } from '../lib/jobs';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { paymentsMode } from '../lib/adapters/payments';
+import { paymentEyebrow } from '../lib/moneyCopy';
 import {
   brazosFeeCents,
   fetchJobPaymentState,
@@ -573,21 +574,8 @@ export function WorkerJobScreen() {
             status, and nothing here says released before it is. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
         <Text style={[styles.paymentEyebrow, isDark && styles.paymentEyebrowDark, isHeld(payment) && !isReleaseRequested(payment) && !isReleased(payment) && styles.eyebrowGold]}>
-          {paymentsMode === 'sandbox'
-            ? isReleased(payment)
-              ? 'PAYMENT RELEASED · TEST MODE'
-              : isHeld(payment)
-                ? 'PAYMENT PROTECTED · TEST MODE'
-                : 'PAYMENT · TEST MODE'
-            : isReleased(payment)
-              ? 'PAYMENT RELEASED'
-              : isReleaseRequested(payment)
-                ? waitingOnSetup
-                  ? 'APPROVED · SET UP PAYOUTS TO RECEIVE IT'
-                  : 'APPROVED · PAYOUT ON ITS WAY'
-                : isHeld(payment)
-                  ? 'PAYMENT PROTECTED'
-                  : 'PAYMENT'}
+          {/* C4: PAYMENT in every state; the caption under the take says which. */}
+          {paymentEyebrow(paymentsMode === 'sandbox')}
         </Text>
         {isReleased(payment) ? (
           <ReleasedTick paymentId={payment.id} releasedAt={payment.released_at} color={isDark ? colors.gold : colors.emerald} size={18} />
@@ -596,7 +584,13 @@ export function WorkerJobScreen() {
         {/* R6c (D7): the figure a worker reads as "yours" is the take —
             amount_cents − platform_fee_cents through the one helper.
             Sandbox rows carry a zero fee, so nothing changes there. */}
-        <MoneyText cents={workerTakeCents(payment)} state={payment.status} />
+        <MoneyText
+          cents={workerTakeCents(payment)}
+          state={payment.status}
+          releaseRequested={isReleaseRequested(payment)}
+          issueOpen={issueOpen}
+          waitingOnPayoutSetup={waitingOnSetup}
+        />
         <Text style={styles.paymentNote}>
           {(() => {
             // A7: the disputed/awaiting fork comes from THE derivation

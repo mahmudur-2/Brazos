@@ -58,6 +58,7 @@ import {
 } from '../lib/payments';
 import { customerChargeCents } from '../lib/paymentRules';
 import { paymentsMode } from '../lib/adapters/payments';
+import { paymentEyebrow } from '../lib/moneyCopy';
 import { cardLabel, listSavedCards, type SavedCard } from '../lib/paymentMethods';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
@@ -1214,9 +1215,9 @@ export function ClientJobDetailScreen() {
                 <View style={styles.paymentShield}>
                   <Ionicons name="shield-outline" size={22} color={colors.mark} />
                 </View>
-                {/* D16: sandbox keeps its label verbatim; stripe drops it. */}
+                {/* C4: PAYMENT in every state; the caption carries "Held in protection". */}
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark, styles.eyebrowGold]}>
-                  {paymentsMode === 'sandbox' ? 'PROTECTED PAYMENT · TEST MODE' : 'PROTECTED PAYMENT'}
+                  {paymentEyebrow(paymentsMode === 'sandbox')}
                 </Text>
                 {/* Tier A (C2, D-4): the customer's held figure is the row's
                     charge_amount_cents — the agreed price is said beside the
@@ -1243,7 +1244,7 @@ export function ClientJobDetailScreen() {
                 <View style={styles.paymentShield}>
                   <Ionicons name="shield-outline" size={22} color={colors.mark} />
                 </View>
-                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>PAYMENT</Text>
+                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>{paymentEyebrow(paymentsMode === 'sandbox')}</Text>
                 <MoneyText cents={customerChargeCents(payment)} state={payment.status} />
                 <Text style={styles.paymentNote}>
                   Your payment didn’t go through in time. Nothing was charged.
@@ -1262,13 +1263,15 @@ export function ClientJobDetailScreen() {
                   <Ionicons name="shield-outline" size={22} color={colors.mark} />
                 </View>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
-                  {paymentsMode === 'sandbox'
-                    ? 'PAYMENT · TEST MODE'
-                    : releaseRequested
-                      ? 'APPROVED · PAYOUT ON ITS WAY'
-                      : 'PAYMENT'}
+                  {paymentEyebrow(paymentsMode === 'sandbox')}
                 </Text>
-                <MoneyText cents={customerChargeCents(payment)} state={payment.status} />
+                <MoneyText
+                  cents={customerChargeCents(payment)}
+                  state={payment.status}
+                  releaseRequested={releaseRequested}
+                  issueOpen={!!openDispute}
+                  counterpartFirstName={workerFirstName}
+                />
                 {/* A10 (2026-10-03): "on its way" says what it waits for. The transfer lands only
                     once the worker's payout account is enabled; until then the row stays here
                     with release requested, and the worker's own job screen nudges them to set

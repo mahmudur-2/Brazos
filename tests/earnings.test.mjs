@@ -190,7 +190,9 @@ test('#63 · an approved payment waiting on the payout setup says so, and only t
   assert.match(screen, /navigateAcrossTabs\('MyJobs', 'WorkerJob', \{ jobId: row\.job_id \}\)/, 'a ledger row opens its job');
   const job = await read('screens/WorkerJobScreen.tsx');
   assert.match(job, /const waitingOnSetup = payment \? payoutSetupNotice\(payouts, \[payment\]\) !== null : false;/);
-  assert.match(job, /'APPROVED · SET UP PAYOUTS TO RECEIVE IT'/);
+  // C4: the eyebrow is PAYMENT; the caption under the take names the step (lib/moneyCopy.ts).
+  assert.match(job, /waitingOnPayoutSetup=\{waitingOnSetup\}/);
+  assert.match(await read('lib/moneyCopy.ts'), /'Approved — waiting on your payout setup'/);
   assert.match(job, /approved the finished work\. \$\{PAYOUT_SETUP_NOTICE\}`/);
   assert.match(job, /navigateAcrossTabs\('Profile', 'Payouts', \{\}\)/, 'one tap to Payouts');
   assert.match(job, /if \(paymentsMode !== 'stripe'\) return;\s*fetchMyPayoutsStatus\(\)/, 'no RPC on the sandbox path');

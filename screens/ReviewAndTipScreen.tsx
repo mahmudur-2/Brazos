@@ -26,6 +26,9 @@ import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
+import { paymentEyebrow } from '../lib/moneyCopy';
+import { customerChargeCents } from '../lib/paymentRules';
+import { firstNameOf } from '../lib/liveJobStatus';
 import {
   classifyTipPoll,
   fetchJobPaymentState,
@@ -512,14 +515,14 @@ export function ReviewAndTipScreen() {
                 {/* D16 / D23: sandbox keeps its wording verbatim; a stripe
                     row is either released or approved with the payout on its
                     way — MoneyText keeps the row's real status either way. */}
-                <Text style={styles.eyebrow}>
-                  {paymentsMode === 'sandbox'
-                    ? 'PAYMENT RELEASED · TEST MODE'
-                    : released
-                      ? 'PAYMENT RELEASED'
-                      : 'APPROVED · PAYOUT ON ITS WAY'}
-                </Text>
-                <MoneyText cents={payment.amount_cents} state={payment.status} />
+                {/* C4: PAYMENT in every state; the caption says Paid or Approved — on its way. */}
+                <Text style={styles.eyebrow}>{paymentEyebrow(paymentsMode === 'sandbox')}</Text>
+                <MoneyText
+                  cents={customerChargeCents(payment)}
+                  state={payment.status}
+                  releaseRequested={!!payment.release_requested_at}
+                  counterpartFirstName={firstNameOf(workerName)}
+                />
                 <Text style={styles.cardNote}>
                   {paymentsMode === 'sandbox'
                     ? payment.release_reason === 'auto_approved'
@@ -558,7 +561,7 @@ export function ReviewAndTipScreen() {
               <Text style={styles.sectionTitle}>Add a tip?</Text>
               {tipDone && tip ? (
                 <>
-                  <MoneyText cents={tip.amount_cents} state={tip.status} />
+                  <MoneyText cents={tip.amount_cents} state={tip.status} tip counterpartFirstName={firstNameOf(workerName)} />
                   <Text style={styles.cardNote}>
                     {paymentsMode === 'sandbox'
                       ? `Your tip went to ${workerName ?? 'the worker'} on top of the job payment. Test mode — no real money moved.`

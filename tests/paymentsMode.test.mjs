@@ -206,21 +206,18 @@ const SANDBOX_STRINGS = {
     'TEST MODE — no real money moves. No real money is charged,',
     'None in test mode',
     'Total (test)',
-    'Finish protecting funds (test)',
-    'Authorize & protect ${formatBudget(amountCents)} (test)',
+    '${PAY_AND_PROTECT} (test)',
+    '${PAY_AND_PROTECT} ${formatBudget(amountCents)} (test)',
     'confirms the amount in test mode. Nothing is charged.',
     'This authorizes the amount and holds it in protection. Test mode — no real money is charged.',
   ],
   'screens/ApproveOrDisputeScreen.tsx': [
-    'PAYMENT RELEASED · TEST MODE',
-    'HELD PAYMENT · TEST MODE',
     'Released automatically after 72 hours with no issue reported. Test mode — no real money moved.',
     'You approved the work and the funds were released. Test mode — no real money moved.',
     'release waits while a report is open. Test mode, no real money.',
     'releases the held funds to the worker. It can’t be undone. Test mode — no real money moves.',
   ],
   'screens/ReviewAndTipScreen.tsx': [
-    'PAYMENT RELEASED · TEST MODE',
     'Released automatically after 72 hours. Test mode — no real money moved.',
     'Released on your approval. Test mode — no real money moved.',
     'on top of the job payment. Test mode — no real money moved.',
@@ -230,10 +227,10 @@ const SANDBOX_STRINGS = {
     'One tip per job. Test mode — no real money moves.',
   ],
   'screens/ClientJobDetailScreen.tsx': [
-    'PROTECTED PAYMENT · TEST MODE',
     'Funds stay held until you approve the finished work. Test mode — no real money moves.',
-    'PAYMENT · TEST MODE',
   ],
+  // C4 (2026-10-03): every payment eyebrow is paymentEyebrow(); its sandbox arm lives here.
+  'lib/moneyCopy.ts': ['PAYMENT · TEST MODE'],
   // A5 (2026-10-03): the accept confirm's body is ONE text for the client's job page and Bid
   // detail, so its sandbox sentence lives in lib/offerCopy.ts, guarded by the `sandbox` flag the
   // two screens pass from the resolved mode (both screens stay listed so their guard is checked).
@@ -241,9 +238,6 @@ const SANDBOX_STRINGS = {
     'protect the payment in checkout, in test mode (no real money moves).',
   ],
   'screens/WorkerJobScreen.tsx': [
-    'PAYMENT RELEASED · TEST MODE',
-    'PAYMENT PROTECTED · TEST MODE',
-    'PAYMENT · TEST MODE',
     'Released automatically after 72 hours with no response from the customer. Test mode — no real money.',
     'approved the finished work and the funds were released. Test mode — no real money.',
     'the funds release automatically. Test mode — no real money.',

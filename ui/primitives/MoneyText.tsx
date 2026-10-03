@@ -1,9 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { formatBudget } from '../../lib/jobs';
+import { paymentCaption } from '../../lib/moneyCopy';
 import { spacing, type EmeraldPalette, type as typeScale } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
-import { useModePerspective, type AppMode } from '../../modes';
-import { PAYMENT_LABELS, type PaymentStatus } from './StatusPill';
+import { useModePerspective } from '../../modes';
+import type { PaymentStatus } from './StatusPill';
 
 /**
  * Money, rendered with payment-state-accurate labelling (§I, §H.3).
@@ -14,32 +15,24 @@ import { PAYMENT_LABELS, type PaymentStatus } from './StatusPill';
  *    (CLAUDE.md's invariant). This component takes cents and never a
  *    pre-formatted string, so a caller cannot route around that.
  * 2. "Paid" never appears before the payment reaches `released` (§H.3). The
- *    caption comes from a fixed map keyed by state — there is no prop that
+ *    caption comes from a fixed table keyed by state — there is no prop that
  *    lets a screen pass its own wording, because that is exactly how a held
  *    balance ends up mislabelled as paid.
  *
  * Passing no `state` renders a plain amount with no payment claim at all,
  * which is the correct shape for a budget or a bid — neither is a payment.
  *
- * A6 (2026-10-03): ONE captions map. The state captions are StatusPill's
- * PAYMENT_LABELS (byte-frozen in tests/statusVocabulary.test.mjs); this file
- * no longer keeps a second copy. The settled captions depend on who is
- * viewing, because the figure does: the customer's MoneyText carries their
- * CHARGE, the worker's carries their TAKE, and "$86 · Released to worker"
- * under the customer's own $86 read their charge as the worker's money. The
- * viewer is the mode from ModeContext (CLAUDE.md: never a hand-passed prop),
- * and the override exists only for settled states, so "paid" still appears
- * only once the ledger says released.
+ * C4 (2026-10-03): THE copy table is lib/moneyCopy.ts's paymentCaption(), by
+ * state and viewer. The viewer is the mode from ModeContext (CLAUDE.md: never
+ * a hand-passed prop), because the figure depends on it: the customer's
+ * MoneyText carries their CHARGE, the worker's their TAKE. What a screen may
+ * pass are FACTS the caption depends on — an approval already requested, an
+ * open issue, payouts not set up, a tip, the other person's first name —
+ * never words.
  */
 
 /** States where the amount is real money that has actually moved or settled. */
 const SETTLED: PaymentStatus[] = ['released', 'paid_out'];
-
-/** The viewer-specific captions, settled states only — see the header. */
-const VIEWER_CAPTIONS: Record<AppMode, Partial<Record<PaymentStatus, string>>> = {
-  customer: { released: 'Paid', paid_out: 'Paid' },
-  worker: { released: 'You received' },
-};
 
 type MoneyTextProps = {
   /** Integer cents. Never dollars — see CLAUDE.md's money invariant. */
@@ -50,9 +43,29 @@ type MoneyTextProps = {
   /** Hides the caption while keeping the state-driven colour. For dense rows
    *  where the same caption is already shown once for the whole group. */
   captionHidden?: boolean;
+  /** D23: release_requested_at is set on this held row. */
+  releaseRequested?: boolean;
+  /** An open issue report is holding this payment. */
+  issueOpen?: boolean;
+  /** #63: approved, and the worker's payout account is not set up yet. */
+  waitingOnPayoutSetup?: boolean;
+  /** This row is a tip. */
+  tip?: boolean;
+  /** The other person's first name, for "on its way to Sam". */
+  counterpartFirstName?: string | null;
 };
 
-export function MoneyText({ cents, state, size = 'md', captionHidden = false }: MoneyTextProps) {
+export function MoneyText({
+  cents,
+  state,
+  size = 'md',
+  captionHidden = false,
+  releaseRequested,
+  issueOpen,
+  waitingOnPayoutSetup,
+  tip,
+  counterpartFirstName,
+}: MoneyTextProps) {
   const { emerald: colors } = useThemeColors();
   const styles = stylesFor(colors);
   const perspective = useModePerspective();
@@ -62,7 +75,12 @@ export function MoneyText({ cents, state, size = 'md', captionHidden = false }: 
   // the accent.
   const amountColor =
     state && !SETTLED.includes(state) ? colors.muted : colors.money;
-  const caption = state ? VIEWER_CAPTIONS[perspective][state] ?? PAYMENT_LABELS[state] : null;
+  const caption = state
+    ? paymentCaption(
+        { status: state, releaseRequested, issueOpen, waitingOnPayoutSetup, tip, counterpartFirstName },
+        perspective
+      )
+    : null;
 
   return (
     <View style={styles.wrap}>

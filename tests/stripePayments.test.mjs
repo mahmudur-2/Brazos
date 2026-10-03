@@ -473,7 +473,10 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
   assert.match(code, /TEST MODE — no real money moves\. No real money is charged/);
   assert.match(code, /'None in test mode'/);
   assert.match(code, /Total \(test\)/);
-  assert.match(code, /Finish protecting funds \(test\)/);
+  // C4: one action word — Pay & protect — in both modes.
+  assert.match(code, /`\$\{PAY_AND_PROTECT\} \(test\)`/);
+  assert.match(code, /confirmText=\{PAY_AND_PROTECT\}/);
+  assert.doesNotMatch(code, /Authorize & protect|Finish protecting/);
   assert.match(code, /This authorizes the amount and holds it in protection/);
   // The stripe copy never says paid, and the sheet's success is never "held".
   const stripeCopy = [
@@ -507,9 +510,12 @@ test('[static] a held row with release_requested_at cannot bounce between Review
   assert.match(approve, /paymentProvider\.releaseJobPayment\(job\.id\)/);
   // D23 (5): the truth on the approved row — on its way, released only when
   // the transfer lands — and never "paid".
-  assert.match(approve, /APPROVED · PAYOUT ON ITS WAY/);
+  // C4: the eyebrow is PAYMENT; the caption under the charge says "Approved — on its way".
+  assert.match(approve, /releaseRequested=\{releaseRequested\}/);
   assert.match(approve, /You approved the work\. The payment is on its way to the worker and shows as released when the transfer lands\./);
-  assert.match(review, /APPROVED · PAYOUT ON ITS WAY/);
+  assert.match(approve, /Approved automatically after 72 hours with no issue reported\. The payment is on its way/);
+  assert.doesNotMatch(approve, /Released automatically after 72 hours with no issue reported\. The payment is on its way/, 'requested is never called released');
+  assert.match(review, /releaseRequested=\{!!payment\.release_requested_at\}/);
   // "can’t be paid early / until …" are honest negations; an affirmed "paid" is not.
   for (const [name, src] of [['ReviewAndTip', review], ['ApproveOrDispute', approve]]) {
     assert.doesNotMatch(src, /\bpaid\b(?! early| out| until)/i, `${name} must never say paid`);
@@ -526,8 +532,9 @@ test('[static] a held row with release_requested_at cannot bounce between Review
   assert.match(review, /<ReviewSection/);
   assert.doesNotMatch(review, /paymentsMode !== 'sandbox'/);
   // D16: the sandbox strings are verbatim and gated on the resolved mode.
-  assert.match(review, /paymentsMode === 'sandbox'\s*\?\s*'PAYMENT RELEASED · TEST MODE'/);
-  assert.match(approve, /paymentsMode === 'sandbox'\s*\?\s*released\s*\?\s*'PAYMENT RELEASED · TEST MODE'\s*:\s*'HELD PAYMENT · TEST MODE'/);
+  // C4: one eyebrow, its sandbox arm in lib/moneyCopy.ts.
+  assert.match(review, /\{paymentEyebrow\(paymentsMode === 'sandbox'\)\}/);
+  assert.match(approve, /\{paymentEyebrow\(paymentsMode === 'sandbox'\)\}/);
 });
 
 test('[static] ClientJobDetail offers Review on an approved row, counts down an unfunded one, and hides checkout when paused', () => {
@@ -554,16 +561,16 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   assert.match(code, /payment && fundingWindowClosed \? \(/);
   const closedCard = code.slice(code.indexOf('payment && fundingWindowClosed ? ('), code.indexOf(') : payment ? ('));
   // FIX-RUN B5: the closed window reads as a payment that didn't go through in time.
-  assert.match(closedCard, />PAYMENT</);
+  assert.match(closedCard, />\{paymentEyebrow\(paymentsMode === 'sandbox'\)\}</);
   assert.match(closedCard, /Your payment didn’t go through in time\. Nothing was charged\./);
   assert.match(closedCard, /title="Check again"/);
   assert.doesNotMatch(closedCard, /navigate\('Checkout'/);
   // D15: the checkout CTA is behind the kill switch.
   // 2026-09-26: the checkout CTA is the pinned primary, still behind the kill switch.
   assert.match(code, /canFundNow \? \(paymentsEnabled \? \{ label: 'Protect payment in checkout'/);
-  // D16: mode-aware eyebrows; sandbox verbatim.
-  assert.match(code, /paymentsMode === 'sandbox' \? 'PROTECTED PAYMENT · TEST MODE' : 'PROTECTED PAYMENT'/);
-  assert.match(code, /'PAYMENT · TEST MODE'/);
+  // D16 → C4: one eyebrow in every state, its sandbox arm in lib/moneyCopy.ts.
+  assert.equal((code.match(/paymentEyebrow\(paymentsMode === 'sandbox'\)/g) ?? []).length, 3);
+  assert.doesNotMatch(code, /PROTECTED PAYMENT|APPROVED · PAYOUT ON ITS WAY/);
   // A5 (2026-10-03): the accept confirm's body is the one shared text in lib/offerCopy.ts, which
   // the job page renders with the resolved mode; the checkout sentence lives there.
   assert.match(code, /message=\{acceptOfferConfirmMessage\(\{/);

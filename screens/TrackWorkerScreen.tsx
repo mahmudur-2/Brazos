@@ -11,6 +11,9 @@ import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { useFocusedPoll } from '../hooks/useFocusedPoll';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentsMode } from '../lib/adapters/payments';
+import { paymentEyebrow } from '../lib/moneyCopy';
+import { customerChargeCents } from '../lib/paymentRules';
+import { firstNameOf } from '../lib/liveJobStatus';
 import { fetchJobPaymentState, isReleased, isReleaseRequested, type Payment } from '../lib/payments';
 import { fetchOpenJobDispute } from '../lib/disputes';
 import { fetchProfileById } from '../lib/profiles';
@@ -266,13 +269,15 @@ export function TrackWorkerScreen() {
                     {/* D16 (R6a): the sandbox label renders in sandbox mode
                         only; the card path names the money state. */}
                     <Text style={[styles.eyebrow, isDark && styles.eyebrowDark, paymentsMode === 'stripe' && payment.status === 'held' && styles.eyebrowGold]}>
-                      {paymentsMode === 'sandbox'
-                        ? 'TEST MODE — NO REAL MONEY'
-                        : payment.status === 'held'
-                          ? 'PROTECTED PAYMENT'
-                          : 'PAYMENT'}
+                      {paymentsMode === 'sandbox' ? 'TEST MODE — NO REAL MONEY' : paymentEyebrow(false)}
                     </Text>
-                    <MoneyText cents={payment.amount_cents} state={payment.status} />
+                    <MoneyText
+                      cents={customerChargeCents(payment)}
+                      state={payment.status}
+                      releaseRequested={isReleaseRequested(payment)}
+                      issueOpen={hasOpenDispute === true}
+                      counterpartFirstName={firstNameOf(workerName)}
+                    />
                     {hasOpenDispute === true ? (
                       <Text style={styles.paymentNote}>
                         Your issue report is holding this payment.

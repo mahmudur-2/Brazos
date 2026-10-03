@@ -17,6 +17,7 @@ import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
+import { paymentEyebrow } from '../lib/moneyCopy';
 import {
   canOfferJobFunding,
   fetchJobPaymentState,
@@ -315,22 +316,19 @@ export function ApproveOrDisputeScreen() {
             {/* D16: mode-aware copy. Sandbox keeps its wording verbatim;
                 stripe says the same money fact without the sandbox label.
                 MoneyText keeps the row's real status — held is still
-                literally true on an approved stripe row (D23); the eyebrow
-                and the note carry the approval. */}
-            <Text style={styles.eyebrow}>
-              {paymentsMode === 'sandbox'
-                ? released
-                  ? 'PAYMENT RELEASED · TEST MODE'
-                  : 'HELD PAYMENT · TEST MODE'
-                : released
-                  ? 'PAYMENT RELEASED'
-                  : releaseRequested
-                    ? 'APPROVED · PAYOUT ON ITS WAY'
-                    : 'HELD PAYMENT'}
-            </Text>
+                literally true on an approved stripe row (D23); C4: the
+                eyebrow is PAYMENT in every state and the caption carries the
+                approval ("Approved — on its way to …"). */}
+            <Text style={styles.eyebrow}>{paymentEyebrow(paymentsMode === 'sandbox')}</Text>
             {/* Tier A (C2, D-4): the customer's held figure is the row's own
                 charge_amount_cents, in the card, the CTA and the dialog alike. */}
-            <MoneyText cents={customerChargeCents(payment)} state={payment.status} size="lg" />
+            <MoneyText
+              cents={customerChargeCents(payment)}
+              state={payment.status}
+              size="lg"
+              releaseRequested={releaseRequested}
+              issueOpen={dispute?.status === 'open'}
+            />
             {held && releaseDeadlineMs(job) != null ? (
               <Text style={styles.paymentNote}>
                 Releases automatically{' '}
@@ -351,7 +349,8 @@ export function ApproveOrDisputeScreen() {
                     : 'You approved the work and the payment was released to the worker.'
                   : releaseRequested
                     ? payment.release_reason === 'auto_approved'
-                      ? 'Released automatically after 72 hours with no issue reported. The payment is on its way to the worker and shows as released when the transfer lands.'
+                      ? // C4: requested is not released — the word waits for the transfer.
+                        'Approved automatically after 72 hours with no issue reported. The payment is on its way to the worker and shows as released when the transfer lands.'
                       : 'You approved the work. The payment is on its way to the worker and shows as released when the transfer lands.'
                     : releaseAllowed
                       ? // Tier A (C3, D23): approving REQUESTS the release; the

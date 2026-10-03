@@ -235,17 +235,21 @@ test('label snapshot · StatusPill maps are byte-frozen', () => {
     expired: 'Expired',
     superseded: 'Superseded',
   });
-  assert.deepEqual(parseLabelMap(pill, 'PAYMENT_LABELS', 'StatusPill'), {
-    unfunded: 'Not funded',
-    authorized: 'Payment authorized — not charged yet',
-    held: 'Funds held in protection',
-    released: 'Released to worker',
+  // C4 (2026-10-03, the money glossary): the payment pill's words ARE the glossary's
+  // viewer-neutral state words — one vocabulary, frozen here.
+  assert.match(pill, /export const PAYMENT_LABELS: Record<PaymentStatus, string> = PAYMENT_STATE_WORDS;/);
+  assert.deepEqual(parseLabelMap(read('lib/moneyCopy.ts'), 'PAYMENT_STATE_WORDS', 'moneyCopy'), {
+    unfunded: 'Not paid yet',
+    authorized: 'Card authorized — not charged yet',
+    released: 'Released',
     paid_out: 'Paid out',
-    failed: 'Payment failed',
-    voided: 'Payment voided',
+    failed: 'Payment didn’t go through',
+    voided: 'Payment cancelled',
     refunded: 'Refunded',
-    partially_refunded: 'Partially refunded',
+    partially_refunded: 'Partly refunded',
   });
+  assert.match(read('lib/moneyCopy.ts'), /\n  held: HELD_IN_PROTECTION,/);
+  assert.match(read('lib/moneyCopy.ts'), /export const HELD_IN_PROTECTION = 'Held in protection';/);
 });
 
 // The exact title-caser both StatusBadge and jobStage render fallback labels

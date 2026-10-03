@@ -439,14 +439,14 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 - tapOn: "Approve & release"
 # E2E3: approval replaces the approval screen with Review & tip outright
-# (screens/ApproveOrDisputeScreen.tsx, approveAndRelease), so the APPROVED
-# eyebrow waited for here is Review & tip's own, and there is no
+# (screens/ApproveOrDisputeScreen.tsx, approveAndRelease), so the "Approved — on its way"
+# caption (C4: the eyebrow says PAYMENT) waited for here is Review & tip's own, and there is no
 # "Continue to review" to tap — that link exists only when the screen opens
 # on an already-settled payment.
 - extendedWaitUntil:
-    visible: "APPROVED · PAYOUT ON ITS WAY"
+    visible: 'Approved — on its way to .*'
     timeout: 60000
-# E2E6 (A1): the approval screen renders the same eyebrow once the release
+# E2E6 (A1): the approval screen renders the same caption once the release
 # call returns (setPayment precedes the replace), so Review & tip's own
 # header title is waited for before the screenshot and the star.
 - extendedWaitUntil:

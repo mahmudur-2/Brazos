@@ -13,6 +13,8 @@ import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
+import { FEE_NAME, PAY_AND_PROTECT } from '../lib/moneyCopy';
+import { customerChargeCents } from '../lib/paymentRules';
 import {
   canOfferJobFunding,
   fetchJobPayment,
@@ -516,8 +518,8 @@ export function CheckoutScreen() {
     <Button
       title={
         authorizedOnly
-          ? 'Finish protecting funds (test)'
-          : `Authorize & protect ${formatBudget(amountCents)} (test)`
+          ? `${PAY_AND_PROTECT} (test)`
+          : `${PAY_AND_PROTECT} ${formatBudget(amountCents)} (test)`
       }
       onPress={() => setConfirmVisible(true)}
       loading={funding}
@@ -713,7 +715,7 @@ export function CheckoutScreen() {
                 ) : (
                   <>
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Platform fee</Text>
+                      <Text style={styles.summaryLabel}>{FEE_NAME}</Text>
                       {/* Read off the ledger row, never computed here (D10):
                           sandbox rows are written with a zero fee. */}
                       <Text style={styles.summaryValue}>
@@ -796,7 +798,7 @@ export function CheckoutScreen() {
                   title: 'Current payment state',
                   content: (
                     <View style={styles.paymentState}>
-                      <MoneyText cents={payment.amount_cents} state={payment.status} size="lg" />
+                      <MoneyText cents={customerChargeCents(payment)} state={payment.status} size="lg" />
                     </View>
                   ),
                 },
@@ -820,7 +822,7 @@ export function CheckoutScreen() {
               : 'Your card is charged the all-in total now, through the secure payment sheet. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
             : 'This authorizes the amount and holds it in protection. Test mode — no real money is charged. Funds stay held until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
         }
-        confirmText={stripe ? 'Pay & protect' : 'Authorize & protect'}
+        confirmText={PAY_AND_PROTECT}
         cancelText="Not now"
         loading={funding}
         onConfirm={stripe ? (dialogPath === 'saved' && savedCard ? fundBySavedCard : fundByCard) : fundProtection}
