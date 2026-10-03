@@ -211,7 +211,8 @@ export async function sharePhoto(url: string): Promise<ShareResult> {
     Sentry?.captureException(err, { extra: { site: 'sharing.sharePhoto', stage: 'native' } });
     return {
       ok: false,
-      message: err instanceof Error ? err.message : 'Could not share this photo.',
+      // The device's own reason went to Sentry above; the alert reads a plain line.
+      message: 'Could not share this photo. Try again.',
     };
   }
 }
@@ -280,7 +281,8 @@ export async function shareDocument(
     Sentry?.captureException(err, { extra: { site: 'sharing.shareDocument', stage: 'native' } });
     return {
       ok: false,
-      message: err instanceof Error ? err.message : 'Could not open this document.',
+      // The device's own reason went to Sentry above; the alert reads a plain line.
+      message: 'Could not open this document. Try again.',
     };
   }
 }

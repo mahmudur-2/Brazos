@@ -110,9 +110,10 @@ export function NotificationSettingsScreen() {
   // Report the device's actual delivery capability without prompting: this
   // screen should explain why nothing is arriving, not spend the one-shot
   // iOS permission dialog just by being opened.
-  useEffect(() => {
+  const checkPush = useCallback(() => {
     registerPushToken({ interactive: false }).then(setPushState);
   }, []);
+  useEffect(checkPush, [checkPush]);
 
   async function persist(patch: Partial<NotificationPrefs>, key: string) {
     if (!user || !prefs) return;
@@ -177,7 +178,7 @@ export function NotificationSettingsScreen() {
   const selectedCategories = profile?.categories ?? [];
 
   // One clear sentence about whether this device can actually receive a push.
-  function deliveryNotice(): { tone: 'warn' | 'info'; text: string; settings?: boolean } | null {
+  function deliveryNotice(): { tone: 'warn' | 'info'; text: string; settings?: boolean; retry?: boolean } | null {
     if (!pushState || pushState.ok) return null;
     if (pushState.reason === 'unsupported' && isExpoGo()) {
       return {
@@ -205,7 +206,14 @@ export function NotificationSettingsScreen() {
         settings: true,
       };
     }
-    return { tone: 'warn', text: pushState.message };
+    // B7 review: the 'error' branch's message carries the device's or the
+    // server's own text ("Could not get a push token: …"); it stays in the
+    // result for diagnostics and the person reads a plain line with a retry.
+    return {
+      tone: 'warn',
+      text: 'Brazos couldn’t set up notifications on this phone. Check your connection and try again.',
+      retry: true,
+    };
   }
 
   const notice = deliveryNotice();
@@ -247,6 +255,10 @@ export function NotificationSettingsScreen() {
               {notice.settings ? (
                 <Pressable onPress={() => void Linking.openSettings()} hitSlop={8} accessibilityRole="button">
                   <Text style={styles.noticeRetry}>Open Settings</Text>
+                </Pressable>
+              ) : notice.retry ? (
+                <Pressable onPress={checkPush} hitSlop={8} accessibilityRole="button">
+                  <Text style={styles.noticeRetry}>Try again</Text>
                 </Pressable>
               ) : null}
             </View>

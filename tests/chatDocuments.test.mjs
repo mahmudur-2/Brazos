@@ -788,7 +788,8 @@ test('[executed] a failed download is a message, never a silent dead bubble', as
     downloadError: new Error('Request failed with status 400'),
   });
   assert.equal(result.ok, false);
-  assert.equal(result.message, 'Request failed with status 400');
+  // B7 review: surfaced as a plain line — the server's own reason goes to Sentry, not the alert.
+  assert.equal(result.message, 'Could not open this document. Try again.');
   assert.equal(calls.shareAsync.length, 0, 'nothing is shared when nothing downloaded');
 });
 
