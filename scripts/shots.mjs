@@ -369,9 +369,10 @@ const TO_MEDIA = [
   { press: 'Create' },
   { pressText: 'Post a job' },
   { expect: 'What needs doing?' },
-  { fill: 'e.g. Walk my dog on weekday mornings', text: JOB_TITLE },
+  { fill: 'e.g. Walk my dog on weekdays', text: JOB_TITLE },
   { fill: 'Describe what you need done…', text: JOB_DESCRIPTION },
-  { pressText: JOB_CATEGORY_LABEL },
+  // The tile draws the short chip name ("Pet care"); its accessibility label is the full one.
+  { press: JOB_CATEGORY_LABEL },
   { press: 'Continue to Media' },
 ];
 
@@ -381,18 +382,21 @@ const TO_LOCATION = [
   { expect: 'Show the job' },
   { press: 'Continue to Location' },
   { expect: 'Where and when?' },
-  { fill: 'e.g. Sheepshead Bay, Brooklyn', text: JOB_AREA },
+  { fill: 'e.g. Sheepshead Bay', text: JOB_AREA },
 ];
 
-/** …then step 3 (Review), with the budget saved through the one editor. */
+/**
+ * …then step 3 (Review), with the budget typed through the price dropdown's own
+ * "Enter your own amount" row (the inline editor that replaced the dialog).
+ */
 const TO_REVIEW = [
   ...TO_LOCATION,
   { press: 'Continue to Review' },
   { expect: 'Review and publish' },
   { press: 'Edit budget' },
-  { expect: 'Edit Budget' },
-  { fill: 'e.g. 60', text: JOB_BUDGET },
-  { pressText: 'Save' },
+  { pressText: 'Enter your own amount' },
+  { fill: 'Your max', text: JOB_BUDGET },
+  { press: 'Done' },
 ];
 
 /**
@@ -423,13 +427,14 @@ const TO_CUSTOMER_PROFILE = [
 ];
 
 /**
- * …then the account & safety page behind the Settings card's "Account" chip.
- * "Log out" lives only on that page, never on the Profile root.
+ * …then the account & safety page behind the Profile hub's "Account & safety"
+ * row. "Private by default." is that page's own hero; the Profile root never
+ * draws it (Log out moved to the hub as Sign out).
  */
 const TO_ACCOUNT_SAFETY = [
   ...TO_CUSTOMER_PROFILE,
-  { press: 'Account and safety' },
-  { expect: 'Log out' },
+  { press: 'Account & safety' },
+  { expect: 'Private by default.' },
 ];
 
 const HOME_LANDMARKS = [
@@ -482,13 +487,14 @@ const TARGETS = [
       wait: 'Review and publish',
     },
     {
-      // The editor reopened over the finished review step, so it is
-      // photographed carrying the amount rather than empty.
+      // The price list reopened over the finished review step, so it is
+      // photographed carrying the amount rather than empty. The wait is the
+      // list's own last row, which only the open list draws.
       name: `postjob-budget-dialog-${colorScheme}`,
       mode: 'customer',
       colorScheme,
       recipe: [...TO_REVIEW, { expect: 'Review and publish' }, { press: 'Edit budget' }],
-      wait: 'Edit Budget',
+      wait: 'Enter your own amount',
     },
     {
       name: `postjob-published-${colorScheme}`,
@@ -599,52 +605,52 @@ const TARGETS = [
       name: `customer-profile-details-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Profile details' }],
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'View your profile' }],
       wait: 'No bio yet',
     },
     {
-      // Profile → the account & safety page ("Account" chip on the Settings
-      // card).
+      // Profile → the account & safety page (the hub's "Account & safety" row).
       name: `customer-account-safety-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Account and safety' }],
-      wait: 'Log out',
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Account & safety' }],
+      wait: 'Private by default.',
     },
     {
-      // Profile → notification preferences. The wait is a preference row's
-      // own label, absent from the Profile root.
+      // Profile → the feed → its settings gear. The wait is a preference
+      // row's own label, absent from the Profile root and the feed.
       name: `customer-notification-settings-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Notifications' }],
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Notifications' }, { expect: 'Nothing yet' }, { press: 'Notification settings' }],
       wait: 'Bids on my jobs',
     },
     {
-      // Profile → the notification feed. EMPTY state: nothing has happened
-      // to the seeded account.
+      // Profile → the notification feed (the hub's "Notifications" row). EMPTY
+      // state: nothing has happened to the seeded account.
       name: `customer-notification-feed-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Notification feed' }],
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Notifications' }],
       wait: 'Nothing yet',
     },
     {
-      // Profile → earnings. The wait is the header's own sandbox subtitle;
-      // the ledger below it photographs EMPTY.
+      // Profile → "Worker tools", opened in place → earnings. The wait is the
+      // header's own sandbox subtitle; the ledger below it photographs EMPTY.
       name: `customer-earnings-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Earnings' }],
-      wait: 'Sandbox — no real money',
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Worker tools' }, { press: 'Earnings & payouts' }],
+      wait: 'Test mode — no real money',
     },
     {
-      // Profile → services & availability. EMPTY state: no services are
-      // seeded, so the add-service form is the surface.
+      // Profile → "Worker tools", opened in place → services & availability.
+      // EMPTY state: no services are seeded, so the add-service form is the
+      // surface.
       name: `customer-services-pricing-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Services & availability' }],
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Worker tools' }, { press: 'Services & availability' }],
       wait: 'Add service',
     },
     {
@@ -664,20 +670,22 @@ const TARGETS = [
       wait: 'THEME',
     },
     {
-      // Account & safety → payment methods, told honestly by the build.
+      // Profile → payment methods (a hub row since the hub absorbed it from
+      // Account & safety), told honestly by the build.
       name: `customer-payment-methods-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [...TO_ACCOUNT_SAFETY, { press: 'Payment methods' }],
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Payment methods' }],
       wait: 'Honest by design.',
     },
     {
-      // Account & safety → the Terms document. The privacy document renders
-      // through the same template, so terms stands for both.
+      // Profile → the hub's Legal row, opened → the Terms document. The
+      // privacy document renders through the same template, so terms stands
+      // for both.
       name: `customer-legal-terms-${colorScheme}`,
       mode: 'customer',
       colorScheme,
-      recipe: [...TO_ACCOUNT_SAFETY, { press: 'Terms of Service' }],
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Legal' }, { press: 'Terms of Service' }],
       wait: 'Last updated',
     },
     {
@@ -734,7 +742,7 @@ const TARGETS = [
       colorScheme,
       recipe: [{ expect: 'Get hired.' }, { press: 'View all open jobs' }, { press: 'Filters' }],
       wait: 'Minimum budget',
-      landmarks: ['Filters', 'Done', 'DISTANCE', 'Any', '2 mi', 'MINIMUM BUDGET', '$25', 'Reset'],
+      landmarks: ['Filters', 'Done', 'MINIMUM BUDGET', 'Any', '$25', 'Reset'],
     },
     {
       // The same sheet with the Minimum budget popup open, on its first six
@@ -770,12 +778,14 @@ const TARGETS = [
     },
     {
       // The worker's Profile tab root — the same shared screen, but worker
-      // mode adds the profile-completeness prompt, so it earns its own frame.
+      // mode adds the profile-completeness prompt and its own row set, so it
+      // earns its own frame. The wait is Earnings & payouts' sub-line, a row
+      // only worker mode draws on the hub itself.
       name: `worker-profile-${colorScheme}`,
       mode: 'worker',
       colorScheme,
       recipe: [{ expect: 'Get hired.' }, { press: 'Profile' }],
-      wait: 'Choose which events can alert you.',
+      wait: 'Balances and where you get paid.',
     },
   ]),
 
@@ -1291,7 +1301,34 @@ function stubResponse({ pathname, query, headers, postData, jobs, accepting, set
   return { status: 200, body: single ? {} : [] };
 }
 
-/** One recipe step. Every locator is scoped to the first match, as a tap is. */
+/**
+ * The match a finger would land on: the first one that is visible AND not covered. A screen the
+ * navigator keeps mounted behind the focused one still carries its labels — Home's bell is
+ * "Notifications" under Profile's own Notifications row, laid out but covered by the Profile
+ * scene — so a first-in-DOM pick waits on a control nobody can reach until the timeout. Each
+ * candidate is tried with a trial click (actionability only, nothing fires); with none reachable
+ * yet it retries, and at the deadline the first match is returned so the real click reports why.
+ */
+async function reachable(page, locator, timeout) {
+  const visible = locator.filter({ visible: true });
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const count = await visible.count();
+    for (let i = 0; i < count; i += 1) {
+      const candidate = visible.nth(i);
+      try {
+        await candidate.click({ trial: true, timeout: 400 });
+        return candidate;
+      } catch {
+        // covered, moving or detached: the next one, or the next pass
+      }
+    }
+    await page.waitForTimeout(200);
+  }
+  return visible.first();
+}
+
+/** One recipe step. Every tap and fill goes to the reachable match, as a finger does. */
 async function runStep(page, step) {
   const timeout = 20_000;
   if (step.expect) {
@@ -1299,15 +1336,15 @@ async function runStep(page, step) {
     return;
   }
   if (step.press) {
-    await page.getByLabel(step.press, { exact: true }).first().click({ timeout });
+    await (await reachable(page, page.getByLabel(step.press, { exact: true }), timeout)).click({ timeout: 5_000 });
     return;
   }
   if (step.pressText) {
-    await page.getByText(step.pressText, { exact: true }).first().click({ timeout });
+    await (await reachable(page, page.getByText(step.pressText, { exact: true }), timeout)).click({ timeout: 5_000 });
     return;
   }
   if (step.fill) {
-    await page.getByPlaceholder(step.fill, { exact: true }).first().fill(step.text, { timeout });
+    await page.getByPlaceholder(step.fill, { exact: true }).filter({ visible: true }).first().fill(step.text, { timeout });
     return;
   }
   throw new Error(`unrecognised recipe step: ${JSON.stringify(step)}`);
