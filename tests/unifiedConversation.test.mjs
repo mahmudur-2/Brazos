@@ -373,13 +373,19 @@ test('a legacy jobId entry opens the merged conversation scrolled to that job', 
     chat,
     /items\.findIndex\(\s*\(item\) => item\.kind === 'message' && item\.message\.job_id === routeJobId\s*\)/
   );
-  assert.match(chat, /scrollToIndex\(\{\s*index: scrollTargetIndex,/);
+  // F4: the list is inverted (newest first), so the chronological index is
+  // mirrored — the jump still lands on that job's first message, once.
+  assert.match(chat, /inverted\s+data=\{invertedItems\}/);
+  assert.match(chat, /const invertedItems = useMemo\(\(\) => \[\.\.\.items\]\.reverse\(\), \[items\]\);/);
+  assert.match(chat, /scrollToIndex\(\{\s*index: items\.length - 1 - scrollTargetIndex,/);
   // findIndex returns -1 when that job has nothing in it yet; the screen must
-  // fall back to the bottom rather than scrolling to index -1.
-  assert.match(chat, /if \(scrollTargetIndex >= 0 && settledCount\.current === null\)/);
+  // fall back to the newest message rather than scrolling to index -1 — an
+  // inverted list opens there, so -1 simply does not jump.
+  assert.match(chat, /if \(jumpedRef\.current \|\| scrollTargetIndex < 0\) return;\s*jumpedRef\.current = true;/);
   assert.match(chat, /onScrollToIndexFailed/);
-  // And the stick-to-bottom behaviour must not immediately undo the jump.
-  assert.match(chat, /if \(scrollTargetIndex >= 0\) return;\s*listRef\.current\?\.scrollToEnd/);
+  // And nothing may undo the jump: no stick-to-bottom path exists at all.
+  assert.doesNotMatch(chat, /scrollToEnd|onContentSizeChange/);
+  assert.match(chat, /maintainVisibleContentPosition=\{\{ minIndexForVisible: 1, autoscrollToTopThreshold: 80 \}\}/);
 });
 
 // ---------------------------------------------------------------------------

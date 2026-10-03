@@ -260,3 +260,13 @@ test('[static] F3: the rows are memoised — one stable renderer, memo bubbles, 
   assert.match(bubble, /const onLongPress = onLongPressMessage && !isUnsent \? \(\) => onLongPressMessage\(message\) : undefined;/);
   assert.match(strip(read('components/OfferCard.tsx')), /export const OfferCard = memo\(function OfferCard\(/);
 });
+
+test('[static] F4: one scroll path — an inverted list, an own send goes to the bottom', () => {
+  const chat = strip(read('screens/ChatScreen.tsx'));
+  assert.equal((chat.match(/scrollToOffset\(\{ offset: 0, animated: true \}\)/g) ?? []).length, 1, 'one own-send scroll');
+  assert.match(chat, /function addOwnMessage\(message: Message\) \{\s*addLocal\(message\);/);
+  assert.equal((chat.match(/if \(data\) addOwnMessage\(data\);/g) ?? []).length, 4, 'every send path takes the reader to its message');
+  assert.doesNotMatch(chat, /if \(data\) addLocal\(data\);/);
+  // FlashList 2 has no `inverted`; the chat stays on FlatList.
+  assert.doesNotMatch(chat, /FlashList/);
+});

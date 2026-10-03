@@ -634,10 +634,16 @@ export function ChatScreen() {
       return;
     }
     recorder.reset();
-    if (data) addLocal(data);
+    if (data) addOwnMessage(data);
   }
 
   const listRef = useRef<FlatList<TimelineItem>>(null);
+
+  /** An own message is in: show it, and take the reader to it (offset 0 is the bottom). */
+  function addOwnMessage(message: Message) {
+    addLocal(message);
+    requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: 0, animated: true }));
+  }
 
   // A job where the client is also the assigned worker (e.g. bid on your own
   // job), or a job with no resolvable second party at all (no one assigned) —
@@ -756,6 +762,9 @@ export function ChatScreen() {
       (item) => item.kind === 'message' && item.message.job_id === routeJobId
     );
   }, [items, routeJobId]);
+
+  // F4: the newest-first rows an inverted list draws bottom-up.
+  const invertedItems = useMemo(() => [...items].reverse(), [items]);
 
   // Only the newest event message for each request stays interactive; earlier
   // ones render as history. Messages arrive oldest-first, so the last one wins.
@@ -1152,25 +1161,28 @@ export function ChatScreen() {
     headerMenuItems.push(...personRows.safety);
   }
 
-  // Once the jump has happened, only genuinely NEW messages pull the view back
-  // down — otherwise the conversation would snap to the bottom the moment a
-  // photo finished measuring and the jump would be pointless.
-  const settledCount = useRef<number | null>(null);
+  // F4 — ONE SCROLL PATH. The list is inverted: the newest message is row 0
+  // at the bottom, so a new message lands there with no measuring and no
+  // snap, and maintainVisibleContentPosition (on the list) keeps a reader who
+  // has scrolled up exactly where they are. Nothing scrolls to the end.
+  //
+  // A legacy jobId entry jumps once, to that job's FIRST chronological message
+  // (scrollTargetIndex is chronological; the list is newest-first). An index
+  // of -1 — that job has nothing in it yet — leaves the list where an
+  // inverted list opens: on the newest message. Nothing undoes the jump: the
+  // only other scroll is an own send, which is the person asking to be there.
+  const jumpedRef = useRef(false);
   useEffect(() => {
-    if (items.length === 0) return;
-    if (scrollTargetIndex >= 0 && settledCount.current === null) {
-      settledCount.current = items.length;
-      requestAnimationFrame(() =>
-        listRef.current?.scrollToIndex({
-          index: scrollTargetIndex,
-          animated: false,
-          viewPosition: 0,
-        })
-      );
-      return;
-    }
-    if (scrollTargetIndex >= 0 && items.length <= (settledCount.current ?? 0)) return;
-    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+    if (jumpedRef.current || scrollTargetIndex < 0) return;
+    jumpedRef.current = true;
+    requestAnimationFrame(() =>
+      listRef.current?.scrollToIndex({
+        index: items.length - 1 - scrollTargetIndex,
+        animated: false,
+        // Inverted: 1 is the visual top, so the job's first message heads the screen.
+        viewPosition: 1,
+      })
+    );
   }, [items.length, scrollTargetIndex]);
 
   /**
@@ -1217,7 +1229,7 @@ export function ChatScreen() {
       setReplyTo(quoted);
       return false;
     }
-    if (data) addLocal(data);
+    if (data) addOwnMessage(data);
     return true;
   }
 
@@ -1546,7 +1558,7 @@ export function ChatScreen() {
       await reportSendFailure('Could not send photo', error);
       return;
     }
-    if (data) addLocal(data);
+    if (data) addOwnMessage(data);
   }
 
   async function pickFromLibrary() {
@@ -1629,7 +1641,7 @@ export function ChatScreen() {
       await reportSendFailure('Could not send document', error);
       return;
     }
-    if (data) addLocal(data);
+    if (data) addOwnMessage(data);
   }
 
   async function pickDocument() {
@@ -1955,17 +1967,14 @@ export function ChatScreen() {
               // contentContainerStyle's flexGrow only affects the inner content
               // view, so it does not bound the scroller itself.
               style={styles.list}
-              data={items}
+              inverted
+              data={invertedItems}
               keyExtractor={(entry) => entry.key}
               renderItem={renderItem}
               contentContainerStyle={styles.messages}
-              // A legacy jobId entry owns the initial scroll (see
-              // scrollTargetIndex) — sticking to the bottom here would undo it
-              // the moment an image finished measuring.
-              onContentSizeChange={() => {
-                if (scrollTargetIndex >= 0) return;
-                listRef.current?.scrollToEnd({ animated: false });
-              }}
+              // F4: a message arriving at the bottom keeps a reader who has
+              // scrolled up in place; within ~80pt of the bottom it follows.
+              maintainVisibleContentPosition={{ minIndexForVisible: 1, autoscrollToTopThreshold: 80 }}
               onScrollToIndexFailed={({ index, averageItemLength }) => {
                 // Variable-height rows: the target may not be measured yet.
                 listRef.current?.scrollToOffset({
@@ -2298,6 +2307,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
+    // F4: the inverted list flips this back upright itself (VirtualizedList
+    // applies its inversion to the empty component), so it reads as authored.
     paddingTop: spacing.xxl,
   },
   emptyIcon: {
