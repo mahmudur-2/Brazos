@@ -420,7 +420,9 @@ test('one-serif fence: the hero role alone is Georgia, and nothing else is a ser
   // and there is no load failure to release it on.
   assert.doesNotMatch(app, /fontsResolved|fontsLoaded|fontLoadError/);
   assert.match(app, /\{children\}/);
-  assert.match(app, /sessionReady=\{!loading\}/);
+  // F1 (fix run, 2026-10-03) adds a hold for the first real screen, capped —
+  // still no face: the doesNotMatch above keeps fonts out of it.
+  assert.match(app, /sessionReady=\{!loading && \(contentReady \|\| holdCapped\)\}/);
 });
 
 // ---------------------------------------------------------------------------

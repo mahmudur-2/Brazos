@@ -86,7 +86,8 @@ test('n5 · the launch overlay has no visibility floor: the exit starts on sessi
   assert.match(launch, /\}, \[sessionReady, still, exit, onFinish\]\);/);
   // The entrance still plays, and the host still hands over the session flag.
   assert.match(launch, /fade\(logo, LOGO_DELAY, 400\)/);
-  assert.match(code('App.tsx'), /sessionReady=\{!loading\}/);
+  // F1: the host hands over the session AND the first real screen (or the cap).
+  assert.match(code('App.tsx'), /sessionReady=\{!loading && \(contentReady \|\| holdCapped\)\}/);
 });
 
 // ---------------------------------------------------------------------------

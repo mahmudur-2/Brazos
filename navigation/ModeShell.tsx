@@ -5,6 +5,7 @@ import { ShellGroundProvider, useShellGroundState } from '../lib/shellGround';
 import { PinnedFootProvider } from '../ui/primitives/BottomNav';
 import { screenGround, useThemeColors } from '../lib/theme';
 import { ModeTreeLayoutSignal } from '../components/ModeTransitionOverlay';
+import { useReportLaunchReady } from '../lib/launchContext';
 import { designStudioAvailable } from '../lib/designStudioGate';
 import { CustomerRoot } from './CustomerRoot';
 import { WorkerRoot } from './WorkerRoot';
@@ -137,6 +138,8 @@ export function ModeShell() {
       {/* Fix run D13: who pins a footer over the pill, shared by the screens and the bar's fade. */}
       <PinnedFootProvider>
       <ShellGroundView>
+        {/* F1: the launch layer lifts once this lays out — in the same pass as the tree. */}
+        <LaunchReadySignal />
         {treeMode === 'worker' ? <WorkerRoot /> : <CustomerRoot />}
         {/* 2026-09-21 — THE PAINT SIGNAL the mode switch's reveal waits for:
             keyed by the tree, so it lays out in the same pass as the incoming
@@ -149,6 +152,15 @@ export function ModeShell() {
       {designStudioAvailable ? <DesignStudioPanel /> : null}
     </>
   );
+}
+
+/**
+ * F1 — tells the launch layer the first mode tree has laid out. Draws nothing,
+ * takes no touch, changes no layout; reporting twice is harmless.
+ */
+function LaunchReadySignal() {
+  const report = useReportLaunchReady();
+  return <View style={styles.signal} pointerEvents="none" onLayout={report} />;
 }
 
 /**
@@ -190,5 +202,11 @@ const styles = StyleSheet.create({
   // time, the same arrangement the loader above uses.
   tree: {
     flex: 1,
+  },
+  // F1's signal: zero size, out of the flow.
+  signal: {
+    position: 'absolute',
+    width: 0,
+    height: 0,
   },
 });

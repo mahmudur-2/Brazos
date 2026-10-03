@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { ActivityIndicator, Linking, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native';
@@ -26,7 +26,7 @@ import {
 import { ResetPasswordScreen } from './screens/ResetPasswordScreen';
 import { flushPendingNavigation, navigationRef } from './lib/navigationRef';
 import { ThemeProvider } from './lib/ThemeContext';
-import { LaunchCompleteContext } from './lib/launchContext';
+import { LaunchCompleteContext, LaunchHoldContext, useReportLaunchReady } from './lib/launchContext';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { ConfirmHost } from './components/ConfirmHost';
 import { OfflineBanner } from './components/OfflineBanner';
@@ -156,6 +156,17 @@ function RootNavigator() {
   // Mode resolution is deliberately NOT part of this condition — it belongs
   // after setup, because Setup's own "Start in" choice feeds it. ModeShell
   // holds the identical loader for that last step.
+  // F1: every branch below but the tabs is real content the launch layer can
+  // lift onto; the tabs report from ModeShell once the mode's tree has laid out.
+  const reportLaunchReady = useReportLaunchReady();
+  const holdsLoader = loading || (!!user && (legal.state === 'loading' || setup.state === 'loading'));
+  const reachesTabs = !!user && !recoveryPending && setup.state === 'complete' && legal.state === 'accepted';
+  // Reset-password, sign-in, Setup, the legal error and the legal re-prompt.
+  const drawsContent = !holdsLoader && !reachesTabs;
+  useEffect(() => {
+    if (drawsContent) reportLaunchReady();
+  }, [drawsContent, reportLaunchReady]);
+
   if (loading || (user && (legal.state === 'loading' || setup.state === 'loading'))) {
     return (
       <View style={[styles.loader, { backgroundColor: palette.background }]}>
@@ -246,6 +257,14 @@ function RootNavigator() {
  * replaying it; a cold reload in Expo Go is a new process, so it plays again.
  */
 /**
+ * F1 — how long the launch layer waits, once the session is back, for the
+ * first real screen. On a normal network the legal, setup and mode reads land
+ * well inside it and no loader is ever seen; on a slow one the layer lifts at
+ * the cap onto the loader or the error that is honestly there.
+ */
+const LAUNCH_HOLD_CAP_MS = 2500;
+
+/**
  * F13 — ONE ACCOUNT'S CACHE. When the signed-in account changes or signs out,
  * the query cache is emptied before the next paint, so nobody ever sees
  * another account's rows. (Every per-account key also carries the user id.)
@@ -264,18 +283,30 @@ function QueryAuthBridge() {
 function LaunchGate({ children }: PropsWithChildren) {
   const { loading } = useAuth();
   const [complete, setComplete] = useState(false);
+  // F1: the layer lifts when the first real screen says it has drawn
+  // (lib/launchContext.ts), or at the cap once the session is back.
+  const [contentReady, setContentReady] = useState(false);
+  const [holdCapped, setHoldCapped] = useState(false);
+  const reportLaunchReady = useCallback(() => setContentReady(true), []);
+  useEffect(() => {
+    if (loading || contentReady) return;
+    const cap = setTimeout(() => setHoldCapped(true), LAUNCH_HOLD_CAP_MS);
+    return () => clearTimeout(cap);
+  }, [loading, contentReady]);
 
   return (
     <LaunchCompleteContext.Provider value={complete}>
+      <LaunchHoldContext.Provider value={reportLaunchReady}>
       <View style={styles.root}>
         {children}
         {complete ? null : (
           <LaunchScreen
-            sessionReady={!loading}
+            sessionReady={!loading && (contentReady || holdCapped)}
             onFinish={() => setComplete(true)}
           />
         )}
       </View>
+      </LaunchHoldContext.Provider>
     </LaunchCompleteContext.Provider>
   );
 }

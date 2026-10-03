@@ -183,6 +183,23 @@ async function persistModeServerSide(userId: string, mode: AppMode): Promise<voi
   await clearPendingModeWrite(userId);
 }
 
+/**
+ * F1 (fix run, 2026-10-03) — the three reads mode resolution waits on. They
+ * start the moment the session names an account (while the legal and setup
+ * reads run), not when ModeShell arms, so arming no longer starts a second
+ * round trip behind a second loader.
+ */
+function readModeSources(userId: string) {
+  return Promise.all([readCachedMode(userId), fetchMyActiveMode(), readPendingModeWrite(userId)]);
+}
+
+/**
+ * An early read is reused only while it is this young. Arming normally
+ * follows within a second or two; an account that spent minutes in Setup
+ * reads again at arm time, so a stale answer is never the one that decides.
+ */
+const MODE_PREFETCH_FRESH_MS = 10_000;
+
 export function ModeProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
   const { start: startTransition, busy } = useModeTransition();
@@ -204,6 +221,19 @@ export function ModeProvider({ children }: PropsWithChildren) {
   const requestingRef = useRef(false);
 
   const armResolution = useCallback(() => setArmed(true), []);
+
+  // F1: the mode reads begin with the session; the armed effect below awaits
+  // them. The decision itself — and consuming Setup's "Start in" landing —
+  // still happens at arm time, so that choice still wins.
+  const prefetchRef = useRef<{
+    userId: string;
+    startedAt: number;
+    reads: ReturnType<typeof readModeSources>;
+  } | null>(null);
+  useEffect(() => {
+    if (!userId || prefetchRef.current?.userId === userId) return;
+    prefetchRef.current = { userId, startedAt: Date.now(), reads: readModeSources(userId) };
+  }, [userId]);
 
   // Signing out drops back to a known state, so the next account cannot inherit
   // the previous one's mode for even one frame.
@@ -241,12 +271,17 @@ export function ModeProvider({ children }: PropsWithChildren) {
     const landingPreference = consumePendingLanding();
     const landing = landingPreference ? modeFromLanding(landingPreference) : undefined;
 
+    const early = prefetchRef.current;
+    const reads =
+      early && early.userId === userId && Date.now() - early.startedAt < MODE_PREFETCH_FRESH_MS
+        ? early.reads
+        : readModeSources(userId);
+    // Used once: a later resolution for this account (after a sign-out and
+    // back in) reads afresh.
+    prefetchRef.current = null;
+
     (async () => {
-      const [local, remoteResult, pendingWrite] = await Promise.all([
-        readCachedMode(userId),
-        fetchMyActiveMode(),
-        readPendingModeWrite(userId),
-      ]);
+      const [local, remoteResult, pendingWrite] = await reads;
       if (!active) return;
 
       // A failed/absent RPC (phase42 not applied, offline, permissions) yields

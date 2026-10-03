@@ -51,7 +51,8 @@ test('[static] F18: the shell ground re-renders only its own view, and PostJob b
   assert.ok(modeShell.length > 0, 'ModeShell precedes ShellGroundView');
   assert.doesNotMatch(modeShell, /useShellGroundState\(/, 'ModeShell holds no ground state');
   assert.match(shell, /function ShellGroundView\(\{ children \}: PropsWithChildren\) \{[\s\S]*?useShellGroundState\(\)/);
-  assert.match(modeShell, /<ShellGroundView>\s*\{treeMode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\}/);
+  // (F1 put the launch signal first, in the same painted view.)
+  assert.match(modeShell, /<ShellGroundView>\s*(\{\}\s*)?<LaunchReadySignal \/>\s*\{treeMode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\}/);
 
   const post = strip(read('screens/PostJobScreen.tsx'));
   assert.match(post, /const dayKey = toLocalIsoDate\(new Date\(\)\);\s*const scheduleDates = useMemo\(upcomingDates, \[dayKey\]\);/);
@@ -532,4 +533,34 @@ test('[static] F15: every screen that ranks by the worker’s history reads the 
   for (const [file, count] of Object.entries(sites)) {
     assert.equal((strip(read(file)).match(/invalidateJobs\(\);/g) ?? []).length, count, `${file} invalidates after each own mutation`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// F1 — cold start: the launch layer waits for the first real screen; the mode
+// reads start with the session.
+// ---------------------------------------------------------------------------
+test('[static] F1: the layer holds for real content, capped by a named constant; every branch reports', () => {
+  const app = strip(read('App.tsx'));
+  assert.match(app, /const LAUNCH_HOLD_CAP_MS = 2500;/);
+  assert.match(app, /const cap = setTimeout\(\(\) => setHoldCapped\(true\), LAUNCH_HOLD_CAP_MS\);/);
+  assert.match(app, /<LaunchHoldContext\.Provider value=\{reportLaunchReady\}>/);
+  assert.match(app, /sessionReady=\{!loading && \(contentReady \|\| holdCapped\)\}/);
+  // Every RootNavigator branch but the loader and the tabs reports; the tabs report from ModeShell.
+  assert.match(app, /const holdsLoader = loading \|\| \(!!user && \(legal\.state === 'loading' \|\| setup\.state === 'loading'\)\);/);
+  assert.match(app, /const reachesTabs = !!user && !recoveryPending && setup\.state === 'complete' && legal\.state === 'accepted';/);
+  assert.match(app, /const drawsContent = !holdsLoader && !reachesTabs;\s*useEffect\(\(\) => \{\s*if \(drawsContent\) reportLaunchReady\(\);/);
+  const shell = strip(read('navigation/ModeShell.tsx'));
+  assert.match(shell, /function LaunchReadySignal\(\) \{\s*const report = useReportLaunchReady\(\);\s*return <View style=\{styles\.signal\} pointerEvents="none" onLayout=\{report\} \/>;/);
+  // LaunchScreen itself is untouched: the exit condition is still the one flag it is handed.
+  assert.match(strip(read('screens/LaunchScreen.tsx')), /if \(!sessionReady \|\| exitStarted\.current\) return;/);
+});
+
+test('[static] F1: the mode reads start with the session; the decision and the landing stay at arm time', () => {
+  const provider = strip(read('modes/ModeProvider.tsx'));
+  assert.match(provider, /function readModeSources\(userId: string\) \{\s*return Promise\.all\(\[readCachedMode\(userId\), fetchMyActiveMode\(\), readPendingModeWrite\(userId\)\]\);/);
+  assert.match(provider, /prefetchRef\.current = \{ userId, startedAt: Date\.now\(\), reads: readModeSources\(userId\) \};/);
+  assert.match(provider, /const MODE_PREFETCH_FRESH_MS = 10_000;/);
+  // The landing is still consumed synchronously when the shell arms, before the reads are awaited.
+  const armed = provider.slice(provider.indexOf('if (!armed || !userId || resolvedFor === userId) return;'));
+  assert.ok(armed.indexOf('consumePendingLanding()') < armed.indexOf('await reads'), 'the landing is taken at arm time');
 });

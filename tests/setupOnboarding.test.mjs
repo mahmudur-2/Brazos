@@ -221,9 +221,17 @@ test('the landing handoff is consumed once, before anything can await', () => {
   // Read synchronously at the top of the resolution effect: an await before it
   // would let a second pass interleave and take the same one-shot value.
   const provider = read('modes/ModeProvider.tsx');
+  // F1: the reads start early (readModeSources, no await of its own); the
+  // resolution effect takes the landing before it awaits them.
   assert.ok(
-    provider.indexOf('consumePendingLanding()') < provider.indexOf('await Promise.all'),
+    provider.indexOf('consumePendingLanding()') > 0 &&
+      provider.indexOf('consumePendingLanding()') < provider.indexOf('await reads'),
     'the landing must be taken before the first await'
+  );
+  assert.doesNotMatch(
+    provider.slice(provider.indexOf('function readModeSources'), provider.indexOf('const MODE_PREFETCH_FRESH_MS')),
+    /\bawait\b/,
+    'the early reads start without waiting on anything'
   );
   // And exactly one consumer exists, so a remount cannot replay it.
   assert.equal(provider.split('consumePendingLanding()').length - 1, 1);
