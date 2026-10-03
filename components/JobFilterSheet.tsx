@@ -1,9 +1,11 @@
 import { Children, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { ChipCheck } from './ChipCheck';
 import { PressScale } from './PressScale';
+import { SelectionText, SelectionTint } from './Selection';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   PickerPopover,
   POPOVER_ROW_HEIGHT,
@@ -632,6 +634,15 @@ function Pill({
   // added where it has none, its slot gliding open (components/ChipCheck.tsx,
   // the motion boundary).
   const checked = on && check;
+  // FIX-RUN F12 — with motion on, the pill's fill, rim and word FADE to the chosen colours
+  // (components/Selection); under Reduce Motion it is drawn exactly as before.
+  const fades = useReducedMotion() === false;
+  const boxAt = (lit: boolean) =>
+    StyleSheet.flatten([styles.pill, isDark && styles.pillDark, lit && (isDark ? styles.pillOnDark : styles.pillOn)]) as ViewStyle;
+  const inkAt = (lit: boolean) =>
+    String(StyleSheet.flatten([styles.pillText, isDark && styles.pillTextDark, lit && styles.pillTextOn]).color);
+  const rest = fades ? boxAt(false) : null;
+  const lit = fades ? boxAt(true) : null;
   // FIX-RUN F12: the shared press spring under the finger, the dim kept.
   return (
     <PressScale
@@ -642,12 +653,22 @@ function Pill({
         isDark && styles.pillDark,
         wide && styles.pillWide,
         on && (isDark ? styles.pillOnDark : styles.pillOn),
+        fades && styles.pillClear,
         pressed && styles.pressed,
       ]}
       accessibilityRole="button"
       accessibilityState={{ selected: on }}
       accessibilityLabel={accessibilityLabel ?? label}
     >
+      {rest && lit ? (
+        <SelectionTint
+          on={on}
+          rest={{ fill: String(rest.backgroundColor ?? 'transparent'), rim: String(rest.borderColor ?? 'transparent') }}
+          chosen={{ fill: String(lit.backgroundColor ?? 'transparent'), rim: String(lit.borderColor ?? 'transparent') }}
+          radius={typeof lit.borderRadius === 'number' ? lit.borderRadius : radius.pill}
+          rimWidth={typeof lit.borderWidth === 'number' ? lit.borderWidth : 1}
+        />
+      ) : null}
       {lead ? (
         checked ? <Ionicons name="checkmark" size={14} color={colors.emeraldBright} /> : lead
       ) : check ? (
@@ -658,9 +679,21 @@ function Pill({
         </View>
       ) : null}
       {dimLead ? <Text style={styles.pillDim}>{dimLead}</Text> : null}
-      <Text style={[styles.pillText, isDark && styles.pillTextDark, on && styles.pillTextOn]} numberOfLines={1}>
-        {label}
-      </Text>
+      {fades ? (
+        <SelectionText
+          on={on}
+          rest={inkAt(false)}
+          chosen={inkAt(true)}
+          style={[styles.pillText, isDark && styles.pillTextDark, on && styles.pillTextOn]}
+          numberOfLines={1}
+        >
+          {label}
+        </SelectionText>
+      ) : (
+        <Text style={[styles.pillText, isDark && styles.pillTextDark, on && styles.pillTextOn]} numberOfLines={1}>
+          {label}
+        </Text>
+      )}
       {trailing}
     </PressScale>
   );
@@ -749,6 +782,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     pillTextDark: {
       color: colors.ink,
+    },
+    // FIX-RUN F12: a pill whose tint paints it keeps its geometry and draws its own paint clear.
+    pillClear: {
+      backgroundColor: 'transparent',
+      borderColor: 'transparent',
     },
     pillTextOn: {
       fontWeight: '600',

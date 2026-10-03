@@ -1101,6 +1101,17 @@ const SIBLINGS = [
     needs: 'reanimated',
   },
   {
+    // 2026-10-03 (fix run F12) — a choice's colours fading instead of jumping (SelectionTint,
+    // SelectionText) and a segmented control's thumb sliding (SelectionThumb): interpolateColor
+    // and a spring on the UI thread; the fallback crossfades two layers by opacity on the native
+    // driver. Worklets alone.
+    name: 'Selection',
+    fallback: 'components/Selection.tsx',
+    fast: 'components/Selection.motion120.tsx',
+    shared: 'components/Selection.shared.tsx',
+    needs: 'reanimated',
+  },
+  {
     name: 'KeyboardAvoid',
     fallback: 'components/KeyboardAvoid.tsx',
     fast: 'components/KeyboardAvoid.motion120.tsx',
@@ -2264,6 +2275,9 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       // and `rimPoint` — a 'worklet' in RimLight.shared.tsx — computing the
       // light's translate and rotate on the UI thread.
       'components/RimLight.motion120.tsx',
+      // 2026-10-03 (fix run F12) — the selection fade: interpolateColor over one shared value per
+      // piece, and the segmented control's thumb sprung by translateX.
+      'components/Selection.motion120.tsx',
       'components/SheetCard.motion120.tsx',
       'components/SuccessMark.motion120.tsx',
       'components/SwipeableRow.motion120.tsx',

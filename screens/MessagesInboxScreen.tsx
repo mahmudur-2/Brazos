@@ -18,6 +18,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { ConversationRow } from '../components/ConversationRow';
 import { PressScale } from '../components/PressScale';
+import { SelectionText, SelectionTint } from '../components/Selection';
 import { GlassDropdown, type GlassDropdownItem, type GlassDropdownRequest } from '../components/GlassDropdown';
 import { personSafetyItems } from '../lib/chatMenus';
 import { UndoToast } from '../components/UndoToast';
@@ -952,6 +953,9 @@ export function MessagesInboxScreen() {
   // Chosen: the mint rim (styles.pillActive) over the soft tint — the mint at
   // .08 in dark, the pale sage in light.
   const pillOnFill = isDark ? withAlpha(colors.emerald, 0.08) : colors.primarySoft;
+  // FIX-RUN F12 — with motion on, a pill's tint and word FADE to the chosen colours
+  // (components/Selection); under Reduce Motion they are drawn exactly as before.
+  const pillsFade = reduceMotion === false;
 
   // Which mechanic reveals the row actions on THIS build. The action list is
   // the same either way (see menuGroups); this only decides what the row tells
@@ -1050,15 +1054,31 @@ export function MessagesInboxScreen() {
                 styles.pill,
                 { height: filterPillHeight, borderColor: pillRim },
                 active && [styles.pillActive, { backgroundColor: pillOnFill }],
+                pillsFade && styles.pillClear,
                 pressed && styles.pillPressed,
               ]}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
               accessibilityLabel={`${pill.label} conversations`}
             >
-              <Text style={[styles.pillLabel, { color: pillInk }, active && styles.pillLabelActive]}>
-                {pill.label}
-              </Text>
+              {pillsFade ? (
+                <>
+                  <SelectionTint
+                    on={active}
+                    rest={{ fill: 'transparent', rim: pillRim }}
+                    chosen={{ fill: pillOnFill, rim: colors.emerald }}
+                    radius={radius.pill}
+                    rimWidth={1}
+                  />
+                  <SelectionText on={active} rest={pillInk} chosen={colors.emeraldBright} style={styles.pillLabel}>
+                    {pill.label}
+                  </SelectionText>
+                </>
+              ) : (
+                <Text style={[styles.pillLabel, { color: pillInk }, active && styles.pillLabelActive]}>
+                  {pill.label}
+                </Text>
+              )}
             </PressScale>
           );
         })}
@@ -1276,6 +1296,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   pillPressed: {
     opacity: 0.7,
+  },
+  // FIX-RUN F12: a pill whose tint paints it keeps its geometry and draws its own paint clear.
+  pillClear: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
   },
   // The foot row. Quiet by construction: a hairline capsule in the muted text
   // colour, the same restraint the resting filter pill uses. It is a way back

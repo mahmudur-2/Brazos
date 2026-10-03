@@ -11,6 +11,8 @@ import { CategoryGlyph } from './CategoryGlyph';
 import type { ComponentProps } from 'react';
 import { ChipCheck } from './ChipCheck';
 import { PressScale } from './PressScale';
+import { SelectionText, SelectionTint } from './Selection';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   glow,
   radius,
@@ -115,9 +117,10 @@ export function Chip({
             ? (accentColor ?? colors.ink)
             : (accentColor ?? colors.textMuted);
 
-  const labelColor = goldSelected
+  // FIX-RUN F12: the label's colour at either state, so a chosen chip's label can fade to it.
+  const labelColorAt = (on: boolean) => on && isDark
     ? chosen.line
-    : selected
+    : on
     ? (isFilter ? colors.onForest : colors.onPrimary)
     : variant === 'service'
       ? (isDark ? colors.ink : colors.forest)
@@ -128,6 +131,11 @@ export function Chip({
           : isFilter
             ? colors.ink
             : colors.textMuted;
+  const labelColor = labelColorAt(selected);
+  // FIX-RUN F12 — with motion on, a choice chip's fill, rim and label FADE to the chosen colours
+  // (components/Selection, on the UI thread) instead of jumping; under Reduce Motion it is drawn
+  // exactly as before.
+  const fades = useReducedMotion() === false && !!onPress;
 
   // 2026-09-27 (the Lux remake, ruling 11) — a chosen chip keeps its own glyph:
   // "the icon and text turn #4FC58C and the rim lights mint", and the refresh's
@@ -145,7 +153,17 @@ export function Chip({
   const checked = selected && !!onPress && check;
   const leadingGlyph: IoniconName | undefined = checked ? 'checkmark' : icon;
   const glyphSize = small ? 13 : 16;
-  const labelText = (
+  const labelText = fades ? (
+    <SelectionText
+      on={selected}
+      rest={labelColorAt(false)}
+      chosen={labelColorAt(true)}
+      style={[styles.label, small && styles.labelSmall]}
+      numberOfLines={1}
+    >
+      {label}
+    </SelectionText>
+  ) : (
     <Text
       style={[styles.label, small && styles.labelSmall, { color: labelColor }]}
       numberOfLines={1}
@@ -194,7 +212,7 @@ export function Chip({
     ...(minHeightDial != null && onPress ? { minHeight: minHeightDial } : null),
   };
 
-  const shape = [
+  const shapeAt = (on: boolean) => [
     styles.chip,
     onPress && styles.chipInteractive,
     small && styles.chipSmall,
@@ -207,7 +225,7 @@ export function Chip({
     isFilter && styles.chipFilter,
     // Order matters: the filter variant's own selected fill has to win over
     // both its unselected sage and `default`'s primary fill.
-    selected && (isFilter ? styles.chipFilterSelected : styles.chipSelected),
+    on && (isFilter ? styles.chipFilterSelected : styles.chipSelected),
     // emerald D6 — the ONE selected treatment in dark, replacing three: the
     // distance chip's gold outline (which masters 12 and 33 already drew), the
     // default variant's `primary` fill and the filter variant's forest fill.
@@ -218,13 +236,27 @@ export function Chip({
     // 2026-09-27 (the Lux remake, ruling 11): the chosen chip KEEPS its dark
     // glass — the variant's own unselected fill — under the mint rim; the
     // helper's `fill` is for the controls that never had a glass to keep.
-    goldSelected && {
+    on && isDark && {
       backgroundColor: isFilter || variant === 'soft' ? colors.mint : colors.surface,
       borderColor: chosen.line,
     },
-    selectionGlow,
+    on && selectionGlow,
     style,
   ];
+  const shape = shapeAt(selected);
+  // The tint paints the fill and the rim; the chip keeps its border WIDTH, drawn clear.
+  const restShape = fades ? (StyleSheet.flatten(shapeAt(false)) as ViewStyle) : null;
+  const chosenShape = fades ? (StyleSheet.flatten(shapeAt(true)) as ViewStyle) : null;
+  const tint =
+    restShape && chosenShape ? (
+      <SelectionTint
+        on={selected}
+        rest={{ fill: String(restShape.backgroundColor ?? 'transparent'), rim: String(restShape.borderColor ?? 'transparent') }}
+        chosen={{ fill: String(chosenShape.backgroundColor ?? 'transparent'), rim: String(chosenShape.borderColor ?? 'transparent') }}
+        radius={typeof chosenShape.borderRadius === 'number' ? chosenShape.borderRadius : radius.pill}
+        rimWidth={typeof chosenShape.borderWidth === 'number' ? chosenShape.borderWidth : 1}
+      />
+    ) : null;
 
   // A tag with no handler is a label, not a button. Rendering it as a
   // Pressable would put a focusable, screen-reader-announced control on screen
@@ -236,16 +268,20 @@ export function Chip({
     <PressScale
       onPress={onPress}
       onLayout={onLayout}
-      style={({ pressed }) => [...shape, pressed && styles.pressed]}
+      style={({ pressed }) => [...shape, fades && CLEAR_PAINT, pressed && styles.pressed]}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ selected }}
     >
+      {tint}
       {content}
     </PressScale>
   );
 }
+
+/** A chip whose tint paints it keeps its geometry and draws its own fill and rim clear. */
+const CLEAR_PAINT = { backgroundColor: 'transparent', borderColor: 'transparent' } as const;
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({

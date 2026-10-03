@@ -31,3 +31,14 @@ export function withAlpha(hex: string, alpha: number): string {
   const b = parseInt(full.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
+
+/**
+ * FIX-RUN F12 — the same colour with its alpha at 0, so a colour fade to or from "nothing" keeps
+ * its hue instead of passing through transparent black (components/Selection.shared.tsx). Takes a
+ * hex or an rgb()/rgba() string; anything else (a name) comes back as it was.
+ */
+export function clearAlpha(color: string): string {
+  if (color.startsWith('#')) return withAlpha(color, 0);
+  const channels = /^rgba?\(([^,]+),([^,]+),([^,)]+)/.exec(color.replace(/\s+/g, ''));
+  return channels ? `rgba(${channels[1]},${channels[2]},${channels[3]},0)` : color;
+}

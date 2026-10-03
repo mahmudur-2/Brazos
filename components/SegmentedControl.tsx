@@ -1,6 +1,8 @@
-import type { ComponentProps } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { SelectionText, SelectionThumb } from './Selection';
 import {
   metricStyles,
   radius,
@@ -37,6 +39,8 @@ type SegmentedControlProps<T extends string> = {
 /** The Lux `.seg2` at the app's 44pt touch floor: 44pt cells inside a 4pt-padded track — 52 tall. */
 export const TRACK_PADDING = 4;
 export const TRACK_HEIGHT = 52;
+/** The track's hairline (styles.track). */
+const TRACK_BORDER = 1;
 
 /**
  * 2026-09-27 (the operator's review — "pills shape and sizes like the
@@ -61,8 +65,19 @@ export function SegmentedControl<T extends string>({
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   const cellHeight = Math.max(0, height - TRACK_PADDING * 2);
+  const cellRadius = Math.round(Math.max(cellHeight, 44) / 2);
+  // FIX-RUN F12 — with motion on, the chosen fill is ONE thumb that slides from cell to cell and
+  // the labels fade to their colours (components/Selection). It needs the track's width, so
+  // until the first layout (and under Reduce Motion, always) each cell paints its own fill.
+  const animated = useReducedMotion() === false;
+  const [trackWidth, setTrackWidth] = useState(0);
+  const cellWidth =
+    trackWidth > 0 ? (trackWidth - TRACK_BORDER * 2 - TRACK_PADDING * 2) / Math.max(1, options.length) : 0;
+  const thumbed = animated && cellWidth > 0;
+  const chosenIndex = options.findIndex((option) => option.value === value);
   return (
     <View
+      onLayout={animated ? (event) => setTrackWidth(event.nativeEvent.layout.width) : undefined}
       style={[
         styles.track,
         {
@@ -74,6 +89,15 @@ export function SegmentedControl<T extends string>({
       ]}
       accessibilityRole="tablist"
     >
+      {thumbed ? (
+        <SelectionThumb
+          index={chosenIndex >= 0 ? chosenIndex : null}
+          cellWidth={cellWidth}
+          inset={TRACK_PADDING}
+          radius={cellRadius}
+          color={palette.primary}
+        />
+      ) : null}
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -85,8 +109,8 @@ export function SegmentedControl<T extends string>({
               // The cell is the touch target: never under the 44pt floor,
               // taller only when the track is dialled taller.
               cellHeight > 44 && { minHeight: cellHeight },
-              { borderRadius: Math.round(Math.max(cellHeight, 44) / 2) },
-              selected && { backgroundColor: palette.primary },
+              { borderRadius: cellRadius },
+              selected && !thumbed && { backgroundColor: palette.primary },
               pressed && styles.pressed,
             ]}
             accessibilityRole="tab"
@@ -99,12 +123,24 @@ export function SegmentedControl<T extends string>({
                 color={selected ? palette.onPrimary : palette.textMuted}
               />
             ) : null}
-            <Text
-              style={[styles.label, { color: selected ? palette.onPrimary : palette.textMuted }]}
-              numberOfLines={1}
-            >
-              {option.label}
-            </Text>
+            {animated ? (
+              <SelectionText
+                on={selected}
+                rest={palette.textMuted}
+                chosen={palette.onPrimary}
+                style={styles.label}
+                numberOfLines={1}
+              >
+                {option.label}
+              </SelectionText>
+            ) : (
+              <Text
+                style={[styles.label, { color: selected ? palette.onPrimary : palette.textMuted }]}
+                numberOfLines={1}
+              >
+                {option.label}
+              </Text>
+            )}
           </Pressable>
         );
       })}

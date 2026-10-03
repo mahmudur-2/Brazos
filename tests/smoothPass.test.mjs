@@ -214,3 +214,40 @@ test('[static] F12: the most-pressed controls sink on the one press spring, the 
   assert.doesNotMatch(strip(read('components/ScreenHeader.tsx')), /pressed: \{ transform: \[\{ scale: 0\.96 \}\] \}/);
   assert.doesNotMatch(strip(read('components/PostJobBar.tsx')), /transform: \[\{ scale: 0\.98 \}\]/);
 });
+
+test('[static] F12: a choice fades to its colours, and a segment slides, instead of jumping', () => {
+  const fast = strip(read('components/Selection.motion120.tsx'));
+  const fallback = strip(read('components/Selection.tsx'));
+  // The fast path drives the colours on the UI thread; the fallback by opacity only (no JS colour).
+  assert.match(fast, /backgroundColor: interpolateColor\(progress\.value, \[0, 1\], \[fillFrom, fillTo\]\)/);
+  assert.match(fast, /color: interpolateColor\(progress\.value, \[0, 1\], \[from, to\]\)/);
+  assert.match(fast, /x\.value = withSpring\(to, THUMB_SPRING\);/);
+  assert.doesNotMatch(fallback, /JS_DRIVER|useNativeDriver: false/);
+  assert.match(fallback, /Animated\.spring\(x, \{ toValue: to, \.\.\.THUMB_SPRING, useNativeDriver: USE_NATIVE_DRIVER \}\)/);
+  // A host mounts the pieces only with motion on, and then draws its own paint clear (its border
+  // WIDTH kept), so Reduce Motion — and the harness — render exactly what they always did.
+  const HOSTS = {
+    'components/Chip.tsx': [/const fades = useReducedMotion\(\) === false && !!onPress;/, /fades && CLEAR_PAINT/, /\{tint\}\s*\{content\}/],
+    'components/JobFilterSheet.tsx': [/const fades = useReducedMotion\(\) === false;/, /fades && styles\.pillClear/, /<SelectionTint\s+on=\{on\}/],
+    'screens/MessagesInboxScreen.tsx': [/const pillsFade = reduceMotion === false;/, /pillsFade && styles\.pillClear/, /<SelectionTint\s+on=\{active\}/],
+    'components/SegmentedControl.tsx': [/const animated = useReducedMotion\(\) === false;/, /selected && !thumbed && \{ backgroundColor: palette\.primary \}/, /<SelectionThumb/],
+  };
+  for (const [path, marks] of Object.entries(HOSTS)) {
+    const source = strip(read(path));
+    for (const mark of marks) assert.match(source, mark, `${path}: ${mark}`);
+    assert.match(source, /<SelectionText/, `${path} fades its label`);
+  }
+});
+
+test('[executed] F12: a fade to or from nothing keeps its hue (clearAlpha)', async () => {
+  const { stripTypeScriptTypes } = await import('node:module');
+  const js = stripTypeScriptTypes(read('ui/colorAlpha.ts'), { mode: 'strip' });
+  const { clearAlpha } = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'));
+  assert.equal(clearAlpha('#4FC58C'), 'rgba(79,197,140,0)');
+  assert.equal(clearAlpha('rgba(79, 197, 140, 0.16)'), 'rgba(79,197,140,0)');
+  assert.equal(clearAlpha('rgb(1,2,3)'), 'rgba(1,2,3,0)');
+  assert.equal(clearAlpha('transparent'), 'transparent');
+  // fadeEnds swaps a transparent end for the other end at alpha 0.
+  const shared = strip(read('components/Selection.shared.tsx'));
+  assert.match(shared, /from === 'transparent' \? clearAlpha\(to\) : from, to === 'transparent' \? clearAlpha\(from\) : to/);
+});
