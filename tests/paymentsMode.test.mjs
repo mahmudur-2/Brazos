@@ -231,6 +231,11 @@ const SANDBOX_STRINGS = {
     'PROTECTED PAYMENT · SANDBOX',
     'Funds stay held until you approve the finished work. Sandbox build — no real money moves.',
     'PAYMENT · SANDBOX',
+  ],
+  // A5 (2026-10-03): the accept confirm's body is ONE text for the client's job page and Bid
+  // detail, so its sandbox sentence lives in lib/offerCopy.ts, guarded by the `sandbox` flag the
+  // two screens pass from the resolved mode (both screens stay listed so their guard is checked).
+  'lib/offerCopy.ts': [
     'protect the payment in a sandbox checkout (no real money in this build).',
   ],
   'screens/WorkerJobScreen.tsx': [
@@ -265,9 +270,8 @@ const SANDBOX_STRINGS = {
   'screens/TrackWorkerScreen.tsx': ['SANDBOX — NO REAL MONEY'],
   // 2026-09-29 (LUX-LIST-2 #7): the Payment methods row moved from Account & safety to the hub.
   'screens/ProfileScreen.tsx': ['Sandbox only · no stored card.'],
-  'screens/BidDetailScreen.tsx': [
-    'protect the payment in a sandbox checkout — no real money is charged in this development build.',
-  ],
+  // Its own "development build" sentence is gone (A5); the shared body above is what it renders.
+  'screens/BidDetailScreen.tsx': [],
 };
 
 // A sandbox string is reachable only from one of these guards: the sandbox

@@ -25,6 +25,7 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import {
   acceptOfferActionLabel,
+  acceptOfferConfirmMessage,
   acceptOfferConfirmText,
   acceptOfferConfirmTitle,
   firstNameOf,
@@ -1477,18 +1478,18 @@ export function ClientJobDetailScreen() {
             ? acceptOfferConfirmTitle(formatBudget(pendingAccept.amount_cents), false)
             : ''
         }
-        message={
-          (acceptQuote
-            ? `Agreed price ${formatBudget(acceptQuote.job_price_cents)} · Protection fee ${formatBudget(
-                acceptQuote.customer_fee_cents
-              )} · Total charged ${formatBudget(acceptQuote.total_cents)}.\n\n`
-            : '') +
-          (paymentsMode === 'sandbox'
-            ? 'This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll authorize and protect the payment in a sandbox checkout (no real money in this build).'
-            : stripe && savedCard && acceptQuote
-              ? `This selects their bid for the job — the other active bids will no longer be eligible. ${cardLabel(savedCard)} is charged the total now, and the funds are held in protection until you approve the work.`
-              : 'This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll protect the payment in checkout.')
-        }
+        // A5: the one accept-confirm body, shared with Bid detail (lib/offerCopy.ts).
+        message={acceptOfferConfirmMessage({
+          quote: acceptQuote
+            ? {
+                priceLabel: formatBudget(acceptQuote.job_price_cents),
+                feeLabel: formatBudget(acceptQuote.customer_fee_cents),
+                totalLabel: formatBudget(acceptQuote.total_cents),
+              }
+            : null,
+          sandbox: paymentsMode === 'sandbox',
+          savedCardLabel: stripe && savedCard ? cardLabel(savedCard) : null,
+        })}
         // #64 (M-17): the confirmation repeats the button's verb and noun; the
         // total it charges is spelled out in the message above. 2026-09-30 (decision C):
         // with the quote, the button itself says what the tap does — "Accept & pay $129".

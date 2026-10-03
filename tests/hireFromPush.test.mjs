@@ -121,7 +121,12 @@ test('[static] the app: the buttons registered, the intents allow-listed, the co
   // Only a confirm that named the saved card pays at once — and it names it.
   assert.match(detail, /const card = oneTapCardRef\.current; navigation\.navigate\('Checkout', card \? \{ job, oneTap: true, oneTapCard: card \} : \{ job \}\);/);
   assert.match(detail, /onConfirm=\{\(\) => \{ \/\/ [^]*?oneTapCardRef\.current = stripe && savedCard && acceptQuote \? savedCard\.id : null; if \(pendingAccept\) void doAccept\(pendingAccept\); \}\}/);
-  assert.match(detail, /: stripe && savedCard && acceptQuote \? `This selects their bid for the job — the other active bids will no longer be eligible\. \$\{cardLabel\(savedCard\)\} is charged the total now, and the funds are held in protection until you approve the work\.`/);
+  // A5 (2026-10-03): the confirm's body is the ONE shared text in lib/offerCopy.ts; the job page
+  // hands it the card it names, and the sentence that says the card is charged now renders only
+  // with a named card AND the quote.
+  assert.match(detail, /message=\{acceptOfferConfirmMessage\(\{ quote: acceptQuote \? \{ priceLabel: formatBudget\(acceptQuote\.job_price_cents\), feeLabel: formatBudget\(acceptQuote\.customer_fee_cents\), totalLabel: formatBudget\(acceptQuote\.total_cents\), \} : null, sandbox: paymentsMode === 'sandbox', savedCardLabel: stripe && savedCard \? cardLabel\(savedCard\) : null, \}\)\}/);
+  const offerCopy = flat(read('lib/offerCopy.ts'));
+  assert.match(offerCopy, /: input\.savedCardLabel && quote \? ` \$\{input\.savedCardLabel\} is charged the total now, and the funds are held in protection until you approve the work\.`/);
   // Checkout: the opt-in is off by default and only offered while no card is saved.
   const checkout = flat(read('screens/CheckoutScreen.tsx'));
   assert.match(checkout, /const \[saveCard, setSaveCard\] = useState\(false\);/);

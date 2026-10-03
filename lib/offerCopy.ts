@@ -77,6 +77,33 @@ export function acceptOfferConfirmText(viewerIsWorker: boolean, totalLabel?: str
 }
 
 /**
+ * A5 (2026-10-03): the customer's accept confirmation BODY — one text for both accept paths, the
+ * client's job page and Bid detail, so they cannot drift (Bid detail's confirm had no fee and no
+ * total). The three money lines are the server's quote_job_price(), each label already
+ * formatBudget()'d by the caller — never a sum made here; without a quote they are left out, never
+ * guessed. `savedCardLabel` names the card this confirm charges at once (the card path with a
+ * saved card and a quote); otherwise checkout is the next step. `sandbox` is the resolved payments
+ * mode, and its sentence renders in that mode only.
+ */
+export function acceptOfferConfirmMessage(input: {
+  quote: { priceLabel: string; feeLabel: string; totalLabel: string } | null;
+  sandbox: boolean;
+  savedCardLabel?: string | null;
+}): string {
+  const { quote } = input;
+  const lines = quote
+    ? `Agreed price ${quote.priceLabel} · Protection fee ${quote.feeLabel} · Total charged ${quote.totalLabel}.\n\n`
+    : '';
+  const selects = 'This selects their bid for the job — the other active bids will no longer be eligible.';
+  const next =
+    input.sandbox ? ' Next you’ll authorize and protect the payment in a sandbox checkout (no real money in this build).'
+    : input.savedCardLabel && quote
+      ? ` ${input.savedCardLabel} is charged the total now, and the funds are held in protection until you approve the work.`
+      : ' Next you’ll protect the payment in checkout.';
+  return lines + selects + next;
+}
+
+/**
  * The card's heading. A counter is identified by HAVING a parent offer —
  * structurally, never by a type value (see the job_offers architecture
  * decision §2) — so callers pass `parent_offer_id !== null`.

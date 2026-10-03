@@ -21,10 +21,12 @@ import {
   declineOffer,
   effectiveOfferStatus,
 } from '../lib/offers';
-import { formatBudget } from '../lib/jobs';
+import { fetchJobById, formatBudget } from '../lib/jobs';
+import { quoteJobPrice, type JobPriceQuote } from '../lib/payments';
 import {
   COUNTER_OFFER_ACTION_LABEL,
   acceptOfferActionLabel,
+  acceptOfferConfirmMessage,
   acceptOfferConfirmText,
   acceptOfferConfirmTitle,
   declineOfferActionLabel,
@@ -94,6 +96,23 @@ export function BidDetailScreen() {
     };
   }, [workerId]);
 
+  // A5 (2026-10-03): the fee is shown BEFORE the accept, from the same quote_job_price() the
+  // client's job page, the worker's composer and Checkout use — never a rate computed here. One
+  // read per distinct amount; a counter that changes the amount re-reads.
+  const [quote, setQuote] = useState<JobPriceQuote | null>(null);
+  const offerAmountCents = offer?.amount_cents ?? null;
+  useEffect(() => {
+    setQuote(null);
+    if (offerAmountCents == null) return;
+    let active = true;
+    quoteJobPrice(offerAmountCents).then(({ data }) => {
+      if (active) setQuote(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [offerAmountCents]);
+
   const effective = offer ? effectiveOfferStatus(offer) : null;
   const isMyTurn = !!offer && !!user && offer.awaiting_id === user.id;
   const canDecide = effective === 'pending' && isMyTurn;
@@ -120,10 +139,10 @@ export function BidDetailScreen() {
     actingRef.current = true;
     setActing(true);
     const { data: jobId, error: acceptError } = await acceptOffer(offer.id);
-    actingRef.current = false;
-    setActing(false);
-    setConfirming(null);
     if (acceptError || !jobId) {
+      actingRef.current = false;
+      setActing(false);
+      setConfirming(null);
       await alertAsync(
         'Could not accept this bid',
         userMessage(acceptError, 'Check your connection and try again.')
@@ -131,9 +150,17 @@ export function BidDetailScreen() {
       void refresh();
       return;
     }
+    // A16 (2026-10-03): Checkout paints from the job it is handed, so hand it the job as it is
+    // AFTER accepting — assigned — not the open snapshot this screen opened with, which flashed
+    // "Nothing to check out yet" until Checkout's own read landed. The read is the canonical row;
+    // nothing about the job is written or guessed here.
+    const { data: accepted } = await fetchJobById(jobId);
+    actingRef.current = false;
+    setActing(false);
+    setConfirming(null);
     // Hired. Funding is the immediate next step; replace so Back can never
     // land on a decision screen for a bid that has already won.
-    navigation.replace('Checkout', { job });
+    navigation.replace('Checkout', { job: accepted ?? job });
   }
 
   // The pre-hire "Message <worker> first" entry and the thread lookup behind
@@ -375,13 +402,21 @@ export function BidDetailScreen() {
       <ConfirmDialog
         visible={confirming === 'accept'}
         title={acceptOfferConfirmTitle(formatBudget(offer?.amount_cents ?? null), false)}
-        message={
-          // D16 (R6a): the sandbox sentence renders in sandbox mode only.
-          paymentsMode === 'sandbox'
-            ? 'This selects this bid for the job. The other active bids will no longer be eligible. Next, you’ll authorize and protect the payment in a sandbox checkout — no real money is charged in this development build.'
-            : 'This selects this bid for the job. The other active bids will no longer be eligible. Next, you’ll protect the payment in checkout.'
-        }
-        confirmText={acceptOfferConfirmText(false)}
+        // A5: the one accept-confirm body, shared with the client's job page (lib/offerCopy.ts):
+        // the agreed price, the protection fee and the total, then what the tap does. D16 (R6a):
+        // the sandbox sentence renders in sandbox mode only.
+        message={acceptOfferConfirmMessage({
+          quote: quote
+            ? {
+                priceLabel: formatBudget(quote.job_price_cents),
+                feeLabel: formatBudget(quote.customer_fee_cents),
+                totalLabel: formatBudget(quote.total_cents),
+              }
+            : null,
+          sandbox: paymentsMode === 'sandbox',
+        })}
+        // With the quote the button says what the tap does — "Accept & pay $129" — as on the job page.
+        confirmText={acceptOfferConfirmText(false, quote ? formatBudget(quote.total_cents) : undefined)}
         cancelText="Cancel"
         loading={acting}
         palette={emeraldColors}

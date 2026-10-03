@@ -561,7 +561,10 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   // D16: mode-aware eyebrows; sandbox verbatim.
   assert.match(code, /paymentsMode === 'sandbox' \? 'PROTECTED PAYMENT · SANDBOX' : 'PROTECTED PAYMENT'/);
   assert.match(code, /'PAYMENT · SANDBOX'/);
-  assert.match(code, /Next you’ll protect the payment in checkout\./);
+  // A5 (2026-10-03): the accept confirm's body is the one shared text in lib/offerCopy.ts, which
+  // the job page renders with the resolved mode; the checkout sentence lives there.
+  assert.match(code, /message=\{acceptOfferConfirmMessage\(\{/);
+  assert.match(stripComments(read('lib/offerCopy.ts')), /Next you’ll protect the payment in checkout\./);
   assert.doesNotMatch(code, /\bpaid\b(?! early| out| until)/i);
   // JobConfirmed's note is mode-aware too.
   const confirmed = stripComments(read('screens/JobConfirmedScreen.tsx'));
