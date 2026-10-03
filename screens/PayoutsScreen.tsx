@@ -18,7 +18,7 @@ import {
 } from '../lib/payments/stripe';
 import { fetchMyEarnings, type EarningsRow } from '../lib/earnings';
 import type { ProfileStackParamList } from '../lib/navigation';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { EYEBROW_TYPE, radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * R6c (D1) — Payouts: the worker's payout state, over the R5b Connect
@@ -393,10 +393,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       gap: 2,
     },
     eyebrow: {
-      fontSize: 11,
-      fontWeight: '800',
+      ...EYEBROW_TYPE,
       color: colors.eyebrow,
-      letterSpacing: 0.8,
     },
     headline: {
       fontSize: 17,

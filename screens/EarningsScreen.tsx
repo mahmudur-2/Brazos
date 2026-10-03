@@ -22,6 +22,7 @@ import { formatBudget } from '../lib/jobs';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import { formatTimeAgo } from '../lib/time';
 import {
+  EYEBROW_TYPE,
   fonts,
   radius,
   spacing,
@@ -348,10 +349,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Green eyebrows over serif figures — master 25's own pairing, and the
   // eyebrow law's live-state case (these ARE the money states).
   bucketLabel: {
-    fontSize: 10,
-    fontWeight: '800',
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
-    letterSpacing: 1.1,
   },
   bucketAmount: {
     fontFamily: fonts.display,

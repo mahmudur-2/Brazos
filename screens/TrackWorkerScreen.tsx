@@ -26,6 +26,7 @@ import {
 } from '../lib/jobLifecycle';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import {
+  EYEBROW_TYPE,
   litCardStyle, fonts,
   radius,
   spacing,
@@ -439,10 +440,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.surface,
   },
   eyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
-    letterSpacing: 1.4,
   },
   eyebrowDark: { color: colors.eyebrow },
   eyebrowGold: { color: colors.eyebrowGold }, // 2026-09-29 (LUX-LIST-2 #4): PROTECTED PAYMENT while held stays antique gold in light.

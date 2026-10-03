@@ -89,7 +89,7 @@ const themeModule = (async () => {
       // 2026-09-18 added `light as emeraldLight`: the task card's three roles
       // are defined once in ui/tokens.ts and lib/theme.ts takes BOTH palettes'
       // values by reference, the light side included.
-      'const { brand, dark: emeraldDark, light: emeraldLight, constantAccents, metricGeneration, radius, shadows: tokenShadows, spacing, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
+      'const { brand, dark: emeraldDark, light: emeraldLight, constantAccents, metricGeneration, radius, shadows: tokenShadows, spacing, type: tokenType, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
     )
     .replace(/export \{[^}]*\} from '\.\.\/ui\/tokens';\n/g, '')
     .replace(/export \{[^}]*\} from '\.\.\/hooks\/useThemeColors';\n/g, '');

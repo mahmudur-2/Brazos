@@ -38,6 +38,7 @@ import {
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import {
+  EYEBROW_TYPE,
   fonts,
   radius,
   spacing,
@@ -649,11 +650,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Master 20's per-tile caption: a gold small-caps eyebrow over the job's
   // own title.
   gridLabel: {
-    fontSize: 11,
-    fontWeight: '700',
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
     marginTop: spacing.xs,
   },
   gridJob: {

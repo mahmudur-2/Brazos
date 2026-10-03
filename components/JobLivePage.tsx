@@ -331,10 +331,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       flexGrow: 1,
     },
     label: {
-      fontSize: 11,
-      lineHeight: 14,
-      fontWeight: '700',
-      letterSpacing: 1.2,
+      ...EYEBROW_TYPE,
       color: colors.eyebrow,
     },
     chipRow: {

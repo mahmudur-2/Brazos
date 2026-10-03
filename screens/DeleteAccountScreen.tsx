@@ -14,6 +14,7 @@ import { listSavedCards, removeSavedCard } from '../lib/paymentMethods';
 import { formatBlockerList, type BlockerRow } from '../lib/accountDeletionBlockers';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import {
+  EYEBROW_TYPE,
   fonts,
   radius,
   spacing,
@@ -364,10 +365,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Master 32 sets each blocker's JOB / PAYMENT eyebrow green — a live-state
   // label for something that is currently unsettled.
   blockerGroup: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
   blockerLabel: {

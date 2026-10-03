@@ -19,7 +19,7 @@ import {
 } from '../lib/jobs';
 import { deriveJobLifecycle, paymentBlindStageLabel } from '../lib/jobLifecycle';
 import type { MyJobsStackParamList } from '../lib/navigation';
-import { litCardStyle, radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { EYEBROW_TYPE, litCardStyle, radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screen 56 — Route & arrival (Phase 6, worker side).
@@ -271,10 +271,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.mint2,
   },
   eyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
-    letterSpacing: 0.8,
   },
   statusLabel: {
     fontSize: 20,

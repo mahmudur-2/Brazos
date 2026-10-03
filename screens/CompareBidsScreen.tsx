@@ -23,6 +23,7 @@ import { formatTimeAgo } from '../lib/time';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { useDialNumber } from '../lib/designOverrides';
 import {
+  EYEBROW_TYPE,
   litCardStyle, fonts,
   radius,
   spacing,
@@ -355,11 +356,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
   },
   headerEyebrow: {
+    ...EYEBROW_TYPE,
     flexShrink: 1,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
     color: colors.eyebrow,
   },
   // Master 46's gold-outline pill. Configuration truth, not a per-job claim.

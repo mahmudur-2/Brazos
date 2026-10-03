@@ -62,6 +62,7 @@ import type {
 } from '../lib/navigation';
 import { useDialNumber } from '../lib/designOverrides';
 import {
+  EYEBROW_TYPE,
   emeraldRadius,
   fonts,
   litCardGround,
@@ -1433,10 +1434,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Master 30 draws these gold, master 29 draws its two cream (B-9) - the
   // decision settles it gold. Light keeps the Heritage muted label.
   fieldLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.3,
-    textTransform: 'uppercase',
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
   fieldLabelDark: { color: colors.eyebrow },
@@ -1599,10 +1597,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // plus this margin) and 10 over its card.
   section: { gap: spacing.sm + 2, marginTop: spacing.sm },
   sectionEyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
     marginHorizontal: 2,
   },
@@ -1738,10 +1733,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.xs,
   },
   adminEyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+    ...EYEBROW_TYPE,
     color: colors.warning,
   },
   adminRow: {

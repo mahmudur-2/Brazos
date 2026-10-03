@@ -84,6 +84,7 @@ import type { JobDetailRouteParamList } from '../lib/navigation';
 import { useDialNumber } from '../lib/designOverrides';
 import { quoteJobPrice, type JobPriceQuote } from '../lib/payments';
 import {
+  EYEBROW_TYPE,
   fonts,
   radius,
   spacing,
@@ -1357,12 +1358,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // Eyebrow law: a structural card label is gold small-caps.
   priceEyebrow: {
-    fontSize: 13,
-    fontWeight: '800',
+    ...EYEBROW_TYPE,
     // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
     color: colors.eyebrowGold,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
   },
   listedPriceInfo: {
     flexDirection: 'row',
@@ -1400,11 +1398,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // Master 10 sets SIMILAR OPEN JOBS as a gold small-caps section eyebrow.
   similarTitle: {
-    fontSize: 12,
-    fontWeight: '800',
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
   },
   similarList: {
     gap: spacing.md,

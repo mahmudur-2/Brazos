@@ -21,7 +21,7 @@ import {
 } from '../lib/jobs';
 import type { Profile } from '../lib/profiles';
 import { formatTimeAgo } from '../lib/time';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { EYEBROW_TYPE, radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type MarketJobPreviewProps = {
   job: OpenJob;
@@ -254,10 +254,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: 2,
   },
   priceEyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
-    letterSpacing: 0.8,
   },
   price: {
     fontSize: 20,

@@ -346,7 +346,8 @@ test('4D-6 left column: shared eyebrow, serif status word beside the toggle, pul
   assert.match(
     code,
     // 2026-09-28 (LUX-LIST-64 #48): the eyebrow role, gold in dark and #86641A in light.
-    /summaryEyebrow: \{\s*fontSize: 11,\s*fontWeight: '700',\s*letterSpacing: 1\.2,\s*color: colors\.eyebrow,\s*\}/
+    // Fix run D7: the one section-label measure (EYEBROW_TYPE), no size of its own.
+    /summaryEyebrow: \{\s*\.\.\.EYEBROW_TYPE,\s*color: colors\.eyebrow,\s*\}/
   );
   // Status word: serif, 30pt, primary ink — sharing one vertically centred
   // row with the SAME control contract (handler, state source, disabled gate

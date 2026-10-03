@@ -95,6 +95,7 @@ import type { PostJobRouteParamList } from '../lib/navigation';
 import { goBackOrHome, navigateAcrossTabs, originLabel } from '../lib/navigationRef';
 import { useDialNumber } from '../lib/designOverrides';
 import {
+  EYEBROW_TYPE,
   emeraldColorsFor,
   fonts,
   radius,
@@ -2297,9 +2298,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.xl,
   },
   stepEyebrow: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.4,
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
   stepEyebrowDark: { color: colors.eyebrow },
@@ -2610,9 +2609,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     marginBottom: spacing.md,
   },
   successEyebrow: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.1,
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
   successTitle: {

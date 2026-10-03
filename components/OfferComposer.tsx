@@ -35,7 +35,7 @@ import {
   type Offer,
 } from '../lib/offers';
 import { quoteJobPrice, workerTakeLine, type JobPriceQuote } from '../lib/payments';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { EYEBROW_TYPE, radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { usePillReserve, usePinnedFooterPadding } from '../ui/primitives';
 
 /** How long after the last keystroke the take-home quote is asked for. */
@@ -570,11 +570,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.xl,
   },
   contextEyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
+    ...EYEBROW_TYPE,
     // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
     color: colors.eyebrowGold,
-    letterSpacing: 0.9,
   },
   contextTitle: {
     fontSize: 19,

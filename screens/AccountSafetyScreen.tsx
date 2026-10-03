@@ -8,6 +8,7 @@ import { useProfile } from '../hooks/useProfile';
 import { goBackOrHome } from '../lib/navigationRef';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import {
+  EYEBROW_TYPE,
   litCardStyle, fonts,
   radius,
   spacing,
@@ -141,9 +142,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   card: { gap: spacing.sm, overflow: 'hidden' },
   cardDark: { borderColor: colors.border },
   eyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.4,
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
   heroRow: {

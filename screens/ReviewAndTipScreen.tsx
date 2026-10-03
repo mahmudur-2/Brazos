@@ -49,6 +49,7 @@ import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { dollarsToCents, formatBudget } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import {
+  EYEBROW_TYPE,
   emeraldColorsFor,
   radius,
   spacing,
@@ -774,10 +775,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   doneAction: { flex: 1 },
   eyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
-    letterSpacing: 0.8,
   },
   sectionTitle: {
     fontSize: 16,

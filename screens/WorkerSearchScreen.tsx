@@ -791,9 +791,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Eyebrow law: a structural section label is gold in dark; light keeps the
   // Heritage emerald.
   eyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.1,
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
   eyebrowDark: { color: colors.eyebrow },
@@ -972,10 +970,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.dangerBg,
   },
   stateEyebrow: {
+    ...EYEBROW_TYPE,
     marginTop: spacing.xs,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.1,
     // The eyebrow role: gold in dark, emerald in light (ruling 4).
     color: colors.eyebrow,
   },
@@ -1021,9 +1017,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingBottom: spacing.sm,
   },
   resultsEyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.1,
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
   resultCount: {
@@ -1055,9 +1049,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.xs,
   },
   profileEyebrow: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
   nameRow: {

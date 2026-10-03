@@ -38,6 +38,7 @@ import {
   type JobCategory,
 } from '../lib/jobs';
 import {
+  EYEBROW_TYPE,
   paneEdges,
   paneFills,
   radius,
@@ -673,10 +674,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       gap: spacing.sm + 2,
     },
     sectionLabel: {
-      fontSize: 12,
-      fontWeight: '700',
-      letterSpacing: 1.2,
-      color: colors.textMuted,
+      ...EYEBROW_TYPE,
+      color: colors.eyebrow,
     },
     pillRow: {
       flexDirection: 'row',

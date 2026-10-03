@@ -11,6 +11,7 @@ import { DetailScreen } from '../ui/templates/DetailScreen';
 import { paymentsMode } from '../lib/adapters/payments';
 import { goBackOrHome } from '../lib/navigationRef';
 import {
+  EYEBROW_TYPE,
   litCardStyle, fonts,
   radius,
   spacing,
@@ -290,9 +291,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Master 40 sets its card eyebrows GREEN, not gold (B-11): every one of
   // them states what the build's payment mode currently IS.
   eyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.4,
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
   heroTitle: {

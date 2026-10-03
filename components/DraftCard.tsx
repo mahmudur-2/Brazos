@@ -62,8 +62,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     eyebrow: {
       ...EYEBROW_TYPE,
-      fontSize: 11,
-      letterSpacing: 1.4,
       color: colors.eyebrowGold, // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
     },
     title: {

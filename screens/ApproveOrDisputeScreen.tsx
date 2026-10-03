@@ -41,6 +41,7 @@ import { completionPhotosOf, completionVideosOf, formatBudget } from '../lib/job
 import { releaseAtLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import {
+  EYEBROW_TYPE,
   radius,
   selectedInDark,
   spacing,
@@ -508,10 +509,8 @@ export function ApproveOrDisputeScreen() {
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
   eyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
-    letterSpacing: 0.8,
   },
   sectionTitle: {
     fontSize: 16,

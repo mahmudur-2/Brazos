@@ -9,6 +9,7 @@ import { CategoryGlyph } from './CategoryGlyph';
 import { DropdownBody, DropdownChevron } from './DropdownReveal';
 import { splitNextAction } from './HubCard';
 import {
+  EYEBROW_TYPE,
   SCRIM_DARK_ALPHA,
   emeraldRadius,
   radius,
@@ -490,9 +491,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     needsCopy: { flex: 1, minWidth: 0 },
     eyebrow: {
-      fontSize: 12,
-      fontWeight: '600',
-      letterSpacing: 0.5,
+      ...EYEBROW_TYPE,
       color: colors.emerald,
     },
     needsLine: {

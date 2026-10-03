@@ -19,6 +19,7 @@ import { fetchBothRoleSummaries, type ReviewSummary } from '../lib/reviews';
 import { skillCategoryLabel } from '../lib/skillCategories';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import {
+  EYEBROW_TYPE,
   litCardStyle, fonts,
   radius,
   spacing,
@@ -413,9 +414,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.mint,
   },
   eyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.4,
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
   cardTitle: {

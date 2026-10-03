@@ -9,6 +9,7 @@ import {
   litCard as tokenLitCard,
   radius,
   spacing,
+  type as tokenType,
   withAlpha as alpha,
   type EmeraldPalette,
 } from '../ui/tokens';
@@ -859,14 +860,10 @@ export function disabledControl(palette: ColorPalette) {
  * on the cream ground fails contrast for small text, EMERALD in light. One
  * measure for both themes; only the colour forks — through the `eyebrow`
  * palette role, so a heading names one token. The measure is the Lux
- * `.eyebrow` (11.5/700/1.6) at whole points.
+ * `.eyebrow` (11.5/700/1.6) at whole points. ONE SPELLING (fix run D7): this is
+ * ui/tokens.ts's `type.eyebrow`, and every section label spreads it unchanged.
  */
-export const EYEBROW_TYPE = {
-  fontSize: 12,
-  fontWeight: '700',
-  letterSpacing: 1.5,
-  textTransform: 'uppercase',
-} as const satisfies TextStyle;
+export const EYEBROW_TYPE = tokenType.eyebrow satisfies TextStyle;
 
 export function eyebrowStyle(palette: { eyebrow: string }): TextStyle {
   return { ...EYEBROW_TYPE, color: palette.eyebrow };

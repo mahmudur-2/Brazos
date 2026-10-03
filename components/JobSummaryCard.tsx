@@ -672,9 +672,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // #48 — the row labels are the eyebrow role (gold / antique gold), with the
     // reference's mint glyph before each.
     label: {
-      fontSize: 11,
-      fontWeight: '700',
-      letterSpacing: 1.2,
+      ...EYEBROW_TYPE,
       color: colors.eyebrow,
     },
     count: {

@@ -6,6 +6,7 @@ import { Card } from '../components/Card';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { goBackOrHome } from '../lib/navigationRef';
 import {
+  EYEBROW_TYPE,
   fonts,
   radius,
   spacing,
@@ -142,9 +143,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       gap: spacing.sm,
     },
     eyebrow: {
-      fontSize: 11,
-      fontWeight: '800',
-      letterSpacing: 1.4,
+      ...EYEBROW_TYPE,
       color: colors.eyebrow,
     },
     eyebrowDark: { color: colors.eyebrow },

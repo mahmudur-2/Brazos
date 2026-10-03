@@ -91,6 +91,7 @@ import { useDialNumber } from '../lib/designOverrides';
 /** The stepper's crossfade into a done stage (2026-09-27, the Lux remake, ruling 14). */
 const STAGE_FILL_MS = 220;
 import {
+  EYEBROW_TYPE,
   fonts,
   radius,
   spacing,
@@ -1200,9 +1201,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.emerald,
   },
   stageEyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.4,
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
   stageEyebrowDark: { color: colors.eyebrow },
@@ -1343,10 +1342,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // Eyebrow law: a structural card label is gold small-caps.
   paymentEyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
-    letterSpacing: 1.4,
   },
   paymentEyebrowDark: { color: colors.eyebrow },
   // Masters 6 and 7 set a large outlined shield-check against the payment

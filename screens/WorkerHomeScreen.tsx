@@ -988,9 +988,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   earningsHalf: { flex: 1, gap: 6 },
   // One eyebrow style for both columns — the shared rhythm is the point.
   summaryEyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.2,
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

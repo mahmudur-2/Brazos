@@ -102,6 +102,7 @@ import {
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { useDialNumber } from '../lib/designOverrides';
 import {
+  EYEBROW_TYPE,
   emeraldColorsFor,
   fonts,
   radius,
@@ -1640,10 +1641,8 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
   // Eyebrow law: BUDGET / AGREED PRICE is a structural card label, so gold
   // in dark; light keeps the Heritage emerald.
   valueLabel: {
-    ...typography.caption,
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
-    fontWeight: '800',
-    letterSpacing: 1.4,
   },
   valueLabelDark: { color: colors.eyebrow },
   // Masters 8, 16 and 17 all set the OWNER's own figure in cream, not green —
@@ -1710,10 +1709,8 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
   },
   // Every card's section eyebrow on masters 8, 16 and 17 is gold small-caps.
   eyebrow: {
-    ...typography.caption,
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
-    fontWeight: '800',
-    letterSpacing: 1.4,
   },
   eyebrowDark: { color: colors.eyebrow },
   eyebrowGold: { color: colors.eyebrowGold }, // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.

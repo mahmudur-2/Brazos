@@ -709,8 +709,8 @@ export const fonts = {
 } as const;
 
 /**
- * §I's type scale, mapped px -> pt. `eyebrow` carries §I's full spec
- * (9/800, letter-spacing 1.2, uppercase, emerald) as a ready-to-spread style.
+ * §I's type scale, mapped px -> pt. `eyebrow` is the one section-label measure
+ * (12/700, letter-spacing 1.5, uppercase; fix run D7) as a ready-to-spread style.
  *
  * The small end (`sub` 11, `caption` 10) is §I's own value and is kept: these
  * are secondary/caption roles, not body copy, and unlike touch targets there
@@ -724,8 +724,8 @@ export const fonts = {
  * this value is left exactly as it was — an OPERATOR DIAL to be re-measured on
  * device, not something this run guessed at. It is deliberately NOT applied to
  * `title`, `body`, `sub`, `caption` or `eyebrow`: negative tracking closes up
- * small type until it smudges, and `eyebrow` wants the opposite (its +1.2 is
- * what makes 9pt uppercase legible). The same three-role decision is mirrored
+ * small type until it smudges, and `eyebrow` wants the opposite (its +1.5 is
+ * what makes small uppercase legible). The same three-role decision is mirrored
  * in lib/theme.ts's `typography`, and tests/emeraldFences.test.mjs holds the
  * two surfaces to it.
  */
@@ -741,10 +741,13 @@ export const type = {
   body: { fontSize: 14, fontWeight: '400' },
   sub: { fontSize: 11, fontWeight: '500' },
   caption: { fontSize: 10, fontWeight: '500' },
+  // Fix run D7 (2026-10-03): THE one section-label measure, the Lux eyebrow at
+  // whole points — lib/theme.ts's EYEBROW_TYPE is this object. It was §I's
+  // 9/800/1.2, worn only by JobCard and StepHeader.
   eyebrow: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 1.2,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
 } as const satisfies Record<string, TextStyle>;

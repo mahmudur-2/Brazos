@@ -43,6 +43,7 @@ import { useMode } from '../modes';
 import { goBackOrHome } from '../lib/navigationRef';
 import { useDialNumber } from '../lib/designOverrides';
 import {
+  EYEBROW_TYPE,
   radius,
   spacing,
   themedStyles,
@@ -600,11 +601,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // pill whose count reads green.
   sectionTitleGold: { color: colors.eyebrowGold }, // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '800',
+    ...EYEBROW_TYPE,
     color: colors.eyebrow,
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
   },
   // The Lux `.badge`: 22 tall, the mint at .14 in dark, the count in mint.
   countBadge: {
