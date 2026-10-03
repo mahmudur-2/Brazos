@@ -58,8 +58,14 @@ test('[static] ModeShell mounts the paint signal inside the painted tree, keyed 
   assert.match(
     shell.replace(/\s+/g, ' '),
     // (the stripped JSX comment between them leaves an empty `{ }`)
-    /\{treeMode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\} (\{\} )?<ModeTreeLayoutSignal key=\{treeMode\} \/> <\/View>/,
+    /\{treeMode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\} (\{\} )?<ModeTreeLayoutSignal key=\{treeMode\} \/> <\/ShellGroundView>/,
     'the signal sits beside the tree, keyed by treeMode, inside the View that paints the ground'
+  );
+  // F18: ShellGroundView renders its children straight into that painted View.
+  assert.match(
+    shell.replace(/\s+/g, ' '),
+    /<View style=\{\[styles\.tree, \{ backgroundColor: treeGround \}, luxGround\]\}>\{children\}<\/View>/,
+    'the ground view paints the tree and the signal as its direct children'
   );
   assert.match(base, /export function ModeTreeLayoutSignal\(\)/);
   assert.match(base, /onLayout=\{markTreeLaidOut\}/);

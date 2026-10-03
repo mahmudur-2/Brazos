@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -1449,7 +1449,11 @@ export function PostJobScreen() {
       arrival_start_hour: arrivalStartHour,
       arrival_end_hour: arrivalEndHour,
     }) ?? 'Flexible';
-  const scheduleDates = upcomingDates();
+  // F18: the fourteen day labels change only when the day turns over, so they
+  // are not rebuilt on every keystroke.
+  const dayKey = toLocalIsoDate(new Date());
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- dayKey is the dependency
+  const scheduleDates = useMemo(upcomingDates, [dayKey]);
 
   // §3 conversion aids — fresh posts only. Edit keeps legacy content legal
   // (no floor retro-applied to an old description) and a hire request is a

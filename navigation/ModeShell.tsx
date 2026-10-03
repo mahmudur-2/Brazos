@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type PropsWithChildren } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useMode } from '../modes';
 import { ShellGroundProvider, useShellGroundState } from '../lib/shellGround';
@@ -107,14 +107,6 @@ const DesignStudioPanel = designStudioAvailable
 export function ModeShell() {
   const { mode, treeMode, ready, armResolution } = useMode();
   const { palette, isDark } = useThemeColors();
-  // Declared by whichever screen is focused; null until one does, and null
-  // again the moment it blurs — so a screen that says nothing leaves this
-  // exactly where it has always been.
-  const { ground, setGround } = useShellGroundState();
-  const treeGround = ground ? palette[ground] : palette.background;
-  // 2026-09-27 (the Lux remake, ruling 9): in dark the shell paints the Lux
-  // gradient over that flat ground, so the bar row and any screen that lets
-  // the shell show through sit on the one ground the screens draw themselves.
   const luxGround = screenGround(palette, isDark);
 
   // Resolution starts here rather than when the session appears, because this
@@ -140,24 +132,50 @@ export function ModeShell() {
     return <View style={[styles.tree, { backgroundColor: palette.background }, luxGround]} />;
   }
 
-  // The provider sits OUTSIDE the painted View on purpose: the View is the
-  // consumer of what the trees inside it declare, and nesting it the other way
-  // would need a second node to read the value it had just set.
   return (
-    <ShellGroundProvider value={setGround}>
+    <>
       {/* Fix run D13: who pins a footer over the pill, shared by the screens and the bar's fade. */}
       <PinnedFootProvider>
-      <View style={[styles.tree, { backgroundColor: treeGround }, luxGround]}>
+      <ShellGroundView>
         {treeMode === 'worker' ? <WorkerRoot /> : <CustomerRoot />}
         {/* 2026-09-21 — THE PAINT SIGNAL the mode switch's reveal waits for:
             keyed by the tree, so it lays out in the same pass as the incoming
             tree's first layout and reports it (components/ModeTransitionOverlay.tsx).
             Draws nothing, takes no touch, changes no layout. */}
         <ModeTreeLayoutSignal key={treeMode} />
-      </View>
+      </ShellGroundView>
       </PinnedFootProvider>
       {/* FENCE: DESIGN STUDIO (RUN S2 C1) — PERMANENT and CHANNEL-GATED: the panel mounts only where lib/designStudioGate.ts says the studio may exist (Metro __DEV__, or update channel internal/development; FAIL CLOSED on preview, production and unknown). tests/designStudio.test.mjs pins this gate — no future run may loosen it. Renders null until toggled on the Appearance screen. */}
       {designStudioAvailable ? <DesignStudioPanel /> : null}
+    </>
+  );
+}
+
+/**
+ * F18 — THE GROUND OWNS ITS STATE. Every focus and blur of a screen that
+ * declares a ground calls setGround, twice per navigation. Held in ModeShell,
+ * that re-rendered the shell and the whole navigator tree. Held here, only this
+ * view re-renders: the tree arrives as `children`, an element ModeShell made,
+ * so React skips it when only the ground changes.
+ *
+ * The provider sits OUTSIDE the painted View on purpose: the View is the
+ * consumer of what the trees inside it declare, and nesting it the other way
+ * would need a second node to read the value it had just set.
+ */
+function ShellGroundView({ children }: PropsWithChildren) {
+  const { palette, isDark } = useThemeColors();
+  // Declared by whichever screen is focused; null until one does, and null
+  // again the moment it blurs — so a screen that says nothing leaves this
+  // exactly where it has always been.
+  const { ground, setGround } = useShellGroundState();
+  const treeGround = ground ? palette[ground] : palette.background;
+  // 2026-09-27 (the Lux remake, ruling 9): in dark the shell paints the Lux
+  // gradient over that flat ground, so the bar row and any screen that lets
+  // the shell show through sit on the one ground the screens draw themselves.
+  const luxGround = screenGround(palette, isDark);
+  return (
+    <ShellGroundProvider value={setGround}>
+      <View style={[styles.tree, { backgroundColor: treeGround }, luxGround]}>{children}</View>
     </ShellGroundProvider>
   );
 }

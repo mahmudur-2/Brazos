@@ -43,3 +43,16 @@ test('[static] F2: the boot path never statically imports the design studio or t
     /\{__DEV__ \? \(\s*<ProfileStack\.Screen name="ComponentCatalog" component=\{ComponentCatalog\} \/>/,
   );
 });
+
+test('[static] F18: the shell ground re-renders only its own view, and PostJob builds its dates once a day', () => {
+  const shell = strip(read('navigation/ModeShell.tsx'));
+  const modeShell = shell.slice(shell.indexOf('export function ModeShell()'), shell.indexOf('function ShellGroundView('));
+  assert.ok(modeShell.length > 0, 'ModeShell precedes ShellGroundView');
+  assert.doesNotMatch(modeShell, /useShellGroundState\(/, 'ModeShell holds no ground state');
+  assert.match(shell, /function ShellGroundView\(\{ children \}: PropsWithChildren\) \{[\s\S]*?useShellGroundState\(\)/);
+  assert.match(modeShell, /<ShellGroundView>\s*\{treeMode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\}/);
+
+  const post = strip(read('screens/PostJobScreen.tsx'));
+  assert.match(post, /const dayKey = toLocalIsoDate\(new Date\(\)\);\s*const scheduleDates = useMemo\(upcomingDates, \[dayKey\]\);/);
+  assert.doesNotMatch(post, /const scheduleDates = upcomingDates\(\)/);
+});
