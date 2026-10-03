@@ -865,6 +865,10 @@ test('E1 contrast: every light text ink clears 4.5:1 on the cream, the white car
     assertAA(colors[key], colors[`${key}Bg`], `light ${key} on ${key}Bg`);
   }
   assertAA(light.waitingInk, light.waitingFill, 'light waitingInk on waitingFill');
+  // Each stage ink on its own tint — the filled light status pill (StatusBadge) draws exactly that pair.
+  for (const key of ['stageAssigned', 'stageProgress', 'stageReview']) {
+    assertAA(light[key], light[`${key}Bg`], `light tokens.${key} on ${key}Bg`);
+  }
   // A resting tab label: the ink at the rest alpha over the white pill, at both of its stops.
   for (const stop of [litCard.light.top, litCard.light.bottom]) {
     assertAA(over(light.ink, meltBar.restInkAlpha.light, stop), stop, 'a resting light tab label on the pill');

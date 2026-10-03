@@ -196,13 +196,14 @@ export const colors = {
    * status pill, the Inbox job chip, the Home live bar's Sonar dot and the
    * stage rail all say "Assigned" / "In progress" / "Review work" in the same
    * hue. Light is the FILLED recipe the app's light pills already use (a pale
-   * tint under the ink, the rim near-invisible): `stageAssigned` #8A6414 on
+   * tint under the ink, the rim near-invisible): `stageAssigned` #8A6414 (deepened below) on
    * #F5EAD2 and `stageReview` #5B45C7 on #ECE7FF are the approved reference
    * pages' own (docs/mockups/html/refs/home-tucked-in.html,
    * inbox-clean-list.html); `stageProgress` #9A4608 on #FBE2CA is the
    * operator's peach (#46). Dark draws the ink itself, outlined (see `dark`).
    */
-  stageAssigned: '#8A6414',
+  // Fix run E1 review: #8A6414 was 4.49:1 on its own tint, a hair under AA; #836010 is 4.82:1.
+  stageAssigned: '#836010',
   stageAssignedBg: '#F5EAD2',
   stageProgress: '#9A4608',
   stageProgressBg: '#FBE2CA',
