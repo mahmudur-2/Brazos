@@ -69,19 +69,36 @@ export function getProjectId(): string | null {
 }
 
 /**
+ * A15 (2026-10-03): the pushes that stay quiet while the app is in front, by the outbox type
+ * send-push puts in `data.type`. Today one: the card decline, which Checkout has already shown as
+ * an alert. Pure, so the rule is one place; anything unrecognised is shown as before.
+ */
+export function isQuietInForeground(data: unknown): boolean {
+  const type = data && typeof data === 'object' ? (data as { type?: unknown }).type : undefined;
+  return type === 'payment_declined';
+}
+
+/**
  * Foreground presentation + the Android channel. Safe to call on every start;
  * both are idempotent. Called from App.tsx before anything can arrive.
  */
 export async function configurePushHandling(): Promise<void> {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      // A push that lands while the user is already looking at the app should
-      // still be visible — they may be on a different screen than it points to.
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
+    handleNotification: async (notification) => {
+      // A15 (2026-10-03): a card decline is answered IN the app — create-payment returns it and
+      // Checkout shows the alert — and its push exists for the customer who already left. While
+      // the app is in front (this handler runs only then) the push would land on top of that
+      // alert, so it is kept out of sight; it still reaches the notification list.
+      const quiet = isQuietInForeground(notification.request.content.data);
+      return {
+        // Every other push that lands while the user is already looking at the app stays
+        // visible — they may be on a different screen than it points to.
+        shouldShowBanner: !quiet,
+        shouldShowList: true,
+        shouldPlaySound: !quiet,
+        shouldSetBadge: false,
+      };
+    },
   });
 
   // 2026-09-30 (idea 6): the evening-before reminder's buttons — the worker's Message and Route, the

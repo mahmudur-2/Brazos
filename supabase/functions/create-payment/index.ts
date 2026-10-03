@@ -363,10 +363,19 @@ Deno.serve(async (req) => {
       if (!card.ok || card.body.customer !== customerId || card.body.type !== 'card') {
         return json({ error: 'That card is no longer saved. Protect the payment in Checkout.', code: 'no_saved_card' }, 409);
       }
+      // A15 (2026-10-03): THE KEY ROTATES ON A DECLINE. The provider caches a confirm's result
+      // under its idempotency key for 24 hours, so a fixed key per payment and card replayed a
+      // cached decline on every retry that day. Each failed confirm leaves a failed Charge on the
+      // intent (latest_charge), so the key carries the id of the charge the intent had BEFORE this
+      // attempt: a retry after a decline sends a genuinely new request, while a repeated tap of the
+      // same attempt still shares its key. An unreadable intent keeps the fixed key — never a
+      // random one, which would be no idempotency at all.
+      const intentNow = await stripeGet(`/v1/payment_intents/${encodeURIComponent(intentId)}`);
+      const priorCharge = intentNow.ok && typeof intentNow.body.latest_charge === 'string' ? intentNow.body.latest_charge : '';
       const confirmed = await stripe(
         `/v1/payment_intents/${encodeURIComponent(intentId)}/confirm`,
         { payment_method: savedCardId, off_session: 'true', return_url: OFF_SESSION_RETURN_URL },
-        `brazos-offsession-${paymentId}-${savedCardId}`
+        `brazos-offsession-${paymentId}-${savedCardId}${priorCharge ? `-${priorCharge}` : ''}`
       );
       const status = confirmed.body.status;
       if (confirmed.ok && (status === 'succeeded' || status === 'processing' || status === 'requires_capture')) {

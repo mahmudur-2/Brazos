@@ -77,7 +77,12 @@ test('[static] create-payment: the opt-in sets or clears the intent\'s future us
   assert.match(fn, /if \(useSavedCard && !\/\^pm_\[A-Za-z0-9_\]\+\$\/\.test\(savedCardId\)\) \{/);
   assert.match(fn, /if \(!card\.ok \|\| card\.body\.customer !== customerId \|\| card\.body\.type !== 'card'\) \{/);
   assert.match(fn, /const OFF_SESSION_RETURN_URL = 'brazos:\/\/checkout';/);
-  assert.match(fn, /\{ payment_method: savedCardId, off_session: 'true', return_url: OFF_SESSION_RETURN_URL \},\s*`brazos-offsession-\$\{paymentId\}-\$\{savedCardId\}`/);
+  // A15 (2026-10-03): the key carries the charge the intent had BEFORE this attempt, so a retry
+  // after a decline is a new request while a repeated tap still shares its key; an unreadable
+  // intent keeps the fixed key.
+  assert.match(fn, /const intentNow = await stripeGet\(`\/v1\/payment_intents\/\$\{encodeURIComponent\(intentId\)\}`\);\s*const priorCharge = intentNow\.ok && typeof intentNow\.body\.latest_charge === 'string' \? intentNow\.body\.latest_charge : '';/);
+  assert.match(fn, /\{ payment_method: savedCardId, off_session: 'true', return_url: OFF_SESSION_RETURN_URL \},\s*`brazos-offsession-\$\{paymentId\}-\$\{savedCardId\}\$\{priorCharge \? `-\$\{priorCharge\}` : ''\}`/);
+  assert.doesNotMatch(fn, /Date\.now\(\)|crypto\.randomUUID|Math\.random/, 'never a random key — that would be no idempotency at all');
   assert.doesNotMatch(fn, /latestSavedCard/, 'never "whichever card is newest"');
   // Only a card decline is a decline; the rest is the provider's, and an unknown outcome is the ledger's.
   assert.match(fn, /const declined =\s*confirmed\.status === 402 \|\|\s*failure\?\.type === 'card_error' \|\|/);
