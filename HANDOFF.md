@@ -1,6 +1,6 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-10-03 (FIX RUN — IN PROGRESS, the first section below, is the current state — then
+WRITTEN: 2026-10-03 (FIX RUN — BUILT, REVIEWED AND SWEPT, the first section below, is the current state — then
 DESIGN LOOP 3, the sitting that planned it — then THE TAB BAR FIX — then BUILD RUN — DONE, the run it followed — then the BUILD RUN's planning section as it was written before "build", superseded by the first —
 then THE VIEWER'S PREP FIXED, AND THE TAB BAR EXPLORED, the DESIGN LOOP section, BUILD IT, the
 LUX-LIST-2 run's, LUX-LIST-64's, the NEXT SESSION primer of 2026-09-27 (the pipeline, the fences and
@@ -11,7 +11,7 @@ the Lux drawing run's, the eighteen-item run's and the sittings before them, unc
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
 
-## FIX RUN — IN PROGRESS: groups A–F built and reviewed, the smooth pass with them; the final sweep follows (2026-10-03, "build" given; the workflow's helpers run one after another)
+## FIX RUN — BUILT, REVIEWED AND SWEPT: groups A–F, the smooth pass and the final sweep are on `mainexpo`; one OTA and the new Beta build are the operator's next (2026-10-03, "build" given; the workflow's helpers ran one after another)
 
 **Start here.** The brief is `docs/dispatch/FIX-RUN.md`; the operator's selection is its first
 section (OUT: A1, B10, C5, D1, D2, D4, D5, E6, F14; picks A10a, A12a, A18a, B1a, C1b, D13a). The
@@ -174,8 +174,42 @@ running log is `.shots/refresh/review/run/log.md` (gitignored), one line per ite
   F1's cached-mode grace.
 - **Only the operator (device check from the F review):** on a device, a tap just outside a small
   control (the header back link, a Filters or Inbox pill, the search clear, a switch) still lands.
-- **Next:** the workflow's remaining helper (the final sweep), then one OTA and the new Beta build.
-  The parked reminders in DESIGN LOOP 3 below still stand.
+- **The final sweep (this section's last run), one defect found and fixed — `8932961`, with the
+  payout-nudge follow-up `04d0f86`:** the whole change `af28bce..f2af46c` read for interactions
+  between groups — money paths, state two screens derive differently, navigation and deep links
+  after the F20/F2 merges, the cache and offline edges, the ten migrations against the live views
+  and the drain. One real gap, across A11 × C4 × F6: the ledger's CANCELLATION shape — a `held`
+  card row that `cancel_job()` or `ban_user()` has directed home (`refund_cents` set until
+  charge.refunded lands; for a late cancel `transfer_cents` and `release_requested_at` for the fee)
+  — had no words on the client. A11 made ClientJobDetail READ it on a cancelled job but every money
+  card still sat in the non-cancelled branch, so the customer saw "No further action is needed" and
+  never the refund; WorkerJob called it "Held in protection — yours when the customer approves", or
+  "Approved — on its way to you" for the fee shape; Earnings counted the whole amount as pending.
+  Now: `isRefundQueued` / `isCancellationFeeKept` in `lib/paymentRules.ts` (re-exported from
+  `lib/payments.ts`), two facts in `lib/moneyCopy.ts`'s caption table checked FIRST on a held row
+  (the fee shape also reads as release requested), `MoneyText` passes them, ClientJobDetail's
+  cancelled branch shows the payment card (and the status-read banner, one element used twice),
+  WorkerJob's note names the cancellation before every live sentence and neither its gold eyebrow
+  nor its "held" breakdown describes a refund, the payout nudge names the fee on a late cancel, and
+  Earnings pends only what still travels. Fenced by `tests/cancelledMoney.test.mjs` (executes the
+  predicates and the Earnings rule, pins both screens) and `tests/moneyCopy.test.mjs`; the expected
+  shapes in `stripePayments`, `customerCharge`, `jobCompletions` and `sandboxCheckout` admit the
+  cancelled card and the two props. Read and sound, no change: the ten migrations against
+  `transfers_due` / `refunds_due` / `job_payment_state()` / the drain; `lib/jobLifecycle.ts` as the
+  one derivation (F6's `isLiveJob` / `nextWorkerStep`, C1b's words); no `RouteArrival` reference
+  left anywhere (F20); `lib/notificationRoutes.ts`'s intents (`route`, `checkout`, `pay`, `accept`)
+  against A13's reminder payload and B8's cold-start wait; F13's cache (`networkMode 'always'`,
+  the account bridge, `invalidateAfterPush`); B6's legal cache against B1's version bump; F1's mode
+  prefetch (every source resolves, never rejects); F4's inverted list and F5's window (no hole, the
+  floor rule); D13's pinned-foot registry; the reduce-motion answer cached per process, so an
+  entrance can flash only on the very first mount, under the launch layer. Noted, not changed
+  (pre-existing, tiny windows): `releaseAtLabel` on a deadline a few minutes past says the past
+  time on ApproveOrDispute and the job page's pinned label; a thread whose 50 oldest messages
+  share one timestamp would page the same page again on scroll.
+- **Proof at the sweep:** `npm run verify` 1618 pass, 0 fail (1615 + the three new tests); no
+  migration added, so no database run.
+- **Next:** one OTA and the new Beta build (the operator's). The parked reminders in DESIGN LOOP 3
+  below still stand.
 
 ## DESIGN LOOP 3 — the review is planned; nothing built (2026-10-01/02, the first design chat after the build run; docs only, nothing in the app changed)
 
