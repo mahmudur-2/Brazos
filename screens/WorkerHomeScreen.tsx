@@ -64,6 +64,8 @@ import {
   useThemeColors,
   type ColorPalette,
   screenGround,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 import { useDialNumber } from '../lib/designOverrides';
 import { Divider, SearchBar, Toggle, useScrollClearance } from '../ui/primitives';
@@ -456,7 +458,7 @@ export function WorkerHomeScreen() {
                 {needsYou.length > (payoutWaitCents != null ? 1 : 2) ? (
                   <Pressable
                     onPress={() => navigateAcrossTabs('MyJobs')}
-                    hitSlop={8}
+                    hitSlop={touchSlop(textLine(styles.needsYouAll))}
                     accessibilityRole="button"
                     accessibilityLabel="See all in My Jobs"
                   >
@@ -796,7 +798,7 @@ export function WorkerHomeScreen() {
           ) : error ? (
             <View style={styles.notice}>
               <Text style={styles.noticeError}>Couldn’t load open jobs.</Text>
-              <Pressable onPress={() => void onRefresh()} hitSlop={8} accessibilityRole="button">
+              <Pressable onPress={() => void onRefresh()} hitSlop={touchSlop(textLine(styles.retry))} accessibilityRole="button">
                 <Text style={[styles.retry, isDark && styles.retryDark]}>Try again</Text>
               </Pressable>
             </View>

@@ -10,6 +10,8 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 
 type CategoryAccordionProps = {
@@ -54,6 +56,7 @@ export function CategoryAccordion({
       <Pressable
         style={styles.summaryRow}
         onPress={() => setExpanded((e) => !e)}
+        hitSlop={touchSlop(2 * (spacing.sm + 2) + textLine(styles.summaryText))}
         accessibilityRole="button"
       >
         <Text style={styles.summaryText}>
@@ -97,7 +100,7 @@ export function CategoryAccordion({
               <Text style={styles.rowLabel}>{key}</Text>
               <Pressable
                 onPress={() => onRemoveCustom(key)}
-                hitSlop={8}
+                hitSlop={touchSlop(20, 20)}
                 accessibilityLabel={`Remove ${key}`}
               >
                 <Ionicons name="close-circle" size={20} color={colors.textSubtle} />
@@ -122,6 +125,7 @@ export function CategoryAccordion({
               style={[styles.otherAddBtn, !customInput.trim() && styles.otherAddBtnDisabled]}
               onPress={submitCustom}
               disabled={!customInput.trim()}
+              hitSlop={touchSlop(34, 34)}
               accessibilityLabel="Add custom category"
             >
               <Ionicons name="add" size={18} color={colors.onPrimary} />

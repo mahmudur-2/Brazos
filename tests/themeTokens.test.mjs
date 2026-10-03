@@ -89,7 +89,8 @@ const themeModule = (async () => {
       // 2026-09-18 added `light as emeraldLight`: the task card's three roles
       // are defined once in ui/tokens.ts and lib/theme.ts takes BOTH palettes'
       // values by reference, the light side included.
-      'const { brand, dark: emeraldDark, light: emeraldLight, constantAccents, metricGeneration, radius, shadows: tokenShadows, spacing, type: tokenType, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
+      // Fix run E3 added `controls`: touchSlop() reads the 44pt floor from it.
+      'const { brand, controls, dark: emeraldDark, light: emeraldLight, constantAccents, metricGeneration, radius, shadows: tokenShadows, spacing, type: tokenType, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
     )
     .replace(/export \{[^}]*\} from '\.\.\/ui\/tokens';\n/g, '')
     .replace(/export \{[^}]*\} from '\.\.\/hooks\/useThemeColors';\n/g, '');
@@ -902,6 +903,24 @@ test('E2 contrast: the dark secondary inks and the one dark red clear 4.5:1 on t
   for (const stop of [litCard.dark.top, litCard.dark.bottom]) {
     assertAA(over(dark.ink, meltBar.restInkAlpha.dark, stop), stop, 'a resting dark tab label on the pill');
   }
+});
+
+test('E3 touchSlop: any drawn size reaches the 44pt floor on each axis it is given, and keeps its identity', async () => {
+  const { touchSlop, textLine } = await themeModule;
+  const { controls } = await tokensModule;
+  const floor = controls.minTouchTarget;
+  assert.equal(floor, 44);
+  for (let drawn = 1; drawn <= floor + 4; drawn += 1) {
+    const slop = touchSlop(drawn, drawn);
+    assert.ok(drawn + slop.top + slop.bottom >= floor, `${drawn}pt tall stays under the floor`);
+    assert.ok(drawn + slop.left + slop.right >= floor, `${drawn}pt wide stays under the floor`);
+    assert.ok(slop.top <= Math.ceil(Math.max(0, floor - drawn) / 2), `${drawn}pt gets more slop than it needs`);
+  }
+  assert.deepEqual(touchSlop(34), { top: 5, bottom: 5, left: 0, right: 0 }, 'no width: a text link keeps its sides');
+  assert.deepEqual(touchSlop(48, 60), { top: 0, bottom: 0, left: 0, right: 0 }, 'at the floor: nothing');
+  assert.equal(touchSlop(34), touchSlop(34), 'one object per size, so the prop never churns');
+  assert.equal(textLine({ fontSize: 14 }), 17);
+  assert.equal(textLine({ fontSize: 13, lineHeight: 18 }), 18);
 });
 
 // ---------------------------------------------------------------------------

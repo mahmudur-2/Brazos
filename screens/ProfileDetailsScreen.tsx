@@ -28,6 +28,7 @@ import {
   useThemeColors,
   type ColorPalette,
   screenGround,
+  touchSlop,
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
 
@@ -248,6 +249,7 @@ export function ProfileDetailsScreen() {
             </View>
             <Pressable
               onPress={() => navigation.navigate('ProfileMain', { edit: true })}
+              hitSlop={touchSlop(34)}
               accessibilityRole="button"
               style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
             >

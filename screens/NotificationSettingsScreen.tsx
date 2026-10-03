@@ -46,6 +46,8 @@ import {
   useThemeColors,
   type ColorPalette,
   screenGround,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 
 /**
@@ -234,7 +236,7 @@ export function NotificationSettingsScreen() {
               <Text style={styles.noticeText}>
                 {loadError} Showing defaults until it loads.
               </Text>
-              <Pressable onPress={load} hitSlop={8} accessibilityRole="button">
+              <Pressable onPress={load} hitSlop={touchSlop(textLine(styles.noticeRetry))} accessibilityRole="button">
                 <Text style={styles.noticeRetry}>Try again</Text>
               </Pressable>
             </View>
@@ -253,11 +255,11 @@ export function NotificationSettingsScreen() {
               />
               <Text style={styles.noticeText}>{notice.text}</Text>
               {notice.settings ? (
-                <Pressable onPress={() => void Linking.openSettings()} hitSlop={8} accessibilityRole="button">
+                <Pressable onPress={() => void Linking.openSettings()} hitSlop={touchSlop(textLine(styles.noticeRetry))} accessibilityRole="button">
                   <Text style={styles.noticeRetry}>Open Settings</Text>
                 </Pressable>
               ) : notice.retry ? (
-                <Pressable onPress={checkPush} hitSlop={8} accessibilityRole="button">
+                <Pressable onPress={checkPush} hitSlop={touchSlop(textLine(styles.noticeRetry))} accessibilityRole="button">
                   <Text style={styles.noticeRetry}>Try again</Text>
                 </Pressable>
               ) : null}
@@ -354,7 +356,7 @@ export function NotificationSettingsScreen() {
                   : ' (not set yet)'}
                 .
               </Text>
-              <Pressable onPress={captureLocation} hitSlop={8}>
+              <Pressable onPress={captureLocation} hitSlop={touchSlop(textLine(styles.link))}>
                 <Text style={styles.link}>Update my location</Text>
               </Pressable>
 

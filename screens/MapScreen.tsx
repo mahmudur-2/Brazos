@@ -56,6 +56,8 @@ import {
   useThemeColors,
   withAlpha,
   type ColorPalette,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 import { PalettePinContext } from '../hooks/useThemeColors';
 import { usePillReserve } from '../ui/primitives';
@@ -659,6 +661,7 @@ export function MapScreen() {
               >
                 <Pressable
                   onPress={toggleToday}
+                  hitSlop={touchSlop(MAP_CHIP_HEIGHT - 2)}
                   style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
                   accessibilityRole="button"
                   accessibilityState={{ selected: todayOn }}
@@ -690,7 +693,7 @@ export function MapScreen() {
           // dead end otherwise (state-coverage audit, 2026-08-10).
           <View style={[styles.errorRow, { backgroundColor: colors.dangerBg }]}>
             <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>
-            <Pressable onPress={refresh} hitSlop={8} accessibilityRole="button">
+            <Pressable onPress={refresh} hitSlop={touchSlop(textLine(styles.errorRetry))} accessibilityRole="button">
               <Text style={styles.errorRetry}>Try again</Text>
             </Pressable>
           </View>
@@ -761,7 +764,7 @@ export function MapScreen() {
                     {selected.job_count} open {selected.job_count === 1 ? 'job' : 'jobs'}
                   </Text>
                 </View>
-                <Pressable onPress={() => setSelected(null)} hitSlop={8}>
+                <Pressable onPress={() => setSelected(null)} hitSlop={touchSlop(20, 20)}>
                   <Ionicons name="close" size={20} color={colors.textMuted} />
                 </Pressable>
               </View>

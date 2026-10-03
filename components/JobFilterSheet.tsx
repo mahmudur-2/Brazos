@@ -47,6 +47,8 @@ import {
   useThemeColors,
   withAlpha,
   type ColorPalette,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 import { PalettePinContext } from '../hooks/useThemeColors';
 
@@ -58,6 +60,8 @@ import { PalettePinContext } from '../hooks/useThemeColors';
 const SHEET_TOP_RADIUS = 28;
 const SHEET_HAIRLINE_ALPHA = 0.2;
 const SHEET_EDGE = 'top' as const;
+/** A filter pill's drawn height; fix run E3 lifts its touch area to 44 with touchSlop. */
+const PILL_HEIGHT = 34;
 
 /**
  * THE FILTERS SHEET — the approved design (docs/mockups/html/map-explore-
@@ -347,7 +351,7 @@ export function JobFilterSheet({
       <Pressable
         onPress={reset}
         disabled={isDefaultJobFilters(draft) && draftDistance === null}
-        hitSlop={8}
+        hitSlop={touchSlop(textLine(styles.resetText))}
         style={({ pressed }) => [styles.reset, pressed && styles.pressed]}
         accessibilityRole="button"
         accessibilityLabel="Reset filters"
@@ -634,6 +638,7 @@ function Pill({
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={touchSlop(PILL_HEIGHT)}
       style={({ pressed }) => [
         styles.pill,
         isDark && styles.pillDark,
@@ -710,7 +715,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       alignItems: 'center',
       justifyContent: 'center',
       gap: spacing.xs + 2,
-      height: 34,
+      height: PILL_HEIGHT,
       paddingHorizontal: spacing.sm + 2,
       borderRadius: radius.pill,
       borderWidth: 1,

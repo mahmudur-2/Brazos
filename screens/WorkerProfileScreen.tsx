@@ -53,6 +53,7 @@ import {
   useThemeColors,
   type ColorPalette,
   screenGround,
+  touchSlop,
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
 
@@ -433,6 +434,7 @@ export function WorkerProfileScreen() {
                         pressed && styles.serviceBookPressed,
                       ]}
                       onPress={() => bookService(service)}
+                      hitSlop={touchSlop(40)}
                       accessibilityRole="button"
                       accessibilityLabel={
                         service.price_cents != null

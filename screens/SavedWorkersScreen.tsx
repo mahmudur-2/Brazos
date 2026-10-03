@@ -25,6 +25,7 @@ import {
   litCardStyle,
   useThemeColors,
   type ColorPalette,
+  touchSlop,
 } from '../lib/theme';
 
 /** The lightest shape a row needs — the batch profile read returns a subset
@@ -222,6 +223,7 @@ export function SavedWorkersScreen() {
         {canHire(profile.full_name) ? (
           <Pressable
             style={[styles.hireButton, isDark && styles.hireButtonDark]}
+            hitSlop={touchSlop(40)}
             onPress={() =>
               navigation.navigate('PostJob', {
                 hireWorkerId: profile.id,

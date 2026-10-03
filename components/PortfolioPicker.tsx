@@ -47,6 +47,8 @@ import {
   withAlpha,
   type ColorPalette,
   selectedInDark,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 
 const OTHER_KEY = '__other__';
@@ -393,7 +395,7 @@ export function PortfolioPicker({
                   </Text>
                   <Pressable
                     onPress={closeDetailStep}
-                    hitSlop={10}
+                    hitSlop={touchSlop(22, 22)}
                     accessibilityLabel="Cancel"
                   >
                     <Ionicons name="close" size={22} color={colors.textMuted} />
@@ -411,6 +413,7 @@ export function PortfolioPicker({
                     <Pressable
                       key={c}
                       onPress={() => setCategory(c)}
+                      hitSlop={touchSlop(2 * (spacing.xs + 2) + textLine(styles.categoryChipText))}
                       style={[
                         styles.categoryChip,
                         category === c &&
@@ -448,6 +451,7 @@ export function PortfolioPicker({
                   ))}
                   <Pressable
                     onPress={() => setCategory(OTHER_KEY)}
+                    hitSlop={touchSlop(2 * (spacing.xs + 2) + textLine(styles.categoryChipText))}
                     style={[
                       styles.categoryChip,
                       category === OTHER_KEY &&

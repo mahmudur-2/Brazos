@@ -113,6 +113,8 @@ import {
   useThemeColors,
   type ColorPalette,
   screenGround,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
@@ -925,7 +927,7 @@ export function ClientJobDetailScreen() {
             <Pressable
               onPress={onRefresh}
               disabled={refreshing}
-              hitSlop={8}
+              hitSlop={touchSlop(textLine(styles.retryText))}
               accessibilityRole="button"
               accessibilityLabel="Retry loading bids"
             >

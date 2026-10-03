@@ -26,6 +26,8 @@ import {
   useThemeColors,
   withAlpha,
   type ColorPalette,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
@@ -275,7 +277,7 @@ export function NotificationsScreen() {
                 content: (
                   <View style={styles.unreadLine}>
                     <Text style={styles.unreadCount}>{`${unread} unread`}</Text>
-                    <Pressable onPress={() => void markAll()} hitSlop={10} accessibilityRole="button">
+                    <Pressable onPress={() => void markAll()} hitSlop={touchSlop(textLine(styles.markAll))} accessibilityRole="button">
                       <Text style={styles.markAll}>Mark all read</Text>
                     </Pressable>
                   </View>

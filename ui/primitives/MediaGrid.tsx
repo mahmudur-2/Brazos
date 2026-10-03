@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { RemoteImage } from '../../components/RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import { radius, spacing, withAlpha, type EmeraldPalette, type as typeScale } from '../tokens';
-import { themedStyles, useThemeColors } from '../../lib/theme';
+import { themedStyles, touchSlop, useThemeColors } from '../../lib/theme';
 
 /**
  * A responsive grid of media thumbnails (§I).
@@ -72,7 +72,7 @@ export function MediaGrid({
               <Pressable
                 style={styles.remove}
                 onPress={() => onRemoveItem(item, index)}
-                hitSlop={8}
+                hitSlop={touchSlop(22, 22)}
                 accessibilityRole="button"
                 accessibilityLabel={`Remove ${isVideo ? 'video' : 'photo'} ${index + 1}`}
               >

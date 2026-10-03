@@ -33,6 +33,8 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 
 type PastWorkProps = {
@@ -271,6 +273,7 @@ function FilterTab({
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={touchSlop(2 * (spacing.xs + 2) + textLine(styles.tabText))}
       style={[styles.tab, active && (isDark ? styles.tabActiveDark : styles.tabActive)]}
     >
       <Text

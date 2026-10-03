@@ -26,7 +26,7 @@ import {
   type PricingMode,
 } from '../lib/pricingMode';
 import { moneyCeilingError } from '../lib/validation';
-import { radius, spacing, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import { radius, spacing, themedStyles, touchSlop, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -288,6 +288,7 @@ export const PriceDropdown = forwardRef<
             <Pressable
               onPress={finishEntry}
               style={({ pressed }) => [styles.done, pressed && styles.donePressed]}
+              hitSlop={touchSlop(38)}
               accessibilityRole="button"
               accessibilityLabel="Done"
             >

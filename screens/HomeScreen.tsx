@@ -61,6 +61,8 @@ import {
   useThemeColors,
   type ColorPalette,
   screenGround,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 import { litFill, SearchBar, useScrollClearance } from '../ui/primitives';
 import { litBetween } from '../ui/primitives/LitSurface';
@@ -929,7 +931,7 @@ export function HomeScreen() {
                 // whole section.
                 <View style={styles.notice}>
                   <Text style={styles.noticeError}>Couldn’t load your jobs.</Text>
-                  <Pressable onPress={refreshMyJobs} hitSlop={8} accessibilityRole="button">
+                  <Pressable onPress={refreshMyJobs} hitSlop={touchSlop(textLine(styles.retry))} accessibilityRole="button">
                     <Text style={styles.retry}>Try again</Text>
                   </Pressable>
                 </View>

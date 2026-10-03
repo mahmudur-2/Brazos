@@ -62,6 +62,8 @@ import {
   useThemeColors,
   type ColorPalette,
   screenGround,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 import { CategoryGlyph } from '../components/CategoryGlyph';
 import { SearchBar, useScrollClearance } from '../ui/primitives';
@@ -477,7 +479,7 @@ export function WorkerSearchScreen() {
                   <Text style={styles.rebookTitle}>Hire someone again</Text>
                   <Pressable
                     onPress={() => navigateAcrossTabs('Profile', 'SavedWorkers')}
-                    hitSlop={8}
+                    hitSlop={touchSlop(textLine(styles.rebookSeeAll))}
                     accessibilityRole="button"
                     accessibilityLabel="See all saved and past workers"
                   >

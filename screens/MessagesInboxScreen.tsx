@@ -97,6 +97,7 @@ import {
   type ColorPalette,
   edgeFade,
   screenGround,
+  touchSlop,
 } from '../lib/theme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 
@@ -1060,6 +1061,7 @@ export function MessagesInboxScreen() {
             <Pressable
               key={pill.key}
               onPress={() => setFilter(pill.key)}
+              hitSlop={touchSlop(filterPillHeight)}
               style={({ pressed }) => [
                 styles.pill,
                 { height: filterPillHeight, borderColor: pillRim },

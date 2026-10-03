@@ -1,6 +1,7 @@
-import { Platform, type TextStyle, type ViewStyle } from 'react-native';
+import { Platform, type Insets, type TextStyle, type ViewStyle } from 'react-native';
 import {
   brand,
+  controls,
   dark as emeraldDark,
   light as emeraldLight,
   constantAccents,
@@ -944,6 +945,34 @@ export function edgeFade(to: string, angle = 90, solidAt = 100): ViewStyle {
   return Platform.OS === 'web'
     ? ({ backgroundImage: gradient } as unknown as ViewStyle)
     : ({ experimental_backgroundImage: gradient } as ViewStyle);
+}
+
+/** One answer per drawn size, so a control's hitSlop keeps its identity across renders. */
+const touchSlopCache = new Map<string, Insets>();
+
+/**
+ * Fix run E3 — the hitSlop that lifts a control drawn `height` tall (and, when
+ * given, `width` wide) to the 44pt touch floor without changing what it draws:
+ * the house rule "hitSlop over drawn size" (ui/primitives/Toggle.tsx). Each
+ * axis gets half the shortfall on either side, rounded up, and nothing once
+ * the drawn size already meets the floor; with no `width` the sides get none,
+ * for a text link whose label is wider than the floor already.
+ */
+export function touchSlop(height: number, width?: number): Insets {
+  const key = `${height}|${width ?? ''}`;
+  const cached = touchSlopCache.get(key);
+  if (cached) return cached;
+  const floor = controls.minTouchTarget;
+  const vertical = Math.max(0, Math.ceil((floor - height) / 2));
+  const horizontal = width == null ? 0 : Math.max(0, Math.ceil((floor - width) / 2));
+  const insets = { top: vertical, bottom: vertical, left: horizontal, right: horizontal };
+  touchSlopCache.set(key, insets);
+  return insets;
+}
+
+/** The height one line of `style` draws: its lineHeight, else the platform's ~1.2 em. */
+export function textLine(style: TextStyle): number {
+  return style.lineHeight ?? Math.ceil((style.fontSize ?? 14) * 1.2);
 }
 
 export function typographyFor(palette: ColorPalette): Record<keyof typeof typography, TextStyle> {

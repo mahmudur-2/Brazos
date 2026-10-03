@@ -134,6 +134,7 @@ import type { ChatRouteParamList } from '../lib/navigation';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette,
   screenGround,
+  touchSlop,
 } from '../lib/theme';
 import { Divider, usePillReserve } from '../ui/primitives';
 
@@ -2055,7 +2056,7 @@ export function ChatScreen() {
                   ) : null}
                   <Pressable
                     onPress={() => setReplyTo(null)}
-                    hitSlop={10}
+                    hitSlop={touchSlop(18, 18)}
                     accessibilityLabel="Cancel reply"
                   >
                     <Ionicons name="close" size={18} color={colors.textMuted} />

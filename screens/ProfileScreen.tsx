@@ -75,6 +75,8 @@ import {
   withAlpha,
   type ColorPalette,
   screenGround,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 
 const LANGUAGE_OPTIONS = [
@@ -884,7 +886,7 @@ export function ProfileScreen() {
                           role: 'both',
                         })
                       }
-                      hitSlop={{ top: 8, bottom: 8 }}
+                      hitSlop={touchSlop(textLine(styles.identityMeta))}
                       accessibilityRole="button"
                       accessibilityLabel={`See all ${reviewTotal} reviews about you`}
                       style={styles.ratingLine}

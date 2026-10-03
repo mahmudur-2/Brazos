@@ -34,6 +34,8 @@ import {
   type ColorPalette,
   disabledControl,
   selectedInDark,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 
 /**
@@ -347,6 +349,7 @@ export function ServicesPricingScreen() {
                   (isDark ? styles.categoryChipActiveDark : styles.categoryChipActive),
               ]}
               onPress={() => setCategory(c)}
+              hitSlop={touchSlop(2 * spacing.sm + textLine(styles.categoryChipText))}
               accessibilityRole="button"
               accessibilityState={{ selected: category === c }}
             >

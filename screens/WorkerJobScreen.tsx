@@ -101,6 +101,8 @@ import {
   withAlpha,
   type ColorPalette,
   screenGround,
+  textLine,
+  touchSlop,
 } from '../lib/theme';
 
 /** Same cap as a job posting's photos, for consistency. */
@@ -826,6 +828,7 @@ export function WorkerJobScreen() {
                 <Pressable
                   onPress={() => navigation.navigate('RouteArrival', { jobId: job.id })}
                   style={({ pressed }) => [styles.stageHead, pressed && styles.pressed]}
+                  hitSlop={touchSlop(textLine(styles.stageEyebrow) + textLine(styles.stageTitle))}
                   accessibilityRole="button"
                   accessibilityLabel="Arrival details"
                 >
@@ -943,7 +946,7 @@ export function WorkerJobScreen() {
                       <Pressable
                         style={styles.photoRemove}
                         onPress={removeDoneVideo}
-                        hitSlop={6}
+                        hitSlop={touchSlop(30, 30)}
                         accessibilityRole="button"
                         accessibilityLabel="Remove video"
                       >
@@ -973,7 +976,7 @@ export function WorkerJobScreen() {
                           <Pressable
                             style={styles.photoRemove}
                             onPress={() => removeDonePhoto(url)}
-                            hitSlop={6}
+                            hitSlop={touchSlop(30, 30)}
                           >
                             <Ionicons name="close" size={16} color={colors.onPrimary} />
                           </Pressable>

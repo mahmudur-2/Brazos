@@ -23,7 +23,7 @@ import {
   type EmeraldPalette,
   type as typeScale,
 } from '../tokens';
-import { glow, themedStyles, useThemeColors } from '../../lib/theme';
+import { glow, themedStyles, touchSlop, useThemeColors } from '../../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../../lib/designOverrides';
 import { voiceSearch, type VoiceSession } from '../../lib/voiceSearch';
 import { askOpenSettings } from '../../lib/permissionPrompt';
@@ -341,7 +341,7 @@ export function SearchBar({
             onPressIn={clearPress.onPressIn}
             onPressOut={clearPress.onPressOut}
             // The glyph is small; the hit area is not.
-            hitSlop={12}
+            hitSlop={touchSlop(18, 18)}
             accessibilityRole="button"
             accessibilityLabel="Clear search"
           >
