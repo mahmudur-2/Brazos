@@ -68,7 +68,60 @@ running log is `.shots/refresh/review/run/log.md` (gitignored), one line per ite
   screen is reachable only behind the internal-build Design studio row).
 - **Left for F (seen, not built here):** the switch knob (D6), the inbox pill fade and the bar
   fade ride core Animated on the native driver, not the 120 Hz path.
-- **Proof at this commit:** `npm run verify` 1570 pass, 0 fail. No migration in D or E.
+- **Proof at the D/E review:** `npm run verify` 1570 pass, 0 fail. No migration in D or E.
+- **Group F (built better) built:** F1–F8, F13, F15, F18–F20, F22–F24 (F14 is OUT), `6e94527`…`bcf3529`,
+  no migration (`npm run db:reset` + `npm run db:types` on the local stack: `types/database.ts`
+  unchanged). The client is typed (F7: `createClient<Database>` through `lib/supabaseTypes.ts`, whose
+  one correction is that a function argument also accepts null); one React Query cache (F13: the
+  feed, the bell's count and the hub; emptied on account change; nothing persisted); one date
+  formatter (F19, `lib/time.ts`); `isLiveJob` / `nextWorkerStep` (F6: no trip step and no Start
+  before the payment is held); chat keeps its draft in the composer, memoises its rows, scrolls one
+  inverted list and loads 50 at a time with one signing call per bucket (F3–F5); Discover moves with
+  the keyboard's WILL events (F8, `components/KeyboardAway`); the launch layer waits for the first
+  real screen, capped at 2.5 s, and the mode reads start with the session (F1; the optional
+  cached-mode grace was NOT built — a switch made on another device could lose on a slow start).
+  Fenced by `tests/fixRunF.test.mjs`.
+- **F20 was switched on by the operator** (FIX-RUN.md selection, "IN … F20"), so its removals are
+  done, not proposed: Route & arrival is gone (Your job is the one stage screen), the chat header and
+  the inbox row share one person menu (`lib/chatMenus.ts` personSafetyItems — chat's "Block…" now
+  reads "Block"), and ProfileDetails' card "Edit profile" chip is gone.
+- **Skipped or partial in F:** F21 — the lossless recompress gains nothing (the PNG is already
+  zlib-optimal) and the downscaled launch mark would rewrite `tests/launchMark.test.mjs`'s one-asset
+  rule ("the mark IS the shipped app icon"): the operator's call. F23 — five unused images and two
+  dead components removed, two root docs archived, the empty `2/` gone; the five unused libraries
+  (i18next, react-i18next, i18next-parser, expo-linking, expo-localization) were NOT removed: the
+  dependency guard blocks `npm uninstall` — the operator runs it. `transition-worker.png` and
+  `home-atmosphere-dark.webp` stay (the lux and refresh mockup scripts read them). F22 —
+  `docs/dispatch/MOTION-INVENTORY.md` waits for F9–F12 / F16–F17, not built yet.
+- **F22 — CLAUDE.md edits for the operator (operator-owned, NOT applied):**
+  1. §Workflow — replace "Flag new dependencies before adding; no animation libraries (built-in
+     `Animated` with `useNativeDriver: Platform.OS !== 'web'`). No unrelated cleanup." with: "Flag
+     new dependencies before adding. Motion goes through `lib/motion120`: Reanimated 4 worklets,
+     react-native-gesture-handler and react-native-keyboard-controller where the binary has them,
+     core `Animated` on the native driver where it does not. The driver flag is `USE_NATIVE_DRIVER`
+     from `lib/motion.ts`, never a literal or an inline `Platform` test (tests/motionDriver.test.mjs).
+     React Native's `LayoutAnimation` stays banned (tests/motion120.test.mjs). No new animation
+     library. No unrelated cleanup."
+  2. §Supabase — replace the bullet "**There are NO generated Supabase database types.** …" (F7 has
+     landed) with: "**The client is typed.** `lib/supabase.ts` is `createClient<Database>(…)` over
+     `types/database.ts` through `lib/supabaseTypes.ts` (one correction: a function argument also
+     accepts null), regenerated with `npm run db:types` (local only) in the same commit as any
+     migration that changes a table, view, enum or function signature. Client status unions in
+     lib/jobLifecycle.ts and the others remain the app's own vocabulary; SQL that filters on status
+     still fails safe — allow-list what it accepts, never block-list what it rejects."
+  3. Both keep `tests/governance.test.mjs` green (`mainexpo`, `transition_job_status`,
+     `accept_offer`, `job_locations`, the production deny sentinel are untouched by them).
+  4. The protected native-ui rule (line 2, "Any screen with a text input needs
+     `KeyboardAvoidingView`…") should read "keyboard-controller's KeyboardAvoidingView, or the shared
+     KeyboardRisingColumn" once F9 lands.
+- **Only the operator (device checks from F):** a cold start shows logo → first screen with no
+  spinner, and offline the layer lifts at the cap (F1); in chat, typing re-renders only the composer
+  (F3), a new message slides in without a snap, a reader scrolled up stays put, a jobId entry lands on
+  that job's first message (F4), scrolling up past 50 loads older with no gap and photos come from the
+  cache on reopen (F5); opening and closing the keyboard over Discover does not snap (F8); back to
+  Home within 30 s makes no read, and signing out and in as another account shows none of the first
+  one's rows (F13).
+- **Proof at `bcf3529`:** `npm run verify` 1603 pass, 0 fail.
 - **Next:** the workflow's remaining helpers (F smooth, the final sweep), then one OTA and the new
   Beta build. The parked reminders in DESIGN LOOP 3 below still stand.
 
