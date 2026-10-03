@@ -114,11 +114,11 @@ export async function resolveCurrentPlace(): Promise<ResolveResult> {
     Sentry?.captureException(err, {
       extra: { site: 'geolocation.resolveCurrentPlace', stage: 'position' },
     });
-    const reason = err instanceof Error ? err.message : String(err);
+    // B11: the raw reason went to Sentry above; the person reads a plain line.
     return {
       ok: false,
       reason: 'unavailable',
-      message: `Couldn't get your location (${reason}). Check that location services are on, or type the area in manually.`,
+      message: 'Couldn’t find your location. Check that Location Services are on, or type the area instead.',
     };
   }
 

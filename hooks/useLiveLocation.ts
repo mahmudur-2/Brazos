@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import * as Location from 'expo-location';
 import { useFocusEffect } from '@react-navigation/native';
 import type { ErrorLike } from '../lib/errorMessage';
+import { askOpenSettings } from '../lib/permissionPrompt';
 import {
   EXPIRY_TICK_MS,
   HEARTBEAT_DISTANCE_M,
@@ -215,10 +216,12 @@ export function useLiveLocation(
           outcome: permissionOutcome(permission.status, permission.canAskAgain),
         });
         if (permission.status !== 'granted') {
-          return {
-            message:
-              'Location permission is off. Enable it in Settings to share your live location.',
-          };
+          // B11: the prompt offers Settings; nothing else to report after it.
+          await askOpenSettings(
+            'location',
+            'Location is off for Brazos. Turn it on in Settings to share your live location.'
+          );
+          return null;
         }
 
         const position = await Location.getCurrentPositionAsync({

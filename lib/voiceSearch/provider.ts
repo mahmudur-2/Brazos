@@ -190,6 +190,7 @@ export function createVoiceSearchProvider(deps: VoiceSearchDeps): VoiceSearchPro
         return;
       }
       if (!(await ensurePermission(mod))) {
+        handlers.onDenied?.();
         finish();
         return;
       }

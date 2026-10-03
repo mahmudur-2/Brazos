@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { advanceMeterWindow, emptyMeterWindow, normalizeMeter } from '../lib/audioMeter';
 import { userMessage } from '../lib/errorMessage';
+import { askOpenSettings } from '../lib/permissionPrompt';
 import { Sentry } from '../lib/observability/sentry';
 import {
   RecordingPresets,
@@ -113,8 +114,9 @@ export function useVoiceRecorder() {
     try {
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
-        setError('Microphone access is off. Enable it in Settings to send a voice message.');
+        // B11: the prompt offers Settings instead of only naming it.
         setPhase('idle');
+        void askOpenSettings('microphone');
         return;
       }
 

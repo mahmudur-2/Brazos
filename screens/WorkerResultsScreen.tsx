@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -388,6 +388,16 @@ export function WorkerResultsScreen() {
       {radiusUnavailable ? (
         <Text style={styles.radiusNote}>
           Location is off — showing jobs at any distance.
+          {geoState === 'denied' ? (
+            // B11: the one place the switch is, one tap away.
+            <Text
+              style={styles.radiusNoteAction}
+              accessibilityRole="button"
+              onPress={() => void Linking.openSettings()}
+            >
+              {' '}Open Settings
+            </Text>
+          ) : null}
         </Text>
       ) : null}
 
@@ -473,6 +483,16 @@ export function WorkerResultsScreen() {
                 <Text style={styles.emptyText}>
                   {emptyBody(params.mode, geoMessage, params.query)}
                 </Text>
+                {/* B11 — a denied location is never a dead end. */}
+                {geoState === 'denied' ? (
+                  <Pressable
+                    onPress={() => void Linking.openSettings()}
+                    accessibilityRole="button"
+                    style={styles.clearFilters}
+                  >
+                    <Text style={styles.clearFiltersText}>Open Settings</Text>
+                  </Pressable>
+                ) : null}
                 {/* M-29 — the sentence names the fix; the button opens it. */}
                 {params.mode === 'skills' && skills.size === 0 && !geoMessage ? (
                   <Pressable
@@ -624,6 +644,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingBottom: spacing.sm,
     fontSize: 13,
     color: colors.textMuted,
+  },
+  radiusNoteAction: {
+    fontWeight: '700',
+    color: colors.emerald,
   },
   clearFilters: {
     marginTop: spacing.sm,

@@ -105,6 +105,12 @@ export type VoiceSessionHandlers = {
    * text reaches a screen) is satisfied here — nothing crosses at all.
    */
   onEnd: () => void;
+  /**
+   * FIX-RUN B11: the person refused the microphone or speech permission.
+   * Fires once, just before onEnd, so the caller can offer Settings. Carries
+   * no message, like onEnd. Optional; omitting it changes nothing.
+   */
+  onDenied?: () => void;
 };
 
 export type VoiceSession = {

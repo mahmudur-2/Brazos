@@ -51,6 +51,7 @@ import {
 } from '../lib/offerCopy';
 import { offerJobTarget } from '../lib/offerNavigation';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { askOpenSettings } from '../lib/permissionPrompt';
 import { userMessage } from '../lib/errorMessage';
 import {
   ACTIVE_JOB_STATUSES,
@@ -1568,7 +1569,8 @@ export function ChatScreen() {
       outcome: permissionOutcome(permission.status, permission.canAskAgain),
     });
     if (!permission.granted) {
-      await alertAsync('Camera access needed', 'Allow camera access to take a photo.');
+      // B11: never a dead end — the prompt offers Settings.
+      await askOpenSettings('camera');
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });

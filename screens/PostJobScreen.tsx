@@ -79,6 +79,7 @@ import { answerLine, withAnswerLine, type PostAnswers } from '../lib/postQuestio
 import { dictateBeforeLine } from '../lib/dictation';
 import { createDirectOffer } from '../lib/offers';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { askOpenSettings } from '../lib/permissionPrompt';
 import { DropdownBody, DropdownChevron } from '../components/DropdownReveal';
 import { CADENCE_LABELS, SERIES_CADENCES, startJobSeries, type SeriesCadence } from '../lib/jobSeries';
 import { userMessage } from '../lib/errorMessage';
@@ -1017,7 +1018,9 @@ export function PostJobScreen() {
     setLocating(false);
 
     if (!result.ok) {
-      await alertAsync('Location unavailable', result.message);
+      // B11: a denied permission offers Settings; anything else says what failed.
+      if (result.reason === 'denied') await askOpenSettings('location');
+      else await alertAsync('Location unavailable', result.message);
       return;
     }
     setCoords({ lat: result.place.lat, lng: result.place.lng });

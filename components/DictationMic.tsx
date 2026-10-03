@@ -4,6 +4,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { joinDictation } from '../lib/dictation';
+import { askOpenSettings } from '../lib/permissionPrompt';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { fieldAccessory, metricStyles, useThemeColors, withAlpha } from '../lib/theme';
 import { voiceSearch, type VoiceSession } from '../lib/voiceSearch';
@@ -129,6 +130,8 @@ export function useDictation({
         setInterim(null);
         onChangeText(next);
       },
+      // B11: a refused microphone or speech permission offers Settings.
+      onDenied: () => void askOpenSettings('speech'),
       onEnd: () => {
         finished = true;
         if (sessionRef.current === session) sessionRef.current = null;

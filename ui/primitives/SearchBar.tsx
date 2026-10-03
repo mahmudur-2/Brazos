@@ -26,6 +26,7 @@ import {
 import { glow, themedStyles, useThemeColors } from '../../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../../lib/designOverrides';
 import { voiceSearch, type VoiceSession } from '../../lib/voiceSearch';
+import { askOpenSettings } from '../../lib/permissionPrompt';
 import { usePressFeedback } from '../../hooks/usePressFeedback';
 
 /**
@@ -258,6 +259,8 @@ export function SearchBar({
       // Interims are display-only (see the docblock): they paint the field
       // below and never reach onChangeText.
       onInterimTranscript: setInterimTranscript,
+      // B11: a refused microphone or speech permission offers Settings.
+      onDenied: () => void askOpenSettings('speech'),
       onEnd: () => {
         sessionRef.current = null;
         setListening(false);

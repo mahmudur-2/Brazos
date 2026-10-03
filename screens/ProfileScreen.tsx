@@ -37,6 +37,7 @@ import { useUnreadNotificationCount } from '../hooks/useUnreadNotificationCount'
 import { paymentsMode } from '../lib/adapters/payments';
 import { SUPPORT_EMAIL, supportMailtoUrl } from '../lib/appLinks';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { askOpenSettings } from '../lib/permissionPrompt';
 import { designStudioAvailable } from '../lib/designStudioGate';
 import { goBackOrHome } from '../lib/navigationRef';
 import { userMessage } from '../lib/errorMessage';
@@ -495,10 +496,8 @@ export function ProfileScreen() {
       outcome: permissionOutcome(permission.status, permission.canAskAgain),
     });
     if (!permission.granted) {
-      await alertAsync(
-        'Camera access needed',
-        'Enable camera access for Brazos in your device Settings to take a new photo.'
-      );
+      // B11: the prompt offers Settings instead of only naming it.
+      await askOpenSettings('camera');
       return;
     }
 

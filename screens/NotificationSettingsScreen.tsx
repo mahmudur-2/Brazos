@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,7 @@ import { Toggle, useScrollClearance } from '../ui/primitives';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { alertAsync } from '../lib/dialog';
+import { askOpenSettings } from '../lib/permissionPrompt';
 import { userMessage } from '../lib/errorMessage';
 import { resolveCurrentPlace } from '../lib/geolocation';
 import { goBackOrHome } from '../lib/navigationRef';
@@ -152,7 +154,12 @@ export function NotificationSettingsScreen() {
     setBusyKey(null);
 
     if (!result.ok) {
-      await alertAsync('Location needed', result.message);
+      // B11: a denied permission offers Settings; anything else says what failed.
+      if (result.reason === 'denied') {
+        await askOpenSettings('location', 'Location is off for Brazos. Turn it on in Settings to hear about jobs near you.');
+      } else {
+        await alertAsync('Location needed', result.message);
+      }
       return false;
     }
 
@@ -170,7 +177,7 @@ export function NotificationSettingsScreen() {
   const selectedCategories = profile?.categories ?? [];
 
   // One clear sentence about whether this device can actually receive a push.
-  function deliveryNotice(): { tone: 'warn' | 'info'; text: string } | null {
+  function deliveryNotice(): { tone: 'warn' | 'info'; text: string; settings?: boolean } | null {
     if (!pushState || pushState.ok) return null;
     if (pushState.reason === 'unsupported' && isExpoGo()) {
       return {
@@ -194,6 +201,8 @@ export function NotificationSettingsScreen() {
         tone: 'warn',
         text:
           'Notifications are turned off for Brazos on this device. Turn them back on in your device Settings to start receiving them.',
+        // B11: the switch is one tap away.
+        settings: true,
       };
     }
     return { tone: 'warn', text: pushState.message };
@@ -235,6 +244,11 @@ export function NotificationSettingsScreen() {
                 color={notice.tone === 'warn' ? colors.danger : colors.textMuted}
               />
               <Text style={styles.noticeText}>{notice.text}</Text>
+              {notice.settings ? (
+                <Pressable onPress={() => void Linking.openSettings()} hitSlop={8} accessibilityRole="button">
+                  <Text style={styles.noticeRetry}>Open Settings</Text>
+                </Pressable>
+              ) : null}
             </View>
           )}
 
