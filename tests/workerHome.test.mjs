@@ -318,7 +318,7 @@ test('the summary card: surface fill, card-rim hairline, divided halves, chips i
 });
 
 test('the section heading reads Available Jobs, with no dot; retired copy stays gone', () => {
-  assert.match(screen, /<Text style=\{styles\.sectionTitle\}>Available Jobs<\/Text>/);
+  assert.match(screen, /<Text accessibilityRole="header" style=\{styles\.sectionTitle\}>Available Jobs<\/Text>/);
   // 2026-09-28 (LUX-LIST-64 #51): the feed dot mockup 43 put before the heading
   // is gone, style and all — the heading stands alone.
   assert.doesNotMatch(code, /feedDot/);

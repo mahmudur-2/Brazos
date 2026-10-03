@@ -31,7 +31,14 @@ export function AvatarPressable({ name, uri, size = 44, initialsSize, onLongPres
     return <Avatar name={name} uri={uri} size={size} initialsSize={initialsSize} />;
   }
   return (
-    <Pressable onLongPress={onLongPress} delayLongPress={350} hitSlop={8}>
+    <Pressable
+      onLongPress={onLongPress}
+      delayLongPress={350}
+      hitSlop={8}
+      accessibilityRole="imagebutton"
+      accessibilityLabel={name ? `Photo of ${name}` : 'Profile photo'}
+      accessibilityHint="Touch and hold to see it full screen"
+    >
       <Avatar name={name} uri={uri} size={size} initialsSize={initialsSize} />
     </Pressable>
   );

@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { authRadius, authSpacing, authType } from '../lib/authTheme';
 import { authSurface, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { useAnnounce } from '../hooks/useAnnounce';
 
 type AuthNoticeProps = {
   tone: 'info' | 'danger';
@@ -27,6 +28,7 @@ export function AuthNotice({ tone, children }: AuthNoticeProps) {
   const styles = stylesFor(palette);
   const surface = authSurface(palette, isDark);
   const danger = tone === 'danger';
+  useAnnounce(children);
 
   return (
     <View

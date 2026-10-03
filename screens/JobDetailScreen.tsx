@@ -857,7 +857,7 @@ export function JobDetailScreen() {
             ) : viewerAuthoredBid ? (
               <Card style={styles.secondaryCard}>
                 <View style={styles.bidHeader}>
-                  <Text style={styles.sectionTitle}>
+                  <Text accessibilityRole="header" style={styles.sectionTitle}>
                     {activeBid.parent_offer_id ? 'Your counter-offer' : 'Your bid'}
                   </Text>
                   <StatusBadge status={activeBid.status} />
@@ -898,7 +898,7 @@ export function JobDetailScreen() {
               // would refuse.
               <Card style={styles.secondaryCard}>
                 <View style={styles.bidHeader}>
-                  <Text style={styles.sectionTitle}>Offer in negotiation</Text>
+                  <Text accessibilityRole="header" style={styles.sectionTitle}>Offer in negotiation</Text>
                   <StatusBadge status={activeBid.status} />
                 </View>
                 <Text style={styles.bidAmount}>{formatBudget(activeBid.amount_cents)}</Text>
@@ -939,7 +939,7 @@ export function JobDetailScreen() {
                 </Card>
               ) : poster ? (
                 <Card style={[styles.posterCard, styles.secondaryCard]}>
-                  <Text style={styles.sectionTitle}>Posted by</Text>
+                  <Text accessibilityRole="header" style={styles.sectionTitle}>Posted by</Text>
                   <View style={styles.posterRow}>
                     <Avatar name={poster.full_name} uri={poster.avatar_url} size={48} />
                     <View style={styles.posterCopy}>
@@ -1028,7 +1028,7 @@ export function JobDetailScreen() {
                   (screen 52) — one canonical offer form for bids, counters
                   and direct offers, rather than a second form living here. */}
               <Card style={styles.secondaryCard}>
-                <Text style={styles.sectionTitle}>
+                <Text accessibilityRole="header" style={styles.sectionTitle}>
                   {job.budget_cents != null ? 'Or name your own price' : 'Place a bid'}
                 </Text>
                 <Text style={styles.quickBidText}>

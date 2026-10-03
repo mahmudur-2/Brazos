@@ -764,7 +764,12 @@ export function MapScreen() {
                     {selected.job_count} open {selected.job_count === 1 ? 'job' : 'jobs'}
                   </Text>
                 </View>
-                <Pressable onPress={() => setSelected(null)} hitSlop={touchSlop(20, 20)}>
+                <Pressable
+                  onPress={() => setSelected(null)}
+                  hitSlop={touchSlop(20, 20)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                >
                   <Ionicons name="close" size={20} color={colors.textMuted} />
                 </Pressable>
               </View>

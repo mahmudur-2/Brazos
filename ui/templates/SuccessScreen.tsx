@@ -150,7 +150,7 @@ export function SuccessScreen({
         )}
 
         <EntranceView index={1} style={styles.copy}>
-          <Text style={styles.title}>{title}</Text>
+          <Text accessibilityRole="header" style={styles.title}>{title}</Text>
           {body ? <Text style={styles.body}>{body}</Text> : null}
         </EntranceView>
 

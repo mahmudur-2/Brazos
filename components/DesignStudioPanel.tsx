@@ -1147,7 +1147,7 @@ export function DesignStudioPanel() {
   const renderPresetsPage = () => (
     <View style={styles.page}>
       {renderBackRow()}
-      <Text style={styles.sectionLabel}>Presets</Text>
+      <Text accessibilityRole="header" style={styles.sectionLabel}>Presets</Text>
       <View style={styles.presetRow}>
         <TextInput
           value={presetName}
@@ -1228,7 +1228,7 @@ export function DesignStudioPanel() {
   const renderExportPage = () => (
     <View style={styles.page}>
       {renderBackRow()}
-      <Text style={styles.sectionLabel}>Export — modified values</Text>
+      <Text accessibilityRole="header" style={styles.sectionLabel}>Export — modified values</Text>
       <View style={styles.filterRow}>
         <Pressable
           onPress={onShareExport}
@@ -1248,7 +1248,7 @@ export function DesignStudioPanel() {
   const renderImportPage = () => (
     <View style={styles.page}>
       {renderBackRow()}
-      <Text style={styles.sectionLabel}>Import</Text>
+      <Text accessibilityRole="header" style={styles.sectionLabel}>Import</Text>
       <TextInput
         value={importDraft}
         onChangeText={(text) => {
@@ -1285,7 +1285,7 @@ export function DesignStudioPanel() {
   const renderRawPage = () => (
     <View style={styles.page}>
       {renderBackRow()}
-      <Text style={styles.sectionLabel}>Raw overrides</Text>
+      <Text accessibilityRole="header" style={styles.sectionLabel}>Raw overrides</Text>
       <TextInput
         value={rawDraft ?? fullJson}
         onChangeText={(text) => {

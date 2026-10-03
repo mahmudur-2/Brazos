@@ -64,7 +64,7 @@ export function SheetHeader({
         ) : null}
         <View style={styles.titles}>
           {title ? (
-            <Text style={[styles.title, titleStyle]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+            <Text accessibilityRole="header" style={[styles.title, titleStyle]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
               {title}
             </Text>
           ) : null}

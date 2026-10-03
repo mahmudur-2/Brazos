@@ -23,6 +23,7 @@ import { CountryPicker } from './CountryPicker';
 import { FocusRing } from './FocusRing';
 import type { PopoverAnchor } from './PickerPopover';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAnnounce } from '../hooks/useAnnounce';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { MENU_MOTION_MS } from '../lib/motion120';
 
@@ -92,6 +93,7 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
     };
     const [focused, setFocused] = useState(false);
     const { palette, isDark } = useThemeColors();
+    useAnnounce(error);
     const surface = authSurface(palette, isDark);
     // Masters 3/4: gold label, gold hairlines, gold calling code and divider,
     // cream digits on the screen's own near-black.

@@ -978,6 +978,8 @@ export function ProfileScreen() {
               // coexist fine on one Pressable — they're different gestures.
               <Pressable
                 onPress={() => setAvatarActionSheetOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Change profile photo"
                 onLongPress={
                   avatarUrl ? () => setAvatarMenuOpen(true) : undefined
                 }

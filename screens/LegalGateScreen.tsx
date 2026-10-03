@@ -34,6 +34,7 @@ import {
 } from '../lib/authTheme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { litCardStyle, screenGround, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { Announce } from '../hooks/useAnnounce';
 
 /** How long the "scroll to the end" hint stays up on its own. */
 const GUIDANCE_MS = 1800;
@@ -393,6 +394,7 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
           {error ? (
             <Text style={styles.error} accessibilityLiveRegion="assertive">
               {error}
+              <Announce message={error} />
             </Text>
           ) : null}
 

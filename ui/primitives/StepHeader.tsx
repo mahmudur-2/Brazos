@@ -62,7 +62,7 @@ export function StepHeader({ step, steps }: StepHeaderProps) {
         <Text style={[styles.counter, isDark && { color: colors.gold }]}>
           Step {index + 1} of {total}
         </Text>
-        <Text style={styles.name} numberOfLines={1}>
+        <Text accessibilityRole="header" style={styles.name} numberOfLines={1}>
           {steps[index]}
         </Text>
       </View>

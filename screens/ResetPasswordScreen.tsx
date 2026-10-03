@@ -15,6 +15,7 @@ import {
 } from '../lib/theme';
 import { completePasswordReset, MIN_PASSWORD_LENGTH, setRecoveryPending } from '../lib/passwordReset';
 import { userMessage } from '../lib/errorMessage';
+import { Announce } from '../hooks/useAnnounce';
 
 /**
  * 2026-09-26 (the refresh, audit M-21) — SET A NEW PASSWORD.
@@ -136,6 +137,7 @@ export function ResetPasswordScreen() {
           {formError ? (
             <View style={styles.formError} accessibilityLiveRegion="polite">
               <Text style={styles.formErrorText}>{formError}</Text>
+              <Announce message={formError} />
             </View>
           ) : null}
         </View>

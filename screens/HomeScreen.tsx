@@ -901,7 +901,7 @@ export function HomeScreen() {
                     red Sonar dot before it — still, a ring travelling out. */}
                 <View style={styles.alarmLabel}>
                   <LiveDot color={colors.danger} size={9} motion="sonar" />
-                  <Text style={styles.sectionTitle}>Needs your attention</Text>
+                  <Text accessibilityRole="header" style={styles.sectionTitle}>Needs your attention</Text>
                 </View>
                 {items.length > ATTENTION_CAP ? (
                   <Pressable
@@ -981,7 +981,7 @@ export function HomeScreen() {
               nothing still learns that this is where their jobs will be. */}
           <EntranceView index={3} style={styles.section}>
             <View style={styles.liveNearbyHeader}>
-              <Text style={styles.sectionTitle}>Your jobs</Text>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>Your jobs</Text>
               <Pressable
                 onPress={() => navigateAcrossTabs('MyJobs')}
                 style={({ pressed }) => [styles.viewAll, pressed && styles.viewAllPressed]}

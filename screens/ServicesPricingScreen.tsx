@@ -232,7 +232,7 @@ export function ServicesPricingScreen() {
         />
       </View>
 
-      <Text style={styles.sectionTitle}>Your services</Text>
+      <Text accessibilityRole="header" style={styles.sectionTitle}>Your services</Text>
       {services.length === 0 ? (
         <Text style={styles.cardNote}>
           List what you do and what it costs, so customers can hire you with

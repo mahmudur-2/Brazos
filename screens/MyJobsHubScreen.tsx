@@ -111,7 +111,7 @@ function SectionHeading({ title, count, gold = false }: { title: string; count: 
   // sits right beside its label, not across the row.
   return (
     <View style={styles.sectionHeaderRow}>
-      <Text style={[styles.sectionTitle, gold && styles.sectionTitleGold]}>{title}</Text>
+      <Text accessibilityRole="header" style={[styles.sectionTitle, gold && styles.sectionTitleGold]}>{title}</Text>
       <View style={[styles.countBadge, isDark && styles.countBadgeDark]}>
         <Text style={styles.countBadgeText}>{count}</Text>
       </View>

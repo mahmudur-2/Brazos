@@ -576,7 +576,7 @@ function Section({
   const styles = stylesFor(colors);
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionLabel}>{label.toUpperCase()}</Text>
+      <Text accessibilityRole="header" style={styles.sectionLabel}>{label.toUpperCase()}</Text>
       {scroll || fill ? (
         <ScrollView
           horizontal

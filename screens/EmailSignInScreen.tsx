@@ -22,6 +22,7 @@ import { PHONE_ENTRY } from '../lib/phoneAuth';
 import { isValidEmail } from '../lib/validation';
 import { requestPasswordReset } from '../lib/passwordReset';
 import { authMessage, userMessage } from '../lib/errorMessage';
+import { Announce } from '../hooks/useAnnounce';
 
 /**
  * Sign in with email — the alternate route off the phone-first SignIn screen,
@@ -275,6 +276,7 @@ export function EmailSignInScreen() {
           {formError ? (
             <View style={styles.formError} accessibilityLiveRegion="polite">
               <Text style={styles.formErrorText}>{formError}</Text>
+              <Announce message={formError} />
             </View>
           ) : null}
         </View>

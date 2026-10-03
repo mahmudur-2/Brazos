@@ -117,6 +117,7 @@ import {
   touchSlop,
 } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
+import { Announce } from '../hooks/useAnnounce';
 
 export function ClientJobDetailScreen() {
   const { palette: colors, isDark } = useThemeColors();
@@ -671,6 +672,14 @@ export function ClientJobDetailScreen() {
     );
   }
 
+  // The hero's bid count: shown as it changes, and spoken on iOS (E4) where the live region is not.
+  const bidCountLine =
+    loading && bids.length === 0
+      ? 'Checking bids…'
+      : error && bids.length === 0
+        ? 'Bids unavailable'
+        : formatPendingBidCount(visibleBidCount);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
@@ -781,13 +790,12 @@ export function ClientJobDetailScreen() {
               </Text>
             </View>
             {canAccept ? (
-              <Text style={styles.bidCount} accessibilityLiveRegion="polite">
-                {loading && bids.length === 0
-                  ? 'Checking bids…'
-                  : error && bids.length === 0
-                    ? 'Bids unavailable'
-                    : formatPendingBidCount(visibleBidCount)}
-              </Text>
+              <>
+                <Text style={styles.bidCount} accessibilityLiveRegion="polite">
+                  {bidCountLine}
+                </Text>
+                <Announce message={bidCountLine} />
+              </>
             ) : null}
           </View>
 
@@ -881,7 +889,7 @@ export function ClientJobDetailScreen() {
 
         {canAccept && (job.photos.length > 0 || job.videos.length > 0) ? (
           <Card palette={emeraldColors} style={[styles.mediaCard, isDark && styles.hairlineDark]}>
-            <Text style={styles.sectionTitle}>Posting media</Text>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>Posting media</Text>
             <Text style={styles.sectionCaption}>What workers can review before bidding.</Text>
             {job.photos.length > 0 ? (
               <ScrollView
@@ -1063,7 +1071,7 @@ export function ClientJobDetailScreen() {
             {hasLifecycle ? (
               <Card palette={emeraldColors} style={[styles.progressCard, isDark && styles.hairlineDark]}>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark, styles.eyebrowGold]}>JOB PROGRESS</Text>
-                <Text style={styles.sectionTitle}>Where things stand</Text>
+                <Text accessibilityRole="header" style={styles.sectionTitle}>Where things stand</Text>
                 <JobProgress status={job.status} palette={emeraldColors} />
               </Card>
             ) : null}
@@ -1304,7 +1312,7 @@ export function ClientJobDetailScreen() {
             {(hasBefore || hasCompletionEvidence) && (
               <Card palette={emeraldColors} style={[styles.evidenceCard, isDark && styles.hairlineDark]}>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>WORK EVIDENCE</Text>
-                <Text style={styles.sectionTitle}>
+                <Text accessibilityRole="header" style={styles.sectionTitle}>
                   {evidenceTitle}
                 </Text>
                 {job.photos.length > 0 && (

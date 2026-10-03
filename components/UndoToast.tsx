@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text } from 'react-native';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAnnounce } from '../hooks/useAnnounce';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
@@ -33,6 +34,7 @@ export function UndoToast({
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   const reducedMotion = useReducedMotion();
+  useAnnounce(message);
   const shown = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {

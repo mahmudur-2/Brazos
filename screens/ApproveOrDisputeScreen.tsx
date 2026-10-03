@@ -391,7 +391,7 @@ export function ApproveOrDisputeScreen() {
 
         {reporting ? (
           <View style={styles.reportForm}>
-            <Text style={styles.sectionTitle}>What went wrong?</Text>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>What went wrong?</Text>
             {DISPUTE_REASONS.map((r) => (
               <Pressable
                 key={r}
@@ -432,7 +432,7 @@ export function ApproveOrDisputeScreen() {
           </View>
         ) : (
           <>
-            <Text style={styles.sectionTitle}>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>
               {hasEvidence ? 'What the worker submitted' : 'No photos or video attached'}
             </Text>
             {!hasEvidence ? (

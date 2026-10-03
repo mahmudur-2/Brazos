@@ -105,7 +105,7 @@ export function DetailScreen({
 
             {sections.map((section, index) => (
               <View key={section.title ?? `section-${index}`} style={styles.section}>
-                {section.title ? <Text style={[styles.sectionTitle, section.titleTone === 'gold' && styles.sectionTitleGold]}>{section.title}</Text> : null}
+                {section.title ? <Text accessibilityRole="header" style={[styles.sectionTitle, section.titleTone === 'gold' && styles.sectionTitleGold]}>{section.title}</Text> : null}
                 {section.content}
               </View>
             ))}

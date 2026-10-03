@@ -163,7 +163,7 @@ export function PaymentMethodsScreen() {
                   <ActivityIndicator color={colors.emerald} />
                 ) : cards.length > 0 ? (
                   <>
-                    <Text style={styles.sectionTitle}>Saved for one-tap hiring</Text>
+                    <Text accessibilityRole="header" style={styles.sectionTitle}>Saved for one-tap hiring</Text>
                     {cards.map((card) => (
                       <View key={card.id} style={styles.cardRow}>
                         <Ionicons name="card-outline" size={20} color={colors.emerald} />
@@ -192,7 +192,7 @@ export function PaymentMethodsScreen() {
                 ) : cardsError ? (
                   // A failed read is not "no card": it says so, and tries again.
                   <>
-                    <Text style={styles.sectionTitle}>Couldn’t read your cards</Text>
+                    <Text accessibilityRole="header" style={styles.sectionTitle}>Couldn’t read your cards</Text>
                     <Text style={styles.bodyText}>{cardsError}</Text>
                     <Button
                       title="Try again"
@@ -205,14 +205,14 @@ export function PaymentMethodsScreen() {
                   </>
                 ) : (
                   <>
-                    <Text style={styles.sectionTitle}>No card saved</Text>
+                    <Text accessibilityRole="header" style={styles.sectionTitle}>No card saved</Text>
                     <Text style={styles.bodyText}>Save a card for one-tap hiring: accept and pay from a bid’s notification.</Text>
                     <Button title="Add a card" variant="secondary" onPress={() => void addCard()} loading={busy} disabled={busy} />
                   </>
                 )
               ) : (
                 <>
-                  <Text style={styles.sectionTitle}>No stored payment methods</Text>
+                  <Text accessibilityRole="header" style={styles.sectionTitle}>No stored payment methods</Text>
                   <Text style={styles.bodyText}>
                     Payments aren’t available right now, so there’s no card to store. When they are, the cards you save will appear here.
                   </Text>
@@ -227,7 +227,7 @@ export function PaymentMethodsScreen() {
                 content: (
                   <View style={[styles.sectionCard, litCardStyle(isDark)]}>
                     <Text style={styles.eyebrow}>TEST MODE</Text>
-                    <Text style={styles.sectionTitle}>What test mode does</Text>
+                    <Text accessibilityRole="header" style={styles.sectionTitle}>What test mode does</Text>
                     <View style={styles.list}>
                       <Row text="Authorize — records the agreed amount. Nothing is charged." />
                       <Row text="Hold in protection — sets the funds aside while the work happens." />

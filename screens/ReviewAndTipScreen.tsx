@@ -48,6 +48,7 @@ import { fetchProfileById } from '../lib/profiles';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { dollarsToCents, formatBudget } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
+import { Announce } from '../hooks/useAnnounce';
 import {
   EYEBROW_TYPE,
   emeraldColorsFor,
@@ -501,6 +502,7 @@ export function ReviewAndTipScreen() {
           >
             {reviewed ? (
               <View style={styles.thanksCard} accessibilityLiveRegion="polite">
+                <Announce message={`Thanks — ${workerName ?? 'the worker'} has been rated.`} />
                 <Ionicons name="checkmark-circle" size={26} color={colors.emerald} />
                 <View style={styles.thanksCopy}>
                   <Text style={styles.thanksTitle}>
@@ -559,7 +561,7 @@ export function ReviewAndTipScreen() {
             ) : null}
 
             <View style={styles.tipCard}>
-              <Text style={styles.sectionTitle}>Add a tip?</Text>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>Add a tip?</Text>
               {tipDone && tip ? (
                 <>
                   <MoneyText cents={tip.amount_cents} state={tip.status} tip counterpartFirstName={firstNameOf(workerName)} />

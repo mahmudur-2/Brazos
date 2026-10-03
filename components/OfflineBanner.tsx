@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DropdownBody } from './DropdownReveal';
 import { useOnline } from '../hooks/useOnline';
+import { useAnnounce } from '../hooks/useAnnounce';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
@@ -12,17 +13,21 @@ import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from
  * is blocked, and it arrives and leaves on the shared 120 Hz reveal
  * (DropdownBody: fade and a 6pt settle, a plain switch under Reduce Motion).
  */
+const OFFLINE_LINE = 'You’re offline. Some things may be out of date.';
+
 export function OfflineBanner() {
   const online = useOnline();
   const insets = useSafeAreaInsets();
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
+  // Spoken on iOS when the connection drops (E4); the banner itself never takes focus.
+  useAnnounce(online ? null : OFFLINE_LINE);
   return (
     <View pointerEvents="none" style={[styles.wrap, { top: insets.top + spacing.xs }]}>
       <DropdownBody open={!online} style={styles.pill}>
         <Ionicons name="cloud-offline-outline" size={14} color={colors.warning} />
         <Text style={styles.text} accessibilityRole="alert" accessibilityLiveRegion="polite">
-          You’re offline. Some things may be out of date.
+          {OFFLINE_LINE}
         </Text>
       </DropdownBody>
     </View>

@@ -970,13 +970,19 @@ export function WorkerJobScreen() {
                     >
                       {donePhotos.map((url) => (
                         <View key={url} style={styles.photoWrap}>
-                          <Pressable onPress={() => setViewerUri(url)}>
+                          <Pressable
+                            onPress={() => setViewerUri(url)}
+                            accessibilityRole="imagebutton"
+                            accessibilityLabel="Open photo"
+                          >
                             <RemoteImage uri={url} style={[styles.photo, { height: photoHeight }]} />
                           </Pressable>
                           <Pressable
                             style={styles.photoRemove}
                             onPress={() => removeDonePhoto(url)}
                             hitSlop={touchSlop(30, 30)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Remove photo"
                           >
                             <Ionicons name="close" size={16} color={colors.onPrimary} />
                           </Pressable>
@@ -1059,7 +1065,12 @@ export function WorkerJobScreen() {
                           style={styles.donePhotoScroll}
                         >
                           {completionPhotosOf(job).map((url) => (
-                            <Pressable key={url} onPress={() => setViewerUri(url)}>
+                            <Pressable
+                              key={url}
+                              onPress={() => setViewerUri(url)}
+                              accessibilityRole="imagebutton"
+                              accessibilityLabel="Open photo"
+                            >
                               <RemoteImage uri={url} style={[styles.donePhoto, { height: photoHeight }]} />
                             </Pressable>
                           ))}

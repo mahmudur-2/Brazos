@@ -152,7 +152,9 @@ export function ScreenHeader({
     : { backgroundColor: withAlpha(palette.text, 0.08), borderColor: withAlpha(palette.text, 0.1) };
 
   const titleText = (
+    // Fix run E4: the screen's title is VoiceOver's first heading (the rotor jumps by these).
     <Text
+      accessibilityRole="header"
       style={[
         leading ? styles.titleConversation : largeTitle ? styles.titleLarge : styles.title,
         { color: palette.text },

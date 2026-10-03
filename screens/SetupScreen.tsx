@@ -22,6 +22,7 @@ import { writeSetupRecord } from '../lib/setupStorage';
 import { DEFAULT_LANDING, type LandingPreference } from '../lib/setupState';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { litCardStyle, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { Announce } from '../hooks/useAnnounce';
 
 const ENTER_MS = 340;
 const COMPLETE_PULSE_MS = 300;
@@ -225,7 +226,7 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
         </Animated.View>
 
         <Animated.View style={stagger(0.3, 0.8)}>
-          <Text style={styles.sectionTitle}>Start in</Text>
+          <Text accessibilityRole="header" style={styles.sectionTitle}>Start in</Text>
           <View style={styles.choices} accessibilityRole="radiogroup">
             <SetupChoiceCard
               icon="home-outline"
@@ -253,6 +254,7 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
             {error ? (
               <Text style={styles.error} accessibilityLiveRegion="assertive">
                 {error}
+                <Announce message={error} />
               </Text>
             ) : !legalComplete ? (
               <Text style={styles.helper}>Review Terms & Privacy to finish setup.</Text>

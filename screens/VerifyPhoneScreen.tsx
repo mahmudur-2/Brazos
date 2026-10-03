@@ -25,6 +25,7 @@ import type { AuthStackNavigation, AuthStackParamList } from '../lib/navigation'
 import { OTP_LENGTH, isOtpToken, phoneAuth } from '../lib/phoneAuth';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { authSurface, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { Announce } from '../hooks/useAnnounce';
 
 /**
  * Verify phone — reference screen 05.
@@ -362,6 +363,7 @@ export function VerifyPhoneScreen() {
               {error ? (
                 <Text style={styles.error} accessibilityLiveRegion="assertive">
                   {error}
+                  <Announce message={error} />
                 </Text>
               ) : notice ? (
                 <AuthNotice tone="info">{notice}</AuthNotice>

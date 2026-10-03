@@ -107,6 +107,7 @@ import {
 } from '../lib/theme';
 import { MediaUploader, Toggle, usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
+import { Announce } from '../hooks/useAnnounce';
 
 // Ten per the screen-13 spec; phase49 raised create_job's server cap to match.
 const MAX_PHOTOS = 10;
@@ -1517,6 +1518,7 @@ export function PostJobScreen() {
     blockedField === field && stepBlocker ? (
       <Text style={styles.fieldReason} accessibilityLiveRegion="polite">
         {stepBlocker}
+        <Announce message={stepBlocker} />
       </Text>
     ) : null;
   // 2026-09-28 (LUX-LIST-64 #38, #41): the last step's footer note is gone with

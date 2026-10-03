@@ -204,7 +204,11 @@ export function PastWork({
               >
                 {visible.map((item) => (
                   <View key={item.id} style={styles.tile}>
-                    <Pressable onPress={() => setViewerItem(item)}>
+                    <Pressable
+                      onPress={() => setViewerItem(item)}
+                      accessibilityRole="imagebutton"
+                      accessibilityLabel={item.caption ? `Open photo: ${item.caption}` : 'Open photo'}
+                    >
                       <RemoteImage uri={item.photo_url} style={styles.photo} />
                     </Pressable>
 

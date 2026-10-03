@@ -67,6 +67,7 @@ import {
 } from '../lib/theme';
 import { CategoryGlyph } from '../components/CategoryGlyph';
 import { SearchBar, useScrollClearance } from '../ui/primitives';
+import { Announce } from '../hooks/useAnnounce';
 
 /** Tiles offered before anything has been typed: the whole shared skill list,
  *  in its own order. It was the first six, which left four categories able to
@@ -279,6 +280,9 @@ export function WorkerSearchScreen() {
   const appliedCategoryLabel = pinnedCategory
     ? skillCategoryLabel(pinnedCategory)
     : undefined;
+  // The results' count line: shown over the list, and spoken on iOS (E4) as it changes.
+  const resultLine =
+    state.kind === 'results' ? resultHeading(state.mode, state.matches.length, appliedCategoryLabel) : null;
 
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
@@ -567,7 +571,8 @@ export function WorkerSearchScreen() {
                     WORKERS TO CONSIDER
                   </Text>
                   <Text style={styles.resultCount} accessibilityLiveRegion="polite">
-                    {resultHeading(state.mode, state.matches.length, appliedCategoryLabel)}
+                    {resultLine}
+                    <Announce message={resultLine} />
                   </Text>
                   <Text style={styles.resultsHint}>
                     Open a profile to see real work and reviews.

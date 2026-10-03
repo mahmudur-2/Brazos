@@ -2117,7 +2117,7 @@ test('RUN H2 fence: the renamed sections, the unread marker and the offline dot'
   // Home and "Your jobs" holds its slot. What this pins is unchanged in kind —
   // the heading is one text node, spelled once, in the shared section style —
   // and the retired copy is still fenced against returning.
-  assert.match(home, /<Text style=\{styles\.sectionTitle\}>Your jobs<\/Text>/);
+  assert.match(home, /<Text accessibilityRole="header" style=\{styles\.sectionTitle\}>Your jobs<\/Text>/);
   assert.doesNotMatch(home, /Live Nearby<\/Text>/, '"Live Nearby" is retired copy');
   assert.doesNotMatch(home, />Nearby<\/Text>/, 'Nearby is Discover’s surface and worker mode’s');
   // AND THE LIVE INDICATOR WENT WITH IT. H2 kept the pulsing mark because the

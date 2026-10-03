@@ -23,6 +23,7 @@ import { authMessage } from '../lib/errorMessage';
 import { PHONE_ENTRY } from '../lib/phoneAuth';
 import { phoneValidationError, toE164 } from '../lib/phoneNumber';
 import { isValidEmail } from '../lib/validation';
+import { Announce } from '../hooks/useAnnounce';
 
 /**
  * Create an account with email and password — the alternate route off the
@@ -230,6 +231,7 @@ export function EmailCreateAccountScreen() {
           {formError ? (
             <View style={styles.formError} accessibilityLiveRegion="polite">
               <Text style={styles.formErrorText}>{formError}</Text>
+              <Announce message={formError} />
             </View>
           ) : null}
         </View>

@@ -67,7 +67,7 @@ export function AppearanceScreen() {
       <ScreenHeader title="Appearance" onBack={goBackOrHome} palette={palette} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}>
         <Card palette={palette} style={styles.card}>
-          <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>THEME</Text>
+          <Text accessibilityRole="header" style={[styles.eyebrow, isDark && styles.eyebrowDark]}>THEME</Text>
           {THEME_PREFERENCES.map((option, index) => {
             const selected = option === preference;
             return (

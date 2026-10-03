@@ -17,6 +17,7 @@ import { SegmentedControl } from './SegmentedControl';
 import { FieldLabel } from './TextField';
 import { useModalPresence } from '../hooks/useModalPresence';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAnnounce } from '../hooks/useAnnounce';
 import { dollarsToCents, formatBudget } from '../lib/jobs';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import {
@@ -117,6 +118,7 @@ export const PriceDropdown = forwardRef<
   const [entering, setEntering] = useState(false);
   const [draft, setDraft] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
+  useAnnounce(problem);
   const turn = useRef(new Animated.Value(0)).current;
 
   const posted = mode === 'posted_price';

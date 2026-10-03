@@ -150,6 +150,9 @@ export function ChatBubble({
                   onPress={() => onPressImage?.(message.image_url!)}
                   onLongPress={onLongPress}
                   delayLongPress={350}
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel="Photo"
+                  accessibilityHint="Opens the photo"
                 >
                   <RemoteImage uri={message.image_url} style={styles.image} />
                 </Pressable>

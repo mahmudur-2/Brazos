@@ -9,6 +9,7 @@ import {
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
 import { authSurface, useThemeColors, withAlpha } from '../lib/theme';
 import { FocusRing } from './FocusRing';
+import { useAnnounce } from '../hooks/useAnnounce';
 
 type AuthFieldProps = {
   /** Rendered as the reference's small uppercase field caption. */
@@ -41,6 +42,7 @@ export const AuthField = forwardRef<TextInput, AuthFieldProps>(function AuthFiel
   // fades on the native driver (components/FocusRing.tsx), not a JS colour tween.
   const [focused, setFocused] = useState(false);
   const { palette, isDark } = useThemeColors();
+  useAnnounce(error);
   const surface = authSurface(palette, isDark);
 
   // Masters 3/4: gold field label, gold hairline, cream value on the screen's

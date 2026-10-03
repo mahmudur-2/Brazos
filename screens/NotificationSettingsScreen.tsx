@@ -335,7 +335,7 @@ export function NotificationSettingsScreen() {
             <Card>
               {/* Master 39 sets typographic quotes here, as the rest of the
                   app's copy already does with its apostrophes. */}
-              <Text style={styles.sectionTitle}>How far is “nearby”?</Text>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>How far is “nearby”?</Text>
               <View style={styles.radiusWrap}>
                 <SegmentedControl
                   options={RADIUS_OPTIONS.map((miles) => ({
@@ -361,7 +361,7 @@ export function NotificationSettingsScreen() {
               </Pressable>
 
               <View style={styles.categoryBlock}>
-                <Text style={styles.sectionTitle}>Categories</Text>
+                <Text accessibilityRole="header" style={styles.sectionTitle}>Categories</Text>
                 {selectedCategories.length > 0 ? (
                   <Text style={styles.sectionNote}>
                     You'll only be told about:{' '}

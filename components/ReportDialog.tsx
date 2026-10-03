@@ -180,13 +180,16 @@ export function ReportDialog({
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
             >
-              <View style={styles.reasons}>
+              {/* Fix run E4: one reason of several — VoiceOver reads a radio group and which is chosen. */}
+              <View style={styles.reasons} accessibilityRole="radiogroup">
                 {REPORT_REASONS.map((r) => {
                   const selected = reason === r.value;
                   return (
                     <Pressable
                       key={r.value}
                       onPress={() => setReason(r.value)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
                       style={[
                         styles.reason,
                         selected && (isDark ? styles.reasonSelectedDark : styles.reasonSelected),

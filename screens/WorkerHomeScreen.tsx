@@ -780,7 +780,7 @@ export function WorkerHomeScreen() {
           <View style={styles.feedHeader}>
             {/* 2026-09-28 (LUX-LIST-64 #51): the heading alone — no dot. */}
             <View style={styles.feedTitleRow}>
-              <Text style={styles.sectionTitle}>Available Jobs</Text>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>Available Jobs</Text>
             </View>
             <Pressable
               onPress={() => navigation.navigate('WorkerResults', { mode: 'all' })}
