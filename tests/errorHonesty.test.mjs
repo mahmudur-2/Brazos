@@ -415,6 +415,12 @@ test('B6 · isOnline is optimistic: only an explicit false is offline', async ()
   assert.equal(isOnline({ isConnected: null, isInternetReachable: null }), true, 'first probe pending');
   assert.equal(isOnline({ isConnected: false, isInternetReachable: null }), false);
   assert.equal(isOnline({ isConnected: true, isInternetReachable: false }), false);
+  // NetInfo throws at import when its native module is missing, and this hook
+  // sits in App.tsx: it loads behind a guard and degrades to "online".
+  const src = read('hooks/useOnline.ts');
+  assert.doesNotMatch(src, /^import NetInfo/m, 'no static value import of the package');
+  assert.match(src, /try \{\s*const mod = require\('@react-native-community\/netinfo'\)[\s\S]*?\} catch \{\s*return null;\s*\}/);
+  assert.match(src, /if \(!netInfo\) return;/);
 });
 
 test('B6 · sign-out never fails offline: the device session ends even when /logout cannot be reached', () => {
