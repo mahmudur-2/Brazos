@@ -391,7 +391,10 @@ export function ClientJobDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      if (job.status === 'open' || job.status === 'cancelled') return;
+      // A11 (2026-10-03): a cancelled job keeps its money record — a ban queues the refund
+      // (20261003000100) and cancel_job() directs it — so the read runs there too and the
+      // card below shows what happened to the payment. Only an open post has nothing to read.
+      if (job.status === 'open') return;
       Promise.all([fetchJobPaymentState(job.id), fetchOpenJobDispute(job.id)]).then(
         ([paymentResult, disputeResult]) => {
           if (!active) return;
