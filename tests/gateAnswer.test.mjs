@@ -316,6 +316,11 @@ test('useSetupStatus: the render in which a user first appears already says load
 test('useLegalGate: the render in which a user first appears already says loading', async () => {
   const { useLegalGate } = await loadHook('hooks/useLegalGate.ts', [
     ["import { fetchLegalStatus } from '../lib/legal';", 'const fetchLegalStatus = (id) => globalThis.__gateHarness.fetchLegal(id);'],
+    // B6: no device record here, so every answer is the server's own.
+    [
+      "import { cachedAcceptanceFor, forgetAcceptance, rememberAcceptance } from '../lib/legalCache';",
+      'const cachedAcceptanceFor = async () => false; const forgetAcceptance = async () => {}; const rememberAcceptance = async () => {};',
+    ],
     ["import { Sentry } from '../lib/observability/sentry';", 'const Sentry = null;'],
   ]);
 

@@ -14,6 +14,29 @@ import { unregisterPushToken } from './pushNotifications';
 import { setSentryUser } from './observability/sentry';
 import { identify } from './observability/analytics';
 
+/**
+ * Ends the session on this device without the network (B6). The public
+ * `signOut({ scope: 'local' })` still posts to /logout and keeps the session
+ * when that fails, so after it the client's own session removal (auth-js
+ * 2.108's `_removeSession`: clears the stored session and emits SIGNED_OUT)
+ * finishes the job. Guarded: if a future auth-js drops the method, this is a
+ * no-op and the session simply stays, which is the old behaviour.
+ */
+async function signOutLocally(): Promise<void> {
+  try {
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (!error) return;
+  } catch {
+    // Fall through to the device-only removal.
+  }
+  const auth = supabase.auth as unknown as { _removeSession?: () => Promise<void> };
+  try {
+    if (typeof auth._removeSession === 'function') await auth._removeSession();
+  } catch {
+    // Nothing more can be done offline.
+  }
+}
+
 type AuthResult = { error: AuthError | null };
 
 type AuthContextValue = {
@@ -159,7 +182,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
         // keep receiving the previous user's notifications.
         await unregisterPushToken();
         const { error } = await supabase.auth.signOut();
-        return { error };
+        if (!error) return { error };
+        // FIX-RUN B6: sign-out never fails offline. auth-js keeps the session
+        // whenever the logout request itself fails (only a 401/403/404 answer
+        // clears it), so a person with no connection could not sign out at
+        // all. They asked to leave THIS device: end it here. The server's push
+        // token stays registered; register_push_token() reassigns it on the
+        // next sign-in on this phone (lib/pushNotifications.ts).
+        await signOutLocally();
+        return { error: null };
       },
     }),
     [session, loading, bannedNotice]

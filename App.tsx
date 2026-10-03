@@ -25,6 +25,8 @@ import { ThemeProvider } from './lib/ThemeContext';
 import { LaunchCompleteContext } from './lib/launchContext';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { ConfirmHost } from './components/ConfirmHost';
+import { OfflineBanner } from './components/OfflineBanner';
+import { useOnline } from './hooks/useOnline';
 import { ModeTransitionProvider } from './components/ModeTransitionOverlay';
 import { ModeProvider } from './modes';
 import { MotionRoot } from './lib/motion120';
@@ -67,7 +69,13 @@ const SHOW_HOME_DESIGN_STUDIO =
  * stack is now two trees that are never mounted at the same time.
  */
 function MainTabs() {
-  return <ModeShell />;
+  // FIX-RUN B6: the offline pill rides over every signed-in screen, once.
+  return (
+    <>
+      <ModeShell />
+      <OfflineBanner />
+    </>
+  );
 }
 
 function RootNavigator() {
@@ -75,6 +83,7 @@ function RootNavigator() {
   const { palette } = useThemeColors();
   const legal = useLegalGate();
   const setup = useSetupStatus();
+  const online = useOnline();
 
   // Lives inside NavigationContainer so a tapped notification always has a
   // mounted container to route through.
@@ -156,17 +165,24 @@ function RootNavigator() {
 
   // F-013: the gate FAILS CLOSED. An unanswered acceptance read blocks here
   // with the shared error state and a retry that re-runs the read — it never
-  // admits by default and never fakes an accepted state.
+  // admits by default and never fakes an accepted state. B6: an account whose
+  // acceptance of the current versions the server already confirmed on this
+  // device never reaches this (useLegalGate admits it from lib/legalCache);
+  // offline, the shared template's offline state says so plainly.
   if (legal.state === 'unknown') {
     return (
       <View style={[styles.loader, { backgroundColor: palette.background }]}>
         <ScreenStateView
-          state={{
-            kind: 'error',
-            message:
-              'The Terms of Service check didn’t load. Check your connection and try again.',
-            onRetry: legal.recheck,
-          }}
+          state={
+            online
+              ? {
+                  kind: 'error',
+                  message:
+                    'The Terms of Service check didn’t load. Check your connection and try again.',
+                  onRetry: legal.recheck,
+                }
+              : { kind: 'offline', onRetry: legal.recheck }
+          }
         />
       </View>
     );

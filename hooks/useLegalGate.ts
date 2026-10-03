@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { deriveGateAnswer } from '../lib/gateAnswer';
 import type { GateAnswer } from '../lib/gateAnswer';
 import { fetchLegalStatus } from '../lib/legal';
+import { cachedAcceptanceFor, forgetAcceptance, rememberAcceptance } from '../lib/legalCache';
 import { Sentry } from '../lib/observability/sentry';
 import { useAuth } from './useAuth';
 
@@ -26,11 +27,14 @@ export function gateStateForStatus(status: string): GateState {
  * Whether the signed-in user still owes acceptance of the current legal
  * documents.
  *
- * FAILS CLOSED (F-013, operator decision 2026-08-22). A failed or thrown
- * acceptance read resolves to 'unknown' — never 'accepted' — and App.tsx
- * holds the shared error state with a Retry that re-runs this read. Nothing
- * is persisted and nothing is admitted by default: a network blip must not
- * be a consent bypass whose only record is a console line.
+ * FAILS CLOSED (F-013, operator decision 2026-08-22, narrowed by FIX-RUN B6 on
+ * 2026-10-03 — docs/DECISIONS.md). A failed or thrown acceptance read admits
+ * ONLY on a recorded server acceptance of the CURRENT versions by THIS user
+ * (lib/legalCache.ts, written only after the server said `accepted` or the
+ * acceptance RPC succeeded); otherwise it resolves to 'unknown' and App.tsx
+ * holds the retry state. Nothing is admitted by default: a network blip is
+ * never a consent bypass, and a server `needs_acceptance` always wins and
+ * clears the record.
  */
 export function useLegalGate() {
   const { user } = useAuth();
@@ -67,13 +71,17 @@ export function useLegalGate() {
       Sentry?.captureException(err, { extra: { site: 'useLegalGate.check' } });
       status = 'unknown';
     }
+    let next = gateStateForStatus(status);
+    if (next === 'accepted') void rememberAcceptance(id);
+    else if (next === 'needs_acceptance') void forgetAcceptance();
+    // B6: the read failed — admitted only by this user's recorded server
+    // acceptance of the current versions, never by default.
+    else if (await cachedAcceptanceFor(id)) next = 'accepted';
     // Kept only while this account's own in-flight answer is still what is
     // stored: a read that lands after a sign-out, or after another account
     // has written, is dropped rather than tagged onto them — the rule
     // useSetupStatus's `active` flag applies to its own late reads.
-    setAnswer((prev) =>
-      prev.forUser === id ? { forUser: id, value: gateStateForStatus(status) } : prev
-    );
+    setAnswer((prev) => (prev.forUser === id ? { forUser: id, value: next } : prev));
   }, [user?.id, setState]);
 
   // Starts the read for whoever is signed in. The 'loading' this effect used
@@ -89,8 +97,11 @@ export function useLegalGate() {
   // Setup could park its "Start in" choice. See lib/gateAnswer.ts.
   const state = deriveGateAnswer(userId, answer, SIGNED_OUT);
 
-  /** Called by the gate screen once acceptance is recorded. */
-  const markAccepted = useCallback(() => setState('accepted'), [setState]);
+  /** Called by the gate screen once acceptance is recorded (the RPC succeeded). */
+  const markAccepted = useCallback(() => {
+    if (userId) void rememberAcceptance(userId);
+    setState('accepted');
+  }, [setState, userId]);
 
   return { state, markAccepted, recheck: check };
 }

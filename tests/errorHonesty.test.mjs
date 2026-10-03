@@ -206,6 +206,16 @@ const legalGateModule = (async () => {
       "import { fetchLegalStatus } from '../lib/legal';",
       'const fetchLegalStatus = (...args) => globalThis.__legalFetch(...args);',
     ],
+    // B6: the device's record of a server-confirmed acceptance. Stubbed to
+    // "no record" unless a test says otherwise, so the four F-013 proofs
+    // above run exactly as before; lib/legalCache.ts is executed on its own
+    // below.
+    [
+      "import { cachedAcceptanceFor, forgetAcceptance, rememberAcceptance } from '../lib/legalCache';",
+      'const cachedAcceptanceFor = (...args) => (globalThis.__legalCacheAdmits ?? (async () => false))(...args);' +
+        "const rememberAcceptance = async (...args) => { (globalThis.__legalCacheLog ??= []).push(['remember', ...args]); };" +
+        "const forgetAcceptance = async () => { (globalThis.__legalCacheLog ??= []).push(['forget']); };",
+    ],
     [
       "import { useAuth } from './useAuth';",
       "const useAuth = () => ({ user: { id: 'user-1' } });",
@@ -278,6 +288,143 @@ test('the pure mapping allow-lists: anything unrecognized stays unknown', async 
   for (const bad of ['unknown', '', 'error', 'ACCEPTED', 'yes', 'null']) {
     assert.equal(gateStateForStatus(bad), 'unknown', `'${bad}' must stay unknown`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// FIX-RUN B6 — offline does not lock out an account that already accepted
+// ---------------------------------------------------------------------------
+
+test('B6 · a failed read admits ONLY on a recorded server acceptance of the current versions', async () => {
+  const { useLegalGate } = await legalGateModule;
+  try {
+    // The record for this user and the current versions: admitted, rejected read or not.
+    globalThis.__legalCacheAdmits = async (userId) => userId === 'user-1';
+    globalThis.__legalFetch = () => Promise.reject(new Error('offline'));
+    assert.equal((await settleGate(useLegalGate)).state, 'accepted');
+    globalThis.__legalFetch = () => Promise.resolve({ status: 'unknown', error: 'network request failed' });
+    assert.equal((await settleGate(useLegalGate)).state, 'accepted');
+    // No record (another user's, or an older version — legalCacheAdmits below): unknown.
+    globalThis.__legalCacheAdmits = async () => false;
+    globalThis.__legalFetch = () => Promise.reject(new Error('offline'));
+    assert.equal((await settleGate(useLegalGate)).state, 'unknown');
+  } finally {
+    delete globalThis.__legalCacheAdmits;
+  }
+});
+
+test('B6 · the server always wins: needs_acceptance overrides a record and clears it; accepted writes one', async () => {
+  const { useLegalGate } = await legalGateModule;
+  try {
+    globalThis.__legalCacheAdmits = async () => true;
+    globalThis.__legalCacheLog = [];
+    globalThis.__legalFetch = () => Promise.resolve({ status: 'needs_acceptance' });
+    assert.equal((await settleGate(useLegalGate)).state, 'needs_acceptance');
+    assert.deepEqual(globalThis.__legalCacheLog, [['forget']]);
+    globalThis.__legalCacheLog = [];
+    globalThis.__legalFetch = () => Promise.resolve({ status: 'accepted' });
+    assert.equal((await settleGate(useLegalGate)).state, 'accepted');
+    assert.deepEqual(globalThis.__legalCacheLog, [['remember', 'user-1']]);
+  } finally {
+    delete globalThis.__legalCacheAdmits;
+    delete globalThis.__legalCacheLog;
+  }
+});
+
+// lib/legalCache.ts executed: AsyncStorage and the version constants stubbed.
+const legalCacheModule = (async () => {
+  let js = stripTypeScriptTypes(read('lib/legalCache.ts'), { mode: 'strip' });
+  const replacements = [
+    [
+      "import AsyncStorage from '@react-native-async-storage/async-storage';",
+      'const AsyncStorage = globalThis.__legalStore;',
+    ],
+    [
+      "import { PRIVACY_VERSION, TERMS_VERSION } from './legal';",
+      "const TERMS_VERSION = 'terms-v2'; const PRIVACY_VERSION = 'privacy-v2';",
+    ],
+  ];
+  for (const [from, to] of replacements) {
+    assert.ok(js.includes(from), `expected the runtime import: ${from}`);
+    js = js.replace(from, to);
+  }
+  const store = new Map();
+  globalThis.__legalStore = {
+    getItem: async (k) => (store.has(k) ? store.get(k) : null),
+    setItem: async (k, v) => void store.set(k, v),
+    removeItem: async (k) => void store.delete(k),
+  };
+  return import(toDataUrl(js));
+})();
+
+test('B6 · legalCacheAdmits: this user AND both current versions, nothing less', async () => {
+  const { legalCacheAdmits, parseLegalCache } = await legalCacheModule;
+  const now = { terms: 'terms-v2', privacy: 'privacy-v2' };
+  assert.equal(legalCacheAdmits({ userId: 'u1', ...now }, 'u1', now), true);
+  assert.equal(legalCacheAdmits({ userId: 'u2', ...now }, 'u1', now), false, 'another account on this phone');
+  assert.equal(legalCacheAdmits({ userId: 'u1', terms: 'terms-v1', privacy: 'privacy-v2' }, 'u1', now), false, 'an older Terms');
+  assert.equal(legalCacheAdmits({ userId: 'u1', terms: 'terms-v2', privacy: 'privacy-v1' }, 'u1', now), false, 'an older Privacy');
+  assert.equal(legalCacheAdmits(null, 'u1', now), false);
+  for (const raw of [null, '', 'not json', '{}', '{"userId":"u1"}', '[]', 'null']) {
+    assert.equal(parseLegalCache(raw), null, `${JSON.stringify(raw)} is no record`);
+  }
+});
+
+test('B6 · remember → admits; forget → does not; another user → does not', async () => {
+  const { cachedAcceptanceFor, rememberAcceptance, forgetAcceptance } = await legalCacheModule;
+  assert.equal(await cachedAcceptanceFor('u1'), false);
+  await rememberAcceptance('u1');
+  assert.equal(await cachedAcceptanceFor('u1'), true);
+  assert.equal(await cachedAcceptanceFor('u2'), false);
+  await forgetAcceptance();
+  assert.equal(await cachedAcceptanceFor('u1'), false);
+  // A storage that throws is "no record", never an admission.
+  const saved = globalThis.__legalStore.getItem;
+  globalThis.__legalStore.getItem = async () => {
+    throw new Error('storage gone');
+  };
+  try {
+    assert.equal(await cachedAcceptanceFor('u1'), false);
+  } finally {
+    globalThis.__legalStore.getItem = saved;
+  }
+});
+
+test('B6 · the gate screen records the acceptance only after the RPC succeeded; offline shows the offline state', () => {
+  const gate = stripTypeScriptTypes(read('hooks/useLegalGate.ts'), { mode: 'strip' });
+  assert.match(gate, /const markAccepted = useCallback\(\(\) => \{\s*if \(userId\) void rememberAcceptance\(userId\);\s*setState\('accepted'\);/);
+  const screen = read('screens/LegalGateScreen.tsx');
+  assert.ok(screen.indexOf('await acceptCurrentDocuments()') < screen.indexOf('onAccepted();'), 'onAccepted follows the RPC');
+  assert.match(screen, /if \(acceptError\) \{[\s\S]*?return;\s*\}\s*onAccepted\(\);/);
+  const app = read('App.tsx');
+  assert.match(app, /: \{ kind: 'offline', onRetry: legal\.recheck \}/);
+  assert.match(app, /<ModeShell \/>\s*<OfflineBanner \/>/);
+  assert.equal((app.match(/<OfflineBanner \/>/g) ?? []).length, 1, 'mounted once');
+  // The banner never takes a tap and rides the shared 120 Hz reveal.
+  const banner = read('components/OfflineBanner.tsx');
+  assert.match(banner, /pointerEvents="none"/);
+  assert.match(banner, /<DropdownBody open=\{!online\}/);
+});
+
+test('B6 · isOnline is optimistic: only an explicit false is offline', async () => {
+  // The pure predicate only: the two imports (react, NetInfo) feed the hook,
+  // which is never called here, so they are dropped.
+  const js = stripTypeScriptTypes(read('hooks/useOnline.ts'), { mode: 'strip' }).replace(/^import .*$/gm, '');
+  const { isOnline } = await import(toDataUrl(js));
+  assert.equal(isOnline({ isConnected: true, isInternetReachable: true }), true);
+  assert.equal(isOnline({ isConnected: true, isInternetReachable: null }), true, 'reachability not known yet');
+  assert.equal(isOnline({ isConnected: null, isInternetReachable: null }), true, 'first probe pending');
+  assert.equal(isOnline({ isConnected: false, isInternetReachable: null }), false);
+  assert.equal(isOnline({ isConnected: true, isInternetReachable: false }), false);
+});
+
+test('B6 · sign-out never fails offline: the device session ends even when /logout cannot be reached', () => {
+  const auth = read('lib/AuthContext.tsx');
+  assert.match(auth, /const \{ error \} = await supabase\.auth\.signOut\(\);\s*if \(!error\) return \{ error \};[\s\S]*?await signOutLocally\(\);\s*return \{ error: null \};/);
+  const helper = auth.slice(auth.indexOf('async function signOutLocally'), auth.indexOf('type AuthResult'));
+  assert.match(helper, /supabase\.auth\.signOut\(\{ scope: 'local' \}\)/);
+  assert.match(helper, /if \(typeof auth\._removeSession === 'function'\) await auth\._removeSession\(\);/);
+  // Never throws: both steps are caught.
+  assert.equal((helper.match(/\} catch \{/g) ?? []).length, 2);
 });
 
 test('App.tsx blocks on unknown with the shared error state and a retry', () => {
