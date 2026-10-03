@@ -597,3 +597,20 @@ test('[static] F7: the client is typed over the generated types, with one stated
     assert.doesNotMatch(strip(read(file)), /\.(from|rpc)\([^)]*\)[^;]*\bas any\b/, `${file} casts a query to any`);
   }
 });
+
+test('[static] F13 review: the hub screens take their one clock reading per READ, not per row identity', () => {
+  // React Query keeps an unchanged array's identity across reads (structural sharing), so a clock
+  // keyed on `posted` would never move again: countdowns, offer expiry and the auto-release bucket
+  // would freeze at the first read. The hub hands out the read's own instant instead.
+  assert.match(strip(read('hooks/useMyJobsHub.ts')), /readAt: query\.dataUpdatedAt,/);
+  const sites = {
+    'screens/HomeScreen.tsx': /const nowMs = useMemo\(\(\) => Date\.now\(\), \[myJobsReadAt\]\);/,
+    'screens/MyJobsHubScreen.tsx': /const nowMs = useMemo\(\(\) => Date\.now\(\), \[readAt\]\);/,
+    'components/CreateSheet.tsx': /const nowMs = useMemo\(\(\) => Date\.now\(\), \[hub\.readAt\]\);/,
+  };
+  for (const [file, clock] of Object.entries(sites)) {
+    const src = strip(read(file));
+    assert.match(src, clock, `${file} keys its clock on the read`);
+    assert.doesNotMatch(src, /Date\.now\(\),\s*\[\s*posted/, `${file} keys a clock on row identity`);
+  }
+});

@@ -452,6 +452,7 @@ export function HomeScreen() {
     openDisputeJobIds,
     reviewedJobIds,
     names,
+    readAt: myJobsReadAt,
     loading: myJobsLoading,
     error: myJobsError,
     // F13: the cached hub — a focus reads only when it is stale or last failed,
@@ -469,7 +470,8 @@ export function HomeScreen() {
 
   // One clock reading per data load — the hub's rule, so a card's countdown
   // and its rank cannot be read at two different instants.
-  const nowMs = useMemo(() => Date.now(), [posted, payments]);
+  // Keyed on the read itself (F13 review): a cached read keeps the rows' identity.
+  const nowMs = useMemo(() => Date.now(), [myJobsReadAt]);
   const items = useMemo(
     () => attentionItems({ posted, payments, openDisputeJobIds, reviewedJobIds, nowMs }),
     [posted, payments, openDisputeJobIds, reviewedJobIds, nowMs]

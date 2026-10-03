@@ -160,6 +160,7 @@ export function MyJobsHubScreen() {
     openDisputeJobIds,
     reviewedJobIds,
     names,
+    readAt,
     loading,
     error,
     refresh,
@@ -207,11 +208,10 @@ export function MyJobsHubScreen() {
   }
 
   // One clock reading per data load: bucketing and the release countdowns all
-  // derive from the same instant, so a card can't straddle two tabs.
-  const nowMs = useMemo(
-    () => Date.now(),
-    [posted, working, pendingBids, settledBids, payments]
-  );
+  // derive from the same instant, so a card can't straddle two tabs. Keyed on
+  // the read itself (F13 review): a cached read keeps the rows' identity, so a
+  // clock keyed on them would freeze every countdown and expiry at the first.
+  const nowMs = useMemo(() => Date.now(), [readAt]);
 
   const lifecycleOf = useCallback(
     (job: Job) =>

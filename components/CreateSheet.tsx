@@ -262,7 +262,8 @@ function NeedsYou({ hub, ready, onOpen }: { hub: Hub; ready: boolean; onOpen: (j
   const loading = !ready;
   // One clock reading per data load — the hub's rule, so the item's rank and
   // its next-action line cannot be read at two different instants.
-  const nowMs = useMemo(() => Date.now(), [posted, payments]);
+  // Keyed on the read itself (F13 review): a cached read keeps the rows' identity.
+  const nowMs = useMemo(() => Date.now(), [hub.readAt]);
   const first = useMemo(
     () =>
       attentionItems({ posted, payments, openDisputeJobIds, reviewedJobIds, nowMs })[0] ?? null,

@@ -191,6 +191,13 @@ export function useMyJobsHub() {
     openDisputeJobIds: hub.openDisputeJobIds,
     reviewedJobIds: hub.reviewedJobIds,
     names: hub.names,
+    /**
+     * When the snapshot was last read (0 before the first). A screen's "one clock reading per data
+     * load" keys on THIS, never on the rows: React Query keeps an unchanged array's identity across
+     * reads (structural sharing), so a clock keyed on `posted` would never move again and every
+     * countdown, offer expiry and auto-release bucket would freeze at the first read.
+     */
+    readAt: query.dataUpdatedAt,
     loading: !!userId && query.isPending,
     // A read that threw outright (not one source failing) still says so.
     error: hub.error ?? (query.error ? userMessage(query.error) : null),
