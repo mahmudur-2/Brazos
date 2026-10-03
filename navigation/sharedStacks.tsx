@@ -43,7 +43,16 @@ import { TrackWorkerScreen } from '../screens/TrackWorkerScreen';
 import { WorkChecklistScreen } from '../screens/WorkChecklistScreen';
 import { WorkerJobScreen } from '../screens/WorkerJobScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
-import { ComponentCatalog } from '../dev-tools/ComponentCatalog';
+
+/**
+ * LOADED LAZILY (F2): the catalog is a __DEV__-only route, so its module is
+ * required on first render, never evaluated at boot.
+ */
+function ComponentCatalog() {
+  const { ComponentCatalog: Catalog } =
+    require('../dev-tools/ComponentCatalog') as typeof import('../dev-tools/ComponentCatalog');
+  return <Catalog />;
+}
 
 /**
  * The four tabs that are the SAME in both modes (BRAZOS_MASTER_PLAN.md §F,

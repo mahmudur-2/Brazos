@@ -41,7 +41,6 @@ import { LegalGateScreen } from './screens/LegalGateScreen';
 import { ScreenStateView } from './ui/templates';
 import { useLegalGate } from './hooks/useLegalGate';
 import { useSetupStatus } from './hooks/useSetupStatus';
-import { HomeDesignStudio } from './dev-tools/HomeDesignStudio';
 import { initSentry, wrapApp } from './lib/observability/sentry';
 
 /**
@@ -59,6 +58,16 @@ const SHOW_HOME_DESIGN_STUDIO =
   Platform.OS === 'web' &&
   typeof window !== 'undefined' &&
   new URLSearchParams(window.location.search).get('studio') === 'home';
+
+/**
+ * LOADED LAZILY (F2): the Home studio is a development-web tool, so it is
+ * required only when SHOW_HOME_DESIGN_STUDIO holds, never evaluated at boot.
+ */
+const PassThrough = ({ children }: PropsWithChildren) => <>{children}</>;
+const HomeDesignStudio = SHOW_HOME_DESIGN_STUDIO
+  ? (require('./dev-tools/HomeDesignStudio') as typeof import('./dev-tools/HomeDesignStudio'))
+      .HomeDesignStudio
+  : PassThrough;
 
 /**
  * The authenticated app.

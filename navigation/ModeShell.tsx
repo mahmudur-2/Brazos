@@ -4,11 +4,23 @@ import { useMode } from '../modes';
 import { ShellGroundProvider, useShellGroundState } from '../lib/shellGround';
 import { PinnedFootProvider } from '../ui/primitives/BottomNav';
 import { screenGround, useThemeColors } from '../lib/theme';
-import { DesignStudioPanel } from '../components/DesignStudioPanel';
 import { ModeTreeLayoutSignal } from '../components/ModeTransitionOverlay';
 import { designStudioAvailable } from '../lib/designStudioGate';
 import { CustomerRoot } from './CustomerRoot';
 import { WorkerRoot } from './WorkerRoot';
+
+/**
+ * LOADED LAZILY (F2). The panel and the schema it reads are about 5,000 lines
+ * that only an internal or development build can ever show, so the module is
+ * required behind the same gate that mounts it: a preview or production build
+ * never evaluates it at boot. The gate is a module-scope constant, so this
+ * resolves once.
+ */
+const NullPanel = () => null;
+const DesignStudioPanel = designStudioAvailable
+  ? (require('../components/DesignStudioPanel') as typeof import('../components/DesignStudioPanel'))
+      .DesignStudioPanel
+  : NullPanel;
 
 /**
  * The root mode switch (BRAZOS_MASTER_PLAN.md §F, enforcement mechanism 2).
