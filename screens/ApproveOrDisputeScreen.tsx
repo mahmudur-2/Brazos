@@ -14,6 +14,7 @@ import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { alertAsync } from '../lib/dialog';
+import { invalidateJobs } from '../lib/queryClient';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
@@ -180,6 +181,8 @@ export function ApproveOrDisputeScreen() {
     setReleasing(true);
     try {
       const result = await paymentProvider.releaseJobPayment(job.id);
+      // F13: an own mutation — the cached hub and feed are out of date.
+      invalidateJobs();
       if (result.error || !result.data) {
         await alertAsync(
           'Could not release the payment',
@@ -201,6 +204,8 @@ export function ApproveOrDisputeScreen() {
     if (!reason || submittingReport) return;
     setSubmittingReport(true);
     const { data, error } = await openJobDispute(job.id, reason, details.trim() || null);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     setSubmittingReport(false);
     if (error || !data) {
       // The typed report is preserved — a failed send never costs the text.
@@ -220,6 +225,8 @@ export function ApproveOrDisputeScreen() {
     if (!dispute || withdrawing) return;
     setWithdrawing(true);
     const { data, error } = await withdrawJobDispute(dispute.id);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     setWithdrawing(false);
     setConfirmWithdraw(false);
     if (error) {

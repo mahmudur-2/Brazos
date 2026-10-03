@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Avatar } from '../components/Avatar';
@@ -9,6 +9,7 @@ import type { ScreenState } from '../ui/templates/ScreenStates';
 import { paymentsMode } from '../lib/adapters/payments';
 import { fetchJobPayment, isHeld, type Payment } from '../lib/payments';
 import { customerChargeCents } from '../lib/paymentRules';
+import { invalidateJobs } from '../lib/queryClient';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { arrivalWindowLabel } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
@@ -34,6 +35,11 @@ export function JobConfirmedScreen() {
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'JobConfirmed'>>();
   const job = params.job;
+  // F13: every funding path lands here (the sandbox authorize, the card poll, the recheck), so this
+  // is where the cached hub learns the payment is held.
+  useEffect(() => {
+    invalidateJobs();
+  }, []);
 
   const [payment, setPayment] = useState<Payment | null>(null);
   const [loaded, setLoaded] = useState(false);

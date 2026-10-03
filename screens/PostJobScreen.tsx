@@ -43,6 +43,7 @@ import { UndoToast } from '../components/UndoToast';
 import { useAuth } from '../hooks/useAuth';
 import { EntranceView } from '../components/EntranceView';
 import { trackIntent } from '../lib/observability/analytics';
+import { invalidateJobs } from '../lib/queryClient';
 import { Sentry } from '../lib/observability/sentry';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
@@ -398,6 +399,8 @@ export function PostJobScreen() {
       if (!again) return;
       ({ error: seriesError } = await startJobSeries(jobId, cadence));
     }
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
   }
 
   // Exact service address — job_private_details on publish, never public.
@@ -1120,6 +1123,8 @@ export function PostJobScreen() {
       coords,
       threadJobId: params?.threadJobId ?? null,
     });
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     submittingRef.current = false;
 
     if (requestError) {
@@ -1241,6 +1246,8 @@ export function PostJobScreen() {
     const { data: savedJob, error, locationError } = isEditing
       ? await updateJob(editJobId!, jobInput)
       : await createJob(user.id, jobInput);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     submittingRef.current = false;
 
     if (error) {

@@ -477,3 +477,59 @@ test('[static] F13: the feed is one cached query with one counted channel, and i
   assert.match(feed, /queryClient\.setQueryData<OpenJob\[\]>\(queryKeys\.openJobs,/);
   assert.match(feed, /const error = query\.error \? userMessage\(query\.error\) : null;/);
 });
+
+// ---------------------------------------------------------------------------
+// F15 — Smart Match reads the worker's past jobs.
+// ---------------------------------------------------------------------------
+test('F15: a worker with a finished Assembly job sees Assembly first under Smart Match', async () => {
+  const filters = await import(
+    toDataUrl(
+      stripTypeScriptTypes(read('lib/jobFilters.ts'), { mode: 'strip' }).replace(
+        "from './time'",
+        `from '${new URL('../lib/time.ts', import.meta.url).href}'`
+      )
+    )
+  );
+  const job = (id, category, distance) => ({ id, category, distance_miles: distance, created_at: '2026-10-01T00:00:00Z', budget_cents: null, scheduled_date: null });
+  const working = [
+    { category: 'furniture_assembly', status: 'completed' },
+    { category: 'cleaning', status: 'in_progress' },
+  ];
+  const rows = [job('clean', 'cleaning', 1), job('assemble', 'furniture_assembly', 5), job('other', 'other', 0.5)];
+  const context = { skills: new Set(['cleaning']), completedByCategory: filters.completedByCategory(working) };
+  assert.deepEqual(
+    filters.applyJobFilters(rows, filters.DEFAULT_JOB_FILTERS, context).map((j) => j.id),
+    ['assemble', 'clean', 'other']
+  );
+});
+
+test('[static] F15: every screen that ranks by the worker’s history reads the hub query, which loads on mount', () => {
+  for (const file of ['screens/WorkerResultsScreen.tsx', 'screens/MapScreen.tsx']) {
+    const src = strip(read(file));
+    assert.match(src, /const \{ working \} = useMyJobsHub\(\);/, `${file} reads the hub`);
+    assert.match(src, /completedByCategory\(working\)/, `${file} ranks by it`);
+  }
+  const hub = strip(read('hooks/useMyJobsHub.ts'));
+  // The query reads on mount when there is nothing cached (React Query's default), so a screen that
+  // never refreshes still gets the worker's jobs — Worker Home's focus read usually has them cached.
+  assert.match(hub, /useQuery\(\{/);
+  assert.doesNotMatch(hub, /refetchOnMount: false|enabled: false/);
+  // Every own mutation invalidates it at its call site.
+  const sites = {
+    'components/OfferComposer.tsx': 2,
+    'components/ReviewSection.tsx': 1,
+    'hooks/useJobOwnerActions.ts': 1,
+    'screens/ApproveOrDisputeScreen.tsx': 3,
+    'screens/BidDetailScreen.tsx': 2,
+    'screens/ChatScreen.tsx': 1,
+    'screens/ClientJobDetailScreen.tsx': 2,
+    'screens/JobConfirmedScreen.tsx': 1,
+    'screens/JobDetailScreen.tsx': 4,
+    'screens/PostJobScreen.tsx': 3,
+    'screens/ReviewAndTipScreen.tsx': 1,
+    'screens/WorkerJobScreen.tsx': 5,
+  };
+  for (const [file, count] of Object.entries(sites)) {
+    assert.equal((strip(read(file)).match(/invalidateJobs\(\);/g) ?? []).length, count, `${file} invalidates after each own mutation`);
+  }
+});

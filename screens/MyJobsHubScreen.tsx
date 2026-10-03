@@ -161,6 +161,7 @@ export function MyJobsHubScreen() {
     loading,
     error,
     refresh,
+    refreshIfStale,
   } = useMyJobsHub();
   const [filter, setFilter] = useState<Filter>('active');
   const [refreshing, setRefreshing] = useState(false);
@@ -186,10 +187,12 @@ export function MyJobsHubScreen() {
     setDraft(null);
   }
 
+  // F13: a focus reads only when the cached hub is stale or last failed;
+  // pull-to-refresh below always reads.
   useFocusEffect(
     useCallback(() => {
-      void refresh();
-    }, [refresh])
+      refreshIfStale();
+    }, [refreshIfStale])
   );
 
   async function onRefresh() {

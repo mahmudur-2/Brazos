@@ -1,6 +1,7 @@
 import { focusManager, onlineManager, QueryClient } from '@tanstack/react-query';
 import { AppState } from 'react-native';
 import { subscribeOnline } from '../hooks/useOnline';
+import { queryKeys } from './queryKeys';
 
 /**
  * F13 (fix run, 2026-10-03) — THE ONE CACHE. Before this, every mount of the
@@ -40,4 +41,15 @@ onlineManager.setEventListener((setOnline) => subscribeOnline(setOnline));
 /** F13 — the bell's count (and anything else under 'notifications') is out of date. */
 export function invalidateNotifications(): Promise<void> {
   return queryClient.invalidateQueries({ queryKey: ['notifications'] });
+}
+
+/**
+ * F13 — an own mutation changed jobs, offers, payments, disputes or reviews:
+ * the hub (every account's key) and the feed are out of date. Called at the
+ * screen and hook call sites, never inside the lib wrappers the node suite
+ * executes with stubs.
+ */
+export function invalidateJobs(): void {
+  void queryClient.invalidateQueries({ queryKey: ['myJobsHub'] });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.openJobs });
 }

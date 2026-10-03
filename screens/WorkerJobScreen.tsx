@@ -26,6 +26,7 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Chip } from '../components/Chip';
 import { LATE_CHOICES, isLateDay } from '../lib/runningLate';
+import { invalidateJobs } from '../lib/queryClient';
 import { HeldPulse, ReleasedTick } from '../components/MoneyMoment';
 import { JobProgress } from '../components/JobProgress';
 import { JobVideo } from '../components/JobVideo';
@@ -199,6 +200,8 @@ export function WorkerJobScreen() {
     if (!ok) return;
     setDroppingSeries(true);
     const { error: dropError } = await dropSeriesWorker(series.id);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     setDroppingSeries(false);
     if (dropError) {
       await alertAsync('Could not drop the visits', userMessage(dropError));
@@ -271,6 +274,8 @@ export function WorkerJobScreen() {
   async function handleStart() {
     setWorking(true);
     const { error } = await updateJobStatus(params.jobId, 'in_progress');
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     setWorking(false);
     if (error) {
       await alertAsync('Could not start job', userMessage(error));
@@ -288,6 +293,8 @@ export function WorkerJobScreen() {
     if (reportingLate != null) return;
     setReportingLate(minutes);
     const { error: lateError } = await reportRunningLate(params.jobId, minutes);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     setReportingLate(null);
     if (lateError) {
       await alertAsync('Could not tell them', userMessage(lateError));
@@ -302,6 +309,8 @@ export function WorkerJobScreen() {
     if (marking) return;
     setMarking(step);
     const { error: markError } = await markWorkerArrival(params.jobId, step);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     setMarking(null);
     if (markError) {
       await alertAsync('Could not update your status', userMessage(markError));
@@ -483,6 +492,8 @@ export function WorkerJobScreen() {
       donePhotos,
       doneVideo ? [doneVideo.url] : []
     );
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     setWorking(false);
     if (error) {
       await alertAsync('Could not complete job', userMessage(error));

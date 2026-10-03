@@ -29,6 +29,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DropMenu, type DropMenuItem } from '../components/DropMenu';
 import { LiveLocationBar, LiveLocationCard } from '../components/LiveLocationCard';
 import { nextMenu, personSafetyItems, type ChatMenu } from '../lib/chatMenus';
+import { invalidateJobs } from '../lib/queryClient';
 import { canCopy, copyText } from '../lib/clipboard';
 import { TranslationSheet } from '../components/TranslationSheet';
 import { OfferCard } from '../components/OfferCard';
@@ -1266,6 +1267,8 @@ export function ChatScreen() {
           : action === 'withdraw'
             ? await withdrawOffer(request.id)
             : await counterOffer(request.id, amountCents ?? 0);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     setRespondingId(null);
 
     if (error) {

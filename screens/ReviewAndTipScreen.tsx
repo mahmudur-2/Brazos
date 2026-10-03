@@ -23,6 +23,7 @@ import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { alertAsync } from '../lib/dialog';
+import { invalidateJobs } from '../lib/queryClient';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
@@ -334,6 +335,8 @@ export function ReviewAndTipScreen() {
     setSendingTip(true);
     try {
       const result = await paymentProvider.tipWorker(job.id, tipCents);
+      // F13: an own mutation — the cached hub and feed are out of date.
+      invalidateJobs();
       if (result.error || !result.data) {
         await alertAsync(
           'Could not send the tip',

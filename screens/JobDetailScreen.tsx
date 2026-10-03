@@ -46,6 +46,7 @@ import { useMode } from '../modes';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import { deriveMatchReasons } from '../lib/matchReasons';
+import { invalidateJobs } from '../lib/queryClient';
 import { type DistanceFilterMiles } from '../lib/discoveryFilter';
 import { readDistanceFilter } from '../lib/discoveryFilterStorage';
 import { fetchWorkerServices } from '../lib/services';
@@ -437,6 +438,8 @@ export function JobDetailScreen() {
       amountCents,
       message: pitch,
     });
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
 
     if (error) {
       const msg =
@@ -513,6 +516,8 @@ export function JobDetailScreen() {
     if (!user || !activeBid || withdrawing) return;
     setWithdrawing(true);
     const { error } = await withdrawOffer(activeBid.id);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     setWithdrawing(false);
     setConfirmWithdrawVisible(false);
     if (error) {
@@ -533,6 +538,8 @@ export function JobDetailScreen() {
     respondingRef.current = true;
     setResponding('accept');
     const { data: assignedJobId, error } = await acceptOffer(activeBid.id);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     respondingRef.current = false;
     setResponding(null);
     setConfirmResponse(null);
@@ -560,6 +567,8 @@ export function JobDetailScreen() {
     respondingRef.current = true;
     setResponding('decline');
     const { error } = await declineOffer(activeBid.id);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     respondingRef.current = false;
     setResponding(null);
     setConfirmResponse(null);

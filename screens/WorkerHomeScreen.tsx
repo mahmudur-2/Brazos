@@ -152,7 +152,8 @@ export function WorkerHomeScreen() {
     openDisputeJobIds,
     reviewedJobIds,
     names,
-    refresh: refreshMyJobs,
+    // F13: the cached hub — read on focus only when stale (own mutations invalidate it).
+    refreshIfStale: refreshMyJobs,
   } = useMyJobsHub();
   useFocusEffect(
     useCallback(() => {

@@ -17,6 +17,7 @@ import { Card } from './Card';
 import { StarRating } from './StarRating';
 import { TextField } from './TextField';
 import { alertAsync } from '../lib/dialog';
+import { invalidateJobs } from '../lib/queryClient';
 import { userMessage } from '../lib/errorMessage';
 import { Sentry } from '../lib/observability/sentry';
 import {
@@ -278,6 +279,8 @@ export function ReviewSection({
       photos: submittedPhotos,
       wouldAgain,
     });
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     if (!error) {
       uploadsCommittedRef.current = true;
       const committed = new Set(submittedPhotos);

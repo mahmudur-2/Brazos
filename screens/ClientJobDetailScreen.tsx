@@ -46,6 +46,7 @@ import { useJobOffers } from '../hooks/useJobOffers';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { useFocusedPoll } from '../hooks/useFocusedPoll';
 import { fetchProfileById, type Profile } from '../lib/profiles';
+import { invalidateJobs } from '../lib/queryClient';
 import {
   canOfferJobFunding,
   fetchJobPaymentState,
@@ -329,6 +330,8 @@ export function ClientJobDetailScreen() {
     if (!ok) return;
     setStoppingSeries(true);
     const { data, error: stopError } = await stopJobSeries(series.id);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     if (!screenMountedRef.current) return;
     setStoppingSeries(false);
     if (stopError) {
@@ -618,6 +621,8 @@ export function ClientJobDetailScreen() {
     acceptingRef.current = true;
     setAcceptingId(bid.id);
     const { error } = await acceptOffer(bid.id);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     acceptingRef.current = false;
     if (!screenMountedRef.current) return;
     setAcceptingId(null);

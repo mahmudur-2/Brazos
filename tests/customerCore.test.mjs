@@ -106,10 +106,16 @@ test('My Jobs exposes recovery and a real Post Job route without dropping worker
   // Fix run E7: the retry reads the one shared word.
   assert.match(hub, /STATE_COPY\.retry/);
   assert.match(hub, /RefreshControl/);
-  assert.match(hubHook, /runId !== runRef\.current/);
-  assert.match(hubHook, /if \(!postedRes\.error\) setPosted/);
-  assert.match(hubHook, /if \(!workingRes\.error\) setWorking/);
-  assert.match(hubHook, /if \(!bidsRes\.error\) setPendingBids/);
+  // F13: the hub is one cached query per account. No late answer wins — React
+  // Query runs one read per key at a time (a forced refresh cancels the one in
+  // flight; a focus refresh joins it) — and one failed source keeps its old
+  // rows: each failure is named, and the merge keeps that field's last good
+  // value (lib/queryKeys.ts mergeKeepOnError, executed in tests/fixRunF.test.mjs).
+  assert.match(hubHook, /useQuery\(\{\s*queryKey: queryKeys\.myJobsHub\(userId \?\? 'signed-out'\),/);
+  assert.match(hubHook, /if \(postedRes\.error\) failed\.add\('posted'\);/);
+  assert.match(hubHook, /if \(workingRes\.error\) failed\.add\('working'\);/);
+  assert.match(hubHook, /if \(bidsRes\.error\) failed\.add\('pendingBids'\);/);
+  assert.match(hubHook, /return mergeKeepOnError\(\s*previous,/);
 });
 
 test('Customer job detail keeps evidence and honest lifecycle recovery states', async () => {

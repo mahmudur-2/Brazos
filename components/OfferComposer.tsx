@@ -6,6 +6,7 @@ import { Card } from './Card';
 import { Chip } from './Chip';
 import { TextField } from './TextField';
 import { alertAsync } from '../lib/dialog';
+import { invalidateJobs } from '../lib/queryClient';
 import { userMessage } from '../lib/errorMessage';
 import { trackIntent } from '../lib/observability/analytics';
 import {
@@ -278,6 +279,8 @@ export function OfferComposer({
           // chips selected this is exactly message.trim(), as it always was.
           message: composeOfferMessage(message, availabilityLine(startChoice, duration)),
         });
+        // F13: an own mutation — the cached hub and feed are out of date.
+        invalidateJobs();
         if (error || !offerId) {
           const msg =
             error?.code === '23505'
@@ -296,6 +299,8 @@ export function OfferComposer({
         onSubmitted(offerId, amountCents);
       } else {
         const { data: newOfferId, error } = await counterOffer(context.offer.id, amountCents);
+        // F13: an own mutation — the cached hub and feed are out of date.
+        invalidateJobs();
         if (error || !newOfferId) {
           // The cap is enforced server-side, so a client whose count was stale
           // (a counter sent from another device, a chain loaded a revision ago)

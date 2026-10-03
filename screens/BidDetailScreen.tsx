@@ -11,6 +11,7 @@ import { StatusPill } from '../ui/primitives/StatusPill';
 import { useAuth } from '../hooks/useAuth';
 import { useJobOffers } from '../hooks/useJobOffers';
 import { alertAsync } from '../lib/dialog';
+import { invalidateJobs } from '../lib/queryClient';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentsMode } from '../lib/adapters/payments';
@@ -140,6 +141,8 @@ export function BidDetailScreen() {
     actingRef.current = true;
     setActing(true);
     const { data: jobId, error: acceptError } = await acceptOffer(offer.id);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     if (acceptError || !jobId) {
       actingRef.current = false;
       setActing(false);
@@ -176,6 +179,8 @@ export function BidDetailScreen() {
     actingRef.current = true;
     setActing(true);
     const { error: declineError } = await declineOffer(offer.id);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     actingRef.current = false;
     setActing(false);
     setConfirming(null);

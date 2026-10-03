@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
+import { invalidateJobs } from '../lib/queryClient';
 import { deleteJob } from '../lib/jobs';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
@@ -123,6 +124,8 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
   async function confirmDelete() {
     setDeleting(true);
     const { error } = await deleteJob(jobId);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
     setDeleting(false);
     setDeleteDialogVisible(false);
 

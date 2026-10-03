@@ -454,7 +454,9 @@ export function HomeScreen() {
     names,
     loading: myJobsLoading,
     error: myJobsError,
-    refresh: refreshMyJobs,
+    // F13: the cached hub — a focus reads only when it is stale or last failed,
+    // and every own mutation (approving, paying, reviewing) invalidates it.
+    refreshIfStale: refreshMyJobs,
   } = useMyJobsHub();
 
   // Same refresh-on-focus the hub does: coming back from approving, paying or
