@@ -424,7 +424,9 @@ test('[static] F13: one client, provided inside AuthProvider around the launch g
   assert.match(app, /<AuthProvider>\s*<QueryClientProvider client=\{queryClient\}>\s*<QueryAuthBridge \/>\s*<LaunchGate>/);
   assert.match(app, /if \(cacheBelongsToSomeoneElse\(previous\.current, userId\)\) queryClient\.clear\(\);/);
   const client = strip(read('lib/queryClient.ts'));
-  assert.match(client, /staleTime: 30_000,\s*gcTime: 10 \* 60_000,\s*retry: 1,/);
+  assert.match(client, /staleTime: 30_000,\s*gcTime: 10 \* 60_000,\s*retry: 1,\s*networkMode: 'always',/);
+  // A read is never paused on NetInfo's word: a wrong "unreachable" must not hold a loader forever.
+  assert.doesNotMatch(client, /networkMode: '(online|offlineFirst)'/);
   assert.match(client, /AppState\.addEventListener\('change', \(state\) => handleFocus\(state === 'active'\)\)/);
   assert.match(client, /onlineManager\.setEventListener\(\(setOnline\) => subscribeOnline\(setOnline\)\)/);
   // No persistence this run: the hub carries names and payment state.

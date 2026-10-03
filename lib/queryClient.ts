@@ -20,6 +20,15 @@ import { queryKeys } from './queryKeys';
  * plain device storage is not where that belongs (the persist packages stay
  * installed and unimported). App.tsx empties the cache when the account
  * changes (lib/queryKeys.ts cacheBelongsToSomeoneElse).
+ *
+ * networkMode 'always' (review fix): a read is ATTEMPTED whatever NetInfo
+ * says, exactly as every screen read before the cache. React Query's default
+ * ('online') pauses a query while onlineManager says offline, and NetInfo's
+ * `isInternetReachable` can be wrongly false (its reachability probe blocked,
+ * a captive network) — a first read paused that way never ran, and the screen
+ * sat on its loader for as long as the false reading lasted. A truly offline
+ * read now fails into the screen's own error state (B6), and coming back
+ * online still refetches what is stale.
  */
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,6 +36,7 @@ export const queryClient = new QueryClient({
       staleTime: 30_000,
       gcTime: 10 * 60_000,
       retry: 1,
+      networkMode: 'always',
     },
   },
 });
