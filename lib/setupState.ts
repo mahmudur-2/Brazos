@@ -26,6 +26,23 @@ export type SetupRecord = {
 /** Matches the reference screen's pre-selected card. */
 export const DEFAULT_LANDING: LandingPreference = 'hire';
 
+/**
+ * FIX-RUN B16 — whether Setup still owes, from this device's record and the
+ * server's one durable trace of it. Acceptance of the legal documents is
+ * recorded only from Setup or the re-prompt gate, so ANY acceptance row means
+ * Setup was finished once — on this phone or another, before a reinstall.
+ * Pure. The caller treats a failed acceptance read as "none" (Setup shows),
+ * the safe direction this module always fails in.
+ */
+export function setupStateFrom(
+  local: SetupRecord | null,
+  hasAnyAcceptance: boolean
+): { completed: boolean; landing: LandingPreference; restored: boolean } {
+  if (local?.completed) return { completed: true, landing: local.landing, restored: false };
+  if (hasAnyAcceptance) return { completed: true, landing: DEFAULT_LANDING, restored: true };
+  return { completed: false, landing: DEFAULT_LANDING, restored: false };
+}
+
 export function isLandingPreference(value: unknown): value is LandingPreference {
   return value === 'hire' || value === 'work';
 }

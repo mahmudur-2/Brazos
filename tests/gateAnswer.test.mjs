@@ -265,7 +265,15 @@ test('useSetupStatus: the render in which a user first appears already says load
     ],
     ["import { deriveGateAnswer } from '../lib/gateAnswer';", `import { deriveGateAnswer } from '${helperUrl}';`],
     ["import { useAuth } from './useAuth';", 'const useAuth = () => ({ user: globalThis.__gateHarness.user });'],
-    ["import { readSetupRecord } from '../lib/setupStorage';", 'const readSetupRecord = (id) => globalThis.__gateHarness.readSetup(id);'],
+    [
+      "import { readSetupRecord, writeSetupRecord } from '../lib/setupStorage';",
+      'const readSetupRecord = (id) => globalThis.__gateHarness.readSetup(id); const writeSetupRecord = async () => ({ error: null });',
+    ],
+    // B16: no server trace in this harness unless a test gives one.
+    [
+      "import { hasAnyLegalAcceptance } from '../lib/legal';",
+      'const hasAnyLegalAcceptance = (id) => (globalThis.__gateHarness.hasAcceptance ?? (async () => false))(id);',
+    ],
   ];
   for (const [from, to] of replacements) {
     assert.ok(js.includes(from), `expected the runtime import: ${from}`);

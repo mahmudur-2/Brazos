@@ -67,8 +67,12 @@ type StripeModule = {
     paymentIntentClientSecret?: string;
     /** Idea 20: the sheet in setup mode — a card saved for later, nothing charged. */
     setupIntentClientSecret?: string;
+    /** B16: where a bank's 3-D Secure page sends the person back to. */
+    returnURL?: string;
   }) => Promise<{ error?: SheetError }>;
   presentPaymentSheet: () => Promise<{ error?: SheetError }>;
+  /** B16: hands a redirect back to the sheet. Optional — older binaries may lack it. */
+  handleURLCallback?: (url: string) => Promise<boolean>;
 };
 
 function load(): StripeModule | null {
@@ -94,6 +98,26 @@ const stripe: StripeModule | null = Platform.OS === 'web' ? null : load();
 export const STRIPE_MERCHANT_IDENTIFIER = 'merchant.app.brazos.mobile';
 /** What the payment sheet calls the business (D17 casing). */
 export const STRIPE_MERCHANT_DISPLAY_NAME = 'Brazos';
+/**
+ * FIX-RUN B16: the app-scheme URL a 3-D Secure (or other bank redirect) page
+ * returns to (`scheme: 'brazos'`, app.config.ts). Without it the sheet cannot
+ * come back from a card that asks the bank to confirm.
+ */
+export const STRIPE_RETURN_URL = 'brazos://stripe-redirect';
+
+/**
+ * B16: a `brazos://stripe-redirect` link goes back to the sheet that opened
+ * it. True when the vendor took it; false for any other URL, or a binary
+ * without the callback, so App.tsx's link handler carries on as before.
+ */
+export async function handleStripeUrl(url: string): Promise<boolean> {
+  if (!url.startsWith(STRIPE_RETURN_URL) || !stripe?.handleURLCallback) return false;
+  try {
+    return await stripe.handleURLCallback(url);
+  } catch {
+    return false;
+  }
+}
 /** D4's one honest sentence for a binary without the module or a build without the key. */
 export const STRIPE_UNAVAILABLE_MESSAGE =
   'This version of Brazos can’t take card payments yet. Update the app to protect a payment.';
@@ -405,6 +429,7 @@ export async function presentCardSetupSheet(session: {
       customerId: session.customerId,
       customerEphemeralKeySecret: session.ephemeralKeySecret,
       setupIntentClientSecret: session.setupIntentClientSecret,
+      returnURL: STRIPE_RETURN_URL,
     });
     const first = initialised.error ?? (await stripe.presentPaymentSheet()).error;
     if (first) {
@@ -461,6 +486,7 @@ export async function presentCheckoutSheet(session: CheckoutSession): Promise<Sh
       customerId: session.customerId,
       customerEphemeralKeySecret: session.ephemeralKeySecret,
       paymentIntentClientSecret: session.clientSecret,
+      returnURL: STRIPE_RETURN_URL,
     });
     if (initialisedSheet.error) {
       const classified = classifySheetError(initialisedSheet.error);

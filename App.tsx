@@ -12,6 +12,7 @@ import { useLiveJobCard } from './hooks/useLiveJobCard';
 import { useThemeColors } from './hooks/useThemeColors';
 import { configurePushHandling } from './lib/pushNotifications';
 import { handleAppLink } from './lib/navigation';
+import { handleStripeUrl, STRIPE_RETURN_URL } from './lib/payments/stripe';
 import {
   beginRecovery,
   isRecoveryPending,
@@ -107,6 +108,11 @@ function RootNavigator() {
     let active = true;
     const dispatch = (url: string | null) => {
       if (!active || !url) return;
+      // FIX-RUN B16: a bank's 3-D Secure page returning to the payment sheet.
+      if (url.startsWith(STRIPE_RETURN_URL)) {
+        void handleStripeUrl(url);
+        return;
+      }
       // 2026-09-26 (the refresh, audit M-21): the reset email's link signs in
       // with its own recovery session, then the new-password screen opens.
       const recovery = parseRecoveryLink(url);

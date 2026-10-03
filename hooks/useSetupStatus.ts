@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { deriveGateAnswer } from '../lib/gateAnswer';
 import type { GateAnswer } from '../lib/gateAnswer';
-import { readSetupRecord } from '../lib/setupStorage';
-import { DEFAULT_LANDING, type LandingPreference } from '../lib/setupState';
+import { readSetupRecord, writeSetupRecord } from '../lib/setupStorage';
+import { hasAnyLegalAcceptance } from '../lib/legal';
+import { DEFAULT_LANDING, setupStateFrom, type LandingPreference } from '../lib/setupState';
 import { useAuth } from './useAuth';
 
 type SetupState = 'loading' | 'complete' | 'incomplete';
@@ -51,11 +52,18 @@ export function useSetupStatus() {
     let active = true;
     setState('loading');
 
-    readSetupRecord(userId).then((record) => {
+    void (async () => {
+      const record = await readSetupRecord(userId);
       if (!active) return;
-      setState(record?.completed ? 'complete' : 'incomplete');
-      setLanding(record?.landing ?? DEFAULT_LANDING);
-    });
+      // B16: no record on this device (a reinstall, a second phone) — the
+      // server's acceptance row says whether Setup was ever finished.
+      const accepted = record?.completed ? false : await hasAnyLegalAcceptance(userId);
+      if (!active) return;
+      const next = setupStateFrom(record, accepted);
+      if (next.restored) void writeSetupRecord(userId, { completed: true, landing: next.landing });
+      setState(next.completed ? 'complete' : 'incomplete');
+      setLanding(next.landing);
+    })();
 
     return () => {
       active = false;

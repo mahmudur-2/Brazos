@@ -87,6 +87,24 @@ export async function fetchLegalStatus(
 }
 
 /**
+ * FIX-RUN B16: whether this user has EVER accepted the legal documents (any
+ * version). Setup's server-side trace — see lib/setupState.ts setupStateFrom.
+ * A failed read answers false: Setup shows, the safe direction.
+ */
+export async function hasAnyLegalAcceptance(userId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('legal_acceptances')
+      .select('document')
+      .eq('user_id', userId)
+      .limit(1);
+    return !error && (data ?? []).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Records acceptance of every current document in one call.
  *
  * Goes through an RPC rather than a plain insert so the accepted_at timestamp

@@ -26,8 +26,27 @@ const read = (path) => readFileSync(join(root, path), 'utf8').replace(/\r\n/g, '
 const toDataUrl = (js) =>
   'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
 
-const { DEFAULT_LANDING, isLandingPreference, parseSetupRecord, serializeSetupRecord, setupStorageKey } =
+const { DEFAULT_LANDING, isLandingPreference, parseSetupRecord, serializeSetupRecord, setupStorageKey, setupStateFrom } =
   await import(toDataUrl(stripTypeScriptTypes(read('lib/setupState.ts'), { mode: 'strip' })));
+
+// FIX-RUN B16 — Setup is no longer remembered on the device alone.
+test('B16 · setupStateFrom: the device record first, then any server acceptance, else Setup', () => {
+  assert.deepEqual(setupStateFrom({ completed: true, landing: 'work' }, false), { completed: true, landing: 'work', restored: false });
+  assert.deepEqual(setupStateFrom({ completed: true, landing: 'work' }, true), { completed: true, landing: 'work', restored: false });
+  // A reinstall or a second phone: the acceptance row restores completion (and the record is written back).
+  assert.deepEqual(setupStateFrom(null, true), { completed: true, landing: DEFAULT_LANDING, restored: true });
+  // No trace anywhere, or a failed read (answered false): Setup shows — the safe direction.
+  assert.deepEqual(setupStateFrom(null, false), { completed: false, landing: DEFAULT_LANDING, restored: false });
+});
+
+test('B16 · useSetupStatus asks the server only without a device record, and writes the restored record back', () => {
+  const src = read('hooks/useSetupStatus.ts');
+  assert.match(src, /const accepted = record\?\.completed \? false : await hasAnyLegalAcceptance\(userId\);/);
+  assert.match(src, /if \(next\.restored\) void writeSetupRecord\(userId, \{ completed: true, landing: next\.landing \}\);/);
+  const legal = read('lib/legal/index.ts');
+  assert.match(legal, /\.from\('legal_acceptances'\)\s*\.select\('document'\)\s*\.eq\('user_id', userId\)\s*\.limit\(1\);/);
+  assert.match(legal, /return !error && \(data \?\? \[\]\)\.length > 0;/);
+});
 
 const app = read('App.tsx');
 const setup = read('screens/SetupScreen.tsx');

@@ -37,6 +37,9 @@ async function signOutLocally(): Promise<void> {
   }
 }
 
+/** B16: how often a foregrounded app re-asks whether this account was banned. */
+const BAN_RECHECK_MS = 10 * 60 * 1000;
+
 type AuthResult = { error: AuthError | null };
 
 type AuthContextValue = {
@@ -120,8 +123,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const userId = session?.user?.id;
     if (!userId) return;
     let active = true;
+    let lastCheck = 0;
 
-    (async () => {
+    const check = async () => {
+      lastCheck = Date.now();
       const { data: banned } = await fetchCurrentUserBanned(userId);
 
       if (!active) return;
@@ -129,10 +134,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setBannedNotice(true);
         await supabase.auth.signOut();
       }
-    })();
+    };
+    void check();
+
+    // FIX-RUN B16: a ban that lands while the app stays signed in is enforced
+    // the next time it comes to the front — at most once per BAN_RECHECK_MS.
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && Date.now() - lastCheck >= BAN_RECHECK_MS) void check();
+    });
 
     return () => {
       active = false;
+      subscription.remove();
     };
   }, [session?.user?.id]);
 

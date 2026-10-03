@@ -52,6 +52,7 @@ import {
 import { offerJobTarget } from '../lib/offerNavigation';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { askOpenSettings } from '../lib/permissionPrompt';
+import { isTombstonedName } from '../lib/rebook';
 import { userMessage } from '../lib/errorMessage';
 import {
   ACTIVE_JOB_STATUSES,
@@ -788,7 +789,11 @@ export function ChatScreen() {
     };
   }, [user, counterpartyId]);
 
-  const isBlocked = relation.blocking || relation.blockedBy;
+  // FIX-RUN B16: a deleted account (phase67's tombstone name) can't receive a
+  // message — the composer gives way to a notice rather than a send that fails.
+  const counterpartyDeleted = isTombstonedName(counterparty?.full_name);
+  // Whether this user may write here at all: a block either way, or nobody left to write to.
+  const isBlocked = relation.blocking || relation.blockedBy || counterpartyDeleted;
 
   // "Hire Again" only ever shows to the client side of a past completed job —
   // a worker never sees it for their client. It used to also require a
@@ -1997,9 +2002,11 @@ export function ChatScreen() {
             <View style={styles.blockedNotice}>
               <Ionicons name="ban-outline" size={18} color={colors.danger} />
               <Text style={styles.blockedText}>
-                {relation.blocking
-                  ? "You've blocked this person. Unblock them from the ⋯ menu above to start talking again."
-                  : "You can't reply to this conversation."}
+                {counterpartyDeleted
+                  ? 'This account was deleted. You can’t send messages here.'
+                  : relation.blocking
+                    ? "You've blocked this person. Unblock them from the ⋯ menu above to start talking again."
+                    : "You can't reply to this conversation."}
               </Text>
             </View>
           ) : messagingUnlocked !== true ? (
