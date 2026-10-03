@@ -689,7 +689,7 @@ export function WorkerHomeScreen() {
                       minimumFontScale={0.87}
                       maxFontSizeMultiplier={1.2}
                     >
-                      {potential.count === 0 ? '$0' : formatBudget(potential.cents)}
+                      {potential.count === 0 ? formatBudget(0) : formatBudget(potential.cents)}
                     </Text>
                     <Text style={styles.earningsCaption}>
                       {`across ${potential.count} ${potential.count === 1 ? 'job' : 'jobs'}`}
