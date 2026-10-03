@@ -153,3 +153,42 @@ test('A19 · the 90-day prune of payment_events payloads exists, is an UPDATE, a
   assert.match(sql, /if not public\.pg_function_present\('cron', 'schedule'\) then/);
   assert.match(sql, /comment on table public\.payment_events is\s*'[^']*prune_payment_event_payloads\(\)/, 'the table comment names the function');
 });
+
+test('A15 · a declined saved card never retries into the cached decline, and the decline push stays quiet while the app is in front', () => {
+  // The key: tests/hireFromPush.test.mjs pins the rotation on latest_charge. Here, the app side.
+  const push = read('lib/pushNotifications.ts');
+  assert.match(push, /export function isQuietInForeground\(data: unknown\): boolean \{\s*const type = data && typeof data === 'object' \? \(data as \{ type\?: unknown \}\)\.type : undefined;\s*return type === 'payment_declined';\s*\}/);
+  assert.match(flat(push), /handleNotification: async \(notification\) => \{ (?:\/\/[^]*? )?const quiet = isQuietInForeground\(notification\.request\.content\.data\); return \{ (?:\/\/[^]*? )?shouldShowBanner: !quiet, shouldShowList: true, shouldPlaySound: !quiet, shouldSetBadge: false, \}; \},/);
+  // send-push puts the outbox type in data.type — the key the handler reads — and the decline's
+  // outbox type is payment_declined.
+  assert.match(read('supabase/functions/send-push/index.ts'), /data: \{ \.\.\.row\.data, type: row\.type, outboxId: row\.outbox_id \},/);
+  assert.match(read('supabase/migrations/20260930001200_hire_from_push.sql'), /'payment_declined',/);
+});
+
+test('A18 · deleting the account removes the saved cards and keeps the payout account open for money still owed (pick A18a)', () => {
+  const screen = code('screens/DeleteAccountScreen.tsx');
+  assert.match(screen, /import \{ listSavedCards, removeSavedCard \} from '\.\.\/lib\/paymentMethods';/);
+  // Before the row goes, on the card path, every saved card is detached through payment-methods —
+  // best effort, never a reason to keep the account alive.
+  assert.match(screen, /setDeleting\(true\); if \(paymentsMode === 'stripe'\) \{ const \{ data: cards \} = await listSavedCards\(\); await Promise\.all\(cards\.map\(\(card\) => removeSavedCard\(card\.id\)\.catch\(\(\) => null\)\)\); \} const \{ blocked, error \} = await deleteMyAccount\(\);/);
+  // The copy says both halves.
+  assert.match(screen, /Any card you saved for one-tap hiring\. It is removed from the payment provider before the account goes\./);
+  assert.match(screen, /Your payout account stays open until every payment still owed to you has reached it/);
+  // And the server keeps it: delete_my_account() never touches payment_accounts, and the tombstone
+  // profile keeps the cascade from firing.
+  const del = read('supabase/migrations/20260901000000_baseline.sql');
+  const body = del.slice(del.indexOf('CREATE OR REPLACE FUNCTION "public"."delete_my_account"()'), del.indexOf('ALTER FUNCTION "public"."delete_my_account"()'));
+  assert.ok(body.length > 0);
+  assert.doesNotMatch(body, /payment_accounts/, 'the payout account is not deleted with the account');
+  assert.match(read('supabase/migrations/20260905000000_stripe_foundation.sql'), /user_id uuid primary key references public\.profiles \(id\) on delete cascade,/);
+  assert.match(body, /tombstone/i, 'the profile row stays as a tombstone');
+});
+
+test('A20 · the running-late day is the market\'s (America/New_York), as the server decides it', () => {
+  const late = read('lib/runningLate.ts');
+  assert.match(late, /export const MARKET_TIME_ZONE = 'America\/New_York';/);
+  assert.match(late, /timeZone: MARKET_TIME_ZONE,/);
+  assert.match(late, /export function isLateDay\(scheduledDate: string \| null \| undefined, now: Date = new Date\(\)\): boolean \{\s*if \(!scheduledDate\) return true;\s*return scheduledDate === marketDate\(now\);\s*\}/);
+  // The server's clock, for the record.
+  assert.match(read('supabase/migrations/20260930000700_running_late.sql'), /America\/New_York/);
+});

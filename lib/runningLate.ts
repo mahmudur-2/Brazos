@@ -23,15 +23,42 @@ export function lateShiftMinutes(job: Lateable): number {
   return (LATE_CHOICES as readonly number[]).includes(minutes) ? minutes : 0;
 }
 
+/** The market's clock. report_running_late() and the reminders read `America/New_York`; so does the app. */
+export const MARKET_TIME_ZONE = 'America/New_York';
+
+/**
+ * A20 (2026-10-03): today's calendar date IN THE MARKET'S TIME ZONE, "2026-09-30". The server
+ * decides "the job's own day" in America/New_York; a phone on another clock (a worker travelling,
+ * a device set to UTC) must agree with it, or the chips show on a day the server refuses. Falls
+ * back to the device's local date only where Intl cannot answer.
+ */
+export function marketDate(now: Date = new Date()): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: MARKET_TIME_ZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(now);
+    const part = (type: string) => parts.find((p) => p.type === type)?.value;
+    const year = part('year');
+    const month = part('month');
+    const day = part('day');
+    if (year && month && day) return `${year}-${month}-${day}`;
+  } catch {
+    // Intl without time-zone data: the local date below.
+  }
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
 /**
  * Whether the chips may show: running late is said on the job's own day — or any day, for a job
- * with no day set. `today` is the device's local calendar date ("2026-09-30"); the server refuses
- * the same way against the market's (report_running_late()).
+ * with no day set. The day is the market's (marketDate), exactly as the server refuses it
+ * (report_running_late()).
  */
 export function isLateDay(scheduledDate: string | null | undefined, now: Date = new Date()): boolean {
   if (!scheduledDate) return true;
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  return scheduledDate === today;
+  return scheduledDate === marketDate(now);
 }
 
 /** A clock time from minutes after midnight: "6 PM", "6:20 PM", "12:20 AM" (wrapping past midnight). */

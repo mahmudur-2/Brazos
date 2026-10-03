@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { LATE_CHOICES, clockLabel, isLateDay, lateShiftMinutes, movedWindow } from '../lib/runningLate.ts';
+import { LATE_CHOICES, MARKET_TIME_ZONE, clockLabel, isLateDay, lateShiftMinutes, marketDate, movedWindow } from '../lib/runningLate.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
@@ -27,6 +27,17 @@ test('[executed] the window moves by the last tap, and only until the worker arr
   assert.equal(isLateDay('2026-10-01', now), false, 'tomorrow\'s job: not yet');
   assert.equal(isLateDay('2026-09-29', now), false);
   assert.equal(isLateDay(null, now), true, 'a flexible day');
+  // A20 (2026-10-03): the day is the MARKET's (America/New_York), as the server decides it — not
+  // the phone's. 02:00 UTC on 1 October is still 30 September in New York (22:00 EDT); 03:59 UTC
+  // on 1 October still is (23:59 EDT); 04:00 UTC is 1 October.
+  assert.equal(marketDate(new Date('2026-10-01T02:00:00Z')), '2026-09-30');
+  assert.equal(marketDate(new Date('2026-10-01T03:59:00Z')), '2026-09-30');
+  assert.equal(marketDate(new Date('2026-10-01T04:00:00Z')), '2026-10-01');
+  assert.equal(isLateDay('2026-09-30', new Date('2026-10-01T02:00:00Z')), true, 'late evening in New York is still the job\'s day');
+  assert.equal(isLateDay('2026-10-01', new Date('2026-10-01T02:00:00Z')), false, 'whatever the phone\'s own date says');
+  assert.equal(MARKET_TIME_ZONE, 'America/New_York');
+  // In January the offset is EST: 04:30 UTC on 2 January is 23:30 on 1 January in New York.
+  assert.equal(marketDate(new Date('2027-01-02T04:30:00Z')), '2027-01-01');
   assert.equal(clockLabel(18 * 60 + 20), '6:20 PM');
   assert.equal(clockLabel(6 * 60), '6 AM');
   assert.equal(clockLabel(24 * 60 + 20), '12:20 AM', 'past midnight wraps');
