@@ -616,13 +616,21 @@ test('D5: the toggle track is state-blind in dark, and only the knob carries sta
     /isDark/,
     'nothing may gate the gold face on the theme'
   );
-  assert.match(knobColor[1], /isDark[\s\S]*?palette\.onPrimary[\s\S]*?palette\.white/);
+  // Fix run D6: the dark OFF face is the Lux muted (`textMuted`), visible on
+  // the dark track — `onPrimary` went near-black in the 09-26 refresh.
+  assert.match(knobColor[1], /isDark[\s\S]*?palette\.textMuted[\s\S]*?palette\.white/);
+  assert.doesNotMatch(knobColor[1], /palette\.onPrimary/, 'the near-black onPrimary disc vanished on the dark track');
   assert.match(toggle, /const knobBorder = value \? palette\.gold : 'transparent';/);
   // The halo stays DARK-ONLY and deliberately so: a glow is an atmosphere the
   // dark ground has and the cream one does not.
   assert.match(toggle, /const knobGlow = isDark && value \? glow\.halo\(withAlpha\(palette\.gold, 0\.55\)\) : null;/);
   assert.match(toggle, /toValue: value \? 1 : 0/);
   assert.match(toggle, /outputRange: \[0, TRAVEL\]/);
+  // Fix run D6 (smooth): the knob springs on the native driver, and Reduce
+  // Motion lands it at once rather than animating.
+  assert.match(toggle, /Animated\.spring\(position, \{[\s\S]*?stiffness: 320,\s*damping: 26,[\s\S]*?useNativeDriver: USE_NATIVE_DRIVER,/);
+  assert.match(toggle, /if \(reduceMotion !== false\) \{\s*position\.setValue\(value \? 1 : 0\);/);
+  assert.doesNotMatch(toggle, /Animated\.timing\(position/, 'the knob no longer slides on a fixed 160 ms timing');
 
   // GOLD IS LINE-WORK. The knob's face is a TINT and its ring is the metal, so
   // tests/goldOnForest.test.mjs's "no gold fill" rule holds without an

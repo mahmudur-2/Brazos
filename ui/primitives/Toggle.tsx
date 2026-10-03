@@ -4,16 +4,17 @@ import { glow, metricStyles, radius, useThemeColors, withAlpha } from '../../lib
 import { useOverrideNumber } from '../../lib/designOverrides';
 import { USE_NATIVE_DRIVER } from '../../lib/motion';
 import { usePressFeedback } from '../../hooks/usePressFeedback';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 /**
  * The one toggle. In dark: a NEUTRAL track that never changes colour, and a
- * knob that carries the whole state — gold and glowing when ON, cream when
- * OFF, sliding left to right as normal. Light keeps its Heritage TRACK
+ * knob that carries the whole state — gold and glowing when ON, the Lux muted
+ * grey-green when OFF, sliding left to right as normal. Light keeps its Heritage TRACK
  * (emerald when ON, border when OFF) and, since 2026-08-23, dark's KNOB: the
  * ON knob is the gold ring over the gold tint in both palettes, so the state
  * colour a worker learns in one theme is the state colour in the other. The
- * OFF knob stays each palette's own quiet disc (cream in dark, white in
- * light), and the halo stays dark-only — a glow is an atmosphere the dark
+ * OFF knob stays each palette's own quiet disc (the Lux muted in dark, white
+ * in light), and the halo stays dark-only — a glow is an atmosphere the dark
  * ground has and the cream one does not.
  *
  * emerald D5 REVERSES THE PREVIOUS RUN'S D1 ENTIRELY. That pass had made the
@@ -70,6 +71,7 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
   const { palette, isDark } = useThemeColors();
   const position = useRef(new Animated.Value(value ? 1 : 0)).current;
   const press = usePressFeedback();
+  const reduceMotion = useReducedMotion();
 
   // RUN S2 (C8) — the drawn geometry dials; TRAVEL derives from them so the
   // knob still lands exactly inside the rim at any size. Colours stay D5's.
@@ -78,13 +80,25 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
   const knobSize = useOverrideNumber('toggle.knobSize') ?? KNOB;
   const TRAVEL = trackWidth - knobSize - INSET * 2;
 
+  // Fix run D6: the knob SPRINGS to its side (the press spring's 320 / 26, a
+  // hair of overshoot that reads as a physical throw) on the native driver,
+  // so the slide never waits on the JS thread. Under Reduce Motion it lands
+  // at once — a state change, not an animation.
   useEffect(() => {
-    Animated.timing(position, {
+    if (reduceMotion !== false) {
+      position.setValue(value ? 1 : 0);
+      return;
+    }
+    const spring = Animated.spring(position, {
       toValue: value ? 1 : 0,
-      duration: 160,
+      stiffness: 320,
+      damping: 26,
+      mass: 1,
       useNativeDriver: USE_NATIVE_DRIVER,
-    }).start();
-  }, [position, value]);
+    });
+    spring.start();
+    return () => spring.stop();
+  }, [position, value, reduceMotion]);
 
   // THE TRACK IS STATE-BLIND IN DARK (D5). Deliberately written without a
   // `value` term so it is not merely the same colour today but structurally
@@ -100,10 +114,13 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
   // `value` branches FIRST, deliberately: the ON face is one colour for the
   // whole app, and only the OFF face is a per-palette read. Written the other
   // way round (isDark first) the two themes could drift apart again.
+  // Fix run D6: the dark OFF face is `textMuted` (the Lux `.switch i` muted,
+  // lux-notif.html). It was `onPrimary`, which the 09-26 refresh turned
+  // near-black — a dark disc on a dark track, so OFF could not be seen.
   const knobColor = value
     ? withAlpha(palette.gold, 0.92)
     : isDark
-      ? palette.onPrimary
+      ? palette.textMuted
       : palette.white;
   const knobBorder = value ? palette.gold : 'transparent';
   const knobGlow = isDark && value ? glow.halo(withAlpha(palette.gold, 0.55)) : null;
