@@ -391,3 +391,46 @@ test('[static] F8: Discover listens on the iOS WILL events and fades its blocks 
   assert.match(fast, /layout=\{reduced \? undefined : LinearTransition\.duration\(durationMs\)\}/);
   assert.doesNotMatch(fast, /LayoutAnimation\./);
 });
+
+// ---------------------------------------------------------------------------
+// F13 — one cache (React Query), keyed per account, emptied on account change.
+// ---------------------------------------------------------------------------
+const queryRules = await import(new URL('../lib/queryKeys.ts', import.meta.url).href);
+
+test('F13: the cache empties whenever the account changes or signs out — never across accounts', () => {
+  const { cacheBelongsToSomeoneElse } = queryRules;
+  assert.equal(cacheBelongsToSomeoneElse('a', 'a'), false, 'the same account keeps its cache');
+  assert.equal(cacheBelongsToSomeoneElse('a', 'b'), true, 'another account never sees the first one’s rows');
+  assert.equal(cacheBelongsToSomeoneElse('a', null), true, 'signing out empties it');
+  assert.equal(cacheBelongsToSomeoneElse(null, 'b'), true, 'a fresh sign-in starts empty');
+  assert.equal(cacheBelongsToSomeoneElse(null, null), false);
+  // Every per-account key carries the account.
+  assert.deepEqual(queryRules.queryKeys.myJobsHub('u1'), ['myJobsHub', 'u1']);
+  assert.deepEqual(queryRules.queryKeys.unreadNotifications('u1'), ['notifications', 'unread', 'u1']);
+});
+
+test('F13: keep-on-error keeps a failed source’s last good rows, field by field', () => {
+  const { mergeKeepOnError } = queryRules;
+  const previous = { posted: ['p1'], working: ['w1'] };
+  const next = { posted: [], working: ['w2'] };
+  assert.deepEqual(mergeKeepOnError(previous, next, new Set(['posted'])), { posted: ['p1'], working: ['w2'] });
+  assert.deepEqual(mergeKeepOnError(previous, next, new Set()), next, 'nothing failed: the new snapshot wins');
+  assert.deepEqual(mergeKeepOnError(undefined, next, new Set(['posted'])), next, 'no snapshot yet: nothing to keep');
+});
+
+test('[static] F13: one client, provided inside AuthProvider around the launch gate, nothing persisted', () => {
+  const app = strip(read('App.tsx'));
+  assert.match(app, /<AuthProvider>\s*<QueryClientProvider client=\{queryClient\}>\s*<QueryAuthBridge \/>\s*<LaunchGate>/);
+  assert.match(app, /if \(cacheBelongsToSomeoneElse\(previous\.current, userId\)\) queryClient\.clear\(\);/);
+  const client = strip(read('lib/queryClient.ts'));
+  assert.match(client, /staleTime: 30_000,\s*gcTime: 10 \* 60_000,\s*retry: 1,/);
+  assert.match(client, /AppState\.addEventListener\('change', \(state\) => handleFocus\(state === 'active'\)\)/);
+  assert.match(client, /onlineManager\.setEventListener\(\(setOnline\) => subscribeOnline\(setOnline\)\)/);
+  // No persistence this run: the hub carries names and payment state.
+  for (const file of execFileSync('git', ['ls-files', '--', '*.ts', '*.tsx'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean)) {
+    if (file.startsWith('supabase/')) continue;
+    assert.doesNotMatch(strip(read(file)), /query-async-storage-persister|react-query-persist-client/, `${file} persists the cache`);
+  }
+  // The banner and the cache share the one NetInfo subscription.
+  assert.match(strip(read('hooks/useOnline.ts')), /return subscribeOnline\(setOnline\);/);
+});

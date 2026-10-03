@@ -32,11 +32,41 @@ function loadNetInfo(): NetInfoApi | null {
 
 const netInfo = loadNetInfo();
 
+/**
+ * F13 — ONE NetInfo subscription, fanned out: the offline banner and React
+ * Query's onlineManager (lib/queryClient.ts) both listen through here. A later
+ * listener is told the last known answer at once. Without NetInfo nothing is
+ * ever reported, which reads as online.
+ */
+const listeners = new Set<(online: boolean) => void>();
+let lastOnline = true;
+let stopNetInfo: (() => void) | null = null;
+
+export function subscribeOnline(listener: (online: boolean) => void): () => void {
+  if (!netInfo) return () => {};
+  listeners.add(listener);
+  if (stopNetInfo) {
+    listener(lastOnline);
+  } else {
+    stopNetInfo = netInfo.addEventListener((state) => {
+      lastOnline = isOnline(state);
+      for (const each of listeners) each(lastOnline);
+    });
+  }
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0 && stopNetInfo) {
+      stopNetInfo();
+      stopNetInfo = null;
+    }
+  };
+}
+
 export function useOnline(): boolean {
   const [online, setOnline] = useState(true);
   useEffect(() => {
     if (!netInfo) return;
-    return netInfo.addEventListener((state) => setOnline(isOnline(state)));
+    return subscribeOnline(setOnline);
   }, []);
   return online;
 }

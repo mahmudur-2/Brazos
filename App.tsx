@@ -1,10 +1,13 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { ActivityIndicator, Linking, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { setAudioModeAsync } from 'expo-audio';
 import { AuthProvider } from './lib/AuthContext';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './lib/queryClient';
+import { cacheBelongsToSomeoneElse } from './lib/queryKeys';
 import { useAuth } from './hooks/useAuth';
 import { useNotificationModeBridge } from './hooks/useNotificationModeBridge';
 import { usePushNotifications } from './hooks/usePushNotifications';
@@ -242,6 +245,22 @@ function RootNavigator() {
  * It renders once per process. Signing out later returns to Welcome without
  * replaying it; a cold reload in Expo Go is a new process, so it plays again.
  */
+/**
+ * F13 — ONE ACCOUNT'S CACHE. When the signed-in account changes or signs out,
+ * the query cache is emptied before the next paint, so nobody ever sees
+ * another account's rows. (Every per-account key also carries the user id.)
+ */
+function QueryAuthBridge() {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const previous = useRef(userId);
+  useLayoutEffect(() => {
+    if (cacheBelongsToSomeoneElse(previous.current, userId)) queryClient.clear();
+    previous.current = userId;
+  }, [userId]);
+  return null;
+}
+
 function LaunchGate({ children }: PropsWithChildren) {
   const { loading } = useAuth();
   const [complete, setComplete] = useState(false);
@@ -396,6 +415,8 @@ function App() {
     <MotionRoot>
       <SafeAreaProvider>
         <AuthProvider>
+          <QueryClientProvider client={queryClient}>
+          <QueryAuthBridge />
           <LaunchGate>
             {/* Theme resolution sits INSIDE the launch gate deliberately (4D-4):
                 the provider reads the stored preference before the themed tree
@@ -408,6 +429,7 @@ function App() {
               <ThemedNavigation />
             </ThemeProvider>
           </LaunchGate>
+          </QueryClientProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </MotionRoot>
