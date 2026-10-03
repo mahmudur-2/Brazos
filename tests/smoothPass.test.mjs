@@ -239,6 +239,27 @@ test('[static] F12: a choice fades to its colours, and a segment slides, instead
   }
 });
 
+test('[static] F12: a mark arrives on a spring, and a tapped star swells', () => {
+  const chooser = strip(read('components/SelectMark.tsx'));
+  // Under Reduce Motion (and until it is known) the chooser renders exactly the site's own glyph.
+  assert.match(chooser, /if \(!animated\) return <>\{props\.on \? props\.mark : \(props\.off \?\? null\)\}<\/>;/);
+  assert.match(chooser, /if \(!animated\) return <>\{props\.children\}<\/>;/);
+  const fast = strip(read('components/SelectMark.motion120.tsx'));
+  assert.match(fast, /progress\.value = withSpring\(on \? 1 : 0, MARK_SPRING\);/);
+  assert.match(fast, /withSequence\(withSpring\(POP_PEAK, POP_UP_SPRING\), withSpring\(1, POP_DOWN_SPRING\)\)/);
+  const SITES = {
+    'screens/AppearanceScreen.tsx': /<SelectMark\s+on=\{selected\}/,
+    'screens/LegalGateScreen.tsx': /<SelectMark\s+on=\{agreed\}[\s\S]*?off=\{<Ionicons name="square-outline"/,
+    'components/CategoryAccordion.tsx': /<SelectMark\s+on=\{isSelected\}[\s\S]*?off=\{<Ionicons name="square-outline"/,
+    'screens/ApproveOrDisputeScreen.tsx': /<SelectMark\s+on=\{reason === r\}/,
+    'components/StarRating.tsx': /<MarkPop popKey=\{popped\?\.star === star \? popped\.key : 0\}>\{icon\}<\/MarkPop>/,
+  };
+  for (const [path, wear] of Object.entries(SITES)) assert.match(strip(read(path)), wear, `${path} wears the arriving mark`);
+  // The rows keep their roles and states (E4); the Maestro walk still finds the stars by testID.
+  assert.match(strip(read('screens/LegalGateScreen.tsx')), /accessibilityRole="checkbox"/);
+  assert.match(strip(read('components/StarRating.tsx')), /testID=\{`review-star-\$\{star\}`\}/);
+});
+
 test('[executed] F12: a fade to or from nothing keeps its hue (clearAlpha)', async () => {
   const { stripTypeScriptTypes } = await import('node:module');
   const js = stripTypeScriptTypes(read('ui/colorAlpha.ts'), { mode: 'strip' });

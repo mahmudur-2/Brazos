@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { SelectMark } from './SelectMark';
 import { PressScale } from './PressScale';
 import { Ionicons } from '@expo/vector-icons';
 import { GlowTextInput } from '../components/GlowTextInput';
@@ -87,10 +88,11 @@ export function CategoryAccordion({
               >
                 <Ionicons name={c.icon} size={18} color={colors.textMuted} />
                 <Text style={styles.rowLabel}>{c.label}</Text>
-                <Ionicons
-                  name={isSelected ? 'checkbox' : 'square-outline'}
-                  size={20}
-                  color={isSelected ? colors.primary : colors.textSubtle}
+                {/* FIX-RUN F12: the tick arrives over the empty box (components/SelectMark). */}
+                <SelectMark
+                  on={isSelected}
+                  mark={<Ionicons name="checkbox" size={20} color={colors.primary} />}
+                  off={<Ionicons name="square-outline" size={20} color={colors.textSubtle} />}
                 />
               </PressScale>
             );

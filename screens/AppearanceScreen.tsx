@@ -1,4 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SelectMark } from '../components/SelectMark';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
@@ -90,17 +91,21 @@ export function AppearanceScreen() {
                   />
                 </View>
                 <Text style={styles.label}>{OPTION_LABELS[option]}</Text>
-                {selected ? (
-                  <Ionicons
-                    name="checkmark"
-                    size={20}
-                    // `primary` is the deep forest FILL under Prestige, so the
-                    // mark had been drawing itself in a colour one step off
-                    // the card behind it. Dark takes the live-state emerald —
-                    // the same green light's `primary` reads as.
-                    color={isDark ? palette.emerald : palette.primary}
-                  />
-                ) : null}
+                {/* FIX-RUN F12: the check arrives on a short spring (components/SelectMark). */}
+                <SelectMark
+                  on={selected}
+                  mark={
+                    <Ionicons
+                      name="checkmark"
+                      size={20}
+                      // `primary` is the deep forest FILL under Prestige, so the
+                      // mark had been drawing itself in a colour one step off
+                      // the card behind it. Dark takes the live-state emerald —
+                      // the same green light's `primary` reads as.
+                      color={isDark ? palette.emerald : palette.primary}
+                    />
+                  }
+                />
               </Pressable>
             );
           })}

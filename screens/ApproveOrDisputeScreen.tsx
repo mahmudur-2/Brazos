@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SelectMark } from '../components/SelectMark';
 import { RemoteImage } from '../components/RemoteImage';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -416,9 +417,11 @@ export function ApproveOrDisputeScreen() {
                     reason === r && (isDark ? styles.radioActiveDark : styles.radioActive),
                   ]}
                 >
-                  {reason === r ? (
-                    <View style={[styles.radioDot, isDark && styles.radioDotDark]} />
-                  ) : null}
+                  {/* FIX-RUN F12: the dot arrives on a short spring (components/SelectMark). */}
+                  <SelectMark
+                    on={reason === r}
+                    mark={<View style={[styles.radioDot, isDark && styles.radioDotDark]} />}
+                  />
                 </View>
                 <Text style={styles.reasonLabel}>{DISPUTE_REASON_LABELS[r]}</Text>
               </Pressable>

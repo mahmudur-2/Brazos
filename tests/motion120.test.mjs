@@ -1105,6 +1105,15 @@ const SIBLINGS = [
     // SelectionText) and a segmented control's thumb sliding (SelectionThumb): interpolateColor
     // and a spring on the UI thread; the fallback crossfades two layers by opacity on the native
     // driver. Worklets alone.
+    // 2026-10-03 (fix run F12) — a radio's dot, a checkbox's tick, a chosen row's check arriving on
+    // a short spring (SelectMark), and a tapped star's swell (MarkPop). Worklets alone.
+    name: 'SelectMark',
+    fallback: 'components/SelectMark.tsx',
+    fast: 'components/SelectMark.motion120.tsx',
+    shared: 'components/SelectMark.shared.tsx',
+    needs: 'reanimated',
+  },
+  {
     name: 'Selection',
     fallback: 'components/Selection.tsx',
     fast: 'components/Selection.motion120.tsx',
@@ -2275,6 +2284,9 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       // and `rimPoint` — a 'worklet' in RimLight.shared.tsx — computing the
       // light's translate and rotate on the UI thread.
       'components/RimLight.motion120.tsx',
+      // 2026-10-03 (fix run F12) — the arriving mark: one shared value sprung 0 ↔ 1, its opacity
+      // and scale from markOpacity / markScale ('worklet's in the shared file); the star's pop.
+      'components/SelectMark.motion120.tsx',
       // 2026-10-03 (fix run F12) — the selection fade: interpolateColor over one shared value per
       // piece, and the segmented control's thumb sprung by translateX.
       'components/Selection.motion120.tsx',

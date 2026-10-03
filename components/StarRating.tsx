@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { MarkPop } from './SelectMark';
 import { metricStyles, starColors, useThemeColors } from '../lib/theme';
 
 type StarRatingProps = {
@@ -13,6 +15,8 @@ export function StarRating({ value, onChange, size = 32 }: StarRatingProps) {
   const { palette: colors, isDark } = useThemeColors();
   const starPaint = starColors(colors, isDark);
   const readOnly = !onChange;
+  // FIX-RUN F12: the star just tapped swells and settles (components/SelectMark's MarkPop).
+  const [popped, setPopped] = useState<{ star: number; key: number } | null>(null);
 
   return (
     <View style={styles.row}>
@@ -36,7 +40,10 @@ export function StarRating({ value, onChange, size = 32 }: StarRatingProps) {
           <Pressable
             key={star}
             testID={`review-star-${star}`}
-            onPress={() => onChange(star)}
+            onPress={() => {
+              onChange(star);
+              setPopped({ star, key: Date.now() });
+            }}
             hitSlop={6}
             style={styles.star}
             // n5 (2026-09-04): a name and a state for VoiceOver — the glyph
@@ -46,7 +53,7 @@ export function StarRating({ value, onChange, size = 32 }: StarRatingProps) {
             accessibilityLabel={`${star} ${star === 1 ? 'star' : 'stars'}`}
             accessibilityState={{ selected: filled }}
           >
-            {icon}
+            <MarkPop popKey={popped?.star === star ? popped.key : 0}>{icon}</MarkPop>
           </Pressable>
         );
       })}

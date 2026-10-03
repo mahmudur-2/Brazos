@@ -12,6 +12,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import { SelectMark } from '../components/SelectMark';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthButton } from '../components/AuthButton';
@@ -380,10 +381,11 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
                 canCheck ? undefined : 'Available once both documents have been read to the end'
               }
             >
-              <Ionicons
-                name={agreed ? 'checkbox' : 'square-outline'}
-                size={24}
-                color={agreed ? colors.forest : colors.textSubtle}
+              {/* FIX-RUN F12: the tick arrives over the empty box (components/SelectMark). */}
+              <SelectMark
+                on={agreed}
+                mark={<Ionicons name="checkbox" size={24} color={colors.forest} />}
+                off={<Ionicons name="square-outline" size={24} color={colors.textSubtle} />}
               />
               <Text style={styles.checkLabel}>
                 I have read and agree to the Terms of Service and Privacy Policy.
