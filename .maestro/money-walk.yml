@@ -289,8 +289,8 @@ appId: app.brazos.mobile.preview
 # Checkout polls the ledger for `held` for 30 s and offers "Check again" past
 # that; the webhook normally lands well inside the first poll. E2E2: each pass
 # also watches for Checkout's own failure texts — the alert "The card was not
-# charged", the "The payment did not go through" card and "Funding window
-# closed" (screens/CheckoutScreen.tsx) — and fails with the one it sees.
+# charged", the "The payment did not go through" card and "Payment timed
+# out" (screens/CheckoutScreen.tsx) — and fails with the one it sees.
 - repeat:
     times: 3
     while:
@@ -302,10 +302,10 @@ appId: app.brazos.mobile.preview
           commands:
             - tapOn: "Check again"
       - extendedWaitUntil:
-          visible: 'Job confirmed|The card was not charged|The payment did not go through|Funding window closed'
+          visible: 'Job confirmed|The card was not charged|The payment did not go through|Payment timed out'
           timeout: 30000
           optional: true
-      - assertNotVisible: 'The card was not charged|The payment did not go through|Funding window closed'
+      - assertNotVisible: 'The card was not charged|The payment did not go through|Payment timed out'
 - assertVisible: "Job confirmed"
 - takeScreenshot: held
 

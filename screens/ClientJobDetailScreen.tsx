@@ -1208,7 +1208,7 @@ export function ClientJobDetailScreen() {
                 </View>
                 {/* D16: sandbox keeps its label verbatim; stripe drops it. */}
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark, styles.eyebrowGold]}>
-                  {paymentsMode === 'sandbox' ? 'PROTECTED PAYMENT · SANDBOX' : 'PROTECTED PAYMENT'}
+                  {paymentsMode === 'sandbox' ? 'PROTECTED PAYMENT · TEST MODE' : 'PROTECTED PAYMENT'}
                 </Text>
                 {/* Tier A (C2, D-4): the customer's held figure is the row's
                     charge_amount_cents — the agreed price is said beside the
@@ -1222,7 +1222,7 @@ export function ClientJobDetailScreen() {
                 </Text>
                 <Text style={styles.paymentNote}>
                   {paymentsMode === 'sandbox'
-                    ? 'Funds stay held until you approve the finished work. Sandbox build — no real money moves.'
+                    ? 'Funds stay held until you approve the finished work. Test mode — no real money moves.'
                     : 'Funds stay held until you approve the finished work.'}
                 </Text>
               </Card>
@@ -1235,12 +1235,11 @@ export function ClientJobDetailScreen() {
                 <View style={styles.paymentShield}>
                   <Ionicons name="shield-outline" size={22} color={colors.mark} />
                 </View>
-                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>FUNDING WINDOW CLOSED</Text>
+                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>PAYMENT</Text>
                 <MoneyText cents={customerChargeCents(payment)} state={payment.status} />
                 <Text style={styles.paymentNote}>
-                  The window to protect this payment closed before a card was
-                  charged. A fresh checkout will be available shortly — check
-                  again in a moment.
+                  Your payment didn’t go through in time. Nothing was charged.
+                  Try again in a moment.
                 </Text>
                 <Button
                   title="Check again"
@@ -1256,7 +1255,7 @@ export function ClientJobDetailScreen() {
                 </View>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
                   {paymentsMode === 'sandbox'
-                    ? 'PAYMENT · SANDBOX'
+                    ? 'PAYMENT · TEST MODE'
                     : releaseRequested
                       ? 'APPROVED · PAYOUT ON ITS WAY'
                       : 'PAYMENT'}

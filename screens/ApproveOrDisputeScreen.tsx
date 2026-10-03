@@ -320,8 +320,8 @@ export function ApproveOrDisputeScreen() {
             <Text style={styles.eyebrow}>
               {paymentsMode === 'sandbox'
                 ? released
-                  ? 'PAYMENT RELEASED · SANDBOX'
-                  : 'HELD PAYMENT · SANDBOX'
+                  ? 'PAYMENT RELEASED · TEST MODE'
+                  : 'HELD PAYMENT · TEST MODE'
                 : released
                   ? 'PAYMENT RELEASED'
                   : releaseRequested
@@ -342,9 +342,9 @@ export function ApproveOrDisputeScreen() {
               {paymentsMode === 'sandbox'
                 ? released
                   ? payment.release_reason === 'auto_approved'
-                    ? 'Released automatically after 72 hours with no issue reported. Sandbox build — no real money moved.'
-                    : 'You approved the work and the funds were released. Sandbox build — no real money moved.'
-                  : 'Approving releases these funds to the worker. If something isn’t right, report the issue instead — release waits while a report is open. Sandbox build, no real money.'
+                    ? 'Released automatically after 72 hours with no issue reported. Test mode — no real money moved.'
+                    : 'You approved the work and the funds were released. Test mode — no real money moved.'
+                  : 'Approving releases these funds to the worker. If something isn’t right, report the issue instead — release waits while a report is open. Test mode, no real money.'
                 : released
                   ? payment.release_reason === 'auto_approved'
                     ? 'Released automatically after 72 hours with no issue reported.'
@@ -482,7 +482,7 @@ export function ApproveOrDisputeScreen() {
         message={
           `Your card was charged ${formatBudget(payment ? customerChargeCents(payment) : null)} at checkout, including the protection fee — nothing more is charged.\n\n` +
           (paymentsMode === 'sandbox'
-            ? 'This approves the finished work and releases the held sandbox funds to the worker. It can’t be undone. No real money moves in this build.'
+            ? 'This approves the finished work and releases the held funds to the worker. It can’t be undone. Test mode — no real money moves.'
             : 'This approves the finished work and releases the payment to the worker. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands.')
         }
         confirmText="Approve & release"

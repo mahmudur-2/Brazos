@@ -469,11 +469,11 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
   assert.match(code, /!paymentsEnabled \? undefined/);
   // D16: every sandbox string is behind the resolved mode; none renders in
   // stripe mode. The sandbox strings themselves are verbatim.
-  assert.match(code, /SANDBOX — no real money moves\. No real money is charged/);
-  assert.match(code, /'None in sandbox'/);
-  assert.match(code, /Total \(sandbox\)/);
-  assert.match(code, /Finish protecting funds \(sandbox\)/);
-  assert.match(code, /This authorizes the sandbox amount and places it in protected\/held state/);
+  assert.match(code, /TEST MODE — no real money moves\. No real money is charged/);
+  assert.match(code, /'None in test mode'/);
+  assert.match(code, /Total \(test\)/);
+  assert.match(code, /Finish protecting funds \(test\)/);
+  assert.match(code, /This authorizes the amount and holds it in protection/);
   // The stripe copy never says paid, and the sheet's success is never "held".
   const stripeCopy = [
     'Your card is charged the all-in total now, through the secure payment sheet.',
@@ -525,8 +525,8 @@ test('[static] a held row with release_requested_at cannot bounce between Review
   assert.match(review, /<ReviewSection/);
   assert.doesNotMatch(review, /paymentsMode !== 'sandbox'/);
   // D16: the sandbox strings are verbatim and gated on the resolved mode.
-  assert.match(review, /paymentsMode === 'sandbox'\s*\?\s*'PAYMENT RELEASED · SANDBOX'/);
-  assert.match(approve, /paymentsMode === 'sandbox'\s*\?\s*released\s*\?\s*'PAYMENT RELEASED · SANDBOX'\s*:\s*'HELD PAYMENT · SANDBOX'/);
+  assert.match(review, /paymentsMode === 'sandbox'\s*\?\s*'PAYMENT RELEASED · TEST MODE'/);
+  assert.match(approve, /paymentsMode === 'sandbox'\s*\?\s*released\s*\?\s*'PAYMENT RELEASED · TEST MODE'\s*:\s*'HELD PAYMENT · TEST MODE'/);
 });
 
 test('[static] ClientJobDetail offers Review on an approved row, counts down an unfunded one, and hides checkout when paused', () => {
@@ -552,15 +552,17 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   assert.match(code, /releaseCountdownLabel\(\s*fundingDueMs as number,\s*Date\.now\(\)\s*\)/);
   assert.match(code, /payment && fundingWindowClosed \? \(/);
   const closedCard = code.slice(code.indexOf('payment && fundingWindowClosed ? ('), code.indexOf(') : payment ? ('));
-  assert.match(closedCard, /FUNDING WINDOW CLOSED/);
+  // FIX-RUN B5: the closed window reads as a payment that didn't go through in time.
+  assert.match(closedCard, />PAYMENT</);
+  assert.match(closedCard, /Your payment didn’t go through in time\. Nothing was charged\./);
   assert.match(closedCard, /title="Check again"/);
   assert.doesNotMatch(closedCard, /navigate\('Checkout'/);
   // D15: the checkout CTA is behind the kill switch.
   // 2026-09-26: the checkout CTA is the pinned primary, still behind the kill switch.
   assert.match(code, /canFundNow \? \(paymentsEnabled \? \{ label: 'Protect payment in checkout'/);
   // D16: mode-aware eyebrows; sandbox verbatim.
-  assert.match(code, /paymentsMode === 'sandbox' \? 'PROTECTED PAYMENT · SANDBOX' : 'PROTECTED PAYMENT'/);
-  assert.match(code, /'PAYMENT · SANDBOX'/);
+  assert.match(code, /paymentsMode === 'sandbox' \? 'PROTECTED PAYMENT · TEST MODE' : 'PROTECTED PAYMENT'/);
+  assert.match(code, /'PAYMENT · TEST MODE'/);
   // A5 (2026-10-03): the accept confirm's body is the one shared text in lib/offerCopy.ts, which
   // the job page renders with the resolved mode; the checkout sentence lives there.
   assert.match(code, /message=\{acceptOfferConfirmMessage\(\{/);
@@ -568,7 +570,7 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   assert.doesNotMatch(code, /\bpaid\b(?! early| out| until)/i);
   // JobConfirmed's note is mode-aware too.
   const confirmed = stripComments(read('screens/JobConfirmedScreen.tsx'));
-  assert.match(confirmed, /paymentsMode === 'sandbox'\s*\?\s*'Sandbox build — these funds are development records, not real money\.'/);
+  assert.match(confirmed, /paymentsMode === 'sandbox'\s*\?\s*'Test mode — no real money moved\.'/);
   assert.match(confirmed, /Your card was charged and the funds are held in protection/);
 });
 

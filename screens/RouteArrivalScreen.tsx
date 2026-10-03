@@ -134,9 +134,8 @@ export function RouteArrivalScreen() {
                       {lifecycle ? JOB_LIFECYCLE_LABELS[lifecycle] : ''}
                     </Text>
                     <Text style={styles.statusNote}>
-                      Your status updates are simple declarations — nothing tracks
-                      your location. The customer sees exactly the two taps below,
-                      nothing more.
+                      The customer sees these two taps and nothing else. Brazos
+                      doesn’t track your location here.
                     </Text>
                   </View>
                 ),

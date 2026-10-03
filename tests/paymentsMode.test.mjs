@@ -197,79 +197,81 @@ test('no screen, component, hook or ui file imports the card SDK; only lib/payme
 // 3. Sandbox strings: every one still renders in sandbox mode, none in stripe
 // ---------------------------------------------------------------------------
 
-// The sandbox sentences, per file, verbatim (D16: "sandbox keeps its current
-// wording verbatim"). Losing one from sandbox mode fails here.
+// The sandbox sentences, per file, verbatim. D16 kept them word for word until
+// FIX-RUN B5 (2026-10-03, the operator's IN selection) rewrote them into one
+// product register — "Test mode", "(test)", "Test cash-out" — each still inside
+// its own mode guard. Losing one from sandbox mode fails here.
 const SANDBOX_STRINGS = {
   'screens/CheckoutScreen.tsx': [
-    'SANDBOX — no real money moves. No real money is charged,',
-    'None in sandbox',
-    'Total (sandbox)',
-    'Finish protecting funds (sandbox)',
-    'Authorize & protect ${formatBudget(amountCents)} (sandbox)',
-    'confirms the amount against your sandbox payment method. Nothing is charged.',
-    'This authorizes the sandbox amount and places it in protected/held state. No real money is being charged — this is sandbox.',
+    'TEST MODE — no real money moves. No real money is charged,',
+    'None in test mode',
+    'Total (test)',
+    'Finish protecting funds (test)',
+    'Authorize & protect ${formatBudget(amountCents)} (test)',
+    'confirms the amount in test mode. Nothing is charged.',
+    'This authorizes the amount and holds it in protection. Test mode — no real money is charged.',
   ],
   'screens/ApproveOrDisputeScreen.tsx': [
-    'PAYMENT RELEASED · SANDBOX',
-    'HELD PAYMENT · SANDBOX',
-    'Released automatically after 72 hours with no issue reported. Sandbox build — no real money moved.',
-    'You approved the work and the funds were released. Sandbox build — no real money moved.',
-    'release waits while a report is open. Sandbox build, no real money.',
-    'releases the held sandbox funds to the worker. It can’t be undone. No real money moves in this build.',
+    'PAYMENT RELEASED · TEST MODE',
+    'HELD PAYMENT · TEST MODE',
+    'Released automatically after 72 hours with no issue reported. Test mode — no real money moved.',
+    'You approved the work and the funds were released. Test mode — no real money moved.',
+    'release waits while a report is open. Test mode, no real money.',
+    'releases the held funds to the worker. It can’t be undone. Test mode — no real money moves.',
   ],
   'screens/ReviewAndTipScreen.tsx': [
-    'PAYMENT RELEASED · SANDBOX',
-    'Released automatically after 72 hours. Sandbox build — no real money moved.',
-    'Released on your approval. Sandbox build — no real money moved.',
-    'on top of the job payment. Sandbox build — no real money moved.',
-    'Sandbox build, no real money.',
-    'tip (sandbox)',
-    'Send tip (sandbox)',
-    'No real money moves in this sandbox build.',
+    'PAYMENT RELEASED · TEST MODE',
+    'Released automatically after 72 hours. Test mode — no real money moved.',
+    'Released on your approval. Test mode — no real money moved.',
+    'on top of the job payment. Test mode — no real money moved.',
+    'Test mode, no real money.',
+    'tip (test)',
+    'Send tip (test)',
+    'One tip per job. Test mode — no real money moves.',
   ],
   'screens/ClientJobDetailScreen.tsx': [
-    'PROTECTED PAYMENT · SANDBOX',
-    'Funds stay held until you approve the finished work. Sandbox build — no real money moves.',
-    'PAYMENT · SANDBOX',
+    'PROTECTED PAYMENT · TEST MODE',
+    'Funds stay held until you approve the finished work. Test mode — no real money moves.',
+    'PAYMENT · TEST MODE',
   ],
   // A5 (2026-10-03): the accept confirm's body is ONE text for the client's job page and Bid
   // detail, so its sandbox sentence lives in lib/offerCopy.ts, guarded by the `sandbox` flag the
   // two screens pass from the resolved mode (both screens stay listed so their guard is checked).
   'lib/offerCopy.ts': [
-    'protect the payment in a sandbox checkout (no real money in this build).',
+    'protect the payment in checkout, in test mode (no real money moves).',
   ],
   'screens/WorkerJobScreen.tsx': [
-    'PAYMENT RELEASED · SANDBOX',
-    'PAYMENT PROTECTED · SANDBOX',
-    'PAYMENT · SANDBOX',
-    'Released automatically after 72 hours with no response from the customer. Sandbox build — no real money.',
-    'approved the finished work and the funds were released. Sandbox build — no real money.',
-    'the funds release automatically. Sandbox build — no real money.',
-    'released only after the finished work is approved — sandbox build, no real money.',
-    'Sandbox build — payment states here are development records, not real money.',
+    'PAYMENT RELEASED · TEST MODE',
+    'PAYMENT PROTECTED · TEST MODE',
+    'PAYMENT · TEST MODE',
+    'Released automatically after 72 hours with no response from the customer. Test mode — no real money.',
+    'approved the finished work and the funds were released. Test mode — no real money.',
+    'the funds release automatically. Test mode — no real money.',
+    'released only after the finished work is approved — test mode, no real money.',
+    'Test mode — no real money moves for this job.',
   ],
   'screens/JobConfirmedScreen.tsx': [
-    'Sandbox build — these funds are development records, not real money.',
+    'Test mode — no real money moved.',
   ],
   'screens/EarningsScreen.tsx': [
-    'Sandbox — no real money',
-    'Simulated cash-outs',
-    'Simulated cash-out complete',
-    'moved to Transferred. Sandbox build — no real transfer exists.',
-    'Cash out ${formatBudget(s.availableCents)} (simulated)',
-    'This SIMULATES a transfer: your released payments move to Transferred in the sandbox ledger.',
-    'Cash out (simulated)',
+    'Test mode — no real money',
+    'Test cash-outs',
+    'Test cash-out complete',
+    'moved to Transferred. Test mode — no real transfer exists.',
+    'Cash out ${formatBudget(s.availableCents)} (test)',
+    'This is a test cash-out: your released payments move to Transferred.',
+    'Cash out (test)',
   ],
   'screens/PaymentMethodsScreen.tsx': [
-    'Nothing on this build is a real charge. Every payment state is a database row you can audit.',
-    'Sandbox payments',
-    'This build runs a development sandbox: checkout, protection, release and tips write real app records, but no card exists and no real money ever moves.',
-    'SANDBOX LEDGER',
-    'What the sandbox does',
+    'Test mode: nothing here is a real charge.',
+    'Test mode payments',
+    'Test mode: checkout, protection, release and tips all work, but no card is charged and no real money ever moves.',
+    'TEST MODE',
+    'What test mode does',
   ],
-  'screens/TrackWorkerScreen.tsx': ['SANDBOX — NO REAL MONEY'],
+  'screens/TrackWorkerScreen.tsx': ['TEST MODE — NO REAL MONEY'],
   // 2026-09-29 (LUX-LIST-2 #7): the Payment methods row moved from Account & safety to the hub.
-  'screens/ProfileScreen.tsx': ['Sandbox only · no stored card.'],
+  'screens/ProfileScreen.tsx': ['Test mode · no stored card.'],
   // Its own "development build" sentence is gone (A5); the shared body above is what it renders.
   'screens/BidDetailScreen.tsx': [],
 };
@@ -300,7 +302,10 @@ test('every sandbox string still renders in sandbox mode — verbatim — and no
       offset += line.length + 1;
       // Style identifiers (styles.sandboxNote, `sandboxBanner: {`) are not copy.
       const copy = line.replace(/styles\.sandbox\w*/g, '').replace(/^\s*sandbox\w*:\s*\{?/, '');
-      if (!/sandbox/i.test(copy)) continue;
+      // FIX-RUN B5: the sandbox copy now says "Test mode" / "(test)" / "test
+      // cash-out"; the detector follows the words so each line is still proven
+      // to sit behind a mode guard (wider than before, never narrower).
+      if (!/sandbox|test mode|\(test\)|test cash-out/i.test(copy)) continue;
       // The adapter import and a local `const sandbox = …` are not copy.
       if (/from '\.\.\/lib\/adapters\/payments'|const sandbox = paymentsMode/.test(line)) continue;
       // A guard line is its own guard (the window ends at the END of the
@@ -374,9 +379,9 @@ test('the simulated-money label is not itself gated on the build type', () => {
   // Un-gated payments with no visible sandbox label is an App Review problem
   // and misleads testers, so the label has to survive onto a release build.
   const checkout = stripComments(read('screens/CheckoutScreen.tsx'));
-  assert.match(checkout, /SANDBOX/, 'checkout must carry a simulated-money label');
+  assert.match(checkout, /TEST MODE/, 'checkout must carry a test-money label');
   assert.match(checkout, /No real money is charged/);
-  assert.doesNotMatch(checkout, /__DEV__[\s\S]{0,200}SANDBOX/, 'the sandbox label must not be behind a build-type condition');
+  assert.doesNotMatch(checkout, /__DEV__[\s\S]{0,200}(SANDBOX|TEST MODE)/, 'the sandbox label must not be behind a build-type condition');
   // Nor may it ASSERT a build type. The label survives onto a release binary,
   // so anything it claims has to be true there too — the money fact is, the
   // build fact is not.

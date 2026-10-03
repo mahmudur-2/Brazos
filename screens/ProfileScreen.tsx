@@ -151,7 +151,7 @@ const HUB_SETTINGS: SettingsRow[] = [
       paymentsMode === 'stripe'
         ? 'Cards and one-tap hiring.'
         : paymentsMode === 'sandbox'
-          ? 'Sandbox only · no stored card.'
+          ? 'Test mode · no stored card.'
           : 'No stored cards · entered at checkout.',
   },
   {

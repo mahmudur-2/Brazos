@@ -90,11 +90,11 @@ export function EarningsScreen() {
       }
       await load();
       await alertAsync(
-        paymentsMode === 'sandbox' ? 'Simulated cash-out complete' : 'Cash-out complete',
+        paymentsMode === 'sandbox' ? 'Test cash-out complete' : 'Cash-out complete',
         data.length === 0
           ? 'Nothing was available to cash out.'
           : paymentsMode === 'sandbox'
-            ? `${data.length} ${data.length === 1 ? 'payment' : 'payments'} moved to Transferred. Sandbox build — no real transfer exists.`
+            ? `${data.length} ${data.length === 1 ? 'payment' : 'payments'} moved to Transferred. Test mode — no real transfer exists.`
             : `${data.length} ${data.length === 1 ? 'payment' : 'payments'} moved to Transferred.`
       );
     } finally {
@@ -130,8 +130,8 @@ export function EarningsScreen() {
         title="Earnings & Payouts"
         subtitle={
           paymentsMode === 'sandbox'
-            ? 'Sandbox — no real money'
-            : 'Every figure is a sum over your ledger rows'
+            ? 'Test mode — no real money'
+            : 'What you’ve earned, what’s held, what’s been paid'
         }
         onBack={goBackOrHome}
         state={state}
@@ -160,7 +160,7 @@ export function EarningsScreen() {
                         label="TRANSFERRED"
                         icon="arrow-up-circle-outline"
                         cents={take.transferredCents}
-                        note={paymentsMode === 'sandbox' ? 'Simulated cash-outs' : 'Transferred to you'}
+                        note={paymentsMode === 'sandbox' ? 'Test cash-outs' : 'Transferred to you'}
                       />
                     </View>
                   ),
@@ -170,9 +170,7 @@ export function EarningsScreen() {
                     <View style={[styles.feeCard, litCardStyle(isDark)]}>
                       <Ionicons name="receipt-outline" size={16} color={colors.textMuted} />
                       <Text style={styles.feeText}>
-                        Platform fees on these rows: {formatBudget(s.feeCents)}. Every
-                        figure here is a sum over the ledger rows below, nothing
-                        else.
+                        Protection fees on these jobs: {formatBudget(s.feeCents)}.
                       </Text>
                     </View>
                   ),
@@ -247,7 +245,7 @@ export function EarningsScreen() {
             <Button
               title={
                 s.availableCents > 0
-                  ? `Cash out ${formatBudget(s.availableCents)} (simulated)`
+                  ? `Cash out ${formatBudget(s.availableCents)} (test)`
                   : 'Nothing available to cash out'
               }
               onPress={() => setConfirmCashOut(true)}
@@ -273,10 +271,10 @@ export function EarningsScreen() {
         title={`Cash out ${formatBudget(s?.availableCents ?? 0)}?`}
         message={
           paymentsMode === 'sandbox'
-            ? 'This SIMULATES a transfer: your released payments move to Transferred in the sandbox ledger. No bank is connected and no real money moves in this build.'
+            ? 'This is a test cash-out: your released payments move to Transferred. Test mode — no bank is connected and no real money moves.'
             : 'Payouts arrive on the provider’s own schedule once payout setup is complete — there is nothing to trigger here.'
         }
-        confirmText={paymentsMode === 'sandbox' ? 'Cash out (simulated)' : 'Cash out'}
+        confirmText={paymentsMode === 'sandbox' ? 'Cash out (test)' : 'Cash out'}
         cancelText="Not now"
         loading={cashingOut}
         onConfirm={cashOut}

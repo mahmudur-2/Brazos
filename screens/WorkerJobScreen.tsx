@@ -574,10 +574,10 @@ export function WorkerJobScreen() {
         <Text style={[styles.paymentEyebrow, isDark && styles.paymentEyebrowDark, isHeld(payment) && !isReleaseRequested(payment) && !isReleased(payment) && styles.eyebrowGold]}>
           {paymentsMode === 'sandbox'
             ? isReleased(payment)
-              ? 'PAYMENT RELEASED · SANDBOX'
+              ? 'PAYMENT RELEASED · TEST MODE'
               : isHeld(payment)
-                ? 'PAYMENT PROTECTED · SANDBOX'
-                : 'PAYMENT · SANDBOX'
+                ? 'PAYMENT PROTECTED · TEST MODE'
+                : 'PAYMENT · TEST MODE'
             : isReleased(payment)
               ? 'PAYMENT RELEASED'
               : isReleaseRequested(payment)
@@ -605,10 +605,10 @@ export function WorkerJobScreen() {
             if (isReleased(payment)) {
               return payment.release_reason === 'auto_approved'
                 ? sandbox
-                  ? 'Released automatically after 72 hours with no response from the customer. Sandbox build — no real money.'
+                  ? 'Released automatically after 72 hours with no response from the customer. Test mode — no real money.'
                   : 'Released automatically after 72 hours with no response from the customer.'
                 : sandbox
-                  ? `${clientName} approved the finished work and the funds were released. Sandbox build — no real money.`
+                  ? `${clientName} approved the finished work and the funds were released. Test mode — no real money.`
                   : `${clientName} approved the finished work and the payment was released.`;
             }
             if (lifecycle === 'disputed') {
@@ -626,17 +626,17 @@ export function WorkerJobScreen() {
             }
             if (lifecycle === 'awaiting_approval') {
               return sandbox
-                ? `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically. Sandbox build — no real money.`
+                ? `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically. Test mode — no real money.`
                 : `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically.`;
             }
             if (isHeld(payment)) {
               return sandbox
-                ? `${clientName} placed the funds in protection. They’re released only after the finished work is approved — sandbox build, no real money.`
+                ? `${clientName} placed the funds in protection. They’re released only after the finished work is approved — test mode, no real money.`
                 : `${clientName} placed the funds in protection. They’re released only after the finished work is approved.`;
             }
             return sandbox
-              ? 'Sandbox build — payment states here are development records, not real money.'
-              : 'The payment isn’t in protection yet — the states here follow the ledger.';
+              ? 'Test mode — no real money moves for this job.'
+              : 'The customer hasn’t paid yet. Nothing is held for this job.';
           })()}
         </Text>
         {/* #63 (M-14) — one tap to Payouts, where the setup is (it was three). */}

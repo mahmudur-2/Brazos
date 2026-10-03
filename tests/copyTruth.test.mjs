@@ -22,7 +22,7 @@ test('C3 · ApproveOrDispute in stripe mode: approving sends the payment on its 
   const approve = code('screens/ApproveOrDisputeScreen.tsx');
   assert.match(approve, /'Approving sends this payment on its way to the worker\. If something isn’t right, report the issue instead — release waits while a report is open\.'/);
   assert.doesNotMatch(approve, /Approving releases this payment/);
-  assert.match(approve, /'Approving releases these funds to the worker\. If something isn’t right, report the issue instead — release waits while a report is open\. Sandbox build, no real money\.'/);
+  assert.match(approve, /'Approving releases these funds to the worker\. If something isn’t right, report the issue instead — release waits while a report is open\. Test mode, no real money\.'/);
 });
 
 test('C5 · the brand is out of prose at the named sites', () => {
@@ -111,4 +111,73 @@ test('C6 · the seeded price range renders OFF behind PRICE_GUIDANCE, default fa
   assert.match(post, /const guidanceLines = isFreshPost && PRICE_GUIDANCE \? priceGuidanceLines\(category\) : null;/);
   // The guidance module itself is untouched — its own fence (tests/conversion.test.mjs §3.2) still executes it.
   assert.match(read('lib/priceGuidance.ts'), /export function priceGuidanceLines\(/);
+});
+
+// ---------------------------------------------------------------------------
+// FIX-RUN B5 (2026-10-03) — no developer sentence reaches a screen
+// ---------------------------------------------------------------------------
+// "this build", "ledger rows", "a database row you can audit", "simple
+// declarations", "Run `eas init`", "SANDBOX", "simulated": all rewritten as
+// product copy, and the sandbox notices say "Test mode" inside their own mode
+// guards (tests/paymentsMode.test.mjs proves the guards). This sweep reads every
+// string with a space in it, and every JSX text run, in the app's screens and
+// components and the two message modules — comments stripped — and refuses the
+// developer vocabulary anywhere in them.
+
+const DEV_WORDS = /this build|ledger|database row|simple declaration|sandbox|eas init|simulat/i;
+
+function appFiles(dir) {
+  const out = [];
+  for (const entry of readdirSync(join(root, dir))) {
+    const rel = `${dir}/${entry}`;
+    if (statSync(join(root, rel)).isDirectory()) {
+      out.push(...appFiles(rel));
+      continue;
+    }
+    if (/\.tsx?$/.test(entry) && !/\.web\.tsx?$/.test(entry)) out.push(rel);
+  }
+  return out;
+}
+
+function renderedStrings(src) {
+  const body = stripComments(src);
+  const out = [];
+  // String literals that read as words (a space inside) — identifiers like
+  // 'sandbox' or 'sandbox_cash_out' are code, not copy.
+  for (const m of body.matchAll(/'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`((?:[^`\\]|\\.)*)`/g)) {
+    const text = m[1] ?? m[2] ?? m[3] ?? '';
+    if (/\s/.test(text.trim()) && /[A-Za-z]{3}/.test(text)) out.push(text);
+  }
+  // JSX text runs: between a tag's closing `>` and the next `<`, no braces.
+  for (const m of body.matchAll(/>\s*([A-Za-z][^<>{}]*?)\s*</g)) out.push(m[1]);
+  return out;
+}
+
+test('B5 · no developer vocabulary in any rendered string', () => {
+  const files = [
+    ...appFiles('screens'),
+    ...appFiles('components'),
+    'lib/errorMessage.ts',
+    'lib/adapters/payments.ts',
+    'lib/offerCopy.ts',
+    'lib/payments/stripe.ts',
+  ].filter((rel) => !rel.startsWith('components/DesignStudio') && !rel.includes('dev-tools'));
+  const offenders = [];
+  for (const rel of files) {
+    for (const text of renderedStrings(read(rel))) {
+      if (DEV_WORDS.test(text)) offenders.push(`${rel}: ${text.slice(0, 120)}`);
+    }
+  }
+  assert.deepEqual(offenders, [], 'rewrite these as product copy');
+});
+
+test('B5 · the rewritten lines are the product sentences', () => {
+  assert.match(code('screens/EarningsScreen.tsx'), /'What you’ve earned, what’s held, what’s been paid'/);
+  assert.match(code('screens/WorkerJobScreen.tsx'), /'The customer hasn’t paid yet\. Nothing is held for this job\.'/);
+  assert.match(code('screens/RouteArrivalScreen.tsx'), /The customer sees these two taps and nothing else\. Brazos\s+doesn’t track your location here\./);
+  assert.match(code('screens/TrackWorkerScreen.tsx'), /If\s+they share their live location in chat, you’ll see it there\./);
+  assert.match(code('screens/NotificationSettingsScreen.tsx'), /'Notifications aren’t available in this version\. Update Brazos to turn them on\.'/);
+  assert.match(code('lib/adapters/payments.ts'), /'Payments aren’t available right now\. Nothing was charged or held\.'/);
+  assert.match(code('lib/errorMessage.ts'), /'Can’t reach Brazos right now\. Check your connection and try again\.'/);
+  assert.match(code('screens/CheckoutScreen.tsx'), /<Text style=\{styles\.summaryLabel\}>Pay by<\/Text>/);
 });

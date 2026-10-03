@@ -26,9 +26,9 @@ const DEFAULT = 'Something went wrong. Please try again.';
 
 /** The app is talking to a database that predates it (or vice versa). */
 const VERSION_SKEW =
-  'This part of the app isn’t available in this build. Check for an app update — if it persists, let us know.';
+  'This needs an app update. Update Brazos, then try again.';
 const OFFLINE =
-  'Can’t reach BRAZOS right now. Check your connection and try again.';
+  'Can’t reach Brazos right now. Check your connection and try again.';
 const DENIED = 'You don’t have access to this.';
 const MISSING = 'This isn’t available anymore.';
 const CONFLICT = 'That was already done.';

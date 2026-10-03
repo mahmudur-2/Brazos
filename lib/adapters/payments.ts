@@ -117,11 +117,11 @@ export const paymentsMode = resolution.mode;
 export const paymentsConfigError = resolution.configError;
 
 const DISABLED_MESSAGE =
-  'Payments are not switched on in this build. Nothing was charged or held.';
+  'Payments aren’t available right now. Nothing was charged or held.';
 
 /** The sandbox has no payment sheet: its two-step idiom is the whole flow. */
 export const SANDBOX_NO_SHEET_MESSAGE =
-  'Sandbox payments use no payment sheet — authorize and protect the payment instead.';
+  'Test mode uses no payment sheet — authorize and protect the payment instead.';
 /** D4: the sandbox's two steps have no stripe meaning. */
 export const STRIPE_NO_TWO_STEP_MESSAGE =
   'Card payments are taken in one step through checkout — nothing is authorized or protected separately.';

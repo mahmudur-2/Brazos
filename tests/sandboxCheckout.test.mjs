@@ -129,8 +129,8 @@ test('the checkout is visibly sandbox, confirmed before funding, and double-tap 
   // Stage 4A-tail: the label states the MONEY fact, not the build fact —
   // sandbox payments now run on a release binary, so "development build" was
   // false on TestFlight. It is also gated on the resolved mode, not __DEV__.
-  assert.match(checkout, /SANDBOX — no real money moves\. No real money is charged/);
-  assert.doesNotMatch(checkout, /SANDBOX — development build/);
+  assert.match(checkout, /TEST MODE — no real money moves\. No real money is charged/);
+  assert.doesNotMatch(checkout, /(SANDBOX|TEST MODE) — development build/);
   assert.match(
     checkout,
     /paymentsMode === 'sandbox'[\s\S]{0,400}styles\.sandboxBanner/,
@@ -142,10 +142,10 @@ test('the checkout is visibly sandbox, confirmed before funding, and double-tap 
   assert.match(checkout, /happens only after you approve the completed work/);
   assert.match(checkout, /automatically 72 hours/);
   // Confirmation with the exact consequence, then the guarded funding call.
-  assert.match(checkout, /This authorizes the sandbox amount and places it in protected\/held state/);
+  assert.match(checkout, /This authorizes the amount and holds it in protection/);
   // Same correction as the banner: the consequence copy names sandbox, not the
   // build type, because the build type no longer decides whether money runs.
-  assert.match(checkout, /No real money is being charged — this is sandbox/);
+  assert.match(checkout, /Test mode — no real money is charged/);
   assert.doesNotMatch(checkout, /in this development build/);
   assert.match(checkout, /fundingRef\.current\) return/);
   // Failure copy keeps the accepted offer explicitly intact.

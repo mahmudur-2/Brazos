@@ -171,9 +171,8 @@ export function TrackWorkerScreen() {
                 <Ionicons name="navigate-outline" size={18} color={accent} />
               </View>
               <Text style={styles.noticeText}>
-                Status comes from {workerName ?? 'your worker'}’s own updates —
-                this build has no live location tracking, so what you see here
-                is exactly what they declared.
+                Status comes from {workerName ?? 'your worker'}’s own taps. If
+                they share their live location in chat, you’ll see it there.
               </Text>
             </View>
           ),
@@ -256,7 +255,7 @@ export function TrackWorkerScreen() {
                         only; the card path names the money state. */}
                     <Text style={[styles.eyebrow, isDark && styles.eyebrowDark, paymentsMode === 'stripe' && payment.status === 'held' && styles.eyebrowGold]}>
                       {paymentsMode === 'sandbox'
-                        ? 'SANDBOX — NO REAL MONEY'
+                        ? 'TEST MODE — NO REAL MONEY'
                         : payment.status === 'held'
                           ? 'PROTECTED PAYMENT'
                           : 'PAYMENT'}

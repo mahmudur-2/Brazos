@@ -183,7 +183,7 @@ export function NotificationSettingsScreen() {
       return {
         tone: 'warn',
         text:
-          'This build is not linked to an EAS project yet, so no push token can be issued. Run `eas init`, then rebuild.',
+          'Notifications aren’t available in this version. Update Brazos to turn them on.',
       };
     }
     if (pushState.reason === 'unsupported') {

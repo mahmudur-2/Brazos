@@ -430,7 +430,7 @@ test('A5 — the accept confirmation body is one text: three money lines, then w
   );
   // Sandbox: its sentence, and never "development build".
   const sandbox = acceptOfferConfirmMessage({ quote, sandbox: true });
-  assert.equal(sandbox, `${lines}${selects} Next you’ll authorize and protect the payment in a sandbox checkout (no real money in this build).`);
+  assert.equal(sandbox, `${lines}${selects} Next you’ll authorize and protect the payment in checkout, in test mode (no real money moves).`);
   assert.doesNotMatch(sandbox, /development build/);
   // Without a quote the money lines are left out, never guessed.
   assert.doesNotMatch(acceptOfferConfirmMessage({ quote: null, sandbox: false }), /Agreed price|Protection fee|Total charged/);

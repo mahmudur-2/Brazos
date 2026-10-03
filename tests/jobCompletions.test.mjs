@@ -159,11 +159,12 @@ test('6 · Earnings buckets and rows read the take through the helper, bucketed 
   assert.match(earnings, /<MoneyText cents=\{workerTakeCents\(row\)\} state=\{row\.status\} captionHidden \/>/);
   assert.doesNotMatch(earnings, /cents=\{row\.amount_cents\}/);
   // D16/D19: the sandbox cash-out still sums the ledger's own released rows.
-  assert.match(earnings, /`Cash out \$\{formatBudget\(s\.availableCents\)\} \(simulated\)`/);
+  assert.match(earnings, /`Cash out \$\{formatBudget\(s\.availableCents\)\} \(test\)`/);
   assert.match(earnings, /disabled=\{s\.availableCents === 0 \|\| cashingOut\}/);
   assert.match(earnings, /note="Held in protection"/);
   assert.match(earnings, /note="Released to you"/);
-  assert.match(earnings, /Platform fees on these rows: \{formatBudget\(s\.feeCents\)\}/);
+  // FIX-RUN B5: product copy, the fee by its one name (C4's glossary).
+  assert.match(earnings, /Protection fees on these jobs: \{formatBudget\(s\.feeCents\)\}\./);
 });
 
 test('7 · the worker’s job card shows the take, and the three-line breakdown off the row’s columns once the charge landed', () => {

@@ -96,7 +96,7 @@ export function acceptOfferConfirmMessage(input: {
     : '';
   const selects = 'This selects their bid for the job — the other active bids will no longer be eligible.';
   const next =
-    input.sandbox ? ' Next you’ll authorize and protect the payment in a sandbox checkout (no real money in this build).'
+    input.sandbox ? ' Next you’ll authorize and protect the payment in checkout, in test mode (no real money moves).'
     : input.savedCardLabel && quote
       ? ` ${input.savedCardLabel} is charged the total now, and the funds are held in protection until you approve the work.`
       : ' Next you’ll protect the payment in checkout.';

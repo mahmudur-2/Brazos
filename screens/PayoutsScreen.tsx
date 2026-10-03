@@ -54,9 +54,9 @@ export const PAYOUTS_LINK_EXPIRED_NOTICE =
   'That setup link had expired, so a fresh one was requested — continue below.';
 /** Outside the card path there is no payout account to show. */
 export const PAYOUTS_SANDBOX_BODY =
-  'This build runs sandbox payments: cash-out is simulated from Earnings, and no payout account exists.';
+  'Test mode: cash out from Earnings is a test, and no payout account exists.';
 export const PAYOUTS_DISABLED_BODY =
-  'Payments are off in this build, so there is no payout account to set up.';
+  'Payments aren’t available right now, so there is no payout account to set up.';
 export const PAYOUTS_OPEN_FAILED =
   'The setup page could not be opened on this device. Nothing changed — try again.';
 

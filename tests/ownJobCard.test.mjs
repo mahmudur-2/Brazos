@@ -73,7 +73,7 @@ test('n5 · a failing fetch alerts through userMessage, does not navigate, and r
     {
       title: 'Could not open your job',
       // lib/errorMessage.ts's own OFFLINE sentence — the raw text never reaches the dialog.
-      message: 'Can’t reach BRAZOS right now. Check your connection and try again.',
+      message: 'Can’t reach Brazos right now. Check your connection and try again.',
     },
   ]);
 });

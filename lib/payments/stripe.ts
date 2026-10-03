@@ -96,7 +96,7 @@ export const STRIPE_MERCHANT_IDENTIFIER = 'merchant.app.brazos.mobile';
 export const STRIPE_MERCHANT_DISPLAY_NAME = 'Brazos';
 /** D4's one honest sentence for a binary without the module or a build without the key. */
 export const STRIPE_UNAVAILABLE_MESSAGE =
-  'This build can’t take card payments yet. Update the app to protect a payment.';
+  'This version of Brazos can’t take card payments yet. Update the app to protect a payment.';
 export const SHEET_UNSHOWN_MESSAGE =
   'The payment sheet could not be shown. Nothing was charged — you can try again.';
 

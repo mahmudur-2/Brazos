@@ -243,8 +243,8 @@ test('[static] 6 · PayoutsScreen opens the link in the system browser, refreshe
   assert.match(code, /payoutsCta\(status\)/);
 
   // Outside the card path the screen says why there is nothing here.
-  assert.match(src, /PAYOUTS_SANDBOX_BODY =\s*'This build runs sandbox payments: cash-out is simulated from Earnings, and no payout account exists\.'/);
-  assert.match(src, /PAYOUTS_DISABLED_BODY =\s*'Payments are off in this build, so there is no payout account to set up\.'/);
+  assert.match(src, /PAYOUTS_SANDBOX_BODY =\s*'Test mode: cash out from Earnings is a test, and no payout account exists\.'/);
+  assert.match(src, /PAYOUTS_DISABLED_BODY =\s*'Payments aren’t available right now, so there is no payout account to set up\.'/);
   assert.match(code, /title: 'Payouts are on the card path only'/);
 });
 
@@ -256,9 +256,9 @@ test('[static] 7 · Earnings leads to Payouts in stripe mode only, and the sandb
   assert.match(code, /if \(paymentsMode === 'stripe'\) \{\s*const payoutsRes = await fetchMyPayoutsStatus\(\);/);
   // D16/D19: the sandbox arm is the same text it was.
   assert.match(code, /s && paymentsMode === 'sandbox' \? \(/);
-  assert.match(code, /`Cash out \$\{formatBudget\(s\.availableCents\)\} \(simulated\)`/);
+  assert.match(code, /`Cash out \$\{formatBudget\(s\.availableCents\)\} \(test\)`/);
   assert.match(code, /'Nothing available to cash out'/);
-  assert.match(code, /'This SIMULATES a transfer: your released payments move to Transferred in the sandbox ledger\. No bank is connected and no real money moves in this build\.'/);
+  assert.match(code, /'This is a test cash-out: your released payments move to Transferred\. Test mode — no bank is connected and no real money moves\.'/);
   assert.equal((code.match(/setConfirmCashOut\(true\)/g) ?? []).length, 1, 'cash-out is still offered from the sandbox arm alone');
   assert.equal((code.match(/paymentProvider\.cashOut\(\)/g) ?? []).length, 1);
 });

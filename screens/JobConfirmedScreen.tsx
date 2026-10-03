@@ -132,7 +132,7 @@ export function JobConfirmedScreen() {
                 only state this screen renders over. */}
             <Text style={styles.sandboxNote}>
               {paymentsMode === 'sandbox'
-                ? 'Sandbox build — these funds are development records, not real money.'
+                ? 'Test mode — no real money moved.'
                 : 'Your card was charged and the funds are held in protection until you approve the finished work.'}
             </Text>
           </View>

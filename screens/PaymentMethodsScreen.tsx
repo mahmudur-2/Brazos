@@ -113,10 +113,10 @@ export function PaymentMethodsScreen() {
               <Text style={styles.heroTitle}>Honest by design.</Text>
               <Text style={styles.bodyText}>
                 {sandbox
-                  ? 'Nothing on this build is a real charge. Every payment state is a database row you can audit.'
+                  ? 'Test mode: nothing here is a real charge.'
                   : stripe
                     ? 'Your card is charged only when you protect a payment, and the funds stay held until you approve the finished work.'
-                    : 'Payments are switched off on this build, so nothing here can move money.'}
+                    : 'Payments aren’t available right now, so nothing here can move money.'}
               </Text>
             </View>
           ),
@@ -133,14 +133,14 @@ export function PaymentMethodsScreen() {
               </View>
               <View style={styles.modeCopy}>
                 <Text style={styles.modeTitle}>
-                  {sandbox ? 'Sandbox payments' : stripe ? 'Card payments' : 'Payments are off'}
+                  {sandbox ? 'Test mode payments' : stripe ? 'Card payments' : 'Payments are off'}
                 </Text>
                 <Text style={styles.modeNote}>
                   {sandbox
-                    ? 'This build runs a development sandbox: checkout, protection, release and tips write real app records, but no card exists and no real money ever moves.'
+                    ? 'Test mode: checkout, protection, release and tips all work, but no card is charged and no real money ever moves.'
                     : stripe
                       ? 'Cards are taken through the provider’s secure payment sheet at checkout. Brazos never sees your card number.'
-                      : 'No payment mode is switched on in this build. Nothing can be authorized, held or moved.'}
+                      : 'Payments aren’t available right now. Nothing can be authorized, held or moved.'}
                 </Text>
               </View>
             </View>
@@ -213,7 +213,7 @@ export function PaymentMethodsScreen() {
                 <>
                   <Text style={styles.sectionTitle}>No stored payment methods</Text>
                   <Text style={styles.bodyText}>
-                    Brazos doesn’t store any card, bank account or wallet in this build — there is no payment provider connected yet. When a real provider arrives, the methods you add will appear here.
+                    Payments aren’t available right now, so there’s no card to store. When they are, the cards you save will appear here.
                   </Text>
                 </>
               )}
@@ -225,13 +225,13 @@ export function PaymentMethodsScreen() {
               {
                 content: (
                   <View style={[styles.sectionCard, litCardStyle(isDark)]}>
-                    <Text style={styles.eyebrow}>SANDBOX LEDGER</Text>
-                    <Text style={styles.sectionTitle}>What the sandbox does</Text>
+                    <Text style={styles.eyebrow}>TEST MODE</Text>
+                    <Text style={styles.sectionTitle}>What test mode does</Text>
                     <View style={styles.list}>
                       <Row text="Authorize — records the agreed amount. Nothing is charged." />
-                      <Row text="Hold in protection — sets the funds aside in the ledger while the work happens." />
-                      <Row text="Release — moves the record to released after you approve the finished work (or 72 hours pass with no issue reported)." />
-                      <Row text="Every state is a real database row you can audit — none of it is real money." />
+                      <Row text="Hold in protection — sets the funds aside while the work happens." />
+                      <Row text="Release — marks the payment released after you approve the finished work (or 72 hours pass with no issue reported)." />
+                      <Row text="Every step works as it will for real — none of it is real money." />
                     </View>
                   </View>
                 ),

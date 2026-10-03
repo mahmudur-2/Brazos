@@ -514,7 +514,7 @@ export function ReviewAndTipScreen() {
                     way — MoneyText keeps the row's real status either way. */}
                 <Text style={styles.eyebrow}>
                   {paymentsMode === 'sandbox'
-                    ? 'PAYMENT RELEASED · SANDBOX'
+                    ? 'PAYMENT RELEASED · TEST MODE'
                     : released
                       ? 'PAYMENT RELEASED'
                       : 'APPROVED · PAYOUT ON ITS WAY'}
@@ -523,8 +523,8 @@ export function ReviewAndTipScreen() {
                 <Text style={styles.cardNote}>
                   {paymentsMode === 'sandbox'
                     ? payment.release_reason === 'auto_approved'
-                      ? 'Released automatically after 72 hours. Sandbox build — no real money moved.'
-                      : 'Released on your approval. Sandbox build — no real money moved.'
+                      ? 'Released automatically after 72 hours. Test mode — no real money moved.'
+                      : 'Released on your approval. Test mode — no real money moved.'
                     : released
                       ? payment.release_reason === 'auto_approved'
                         ? 'Released automatically after 72 hours.'
@@ -561,7 +561,7 @@ export function ReviewAndTipScreen() {
                   <MoneyText cents={tip.amount_cents} state={tip.status} />
                   <Text style={styles.cardNote}>
                     {paymentsMode === 'sandbox'
-                      ? `Your tip went to ${workerName ?? 'the worker'} on top of the job payment. Sandbox build — no real money moved.`
+                      ? `Your tip went to ${workerName ?? 'the worker'} on top of the job payment. Test mode — no real money moved.`
                       : // R6c (D3): the all-in figure is the tip ROW's
                         // charge_amount_cents, read off the row, and it is
                         // said only once the row reads released.
@@ -574,7 +574,7 @@ export function ReviewAndTipScreen() {
                 </>
               ) : paymentsMode === 'disabled' ? (
                 <Text style={styles.cardNote}>
-                  Payments are off in this build, so tipping is unavailable.
+                  Payments aren’t available right now, so tipping is unavailable.
                 </Text>
               ) : stripe ? (
                 // R6c (D3): the card tip — the same amount controls as the
@@ -660,15 +660,15 @@ export function ReviewAndTipScreen() {
                 <>
                   <Text style={styles.cardNote}>
                     Entirely optional — every cent goes to{' '}
-                    {workerName ?? 'the worker'}. Sandbox build, no real money.
+                    {workerName ?? 'the worker'}. Test mode, no real money.
                   </Text>
                   {amountControls}
                   {/* M-26 — always here; it enables with an amount. */}
                   <Button
                     title={
                       tipValid
-                        ? `Send ${formatBudget(tipCents)} tip (sandbox)`
-                        : 'Send tip (sandbox)'
+                        ? `Send ${formatBudget(tipCents)} tip (test)`
+                        : 'Send tip (test)'
                     }
                     palette={emeraldColors}
                     onPress={() => setConfirmTip(true)}
@@ -710,7 +710,7 @@ export function ReviewAndTipScreen() {
         }
         message={
           paymentsMode === 'sandbox'
-            ? `The tip goes straight to ${workerName ?? 'the worker'} as its own ledger entry, separate from the job payment. One tip per job. No real money moves in this sandbox build.`
+            ? `The tip goes straight to ${workerName ?? 'the worker'} separately from the job payment. One tip per job. Test mode — no real money moves.`
             : cardTipMessage
         }
         confirmText={stripe ? 'Pay & send tip' : 'Send tip'}

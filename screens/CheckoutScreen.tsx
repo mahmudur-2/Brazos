@@ -248,8 +248,8 @@ export function CheckoutScreen() {
     : paymentsMode === 'disabled'
       ? {
           kind: 'permissionDenied',
-          title: 'Payments are off in this build',
-          body: 'No payment mode is switched on, so nothing can be authorized or held. Your accepted offer is unaffected.',
+          title: 'Payments aren’t available right now',
+          body: 'Nothing was charged or held. Your accepted offer is unaffected.',
         }
       : stripe && !stripeReady()
         ? {
@@ -516,8 +516,8 @@ export function CheckoutScreen() {
     <Button
       title={
         authorizedOnly
-          ? 'Finish protecting funds (sandbox)'
-          : `Authorize & protect ${formatBudget(amountCents)} (sandbox)`
+          ? 'Finish protecting funds (test)'
+          : `Authorize & protect ${formatBudget(amountCents)} (test)`
       }
       onPress={() => setConfirmVisible(true)}
       loading={funding}
@@ -584,7 +584,7 @@ export function CheckoutScreen() {
                     <View style={styles.sandboxBanner} accessibilityRole="alert">
                       <Ionicons name="flask-outline" size={18} color={colors.warning} />
                       <Text style={styles.sandboxText}>
-                        SANDBOX — no real money moves. No real money is charged,
+                        TEST MODE — no real money moves. No real money is charged,
                         held or transferred. The payment states below are real
                         app records used to test the flow.
                       </Text>
@@ -641,13 +641,12 @@ export function CheckoutScreen() {
           ...(stripe && windowClosed && phase === 'idle'
             ? [
                 {
-                  title: 'Funding window closed',
+                  title: 'Payment timed out',
                   content: (
                     <View style={styles.paymentState}>
                       <Text style={styles.explainText}>
-                        The window to protect this payment closed before a card
-                        was charged. A fresh checkout will be available shortly
-                        — tap Check again below.
+                        Your payment didn’t go through in time. Nothing was
+                        charged. Tap Check again below in a moment.
                       </Text>
                     </View>
                   ),
@@ -698,7 +697,7 @@ export function CheckoutScreen() {
                     </View>
                     {windowOpen ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Funding window</Text>
+                        <Text style={styles.summaryLabel}>Pay by</Text>
                         <Text style={styles.summaryValue}>
                           closes in {releaseCountdownLabel(fundingDueMs as number, nowMs)}
                         </Text>
@@ -720,11 +719,11 @@ export function CheckoutScreen() {
                       <Text style={styles.summaryValue}>
                         {payment && payment.platform_fee_cents > 0
                           ? formatBudget(payment.platform_fee_cents)
-                          : 'None in sandbox'}
+                          : 'None in test mode'}
                       </Text>
                     </View>
                     <View style={[styles.summaryRow, styles.totalRow]}>
-                      <Text style={styles.totalLabel}>Total (sandbox)</Text>
+                      <Text style={styles.totalLabel}>Total (test)</Text>
                       <Text style={styles.totalValue}>{formatBudget(amountCents)}</Text>
                     </View>
                   </>
@@ -773,7 +772,7 @@ export function CheckoutScreen() {
                   <ExplainRow
                     icon="card-outline"
                     strong="Authorize"
-                    text="confirms the amount against your sandbox payment method. Nothing is charged."
+                    text="confirms the amount in test mode. Nothing is charged."
                   />
                 )}
                 <ExplainRow
@@ -819,7 +818,7 @@ export function CheckoutScreen() {
             ? dialogPath === 'saved' && savedCard
               ? `${cardLabel(savedCard)} is charged the all-in total now. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done.`
               : 'Your card is charged the all-in total now, through the secure payment sheet. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
-            : 'This authorizes the sandbox amount and places it in protected/held state. No real money is being charged — this is sandbox. Funds stay held until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
+            : 'This authorizes the amount and holds it in protection. Test mode — no real money is charged. Funds stay held until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
         }
         confirmText={stripe ? 'Pay & protect' : 'Authorize & protect'}
         cancelText="Not now"
