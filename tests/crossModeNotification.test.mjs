@@ -193,6 +193,49 @@ test('while mode resolution is pending, the gate stands down and routing proceed
   assert.deepEqual(calls.navigate, [['MyJobs', 'WorkerJob', { jobId: 'job-5' }]]);
 });
 
+// FIX-RUN B8 — a push opened from a closed app waits for the mode, then the
+// switch prompt applies; a bridge whose wait times out keeps the stand-down.
+test('B8 · cold start: the gate waits for the mode, then prompts the switch once and routes after confirm', async () => {
+  resetCalls();
+  const waits = [];
+  const bridge = makeBridge(null, async () => true);
+  bridge.whenReady = (timeoutMs) => {
+    waits.push(timeoutMs);
+    return Promise.resolve('customer');
+  };
+  await handleNotificationData({ screen: 'WorkerJob', jobId: 'job-b8' }, bridge);
+  assert.deepEqual(waits, [4000]);
+  assert.equal(bridge.switchCalls.length, 1);
+  assert.equal(bridge.switchCalls[0].target, 'worker');
+  assert.deepEqual(calls.navigate, [['MyJobs', 'WorkerJob', { jobId: 'job-b8' }]]);
+});
+
+test('B8 · cold start: a declined switch routes nowhere; a wait that times out routes without a prompt', async () => {
+  resetCalls();
+  const declined = makeBridge(null, async () => false);
+  declined.whenReady = () => Promise.resolve('customer');
+  await handleNotificationData({ screen: 'WorkerJob', jobId: 'job-b8b' }, declined);
+  assert.equal(declined.switchCalls.length, 1);
+  assert.deepEqual(calls.navigate, []);
+
+  resetCalls();
+  const timedOut = makeBridge(null, async () => {
+    throw new Error('no prompt when the mode never resolved');
+  });
+  timedOut.whenReady = () => Promise.resolve(null);
+  await handleNotificationData({ screen: 'WorkerJob', jobId: 'job-b8c' }, timedOut);
+  assert.equal(timedOut.switchCalls.length, 0);
+  assert.deepEqual(calls.navigate, [['MyJobs', 'WorkerJob', { jobId: 'job-b8c' }]]);
+});
+
+test('B8 · the app bridge answers waiters when `ready` flips, and times out to null', () => {
+  const src = read('hooks/useNotificationModeBridge.ts');
+  assert.match(src, /if \(ready && waiters\.current\.size\) \{/);
+  assert.match(src, /for \(const resolve of pending\) resolve\(mode\);/);
+  assert.match(src, /const timer = setTimeout\(\(\) => done\(null\), timeoutMs\);/);
+  assert.match(read('lib/notificationRoutes.ts'), /export const MODE_WAIT_MS = 4000;/);
+});
+
 test('routability is mode-independent — the feed’s tappable set is unchanged', () => {
   // canRouteNotification answers reachability, and every destination is
   // mounted in both trees; the mode gate is a perspective prompt on top,

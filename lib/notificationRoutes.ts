@@ -80,6 +80,11 @@ export type NotificationModeBridge = {
   /** The resolved mode, or null while resolution is pending (cold start). */
   getMode: () => AppMode | null;
   /**
+   * FIX-RUN B8: the mode once resolution finishes, or null after `timeoutMs`.
+   * Optional: a bridge without it keeps the stand-down behaviour below.
+   */
+  whenReady?: (timeoutMs: number) => Promise<AppMode | null>;
+  /**
    * ModeProvider's switchMode: the confirmation is mandatory and lives inside
    * the provider; resolves true only once the target tree is mounted, false
    * when declined or refused.
@@ -91,6 +96,9 @@ export type NotificationModeBridge = {
 };
 
 /** The cross-mode prompt's copy, per destination mode. */
+/** B8: how long a cold-start tap waits for the mode to resolve before the gate stands down. */
+export const MODE_WAIT_MS = 4000;
+
 const CROSS_MODE_CONFIRM: Record<AppMode, { title: string; message: string; confirmText: string }> =
   {
     customer: {
@@ -276,7 +284,11 @@ export async function handleNotificationData(
   // cold-start replay), the gate stands down and the dispatch keeps its
   // standing contract: every destination lives in a tab mounted in BOTH
   // trees, so it resolves either way.
-  const currentMode = bridge.getMode();
+  // B8: a tap from a closed app arrives before the mode resolves. Wait for it
+  // (up to MODE_WAIT_MS) so the switch prompt can apply; on timeout the gate
+  // stands down as before.
+  const currentMode =
+    bridge.getMode() ?? (target.mode && bridge.whenReady ? await bridge.whenReady(MODE_WAIT_MS) : null);
   if (target.mode && currentMode && currentMode !== target.mode) {
     const switched = await bridge.switchMode(target.mode, {
       confirm: CROSS_MODE_CONFIRM[target.mode],

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { NotificationModeBridge } from '../lib/notificationRoutes';
+import type { AppMode } from '../modes/types';
 import { useMode } from '../modes';
 
 /**
@@ -19,12 +20,35 @@ import { useMode } from '../modes';
 export function useNotificationModeBridge(): NotificationModeBridge {
   const { mode, ready, switchMode } = useMode();
   const latest = useRef({ mode, ready, switchMode });
+  // FIX-RUN B8: taps that arrived before the mode resolved (a cold start from a
+  // push) wait here and are answered the moment `ready` flips.
+  const waiters = useRef(new Set<(mode: AppMode | null) => void>());
   useEffect(() => {
     latest.current = { mode, ready, switchMode };
+    if (ready && waiters.current.size) {
+      const pending = [...waiters.current];
+      waiters.current.clear();
+      for (const resolve of pending) resolve(mode);
+    }
   });
   return useMemo(
     () => ({
       getMode: () => (latest.current.ready ? latest.current.mode : null),
+      // Resolves with the mode once it is known, or null after `timeoutMs`
+      // (Setup or the legal gate can hold resolution back indefinitely; the
+      // caller then keeps its both-trees fallback).
+      whenReady: (timeoutMs) =>
+        latest.current.ready
+          ? Promise.resolve(latest.current.mode)
+          : new Promise<AppMode | null>((resolve) => {
+              const done = (value: AppMode | null) => {
+                clearTimeout(timer);
+                waiters.current.delete(done);
+                resolve(value);
+              };
+              const timer = setTimeout(() => done(null), timeoutMs);
+              waiters.current.add(done);
+            }),
       switchMode: (target, options) => latest.current.switchMode(target, options),
     }),
     []
