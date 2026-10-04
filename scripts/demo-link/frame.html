@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>BRAZOS demo</title>
+    <meta name="description" content="A browser copy of the BRAZOS iPhone app, running on practice money." />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/favicon.ico" />
+    <script>
+      // A phone opens the app itself, full screen: its own browser already
+      // supplies the real notch and home bar. `?frame=1` keeps the frame.
+      (function () {
+        var narrow = Math.min(window.screen.width, window.innerWidth) < 560;
+        var touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        if (narrow && touch && !/[?&]frame=1\b/.test(location.search)) {
+          location.replace('/app.html' + location.search);
+        }
+      })();
+    </script>
+    <style>
+      :root {
+        --page: #e9e6df;
+        --ink: #1b1d1b;
+        --muted: #5f655f;
+        --bezel: #0b0b0d;
+        --edge: #34343a;
+        --s: 1;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --page: #101211;
+          --ink: #ecebe6;
+          --muted: #9aa09a;
+          --edge: #45454c;
+        }
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        background: var(--page);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+      }
+      /* The phone is drawn at its true size (393 x 852 points, the iPhone 15 Pro)
+         and scaled as a whole, so the app inside always lays out at 393 x 852. */
+      .fit {
+        width: calc(417px * var(--s));
+        height: calc(876px * var(--s));
+        flex: none;
+      }
+      .phone {
+        position: relative;
+        width: 417px;
+        height: 876px;
+        border-radius: 68px;
+        background: var(--bezel);
+        box-shadow: 0 0 0 2px var(--edge), 0 28px 70px rgba(0, 0, 0, 0.32);
+        transform: scale(var(--s));
+        transform-origin: top left;
+      }
+      .screen {
+        position: absolute;
+        left: 12px;
+        top: 12px;
+        width: 393px;
+        height: 852px;
+        border-radius: 56px;
+        overflow: hidden;
+        background: #000;
+        isolation: isolate;
+      }
+      iframe {
+        display: block;
+        width: 393px;
+        height: 852px;
+        border: 0;
+        background: #f7f4ed;
+      }
+      .status {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 393px;
+        height: 59px;
+        pointer-events: none;
+        color: #000;
+        transition: color 0.2s;
+      }
+      .status.light {
+        color: #fff;
+      }
+      .time {
+        position: absolute;
+        left: 0;
+        width: 134px;
+        top: 19px;
+        text-align: center;
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: -0.2px;
+      }
+      .icons {
+        position: absolute;
+        right: 26px;
+        top: 21px;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .island {
+        position: absolute;
+        left: 134px;
+        top: 11px;
+        width: 125px;
+        height: 37px;
+        border-radius: 19px;
+        background: #000;
+        pointer-events: none;
+      }
+      .home {
+        position: absolute;
+        left: 127px;
+        bottom: 8px;
+        width: 139px;
+        height: 5px;
+        border-radius: 3px;
+        background: #000;
+        pointer-events: none;
+        transition: background 0.2s;
+      }
+      .home.light {
+        background: #fff;
+      }
+      .caption {
+        text-align: center;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--muted);
+        max-width: 420px;
+        padding: 0 16px;
+      }
+      .caption strong {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .caption a {
+        color: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="fit" id="fit">
+      <div class="phone">
+        <div class="screen">
+          <iframe id="app" title="BRAZOS app" allow="geolocation; microphone; clipboard-write"></iframe>
+          <div class="status" id="status" aria-hidden="true">
+            <div class="time" id="time">9:41</div>
+            <div class="icons">
+              <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor">
+                <rect x="0" y="8" width="3" height="4" rx="1" />
+                <rect x="5" y="5.5" width="3" height="6.5" rx="1" />
+                <rect x="10" y="3" width="3" height="9" rx="1" />
+                <rect x="15" y="0" width="3" height="12" rx="1" />
+              </svg>
+              <svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor">
+                <path d="M8 2.4c2.2 0 4.2.8 5.7 2.2l1.3-1.3A9.9 9.9 0 0 0 8 .5 9.9 9.9 0 0 0 1 3.3l1.3 1.3A8.1 8.1 0 0 1 8 2.4Z" />
+                <path d="M8 6c1.2 0 2.3.4 3.1 1.2l1.3-1.3A6.3 6.3 0 0 0 8 4.1c-1.7 0-3.3.7-4.4 1.8l1.3 1.3C5.7 6.4 6.8 6 8 6Z" />
+                <path d="M8 9.6 10 7.6a2.9 2.9 0 0 0-4 0l2 2Z" />
+              </svg>
+              <svg width="27" height="13" viewBox="0 0 27 13" fill="none">
+                <rect x="0.5" y="0.5" width="23" height="12" rx="3.8" stroke="currentColor" opacity="0.4" />
+                <rect x="2" y="2" width="20" height="9" rx="2.5" fill="currentColor" />
+                <path d="M25 4.5v4c.8-.3 1.4-1.1 1.4-2s-.6-1.7-1.4-2Z" fill="currentColor" opacity="0.4" />
+              </svg>
+            </div>
+          </div>
+          <div class="island" aria-hidden="true"></div>
+          <div class="home" id="home" aria-hidden="true"></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">
+      <strong>BRAZOS</strong> · a browser copy of the iPhone app.<br />
+      It runs on practice money: nothing real is ever charged.
+      <a href="/app.html">Open full screen</a>
+    </p>
+    <script>
+      (function () {
+        var frame = document.getElementById('app');
+        var fit = document.getElementById('fit');
+        var status = document.getElementById('status');
+        var home = document.getElementById('home');
+        var clock = document.getElementById('time');
+
+        // The iPhone 15 Pro's safe area, handed to the app the way Safari on
+        // that phone hands it over: through the element react-native-safe-area-
+        // context measures. Its padding is env(safe-area-inset-*), which a
+        // desktop browser reports as 0; this rule gives it the phone's 59 / 34,
+        // and the provider re-measures on the transition the change starts.
+        var INSETS =
+          'body > div[style*="safe-area-inset"]{padding:59px 0 34px 0 !important}';
+        function inject() {
+          try {
+            var doc = frame.contentDocument;
+            if (!doc || !doc.head || doc.location.pathname !== '/app.html') return false;
+            if (doc.getElementById('demo-safe-area')) return true;
+            var style = doc.createElement('style');
+            style.id = 'demo-safe-area';
+            style.textContent = INSETS;
+            doc.head.appendChild(style);
+            return true;
+          } catch (error) {
+            return false;
+          }
+        }
+        frame.addEventListener('load', inject);
+        frame.src = '/app.html' + location.search.replace(/[?&]frame=1\b/, '');
+        (function early() {
+          if (!inject()) requestAnimationFrame(early);
+        })();
+
+        // The status bar and home bar take the colour that reads on whatever
+        // the app is drawing beneath them, as iOS does.
+        function tone(y) {
+          try {
+            var doc = frame.contentDocument;
+            var el = doc && doc.elementFromPoint(196, y);
+            while (el) {
+              var match = /rgba?\(([^)]+)\)/.exec(getComputedStyle(el).backgroundColor);
+              if (match) {
+                var p = match[1].split(',').map(Number);
+                if (p.length < 4 || p[3] > 0.5) {
+                  var lum = (0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]) / 255;
+                  return lum < 0.55 ? 'light' : 'dark';
+                }
+              }
+              el = el.parentElement;
+            }
+          } catch (error) {}
+          return 'dark';
+        }
+        function paint() {
+          status.className = 'status ' + tone(30);
+          home.className = 'home ' + tone(846);
+        }
+        setInterval(paint, 400);
+
+        function tick() {
+          var now = new Date();
+          var h = now.getHours() % 12 || 12;
+          var m = String(now.getMinutes()).padStart(2, '0');
+          clock.textContent = h + ':' + m;
+        }
+        tick();
+        setInterval(tick, 15000);
+
+        function scale() {
+          var s = Math.min(1, (window.innerHeight - 110) / 876, (window.innerWidth - 32) / 417);
+          document.documentElement.style.setProperty('--s', String(Math.max(0.4, s)));
+        }
+        scale();
+        window.addEventListener('resize', scale);
+      })();
+    </script>
+  </body>
+</html>

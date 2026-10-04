@@ -1,6 +1,6 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-10-03 (FIX RUN — BUILT, REVIEWED AND SWEPT, the first section below, is the current state — then
+WRITTEN: 2026-10-04 (THE DEMO LINK, the first section below, is the newest — then THE PHONE FIX — then FIX RUN — BUILT, REVIEWED AND SWEPT — then
 DESIGN LOOP 3, the sitting that planned it — then THE TAB BAR FIX — then BUILD RUN — DONE, the run it followed — then the BUILD RUN's planning section as it was written before "build", superseded by the first —
 then THE VIEWER'S PREP FIXED, AND THE TAB BAR EXPLORED, the DESIGN LOOP section, BUILD IT, the
 LUX-LIST-2 run's, LUX-LIST-64's, the NEXT SESSION primer of 2026-09-27 (the pipeline, the fences and
@@ -10,6 +10,62 @@ the Lux drawing run's, the eighteen-item run's and the sittings before them, unc
 
 Rewritten as the last act of every run. Read it before naming what is blocked or what just
 happened.
+
+## THE DEMO LINK — a browser copy of the app, shareable by URL, gated by a test robot (2026-10-04)
+
+**What it is.** https://brazos-demo.expo.app — the app's own code exported for the browser
+(react-native-web), shown inside an iPhone 15 Pro frame (393 × 852, the 59 / 34 safe area handed to
+the app as Safari on that phone would), on STAGING, on PRACTICE MONEY (`EXPO_PUBLIC_PAYMENTS_MODE=
+sandbox`, the labelled simulated ledger — a browser has no card sheet and `create-payment` answers no
+browser). Free on EAS Hosting. The operator asked for it ("an html build thats shareable via link"),
+chose "Safe copy + test robot" and "With each phone update". LUX-LIST-3 §7 has their words.
+
+**Live since 2026-10-04:** production URL https://brazos-demo.expo.app (EAS Hosting deployment
+`brazos-demo--w12e0t53h2`), bundle `index-a7d1b02b01ee5d3e1ac96b4e6decffaa.js` — the bundle the robot
+passed, at `1d33f76`'s app code. `/config.js` names staging (`zzkumxcjtbqoselzptig`); every file
+answers 200. **Not yet opened by a person on the live link** — the run may not touch staging, so the
+operator's 2-minute check (open it, sign in with a test login, tap around) is the outstanding step.
+
+**Standing instruction — refresh it with each phone update.** After every `npm run update:preview`,
+run `npm run demo:refresh` (needs `supabase start` and the machine's EAS login). It exports the copy,
+resets the LOCAL stack and runs the robot, points the site at staging through `eas env:exec preview`
+(no value is read from `.env` or printed), and deploys only the bundle the robot passed — its pass is
+written against the bundle's hash. A red robot leaves the live link on the last green version.
+
+**Untouched, by the operator's choice:** the phone app's code and the frozen web surface. Everything
+is additive: `scripts/demo-link/` (lib, frame.html, robot, write-config, refresh, serve-local),
+`tests/demoLink.test.mjs` (8 fences: staging only, production refused, secret keys refused, practice
+money, no vendor keys, nothing built under dist/ public/ hosting/, deploy gated on the robot, the
+robot never reaches a remote Supabase host), the `demo:refresh` script. Build output lives in the
+gitignored `.shots/demo-link/`.
+
+**The robot** (`scripts/demo-link/robot.mjs`): two browsers side by side, the seed's customer
+(dark) and worker (light), on the local stack — sign in (Terms read to the end), post, worker
+search + bid, accept & pay ($53.75 confirm) → practice-money hold ("TEST MODE — no real money
+moves"), on my way → here → start → photo → mark complete, approve & release (its confirm), both
+reviews. Any uncaught page error fails it. Green: see the refresh log in `.shots/demo-link/`.
+
+**What the copy is NOT (told to the operator):** not the 120 Hz feel (same animations, browser
+thread, mostly 60 Hz); no native screen slides or swipe-back; no haptics; no push, camera, Face ID;
+mic features may not work; the map is the web map; fonts match on Apple devices only.
+
+**Found while building, not fixed (the phone code was out of bounds), for the operator:**
+- Practice money: the accept confirm says "Total charged $53.75" (the fee schedule) while the
+  sandbox hold is written at $50 with a zero fee — the two figures disagree in sandbox mode, on the
+  phone too if it ever runs sandbox.
+- Web only: the tab bar's moving bubble shows the wrong tab's icon and label on some tabs (My Jobs
+  shows "Profile") — the ink copy inside the bubble is offset under react-native-web.
+- Web only, by design: with no push, the other person's change reaches a browser by the 20 s
+  freshness window (HUB_STALE_MS), so a viewer may need to switch tabs to see it.
+- Local stack only: finished-work photos never draw locally — the seed's buckets are private
+  (R7b) while job photos are read by public URL. Staging decides for the live link: this is the
+  parked "is photo storage public?" question.
+- The accept dialog's content flips to "Accept bid" while it closes (seen in a frame capture;
+  needs a phone check).
+
+**Docker note.** Docker Desktop crashed on start (stale Windows AF_UNIX sockets); the run moved
+`%LOCALAPPDATA%\Docker\run` and `%LOCALAPPDATA%\docker-secrets-engine` aside (`*.stale-20261004`,
+nothing deleted) and it started. A reboot clears the stale folders for good.
 
 ## THE PHONE FIX — the fix run's OTA blanked every header-link screen on the iPhone; two layout fixes shipped (2026-10-03, after the fix run; `e341b01`, `3b47d74`)
 

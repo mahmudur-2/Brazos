@@ -589,3 +589,14 @@ all"; other screens → "Not sure, id need you to directly check everything... t
 implement correct fix in the best way so it doesnt happen in the future". → FIXED (`e341b01`,
 `3b47d74`, HANDOFF "THE PHONE FIX"); the screens walk written for the future
 (`.maestro/screens-walk.yml`), blocked by Expo's paid-plan requirement (operator decision).
+2026-10-04 — THE DEMO LINK. Their words: "is there a way to share this exact build with someone
+(even if they don't have an iphone?) like for them to see everything my app does?" → answered:
+the ad hoc build installs on the registered iPhone only; Appetize runs the real app in a browser
+but its free plan is 30 minutes a month for everyone together. Then: "how about an html build thats
+shareable via link? like opens up a simulator etc ... There has to be a better free way no?" and
+"can we make it so it can make auto on the air updates too? ... how accurate will it be from the
+real app?" → answered: the browser copy, free, on Expo hosting; looks very close, not the 120 Hz
+feel; practice money. Popup answers: updates → "With each phone update (Recommended)"; version →
+"Safe copy + test robot (Recommended)" (the phone app and the frozen web code untouched); link
+name → "brazos-demo (Recommended)". Then: "build (if needed may use subagents but not too many)".
+→ BUILT: scripts/demo-link/ (HANDOFF "THE DEMO LINK").
