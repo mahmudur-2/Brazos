@@ -58,9 +58,8 @@ Gates 0–2 are closed; Gate 3 is live (`docs/GATES.md`).
 ## Blocked — waiting on the operator
 
 1. **`docs/proposed/` is applied and committed (`f042276`).** Do not run the apply script again.
-   Left for the operator:
-   - delete the untracked `docs/proposed/CLAUDE.md` and `docs/proposed/guard.ps1`: they carry the
-     production ref and must never be committed;
+   The untracked copies `docs/proposed/CLAUDE.md` and `docs/proposed/guard.ps1` were deleted on
+   2026-10-06 after a byte check against `f042276`. Left for the operator:
    - optional: 11 of the guard test's 30 safe calls stay refused by layers the token diet left
      alone: the evidence hook (`.claude/settings.local.json`) refuses writes to `~/.claude/plans`
      and the memory folder, and `.claude/settings.json` denies `git stash:*`, `node -e *` and
