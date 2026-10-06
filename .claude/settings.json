@@ -28,7 +28,6 @@
       "PowerShell(git clean:*)",
       "Bash(git stash:*)",
       "PowerShell(git stash:*)",
-
       "Edit(/design-reference/**)",
       "Edit(/public/**)",
       "Edit(/hosting/**)",
@@ -36,32 +35,26 @@
       "Edit(/WEB_DEPLOYMENT.md)",
       "Edit(**/*.web.ts)",
       "Edit(**/*.web.tsx)",
-
       "Bash(*avkighsiufeefyycbebf*)",
       "PowerShell(*avkighsiufeefyycbebf*)",
-
       "Read(./start.ps1)",
       "Read(./.env)",
       "Read(./.env.*)",
       "Edit(./start.ps1)",
       "Edit(./.env)",
       "Edit(./.env.*)",
-
       "Edit(/.claude/**)",
-
       "Bash(psql:*)",
       "PowerShell(psql:*)",
       "Bash(pg_dump:*)",
       "Bash(pg_restore:*)",
       "Bash(pg_dumpall:*)",
-
       "Bash(*--linked*)",
       "PowerShell(*--linked*)",
       "Bash(*--db-url*)",
       "PowerShell(*--db-url*)",
       "Bash(*--project-ref*)",
       "PowerShell(*--project-ref*)",
-
       "Bash(*supabase login*)",
       "PowerShell(*supabase login*)",
       "Bash(*supabase logout*)",
@@ -88,7 +81,6 @@
       "PowerShell(*supabase branches*)",
       "Bash(*supabase functions deploy*)",
       "PowerShell(*supabase functions deploy*)",
-
       "Bash(claude)",
       "Bash(claude *)",
       "Bash(claude.exe)",
@@ -96,7 +88,6 @@
       "PowerShell(claude)",
       "PowerShell(claude *)",
       "PowerShell(claude.exe *)",
-
       "PowerShell(Invoke-Expression *)",
       "Bash(*-EncodedCommand*)",
       "PowerShell(*-EncodedCommand*)",
@@ -107,17 +98,14 @@
       "Bash(node -p *)",
       "Bash(python -c *)",
       "PowerShell(node -e *)",
-
       "Bash(*--amend*)",
       "PowerShell(*--amend*)",
-
       "Bash(git add .)",
       "Bash(git add -A)",
       "Bash(git add -A *)",
       "Bash(git add -u)",
       "Bash(git add -u *)",
       "Bash(git add --all*)",
-
       "Bash(git pull:*)",
       "PowerShell(git pull:*)",
       "Bash(git fetch:*)",
@@ -184,5 +172,8 @@
         ]
       }
     ]
-  }
+  },
+  "claudeMdExcludes": [
+    "**/.shots/**"
+  ]
 }

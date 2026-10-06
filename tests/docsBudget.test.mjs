@@ -21,3 +21,13 @@ for (const [file, max] of BUDGETS) {
     assert.ok(size <= max, `${file} is ${size} bytes, over its ${max}-byte budget: move the oldest material to its archive, never raise the budget to pass`);
   });
 }
+
+// CLAUDE.md is read into every chat, so it stays under 5,000 bytes; a line starting with @ would
+// import another file into every chat too.
+test('CLAUDE.md stays under 5,000 bytes, with no line starting with @', () => {
+  const text = readFileSync(join(ROOT, 'CLAUDE.md'), 'utf8').replace(/\r\n/g, '\n');
+  const size = Buffer.byteLength(text);
+  assert.ok(size < 5_000, `CLAUDE.md is ${size} bytes; it must stay under 5,000, never raise the limit to pass`);
+  const imports = text.split('\n').filter((line) => line.startsWith('@'));
+  assert.deepEqual(imports, [], `CLAUDE.md has lines starting with @, which import files into every chat: ${imports.join(' | ')}`);
+});
