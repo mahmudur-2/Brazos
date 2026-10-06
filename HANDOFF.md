@@ -7,8 +7,8 @@ one to `docs/handoff-archive/<date>-<name>.md`. Machine state is Git's: `git log
 
 ## Now
 
-**Token diet + guard fix (2026-10-06; `656d246`, `3200a35`).** Docs only; nothing in the app
-changed. `npm run verify`: exit 0, 1629/1629.
+**Token diet + guard fix — applied (2026-10-06; `656d246`, `3200a35`, `f042276`).** Docs and the
+owner's files only; nothing in the app changed. `npm run verify` at `f042276`: exit 0, 1630/1630.
 - `HANDOFF.md` rewritten to this shape; the old one is archived as above.
 - `docs/DECISIONS.md` is now an index of the 110 decisions in force, one line each. The full log
   to 2026-10-06 is `docs/archive/DECISIONS-2026-10.md`, verbatim.
@@ -19,9 +19,11 @@ changed. `npm run verify`: exit 0, 1629/1629.
 - `docs/dispatch/` keeps 3 briefs (FIX-RUN, MOTION-INVENTORY, LUX-LIST-3); 17 older ones are in
   `docs/archive/dispatch/`.
 - `docs/README.md` says how an old pointer resolves.
-- `tests/docsBudget.test.mjs` fences HANDOFF (12,000 B) and DECISIONS (40,000 B).
-- Proposals for the owner-only files are in `docs/proposed/` (Blocked 1). Guard test
-  (`docs/proposed/guard-test.md`): of 30 safe calls the current guard refused, the proposed guard
+- `tests/docsBudget.test.mjs` fences HANDOFF (12,000 B), DECISIONS (40,000 B) and `CLAUDE.md`
+  (under 5,000 B, now 4,378; no line starting with @).
+- The owner applied `docs/proposed/` (`apply-owner-changes.ps1`); `f042276` commits the five files
+  as applied (`CLAUDE.md` and `.claude/hooks/guard.ps1` match `docs/proposed/` byte for byte).
+  Guard test (`docs/proposed/guard-test.md`): of 30 safe calls the old guard refused, the new one
   passes 24; all 10 dangerous calls stay blocked; `tests/safety.test.mjs` against it: 120/120.
 
 **Demo link (`b2c2891`).** https://brazos-demo.expo.app — EAS Hosting deployment
@@ -55,19 +57,14 @@ Gates 0–2 are closed; Gate 3 is live (`docs/GATES.md`).
 
 ## Blocked — waiting on the operator
 
-1. **Apply `docs/proposed/`** with Claude Code closed:
-   `powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\mdmah\BRAZOS\docs\proposed\apply-owner-changes.ps1`.
-   - It backs up to `C:\Users\mdmah\.claude\backups\brazos-2026-10-06`, then replaces
-     `CLAUDE.md` and `.claude/hooks/guard.ps1`, appends to `.claude/rules/{supabase,native-ui}.md`,
-     and adds `claudeMdExcludes` to `.claude/settings.json`. It prints ALL APPLIED and the
-     restore command.
-   - Afterwards: `npm run verify`, then commit those five files by path. Delete the untracked
-     `docs/proposed/CLAUDE.md` and `docs/proposed/guard.ps1`: they carry the production ref and
-     must never be committed.
-   - Even after applying, 11 of the guard test's 30 safe calls stay refused by layers this run
-     left alone: the evidence hook (`.claude/settings.local.json`) refuses writes to
-     `~/.claude/plans` and the memory folder, and `.claude/settings.json` denies `git stash:*`,
-     `node -e *` and `node -p *`. Narrow those by hand if wanted.
+1. **`docs/proposed/` is applied and committed (`f042276`).** Do not run the apply script again.
+   Left for the operator:
+   - delete the untracked `docs/proposed/CLAUDE.md` and `docs/proposed/guard.ps1`: they carry the
+     production ref and must never be committed;
+   - optional: 11 of the guard test's 30 safe calls stay refused by layers the token diet left
+     alone: the evidence hook (`.claude/settings.local.json`) refuses writes to `~/.claude/plans`
+     and the memory folder, and `.claude/settings.json` denies `git stash:*`, `node -e *` and
+     `node -p *`. Narrow those by hand if wanted.
 2. **Production:** hand-apply `20260930000600`–`20260930001300` and
    `20261003000000`–`20261003001200`, in order, before any production build or OTA. The app reads
    `needed_today`, `late_minutes`, `late_reported_at` and `series_id`.
@@ -179,17 +176,18 @@ Gates 0–2 are closed; Gate 3 is live (`docs/GATES.md`).
 - CRLF files (`docs/DECISIONS.md`, `lib/time.ts`, `lib/hotspots.ts`, others). After `git apply`,
   autocrlf turns patched files CRLF: run `.shots/refresh/buildit-lf.mjs` before verify.
 - In a Bash heredoc `\\` collapses to `\`: write scripts that need a backslash with the Write tool.
-- The co-author trailer can't appear in a command (until Blocked 1 is applied): commit with
-  `git commit -F <file>`.
+- Commit with `git commit -F <file>`: the old guard refused the co-author trailer in a command
+  (untested on the new one). The new guard refuses `git branch --show-current` (GUARD-GIT; use
+  `git status -sb`) and `cmd /c` (GUARD-DYNEXEC).
 - The evidence hook refuses Read of `docs/archive/` and `docs/handoff-archive/`: use `git show`
   or Grep.
 - Never stage the operator's files in `docs/mockups/html/lux/`.
 
 ## Revert
 
-- **This run:** `git revert 3200a35 656d246`, plus the HANDOFF commit after them.
-- **The applied proposals:** the one restore command the apply script prints. The backups are in
-  `C:\Users\mdmah\.claude\backups\brazos-2026-10-06`.
+- **Token diet:** `git revert 3200a35 656d246`, plus the HANDOFF commits after them.
+- **The applied proposals:** `git revert f042276` restores the five old files and drops the
+  CLAUDE.md test with them. The backups are in `C:\Users\mdmah\.claude\backups\brazos-2026-10-06`.
 - **Demo link:** `git revert b2c2891` (the live site stays up until it is taken down on EAS).
 - **Phone fix:** `git revert 3b47d74 e341b01`, then `npm run verify`, then an OTA on the operator's
   word.
