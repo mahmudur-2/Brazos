@@ -22,3 +22,4 @@ newest-first; this list is its reverse).
 14. [2026-08-22-serif-retired-g001.md](2026-08-22-serif-retired-g001.md) — Serif retired app-wide + G-001 closed.
 15. [2026-08-22-securestore-session-adapter.md](2026-08-22-securestore-session-adapter.md) — SecureStore session adapter wired and landed.
 16. [2026-08-22-modeswitch-parity-map-serif.md](2026-08-22-modeswitch-parity-map-serif.md) — Mode-switch crash root cause (two-commit swap), Home light/dark parity, worker pills, Map restructure + session-only distance, hero Playfair restore.
+17. [2026-10-HANDOFF-full.md](2026-10-HANDOFF-full.md) — The whole root `HANDOFF.md` as it stood on 2026-10-06 (newest run first), moved here verbatim by the token diet; the root file now keeps only Now / Blocked / Next / Revert.

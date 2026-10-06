@@ -8,7 +8,8 @@
 
 `docs/README.md` says which documentation surface is authoritative and which
 is history. `docs/architecture.md` is the implemented architecture;
-`BRAZOS_MASTER_PLAN.md` is roadmap intent, never current state.
+`docs/BRAZOS_TARGET_ARCHITECTURE_v3.md` is the one roadmap owner (run queue,
+priorities, backlog), never current state.
 
 ## Machine state comes from Git
 

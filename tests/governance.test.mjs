@@ -31,7 +31,6 @@ const ACTIVE_DOCS = [
   'CLAUDE.md',
   'AGENTS.md',
   'HANDOFF.md',
-  'BRAZOS_MASTER_PLAN.md',
   'docs/architecture.md',
   'docs/README.md',
   'docs/PROJECT-CHAT.md',

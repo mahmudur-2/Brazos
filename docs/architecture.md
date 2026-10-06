@@ -2,7 +2,7 @@
 
 What the code does today, reconstructed from source, migrations and tests. This
 file owns *implemented architecture* and nothing else: no machine state (Git),
-no operational context (`HANDOFF.md`), no roadmap (`BRAZOS_MASTER_PLAN.md`). If
+no operational context (`HANDOFF.md`), no roadmap (`docs/BRAZOS_TARGET_ARCHITECTURE_v3.md`). If
 it disagrees with the code, the code wins — fix this file.
 
 ## The four layers, kept separate

@@ -89,11 +89,11 @@ operator-authored reference material.
 | Document | Role |
 | --- | --- |
 | `CLAUDE.md` | Permanent policy and invariants. Binding on all automated work. |
-| `docs/GATES.md` | The phase gates. Binding — imported by `CLAUDE.md`. |
-| `docs/SCOPE.md` | The v1 feature list, plus the frozen list of what already exists beyond it. Binding — imported by `CLAUDE.md`. |
+| `docs/GATES.md` | The phase gates: the open Gate 3 (closed Gates 0–2 are in `docs/archive/`). Binding — named by `CLAUDE.md`. |
+| `docs/SCOPE.md` | The v1 feature list, plus the frozen list of what already exists beyond it. Binding — named by `CLAUDE.md`. |
 | `AGENTS.md` | Reading order for an agent starting a session. |
-| `HANDOFF.md` | Current operational context (live edge only; per-run history is in `docs/handoff-archive/`). |
-| `BRAZOS_MASTER_PLAN.md` | Roadmap intent — never current state. |
+| `HANDOFF.md` | Current operational context: Now / Blocked / Next / Revert only (per-run history is in `docs/handoff-archive/`). |
+| `docs/BRAZOS_TARGET_ARCHITECTURE_v3.md` | The one roadmap owner — never current state. |
 | `docs/architecture.md` | Implemented architecture. |
 | `docs/README.md` | Index and classification of every documentation surface. |
 
