@@ -7,10 +7,11 @@ one to `docs/handoff-archive/<date>-<name>.md`. Machine state is Git's: `git log
 
 ## Now
 
-**Token diet + guard fix (2026-10-06).** Docs only; nothing in the app changed.
+**Token diet + guard fix (2026-10-06; `656d246`, `3200a35`).** Docs only; nothing in the app
+changed. `npm run verify`: exit 0, 1629/1629.
 - `HANDOFF.md` rewritten to this shape; the old one is archived as above.
-- `docs/DECISIONS.md` is now an index: one line per decision in force. The full log to
-  2026-10-06 is `docs/archive/DECISIONS-2026-10.md`.
+- `docs/DECISIONS.md` is now an index of the 110 decisions in force, one line each. The full log
+  to 2026-10-06 is `docs/archive/DECISIONS-2026-10.md`, verbatim.
 - `docs/GATES.md` keeps the open Gate 3. Closed Gates 0–2 are in
   `docs/archive/GATES_closed_2026-10.md`.
 - `docs/BRAZOS_TARGET_ARCHITECTURE_v3.md` is the one roadmap owner. `BRAZOS_MASTER_PLAN.md`,
@@ -19,7 +20,9 @@ one to `docs/handoff-archive/<date>-<name>.md`. Machine state is Git's: `git log
   `docs/archive/dispatch/`.
 - `docs/README.md` says how an old pointer resolves.
 - `tests/docsBudget.test.mjs` fences HANDOFF (12,000 B) and DECISIONS (40,000 B).
-- Proposals for the owner-only files are in `docs/proposed/` (Blocked 1).
+- Proposals for the owner-only files are in `docs/proposed/` (Blocked 1). Guard test
+  (`docs/proposed/guard-test.md`): of 30 safe calls the current guard refused, the proposed guard
+  passes 24; all 10 dangerous calls stay blocked; `tests/safety.test.mjs` against it: 120/120.
 
 **Demo link (`b2c2891`).** https://brazos-demo.expo.app — EAS Hosting deployment
 `brazos-demo--w12e0t53h2`, bundle `index-a7d1b02b01ee5d3e1ac96b4e6decffaa.js`. Staging data,
@@ -61,7 +64,10 @@ Gates 0–2 are closed; Gate 3 is live (`docs/GATES.md`).
    - Afterwards: `npm run verify`, then commit those five files by path. Delete the untracked
      `docs/proposed/CLAUDE.md` and `docs/proposed/guard.ps1`: they carry the production ref and
      must never be committed.
-   - The guard test is in `docs/proposed/guard-test.md`.
+   - Even after applying, 11 of the guard test's 30 safe calls stay refused by layers this run
+     left alone: the evidence hook (`.claude/settings.local.json`) refuses writes to
+     `~/.claude/plans` and the memory folder, and `.claude/settings.json` denies `git stash:*`,
+     `node -e *` and `node -p *`. Narrow those by hand if wanted.
 2. **Production:** hand-apply `20260930000600`–`20260930001300` and
    `20261003000000`–`20261003001200`, in order, before any production build or OTA. The app reads
    `needed_today`, `late_minutes`, `late_reported_at` and `series_id`.
@@ -181,7 +187,7 @@ Gates 0–2 are closed; Gate 3 is live (`docs/GATES.md`).
 
 ## Revert
 
-- **This run:** `git revert` its commits (docs, one test, the guard-test files).
+- **This run:** `git revert 3200a35 656d246`, plus the HANDOFF commit after them.
 - **The applied proposals:** the one restore command the apply script prints. The backups are in
   `C:\Users\mdmah\.claude\backups\brazos-2026-10-06`.
 - **Demo link:** `git revert b2c2891` (the live site stays up until it is taken down on EAS).
