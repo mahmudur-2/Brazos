@@ -11,7 +11,7 @@
 // secrets every row is resolved 'skipped' and logged, and the card still follows the job whenever
 // the app is open (hooks/useLiveJobCard.ts).
 //
-//   APNS_KEY_P8    the .p8 key's contents (-----BEGIN PRIVATE KEY----- …), from Apple Developer →
+//   APNS_KEY_P8    the .p8 key's contents (-----BEGIN PRIVATE KEY----- …; key-guard: allow, a header not a key), from Apple Developer →
 //                  Keys, with Apple Push Notifications enabled.
 //   APNS_KEY_ID    that key's ten-character id.
 //   APNS_TEAM_ID   the team id.
