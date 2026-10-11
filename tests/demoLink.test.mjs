@@ -11,10 +11,10 @@ const url = (ref) => `https://${ref}.supabase.co`;
 
 test('the link may name staging, with its anon or publishable key, and nothing else', () => {
   assert.doesNotThrow(() => assertStagingConfig({ SUPABASE_URL: url(STAGING_REF), SUPABASE_KEY: jwt({ ref: STAGING_REF, role: 'anon' }) }));
-  assert.doesNotThrow(() => assertStagingConfig({ SUPABASE_URL: url(STAGING_REF), SUPABASE_KEY: 'sb_publishable_abc123' }));
-  assert.throws(() => assertStagingConfig({ SUPABASE_URL: url(PRODUCTION_REF), SUPABASE_KEY: 'sb_publishable_abc123' }), /production/);
-  assert.throws(() => assertStagingConfig({ SUPABASE_URL: url('abcdefghijklmnopqrst'), SUPABASE_KEY: 'sb_publishable_abc123' }), /not staging/);
-  assert.throws(() => assertStagingConfig({ SUPABASE_URL: 'http://127.0.0.1:54321', SUPABASE_KEY: 'sb_publishable_abc123' }), /no Supabase project URL/);
+  assert.doesNotThrow(() => assertStagingConfig({ SUPABASE_URL: url(STAGING_REF), SUPABASE_KEY: 'sb_publishable_abc123' })); // key-guard: allow, a publishable (public) key fixture
+  assert.throws(() => assertStagingConfig({ SUPABASE_URL: url(PRODUCTION_REF), SUPABASE_KEY: 'sb_publishable_abc123' }), /production/); // key-guard: allow, a publishable (public) key fixture
+  assert.throws(() => assertStagingConfig({ SUPABASE_URL: url('abcdefghijklmnopqrst'), SUPABASE_KEY: 'sb_publishable_abc123' }), /not staging/); // key-guard: allow, a publishable (public) key fixture
+  assert.throws(() => assertStagingConfig({ SUPABASE_URL: 'http://127.0.0.1:54321', SUPABASE_KEY: 'sb_publishable_abc123' }), /no Supabase project URL/); // key-guard: allow, a publishable (public) key fixture
 });
 
 test('a secret-shaped key never reaches the public /config.js', () => {
