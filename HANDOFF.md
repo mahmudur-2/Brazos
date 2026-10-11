@@ -10,12 +10,13 @@ one to `docs/handoff-archive/<date>-<name>.md`. Machine state is Git's: `git log
 
 ## Now
 
-**Owner's 2026-10-11 rules (`714baa7`, `7fe4433`).** `CLAUDE.md` gained the owner's Core rules block,
+**Owner's 2026-10-11 rules (`714baa7`, `7fe4433`, `52307af`).** `CLAUDE.md` gained the owner's Core rules block,
 the manual-production-deploys line and a Critical folders list (supabase/migrations, supabase/functions,
 lib/phoneAuth, lib/payments); other lines were shortened so it stays under 5,000 B (now 4,991), no rule
 changed. `docs/DECISIONS.md`: D-20261011-1. `.gitignore`: `.claude/run-lock.json`, `.claude/worktrees/`.
 - The minute backup's key guard had halted BRAZOS uploads on `supabase/functions/send-live-cards/index.ts:14`
-  (a PEM header inside the env-var comment, not a key): the line now carries `key-guard: allow`. Nothing was
+  (a PEM header inside the env-var comment, not a key), then on `tests/demoLink.test.mjs:14-17` (publishable-key
+  fixtures, public values): all five lines now carry `key-guard: allow` (`7fe4433`, `52307af`). Nothing was
   pushed by a chat. The `.shots` backup (judge Q2) waits for the owner's words "backup shots now".
 
 **Token diet + guard fix — applied (2026-10-06; `656d246`, `3200a35`, `f042276`).** Docs and the
