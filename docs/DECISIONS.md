@@ -141,3 +141,4 @@ index says what applies; the archive says why.
 | D-20261003-1 | 2026-10-03 | Sandbox UI strings are plain product copy ("Test mode — no real money moved.", etc.), no developer vocabulary | L202 |
 | D-20261003-2 | 2026-10-03 | A legal-gate failure admits only on-device proof that the server confirmed THIS account accepted the CURRENT Terms and Privacy; otherwise it fails closed; sign-out always works locally | L203 |
 | D-20261003-3 | 2026-10-03 | SCOPE.md's "built already" voice-search line also names the in-v1 dictation's on-device boundary; no scope change | L205 |
+| D-20261011-1 | 2026-10-11 | Core rules block replaced by the owner's 2026-10-11 version (a run never waits at night; hard stops only: sending to real people, moving real money, deleting data with no backup, store submissions; spending money or a red deploy = parked step). Production deploys stay manual. Critical folders listed in CLAUDE.md. | `CLAUDE.md` |

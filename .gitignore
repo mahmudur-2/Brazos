@@ -35,6 +35,8 @@ yarn-error.*
 .claude/settings.local.json
 .claude/*.local.json
 .claude/_claude_bak/
+.claude/run-lock.json
+.claude/worktrees/
 brazos-review.zip
 # Per-run agent scratch: commit messages passed to `git commit -F`, verify
 # logs, one-off probe scripts. Working material for a single run, never an
