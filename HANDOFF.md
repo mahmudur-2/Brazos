@@ -1,3 +1,6 @@
+## Resume line
+`Read HANDOFF.md in full, then git log -10 --oneline and git status, then continue with the Next step.`
+
 # HANDOFF
 
 Now / Blocked / Next / Revert only, 12,000 bytes at most (`tests/docsBudget.test.mjs`). Every run
@@ -6,6 +9,14 @@ section up to 2026-10-06 is kept verbatim in `docs/handoff-archive/2026-10-HANDO
 one to `docs/handoff-archive/<date>-<name>.md`. Machine state is Git's: `git log`, `git status`.
 
 ## Now
+
+**Owner's 2026-10-11 rules (`714baa7`, `7fe4433`).** `CLAUDE.md` gained the owner's Core rules block,
+the manual-production-deploys line and a Critical folders list (supabase/migrations, supabase/functions,
+lib/phoneAuth, lib/payments); other lines were shortened so it stays under 5,000 B (now 4,991), no rule
+changed. `docs/DECISIONS.md`: D-20261011-1. `.gitignore`: `.claude/run-lock.json`, `.claude/worktrees/`.
+- The minute backup's key guard had halted BRAZOS uploads on `supabase/functions/send-live-cards/index.ts:14`
+  (a PEM header inside the env-var comment, not a key): the line now carries `key-guard: allow`. Nothing was
+  pushed by a chat. The `.shots` backup (judge Q2) waits for the owner's words "backup shots now".
 
 **Token diet + guard fix — applied (2026-10-06; `656d246`, `3200a35`, `f042276`).** Docs and the
 owner's files only; nothing in the app changed. `npm run verify` at `f042276`: exit 0, 1630/1630.
@@ -20,7 +31,7 @@ owner's files only; nothing in the app changed. `npm run verify` at `f042276`: e
   `docs/archive/dispatch/`.
 - `docs/README.md` says how an old pointer resolves.
 - `tests/docsBudget.test.mjs` fences HANDOFF (12,000 B), DECISIONS (40,000 B) and `CLAUDE.md`
-  (under 5,000 B, now 4,378; no line starting with @).
+  (under 5,000 B, now 4,991; no line starting with @).
 - The owner applied `docs/proposed/` (`apply-owner-changes.ps1`); `f042276` commits the five files
   as applied (`CLAUDE.md` and `.claude/hooks/guard.ps1` match `docs/proposed/` byte for byte).
   Guard test (`docs/proposed/guard-test.md`): of 30 safe calls the old guard refused, the new one
