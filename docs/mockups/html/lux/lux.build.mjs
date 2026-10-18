@@ -437,6 +437,104 @@ const SYSTEM_CSS = `
 .choice.on{border-color:var(--acc);background:rgba(126,226,180,.12)}
 .choice svg{width:24px;height:24px;color:var(--acc)}
 .overlayart{position:absolute;left:0;right:0;bottom:0;width:393px;display:block}
+/* --- fable: Customer Home (home-fable) --- */
+.herof{position:relative;display:flex;flex-direction:column;gap:8px;min-height:172px}
+.herof .art{right:-33px;top:2px}
+.greetf{display:flex;gap:5px;font-size:18px;line-height:22px;font-weight:500;color:var(--ink);white-space:nowrap}
+.greetf b{color:var(--gold);font-weight:600}
+.hubf{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.hubf .hd{display:flex;gap:12px;align-items:center}
+.hubf .hd .well{width:48px;height:48px;border-radius:24px}
+.hubf .hd .well svg{width:22px;height:22px}
+.hubf .amt{font-size:20px;line-height:24px}
+.hubf .act{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700;color:var(--acc);min-width:0}
+.hubf .act svg{width:16px;height:16px;flex:0 0 auto}
+.hubf .act span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hubf .vd{font-size:12px;color:var(--muted);white-space:nowrap;flex:0 0 auto}
+.tilesf .tile{font-size:12px;line-height:14px;gap:7px}
+.linkf svg{width:18px;height:18px;flex:0 0 auto}
+/* --- fable: Post a job · Review and publish (post-review-fable) --- */
+.noticef{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:19px;color:var(--ink)}
+.noticef svg{width:20px;height:20px;color:var(--acc);flex:0 0 auto}
+.sumf{padding:18px 16px;display:flex;flex-direction:column;gap:14px}
+.sumf .t{font-size:22px;line-height:26px;font-weight:700;color:var(--ink)}
+.sumf .d{font-size:15px;line-height:21px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+/* --- fable: Compare bids (compare-fable) --- */
+.av44{width:44px;height:44px;border-radius:22px;background:rgba(255,255,255,.06);border:1.5px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:Georgia,"Times New Roman",serif;font-size:17px;font-weight:700;color:var(--gold);flex:0 0 auto}
+.bidf{padding:16px;display:flex;flex-direction:column;gap:10px}
+.bidf .hd{display:flex;align-items:center;gap:12px}
+.bidf .nm{flex:1;min-width:0;font-size:17px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bidf .amt{font-size:22px;line-height:26px}
+.bidf .ft{display:flex;align-items:center;gap:2px;font-size:13px;color:var(--muted)}
+.bidf .ft b{color:var(--acc);font-weight:700}
+.bidf .ft svg{width:12px;height:12px;color:var(--acc)}
+.protf{padding:18px 16px;display:flex;flex-direction:column;gap:10px;position:relative}
+.protf .shield{position:absolute;right:16px;top:16px;width:40px;height:40px;border-radius:20px;background:rgba(126,226,180,.12);display:flex;align-items:center;justify-content:center}
+.protf .shield svg{width:22px;height:22px;color:var(--acc)}
+.protf .tiles3{display:flex;gap:8px;margin-top:6px}
+.protf .pt{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 6px;border-radius:16px;background:rgba(255,255,255,.06);text-align:center}
+.protf .pt .g{width:34px;height:34px;border-radius:17px;background:rgba(126,226,180,.12);display:flex;align-items:center;justify-content:center}
+.protf .pt .g svg{width:18px;height:18px;color:var(--acc)}
+.protf .pt .t{font-size:13px;font-weight:700;color:var(--ink)}
+.protf .pt .s{font-size:11px;color:var(--muted)}
+/* --- fable: the client's job detail (cjob-fable) --- */
+.pcard{padding:18px 16px;display:flex;flex-direction:column;gap:12px}
+.pcard .sect{font-size:20px}
+.btn2.danger{color:#F0A0A0;border-color:rgba(240,160,160,.35)}
+.btn2.sm{height:44px;font-size:15px;flex:1}
+.btn2 svg{width:20px;height:20px;flex:0 0 auto}
+.av52{width:52px;height:52px;border-radius:26px;background:rgba(255,255,255,.06);border:1.5px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:Georgia,"Times New Roman",serif;font-size:20px;font-weight:700;color:var(--gold);flex:0 0 auto}
+.wrow{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;background:rgba(255,255,255,.06)}
+.wrow .nm{font-size:16px;font-weight:700;color:var(--ink)}
+.wrow .chevw{display:flex;color:var(--muted);flex:0 0 auto}
+.wrow .chevw svg{width:18px;height:18px}
+.moneylg{font-size:30px;line-height:34px;font-weight:800;color:var(--gold)}
+.tagf{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:15px;background:rgba(126,226,180,.14);color:var(--acc);font-size:13px;font-weight:700;align-self:flex-start}
+.tagf svg{width:15px;height:15px}
+.thumb96{width:96px;height:96px;border-radius:16px;overflow:hidden;background:rgba(255,255,255,.06)}
+.noticec{display:flex;gap:10px;align-items:flex-start;padding:14px 16px;font-size:14px;line-height:19px;color:var(--muted)}
+.noticec svg{width:20px;height:20px;color:var(--muted);flex:0 0 auto}
+/* --- fable: Chat, Checkout, Welcome, Sign in --- */
+.chathd{display:flex;align-items:center;gap:10px;min-height:44px}
+.chathd .av34{width:34px;height:34px;border-radius:17px;background:rgba(255,255,255,.06);border:1.5px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:Georgia,"Times New Roman",serif;font-size:13px;font-weight:700;color:var(--gold);flex:0 0 auto}
+.chathd .nm{font-size:17px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chathd .sub{font-size:13px;line-height:16px;color:var(--muted)}
+.bub .img{width:200px;height:150px;border-radius:14px;overflow:hidden;background:rgba(255,255,255,.06)}
+.bub .img .pimg{width:100%;height:100%}
+.bub .vn{display:flex;align-items:center;gap:10px}
+.bub .vn .dur{font-size:12px;color:var(--muted);flex:0 0 auto}
+.bub .doc .nm{font-size:14px;font-weight:600;color:var(--ink);line-height:18px}
+.bub .doc .sz{font-size:12px;color:var(--muted)}
+.bub .ft svg.sent{color:var(--muted)}
+.bub .ft svg.read{color:var(--gold)}
+.livef{position:absolute;left:16px;right:16px;display:flex;align-items:center;gap:10px;padding:10px 12px}
+.livef .pin{width:34px;height:34px;border-radius:17px;background:rgba(126,226,180,.14);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.livef .pin svg{width:18px;height:18px;color:var(--acc)}
+.livef .t{font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.livef .d{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.livef .rem{font-size:12px;font-weight:700;color:var(--acc);flex:0 0 auto}
+.composer .plus svg{width:28px;height:28px;color:var(--ink)}
+.explf{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:19px;color:var(--muted)}
+.explf svg{width:18px;height:18px;color:var(--acc);flex:0 0 auto;margin-top:1px}
+.explf b{color:var(--ink);font-weight:700}
+.artf{position:relative;height:250px}
+.artf .ring{position:absolute;left:50%;top:22px;width:206px;height:206px;margin-left:-103px;border-radius:50%;background:rgba(126,226,180,.10)}
+.artf .ring i{position:absolute;inset:0;border-radius:50%;display:block}
+.artf .ring i.b{left:6%;top:6%;right:-6%;bottom:-6%;background:rgba(126,226,180,.09)}
+.artf .ring i.c{left:12%;top:12%;right:-12%;bottom:-12%;background:rgba(126,226,180,.08)}
+.badgef{position:absolute;display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-radius:20px;background:rgba(9,36,31,.90);border:1px solid var(--rim);box-shadow:inset 0 1px 0 var(--spec),0 10px 30px rgba(0,0,0,.35);font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap}
+.badgef svg{width:16px;height:16px;color:var(--acc)}
+.topbar{display:flex;align-items:center;justify-content:space-between;height:40px}
+.topbar .t{font-size:15px;font-weight:700;color:var(--ink)}
+.phonef{display:flex;gap:8px}
+.phonef .cc{height:54px;padding:0 12px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(200,255,230,.10);display:flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:var(--ink);flex:0 0 auto}
+.phonef .cc svg{width:14px;height:14px;color:var(--muted);transform:rotate(90deg)}
+.phonef .in{flex:1;height:54px;padding:0 16px}
+.phonef .in .dial{color:var(--muted);font-weight:600}
+/* --- fable: Review & tip (review-tip-fable) --- */
+.presetf{display:flex;gap:8px}
+.presetf .p{flex:1;height:44px;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid rgba(200,255,230,.12)}
+.presetf .p.on{background:var(--acc);color:var(--accInk);border-color:transparent}
 `;
 
 const base = `
@@ -1310,6 +1408,370 @@ const amount = (which = 'amount') => which === 'amount'
   ? `${chat(CHAT_END)}<div class="scrim"></div><div class="card dialog"><div class="h2 serif" style="font-size:24px;line-height:28px">Counter offer</div><p class="muted" style="font-size:14px;line-height:20px;margin-top:-6px">Currently ${BIDS[0].amount}. Propose a different amount.</p><div class="in" style="height:56px;gap:6px"><span class="money" style="font-size:22px">$</span><span class="money" style="font-size:22px">100</span></div><div style="display:flex;gap:10px"><div class="btn2" style="flex:1">Cancel</div><div class="cta" style="flex:1">Send counter</div></div></div>`
   : `${home()}<div class="scrim"></div><div class="card dialog"><div class="h2 serif" style="font-size:24px;line-height:28px">Switch to Worker Mode?</div><p class="muted" style="font-size:14px;line-height:20px;margin-top:-6px">You’ll see the jobs you can bid on. The jobs you’ve posted stay exactly where they are — switch back any time.</p><div class="stack" style="gap:10px"><div class="cta">Switch</div><div class="btn2">Stay in Customer</div></div></div>`;
 
+
+/**
+ * Customer Home (screens/HomeScreen.tsx) — the Fable comparison page. Every
+ * control the live screen draws, in its order: the hero (greeting + first name
+ * in gold, the two-line headline, the three-line subtitle, the armchair art),
+ * the task card (its title, the search field with the voice mic while empty,
+ * the "Post a job ›" pill), "Popular services" with the sliding tile row (four
+ * whole tiles fill the row, nothing peeks), "Needs your attention" (the posted
+ * jobs waiting on the customer, most urgent first, each hub card carrying its
+ * next-action line; "See all" only past the cap of three, so not here), and
+ * "Your jobs" (the three most recent postings with "View all"). Data: the
+ * harness's four seeded jobs (JOBS) — the hub card shows formatBudget() of the
+ * row's budget_cents, which is the range's upper bound, and the long time-ago
+ * form the card draws ("2 h ago"). The All services sheet is its own page.
+ */
+const home_fable = (scroll = 0) => {
+  const first = CLIENT.split(' ')[0];
+  const bidsOf = (j) => (j.bids === 'No bids' ? 0 : Number(j.bids.split(' ')[0]));
+  const price = (j) => (j.pay.includes('–') ? '$' + j.pay.split('–')[1] : j.pay);
+  const ageLong = (j) => j.age.replace(/^([0-9]+)([a-z])/, '$1 $2');
+  const subtitle = (j) => { const n = bidsOf(j); return n ? `${n} ${n === 1 ? 'bid' : 'bids'} received` : 'Awaiting bids'; };
+  const nextAction = (j) => { const n = bidsOf(j); return `${n} ${n === 1 ? 'bid' : 'bids'} to review`; };
+  const hub = (j, action) => `<div class="card hubf">
+      <div class="between"><div style="display:flex;align-items:center;gap:10px"><span class="chip">Open</span><span class="meta">${ageLong(j)}</span></div><span class="money amt">${price(j)}</span></div>
+      <div class="hd"><div class="well">${ic(j.icon)}</div><div class="stack" style="gap:3px;min-width:0;flex:1"><div class="title lines2">${j.title}</div><span class="muted" style="font-size:13px">${subtitle(j)}</span></div></div>
+      ${action
+        ? `<div class="between" style="gap:12px"><div class="act">${ic('i-arrow')}<span>${action}</span></div><span class="vd">View details</span></div>`
+        : `<div class="act" style="justify-content:flex-end">View details${ic('i-arrow')}</div>`}
+    </div>`;
+  const sectionHead = (title, link) => `<div class="between"><span class="sect serif" style="font-size:22px">${title}</span>${link ? `<span class="link linkf" style="display:flex;align-items:center;gap:4px;font-size:14px">${link}${ic('i-arrow')}</span>` : ''}</div>`;
+  // Needs your attention: open jobs with bids, most recent first (lib/homeAttention.ts rank 2 for all of them).
+  const attention = JOBS.filter((j) => bidsOf(j) > 0);
+  const yours = JOBS.slice(0, 3);
+  const inner = `
+    <div class="herof">
+      <img class="art" src="${photoSrc()}" alt="">
+      <div class="greetf"><span>Good morning,</span><b>${first}</b></div>
+      <div class="h1 serif" style="font-size:33px;line-height:40px;max-width:235px">Take a task<br>off your plate</div>
+      <p class="muted" style="font-size:14px;line-height:19px;max-width:235px">Describe it.<br>Hire help.<br>Get it handled.</p>
+    </div>
+    <div class="card" style="padding:17px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:20px;line-height:24px;font-weight:700">What do you need done?</div>
+      <div class="field"><span style="flex:1">Describe your task...</span>${ic('i-mic')}</div>
+      <div class="cta">Post a job ›</div>
+    </div>
+    <div class="stack" style="gap:12px">
+      ${sectionHead('Popular services')}
+      <div class="tiles tilesf">${[['Assembly', 'i-wrench'], ['Moving', 'i-cube'], ['Cleaning', 'i-sparkles'], ['TV mounting', 'i-tv']].map(([l, i]) => `<div class="tile">${ic(i)}<span>${l}</span></div>`).join('')}</div>
+    </div>
+    <div class="stack" style="gap:12px">
+      ${sectionHead('Needs your attention')}
+      ${attention.map((j) => hub(j, nextAction(j))).join('')}
+    </div>
+    <div class="stack" style="gap:12px">
+      ${sectionHead('Your jobs', 'View all')}
+      ${yours.map((j) => hub(j)).join('')}
+    </div>`;
+  return scroller(64, 84, scroll, inner, 24) + nav('Home');
+};
+
+
+/**
+ * Post a job · 4 Review and publish (screens/PostJobScreen.tsx, step 3 of
+ * POST_STEPS, a fresh post in the default open-bids pricing mode) — the Fable
+ * comparison page. Every control the step draws, in its order: the wizard
+ * header (back link "Location", the centred "Post a Job", no right link on the
+ * last step — its forward action is the footer), the step intro ("STEP 4 OF
+ * 4", "Review and publish", its subtitle) and the four-segment progress row,
+ * the "Max budget" display pill with its pencil (the only pressable — it opens
+ * the Edit Budget dialog, its own page) and the optional hint, the JOB SUMMARY
+ * card (title, description clamped to four lines, then Category · Area ·
+ * Media · Timing · Address (private) · Budget), the publish notice, and the
+ * one pinned footer button, "Publish". Data: the sample detail job as the
+ * wizard writes it (DETAIL, POST) — one photo, no private address given, so
+ * the row reads the app's own "Not added".
+ */
+const postReview_fable = (scroll = 0) => {
+  const rows = [
+    ['i-grid', 'Category', POST.cat],
+    ['i-pin', 'Area', DETAIL.hood],
+    ['i-images', 'Media', '1 photo'],
+    ['i-clock', 'Timing', POST.timing],
+    ['i-lock', 'Address (private)', 'Not added'],
+  ];
+  const inner = `
+    ${wizHeader('Location', 'Post a Job', '')}
+    ${stepIntro(4, 'Review and publish', 'Check the details below. You can still go back without losing your work.')}
+    <div class="fld"><span class="lbl">Max budget</span><div class="pricepill"><span class="money" style="font-size:20px">${POST.pay}</span><div class="pen">${ic('i-pencil')}</div></div><span class="cap">Optional — leave blank if you want workers to propose a price.</span></div>
+    <div class="card sumf">
+      <span class="eyebrow">Job summary</span>
+      <div class="t serif">${DETAIL.title}</div>
+      <div class="d">${DETAIL.body}</div>
+      <div class="divider"></div>
+      ${rows.map(([i, k, v]) => frow(i, k, v)).join('')}
+      ${frow('i-card', 'Budget', POST.pay, true)}
+    </div>
+    <div class="noticef">${ic('i-checkcircle')}<span>Publishing makes this job visible to workers nearby.</span></div>`;
+  return scroller(64, 100, scroll, inner, 20) + `<div class="sticky"><div class="cta">Publish</div></div><div class="home-bar"></div>`;
+};
+
+
+/**
+ * Compare bids (screens/CompareBidsScreen.tsx) — the Fable comparison page.
+ * Every control the screen draws, in its order: the pushed header ("Compare
+ * bids", back), the header card (the count-and-title eyebrow on one line, the
+ * "Protected job" pill, "Compare the full offer.", the framing line), the
+ * stated order rule, one row per pending bid in the deterministic order
+ * (rating, then lowest price, then earliest — both samples unrated, so Sam's
+ * $110 leads), each with the avatar, the name, the amount, the trust line and
+ * "Bid N h ago · full terms ›", then the BRAZOS PROTECTS card with its three
+ * tiles. Honest to the sample data: both bidders are new workers, so the
+ * rating row and the "Highest rated" tag do not render, the trust line reads
+ * the app's own "New worker", and that branch hides the pitch. The dark
+ * monogram behind the header copy is dropped (light never had it). Empty,
+ * loading and error states are the template's.
+ */
+const compare_fable = (scroll = 0) => {
+  const sorted = [...BIDS].sort((a, b) => Number(a.amount.slice(1)) - Number(b.amount.slice(1)));
+  const row = (b) => `<div class="card bidf">
+      <div class="hd"><div class="av44">${b.w.initials}</div><span class="nm">${b.w.name}</span><span class="money amt">${b.amount}</span></div>
+      <span class="muted" style="font-size:13px">New worker</span>
+      <div class="ft">Bid ${b.age.replace(/^([0-9]+)([a-z])/, '$1 $2')} · <b>full terms</b>${ic('i-chev')}</div>
+    </div>`;
+  const tiles = [['i-grid', 'Scope', 'Agreed work'], ['i-shield', 'Payment', 'Held safely'], ['i-images', 'Evidence', 'Before release']];
+  const inner = `
+    ${header('Compare bids')}
+    <div class="stack" style="gap:10px">
+      <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:8px">
+        <div class="between" style="gap:10px;align-items:flex-start"><span class="eyebrow" style="min-width:0;line-height:16px">${BIDS.length} bids · ${DETAIL.title}</span><span class="chip" style="flex:0 0 auto">Protected job</span></div>
+        <div class="h2 serif">Compare the full offer.</div>
+        <p class="muted" style="font-size:14px;line-height:19px">Price matters, but fit, reliability and included work determine value.</p>
+      </div>
+      <span class="cap">Sorted by rating, then lowest price, then earliest bid.</span>
+    </div>
+    <div class="stack" style="gap:12px">${sorted.map(row).join('')}</div>
+    <div class="card protf">
+      <div class="shield">${ic('i-shield')}</div>
+      <span class="eyebrow">Brazos protects</span>
+      <div class="h2 serif" style="font-size:22px;line-height:26px;padding-right:56px">One job. One clear record.</div>
+      <div class="tiles3">${tiles.map(([i, t, s]) => `<div class="pt"><div class="g">${ic(i)}</div><div><div class="t">${t}</div><div class="s">${s}</div></div></div>`).join('')}</div>
+    </div>
+`;
+  return scroller(64, 95, scroll, inner, 20) + nav('');
+};
+
+
+/**
+ * The client's job detail (screens/ClientJobDetailScreen.tsx) — the Fable
+ * comparison page, in the state the sample job's lifecycle constants describe:
+ * Sam's bid accepted and the payment funded (status assigned, payment held —
+ * PAY's figures are the fee schedule's, so the card reads the Stripe-mode copy). Every control that state
+ * draws, in its order: the pushed header ("Job detail" — "Job & bids" belongs
+ * to the open state), the job hero (the Assigned badge, "Posted N h ago", the
+ * title, the category glyph and area line, AGREED PRICE, and the owner's two
+ * actions, Edit job · Delete job), JOB SCOPE (the description and the category
+ * tag), TIMING & ADDRESS (the arrival window; no private address was given so
+ * that row does not render), JOB PROGRESS ("Where things stand", Assigned ·
+ * In progress · Completed), ASSIGNED WORKER (the worker row, "$110 agreed",
+ * the chevron to their profile), the "Message Sam" and "Track worker" buttons,
+ * PROTECTED PAYMENT (what the card was charged, MoneyText's own held caption,
+ * the held note), WORK EVIDENCE ("Your original media" — the one
+ * posting photo), and the waiting notice. Pull-to-refresh, the photo viewer,
+ * the error banners and the accept dialog are states the page does not show.
+ */
+const cjob_fable = (scroll = 0) => {
+  const inner = `
+    ${header('Job detail')}
+    <div class="card pcard">
+      <div class="between"><span class="chip">Assigned</span><span class="meta">Posted 2 h ago</span></div>
+      <div class="h2 serif">${DETAIL.title}</div>
+      <div style="display:flex;align-items:center;gap:10px"><div class="well sm">${ic('i-wrench')}</div><span class="muted" style="font-size:14px">${POST.cat} · ${DETAIL.hood}</span></div>
+      <div class="divider"></div>
+      <div class="stack" style="gap:2px"><span class="eyebrow">Agreed price</span><span class="money" style="font-size:24px;line-height:28px">${PAY.agreed}</span></div>
+      <div class="divider"></div>
+      <div style="display:flex;gap:10px"><div class="btn2 sm">Edit job</div><div class="btn2 sm danger">Delete job</div></div>
+    </div>
+    <div class="card pcard">
+      <span class="eyebrow">Job scope</span>
+      <p style="font-size:15px;line-height:21px;color:var(--ink)">${DETAIL.body}</p>
+      <span class="tagf">${ic('i-wrench')}${POST.cat}</span>
+    </div>
+    <div class="card pcard">
+      <span class="eyebrow">Timing &amp; address</span>
+      <div style="display:flex;align-items:center;gap:10px"><div class="well sm">${ic('i-clock')}</div><span style="font-size:15px;font-weight:600">${POST.timing}</span></div>
+    </div>
+    <div class="card pcard">
+      <span class="eyebrow">Job progress</span>
+      <div class="sect">Where things stand</div>
+      <div class="steps">${['Assigned', 'In progress', 'Completed'].map((l, i) => `<div class="st${i === 0 ? ' done on' : ''}"><i></i><span>${l}</span></div>`).join('')}</div>
+    </div>
+    <div class="card pcard">
+      <span class="eyebrow">Assigned worker</span>
+      <div class="sect">${WORKER.name}</div>
+      <div class="wrow"><div class="av52">${WORKER.initials}</div><div class="stack" style="gap:2px;flex:1;min-width:0"><span class="nm">${WORKER.name}</span><span class="muted" style="font-size:13px">${PAY.agreed} agreed</span></div><span class="chevw">${ic('i-chev')}</span></div>
+    </div>
+    <div class="btn2">${ic('i-chat')}Message ${WORKER.first}</div>
+    <div class="btn2">${ic('i-pin')}Track worker</div>
+    <div class="card pcard" style="position:relative">
+      <div class="well sm" style="position:absolute;right:16px;top:16px">${ic('i-shield')}</div>
+      <span class="eyebrow" style="padding-right:48px">Protected payment</span>
+      <div class="stack" style="gap:2px"><span class="moneylg">${PAY.total}</span><span class="muted" style="font-size:13px">Funds held in protection</span></div>
+      <p class="muted" style="font-size:14px;line-height:19px">Funds stay held until you approve the finished work.</p>
+    </div>
+    <div class="card pcard">
+      <span class="eyebrow">Work evidence</span>
+      <div class="sect">Your original media</div>
+      <span class="muted" style="font-size:13px;font-weight:600">Your job photos</span>
+      <div style="display:flex;gap:10px"><div class="thumb96"><div class="pimg"></div></div></div>
+    </div>
+    <div class="card noticec">${ic('i-clock')}<span>Waiting for the worker to finish. You can leave a review once the job is completed.</span></div>`;
+  return scroller(64, 95, scroll, inner, 16) + nav('');
+};
+
+
+// ---- the mockup's sample thread (chat-fable): four short messages between the
+// client and Sam about the sample job — the only text this page invents — plus
+// the app's own art as the one photo, a voice note, a document and Sam's live
+// share. Clock times as formatClockTime() writes them.
+const THREAD = [
+  { who: 'them', t: '9:12 AM', text: 'Hi! Confirming Saturday at 9 — I’ll bring the drill and a second Allen set.' },
+  { who: 'me', t: '9:15 AM', tick: 'read', text: 'Perfect. Both boxes are in the living room — here’s the armchair one.' },
+  { who: 'me', t: '9:15 AM', tick: 'read', photo: true },
+  { who: 'them', t: '9:20 AM', voice: '0:12' },
+  { who: 'me', t: '9:24 AM', tick: 'sent', doc: ['Armchair assembly guide.pdf', '1.2 MB'] },
+];
+/**
+ * Chat (screens/ChatScreen.tsx, components/ChatComposer.tsx) — the Fable
+ * comparison page, the thread scrolled to its end. Every control the unlocked
+ * thread draws, in its order: the header (back, the counterparty's avatar, the
+ * name that opens their profile, the job title under it, the "More" menu —
+ * its own page), the job divider, the bubbles (text, a photo, a voice note, a
+ * document, each with its clock time and, on your own, the tick — one muted
+ * tick sent, the gold double tick read), the persistent live-location card the
+ * other person is sharing (area · coordinates, the time remaining), and the
+ * composer (attach [+] — Camera · Photos · Voice Message · Live location ·
+ * Document — the "Message…" field, the dictation mic that becomes Send once
+ * there is text). The long-press sheet, the reply bar, reactions, the photo
+ * viewer and the dialogs are states the page does not show.
+ */
+const chat_fable = () => {
+  const tick = (k) => k === 'read' ? `<span class="tk">${ic('i-check', 'read')}${ic('i-check', 'read')}</span>` : `<span class="tk">${ic('i-check', 'sent')}</span>`;
+  const bars = [6, 12, 18, 10, 22, 14, 8, 16, 20, 9, 13, 7, 17, 11, 6].map((h) => `<i style="height:${h}px"></i>`).join('');
+  const bub = (m) => `<div class="bub ${m.who}">${m.text ? m.text : ''}${m.photo ? '<div class="img"><div class="pimg"></div></div>' : ''}${m.voice ? `<div class="vn"><div class="play">${ic('i-arrow')}</div><div class="wave">${bars}</div><span class="dur">${m.voice}</span></div>` : ''}${m.doc ? `<div class="doc"><div class="ico">${ic('i-archive')}</div><div class="stack" style="gap:1px;min-width:0"><span class="nm">${m.doc[0]}</span><span class="sz">${m.doc[1]}</span></div></div>` : ''}<div class="ft"><span>${m.t}</span>${m.who === 'me' ? tick(m.tick) : ''}</div></div>`;
+  return `<div class="body" style="gap:0">
+    <div class="chathd"><div class="circle">${ic('i-back')}</div><div class="av34">${WORKER.initials}</div><div class="stack" style="gap:1px;flex:1;min-width:0"><span class="nm">${WORKER.name}</span><span class="sub">${DETAIL.title}</span></div><div class="circle">${ic('i-dots')}</div></div>
+  </div>
+  <div class="clip" style="top:140px;bottom:230px"><div class="col msgs" style="padding:0 16px;justify-content:flex-end;height:100%">
+    <div class="jobdiv"><i></i><span>${DETAIL.title}</span><i></i></div>
+    ${THREAD.map(bub).join('')}
+  </div></div>
+  <div class="card livef" style="bottom:160px"><div class="pin">${ic('i-pin')}</div><div class="stack" style="gap:1px;flex:1;min-width:0"><span class="t">${WORKER.name}’s live location</span><span class="d">Flatbush · 40.6501, -73.9496</span></div><span class="rem">12m</span></div>
+  <div class="composer"><span class="plus">${ic('i-plus')}</span><div class="in ph"><span style="flex:1">Message…</span></div>${ic('i-mic')}</div>
+  ` + nav('Inbox');
+};
+
+/**
+ * Checkout (screens/CheckoutScreen.tsx, the DetailScreen template) — the Fable
+ * comparison page, in card mode before the payment exists (the PAY figures
+ * are the fee schedule's quote for the accepted $110 at the 7.5% customer
+ * fee). Every control that state draws, in its order: the header ("Protected
+ * checkout", the job title under it, back), "What you’re protecting" (Accepted
+ * offer · Agreed price · Scheduled · Protection fee · Total charged to your
+ * card · Funding window — tax renders only when non-zero), "How protection
+ * works" (Pay by card · Hold in protection · Release), and the action bar's
+ * one button, "Protect $118.25 by card". The sandbox banner, the gone /
+ * timeout / window-closed sections, "Current payment state" and the confirm
+ * dialog are other states of the same screen.
+ */
+const checkout_fable = () => {
+  const kv = (k, v, money = false, total = false) => `<div class="kv${total ? ' total' : ''}"><span class="k">${k}</span><span class="v${money ? ' money' : ''}">${v}</span></div>`;
+  const ex = (i, s, t) => `<div class="explf">${ic(i)}<span><b>${s}</b> ${t}</span></div>`;
+  return `<div class="body" style="gap:16px">
+    ${header('Protected checkout')}
+    <span class="cap" style="margin-top:-14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:54px">${DETAIL.title}</span>
+    <div class="stack" style="gap:10px"><span class="sect">What you’re protecting</span>
+      <div class="card" style="padding:8px 16px">
+        ${kv('Accepted offer', WORKER.name)}${kv('Agreed price', PAY.agreed, true)}${kv('Scheduled', POST.timing)}${kv('Protection fee', PAY.fee, true)}${kv('Total charged to your card', PAY.total, true, true)}${kv('Funding window', 'closes in ' + PAY.window)}
+      </div></div>
+    <div class="stack" style="gap:10px"><span class="sect">How protection works</span>
+      <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+        ${ex('i-card', 'Pay by card', 'charges the all-in total shown above through the secure payment sheet. Nothing is charged until you confirm in the sheet.')}
+        ${ex('i-lock', 'Hold in protection', `keeps the funds set aside while ${WORKER.name} does the job. They can see the funds are protected, and can’t be paid early.`)}
+        ${ex('i-checkcircle', 'Release', 'happens only after you approve the completed work — or automatically 72 hours after completion if you don’t respond. Reporting an issue holds the funds instead.')}
+      </div></div>
+  </div><div class="sticky"><div class="cta">Protect ${PAY.total} by card</div></div><div class="home-bar"></div>`;
+};
+
+/**
+ * Welcome (screens/WelcomeScreen.tsx) — the Fable comparison page, drawn in Lux
+ * (whether the auth flow keeps its own emerald/ivory palette is the operator's
+ * ruling). Every control, in its order: the art (the layered ring and the
+ * three badges — Local workers · Protected payment · Local jobs), the eyebrow
+ * "BRAZOS MARKETPLACE", the three-line headline, the body line, and the three
+ * actions — Continue with email, Continue with phone, and the ghost "I already
+ * have an account". No top bar: Welcome has no back.
+ */
+const welcome_fable = () => `<div class="glowbg"></div><div class="body" style="gap:18px;top:70px;bottom:34px">
+    <div class="artf"><div class="ring"><i class="b"></i><i class="c"></i></div>
+      <div class="badgef" style="left:8px;top:58px;transform:rotate(-7deg)">${ic('i-shield')}Local workers</div>
+      <div class="badgef" style="right:4px;top:118px;transform:rotate(8deg)">${ic('i-lock')}Protected payment</div>
+      <div class="badgef" style="left:34px;top:188px">${ic('i-pin')}Local jobs</div>
+    </div>
+    <div class="stack" style="gap:10px"><span class="eyebrow">Brazos marketplace</span><div class="h1 serif" style="font-size:36px;line-height:40px">Get it done.<br>Work with<br>confidence.</div><p class="muted" style="font-size:15px;line-height:21px">Hire trusted local help or find nearby work from one account.</p></div>
+    <div class="stack" style="gap:10px;margin-top:auto"><div class="cta">Continue with email</div><div class="btn2">Continue with phone</div><div class="ghost">I already have an account</div></div>
+  </div><div class="home-bar"></div>`;
+
+/**
+ * Sign in (screens/SignInScreen.tsx) — the Fable comparison page, in Lux. Every
+ * control, in its order: the top bar (back, the small centred "Sign in"), the
+ * brand mark, the eyebrow "WELCOME BACK", "Sign in to BRAZOS", the one-line
+ * subtitle, the phone number field (the country pill — flag, ISO code, its
+ * menu — the +1 dial and the national number, with the NANP placeholder the
+ * app shows), and the two actions — Continue and the ghost "Use Email Instead".
+ * The suspended-account notice and the info notice are states not shown.
+ */
+const signin_fable = () => `<div class="glowbg"></div><div class="body" style="gap:22px">
+    <div class="topbar"><div class="circle">${ic('i-back')}</div><span class="t">Sign in</span><div style="width:40px"></div></div>
+    <div class="stack" style="gap:12px;margin-top:8px"><img src="${brandSrc('brazos-b-leaf.png', 112, 112)}" width="56" height="56" style="border-radius:14px;display:block" alt=""><span class="eyebrow">Welcome back</span><div class="h1 serif" style="font-size:32px;line-height:36px">Sign in to BRAZOS</div><p class="muted" style="font-size:15px;line-height:21px">Use the phone number connected to your account.</p></div>
+    <div class="fld"><span class="lbl">Phone number</span><div class="phonef"><div class="cc"><span>🇺🇸</span>US${ic('i-chev')}</div><div class="in ph"><span class="dial">+1</span><span style="flex:1">347 320 0610</span></div></div></div>
+    <div class="stack" style="gap:10px"><div class="cta">Continue</div><div class="ghost">Use Email Instead</div></div>
+  </div><div class="home-bar"></div>`;
+
+
+/**
+ * Review & tip (screens/ReviewAndTipScreen.tsx, components/ReviewSection.tsx)
+ * — the Fable comparison page, in card mode with the payment released on the
+ * customer's approval (PAY's agreed $110 is the row's amount). Every control,
+ * in its order: the header ("Review & tip", the job title under it, back), the
+ * PAYMENT RELEASED card (MoneyText with its own released caption, the
+ * approval note), the review card ("How was Sam’s work?", the five stars, "Would
+ * you hire Sam again?" with Yes · No, the optional comment field with its
+ * placeholder, "Add photos", "Submit review"), and the tip card ("Add a tip?",
+ * the optional line, the $5 · $10 · $20 · Other presets — the custom amount
+ * field opens under Other — and "Send $10 tip by card" once an amount is
+ * chosen). No stars are lit and no answer is chosen: the page invents no
+ * opinion about a real person. The confirm dialog is a state not shown.
+ */
+const reviewTip_fable = (scroll = 0) => {
+  const inner = `
+    ${header('Review &amp; tip')}
+    <span class="cap" style="margin-top:-6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:54px">${DETAIL.title}</span>
+    <div class="card pcard">
+      <span class="eyebrow">Payment released</span>
+      <div class="stack" style="gap:2px"><span class="money" style="font-size:24px;line-height:28px">${PAY.agreed}</span><span class="muted" style="font-size:13px">Released to worker</span></div>
+      <p class="muted" style="font-size:14px;line-height:19px">Released on your approval.</p>
+    </div>
+    <div class="card pcard">
+      <div class="sect">How was ${WORKER.first}’s work?</div>
+      <div class="stars">${[1, 2, 3, 4, 5].map(() => ic('i-staro')).join('')}</div>
+      <span class="lbl" style="font-size:15px">Would you hire ${WORKER.first} again?</span>
+      <div class="presetf"><div class="p">Yes</div><div class="p">No</div></div>
+      ${fld('Comment (optional)', `Share how it went with ${WORKER.name}…`, { ph: true, multi: true })}
+      <div class="btn2">${ic('i-images')}Add photos</div>
+      <div class="cta">Submit review</div>
+    </div>
+    <div class="card pcard">
+      <div class="sect">Add a tip?</div>
+      <p class="muted" style="font-size:14px;line-height:19px">Entirely optional — every cent of the tip goes to ${WORKER.name}.</p>
+      <div class="presetf"><div class="p">$5</div><div class="p on">$10</div><div class="p">$20</div><div class="p">Other</div></div>
+      <div class="cta">Send $10 tip by card</div>
+    </div>`;
+  return scroller(64, 95, scroll, inner, 16) + nav('');
+};
+
 const SCREENS = {
   home: { label: 'Customer Home', render: home },
   whome: { label: 'Worker Home', render: whome },
@@ -1384,6 +1846,15 @@ const SCREENS = {
   'legal-gate': { label: 'The legal gate', render: legalGate },
   'mode-switch': { label: 'The mode-switch overlay', render: modeSwitch },
   amount: { label: 'Amount prompt · Confirm dialog', render: amount, frames: ['amount', 'confirm'], frameLabels: [' (the amount prompt)', ' (the confirm dialog)'] },
+  'home-fable': { label: 'Customer Home (Fable)', render: home_fable, frames: [0, 474, 947] },
+  'post-review-fable': { label: 'Post a job · 4 Review and publish (Fable)', render: postReview_fable, frames: [0, 266] },
+  'compare-fable': { label: 'Compare bids (Fable)', render: compare_fable, frames: [0, 110] },
+  'cjob-fable': { label: 'The client’s job detail (Fable)', render: cjob_fable, frames: [0, 504, 1007] },
+  'chat-fable': { label: 'Chat (Fable)', render: chat_fable },
+  'checkout-fable': { label: 'Protected checkout (Fable)', render: checkout_fable },
+  'welcome-fable': { label: 'Welcome (Fable)', render: welcome_fable },
+  'signin-fable': { label: 'Sign in (phone) (Fable)', render: signin_fable },
+  'review-tip-fable': { label: 'Review & tip (Fable)', render: reviewTip_fable, frames: [0, 269] },
 };
 
 // ---------------------------------------------------------------------------
