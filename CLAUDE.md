@@ -1,11 +1,8 @@
 # BRAZOS: policy, never current state
 
 ## Core rules (copied from the owner's global rules)
-- Owner doesn't code, has ADHD: basic English, answer first, short, answer every part.
-- Plan, popups, "go", build alone; never wait at night. Hard stops only: sending to real people, moving real money, deleting data with no backup, store submissions. Money or red deploy = parked step.
-- Short helpers, one job each; one review, blockers only. Critical (money, login, personal data, irreversible, folders below): Fable max designs + reviews, Opus writes.
-- Handoff file (docs/STATE.md unless named below) after every step; new chats read it + git log + git status first.
-- Owner's steps: one copy-paste block, where it goes, what to expect.
+Global rules apply; this file holds only this project's rules.
+- Handoff file: `HANDOFF.md` (not docs/STATE.md).
 - BRAZOS production deploys stay manual: a production step is always a parked step for the owner, never run by a chat.
 
 Non-Windows (cloud) chat: change nothing; tell the owner to use Remote Control from the PC (guard hooks need Windows PowerShell).
