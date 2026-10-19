@@ -19,6 +19,10 @@ changed. `docs/DECISIONS.md`: D-20261011-1. `.gitignore`: `.claude/run-lock.json
   fixtures, public values): all five lines now carry `key-guard: allow` (`7fe4433`, `52307af`). Nothing was
   pushed by a chat. The `.shots` backup (judge Q2) waits for the owner's words "backup shots now".
 
+**`.shots` cleanup (2026-10-18).** 232 unused items moved (none deleted) to the gitignored
+`_archive/2026-10-18/.shots/`; list and undo in `_archive/2026-10-18/MOVED.txt`. `.shots` keeps
+the `scripts/shots.mjs --list` outputs and the folders tracked files name.
+
 **Token diet + guard fix — applied (2026-10-06; `656d246`, `3200a35`, `f042276`).** Docs and the
 owner's files only; nothing in the app changed. `npm run verify` at `f042276`: exit 0, 1630/1630.
 - `HANDOFF.md` rewritten to this shape; the old one is archived as above.
@@ -203,3 +207,4 @@ Gates 0–2 are closed; Gate 3 is live (`docs/GATES.md`).
 - **Phone fix:** `git revert 3b47d74 e341b01`, then `npm run verify`, then an OTA on the operator's
   word.
 - **Applied migrations** are never reverted: write a corrective migration.
+- **`.shots` cleanup:** run the undo line in `_archive/2026-10-18/MOVED.txt`.
