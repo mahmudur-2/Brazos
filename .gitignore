@@ -77,3 +77,6 @@ start.ps1
 
 # shot(0) screenshot harness output (scripts/home-shots.mjs)
 .shots/
+
+# owner's dated archive of cleaned-up local files (moved, never deleted)
+_archive/
