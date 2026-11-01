@@ -36,6 +36,7 @@ iOS only for v1; Android config stays and keeps building. Expo SDK: `package.jso
 Production (`avkighsiufeefyycbebf`) is never contacted, read or write. `.env` stays on staging; never modify it. A run uses only the local stack, never a remote project. Rest: `.claude/rules/supabase.md`.
 
 ## Workflow
+Verify: npm run verify
 - Check branch and HEAD with `git` against the dispatch prompt; on a mismatch, stop.
 - Keep unrelated changes: never stash, reset, clean, revert or edit them.
 - Stage by explicit path; check `git diff --cached --name-status`; one commit per milestone.
