@@ -1,8 +1,8 @@
 appId: app.brazos.mobile.preview
 # Shared: Publish from the wizard's review step, then the live page.
-# On a GitHub Mac the publish is the first request after minutes of typing, and the runner drops idle
-# connections silently; iOS gives up after 60 s with "Could not post job" (e2e runs 4 and 5 hung here).
-# One retry covers it. A phone's network does not behave this way.
+# e2e runs 4 and 5 hung here with the job saved on staging: a fast answer interrupted the Seal's intro
+# animation (components/SealTransition.tsx, fixed 2026-11-08). The 90 s wait and the one retry on
+# "Could not post job" stay for a real network failure.
 ---
 - tapOn: "Publish"
 - extendedWaitUntil:

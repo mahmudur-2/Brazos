@@ -1168,3 +1168,36 @@ test('gate · the staged light hero has landed: one mount, gated, on customer Ho
     'the light hero must resolve per palette, never unconditionally'
   );
 });
+
+// ---------------------------------------------------------------------------
+// 2026-11-08 — THE SEAL CANNOT BE STUCK BY A FAST SERVER.
+//
+// e2e runs 4 and 5 (staging) left the ring turning for minutes over a job that
+// WAS saved: the answer came while the intro was still about to move `ring` and
+// `lit` (its 220 ms delay); starting those stopped the saved sequence's own
+// timings on the same values with finished=false, so the tick never drew and
+// onOpened never fired. The intro is kept and stopped before the saved sequence
+// starts, so nothing else moves the values it animates.
+// ---------------------------------------------------------------------------
+
+test('Seal · the saved sequence stops the intro first, so a fast answer cannot interrupt it', () => {
+  const seal = stripComments(read('components/SealTransition.tsx'));
+  const flat = seal.replace(/\s+/g, ' ');
+
+  assert.match(flat, /const intro = useRef<Animated\.CompositeAnimation \| null>\(null\);/, 'the intro is kept');
+  assert.match(
+    flat,
+    /intro\.current = Animated\.sequence\(\[ Animated\.delay\(220\), Animated\.parallel\(\[ Animated\.timing\(ring, \{ toValue: 1,[^\]]*Animated\.timing\(lit, \{ toValue: 0,/,
+    'the kept intro is the delayed ring/lit move'
+  );
+  assert.match(flat, /intro\.current\.start\(\);/, 'and it still runs');
+
+  // In the saved branch the stop comes BEFORE the sequence that animates ring and lit again.
+  const saved = flat.indexOf("if (phase === 'saved') {");
+  assert.notEqual(saved, -1, 'the saved branch must still exist');
+  const stop = flat.indexOf('intro.current?.stop();', saved);
+  const sequence = flat.indexOf('Animated.sequence([', saved);
+  assert.ok(stop > saved && stop < sequence, 'the intro is stopped before the saved sequence starts');
+  // The reveal still waits for a finished sequence: a stopped one (unmount) must not open the page.
+  assert.match(flat, /\.start\(\(\{ finished \}\) => \{ if \(!finished\) return; setRevealing\(true\);/);
+});

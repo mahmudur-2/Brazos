@@ -63,16 +63,22 @@ export function SealTransition({
   // The reveal circle reaches the screen's farthest corner from the tick.
   const reach = 2 * Math.hypot(Math.max(screenW / 2, screenW / 2), Math.max(cy, screenH - cy));
 
-  // Shrink, then turn the ring for as long as the save takes.
+  // Shrink, then turn the ring for as long as the save takes. The intro is kept so a fast
+  // server can stop it: 2026-11-08 (e2e runs 4 and 5 on staging), the answer arrived while the
+  // intro was still about to move `ring` and `lit`; starting those stopped the saved sequence's
+  // own `ring`/`lit` timings with finished=false, so the tick never drew, the reveal never ran,
+  // and the ring turned forever over a job that WAS saved.
+  const intro = useRef<Animated.CompositeAnimation | null>(null);
   useEffect(() => {
     Animated.timing(shrink, { toValue: 1, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE_DRIVER }).start();
-    Animated.sequence([
+    intro.current = Animated.sequence([
       Animated.delay(220),
       Animated.parallel([
         Animated.timing(ring, { toValue: 1, duration: 180, useNativeDriver: USE_NATIVE_DRIVER }),
         Animated.timing(lit, { toValue: 0, duration: 180, useNativeDriver: USE_NATIVE_DRIVER }),
       ]),
-    ]).start();
+    ]);
+    intro.current.start();
   }, [lit, ring, shrink]);
 
   useEffect(() => {
@@ -87,7 +93,9 @@ export function SealTransition({
   useEffect(() => {
     if (phase === 'saved') {
       // Confirmed: the ring goes, the circle lights with a small pop, the tick
-      // draws — and only then does the live page open from it.
+      // draws — and only then does the live page open from it. The intro is
+      // stopped first so nothing else moves `ring` or `lit` under this sequence.
+      intro.current?.stop();
       Animated.sequence([
         Animated.parallel([
           Animated.timing(ring, { toValue: 0, duration: 140, useNativeDriver: USE_NATIVE_DRIVER }),
