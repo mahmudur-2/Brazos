@@ -60,6 +60,7 @@ availability calendar).
   exists); saves about 25 s of upload per build.
 - Staging rows titled `E2E <timestamp>` pile up from the Maestro money walk; purge by title prefix
   once they get in the way.
+- TestSprite happy-path tests need a staging test-user token (auto-auth is Pro): add when the plan allows.
 
 ## Parked operator decisions
 

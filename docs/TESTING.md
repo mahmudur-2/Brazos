@@ -110,3 +110,10 @@ never in this repository.
   in Stripe test mode with the card above. Every job post, profile, review and chat has Report and
   Block; posts, bios, offers, reviews and messages are checked against a word list on the server.
   Account deletion: Profile, Account & safety, Delete Account. Support: Profile, Contact support.
+
+## 6. Server-function contract tests (TestSprite)
+
+- What: one backend test per server function in `tests/testsprite/` (about 45 checks): a missing or bogus token, a wrong method and a bogus body each get a 4xx (never a 200 or a 404), stripe-webhook refuses every bad signature with a 400, and no response holds a secret-shaped string. No secret is sent; happy paths need a staging test user (`docs/BACKLOG.md`).
+- Where: TestSprite project "Brazos staging", environment `staging`. `.github/workflows/testsprite.yml` runs them on a push to `mainexpo` that touches `supabase/functions/`, and on one click: GitHub, Actions, TestSprite, Run workflow. It reads one secret, `TESTSPRITE_API_KEY`.
+- Credits: every run spends TestSprite credits for all nine tests; check `testsprite usage` before running often.
+- `tests/testspriteGate.test.mjs` fences the workflow and the suite offline.
