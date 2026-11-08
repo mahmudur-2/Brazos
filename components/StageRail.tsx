@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLoopActive } from '../hooks/useLoopActive';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -91,10 +91,7 @@ function RailBar({ fill, current }: { fill: number; current: boolean }) {
 
   const filled = Math.max(0, Math.min(1, fill)) * width;
   const sheen = `linear-gradient(90deg, ${withAlpha(colors.white, 0)} 0%, ${withAlpha(colors.white, 0.55)} 50%, ${withAlpha(colors.white, 0)} 100%)`;
-  const sheenStyle: ViewStyle =
-    Platform.OS === 'web'
-      ? ({ backgroundImage: sheen } as unknown as ViewStyle)
-      : ({ experimental_backgroundImage: sheen } as ViewStyle);
+  const sheenStyle: ViewStyle = { experimental_backgroundImage: sheen } as ViewStyle;
 
   return (
     <View style={styles.bar} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>

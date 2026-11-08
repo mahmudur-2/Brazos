@@ -217,14 +217,12 @@ test('avatar and job-photo writes are path-owned', () => {
   );
 });
 
-test('web does not register unsupported notification response listeners', () => {
-  const guards = pushHook.match(/if \(Platform\.OS === 'web'\) return;/g) ?? [];
-  // One guard per native listener effect: the cold-start read, the tap listener,
-  // and (F13) the received listener that refreshes the bell's count.
-  assert.equal(guards.length, 3);
+test('the push hook registers its three native listener effects', () => {
+  // The cold-start read, the tap listener, and (F13) the received listener
+  // that refreshes the bell's count. (Lean D2 removed their web guards.)
   assert.match(pushHook, /getLastNotificationResponseAsync/);
   assert.match(pushHook, /addNotificationResponseReceivedListener/);
-  assert.match(pushHook, /if \(Platform\.OS === 'web'\) return;\s*const subscription = Notifications\.addNotificationReceivedListener\(/);
+  assert.match(pushHook, /useEffect\(\(\) => \{\s*const subscription = Notifications\.addNotificationReceivedListener\(/);
 });
 
 test('function EXECUTE is revoked from anon and regranted to intended roles only', () => {

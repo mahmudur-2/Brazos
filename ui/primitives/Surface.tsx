@@ -1,7 +1,6 @@
 import { useEffect, useState, type PropsWithChildren } from 'react';
 import {
   AccessibilityInfo,
-  Platform,
   StyleSheet,
   View,
   type StyleProp,
@@ -31,10 +30,7 @@ import { backgroundImageStyle } from './LitSurface';
  * binary without the native module (`canBlur`) — the surface renders
  * scrim-only at the material's deeper `fallbackScrimAlpha`, so the
  * accessibility rendering looks intentional, because it is: the mix is data
- * in the materials table, not an accident of a missing module. 2026-09-19:
- * web is no longer such a place — lib/blur.tsx blurs there with a colourless
- * CSS backdrop-filter — so the screenshot harness renders every glass
- * surface at the material's REAL mix, the way the phone does.
+ * in the materials table, not an accident of a missing module.
  *
  * LIGHT IS NOT GLASS — WITH ONE NAMED EXCEPTION. In the light theme this
  * renders the solid theme surface with the ordinary hairline — no blur, no
@@ -114,14 +110,11 @@ export const SURFACE_GLOW_ALPHA = 0.55;
 
 /**
  * Whether the person has asked iOS for Reduce Transparency — subscribed, so a
- * change in Settings reaches every mounted Surface without a relaunch. Web
- * returns false and never asks: the web branch below is the fallback path
- * already, so there is nothing for the API to add there.
+ * change in Settings reaches every mounted Surface without a relaunch.
  */
 function useReduceTransparency(): boolean {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
-    if (Platform.OS === 'web') return;
     let alive = true;
     void AccessibilityInfo.isReduceTransparencyEnabled()
       .then((enabled) => {
@@ -198,20 +191,19 @@ export function Surface({
   const sheenColor = sheen?.color ?? colors.white;
 
   const haloColor = glowColor && isDark ? withAlpha(glowColor, SURFACE_GLOW_ALPHA) : null;
-  // Native keeps the halo on the legacy shadow props; on web it joins the one boxShadow below.
-  const halo = haloColor && Platform.OS !== 'web' ? glow.halo(haloColor) : null;
+  // The halo rides the legacy shadow props.
+  const halo = haloColor ? glow.halo(haloColor) : null;
   // 2026-09-27 (the Lux remake) — the flat card's drop shadow, from the
   // material's own numbers (dark: the Lux 0 10px 30px black .35; light: the
   // auth surface's soft card shadow). Only the `card` material carries one:
   // a blurred pane that moves under a finger would re-rasterise it per frame.
-  // 2026-09-29 (LUX-LIST-2 #6) — ONE boxShadow: the inset top edge, the material's lift and (web) the
-  // glow, the way the reference writes `.card`. React Native 0.81 draws `boxShadow` natively
-  // (inset included) on the new architecture; the web draws the same CSS.
+  // 2026-09-29 (LUX-LIST-2 #6) — ONE boxShadow: the inset top edge and the material's lift, the
+  // way the reference writes `.card`. React Native 0.81 draws `boxShadow` natively (inset
+  // included) on the new architecture.
   const edge = glass && highlightAlpha > 0 ? withAlpha(glass.highlightColor ?? glass.borderColor, highlightAlpha) : null;
   const shadowParts = [
     edge ? `inset 0 1px 0 ${edge}` : null,
     glass?.shadow ? `0 ${glass.shadow.y}px ${glass.shadow.radius * 2}px ${withAlpha(glass.shadow.color, glass.shadow.alpha)}` : null,
-    haloColor && Platform.OS === 'web' ? `0 0 14px ${haloColor}` : null,
   ].filter(Boolean);
   const shadow: ViewStyle | null = shadowParts.length ? ({ boxShadow: shadowParts.join(', ') } as ViewStyle) : null;
   // The material's lit wash (the card's), in whichever theme it is drawn.

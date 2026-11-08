@@ -12,7 +12,7 @@
  * grey row, carving the concave waist of a neck.
  */
 import { useEffect, useMemo, useRef, type ComponentProps, type ComponentType } from 'react';
-import { Animated, Image, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions, type ViewStyle } from 'react-native';
+import { Animated, Image, Pressable, StyleSheet, Text, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CommonActions } from '@react-navigation/native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -188,9 +188,7 @@ export function pillGround(isDark: boolean): ViewStyle {
   const lit = litCardStyle(isDark) as Record<string, unknown>;
   return {
     backgroundColor: lit.backgroundColor as string,
-    ...(Platform.OS === 'web'
-      ? ({ backgroundImage: lit.backgroundImage } as unknown as ViewStyle)
-      : ({ experimental_backgroundImage: lit.experimental_backgroundImage } as ViewStyle)),
+    ...({ experimental_backgroundImage: lit.experimental_backgroundImage } as ViewStyle),
   };
 }
 

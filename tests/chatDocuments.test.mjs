@@ -629,11 +629,10 @@ const sharingModule = (async () => {
   const js = stripTypeScriptTypes(await read('lib/sharing.ts'), { mode: 'strip' });
   const stubbed = js
     .replace(
-      /import \{ Platform, Share \} from 'react-native';/,
-      // Getters, not snapshots: `node --test` caches a data: module by URL, so
-      // every case shares one instance and must read the knobs at call time.
-      `const Platform = { get OS() { return globalThis.__platform; } };
-       const Share = { share: async (a) => { globalThis.__calls.rnShare.push(a); } };`
+      /import \{ Share \} from 'react-native';/,
+      // Read at call time: `node --test` caches a data: module by URL, so
+      // every case shares one instance.
+      `const Share = { share: async (a) => { globalThis.__calls.rnShare.push(a); } };`
     )
     .replace(
       /import \* as Sharing from 'expo-sharing';/,
@@ -686,12 +685,11 @@ const sharingModule = (async () => {
  *  guard. */
 const withSharing = async (
   run,
-  { platform = 'ios', sheet = true, staged = [], downloadError = null } = {}
+  { sheet = true, staged = [], downloadError = null } = {}
 ) => {
   const mod = await sharingModule;
   const calls = sharingCalls();
   globalThis.__calls = calls;
-  globalThis.__platform = platform;
   globalThis.__sheetAvailable = sheet;
   globalThis.__staged = new Set(staged);
   globalThis.__downloadError = downloadError;
@@ -813,31 +811,9 @@ test('[executed] no share sheet is an honest failure, NOT a fallback to the link
 
 test('[executed] dismissing the sheet is a cancellation, and surfaces nothing', async () => {
   // iOS resolves shareAsync when the user dismisses rather than throwing, so
-  // the stub's plain resolve IS the dismissal — the native counterpart of the
-  // web AbortError case, and it must not read as a failure.
+  // the stub's plain resolve IS the dismissal, and it must not read as a failure.
   const { result } = await withSharing((m) => m.shareDocument(SIGNED, 'Kitchen quote.pdf'));
   assert.deepEqual(result, { ok: true });
-});
-
-test('[executed] web gets the Web Share API, or an honest refusal — never a no-op', async () => {
-  const { result, calls } = await withSharing((m) => m.shareDocument(SIGNED, 'Kitchen quote.pdf'), {
-    platform: 'web',
-  });
-  // node exposes a `navigator` with no share(), which is the browser case that
-  // has no Web Share API. expo-file-system's web build stubs downloading, so
-  // there is nothing to stage and the user is told rather than left waiting.
-  assert.equal(result.ok, false);
-  assert.match(result.message, /browser/i);
-  assert.equal(calls.downloads.length, 0);
-
-  // And the present-API branch exists rather than being assumed.
-  const source = stripComments(await read('lib/sharing.ts'));
-  const documentBranch = source.slice(source.indexOf('export async function shareDocument'));
-  assert.match(documentBranch, /if \(nav\?\.share\) \{\s*await nav\.share\(\{ url \}\);/);
-  assert.match(
-    documentBranch,
-    /if \(err instanceof Error && err\.name === 'AbortError'\) return \{ ok: true \};/
-  );
 });
 
 test('[executed] sharePhoto is untouched — still coerces to .jpg, still sends its UTI', async () => {

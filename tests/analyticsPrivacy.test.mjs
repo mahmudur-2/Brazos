@@ -79,7 +79,7 @@ const INTENT_ALLOWLIST = [
   // real event EVERY time it is shown, so several surfaces asking for the same
   // permission all emit; unlike a funnel step, this cannot double-count a
   // conversion.
-  'components/HotspotMap.native.tsx',
+  'components/HotspotMap.tsx',
   'hooks/useLiveLocation.ts',
   'screens/ChatScreen.tsx',
   'screens/ProfileScreen.tsx',

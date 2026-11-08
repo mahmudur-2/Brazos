@@ -364,11 +364,10 @@ test('the preview profile is a standalone staging build on its own channel', () 
   assert.equal(eas.build.production.channel, 'production');
   assert.equal(eas.build.production.environment, 'production');
   assert.equal(eas.build.production.autoIncrement, true);
-  // Android is a shipping target: the store build is an app bundle, the two
-  // installable ones are APKs.
-  assert.equal(eas.build.production.android.buildType, 'app-bundle');
-  assert.equal(eas.build.development.android.buildType, 'apk');
-  assert.equal(eas.build.preview.android.buildType, 'apk');
+  // iOS only (lean D2, owner ruling 42): no profile carries Android keys.
+  for (const [name, profile] of Object.entries(eas.build)) {
+    assert.equal(profile.android, undefined, `${name} still carries an android block`);
+  }
   assert.equal(eas.cli.appVersionSource, 'remote');
   assert.deepEqual(Object.keys(eas.submit), ['production']);
 });

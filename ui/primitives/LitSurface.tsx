@@ -1,4 +1,4 @@
-import { Animated, Platform, type ViewProps, type ViewStyle } from 'react-native';
+import { Animated, type ViewProps, type ViewStyle } from 'react-native';
 import { withAlpha } from '../tokens';
 
 /**
@@ -14,17 +14,9 @@ import { withAlpha } from '../tokens';
  *
  * WHY THE GRADIENT IS A STRING AND NOT A LIBRARY. `experimental_backgroundImage`
  * is a real, typed View style in React Native 0.81
- * (Libraries/StyleSheet/StyleSheetTypes.d.ts) that accepts CSS gradient syntax,
- * and react-native-web forwards `backgroundImage` straight to CSS — its own
- * CheckBox styles it that way. Two platform keys, one string, no dependency.
- * CLAUDE.md forbids adding an animation or gradient package and nothing here
- * needs one.
- *
- * WHY THE WEB BRANCH IS NOT OPTIONAL. `node scripts/shots.mjs` renders the web
- * export, and that render is the only instrument this repo has for looking at
- * a change. A native-only gradient would be invisible to it, so every claim
- * about this feature would be unmeasured — the shots harness would go blind to
- * the one thing the surface exists to do.
+ * (Libraries/StyleSheet/StyleSheetTypes.d.ts) that accepts CSS gradient syntax.
+ * One string, no dependency. CLAUDE.md forbids adding an animation or gradient
+ * package and nothing here needs one.
  *
  * WHY THE TOP EDGE IS A SECOND GRADIENT AND NOT A CHILD VIEW. An absolutely
  * positioned 1pt child would draw the same line, and would also be a DOM node
@@ -95,17 +87,13 @@ export function litGradient({
 /**
  * A gradient string as the style that draws it.
  *
- * THE ONE IMPLEMENTATION OF THE PLATFORM BRANCH. Both fills below go through
- * it, and so does `LitSurface` — a caller whose container cannot become a View
- * (the "Post a job" pill is a `Pressable` with an `onPress`) takes the
- * returned style into its own style array instead. react-native-web forwards
- * `backgroundImage` to CSS, but React Native's own ViewStyle has no such key —
- * hence the single cast, here and nowhere else (RN 0.81 View style docs).
+ * THE ONE IMPLEMENTATION. Both fills below go through it, and so does
+ * `LitSurface` — a caller whose container cannot become a View (the "Post a
+ * job" pill is a `Pressable` with an `onPress`) takes the returned style into
+ * its own style array instead.
  */
 export function backgroundImageStyle(image: string): ViewStyle {
-  return Platform.OS === 'web'
-    ? ({ backgroundImage: image } as unknown as ViewStyle)
-    : { experimental_backgroundImage: image };
+  return { experimental_backgroundImage: image };
 }
 
 /**

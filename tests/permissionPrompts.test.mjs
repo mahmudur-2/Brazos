@@ -84,7 +84,7 @@ test('B11 · every permission request has a way to Settings on denial', () => {
   assert.match(results, /onPress=\{\(\) => void Linking\.openSettings\(\)\}\s*>\s*\{' '\}Open Settings/);
 
   // The surface that already had its own control keeps it.
-  assert.match(read('components/HotspotMap.native.tsx'), /Linking\.openSettings\(\)/);
+  assert.match(read('components/HotspotMap.tsx'), /Linking\.openSettings\(\)/);
   // Notifications: the denied notice carries the action.
   const notif = read('screens/NotificationSettingsScreen.tsx');
   assert.match(notif, /settings: true,/);

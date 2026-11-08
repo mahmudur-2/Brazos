@@ -56,7 +56,6 @@ test('B3 · every surface that shows another person\'s content offers Report (an
     ['screens/JobDetailScreen.tsx', "kind: 'job'"],
     ['components/MarketJobPreview.tsx', "kind: 'job'"],
     ['screens/WorkerProfileScreen.tsx', "kind: 'profile'"],
-    ['screens/PublicProfileScreen.tsx', "kind: 'profile'"],
     ['screens/ProfileReviewsScreen.tsx', "kind: 'review'"],
   ];
   for (const [path, kind] of hosts) {

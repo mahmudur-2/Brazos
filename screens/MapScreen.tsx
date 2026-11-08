@@ -62,7 +62,7 @@ import {
 import { PalettePinContext } from '../hooks/useThemeColors';
 import { usePillReserve } from '../ui/primitives';
 
-/** Matches HotspotMap.native's DEFAULT_REGION span — the pre-interaction zoom. */
+/** Matches HotspotMap's DEFAULT_REGION span — the pre-interaction zoom. */
 const INITIAL_LAT_DELTA = 0.08;
 
 /**
@@ -566,7 +566,7 @@ export function MapScreen() {
         {/* THE HEADER BLOCK — the search capsule and the chip row, measured
             together because the open sheet stops a gap under whatever is
             here. 4D-4: chrome and tiles resolve together — the MapView follows
-            the in-app theme (HotspotMap.native userInterfaceStyle). */}
+            the in-app theme (HotspotMap userInterfaceStyle). */}
         <View style={styles.headerBlock} pointerEvents="box-none">
           {/* 2026-09-19 — ONE GLASS PILL, not a capsule around a field. The
               shared SearchBar keeps its behaviour — the mic, the clear, the

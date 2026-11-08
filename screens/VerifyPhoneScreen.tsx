@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   InteractionManager,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -108,15 +107,6 @@ export function VerifyPhoneScreen() {
   useFocusEffect(
     useCallback(() => {
       if (settled) return;
-
-      // On the web there is no native push animation to wait out, and
-      // react-native-web schedules runAfterInteractions through
-      // requestIdleCallback — which a backgrounded or hidden tab may never
-      // run at all, leaving the field unfocused forever.
-      if (Platform.OS === 'web') {
-        focusCode();
-        return;
-      }
 
       const task = InteractionManager.runAfterInteractions(focusCode);
       return () => task.cancel();

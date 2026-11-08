@@ -72,8 +72,8 @@ test('C5 · no mid-sentence brand use remains in screens/ or components/ — wha
   }
   assert.deepEqual(offenders, []);
   // The chrome that stays, by name — a wordmark, a heading, a tagline, an
-  // eyebrow, a public page's "get the app" line, the logo's label.
-  const chrome = ['screens/LaunchScreen.tsx', 'screens/WelcomeScreen.tsx', 'screens/SignInScreen.tsx', 'screens/EmailSignInScreen.tsx', 'screens/HomeScreen.tsx', 'screens/CompareBidsScreen.tsx', 'screens/PublicProfileScreen.tsx', 'components/BrandLogo.tsx'];
+  // eyebrow, the logo's label.
+  const chrome = ['screens/LaunchScreen.tsx', 'screens/WelcomeScreen.tsx', 'screens/SignInScreen.tsx', 'screens/EmailSignInScreen.tsx', 'screens/HomeScreen.tsx', 'screens/CompareBidsScreen.tsx', 'components/BrandLogo.tsx'];
   for (const file of clientScreens()) {
     if (chrome.includes(file)) continue;
     assert.doesNotMatch(code(file), /BRAZOS/, `${file} names the brand outside the chrome list`);

@@ -127,16 +127,12 @@ export type MapRegionSnapshot = {
   longitudeDelta: number;
 };
 
-// Shared props for the platform-specific map implementations
-// (HotspotMap.native.tsx uses react-native-maps; HotspotMap.web.tsx uses
-// OpenLayers because react-native-maps has no web support).
+// Props for the map (components/HotspotMap.tsx, react-native-maps).
 //
-// The optional members below are the 4D-2 worker-discovery surface. They are
-// OPTIONAL by design: the web implementation is frozen (CLAUDE.md) and simply
-// never reads them, so on web the map keeps its pre-4D-2 glow-cell behavior
-// in every mode while the native map renders clustered pins when a caller
-// passes them. When `pins` is present (even empty) the native map suppresses
-// the glow overlay — the two presentations never stack.
+// The optional members below are the 4D-2 worker-discovery surface: the map
+// renders clustered pins when a caller passes them. When `pins` is present
+// (even empty) the map suppresses the glow overlay — the two presentations
+// never stack.
 export type HotspotMapProps = {
   cells: HotspotCell[];
   loading: boolean;

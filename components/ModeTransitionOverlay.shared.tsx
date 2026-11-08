@@ -1,4 +1,4 @@
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { backgroundImageStyle } from '../ui/primitives/LitSurface';
 import { radius, spacing, themedStyles, withAlpha, type ColorPalette } from '../lib/theme';
 import type { AppMode } from '../modes/types';
@@ -264,14 +264,10 @@ export const transitionStylesFor = themedStyles((colors: ColorPalette) =>
       height: 10,
       borderRadius: radius.pill,
       backgroundColor: colors.emeraldBright,
-      ...(Platform.OS === 'web'
-        ? null
-        : {
-            shadowColor: colors.emeraldBright,
-            shadowOpacity: 0.7,
-            shadowRadius: 6,
-            shadowOffset: { width: 0, height: 0 },
-          }),
+      shadowColor: colors.emeraldBright,
+      shadowOpacity: 0.7,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 0 },
     },
     capsuleText: {
       fontSize: 15,

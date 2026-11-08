@@ -10,13 +10,11 @@ const stripComments = (source) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 const flatten = (source) => stripComments(source).replace(/\s+/g, ' ');
 
-// The wrapper cannot be IMPORTED here: it pulls Platform from react-native,
-// whose entry point Node cannot resolve, and every other lib module in this
-// suite is read the same way for the same reason. So the fence is on the
-// source — and it is written to be falsifiable rather than decorative: the
-// three counting assertions below fail on zero occurrences just as loudly as
-// they fail on two, so a green result means the needles were really found.
-test('[static] lib/haptics exposes three no-ops, and web never reaches the vendor', () => {
+// The fence is on the source, as every other lib module in this suite is read
+// — and it is written to be falsifiable rather than decorative: the counting
+// assertions below fail on zero occurrences just as loudly as they fail on
+// two, so a green result means the needles were really found.
+test('[static] lib/haptics exposes three no-ops, and the vendor is one caught require', () => {
   const source = read('lib/haptics.ts');
   const code = stripComments(source);
   const flat = flatten(source);
@@ -32,8 +30,8 @@ test('[static] lib/haptics exposes three no-ops, and web never reaches the vendo
   assert.match(code, /NotificationFeedbackType\?\.Success \?\? 'success'/);
 
   // 2. THE VENDOR IS NEVER STATICALLY IMPORTED. A top-level import would run
-  //    expo-haptics' module scope on every platform, web included, which is
-  //    exactly what this boundary exists to prevent.
+  //    expo-haptics' module scope unguarded, which is exactly what this
+  //    boundary exists to prevent.
   assert.doesNotMatch(code, /import[^;]*from 'expo-haptics'/);
 
   // 3. THE VENDOR IS NAMED EXACTLY ONCE IN EXECUTABLE CODE, AND IT IS A
@@ -43,16 +41,14 @@ test('[static] lib/haptics exposes three no-ops, and web never reaches the vendo
   assert.equal(vendorHits.length, 1, 'expo-haptics must be named once, in the sole load site');
   assert.match(code, /require\('expo-haptics'\)/);
 
-  // 4. THAT SOLE require IS UNREACHABLE ON WEB. load() is the only function
-  //    that requires the vendor, it has exactly one call site, and that call
-  //    site sits on the non-web arm of a Platform ternary — so on web the
-  //    handle is decided without the vendor ever being executed.
+  // 4. THAT SOLE require IS RESOLVED ONCE. load() is the only function that
+  //    requires the vendor, and it has exactly one call site, at module scope.
   const loadCalls = [...code.matchAll(/(?<!function )\bload\(\)/g)];
   assert.equal(loadCalls.length, 1, 'load() must have exactly one call site');
   assert.match(
     flat,
-    /const haptics: HapticsModule \| null = Platform\.OS === 'web' \? null : load\(\);/,
-    'the one call site must be the non-web arm of the Platform ternary'
+    /const haptics: HapticsModule \| null = load\(\);/,
+    'the one call site resolves the handle once at module scope'
   );
 
   // 5. WITH A NULL HANDLE EVERY EXPORT IS A NO-OP, AND BOTH FAILURE SHAPES
@@ -85,7 +81,7 @@ function* walk(dir) {
   for (const entry of readdirSync(join(root, dir))) {
     const rel = `${dir}/${entry}`;
     if (statSync(join(root, rel)).isDirectory()) yield* walk(rel);
-    else if (/\.tsx?$/.test(entry) && !/\.web\.tsx?$/.test(entry)) yield rel;
+    else if (/\.tsx?$/.test(entry)) yield rel;
   }
 }
 

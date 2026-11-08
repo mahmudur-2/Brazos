@@ -1,4 +1,4 @@
-import { Platform, type Insets, type TextStyle, type ViewStyle } from 'react-native';
+import type { Insets, TextStyle, ViewStyle } from 'react-native';
 import {
   brand,
   controls,
@@ -644,7 +644,7 @@ export const typography = {
   caption: { fontSize: 12, fontWeight: '500', color: colors.textSubtle },
 } as const;
 
-/** Soft, grounded shadows. Uses boxShadow on web to avoid deprecation warnings. */
+/** Soft, grounded shadows. */
 export const shadows: Record<'card' | 'raised' | 'cardDark' | 'ctaDark', ViewStyle> = {
   /**
    * RUN GROUND1 (C4) — SURFACED HERE, DEFINED ONCE, IN ui/tokens.ts.
@@ -661,26 +661,20 @@ export const shadows: Record<'card' | 'raised' | 'cardDark' | 'ctaDark', ViewSty
   cardDark: tokenShadows.cardDark,
   // 2026-09-27 (the operator's review): the Lux CTA glow, surfaced the same way.
   ctaDark: tokenShadows.ctaDark,
-  card: Platform.select({
-    web: { boxShadow: '0 1px 3px rgba(31,46,34,0.07), 0 1px 2px rgba(31,46,34,0.05)' },
-    default: {
-      shadowColor: '#1F2E22',
-      shadowOpacity: 0.07,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 2,
-    },
-  }) as ViewStyle,
-  raised: Platform.select({
-    web: { boxShadow: '0 8px 24px rgba(31,46,34,0.14)' },
-    default: {
-      shadowColor: '#1F2E22',
-      shadowOpacity: 0.14,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 8,
-    },
-  }) as ViewStyle,
+  card: {
+    shadowColor: '#1F2E22',
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  raised: {
+    shadowColor: '#1F2E22',
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
 };
 
 /**
@@ -881,9 +875,8 @@ export function eyebrowStyle(palette: { eyebrow: string }): TextStyle {
  * it (ui/tokens.ts `dark.authGround*`). Spread onto a screen's root OVER its
  * flat `background`, which stays underneath as the fallback. Light returns
  * null and keeps its flat cream — its three stops are equal, so nothing would
- * draw. The platform branch is the one every lit surface uses
- * (ui/primitives/LitSurface.tsx): CSS on web, `experimental_backgroundImage`
- * on native.
+ * draw. The style key is the one every lit surface uses
+ * (ui/primitives/LitSurface.tsx): `experimental_backgroundImage`.
  */
 /**
  * 2026-09-29 (LUX-LIST-2 #6) — THE LIT CARD for a hand-styled card, tile or icon square: the same
@@ -902,9 +895,7 @@ export function litCardStyle(isDark: boolean, kind: 'card' | 'tile' = 'card'): V
   const gradient = `linear-gradient(180deg, ${look.top} 0%, ${look.bottom} 100%)`;
   return {
     backgroundColor: look.bottom,
-    ...(Platform.OS === 'web'
-      ? ({ backgroundImage: gradient } as unknown as ViewStyle)
-      : ({ experimental_backgroundImage: gradient } as ViewStyle)),
+    experimental_backgroundImage: gradient,
     borderWidth: 1,
     borderColor: alpha(look.rim.color, look.rim.alpha),
     boxShadow: parts.join(', '),
@@ -925,9 +916,7 @@ export function screenGround(
 ): ViewStyle | null {
   if (!isDark) return null;
   const gradient = `linear-gradient(165deg, ${palette.authGroundTop} 0%, ${palette.authGroundMid} 55%, ${palette.authGroundBottom} 100%)`;
-  return Platform.OS === 'web'
-    ? ({ backgroundImage: gradient } as unknown as ViewStyle)
-    : ({ experimental_backgroundImage: gradient } as ViewStyle);
+  return { experimental_backgroundImage: gradient } as ViewStyle;
 }
 
 /**
@@ -937,13 +926,11 @@ export function screenGround(
  * something that scrolls under it — the inbox pills' right edge, the strip
  * under the floating tab bar — so content ends in the ground rather than at a
  * cut. Zero alpha of the SAME colour, never `transparent`, so the ramp never
- * passes through grey. The same platform branch as `screenGround()`.
+ * passes through grey. The same style shape as `screenGround()`.
  */
 export function edgeFade(to: string, angle = 90, solidAt = 100): ViewStyle {
   const gradient = `linear-gradient(${angle}deg, ${alpha(to, 0)} 0%, ${to} ${solidAt}%)`;
-  return Platform.OS === 'web'
-    ? ({ backgroundImage: gradient } as unknown as ViewStyle)
-    : ({ experimental_backgroundImage: gradient } as ViewStyle);
+  return { experimental_backgroundImage: gradient } as ViewStyle;
 }
 
 /** One answer per drawn size, so a control's hitSlop keeps its identity across renders. */

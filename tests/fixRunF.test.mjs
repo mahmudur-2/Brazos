@@ -558,11 +558,8 @@ test('[static] F7: the client is typed over the generated types, with one stated
   assert.match(types, /type NullableArgs<A> = A extends Record<string, unknown> \? \{ \[K in keyof A\]: A\[K\] \| null \} : A;/);
   assert.match(types, /P extends 'Args' \? NullableArgs<F\[N\]\[P\]> : F\[N\]\[P\]/);
   assert.match(types, /P extends 'Functions' \? WithNullableFunctionArgs<F> : GeneratedDatabase\[S\]\[P\]/);
-  // The frozen web client stays untyped and untouched.
-  assert.doesNotMatch(read('lib/supabase.web.ts'), /createClient</);
   // No `as any` stands at a .from / .rpc call site.
   for (const file of execFileSync('git', ['ls-files', '--', 'lib/*.ts', 'hooks/*.ts', 'screens/*.tsx', 'components/*.tsx'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean)) {
-    if (/\.web\.tsx?$/.test(file)) continue;
     assert.doesNotMatch(strip(read(file)), /\.(from|rpc)\([^)]*\)[^;]*\bas any\b/, `${file} casts a query to any`);
   }
 });

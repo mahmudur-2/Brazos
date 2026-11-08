@@ -1,4 +1,4 @@
-import { Platform, type ViewStyle } from 'react-native';
+import type { ViewStyle } from 'react-native';
 import { brand } from '../ui/tokens';
 
 /**
@@ -202,25 +202,19 @@ export const authType = {
 
 /** --shadow: 0 10px 28px rgba(16,38,29,.08), plus the softer .art-card lift. */
 export const authShadows: Record<'card' | 'logo', ViewStyle> = {
-  card: Platform.select({
-    web: { boxShadow: '0 10px 28px rgba(16,38,29,0.08)' },
-    default: {
-      shadowColor: '#102A1D',
-      shadowOpacity: 0.1,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 3,
-    },
-  }) as ViewStyle,
+  card: {
+    shadowColor: '#102A1D',
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
   // .launch-logo box-shadow: 0 18px 40px rgba(0,0,0,.2)
-  logo: Platform.select({
-    web: { boxShadow: '0 18px 40px rgba(0,0,0,0.2)' },
-    default: {
-      shadowColor: '#000000',
-      shadowOpacity: 0.2,
-      shadowRadius: 20,
-      shadowOffset: { width: 0, height: 12 },
-      elevation: 10,
-    },
-  }) as ViewStyle,
+  logo: {
+    shadowColor: '#000000',
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
 };

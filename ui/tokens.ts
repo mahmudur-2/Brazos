@@ -1,4 +1,4 @@
-import { Platform, type TextStyle, type ViewStyle } from 'react-native';
+import type { TextStyle, ViewStyle } from 'react-native';
 
 /**
  * BRAZOS Emerald Trust — the authoritative design tokens.
@@ -701,18 +701,12 @@ export const type = {
 // ---------------------------------------------------------------------------
 
 export const shadows: Record<'card' | 'cardDark' | 'ctaDark', ViewStyle> = {
-  card: Platform.select({
-    // boxShadow on web avoids RN-web's shadow* deprecation warnings, the same
-    // way lib/theme.ts already handles it.
-    web: { boxShadow: '0 5px 14px rgba(16,38,29,0.08)' },
-    default: {
-      shadowColor: '#10261D',
-      shadowOpacity: 0.08,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 5 },
-      elevation: 3,
-    },
-  }) as ViewStyle,
+  card: {
+    shadowColor: '#10261D',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 5 },
+  },
   /**
    * RUN GROUND1 (C4) — THE SAME DEPTH, FOR A GROUND THAT IS NEARLY BLACK.
    *
@@ -754,29 +748,21 @@ export const shadows: Record<'card' | 'cardDark' | 'ctaDark', ViewStyle> = {
   // 2026-09-27 (the operator's review, "more 3D popping out"): one notch past
   // the Lux `0 10px 30px .35` — `0 12px 34px .42`, the same shadow the `card`
   // material carries — so a hand-styled card and a material card lift alike.
-  cardDark: Platform.select({
-    web: { boxShadow: '0 12px 34px rgba(0,0,0,0.42)' },
-    default: {
-      shadowColor: '#000000',
-      shadowOpacity: 0.42,
-      shadowRadius: 17,
-      shadowOffset: { width: 0, height: 12 },
-      elevation: 9,
-    },
-  }) as ViewStyle,
+  cardDark: {
+    shadowColor: '#000000',
+    shadowOpacity: 0.42,
+    shadowRadius: 17,
+    shadowOffset: { width: 0, height: 12 },
+  },
   // The Lux `.cta` glow, `0 10px 24px rgba(79,197,140,.30)`: the mint CTA's
   // lift in dark. The fill stays the one flat mint (ruling 5); only the
   // shadow under it is the reference's.
-  ctaDark: Platform.select({
-    web: { boxShadow: '0 10px 24px rgba(79,197,140,0.30)' },
-    default: {
-      shadowColor: '#4FC58C',
-      shadowOpacity: 0.3,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 10 },
-      elevation: 6,
-    },
-  }) as ViewStyle,
+  ctaDark: {
+    shadowColor: '#4FC58C',
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 10 },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -794,17 +780,12 @@ export const shadows: Record<'card' | 'cardDark' | 'ctaDark', ViewStyle> = {
  */
 export const glow = {
   /** Outer halo for views — cards, avatar rings, the active nav glyph wrap. */
-  halo: (color: string): ViewStyle =>
-    Platform.select({
-      web: { boxShadow: `0 0 14px ${color}` },
-      default: {
-        shadowColor: color,
-        shadowOpacity: 1,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 0 },
-        elevation: 5,
-      },
-    }) as ViewStyle,
+  halo: (color: string): ViewStyle => ({
+    shadowColor: color,
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+  }),
   /** Soft aura behind glowing text — money values, eyebrows, active labels. */
   text: (color: string): TextStyle => ({
     textShadowColor: color,

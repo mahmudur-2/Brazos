@@ -24,12 +24,11 @@ const flatten = (source) => stripComments(source).replace(/\s+/g, ' ');
 // app code reaching for the session key (supabase-js's default
 // `sb-<ref>-auth-token`) around the adapter.
 //
-// SCOPE, decided in HANDOFF 2026-08-22: `lib/supabase.web.ts` and every
-// `*.web.ts(x)` are the frozen web surface with its own AsyncStorage client,
-// and `scripts/shots.mjs` (which `scripts/home-shots.mjs` now forwards to)
-// seeds a fabricated web session for a host that does not exist — both are
-// web-only and OUTSIDE this native fence by design, so the walk skips web
-// modules and never enters scripts/.
+// SCOPE, decided in HANDOFF 2026-08-22: `scripts/shots.mjs` (which
+// `scripts/home-shots.mjs` now forwards to) seeds a fabricated web session for
+// a host that does not exist — it is OUTSIDE this native fence by design, so
+// the walk never enters scripts/. (Lean D2 deleted lib/supabase.web.ts and
+// every `*.web.ts(x)`, so the walk no longer needs to skip web modules.)
 // ===========================================================================
 
 const SOURCE_DIRS = [
@@ -48,8 +47,7 @@ const sourceFiles = SOURCE_DIRS.flatMap((dir) =>
     .filter((entry) => entry.isFile() && /\.(ts|tsx)$/.test(entry.name))
     .map((entry) => relative(root, join(entry.parentPath, entry.name)).replace(/\\/g, '/'))
 )
-  .concat(SOURCE_FILES)
-  .filter((path) => !/\.web\.tsx?$/.test(path));
+  .concat(SOURCE_FILES);
 
 test('F-KEYCHAIN-1 · lib/supabase.ts auth storage is the SecureStore adapter, never plain AsyncStorage', () => {
   const source = flatten(read('lib/supabase.ts'));
@@ -123,10 +121,6 @@ test('F-KEYCHAIN-4 · no app code names the session key outside the adapter', ()
   for (const expected of ['lib/supabase.ts', 'lib/AuthContext.tsx', 'App.tsx']) {
     assert.ok(sourceFiles.includes(expected), `walk missed ${expected}`);
   }
-  assert.ok(
-    !sourceFiles.some((path) => /\.web\.tsx?$/.test(path)),
-    'web modules are outside this fence by design'
-  );
   const offenders = sourceFiles.filter((path) => {
     const code = stripComments(read(path));
     return /auth-token/i.test(code) || /['"`]sb-/.test(code);

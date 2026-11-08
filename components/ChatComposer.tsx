@@ -99,11 +99,7 @@ type ChatComposerProps = {
   onStopRecording: () => void;
   onSendVoice: () => void;
   onDiscardVoice: () => void;
-  /**
-   * Camera and the voice recorder are native-only in the real app
-   * (Platform.OS !== 'web'). Exposed as a prop rather than checked internally
-   * so a harness can force the controls to render for visual comparison.
-   */
+  /** Camera and the voice recorder; on by default, a prop so a harness can hide them. */
   showCameraAndMic?: boolean;
   /**
    * Whether CAMERA, PHOTOS and VOICE MESSAGE are possible in this thread —
@@ -175,7 +171,7 @@ export function ChatComposer({
   onStopRecording,
   onSendVoice,
   onDiscardVoice,
-  showCameraAndMic = Platform.OS !== 'web',
+  showCameraAndMic = true,
   allowAttachments = true,
   onShareLiveLocation,
   onPickDocument,

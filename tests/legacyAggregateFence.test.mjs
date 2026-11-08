@@ -29,8 +29,7 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 const codeOnly = (source) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
-/** Every tree that holds app code. dev-tools/ is excluded wherever it sits;
- *  the frozen web surface (*.web.ts / *.web.tsx) is never product code. */
+/** Every tree that holds app code. dev-tools/ is excluded wherever it sits. */
 const APP_TREES = ['lib', 'screens', 'components', 'hooks', 'navigation', 'modes'];
 
 function appSources(dir) {
@@ -44,7 +43,6 @@ function appSources(dir) {
       continue;
     }
     if (!/\.tsx?$/.test(entry)) continue;
-    if (/\.web\.tsx?$/.test(entry)) continue;
     out.push(rel);
   }
   return out;

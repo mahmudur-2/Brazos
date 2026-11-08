@@ -10,8 +10,7 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 // The one file allowed to spell an Animated-driver value (F-017/F-041/F-052).
 const MOTION = 'lib/motion.ts';
 
-// Every directory that holds app code. The frozen web surface (*.web.ts/tsx)
-// is outside every sweep per CLAUDE.md and is skipped below.
+// Every directory that holds app code.
 const SCAN_DIRS = ['components', 'dev-tools', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui'];
 const ROOT_FILES = ['App.tsx', 'index.ts'];
 
@@ -20,7 +19,7 @@ function* walk(dir) {
     const rel = `${dir}/${entry}`;
     if (statSync(join(root, rel)).isDirectory()) {
       yield* walk(rel);
-    } else if (/\.tsx?$/.test(entry) && !/\.web\.tsx?$/.test(entry)) {
+    } else if (/\.tsx?$/.test(entry)) {
       yield rel;
     }
   }
@@ -34,7 +33,7 @@ function appFiles() {
 
 test('lib/motion.ts is the single Animated-driver authority', () => {
   const motion = read(MOTION);
-  assert.match(motion, /export const USE_NATIVE_DRIVER = Platform\.OS !== 'web';/);
+  assert.match(motion, /export const USE_NATIVE_DRIVER = true;/);
   // JS_DRIVER exists solely for animations of props the native module cannot
   // drive (interpolated colors); it must stay pinned false, never platform-
   // conditional, or a color animation would crash on device.

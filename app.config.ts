@@ -105,38 +105,6 @@ export default (_context: ConfigContext): ExpoConfig => ({
     // supabase/functions/), and App Review asks what a declared capability is
     // for. expo-notifications still writes aps-environment itself.
   },
-  android: {
-    package: `com.brazos.app${BUNDLE_SUFFIX[VARIANT]}`,
-    adaptiveIcon: {
-      backgroundColor: '#082F27',
-      foregroundImage: './assets/icon.png',
-    },
-    predictiveBackGestureEnabled: false,
-    permissions: [
-      'android.permission.RECORD_AUDIO',
-      'android.permission.ACCESS_COARSE_LOCATION',
-      'android.permission.ACCESS_FINE_LOCATION',
-      'android.permission.MODIFY_AUDIO_SETTINGS',
-    ],
-    // ANDROID ONLY. iOS stays on Apple Maps — no PROVIDER_GOOGLE anywhere —
-    // so there is no iOS counterpart to this key and there must not be one.
-    // Never a literal: an unset variable resolves to undefined, which renders
-    // a blank Android map rather than failing the build. react-native-maps
-    // 1.20.1 ships no config plugin (no app.plugin.js in the package), so this
-    // native-config key is the only shape available.
-    config: {
-      googleMaps: {
-        apiKey: process.env.GOOGLE_MAPS_API_KEY,
-      },
-    },
-  },
-  // FROZEN WEB SURFACE — copied verbatim from app.json. `output: 'single'` is
-  // what makes the PWA a single-page app the service worker can cache.
-  web: {
-    favicon: './assets/favicon.png',
-    bundler: 'metro',
-    output: 'single',
-  },
   // Carried over whole from app.json: same entries, same order. The usage
   // strings say "Brazos" (operator decision 2026-08-29, D17: the all-caps
   // form is the app's NAME — DISPLAY_NAME and slug — never its prose voice).

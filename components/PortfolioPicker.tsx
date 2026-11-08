@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  BackHandler,
   Platform,
   Pressable,
   ScrollView,
@@ -150,19 +149,6 @@ export function PortfolioPicker({
     if (changed) onChanged();
     onClose();
   }
-
-  // RN's <Modal> handles the Android hardware back button itself via
-  // onRequestClose; a plain overlay View needs its own listener to keep that
-  // behavior.
-  useEffect(() => {
-    if (!visible || Platform.OS !== 'android') return;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      handleClose();
-      return true;
-    });
-    return () => sub.remove();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
 
   if (!visible) return null;
 

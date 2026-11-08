@@ -13,9 +13,6 @@
  * and nowhere else; there is no <StripeProvider> in App.tsx or any component
  * for the same reason — it would be a static import.
  *
- * WEB IS SHORT-CIRCUITED BEFORE THE REQUIRE, NOT AFTER IT. `Platform.OS ===
- * 'web'` decides the handle is null without calling `load()` at all.
- *
  * A BINARY THAT PREDATES THE NATIVE MODULE. `getEnforcing` throws inside the
  * require, the catch returns null, and every export here refuses with D4's one
  * honest sentence — this build cannot take card payments yet; update the app.
@@ -33,7 +30,6 @@
  * claims it off a successful sheet.
  */
 
-import { Platform } from 'react-native';
 import { env } from '../../config/env';
 import { userMessage } from '../errorMessage';
 import { track } from '../observability/analytics';
@@ -89,10 +85,10 @@ function load(): StripeModule | null {
 }
 
 /**
- * Resolved ONCE per process, and never at all on web. A native module cannot
- * appear or disappear while the app is running.
+ * Resolved ONCE per process. A native module cannot appear or disappear while
+ * the app is running.
  */
-const stripe: StripeModule | null = Platform.OS === 'web' ? null : load();
+const stripe: StripeModule | null = load();
 
 /** The Apple Pay merchant identifier app.config.ts declares (D8). */
 export const STRIPE_MERCHANT_IDENTIFIER = 'merchant.app.brazos.mobile';

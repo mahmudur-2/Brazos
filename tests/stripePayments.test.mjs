@@ -273,7 +273,7 @@ function* walk(dir) {
   for (const entry of readdirSync(join(root, dir))) {
     const rel = `${dir}/${entry}`;
     if (statSync(join(root, rel)).isDirectory()) yield* walk(rel);
-    else if (/\.tsx?$/.test(entry) && !/\.web\.tsx?$/.test(entry)) yield rel;
+    else if (/\.tsx?$/.test(entry)) yield rel;
   }
 }
 
@@ -308,13 +308,13 @@ test('[static] lib/payments/stripe.ts is the only app-source file that names the
   const flat = flatten(read(BOUNDARY));
   assert.doesNotMatch(boundary, /import[^;]*from '@stripe\/stripe-react-native'/, 'never a static import');
   assert.match(boundary, /require\('@stripe\/stripe-react-native'\)/, 'the one mention is the caught require');
-  // The require sits inside load()'s try, and load() has exactly one call site:
-  // the non-web arm of the Platform ternary, so web never executes the vendor.
+  // The require sits inside load()'s try, and load() has exactly one call site,
+  // resolved once at module scope.
   assert.match(flat, /function load\(\): StripeModule \| null \{ try \{ const vendor = require\('@stripe\/stripe-react-native'\)/);
   assert.match(flat, /\} catch \{ return null; \} \}/);
   const loadCalls = [...boundary.matchAll(/(?<!function )\bload\(\)/g)];
   assert.equal(loadCalls.length, 1, 'load() must have exactly one call site');
-  assert.match(flat, /const stripe: StripeModule \| null = Platform\.OS === 'web' \? null : load\(\);/);
+  assert.match(flat, /const stripe: StripeModule \| null = load\(\);/);
   // D2: initialisation is lazy, once, with the merchant identifier; D8: the
   // sheet carries no applePay parameter and is initialised as Brazos.
   assert.match(boundary, /merchantIdentifier: STRIPE_MERCHANT_IDENTIFIER/);

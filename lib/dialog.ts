@@ -1,13 +1,9 @@
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
 import { openModalCount } from './modalPresence';
 
 /**
- * Cross-platform dialogs. React Native's `Alert.alert` is a no-op on
- * react-native-web (buttons/callbacks never fire), which silently breaks any
- * flow that depends on the confirm callback. These helpers fall back to the
- * browser's window.confirm/window.alert on web and use Alert on native, and
- * return a Promise so callers can `await` the result instead of relying on
- * button callbacks.
+ * Dialogs as Promises, so callers can `await` the result instead of relying
+ * on button callbacks.
  */
 
 type ConfirmOptions = {
@@ -33,7 +29,7 @@ export type ResolvedConfirm = Required<ConfirmOptions>;
  * when it asks with the sheet up; at the root once a menu or sheet that was
  * closed by the same tap has finished leaving (waited for, briefly).
  *
- * THE FALLBACK is the system alert (web: window.confirm): before any host has
+ * THE FALLBACK is the system alert: before any host has
  * mounted, while a modal with no host of its own is on top, and — the host's
  * watchdog — if the in-app dialog does not appear in time. No confirm can hang.
  */
@@ -92,15 +88,6 @@ export function nativeConfirm({
   cancelText,
   destructive,
 }: ResolvedConfirm): Promise<boolean> {
-  if (Platform.OS === 'web') {
-    const text = message ? `${title}\n\n${message}` : title;
-    const ok =
-      typeof window !== 'undefined' && typeof window.confirm === 'function'
-        ? window.confirm(text)
-        : true;
-    return Promise.resolve(ok);
-  }
-
   return new Promise((resolve) => {
     Alert.alert(
       title,
@@ -119,14 +106,6 @@ export function nativeConfirm({
 }
 
 export function alertAsync(title: string, message?: string): Promise<void> {
-  if (Platform.OS === 'web') {
-    const text = message ? `${title}\n\n${message}` : title;
-    if (typeof window !== 'undefined' && typeof window.alert === 'function') {
-      window.alert(text);
-    }
-    return Promise.resolve();
-  }
-
   return new Promise((resolve) => {
     Alert.alert(title, message, [{ text: 'OK', onPress: () => resolve() }], {
       cancelable: true,

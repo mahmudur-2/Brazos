@@ -114,7 +114,7 @@ test('B1 · the clustering module is pure — no React, no React Native imports'
 // ---------------------------------------------------------------------------
 
 test('[static] B1 · the native map renders pins when provided and suppresses the glow', async () => {
-  const map = await read('components/HotspotMap.native.tsx');
+  const map = await read('components/HotspotMap.tsx');
   assert.match(map, /pins !== undefined\s*\?\s*pins\.map/);
   assert.match(map, /: cells\.flatMap/);
   assert.match(map, /Marker/);
@@ -153,12 +153,12 @@ test('[static] B1 · MapScreen: worker mode clusters cells into pins and opens t
   assert.match(screen, /navigation\.navigate\('CellJobs'/);
   assert.match(screen, /const isWorker = mode === 'worker';/);
   // 4D-4: the map screen is themed now — resolved palette for chrome, tiles
-  // follow via HotspotMap.native; the WEB map file itself stays frozen.
+  // follow via HotspotMap.
   assert.match(screen, /backgroundColor: colors\.background/);
   assert.match(screen, /useThemeColors/);
 });
 
-test('[static] B1 · the shared props stay optional so the frozen web map ignores them', async () => {
+test('[static] B1 · the shared props stay optional', async () => {
   const hotspots = await read('lib/hotspots.ts');
   assert.match(hotspots, /pins\?: ClusterPin\[\];/);
   assert.match(hotspots, /onSelectPin\?:/);
@@ -166,10 +166,6 @@ test('[static] B1 · the shared props stay optional so the frozen web map ignore
   assert.match(hotspots, /onUserLocation\?:/);
   assert.match(hotspots, /selectedPinKey\?: string \| null;/);
   assert.match(hotspots, /hideLocateButton\?: boolean;/);
-  // The frozen web implementation is byte-untouched by 4D-2 — it must not
-  // even mention the new props.
-  const webMap = await read('components/HotspotMap.web.tsx');
-  assert.doesNotMatch(webMap, /onSelectPin|onRegionChangeComplete|onUserLocation|selectedPinKey|hideLocateButton/);
 });
 
 // ---------------------------------------------------------------------------
@@ -396,7 +392,7 @@ test('[static] the Map screen structure holds: no header card, sheet-filtered, t
   assert.match(map, /useFocusEffect\(\s*useCallback\(\(\) => \{\s*setSheetStop\('peek'\);\s*\}, \[\]\)\s*\);/);
   assert.match(map, /stop=\{sheetStop\}\s*onStopChange=\{setSheetStop\}\s*onPeekHeight=\{setPeekHeight\}/);
   assert.match(map, /legalLabelInsetBottom=\{isWorker \? sheetBottom \+ peekHeight \+ LEGAL_LINK_AIR : undefined\}/);
-  const nativeMap = await read('components/HotspotMap.native.tsx');
+  const nativeMap = await read('components/HotspotMap.tsx');
   assert.match(nativeMap, /legalLabelInsets=\{\s*legalLabelInsetBottom != null\s*\? \{ top: 0, left: 0, bottom: legalLabelInsetBottom, right: 0 \}\s*: undefined\s*\}/);
 });
 

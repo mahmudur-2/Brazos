@@ -1,4 +1,4 @@
-import { Platform, Share } from 'react-native';
+import { Share } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { Directory, File, Paths } from 'expo-file-system';
 import { profileUrl } from './appLinks';
@@ -139,24 +139,6 @@ export async function shareProfileLink(userId: string, name?: string | null): Pr
   const url = profileUrl(userId);
   const message = name ? `${name} on BRAZOS: ${url}` : url;
 
-  if (Platform.OS === 'web') {
-    try {
-      const nav = typeof navigator !== 'undefined' ? (navigator as any) : null;
-      if (nav?.share) {
-        await nav.share({ url, text: message });
-        return { ok: true };
-      }
-      return { ok: false, message: 'Sharing isn’t supported in this browser.' };
-    } catch (err) {
-      // Dismissing the browser's own share UI throws AbortError; that is a
-      // cancellation, not a failure.
-      if (err instanceof Error && err.name === 'AbortError') return { ok: true };
-      console.error('[sharing] web profile share failed', err);
-      Sentry?.captureException(err, { extra: { site: 'sharing.shareProfileLink', stage: 'web' } });
-      return { ok: false, message: 'Could not share this profile.' };
-    }
-  }
-
   try {
     await Share.share({ url, message });
     return { ok: true };
@@ -168,27 +150,6 @@ export async function shareProfileLink(userId: string, name?: string | null): Pr
 }
 
 export async function sharePhoto(url: string): Promise<ShareResult> {
-  // react-native-web has no native share sheet and expo-file-system's web
-  // build stubs out downloading, so the browser gets the Web Share API when
-  // present and an honest failure otherwise.
-  if (Platform.OS === 'web') {
-    try {
-      const nav = typeof navigator !== 'undefined' ? (navigator as any) : null;
-      if (nav?.share) {
-        await nav.share({ url });
-        return { ok: true };
-      }
-      return { ok: false, message: 'Sharing isn’t supported in this browser.' };
-    } catch (err) {
-      // The user dismissing the browser's share UI throws AbortError — not a
-      // real failure, so don't surface an error for it.
-      if (err instanceof Error && err.name === 'AbortError') return { ok: true };
-      console.error('[sharing] web share failed', err);
-      Sentry?.captureException(err, { extra: { site: 'sharing.sharePhoto', stage: 'web' } });
-      return { ok: false, message: 'Could not share this photo.' };
-    }
-  }
-
   try {
     if (!(await Sharing.isAvailableAsync())) {
       // Very old/limited devices: fall back to sharing the link itself. Fewer
@@ -239,27 +200,6 @@ export async function shareDocument(
   url: string,
   fileName?: string | null
 ): Promise<ShareResult> {
-  // Same honest web branch as sharePhoto: expo-file-system's web build stubs
-  // downloading, so the browser gets the Web Share API when it has one and is
-  // told when it does not. Never a silent no-op.
-  if (Platform.OS === 'web') {
-    try {
-      const nav = typeof navigator !== 'undefined' ? (navigator as any) : null;
-      if (nav?.share) {
-        await nav.share({ url });
-        return { ok: true };
-      }
-      return { ok: false, message: 'Sharing isn’t supported in this browser.' };
-    } catch (err) {
-      // Dismissing the browser's share UI throws AbortError — a cancellation,
-      // not a failure, so nothing is surfaced for it.
-      if (err instanceof Error && err.name === 'AbortError') return { ok: true };
-      console.error('[sharing] web document share failed', err);
-      Sentry?.captureException(err, { extra: { site: 'sharing.shareDocument', stage: 'web' } });
-      return { ok: false, message: 'Could not open this document.' };
-    }
-  }
-
   try {
     if (!(await Sharing.isAvailableAsync())) {
       return { ok: false, message: 'Opening files isn’t supported on this device.' };
@@ -272,8 +212,7 @@ export async function shareDocument(
     // is how a .numbers file ends up offering the wrong targets.
     //
     // Dismissing the sheet resolves normally rather than throwing, so a user
-    // who changes their mind gets {ok: true} and sees nothing — the native
-    // counterpart of the AbortError case on web.
+    // who changes their mind gets {ok: true} and sees nothing.
     await Sharing.shareAsync(uri, { dialogTitle: 'Open document' });
     return { ok: true };
   } catch (err) {

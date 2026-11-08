@@ -1,13 +1,10 @@
-import { Platform } from 'react-native';
-
 /**
- * The one Animated-driver gate. The web target has no native animated
- * module, so transform/opacity animations run natively everywhere except
- * web. Import this constant — never redeclare it and never write a
+ * The one Animated-driver gate: transform/opacity animations run on the
+ * native driver. Import this constant — never redeclare it and never write a
  * `useNativeDriver:` literal at a call site; tests/motionDriver.test.mjs
- * fences both, so the platform decision cannot drift file by file again.
+ * fences both, so the decision cannot drift file by file again.
  */
-export const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+export const USE_NATIVE_DRIVER = true;
 
 /**
  * Color props (an interpolated borderColor) are outside the native animated

@@ -226,12 +226,12 @@ function enclosingObject(source, index) {
 }
 
 test('[static] the HotspotMap pin is the approved teardrop: pin tokens, emerald stroke, gold only when selected', () => {
-  const source = stripComments(read('components/HotspotMap.native.tsx'));
+  const source = stripComments(read('components/HotspotMap.tsx'));
   // A named style's object: enclosingObject walks back from a point INSIDE
   // the braces, so the index steps past the name and its opening brace.
   const styleObject = (name) => {
     const at = source.indexOf(`${name}: {`);
-    assert.ok(at >= 0, `HotspotMap.native must keep a ${name} style`);
+    assert.ok(at >= 0, `HotspotMap must keep a ${name} style`);
     return enclosingObject(source, at + name.length + 3);
   };
   // THE HEAD AND THE TAIL are cut from the same fill — the pin's own bottom

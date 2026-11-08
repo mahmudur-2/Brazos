@@ -13,30 +13,26 @@ const flatten = (source) => stripComments(source).replace(/\s+/g, ' ');
 // ---------------------------------------------------------------------------
 // lit(2) — THE LIT SURFACE HAS TO BE VISIBLE TO THE INSTRUMENT THAT MEASURES IT.
 //
-// CATCHES the two ways this feature dies quietly. First, a native-only
-// gradient: `experimental_backgroundImage` alone renders nothing on web, and
-// the web export is what `node scripts/shots.mjs` captures and what
-// `node scripts/master-diff.mjs` then measures — so a native-only surface
-// would make every later claim about the wash unmeasured while still looking
-// correct in the source. Second, a hex creeping into the one file whose whole
-// job is deriving opacities from palette tokens.
+// CATCHES a gradient that stops reaching React Native's
+// `experimental_backgroundImage`, and a hex creeping into the one file whose
+// whole job is deriving opacities from palette tokens. (Lean D2 removed the
+// web arm of the style branch with the web build.)
 //
-// WHY NOT VACUOUS: the branch assertion pins the WHOLE ternary, so deleting
-// either arm fails; the stop count is an equality, so it fails on zero as
-// loudly as on six; and the colour check runs on the raw source rather than
-// the stripped code, so a hex parked in a comment fails too.
+// WHY NOT VACUOUS: the style assertion pins the whole return; the stop count
+// is an equality, so it fails on zero as loudly as on six; and the colour
+// check runs on the raw source rather than the stripped code, so a hex parked
+// in a comment fails too.
 // ---------------------------------------------------------------------------
-test('[static] LitSurface paints on web and native, and writes no colour of its own', () => {
+test('[static] LitSurface paints through experimental_backgroundImage, and writes no colour of its own', () => {
   const source = read('ui/primitives/LitSurface.tsx');
   const code = stripComments(source);
   const flat = flatten(source);
 
-  // 1. BOTH BRANCHES, IN ONE TERNARY, KEYED ON Platform.OS. The web arm is
-  //    named first because it is the arm the harness takes.
+  // 1. ONE STYLE KEY, React Native's own.
   assert.match(
     flat,
-    /return Platform\.OS === 'web' \? \(\{ backgroundImage: image \} as unknown as ViewStyle\) : \{ experimental_backgroundImage: image \};/,
-    'the web branch must set backgroundImage and the native branch experimental_backgroundImage'
+    /export function backgroundImageStyle\(image: string\): ViewStyle \{ return \{ experimental_backgroundImage: image \}; \}/,
+    'the gradient must be drawn through experimental_backgroundImage'
   );
 
   // 2. FLAT COSTS NOTHING. This is what keeps a light render byte-identical

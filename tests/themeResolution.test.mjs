@@ -1050,7 +1050,7 @@ test('[static] a theme-specific asset is mounted only behind an isDark decision'
 
 test('[static] MapKit tiles follow the resolved theme; no Google-only style ships', async () => {
   // Comment-stripped: the docblock NAMES customMapStyle to explain its absence.
-  const nativeMap = stripCommentsForScan(await read('components/HotspotMap.native.tsx'));
+  const nativeMap = stripCommentsForScan(await read('components/HotspotMap.tsx'));
   // No Google provider is configured anywhere, so iOS renders Apple Maps —
   // where customMapStyle is Google-only and inert. It must not ship.
   assert.doesNotMatch(nativeMap, /customMapStyle/);
@@ -1088,7 +1088,7 @@ test('[static] MapKit tiles follow the resolved theme; no Google-only style ship
       if (/from 'react-native-maps'/.test(source)) mapFiles.push(`${path}/${entry.name}`);
     }
   }
-  assert.deepEqual(mapFiles.sort(), ['components/HotspotMap.native.tsx']);
+  assert.deepEqual(mapFiles.sort(), ['components/HotspotMap.tsx']);
 });
 
 // ---------------------------------------------------------------------------
@@ -1107,7 +1107,6 @@ const MODULE_SCOPE_SHEET_EXCLUSIONS = {
   'components/AuthButton.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
   'components/AuthField.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
   'components/AuthScaffold.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
-  'components/HotspotMap.web.tsx': 'frozen web surface (CLAUDE.md) — a *.web.tsx file is never edited',
 };
 
 test('[static] T1 (D6): every eligible sheet is lazy, and the exclusions are named with a reason', async () => {

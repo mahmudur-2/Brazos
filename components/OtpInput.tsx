@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react';
-import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { authColors, authRadius, authSizes } from '../lib/authTheme';
 import { OTP_LENGTH } from '../lib/phoneAuth';
 import { authSurface, metricStyles, useThemeColors, withAlpha } from '../lib/theme';
@@ -127,13 +127,9 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpIn
         autoCorrect={false}
         autoCapitalize="none"
         spellCheck={false}
-        // iOS reads the code out of the incoming message with this; Android
-        // uses the autofill hint below.
+        // iOS reads the code out of the incoming message with this.
         textContentType="oneTimeCode"
-        autoComplete={Platform.select({
-          android: 'sms-otp',
-          default: 'one-time-code',
-        })}
+        autoComplete="one-time-code"
         returnKeyType="go"
         accessibilityLabel={`Verification code, ${OTP_LENGTH} digits`}
         accessibilityHint="Enter the code sent by text message"

@@ -410,8 +410,7 @@ test('[static] 11 · App.tsx listens for the URL beside the push listener, reads
   // The cold-start URL is consumed once per process.
   assert.match(rootNavigator, /const handledInitialUrl = useRef\(false\);/);
   assert.match(rootNavigator, /if \(!handledInitialUrl\.current\) \{\s*handledInitialUrl\.current = true;/);
-  // Native only, and the subscription is removed on cleanup.
-  assert.match(rootNavigator, /if \(Platform\.OS === 'web'\) return;/);
+  // The subscription is removed on cleanup.
   assert.match(rootNavigator, /subscription\.remove\(\);/);
   // One dispatch system: no `linking` prop on the container, then or now.
   assert.doesNotMatch(code, /linking=\{/);

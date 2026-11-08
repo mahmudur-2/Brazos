@@ -45,7 +45,6 @@ const CHAT = 'screens/ChatScreen.tsx';
 
 const meter = await import('../lib/audioMeter.ts');
 const ticks = await import('../lib/messageTicks.ts');
-const webRoute = await import('../lib/webRoute.ts');
 const inbox = await import('../lib/inboxFilters.ts');
 const menus = await import('../lib/chatMenus.ts');
 const translate = await import('../lib/translateRules.ts');
@@ -457,8 +456,6 @@ test('[static] Share Profile builds its URL from ONE constant and shares a name 
   // A bare URL is a grey rectangle in Messages, and the name is also the part
   // that still works before the domain resolves.
   assert.match(sharing, /const message = name \? `\$\{name\} on BRAZOS: \$\{url\}` : url;/);
-  // Dismissing the browser's own share UI is a cancellation, not a failure.
-  assert.match(sharing, /if \(err instanceof Error && err\.name === 'AbortError'\) return \{ ok: true \};/);
 
   assert.match(chat, /await shareProfileLink\(counterpartyId, counterparty\?\.full_name\)/);
   assert.match(chat, /if \(!result\.ok\) await alertAsync\('Could not share', result\.message\);/);
@@ -671,78 +668,6 @@ test('[static] the read-model verdicts are recorded where the next run will look
   // And each one names what CLOSED it, not just what blocked it.
   assert.match(flags, /message_reads_select_party/);
   assert.match(flags, /set_direct_thread_read_at\(\)/);
-});
-
-// ---------------------------------------------------------------------------
-// THE SHARED LINK'S LANDING PAGE — /profile/{id} on the web build.
-// ---------------------------------------------------------------------------
-
-test('[executed] the web route matches /profile/{id} and nothing near it', () => {
-  assert.deepEqual(webRoute.parseWebRoute('/profile/abc-123'), { kind: 'profile', userId: 'abc-123' });
-  // A trailing slash is the same address.
-  assert.deepEqual(webRoute.parseWebRoute('/profile/abc-123/'), { kind: 'profile', userId: 'abc-123' });
-  // Percent-encoding is undone, because lib/appLinks.ts applies it on the way out.
-  assert.deepEqual(webRoute.parseWebRoute('/profile/a%20b'), { kind: 'profile', userId: 'a b' });
-
-  // STRICT: everything else belongs to the navigator, and a too-permissive
-  // match here would swallow paths it should have had.
-  for (const path of [
-    '/',
-    '/profile',
-    '/profile/',
-    '/profiles/abc',
-    '/profile/abc/extra',
-    '/x/profile/abc',
-    '/PROFILE/abc',
-    '/profile/%',
-    '/profile/%E0%A4%A',
-    '/profile/   ',
-  ]) {
-    assert.equal(webRoute.parseWebRoute(path), null, `${path} must not resolve to a profile`);
-  }
-});
-
-test('[static] the public page is honest about what an anonymous visitor can see', () => {
-  const app = stripComments(read('App.tsx'));
-  const page = stripComments(read('screens/PublicProfileScreen.tsx'));
-
-  // Resolved BEFORE the navigator, and native is gated out by construction.
-  assert.match(app, /Platform\.OS === 'web' && typeof window !== 'undefined'/);
-  assert.match(app, /parseWebRoute\(window\.location\.pathname\)/);
-  assert.match(app, /if \(webRoute\?\.kind === 'profile'\) \{/);
-  // No launch layer for a visitor with no account to restore — but the
-  // session still matters, so AuthProvider stays.
-  const branch = /if \(webRoute\?\.kind === 'profile'\) \{([\s\S]*?)\n  \}/.exec(app);
-  assert.ok(branch, 'the public-page branch must stay a plain if block');
-  assert.doesNotMatch(branch[1], /LaunchGate|ModeShell|ThemedNavigation/);
-  assert.match(branch[1], /<AuthProvider>/);
-  assert.match(branch[1], /<PublicProfileScreen userId=\{webRoute\.userId\} \/>/);
-
-  // NOTHING IS INVENTED. The rating block renders only on a real positive
-  // REVEALED total from the per-role summary (R8b-c) — worker first, hiring
-  // when that is all they have; a person with none gets no stars and no
-  // zero, and a failed summary read stays UNKNOWN and renders nothing. The
-  // legacy profiles aggregate is out of this file entirely.
-  assert.match(page, /summary && summary\.total > 0 && summary\.shownAverage != null/);
-  assert.match(page, /\{shownSummary \? \(/);
-  assert.match(page, /if \(!alive \|\| error\) return;/);
-  assert.doesNotMatch(page, /rating_count|rating_avg/);
-
-  // An empty read is ONE state whether the cause is RLS or a missing id: the
-  // page must not tell strangers which user ids exist.
-  assert.match(page, /setState\(data \? \{ status: 'ready', profile: data \} : \{ status: 'unavailable' \}\)/);
-  assert.match(page, /Profiles live in the app/);
-  assert.match(page, /Get the app/);
-  // The repo's verbatim label for an absent account — taken from the constant
-  // since 2026-08-23 (audit F4), not spelled out again here. The wording is
-  // still pinned, one layer up: tests/conversion.test.mjs asserts
-  // DELETED_USER_LABEL === 'Deleted user' and that phase67 writes that exact
-  // string, so this assertion is strictly stronger than the literal it
-  // replaces — it now also rules out a SECOND spelling drifting from the one
-  // isDeletedUser() compares against.
-  assert.match(page, /state\.profile\.full_name \?\? DELETED_USER_LABEL/);
-  // Read through the EXISTING public read, not a new one.
-  assert.match(page, /import \{ fetchProfileById, type Profile \} from '\.\.\/lib\/profiles';/);
 });
 
 // ---------------------------------------------------------------------------
@@ -1546,9 +1471,5 @@ test('[static] the translation sheet invalidates on close, and the tombstone has
   // AUDIT F4 — one spelling of the tombstone, in one place. A second literal
   // is a second thing to get wrong the day the wording changes, and
   // isDeletedUser() compares against the constant.
-  const profile = read('screens/PublicProfileScreen.tsx');
-  assert.match(profile, /import \{ DELETED_USER_LABEL \} from '\.\.\/lib\/rebook';/);
-  assert.match(profile, /state\.profile\.full_name \?\? DELETED_USER_LABEL/);
-  assert.doesNotMatch(profile, /'Deleted user'/, 'the inline literal must not come back');
   assert.match(read('lib/rebook.ts'), /export const DELETED_USER_LABEL = 'Deleted user';/);
 });

@@ -27,9 +27,6 @@ import { supabase } from './supabase';
 // push past someone's settings, mute or block.
 // ---------------------------------------------------------------------------
 
-/** Android channel id. Must match `channelId` in the send-push Edge Function. */
-export const ANDROID_CHANNEL_ID = 'default';
-
 const ASKED_KEY = 'brazos.push.asked';
 
 export type PushRegistration =
@@ -38,7 +35,7 @@ export type PushRegistration =
       ok: false;
       /**
        * denied        — user said no (or previously said no and we can't re-ask)
-       * unsupported   — simulator, web, or Expo Go where remote tokens don't exist
+       * unsupported   — simulator or Expo Go where remote tokens don't exist
        * no_project_id — app isn't linked to an EAS project, so Expo can't mint a token
        * error         — anything else, message carries the detail
        */
@@ -79,8 +76,8 @@ export function isQuietInForeground(data: unknown): boolean {
 }
 
 /**
- * Foreground presentation + the Android channel. Safe to call on every start;
- * both are idempotent. Called from App.tsx before anything can arrive.
+ * Foreground presentation + the action categories. Safe to call on every
+ * start; both are idempotent. Called from App.tsx before anything can arrive.
  */
 export async function configurePushHandling(): Promise<void> {
   Notifications.setNotificationHandler({
@@ -125,21 +122,6 @@ export async function configurePushHandling(): Promise<void> {
     console.error('[push] setNotificationCategoryAsync failed', err);
     Sentry?.captureException(err, { extra: { site: 'pushNotifications.configurePushHandling.categories' } });
   }
-
-  if (Platform.OS === 'android') {
-    try {
-      await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
-        name: 'Job & message alerts',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-      });
-    } catch (err) {
-      // A missing channel degrades presentation, not delivery — never let it
-      // take down app startup.
-      console.error('[push] setNotificationChannelAsync failed', err);
-      Sentry?.captureException(err, { extra: { site: 'pushNotifications.configurePushHandling' } });
-    }
-  }
 }
 
 /** Whether we've already shown the OS permission prompt on this device. */
@@ -174,9 +156,6 @@ export async function registerPushToken(
 ): Promise<PushRegistration> {
   const { interactive = true } = options;
 
-  if (Platform.OS === 'web') {
-    return { ok: false, reason: 'unsupported', message: 'Push is not supported on web.' };
-  }
   if (!Device.isDevice) {
     return {
       ok: false,
@@ -293,7 +272,7 @@ export async function maybePromptForPush(rationale: string): Promise<PushRegistr
   if (await hasAskedForPush()) return null;
 
   // Don't burn the one-shot iOS dialog somewhere it can't possibly succeed.
-  if (Platform.OS === 'web' || !Device.isDevice || isExpoGo() || !getProjectId()) {
+  if (!Device.isDevice || isExpoGo() || !getProjectId()) {
     return null;
   }
 
@@ -347,7 +326,7 @@ function deactivateToken(token: string) {
  * the next sign-in — never a console line as the only handling.
  */
 export async function unregisterPushToken(): Promise<void> {
-  if (Platform.OS === 'web' || !Device.isDevice || isExpoGo()) return;
+  if (!Device.isDevice || isExpoGo()) return;
   const projectId = getProjectId();
   if (!projectId) return;
 
@@ -406,7 +385,7 @@ export async function settlePendingPushDeactivation(): Promise<void> {
 
   let token: string | null = pending === '*' ? null : pending;
   if (!token) {
-    if (Platform.OS === 'web' || !Device.isDevice || isExpoGo()) return;
+    if (!Device.isDevice || isExpoGo()) return;
     const projectId = getProjectId();
     if (!projectId) return;
     try {

@@ -4,13 +4,6 @@
  * WHY IT IS A BOUNDARY AND NOT AN IMPORT. Same arrangement, and the same two
  * reasons, as lib/clipboard.ts — one lazy, caught `require`, resolved once.
  *
- * WEB IS SHORT-CIRCUITED BEFORE THE REQUIRE, NOT AFTER IT. A browser has no
- * haptics hardware, and the screenshot harness renders on web. The vendor is
- * therefore never EXECUTED there: `Platform.OS === 'web'` decides the handle
- * is null without calling `load()` at all, so there is no path on web that
- * reaches expo-haptics, its `requireOptionalNativeModule` call, or its web
- * shim. Every export becomes an immediate no-op.
- *
  * A BINARY THAT PREDATES THE PACKAGE. expo-haptics entered package.json in the
  * run that created this file, so the operator's current dev build carries no
  * ExpoHaptics native module. The vendor entry uses
@@ -23,8 +16,6 @@
  * NO CALLERS YET. Nothing imports this. It exists so that the screens which
  * will call it do not each grow their own try/catch around the same vendor.
  */
-
-import { Platform } from 'react-native';
 
 /**
  * Only what this wrapper actually calls. The two enums are optional because a
@@ -50,11 +41,11 @@ function load(): HapticsModule | null {
 }
 
 /**
- * Resolved ONCE per process, and never at all on web. A native module cannot
- * appear or disappear while the app is running, so re-probing per tap would
- * burn a try/catch for an answer that cannot change.
+ * Resolved ONCE per process. A native module cannot appear or disappear while
+ * the app is running, so re-probing per tap would burn a try/catch for an
+ * answer that cannot change.
  */
-const haptics: HapticsModule | null = Platform.OS === 'web' ? null : load();
+const haptics: HapticsModule | null = load();
 
 /**
  * Run one vendor call so that nothing it does can reach the caller.

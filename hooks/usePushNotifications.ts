@@ -1,6 +1,6 @@
 import { dataForAction } from '../lib/notificationActions';
 import { useEffect, useRef } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { handleNotificationData } from '../lib/notificationRoutes';
 import { registerPushToken, settlePendingPushDeactivation } from '../lib/pushNotifications';
@@ -79,7 +79,6 @@ export function usePushNotifications() {
 
   // --- Cold start: app was closed, tapping the notification launched it ----
   useEffect(() => {
-    if (Platform.OS === 'web') return;
     if (handledColdStart.current) return;
 
     let active = true;
@@ -103,7 +102,6 @@ export function usePushNotifications() {
   // F13 — a push that arrives while the app is open changes the bell's count,
   // and the jobs it is about (lib/queryClient.ts invalidateAfterPush).
   useEffect(() => {
-    if (Platform.OS === 'web') return;
     const subscription = Notifications.addNotificationReceivedListener(() => {
       invalidateAfterPush();
     });
@@ -112,7 +110,6 @@ export function usePushNotifications() {
 
   // --- Warm start: app was backgrounded or already open -------------------
   useEffect(() => {
-    if (Platform.OS === 'web') return;
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       // Any tap arriving through this listener is a fresh one, so the
       // cold-start replay is no longer relevant.

@@ -13,8 +13,7 @@ import type { Database } from './supabaseTypes';
 // types/database.ts (regenerated with `npm run db:types`, local only, in the
 // same commit as any migration that changes a table, view, enum or function
 // signature), through lib/supabaseTypes.ts's one correction — a function
-// argument also accepts null. lib/supabase.web.ts is the frozen web surface and
-// stays as it is.
+// argument also accepts null.
 export const supabase = createClient<Database>(env.EXPO_PUBLIC_SUPABASE_URL, env.EXPO_PUBLIC_SUPABASE_KEY, {
   auth: {
     // Persist the session in the device keychain so the user stays logged in

@@ -18,7 +18,7 @@ function* walk(dir) {
   for (const entry of readdirSync(join(root, dir))) {
     const rel = `${dir}/${entry}`;
     if (statSync(join(root, rel)).isDirectory()) yield* walk(rel);
-    else if (/\.tsx?$/.test(entry) && !/\.web\.tsx?$/.test(entry)) yield rel;
+    else if (/\.tsx?$/.test(entry)) yield rel;
   }
 }
 
@@ -26,18 +26,13 @@ function* walk(dir) {
 // RUN MOTION1 (C3) — THE BLUR IS A BOUNDARY, THE SAME SHAPE AS THE OTHER TWO.
 //
 // CATCHES: a static `import { BlurView } from 'expo-blur'` anywhere (which
-// runs the vendor's module scope on every platform, web included, and hands a
-// binary without ExpoBlurView an unguarded native-module error); the boundary
-// growing a fallback COLOUR of its own, which would be a second ground under
-// every surface it is layered onto; and the VENDOR's web short-circuit being
-// removed — expo-blur's web shim paints a tint of its own, and the screenshot
-// harness, a web render, must never gain one. 2026-09-19: web is not
-// blur-less any more — the boundary draws a colourless CSS backdrop-filter
-// there, so the harness shows the glass the phone shows — but the vendor is
-// still never executed on web, and the CSS branch paints no colour either.
+// runs the vendor's module scope at import and hands a binary without
+// ExpoBlurView an unguarded native-module error); and the boundary growing a
+// fallback COLOUR of its own, which would be a second ground under every
+// surface it is layered onto. (Lean D2 removed the web branch.)
 // ---------------------------------------------------------------------------
 
-test('[static] lib/blur renders the vendor, a colourless CSS blur on web, or nothing — and the vendor never runs on web', () => {
+test('[static] lib/blur renders the vendor or nothing', () => {
   const source = read(BOUNDARY);
   const code = stripComments(source);
   const flat = flatten(source);
@@ -53,8 +48,7 @@ test('[static] lib/blur renders the vendor, a colourless CSS blur on web, or not
   assert.match(flat, /try \{ const vendor = require\('expo-blur'\)/);
   assert.match(flat, /\} catch \{ return null; \}/);
 
-  // The one call site is the non-web arm of a Platform ternary, so the vendor
-  // is never executed on web at all.
+  // One call site, resolved once at module scope.
   assert.equal(
     [...code.matchAll(/(?<!function )\bload\(\)/g)].length,
     1,
@@ -62,43 +56,28 @@ test('[static] lib/blur renders the vendor, a colourless CSS blur on web, or not
   );
   assert.match(
     flat,
-    /const BlurView: BlurViewComponent \| null = Platform\.OS === 'web' \? null : load\(\);/,
-    'the one call site must be the non-web arm of the Platform ternary'
+    /const BlurView: BlurViewComponent \| null = load\(\);/,
+    'the one call site resolves the handle once at module scope'
   );
+  assert.match(flat, /export const canBlur = BlurView != null;/);
 
   // With no handle it renders NOTHING, so what shows is whatever opaque colour
   // the caller had underneath. It never paints one itself.
   assert.match(flat, /if \(!BlurView\) return null;/);
   assert.doesNotMatch(code, /backgroundColor/, 'the blur layer must paint no colour of its own');
-
-  // 2026-09-19 — THE WEB BRANCH: a plain View with backdrop-filter, before
-  // the vendor check, sized from the same intensity the vendor takes, and
-  // nothing at zero. `canBlur` says web can, so Surface uses the real mix.
-  assert.match(
-    flat,
-    /if \(Platform\.OS === 'web'\) \{ const px = Math\.round\(intensity \* WEB_PX_PER_INTENSITY\); if \(px <= 0\) return null; return <View pointerEvents="none" style=\{\[style \?\? StyleSheet\.absoluteFill, webBlurStyle\(px\)\]\} \/>; \}/,
-    'web blurs with a colourless CSS view, sized from the intensity',
-  );
-  // 2026-09-29 (LUX-LIST-2 #9): the web ASKS whether it can draw a backdrop blur (CSS.supports),
-  // never assumes — a renderer without it showed see-through pop-ups with the rows readable through them.
-  assert.match(flat, /export const canBlur = Platform\.OS === 'web' \? webCanBlur\(\) : BlurView != null;/);
-  assert.match(flat, /css\.supports\('backdrop-filter', 'blur\(1px\)'\)/);
-  assert.match(flat, /const WEB_PX_PER_INTENSITY = 0\.5;/);
-  assert.doesNotMatch(code, /tint[^\n]*backdropFilter|backdropFilter[^\n]*tint/, 'the CSS blur carries no tint');
 });
 
-test('[static] the CSS blur is named nowhere but the boundary (2026-09-19)', () => {
-  // The web analogue of the BlurView rule below: one implementation of the
-  // blur per platform, both inside lib/blur.tsx. A surface reaching for
-  // backdrop-filter itself would be inventing its own glass on web.
+test('[static] no CSS blur is named anywhere in the app tree (lean D2: the web branch is gone)', () => {
+  // Lean D2 removed the web build, and with it the CSS backdrop-filter branch
+  // lib/blur.tsx drew there. The only blur is the vendor's, through the
+  // boundary, so backdrop-filter has no reason to appear in any file.
   const files = [...ROOT_FILES];
   for (const dir of SCAN_DIRS) files.push(...walk(dir));
   const offenders = [];
   for (const file of files) {
-    if (file === BOUNDARY) continue;
     if (/backdropFilter|backdrop-filter/i.test(stripComments(read(file)))) offenders.push(file);
   }
-  assert.deepEqual(offenders, [], 'backdrop-filter may be named only inside lib/blur.tsx');
+  assert.deepEqual(offenders, [], 'backdrop-filter is named in the app tree');
 });
 
 test('[static] lib/blur is the only file in the tree that names expo-blur', () => {

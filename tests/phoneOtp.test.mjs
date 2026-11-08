@@ -696,7 +696,7 @@ test('a full six-digit paste is handled by one input, not six', () => {
   // `<TextInput\s` is the JSX element; `useRef<TextInput>` is a type argument.
   assert.equal((otp.match(/<TextInput\s/g) ?? []).length, 1, 'one input, so paste lands whole');
   assert.match(otp, /textContentType="oneTimeCode"/);
-  assert.match(otp, /'sms-otp'/);
+  assert.match(otp, /autoComplete="one-time-code"/);
 });
 
 // ---------------------------------------------------------------------------
