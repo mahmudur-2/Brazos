@@ -157,17 +157,15 @@ appId: app.brazos.mobile.preview
 - inputText: "123"
 - tapOn: "ZIP"
 - inputText: "10001"
-# Run 9: the number pad covered the Pay button and the tap on it landed on a key. The sheet's keyboard
-# toolbar ends with a Done check; close the keyboard first, then the button is on screen.
-- runFlow:
-    when:
-      visible: "Done"
-    commands:
-      - tapOn: "Done"
-- hideKeyboard
-- extendedWaitUntil:
-    visible: 'Pay \$.*'
-    timeout: 10000
+# Runs 9 and 10: the number pad covered the Pay button and the tap on it landed on a key. The sheet's
+# keyboard toolbar ends with a check that has no readable label, and Maestro's hideKeyboard swipes
+# fail on this sheet, so the check is tapped where it sits (bottom right, just above the keys), then
+# the sheet title as the documented fallback (a tap outside a field also ends editing).
+- tapOn:
+    point: "90%,61%"
+- tapOn: "Add card"
+- waitForAnimationToEnd:
+    timeout: 5000
 - tapOn: 'Pay \$.*'
 # Checkout polls the ledger for `held` and offers "Check again" past its window (screens/CheckoutScreen.tsx).
 - repeat:
