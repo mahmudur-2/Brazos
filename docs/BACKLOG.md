@@ -40,10 +40,24 @@ repeat jobs; waiting-state facts and nudges (notified count, expected first-offe
 24 h nudges; each needs a new RPC or a cron); an "available this week" label (needs an
 availability calendar).
 
+## Security (from the lean verdict)
+
+From the lean security verdict (archived 2026-11-08, `_archive/2026-11-lean/SECURITY-VERDICT.md`).
+
+- L1. Move the `job-photos` completion and review folders to signed URLs (D-20261108-12).
+- L2. The postcss advisory waits for an Expo major.
+- L3. `supabase_admin` default privileges are Supabase-owned: raise them with the Advisor on staging.
+- L4. Export the Security Advisor and Performance Advisor reports for staging (owner, 2 minutes).
+- L5. Re-home `notify_on_bid`, then drop the `bids` table (v1.2 item 16).
+- `is_blocked_between` still answers for any two users: restrict it to the caller's own pairs.
+- TestSprite happy-path tests need a staging user token (auto-auth is Pro): listed under Other open
+  items.
+
 ## Other open items
 
-- `job-photos` and `avatars` buckets are public with permanent unauthenticated URLs on staging.
-  Do not fix through the dashboard's "Remove policy" button; batch with the media item below.
+- `job-photos` and `avatars` buckets are public with permanent unauthenticated URLs on staging, by
+  decision (D-20261108-12). Do not fix through the dashboard's "Remove policy" button; batch with
+  the media item below.
 - Media: `useCaching: true`, a one-year `cacheControl`, a downscale to 1600 px, poster frames. Needs
   `expo-image-manipulator` and `expo-video-thumbnails` (not installed; flag before adding).
 - The job draft stores the private service address in plain device storage: the offline cache

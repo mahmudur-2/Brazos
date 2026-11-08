@@ -14,7 +14,8 @@ typed: `lib/supabase.ts` is `createClient<Database>` over `types/database.ts` (m
 `lib/AuthContext.tsx` owns the session: `user`, `session`, `loading`, `signUp`, `login`, sign-out,
 and a `bannedNotice` flag set when the last sign-out was a suspension. Sign-out also unregisters
 the push token. Screens read auth through `hooks/useAuth.ts`. Sign-up creates the profile row
-through the `on_auth_user_created` trigger on `auth.users` (`handle_new_user()`).
+through the `on_auth_user_created` trigger on `auth.users` (`handle_new_user()`, which prefers the
+verified phone on the auth row over client-supplied metadata).
 
 Two gates sit above the tabs: signed out goes to the auth flow; signed in with the current Terms
 and Privacy not accepted goes to `LegalGateScreen`. A gate failure admits only on-device proof
@@ -29,6 +30,9 @@ Phone one-time codes go through `lib/phoneAuth/`. Screens call `phoneAuth`, neve
 (development only: a random six-digit code shown on the verify screen) or `disabled` (the buttons
 fall back to email). Unset means `mock` in development and `disabled` in a release. `mock` is
 impossible when `__DEV__` is false: it resolves to `disabled` and reports the misconfiguration.
+`eas.json` pins `EXPO_PUBLIC_PHONE_AUTH_MODE` and `EXPO_PUBLIC_PAYMENTS_MODE` in every build
+profile (`development`: `mock` and `disabled`; `preview`, `production`, `testflight`, `e2e-test`:
+`supabase` and `stripe`).
 
 Turning SMS on, in this order:
 1. Twilio: a funded account (a trial account messages only verified numbers) and a Verify Service;
@@ -332,10 +336,11 @@ job owner and the assigned worker only, and it is never added to realtime. A `jo
 table was never built; `job_locations` is that surface. Open-market surfaces show approximate
 location only, enforced by RLS and not by the frontend.
 
-Three buckets: `job-photos` (posting and completion photos and videos) and `avatars`, readable by
-any signed-in account by policy; `chat-photos`, private, whose uploads return a
-`storage://bucket/path` reference that `resolveChatMediaUrl()` exchanges for a six-hour signed URL.
-Direct SQL deletes on storage tables are refused for everyone; use the Storage API.
+Three buckets, each with a 25 MB limit and an image/video mime list: `job-photos` (posting and
+completion photos and videos) and `avatars`, public (permanent URLs; the privacy policy says so,
+D-20261108-12); `chat-photos`, private, whose uploads return a `storage://bucket/path` reference
+that `resolveChatMediaUrl()` exchanges for a six-hour signed URL. The orphan buckets `chat-audio`
+and `chat-documents` are deleted. Direct SQL deletes on storage tables are refused for everyone; use the Storage API.
 
 ## Profiles and reputation
 
@@ -434,15 +439,16 @@ bios, services, offers, reviews and messages.
 
 Plus views `conversations`, `transfers_due`, `refunds_due`, `transfers_ready`, `refunds_ready`, and
 126 functions. The schema is the numbered files in `supabase/migrations/` (baseline `20260901000000`
-to `20261108000000_lean_v1.sql`). A migration file existing is not evidence staging has it: the
+to `20261108010000_lean_v1_grants.sql`). A migration file existing is not evidence staging has it: the
 pipeline's list-after step is.
 
 ## Edge functions (9)
 
-House style: plain `fetch` to PostgREST and Stripe, no `supabase-js`, no import map, no shared
-module, no function computes a monetary amount (every cent sent to Stripe is read verbatim from a
-`payments` column). The one exception to "no imports" is `stripe-webhook`, which imports its
-sibling `./verify.mjs` because a Node test runs it. `supabase/functions/` is not type-checked.
+House style: plain `fetch` to PostgREST and Stripe, no `supabase-js`, no import map, no
+shared module beyond `_shared/serviceAuth.ts` (below), no function computes a monetary amount
+(every cent sent to Stripe is read verbatim from a `payments` column). The other import is
+`stripe-webhook`'s sibling `./verify.mjs`, because a Node test runs it. `supabase/functions/` is
+not type-checked.
 `supabase/config.toml` is the only source of `verify_jwt`: `stripe-webhook` and `connect-return`
 are `false` (Stripe and a browser send no JWT); `create-payment`, `connect-onboarding`,
 `connect-status`, `payment-methods` are `true`; `send-push`, `send-receipts` and
@@ -461,6 +467,10 @@ verification off for `stripe-webhook` and `connect-return`.
 | `payment-methods` | list, add (setup intent) and remove saved cards |
 | `send-push` | drains `notification_outbox` through Expo push (100 per request, 10 passes) |
 | `send-receipts` | drains `receipt_outbox` by email (Resend) |
+
+**`_shared/serviceAuth.ts`** is the one shared module (D-20261108-10): a constant-time check of the
+service-role key in the Bearer header, POST only. `send-push`, `send-receipts` and
+`process-settlements` call it first, since the database and pg_cron wake them with that key.
 
 **Webhook events**, exactly seven: `payment_intent.succeeded`, `payment_intent.canceled`,
 `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed`, `transfer.created`,
