@@ -125,6 +125,7 @@ jobs:
           xcrun simctl io booted recordVideo --codec=h264 --force e2e.mp4 &
           recorder=$!
           status=0
+          mkdir -p e2e-debug
           maestro test .maestro/ --format junit --output e2e-junit.xml --debug-output e2e-debug || status=$?
           # SIGINT lets simctl finish the mp4; the flows' exit code is kept.
           kill -INT "$recorder"
@@ -140,6 +141,9 @@ jobs:
             e2e-junit.xml
             e2e-debug/
             e2e.mp4
+            *.png
+            ~/.maestro/tests/
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Shut the simulator down

@@ -109,7 +109,10 @@ appId: app.brazos.mobile.preview
           visible: 'Terms and Privacy\. Reviewed\.'
           timeout: 30000
       - takeScreenshot: setup-done
-      - tapOn: "Finish setup"
+      # Below "Start in", so the header's "Finish Setup" is never the match.
+      - tapOn:
+          text: "Finish setup"
+          below: "Start in"
 - runFlow:
     when:
       visible: "BEFORE YOU START"
