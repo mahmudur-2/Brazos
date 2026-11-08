@@ -74,3 +74,6 @@ start.ps1
 
 # owner's dated archive of cleaned-up local files (moved, never deleted)
 _archive/
+
+# graphify AST cache (rebuilt by graphify extract)
+graphify-out/cache/
