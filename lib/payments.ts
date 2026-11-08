@@ -4,9 +4,9 @@ import { formatBudget } from './jobs';
 /**
  * The money ledger's client types and reads (BRAZOS_MASTER_PLAN.md §G/§H.3).
  *
- * Phase 5 scope: a payment is created by the sandbox checkout and stops at
- * `held`. There is deliberately no client call — and no database function —
- * that moves a payment past `held`; release is Phase 6's approval flow.
+ * A payment is created by the card checkout and stops at `held`. No client
+ * call moves a payment past `held`: release is the customer's approval or the
+ * auto-release clock, both in the database.
  *
  * Writes go through the payment ADAPTER (lib/adapters/payments.ts), never
  * from screens, and land in SECURITY DEFINER RPCs — payments carries SELECT
@@ -61,12 +61,11 @@ export type Payment = {
   kind: PaymentKind;
   /** The agreed price — what the worker's payout is computed from. */
   amount_cents: number;
-  /** What the platform keeps from amount_cents. Sandbox rows write 0; a
-   *  stripe row carries the ledger's own figure. The worker's take is
-   *  amount_cents - platform_fee_cents, read off the row, never computed
-   *  from a client rate (D10). */
+  /** What the platform keeps from amount_cents: the ledger's own figure. The
+   *  worker's take is amount_cents - platform_fee_cents, read off the row,
+   *  never computed from a client rate (D10). */
   platform_fee_cents: number;
-  /** 'sandbox' (phase50) or 'stripe' (R4's foundation). */
+  /** 'stripe' for every row the app writes. */
   provider: string;
   provider_ref: string | null;
   status: PaymentStatus;
@@ -78,13 +77,13 @@ export type Payment = {
   /** 'approved' = the customer approved the work; 'auto_approved' = the 72h
    *  on-read clock ran out (phase51). Null for tips and unreleased rows. */
   release_reason: 'approved' | 'auto_approved' | null;
-  /** When the payee's simulated cash-out swept this row to paid_out
-   *  (phase55). Sandbox — no real transfer exists. */
+  /** Reserved: the ledger stops at released (payout.paid is unhandled), so
+   *  nothing writes this today. */
   paid_out_at: string | null;
   created_at: string;
   updated_at: string;
   // --- R6a (D12): the stripe ledger's figures. Every one optional/nullable so
-  // a sandbox row that never carried them still parses. ---
+  // an older row that never carried them still parses. ---
   /** The customer's ALL-IN total — agreed price + protection fee + tax. The
    *  headline everywhere the customer is shown what they pay (D13). */
   charge_amount_cents?: number | null;
@@ -108,8 +107,7 @@ export type Payment = {
  * R6c (D7): THE one place the worker's take is derived from a ledger row —
  * amount_cents − platform_fee_cents, both read off the row, no rate anywhere.
  * Tips carry platform_fee_cents = 0 (enforce_tip_ceiling), so a tip's take is
- * its full amount. Sandbox rows write platform_fee_cents = 0, so their take
- * equals amount_cents and no sandbox figure changes. Every worker-facing
+ * its full amount. Every worker-facing
  * "yours" figure — Earnings' buckets and rows, the worker's job card — calls
  * this; nothing else on the client subtracts a fee.
  */
@@ -260,10 +258,8 @@ export type PaymentStatusSummary = Pick<Payment, 'status' | 'release_requested_a
  *
  * This is a plain table read: it does NOT run phase51's on-read release
  * clock (that is job_payment_state(), one job per call — N round trips for a
- * list). deriveJobLifecycle() mirrors the elapsed-clock case client-side
- * instead — for sandbox rows only — so a held sandbox row past its deadline
- * still buckets as closed; a stripe row buckets as closed once
- * release_requested_at is set (D23).
+ * list). A stripe row buckets as closed once release_requested_at is set
+ * (D23).
  */
 export async function fetchJobPaymentStatusesByJobIds(jobIds: string[]) {
   if (jobIds.length === 0) {
@@ -411,7 +407,7 @@ export function payoutsCta(status: PayoutsStatus): PayoutsView {
  * nothing to a payee whose payment_accounts.payouts_enabled is false, which
  * is every status but 'enabled'. Never "paid", never "released": the
  * transfer has not landed. A null status is unknown, and unknown says
- * nothing; a sandbox row never waits on a payout account.
+ * nothing.
  */
 export const PAYOUT_SETUP_NOTICE =
   'An approved payment is waiting on your payout setup before it can be sent to you.';
@@ -431,7 +427,7 @@ export const PAYOUTS_STATUS_UNREADABLE = 'Your payout status could not be read r
 
 // The cheap read itself — my_payouts_status() — lives in
 // lib/payments/stripe.ts beside the two connect calls: payouts exist on the
-// card path only, and this module's contract (tests/sandboxCheckout.test.mjs)
+// card path only, and this module's contract (tests/payouts.test.mjs)
 // is that it calls no RPC on a payout path at all. It validates through
 // validatePayoutsStatusResponse() below, so the shape rule is written once.
 

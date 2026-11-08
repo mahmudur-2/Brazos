@@ -314,7 +314,7 @@ export type MyJobsStackParamList = {
     counterpartyName: string;
     countersRemaining: number;
   };
-  /** Screen 31 — sandbox protected checkout for an assigned, unfunded job. */
+  /** Screen 31 — protected card checkout for an assigned, unfunded job. */
   /** Idea 20: `oneTap` — after "Accept & pay" or a push's Confirm, the saved card is the path;
    *  `oneTapCard` — the card the accept's confirm named, the only one that pays at once. A4: a
    *  `oneTap` arrival without it (the push) opens the Pay & protect confirm, naming the card. */
@@ -446,9 +446,9 @@ export type ProfileStackParamList = {
   /** Screens 64+66 (Phase 9): the worker's services & pricing manager with
    *  the availability toggle and the honest verification state. */
   ServicesPricing: undefined;
-  /** Screen 45 (Phase 9): the sandbox payment-methods surface. */
+  /** Screen 45 (Phase 9): the saved-card (payment methods) surface. */
   PaymentMethods: undefined;
-  /** Screens 59+60 (Phase 11): the ledger-derived wallet + simulated cash-out. */
+  /** Screens 59+60 (Phase 11): the ledger-derived earnings view. */
   Earnings: undefined;
   /**
    * R6c (D1/D2) — the worker's payout state over connect-onboarding /

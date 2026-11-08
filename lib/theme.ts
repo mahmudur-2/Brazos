@@ -416,9 +416,8 @@ export { spacing, radius };
  * still, and the same lever — but no font file is registered any more, so
  * App.tsx's launch gate no longer waits on `expo-font`, and a face that ships
  * with iOS cannot arrive late enough to paint a frame in a fallback.
- * `assets/fonts/PlayfairDisplay-Bold.ttf` and its OFL license stay on disk,
- * required by nothing and bundled by nothing; the themeTokens fence pins
- * them there.
+ * The Playfair static and its OFL license moved to `_archive/2026-11-lean/`
+ * in D8; the themeTokens fence pins that no font file ships.
  *
  * CONSEQUENCE FOR WEIGHT, INVERTED. A bundled static made `fontWeight` inert
  * on iOS — the family name WAS the weight. A platform face does not: iOS

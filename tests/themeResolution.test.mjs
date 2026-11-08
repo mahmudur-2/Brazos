@@ -399,6 +399,10 @@ test('[static] no raw colour literal in screens/, components/, ui/, hooks/, navi
 // does not retire that.
 // ---------------------------------------------------------------------------
 
+// D8 (lean v1): the PNG masters the comments below call "beside" the .webp mounts (lamp dark and
+// light, the toolbox) moved to _archive/2026-11-lean/, with the retired atmosphere raster. A .webp
+// mount is now checked by its RIFF header only: a real WebP whose alpha flag is set. The soft
+// layers and glyphs are PNGs and are still measured sample by sample.
 const BAKED_ART = {
   // Master 44's hero crop and its gold-B drape, and master 43's hero crop.
   // All three shipped as RGB with the dark room baked in; the operator's
@@ -489,8 +493,8 @@ const BAKED_ART = {
   // 46.85% solid, 7.23% the soft edge between; light 49.75 / 43.46 / 6.79. A
   // CUT-OUT by this roster's own measure (a cut-out here runs 38% to 73% empty),
   // and gated as the pair always was: a dark composition and a light one.
-  'assets/prestige/hero_armchair_customer_lamp_dark.webp': { bake: 'transparent', gate: true, master: 'assets/prestige/hero_armchair_customer_lamp_dark.png' },
-  'assets/prestige/hero_armchair_customer_lamp_light.webp': { bake: 'transparent', gate: true, master: 'assets/prestige/hero_armchair_customer_lamp_light.png' },
+  'assets/prestige/hero_armchair_customer_lamp_dark.webp': { bake: 'transparent', gate: true },
+  'assets/prestige/hero_armchair_customer_lamp_light.webp': { bake: 'transparent', gate: true },
   // ...and the two soft layers under them, a NEW WORD rather than a rounding:
   // 'soft-layer' is a light or a shadow, not a picture — RGBA that reaches 0 at
   // its rim and holds NO fully opaque sample anywhere (the hero sweep below pins
@@ -542,7 +546,7 @@ const BAKED_ART = {
   // the scan saw the mount as it really is — unconditional, by decision — and
   // this entry now says so, exactly as the customer hero's 2026-08-23 entry did
   // when both themes mounted it. The bake is untouched and still measured.
-  'assets/prestige/hero_toolbox_worker.webp': { bake: 'transparent', gate: false, master: 'assets/prestige/hero_toolbox_worker.png' },
+  'assets/prestige/hero_toolbox_worker.webp': { bake: 'transparent', gate: false },
   // 2026-09-28 (LUX-LIST-64 #14) — THE THREE BAKED CATEGORY GLYPHS: sim.html's
   // paint roller (Painting) and bin (Junk Removal), and a drill (Handyman, since
   // the hammer is Assembly's) — 96px white line art on a transparent ground,
@@ -686,28 +690,22 @@ function webpDims(bytes, asset) {
 }
 
 /**
- * The bytes a roster entry's bake is measured on: the file itself, or — for a
- * WebP mount that names a PNG `master` — the master, once the WebP is proven
- * to exist, to be a WebP, and to be the master's exact size. The master stays
- * on disk precisely so the bake keeps being measured from real alpha samples;
- * a WebP with no master is refused rather than measured as nothing.
+ * The bytes a roster entry's bake is measured on: the file itself. Reading it also proves the
+ * file is on disk (Metro resolves an asset `require` at bundle time). A .webp mount is proven by
+ * `webpAlphaChecked` instead of `alphaProfile`, since no decoder ships and its PNG master moved
+ * to _archive/2026-11-lean/ (D8).
  */
-async function rosterBytes(asset, master) {
-  const own = await readFile(new URL(`../${asset}`, import.meta.url));
-  if (!master) {
-    assert.doesNotMatch(asset, /\.webp$/, `${asset} is a WebP mount with no PNG master to measure`);
-    return own;
-  }
-  assert.match(asset, /\.webp$/, `${asset}: only a WebP mount carries a master`);
-  const masterBytes = await readFile(new URL(`../${master}`, import.meta.url));
-  assert.equal(masterBytes.toString('ascii', 12, 16), 'IHDR', `${master} is not a PNG`);
-  const dims = webpDims(own, asset);
-  assert.deepEqual(
-    [dims.width, dims.height],
-    [masterBytes.readUInt32BE(16), masterBytes.readUInt32BE(20)],
-    `${asset} is not the size of its master ${master}`,
+async function rosterBytes(asset) {
+  return readFile(new URL(`../${asset}`, import.meta.url));
+}
+
+/** A WebP mount recorded `transparent` must be a real WebP with its alpha flag set. */
+function webpAlphaChecked(bytes, asset, bake) {
+  assert.equal(bake, 'transparent', `${asset}: a WebP mount is recorded transparent`);
+  assert.ok(
+    webpDims(bytes, asset).alphaFlag,
+    `${asset} is claimed transparent but its WebP carries no alpha channel`,
   );
-  return masterBytes;
 }
 
 /**
@@ -806,11 +804,16 @@ function alphaProfile(bytes, asset) {
 test('[static] every roster bake claim is re-derived from the file, both ways', async () => {
   let opaqueChecked = 0;
   let transparentChecked = 0;
-  for (const [asset, { bake, master }] of Object.entries(BAKED_ART)) {
+  for (const [asset, { bake }] of Object.entries(BAKED_ART)) {
     // Every rostered asset must be ON DISK. Metro resolves an asset `require`
     // at bundle time, so a roster entry with no file is not a cosmetic gap —
     // it is a build that does not start. home(1) hit exactly that.
-    const bytes = await rosterBytes(asset, master);
+    const bytes = await rosterBytes(asset);
+    if (asset.endsWith('.webp')) {
+      webpAlphaChecked(bytes, asset, bake);
+      transparentChecked += 1;
+      continue;
+    }
     const alpha = alphaProfile(bytes, asset);
     if (bake.startsWith('opaque-')) {
       opaqueChecked += 1;
@@ -913,9 +916,13 @@ test('[static] each hero raster is the bake the roster records', async () => {
   ]) {
     const recorded = BAKED_ART[asset]?.bake;
     assert.ok(recorded, `${asset} must stay on the roster`);
-    const bytes = await rosterBytes(asset, BAKED_ART[asset]?.master);
-    const alpha = alphaProfile(bytes, asset);
+    const bytes = await rosterBytes(asset);
     checked += 1;
+    if (asset.endsWith('.webp')) {
+      webpAlphaChecked(bytes, asset, recorded);
+      continue;
+    }
+    const alpha = alphaProfile(bytes, asset);
 
     if (recorded === 'transparent') {
       assert.equal(alpha.colourType, 6, `${asset} is recorded transparent but is not RGBA`);

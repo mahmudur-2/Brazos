@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 // Now / Blocked / Next / Revert only; docs/DECISIONS.md is one line per decision still in force.
 // Bytes are counted with CRLF folded to LF, so a Windows checkout and CI agree. A budget is raised
 // only by a dated docs/DECISIONS.md entry, never to make this pass: move the oldest material to
-// its archive instead (docs/README.md says where each one goes).
+// _archive/ instead (git keeps the rest).
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BUDGETS = [
   ['HANDOFF.md', 12_000],

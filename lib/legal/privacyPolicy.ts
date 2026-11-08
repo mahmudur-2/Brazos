@@ -6,7 +6,7 @@
  *   * location   — phase12 (job_locations, neighbourhood label on `jobs`),
  *                  lib/reverseGeocode.ts (OpenStreetMap Nominatim)
  *   * photos     — phase13 job photos, phase17 completion photos + portfolio
- *   * moderation — phase13 blocks/mutes/reports/bans, FIX-RUN B3 word filter
+ *   * moderation — blocks/reports/bans, FIX-RUN B3 word filter
  *   * push       — phase20 push_tokens, notification_prefs.home_lat/lng,
  *                  live_activity_tokens (the lock-screen card)
  *   * payments   — Stripe (payments, payment_events, payment_accounts, saved
@@ -135,10 +135,10 @@ Worker.
 
 ### Moderation data
 
-Blocks, mutes, and reports you make, including any description you write in a
+Blocks and reports you make, including any description you write in a
 report and what the report is about (a job post, a profile, a review, a photo
-or a message). Reports are visible to Brazos administrators. Blocks and mutes
-are not disclosed to the person blocked or muted. Brazos refuses posts, bids,
+or a message). Reports are visible to Brazos administrators. Blocks
+are not disclosed to the person blocked. Brazos refuses posts, bids,
 profiles, reviews and messages that contain certain words it does not allow;
 the refused text is not stored.
 
@@ -171,7 +171,7 @@ only: no name, email, phone number, message text or location is sent to it.
 - To place jobs on the aggregated map view.
 - To send notifications you have switched on.
 - To enforce safety and the Terms of Service: reviewing reports, applying
-  blocks and mutes, refusing words Brazos does not allow, suspending accounts,
+  blocks, refusing words Brazos does not allow, suspending accounts,
   and preventing a banned user from re-registering.
 - To fix problems and diagnose errors, and to understand which parts of the
   app are used.
@@ -236,7 +236,7 @@ Deletion is permanent and cannot be undone.
   publicly, and remove any of them at any time.
 - Profile details: edit or clear your bio, photo, and categories whenever you
   want.
-- Other users: block or mute anyone, and report what they post.
+- Other users: block anyone, and report what they post.
 
 Depending on where you live, you may have additional rights to access, correct,
 port, or delete your personal information. Email ${SUPPORT_EMAIL} to make a

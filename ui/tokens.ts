@@ -615,9 +615,8 @@ export const radius = metricGroup(THEME_RADIUS_DEFAULTS, {
  * §I names Inter. NOTHING IS BUNDLED AND NOTHING IS A SERIF.
  *
  * No font file is REGISTERED by this app: App.tsx names no face and there is
- * no `useFonts` anywhere. (`assets/fonts/PlayfairDisplay-Bold.ttf` is still on
- * disk — recovered 2026-08-22, orphaned again 2026-08-23 — but nothing
- * requires it, so nothing bundles it.) Every role below resolves to the
+ * no `useFonts` anywhere. (The orphaned Playfair static moved to
+ * `_archive/2026-11-lean/` in D8; no font file ships.) Every role below resolves to the
  * platform's own system sans, the same family body copy has always used.
  *
  * FOUR decisions arrived at that. The first three were all 2026-08-22

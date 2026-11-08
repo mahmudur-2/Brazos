@@ -26,7 +26,7 @@ export function isReleased(payment: Pick<Payment, 'status'>): boolean {
  * D23 — APPROVED, PAYOUT PENDING. `release_job_payment` (and the 72h
  * `auto_release_due_payments`) set `release_requested_at` and `transfer_cents`
  * on a stripe row and LEAVE ITS STATUS `held` until the provider's
- * `transfer.created` lands; sandbox rows go `released` immediately. So a row
+ * `transfer.created` lands. So a row
  * with status held AND release_requested_at set is approved — the customer's
  * decision is made and the payout is on its way. isReleased is deliberately
  * NOT widened: nothing may say released before the transfer exists.
@@ -40,8 +40,7 @@ export function isReleaseRequested(
 /**
  * Final sweep (2026-10-03) — THE CANCELLATION SHAPE. cancel_job() and ban_user()
  * direct a held card payment home by setting `refund_cents` on the row while its
- * status stays `held` until the provider's charge.refunded lands (a sandbox row
- * goes `refunded` at once and never reads true here). Nothing about such a row
+ * status stays `held` until the provider's charge.refunded lands. Nothing about such a row
  * is "held in protection" or "approved" any more: the money is on its way back.
  * One predicate, so the customer's page, the worker's page and Earnings agree.
  */
@@ -69,14 +68,14 @@ export function isCancellationFeeKept(
  * derivation for every surface that can show it (AUD-P1-02; the lifecycle
  * derivation drifted into a duplicate once already, so this predicate exists
  * exactly once). It mirrors the server contract of
- * sandbox_authorize_job_payment (phase58) and begin_job_payment: the job's
+ * begin_job_payment: the job's
  * owner, an accepted assignment, status assigned/in_progress/completed — the
  * worker starting or even finishing must never destroy the customer's path
  * to fund.
  *
  * The payment side is a strict WHITELIST: offer only on
  *   - no active row (checkout never ran; failed/voided rows read as null),
- *   - an 'authorized' row (sandbox checkout stopped before the hold), or
+ *   - an 'authorized' row (checkout stopped before the hold), or
  *   - an 'unfunded' row whose funding window has not closed.
  * held, released, paid_out, refunded, partially_refunded, the legacy
  * 'pending', and anything unrecognized mean money already moved — or a state
@@ -136,9 +135,7 @@ export function canOfferJobFunding({
  * Tier A (C2, v3 D-4): THE customer's held figure — the row's own
  * charge_amount_cents (agreed price + protection fee + tax, generated in the
  * database), never amount_cents. Read off the column; the `??` is null-safety
- * for a row the type allows to lack it, not arithmetic. Sandbox rows write a
- * zero fee and zero tax, so their charge equals the amount and no sandbox
- * figure changes. Every customer-facing "held in protection" amount —
+ * for a row the type allows to lack it, not arithmetic. Every customer-facing "held in protection" amount —
  * JobConfirmed, ClientJobDetail, ApproveOrDispute and its CTA — reads this.
  */
 export function customerChargeCents(

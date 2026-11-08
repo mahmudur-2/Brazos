@@ -1,9 +1,9 @@
 # .maestro/screens-walk.yml — THE SCREENS WALK: the real app on an iOS simulator, screen by
-# screen, each proven by the text it renders. The web harness (scripts/shots.mjs) renders the
-# FALLBACK branch of every motion piece and no native module at all, so a defect in a
+# screen, each proven by the text it renders. A web render shows the FALLBACK branch of every
+# motion piece and no native module at all, so a defect in a
 # device-only path (a *.motion120.tsx sibling, keyboard-controller, a Platform.OS === 'ios'
 # branch, real insets) is invisible to it — the 2026-10-03 blank Post a Job is the lesson. This
-# flow runs through .eas/workflows/screens-walk-ios.yml; its job log is the record (one line per
+# flow runs through the e2e workflow (.github/workflows/e2e-ios.yml, Phase F); its job log is the record (one line per
 # command, ⚠ for an optional assertion that failed), and every screen leaves a screenshot.
 #
 # Non-optional steps are the walk's spine (a sign-in, a tap that opens a screen); the

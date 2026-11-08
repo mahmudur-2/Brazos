@@ -24,17 +24,17 @@ const read = (relativePath) => readFileSync(join(root, relativePath), 'utf8');
 
 /**
  * The documents that must be true right now. Archives are deliberately absent:
- * docs/archive/ is history and is exempt from every content rule here, which
+ * _archive/ is history and is exempt from every content rule here, which
  * is exactly what makes archiving a real option rather than a deletion.
  */
 const ACTIVE_DOCS = [
   'CLAUDE.md',
-  'AGENTS.md',
+  'README.md',
   'HANDOFF.md',
-  'docs/architecture.md',
-  'docs/README.md',
-  'docs/PROJECT-CHAT.md',
-  'BRAZOS_BUILD_STATE.md',
+  'docs/ARCHITECTURE.md',
+  'docs/DECISIONS.md',
+  'docs/TESTING.md',
+  'docs/BACKLOG.md',
 ];
 
 /** A line naming a retired thing is fine when the same line retires it. */
@@ -68,14 +68,14 @@ test('CLAUDE.md still carries the load-bearing literals', () => {
   assert.match(claude, /avkighsiufeefyycbebf/);
 });
 
-test('AGENTS.md derives the SDK from package.json instead of pinning one', () => {
-  const agents = read('AGENTS.md');
+test('CLAUDE.md derives the SDK from package.json instead of pinning one', () => {
+  const agents = read('CLAUDE.md');
 
   assert.match(agents, /package\.json/);
   assert.match(agents, /\bSDK\b/i);
 
-  // A hard-coded version or docs URL is how AGENTS.md went stale before: it
-  // named an Expo version the repository did not use.
+  // A hard-coded version or docs URL is how the agent instructions went stale
+  // before: they named an Expo version the repository did not use.
   assert.doesNotMatch(agents, /docs\.expo\.dev/i);
   assert.doesNotMatch(agents, /\bv?5[0-9]\.\d+\.\d+\b/);
 });

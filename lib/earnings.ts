@@ -11,10 +11,10 @@ export type { EarningsRow, EarningsSummary } from './earningsMath';
  *
  *   pending      — held rows: protected, not yet approved
  *   available    — released rows: approved (or auto-approved), cash-out-able
- *   transferred  — paid_out rows: swept by the simulated cash-out
+ *   transferred  — paid_out rows (reserved: the ledger stops at released today)
  *
  * Fee math: platform_fee_cents is summed from the same rows the amounts come
- * from — today always 0, exactly what checkout shows ("None in sandbox").
+ * from — the ledger's own figure, never a client rate.
  * The screen's every figure must be reproducible by re-summing `rows`.
  */
 

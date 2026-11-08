@@ -109,8 +109,8 @@ const CTA_EDGE_ALPHA = 0.38;
 // raster the app stops drawing. They drew the promo card's mark, and the
 // promo card is the task card now (see the card below).
 // 2026-08-23: the light hero's own file is GONE FROM THE SOURCE. It was
-// assets/brand/customer-home-chair.png and it is still on disk, required by
-// nothing — see the <Image> below for why, and note that it left the
+// assets/brand/customer-home-chair.png (moved to _archive/2026-11-lean/ in D8)
+// — see the <Image> below for why, and note that it left the
 // BAKED_ART roster with its `require`, which is what that roster's
 // added-or-removed assertion demands.
 // home(14): the ROOM-BAKED hero, restored from prestige(0a) (715ddf8) by

@@ -47,8 +47,8 @@ brazos-review.zip
 # tell a credit line from an attempt to start a second, unguarded session. The
 # message therefore travels to `git commit -F` as a file.
 commit-msg.txt
-# Launcher output: scripts/dispatch/dispatch.ps1 writes the session activity
-# log and its exit-code file here.
+# Dispatch launcher output (the launcher is archived): the session activity
+# log and its exit-code file.
 .audit-scratch/dispatch/
 
 # macOS
@@ -69,7 +69,7 @@ start.ps1
 /ios
 /android
 
-# shot(0) screenshot harness output (scripts/home-shots.mjs)
+# screenshot output folder (the harness is archived; the folder may linger locally)
 .shots/
 
 # owner's dated archive of cleaned-up local files (moved, never deleted)

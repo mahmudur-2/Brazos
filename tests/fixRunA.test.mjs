@@ -55,14 +55,14 @@ test('A12 · a reported issue says who decides and how fast; the operator has a 
   assert.ok(sql.includes('grant execute on function public.resolve_job_dispute(uuid, text, text) to service_role;'));
   assert.doesNotMatch(read('lib/disputes.ts'), /resolve_job_dispute/, 'no client wrapper for the resolver');
   assert.doesNotMatch(code('screens/ApproveOrDisputeScreen.tsx'), /resolve_job_dispute/, 'the screen never calls it');
-  assert.ok(existsSync(join(root, 'docs/runbooks/dispute-resolution.md')), 'the runbook exists');
-  // The runbook exists, runs the resolver by name, and keeps the promise's clock.
-  const runbook = read('docs/runbooks/dispute-resolution.md');
+  // The runbook lives in docs/ARCHITECTURE.md (Disputes): it runs the resolver by name and keeps
+  // the promise's clock.
+  assert.ok(existsSync(join(root, 'docs/ARCHITECTURE.md')), 'the runbook exists');
+  const runbook = read('docs/ARCHITECTURE.md');
   assert.match(runbook, /resolve_job_dispute\(p_job_id, p_in_favour_of, p_note\)/);
   assert.match(runbook, /2 business\s+days/);
   assert.match(runbook, /'worker'/);
   assert.match(runbook, /'customer'/);
-  assert.match(read('docs/README.md'), /dispute-resolution\.md/);
 });
 
 const ADDITIVE = /\bdrop\s+(table|column|schema)\b|\btruncate\b|\brename\s+(to|column)\b|\bdelete\s+from\b/i;

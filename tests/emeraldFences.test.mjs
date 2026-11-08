@@ -3,7 +3,6 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { decode, inkBounds, luminance, tonePatches } from './pngGeometry.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
@@ -1450,35 +1449,9 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
       `one runs ${overhang}pt past it`
   );
 
-  // The replaced scene carries alpha now -- a 9-row trim off its bottom edge --
-  // but nothing is cut from its right, so `inkBounds` still reports a
-  // full canvas — the box IS the art, and that is the correct answer here.
-  // 2026-09-29 (LUX-LIST-2 #5): measured on the mounted cut-out's own master —
-  // its ink is cropped to the box and meets the right edge (the lamp's foot).
-  const ink = inkBounds(join(root, 'assets/prestige/hero_armchair_customer_lamp_dark.png'));
-  assert.equal(
-    ink.right,
-    0,
-    'nothing may be trimmed off the scene right edge, or this box stops describing it',
-  );
-
-  // WHERE ITS INK ACTUALLY STARTS, re-derived from the asset rather than
-  // restated. The scene is vignetted, so its outer columns carry no structure
-  // at all; HERO_ART_INK_LEFT is what the headline's column has to stop at, and
-  // it is measured on the rows the headline occupies (the middle band of the
-  // scene) rather than over the whole canvas.
-  const declaredInk = constantOf(home, 'HERO_ART_INK_LEFT');
-  // 2026-09-29 (LUX-LIST-2 #5): the mounted dark master, not the retired room.
-  const measuredInk = structuredLeftFraction(
-    join(root, 'assets/prestige/hero_armchair_customer_lamp_dark.png'),
-    0.53,
-    0.75,
-  );
-  assert.ok(
-    Math.abs(declaredInk - measuredInk) < 0.03,
-    `HERO_ART_INK_LEFT says the scene's ink starts at ${declaredInk} of its box; the file says ` +
-      `${measuredInk.toFixed(3)}. Swap the artwork and this number has to move with it`
-  );
+  // D8 (lean v1): the pixel checks that measured the hero's ink edge on the PNG masters (the
+  // right edge and HERO_ART_INK_LEFT against the dark and light files) are gone with the masters,
+  // which moved to _archive/2026-11-lean/. Only the .webp mounts remain and no decoder ships.
 
   // Parity 2026-08-22: one fill rule. The hero slot fills and crops in both
   // themes.
@@ -1506,98 +1479,21 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
     'the light-geometry hero must not be referenced anywhere on this screen again'
   );
 
-  // The light scene has to put its ink where the dark one does, because the
-  // headline column is measured off HERO_ART_INK_LEFT and there is only one of
-  // those. If a future light export moves the chair, this fails here rather
-  // than silently running the headline under the artwork on light devices only.
-  // 2026-09-29 (LUX-LIST-2 #5): the mounted light master, not the retired room.
-  const measuredInkLight = structuredLeftFraction(
-    join(root, 'assets/prestige/hero_armchair_customer_lamp_light.png'),
-    0.53,
-    0.75,
-  );
-  assert.ok(
-    Math.abs(declaredInk - measuredInkLight) < 0.03,
-    `the light hero's ink starts at ${measuredInkLight.toFixed(3)} of its box where the shared ` +
-      `HERO_ART_INK_LEFT says ${declaredInk}. One column serves both themes, so the two scenes ` +
-      'have to agree on where the artwork begins'
-  );
+  // The light scene's own ink-edge measurement went with its master (see above).
 });
 
-/**
- * The leftmost column of a raster that carries real detail, as a fraction of
- * its own width, looking only at the rows between `v0` and `v1`.
- *
- * "Detail" is adjacent-column luminance change. A vignetted scene fades to a
- * flat wash at its edges, and a flat wash has none — which is exactly the
- * difference between the box a slot reserves and the picture a reader sees.
- */
-function structuredLeftFraction(path, v0, v1) {
-  const img = decode(path);
-  const y0 = Math.round(v0 * img.height);
-  const y1 = Math.round(v1 * img.height);
-  for (let x = 0; x < img.width - 1; x += 1) {
-    let hits = 0;
-    for (let y = y0; y <= y1; y += 1) {
-      if (Math.abs(luminance(...img.at(x, y)) - luminance(...img.at(x + 1, y))) > 4) hits += 1;
-    }
-    if (hits >= (y1 - y0) * 0.05) return x / img.width;
-  }
-  assert.fail(`${path} carries no structure between ${v0} and ${v1} of its height`);
-}
-
 // ---------------------------------------------------------------------------
-// H4b — the atmosphere is a VIGNETTE, and the layer crops rather than fits.
+// H4b — the atmosphere layer crops rather than fits.
 //
-// CATCHES: the raster being swapped for a flat plate (which is what
-// `homeBackground` already is — a second flat ground buys nothing and costs
-// 2MB); it being swapped for something bright enough to stop reading as a dark
-// room; and `cover` being changed to `contain`, which honours the aspect by
+// CATCHES: `cover` being changed to `contain`, which honours the aspect by
 // letterboxing and puts back the bands of bare ground the layer exists to
 // remove.
 //
-// WHY NOT VACUOUS: every number is measured out of the PNGs at run time — the
-// raster's own corners against its own middle, and master 44's side gutters
-// against each other. Replacing the file changes the measurement; there is no
-// hex or literal here to keep in step.
+// D8 (lean v1): the vignette pixel measurements (the raster's corners against its middle, and
+// mockup 44's side gutters) are gone: the raster (home-atmosphere-dark.png) and the mockup moved
+// to _archive/2026-11-lean/, and the layer has drawn a gradient, not a raster, since the Lux remake.
 // ---------------------------------------------------------------------------
-test('home(13) fence: the atmosphere carries a vignette, and it crops to fill', () => {
-  const patches = {
-    topLeft: [0, 0, 0.14, 0.07],
-    topRight: [0.86, 0, 1, 0.07],
-    bottomLeft: [0, 0.93, 0.14, 1],
-    bottomRight: [0.86, 0.93, 1, 1],
-    middle: [0.3, 0.42, 0.7, 0.62],
-  };
-  const layer = tonePatches(join(root, 'assets/prestige/home-atmosphere-dark.png'), patches);
-  const corners =
-    (layer.topLeft + layer.topRight + layer.bottomLeft + layer.bottomRight) / 4;
-
-  assert.ok(
-    layer.middle > corners * 2,
-    `the atmosphere's middle reads ${layer.middle.toFixed(1)} against corners at ` +
-      `${corners.toFixed(1)} — that is a flat plate, not a vignette, and homeBackground is ` +
-      'already a flat plate'
-  );
-  assert.ok(
-    layer.middle < 64,
-    `the atmosphere's middle reads ${layer.middle.toFixed(1)}/255 — a dark room, not a wash, ` +
-      'is what every card and hairline on this screen is drawn to sit on'
-  );
-
-  // The reason a vignette is owed at all: master 44's ground is not one value.
-  // Its side gutters are the only strip of it with no card, art or chrome in
-  // the way, so they are what gets measured.
-  const master = tonePatches(join(root, 'docs/mockups/44_customer_home_dark.png'), {
-    upperGutter: [0, 0.08, 0.045, 0.3],
-    lowerGutter: [0, 0.55, 0.045, 0.85],
-  });
-  assert.notEqual(
-    master.upperGutter.toFixed(1),
-    master.lowerGutter.toFixed(1),
-    'master 44 is being read as a flat ground; if that is now true the vignette is not owed'
-  );
-
+test('home(13) fence: the atmosphere layer crops to fill', () => {
   // Full-bleed wins over fitting: the layer reaches every edge. 2026-09-27 (the
   // Lux remake, ruling 9): it is a gradient View now, not an Image, so there is
   // no resize mode to pin — the four edges below are the whole of the claim.
@@ -1923,31 +1819,19 @@ test('map(1) fence: the map is the ground and the chrome floats on it, on the pa
 //   - the all-services rows losing the fill and hairline that make them cards,
 //     or the type and rhythm moving, which this commit promised not to touch.
 // ---------------------------------------------------------------------------
-test('RUN H2 fence: the atmosphere docblock is re-derived from the file it mounts', () => {
+test('RUN H2 fence: the atmosphere layer mounts no raster and its docblock names none', () => {
   const layer = read('components/HomeAtmosphere.tsx');
-  const img = decode(join(root, 'assets/prestige/home-atmosphere-dark.png'));
 
-  // The dimensions the prose claims must be the dimensions the file has, and
-  // EVERY raster-scale size it names must be that one — a second, different
-  // WxH is the stale-number failure wearing a new hat. Scoped to widths of
-  // 1000 and up so the docblock can still name the 393x852 viewport the
-  // harness renders at, which is a screen and not this raster.
-  // 2026-09-27 (the Lux remake, ruling 9): the layer mounts NO raster — it
-  // draws the Lux gradient — so its docblock may not describe one; a size
-  // that appears there is still held to the file it would be describing.
-  const sizes = [...layer.matchAll(/(\d{4,5})x(\d{3,5})/g)];
+  // 2026-09-27 (the Lux remake, ruling 9): the layer mounts NO raster — it draws the Lux gradient
+  // — so its docblock may not describe one. D8 (lean v1): the raster it once mounted
+  // (home-atmosphere-dark.png) moved to _archive/2026-11-lean/, so no raster-scale WxH (widths of
+  // 1000 and up; the 393x852 viewport is a screen) may appear here either.
   assert.doesNotMatch(layer, /require\(/, 'the layer mounts nothing');
-  for (const hit of sizes) {
-    assert.equal(
-      `${hit[1]}x${hit[2]}`,
-      `${img.width}x${img.height}`,
-      `the atmosphere docblock mentions ${hit[0]}, which is not this file — re-measure it, do ` +
-        'not carry the old numbers forward'
-    );
-  }
-  // And it is still the opaque RGB raster the roster records, which is WHY the
-  // component may never render it under the light palette.
-  assert.equal(img.colourType, 2, 'the atmosphere must stay RGB with no alpha channel');
+  assert.deepEqual(
+    [...layer.matchAll(/(\d{4,5})x(\d{3,5})/g)].map((hit) => hit[0]),
+    [],
+    'the atmosphere docblock names a raster size, but the layer mounts no raster'
+  );
 });
 
 test('RUN H2 fence: the greeting name and the Post-a-job pill', () => {

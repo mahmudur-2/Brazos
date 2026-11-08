@@ -368,13 +368,11 @@ test('C7 · no tracked file shows a real phone number — the placeholder and ev
   assert.match(placeholder, /placeholder=\{isNanp\(country\) \? '718 555 0123' : 'Phone number'\}/);
   // Built from pieces so this file never carries the number it hunts for.
   const real = new RegExp(['347', '320', '0610'].join('[ -]?') + '|' + ['347', '320', '0610'].join(''));
-  // Left out on purpose: the operator's own mockup tree (its builder is the
-  // operator's working copy), the brief that names the defect, and a recorded
-  // historical patch.
-  const excluded = [/^docs\/mockups\/html\/lux\//, /^docs\/dispatch\//, /^docs\/mockups\/refresh\/after\.patch$/];
+  // Nothing is left out: the mockup tree, the dispatch briefs and the recorded patch it once
+  // excluded moved to _archive/ in D8 and are no longer tracked.
   const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
     .split('\0')
-    .filter((file) => file && !excluded.some((re) => re.test(file)));
+    .filter(Boolean);
   assert.ok(tracked.length > 100, `expected a populated tracked-file list, got ${tracked.length}`);
   const hits = [];
   for (const file of tracked) {

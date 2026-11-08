@@ -409,8 +409,8 @@ test('one-serif fence: the hero role alone is Georgia, and nothing else is a ser
   const assets = await readdir(join(repoRoot, 'assets'), { withFileTypes: true, recursive: true });
   assert.deepEqual(
     assets.filter((e) => e.isFile() && /\.(ttf|otf|woff2?)$/i.test(e.name)).map((e) => e.name),
-    ['PlayfairDisplay-Bold.ttf'],
-    'the recovered static stays on disk, orphaned — and no SECOND face may join it',
+    [],
+    'no font file ships (D8 moved the orphaned Playfair static to _archive/2026-11-lean/) — and none may join the asset tree',
   );
 
   const app = stripComments(await read('App.tsx'));
