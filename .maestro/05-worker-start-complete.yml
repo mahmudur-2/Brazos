@@ -1,0 +1,135 @@
+appId: app.brazos.mobile.preview
+# F7 worker job (account B): My Jobs hub, Your Job (address, on my way, running late, start, photo rule, Mark complete); F6 the worker's counter-offer.
+# Proves B answers A's $45 counter with $42, sees the exact address only once hired, and completes the paid main job with a photo.
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- runFlow:
+    file: subflows/sign-in-phone.yml
+    env:
+      PHONE: ${MAESTRO_E2E_PHONE_2}
+      OTP: ${MAESTRO_E2E_OTP_2}
+      NAME: "E2E Worker"
+      LANDING: "Find work"
+- runFlow: subflows/ensure-mode-worker.yml
+- evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
+
+# ─── Side job: the customer countered $45; B counters back $42 ───────────
+- tapOn: "Search for jobs or areas"
+- inputText: "${output.marker} side"
+- tapOn: "Search"
+- extendedWaitUntil:
+    visible: '${output.marker} side(, needed today)?'
+    timeout: 60000
+- tapOn:
+    text: '${output.marker} side(, needed today)?'
+    index: 0
+- extendedWaitUntil:
+    visible: "Job Details"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: 'Accept offer \(\$45\)'
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "Decline offer"
+- takeScreenshot: 05-customer-counter
+# The first "Send counter-offer" opens the inline form; the second (under its consequence line) sends it.
+- tapOn: "Send counter-offer"
+- extendedWaitUntil:
+    visible: "COUNTERING"
+    timeout: 15000
+- tapOn: "e.g. 45"
+- inputText: "42"
+- tapOn: "COUNTERING"
+- scrollUntilVisible:
+    element:
+      text: '.*counter-offers left; each expires after 7 days\.|Your last counter — after it, accept or decline\.'
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    text: "Send counter-offer"
+    below: '.*counter-offers left; each expires after 7 days\.|Your last counter — after it, accept or decline\.'
+- extendedWaitUntil:
+    visible: 'Your counter-offer|No counter-offers left|Could not send.*'
+    timeout: 60000
+- assertVisible: "Your counter-offer"
+- takeScreenshot: 05-worker-counter
+
+# ─── Main job: hired and held → on my way → late → start → complete ──────
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Search for jobs or areas"
+    timeout: 60000
+- tapOn: "My Jobs"
+- extendedWaitUntil:
+    notVisible: "Loading your jobs…"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: '.*${output.marker} main.*'
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: 05-hub
+- tapOn:
+    text: '.*${output.marker} main.*'
+    index: 0
+- extendedWaitUntil:
+    visible: "Your Job"
+    timeout: 30000
+# The hired worker reads the exact address (job_locations RLS); the open market never does.
+- extendedWaitUntil:
+    visible: "Directions to .*Emmons Ave.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "I.m on my way"
+    timeout: 30000
+- takeScreenshot: 05-your-job
+- tapOn: "I.m on my way"
+- extendedWaitUntil:
+    visible: "I.m here"
+    timeout: 30000
+- tapOn: "Running 10 minutes late"
+- extendedWaitUntil:
+    visible: ".*was told ✓"
+    timeout: 30000
+- tapOn: "Start job now"
+- extendedWaitUntil:
+    visible: "Mark complete"
+    timeout: 30000
+# A job cannot complete without a photo: the rule is stated first, then the picker.
+- tapOn: "Mark complete"
+- extendedWaitUntil:
+    visible: "Add a photo of the finished work"
+    timeout: 15000
+- tapOn: "Not yet"
+- scrollUntilVisible:
+    element:
+      text: "Add photos or video of the finished work"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Add photos or video of the finished work"
+- extendedWaitUntil:
+    visible: 'Photo, .*'
+    timeout: 30000
+- tapOn:
+    text: 'Photo, .*'
+    index: 0
+- tapOn: 'Add( \(\d+\))?'
+- extendedWaitUntil:
+    visible: "Remove photo"
+    timeout: 60000
+- takeScreenshot: 05-photo-added
+- tapOn: "Mark complete"
+- extendedWaitUntil:
+    visible: 'Finished work|Could not complete job'
+    timeout: 60000
+- assertNotVisible: "Could not complete job"
+- assertNotVisible: "Mark complete"
+- assertNotVisible: "Paid"
+- takeScreenshot: 05-completed
+- runFlow: subflows/sign-out.yml

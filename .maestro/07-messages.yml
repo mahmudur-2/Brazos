@@ -1,0 +1,200 @@
+appId: app.brazos.mobile.preview
+# F4 messages (both accounts): Inbox pills, row → Chat, send text + photo, photo viewer, unsend, header menu (Block / Report), row long-press; F7 WorkerProfile as the customer sees it.
+# Proves the hired pair can talk on the main job, A unsends its own message, B sees A's message as unread and the row clears once read.
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- runFlow:
+    file: subflows/sign-in-phone.yml
+    env:
+      PHONE: ${MAESTRO_E2E_PHONE}
+      OTP: ${MAESTRO_E2E_OTP}
+      NAME: "E2E Customer"
+      LANDING: "Hire help"
+- runFlow: subflows/ensure-mode-customer.yml
+- evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
+
+# ─── A: Inbox → the main job's conversation ──────────────────────────────
+- tapOn: "Inbox"
+- extendedWaitUntil:
+    visible: "All conversations"
+    timeout: 30000
+- tapOn: "Unread conversations"
+- tapOn: "Requests conversations"
+- tapOn: "All conversations"
+- extendedWaitUntil:
+    visible: ".*${output.marker} main.*"
+    timeout: 30000
+- takeScreenshot: 07-inbox-customer
+- tapOn:
+    text: ".*${output.marker} main.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Message…"
+    timeout: 30000
+- tapOn: "Message…"
+- inputText: "${output.marker} hello"
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: ".*${output.marker} hello.*"
+    timeout: 30000
+# Unsend own message: long-press → Unsend → confirm.
+- tapOn: "Message…"
+- inputText: "${output.marker} undo"
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: ".*${output.marker} undo.*"
+    timeout: 30000
+- longPressOn: ".*${output.marker} undo.*"
+- extendedWaitUntil:
+    visible: "Unsend"
+    timeout: 15000
+- tapOn: "Unsend"
+- extendedWaitUntil:
+    visible: 'Unsend this message\?'
+    timeout: 15000
+- tapOn:
+    text: "Unsend"
+    rightOf: "Cancel"
+- extendedWaitUntil:
+    visible: ".*This message was unsent.*"
+    timeout: 30000
+- assertNotVisible: ".*${output.marker} undo.*"
+- takeScreenshot: 07-unsent
+# A library photo goes out at once; tapping it opens the viewer.
+- tapOn: "Attach"
+- extendedWaitUntil:
+    visible: "Photos"
+    timeout: 15000
+- tapOn: "Photos"
+- extendedWaitUntil:
+    visible: 'Photo, .*'
+    timeout: 30000
+- tapOn:
+    text: 'Photo, .*'
+    index: 0
+- extendedWaitUntil:
+    visible: 'Photo(, .*)?'
+    timeout: 60000
+- tapOn:
+    text: 'Photo(, .*)?'
+    index: 0
+- extendedWaitUntil:
+    visible: "Share photo"
+    timeout: 15000
+- takeScreenshot: 07-photo-viewer
+- tapOn: "Close"
+# Header menu: Block (confirm, then Cancel) and Report (dialog, then Cancel).
+- tapOn: "More"
+- extendedWaitUntil:
+    visible: "Block"
+    timeout: 15000
+- tapOn: "Block"
+- extendedWaitUntil:
+    visible: 'Block .*\?'
+    timeout: 15000
+- tapOn: "Cancel"
+- tapOn: "More"
+- extendedWaitUntil:
+    visible: "Report"
+    timeout: 15000
+- tapOn: "Report"
+- extendedWaitUntil:
+    visible: "Send report"
+    timeout: 15000
+- tapOn: "Cancel"
+# The worker as the customer sees them: the reviews list (06's review stays hidden until B reviews
+# back or 7 days pass, review_is_revealed), then Worker Profile + its report link.
+- tapOn: "More"
+- extendedWaitUntil:
+    visible: "Rating / Reviews"
+    timeout: 15000
+- tapOn: "Rating / Reviews"
+- extendedWaitUntil:
+    notVisible: "View Profile"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: ".*Reviews"
+    timeout: 30000
+- takeScreenshot: 07-worker-reviews
+- tapOn: 'Back( to .*)?'
+- tapOn: "More"
+- extendedWaitUntil:
+    visible: "View Profile"
+    timeout: 15000
+- tapOn: "View Profile"
+- extendedWaitUntil:
+    visible: "Worker Profile"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Report this profile"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Report this profile"
+- extendedWaitUntil:
+    visible: "Send report"
+    timeout: 15000
+- takeScreenshot: 07-worker-profile-report
+- tapOn: "Cancel"
+- runFlow: subflows/sign-out.yml
+
+# ─── B: the unread row, its long-press menu, read and reply ──────────────
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- runFlow:
+    file: subflows/sign-in-phone.yml
+    env:
+      PHONE: ${MAESTRO_E2E_PHONE_2}
+      OTP: ${MAESTRO_E2E_OTP_2}
+      NAME: "E2E Worker"
+      LANDING: "Find work"
+- runFlow: subflows/ensure-mode-worker.yml
+- tapOn: "Inbox"
+- extendedWaitUntil:
+    visible: "All conversations"
+    timeout: 30000
+- tapOn: "Unread conversations"
+- extendedWaitUntil:
+    visible: ".*unread.*${output.marker} main.*"
+    timeout: 30000
+- takeScreenshot: 07-inbox-worker-unread
+- tapOn: "All conversations"
+- longPressOn:
+    text: ".*unread.*${output.marker} main.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Report"
+    timeout: 15000
+- assertVisible: "Block"
+- tapOn: "Report"
+- extendedWaitUntil:
+    visible: "Send report"
+    timeout: 15000
+- tapOn: "Cancel"
+- tapOn:
+    text: ".*${output.marker} main.*"
+    index: 0
+- extendedWaitUntil:
+    visible: ".*${output.marker} hello.*"
+    timeout: 30000
+- assertVisible: ".*This message was unsent.*"
+- tapOn: "Message…"
+- inputText: "${output.marker} reply"
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: ".*${output.marker} reply.*"
+    timeout: 30000
+- tapOn: 'Back( to .*)?'
+- extendedWaitUntil:
+    visible: "All conversations"
+    timeout: 30000
+- assertNotVisible: ".*unread.*${output.marker} main.*"
+- takeScreenshot: 07-inbox-worker-read
+- runFlow: subflows/sign-out.yml

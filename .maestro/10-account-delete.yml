@@ -1,0 +1,72 @@
+appId: app.brazos.mobile.preview
+# F5 delete account (account A): Account & Safety → Delete Account, its two explainer cards, the blockers list or the DELETE gate, the final confirm.
+# Proves deletion is explained, blocked while a job is live or gated behind typing DELETE plus a confirm; the flow always taps Cancel, so the account survives.
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- runFlow:
+    file: subflows/sign-in-phone.yml
+    env:
+      PHONE: ${MAESTRO_E2E_PHONE}
+      OTP: ${MAESTRO_E2E_OTP}
+      NAME: "E2E Customer"
+      LANDING: "Hire help"
+- runFlow: subflows/ensure-mode-customer.yml
+- tapOn: "Profile"
+- scrollUntilVisible:
+    element:
+      text: "Account & safety"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Account & safety"
+- extendedWaitUntil:
+    visible: "Delete account"
+    timeout: 30000
+- tapOn: "Delete account"
+- extendedWaitUntil:
+    visible: "What is removed"
+    timeout: 30000
+- assertVisible: "What is kept, and why"
+- extendedWaitUntil:
+    visible: "Finish or cancel each of these.*|Type DELETE to confirm account deletion"
+    timeout: 30000
+- takeScreenshot: 10-delete-account
+# A live job blocks deletion: the button stays disabled.
+- runFlow:
+    when:
+      visible: "Finish or cancel each of these.*"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Finish or cancel each of these.*"
+          direction: DOWN
+          timeout: 20000
+      - takeScreenshot: 10-blockers
+      - assertVisible:
+          text: "Delete my account"
+          enabled: false
+# No blocker: DELETE enables the button; the confirm is always cancelled.
+- runFlow:
+    when:
+      visible: "Type DELETE to confirm account deletion"
+    commands:
+      - assertVisible:
+          text: "Delete my account"
+          enabled: false
+      - tapOn: "Type DELETE to confirm account deletion"
+      - inputText: "DELETE"
+      - tapOn: "Confirm"
+      - tapOn: "Delete my account"
+      - extendedWaitUntil:
+          visible: 'Delete this account\?'
+          timeout: 15000
+      - takeScreenshot: 10-delete-confirm
+      - tapOn: "Cancel"
+      - extendedWaitUntil:
+          notVisible: 'Delete this account\?'
+          timeout: 15000
+      - assertVisible: "What is removed"
+- runFlow: subflows/sign-out.yml

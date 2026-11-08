@@ -1,0 +1,183 @@
+appId: app.brazos.mobile.preview
+# F6 worker discover and bid (account B): Map tab, Home search, results + Filters sheet, JobDetail, set-price bid, written bid, withdraw + rebid, report a job.
+# Proves B finds both of A's jobs, bids $50 on the main job and $40 on the side job, never sees the exact address, and can withdraw a pending bid.
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- runFlow:
+    file: subflows/sign-in-phone.yml
+    env:
+      PHONE: ${MAESTRO_E2E_PHONE_2}
+      OTP: ${MAESTRO_E2E_OTP_2}
+      NAME: "E2E Worker"
+      LANDING: "Find work"
+- runFlow: subflows/ensure-mode-worker.yml
+- evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
+
+# ─── Map tab ─────────────────────────────────────────────────────────────
+- tapOn: "Map"
+- extendedWaitUntil:
+    visible: "Explore nearby jobs"
+    timeout: 30000
+- takeScreenshot: 03-map
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Search for jobs or areas"
+    timeout: 30000
+
+# ─── Main job: search → results → Filters → JobDetail → bid at the set price ─
+- tapOn: "Search for jobs or areas"
+- inputText: "${output.marker} main"
+- tapOn: "Search"
+- extendedWaitUntil:
+    visible: '${output.marker} main(, needed today)?'
+    timeout: 60000
+- tapOn: 'Filters(, \d+ active)?'
+- extendedWaitUntil:
+    visible: "Reset filters"
+    timeout: 15000
+- takeScreenshot: 03-filters
+- tapOn: 'Show (\d+ )?jobs?'
+- extendedWaitUntil:
+    notVisible: "Reset filters"
+    timeout: 15000
+- takeScreenshot: 03-results
+- tapOn:
+    text: '${output.marker} main(, needed today)?'
+    index: 0
+- extendedWaitUntil:
+    visible: "Job Details"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: 'I.ll do it for \$50'
+    timeout: 30000
+# The exact address lives in job_locations, readable only by the owner and the hired worker.
+- assertNotVisible: ".*2017 Emmons.*"
+- takeScreenshot: 03-main-detail
+- tapOn: 'I.ll do it for \$50'
+- extendedWaitUntil:
+    visible: 'Send a \$50 bid\?'
+    timeout: 15000
+- tapOn: "Send bid"
+- extendedWaitUntil:
+    visible: 'Bid Sent|Get notified\?|Could not place bid'
+    timeout: 60000
+- assertNotVisible: "Could not place bid"
+- runFlow: subflows/dismiss-permission-prompts.yml
+- extendedWaitUntil:
+    visible: "Bid Sent"
+    timeout: 30000
+- takeScreenshot: 03-main-bid-sent
+- tapOn: "Keep browsing"
+- extendedWaitUntil:
+    visible: "Your bid"
+    timeout: 30000
+# Report this job: the dialog opens; nothing is sent.
+- scrollUntilVisible:
+    element:
+      text: "Report this job"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Report this job"
+- extendedWaitUntil:
+    visible: "Send report"
+    timeout: 15000
+- takeScreenshot: 03-report-job
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    notVisible: "Send report"
+    timeout: 15000
+
+# ─── Side job: a written bid, the pitch rule, withdraw, then bid again ───
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Search for jobs or areas"
+    timeout: 60000
+- tapOn: "Search for jobs or areas"
+- inputText: "${output.marker} side"
+- tapOn: "Search"
+- extendedWaitUntil:
+    visible: '${output.marker} side(, needed today)?'
+    timeout: 60000
+- tapOn:
+    text: '${output.marker} side(, needed today)?'
+    index: 0
+- extendedWaitUntil:
+    visible: "Write a bid"
+    timeout: 30000
+- tapOn: "Write a bid"
+- extendedWaitUntil:
+    visible: "Submit a Bid"
+    timeout: 30000
+- tapOn: "e.g. 45"
+- inputText: "40"
+- tapOn: "YOU.RE BIDDING ON"
+# A bid needs a pitch (components/OfferComposer.tsx).
+- tapOn: "Send bid"
+- extendedWaitUntil:
+    visible: "Add a pitch"
+    timeout: 15000
+- tapOn: "OK"
+- tapOn: 'Why should the customer pick you\?'
+- inputText: "I have a dolly and can do it tomorrow morning."
+- tapOn: "YOU.RE BIDDING ON"
+- tapOn: "Tomorrow"
+- takeScreenshot: 03-side-bid-form
+- tapOn: "Send bid"
+- extendedWaitUntil:
+    visible: 'Bid Sent|Get notified\?|Could not send bid'
+    timeout: 60000
+- assertNotVisible: "Could not send bid"
+- runFlow: subflows/dismiss-permission-prompts.yml
+- extendedWaitUntil:
+    visible: "Bid Sent"
+    timeout: 30000
+- tapOn: "Keep browsing"
+- extendedWaitUntil:
+    visible: "Your bid"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Withdraw bid"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Withdraw bid"
+- extendedWaitUntil:
+    visible: 'Withdraw your bid\?'
+    timeout: 15000
+- tapOn:
+    text: "Withdraw bid"
+    rightOf: "Keep bid"
+- extendedWaitUntil:
+    visible: "Write a bid"
+    timeout: 30000
+- assertNotVisible: "Your bid"
+- tapOn: "Write a bid"
+- extendedWaitUntil:
+    visible: "Submit a Bid"
+    timeout: 30000
+- tapOn: "e.g. 45"
+- inputText: "40"
+- tapOn: "YOU.RE BIDDING ON"
+- tapOn: 'Why should the customer pick you\?'
+- inputText: "I have a dolly and can do it tomorrow morning."
+- tapOn: "YOU.RE BIDDING ON"
+- tapOn: "Send bid"
+- extendedWaitUntil:
+    visible: 'Bid Sent|Get notified\?|Could not send bid'
+    timeout: 60000
+- assertNotVisible: "Could not send bid"
+- runFlow: subflows/dismiss-permission-prompts.yml
+- extendedWaitUntil:
+    visible: "Bid Sent"
+    timeout: 30000
+- tapOn: "View in My Jobs"
+- extendedWaitUntil:
+    visible: "Pending bids"
+    timeout: 30000
+- takeScreenshot: 03-pending-bids
+- runFlow: subflows/sign-out.yml

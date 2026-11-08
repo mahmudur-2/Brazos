@@ -1,0 +1,130 @@
+appId: app.brazos.mobile.preview
+# F1 auth (signed out): Welcome, email create + sign-in forms, phone create form, country picker, VerifyPhone, LegalGate, Setup, sign out.
+# Proves every auth form names its missing field, a wrong code is refused, both accounts get in by phone (created on a first run), and sign-out lands on Welcome.
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- extendedWaitUntil:
+    visible: "I already have an account"
+    timeout: 60000
+- assertVisible: "Continue with phone"
+- assertVisible: "Continue with email"
+- takeScreenshot: 01-welcome
+
+# Email create account: the empty form names each missing field (Create itself is never sent: it would mint a real email account).
+- tapOn: "Continue with email"
+- extendedWaitUntil:
+    visible: "Use Phone Number Instead"
+    timeout: 15000
+- tapOn:
+    text: "Create account"
+    below: "Password"
+- assertVisible: "Enter your full name."
+- assertVisible: "Enter your email address."
+- assertVisible: "Choose a password."
+- takeScreenshot: 01-email-create-errors
+- tapOn: "Go back"
+
+# Phone create account: the name is required.
+- extendedWaitUntil:
+    visible: "Continue with phone"
+    timeout: 15000
+- tapOn: "Continue with phone"
+- extendedWaitUntil:
+    visible: "One account. Two ways to use it."
+    timeout: 15000
+- tapOn: "Switch modes to hire help or find work."
+- tapOn:
+    text: "Create account"
+    below: "Phone number, United States, plus 1"
+- assertVisible: "Enter your full name."
+- assertVisible: "Enter your phone number."
+- tapOn: "Go back"
+
+# Email sign-in: both fields required; Forgot password needs the email first (no reset mail is ever sent).
+- extendedWaitUntil:
+    visible: "I already have an account"
+    timeout: 15000
+- tapOn: "I already have an account"
+- extendedWaitUntil:
+    visible: "Sign in to Brazos"
+    timeout: 15000
+- tapOn: "Continue"
+- assertVisible: "Enter your phone number."
+- tapOn: "Use Email Instead"
+- extendedWaitUntil:
+    visible: 'Forgot password\?'
+    timeout: 15000
+- tapOn: "Continue"
+- assertVisible: "Enter your email address."
+- assertVisible: "Enter your password."
+- tapOn: 'Forgot password\?'
+- assertVisible: "Enter your email address first — the reset link goes there."
+- takeScreenshot: 01-email-sign-in-errors
+- tapOn: "Use Phone Number Instead"
+
+# Country picker: open, search, pick Canada, then back to the United States.
+- extendedWaitUntil:
+    visible: "Sign in to Brazos"
+    timeout: 15000
+- tapOn: "Country: United States, plus 1"
+- extendedWaitUntil:
+    visible: "Select country"
+    timeout: 15000
+- tapOn: "Search countries by name or code"
+- inputText: "Canada"
+- tapOn: "Canada, plus 1"
+- extendedWaitUntil:
+    visible: "Country: Canada, plus 1"
+    timeout: 15000
+- tapOn: "Country: Canada, plus 1"
+- extendedWaitUntil:
+    visible: "Select country"
+    timeout: 15000
+- tapOn: "Search countries by name or code"
+- inputText: "United States"
+- tapOn: "United States, plus 1"
+- extendedWaitUntil:
+    visible: "Country: United States, plus 1"
+    timeout: 15000
+- takeScreenshot: 01-country-picked
+
+# Account A (customer): a wrong code first, then the right one.
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- runFlow:
+    file: subflows/sign-in-phone.yml
+    env:
+      PHONE: ${MAESTRO_E2E_PHONE}
+      OTP: ${MAESTRO_E2E_OTP}
+      NAME: "E2E Customer"
+      LANDING: "Hire help"
+      WRONG_CODE: "true"
+- runFlow: subflows/ensure-mode-customer.yml
+- takeScreenshot: 01-customer-home
+- runFlow: subflows/sign-out.yml
+- assertVisible: "Continue with phone"
+
+# Account B (worker).
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- runFlow:
+    file: subflows/sign-in-phone.yml
+    env:
+      PHONE: ${MAESTRO_E2E_PHONE_2}
+      OTP: ${MAESTRO_E2E_OTP_2}
+      NAME: "E2E Worker"
+      LANDING: "Find work"
+- runFlow: subflows/ensure-mode-worker.yml
+- takeScreenshot: 01-worker-home
+- runFlow: subflows/sign-out.yml
+- assertVisible: "Continue with phone"

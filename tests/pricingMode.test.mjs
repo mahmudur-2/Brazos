@@ -18,7 +18,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 //   stripped so a sentence in a comment can never satisfy an assertion.
 //
 // WHAT THIS FILE PROTECTS ABOVE ALL: the DEFAULT path. The E2E money walk
-// (.maestro/money-walk.yml) taps 'Edit budget', types into 'Maximum budget in
+// (.maestro/02-customer-post-job.yml, its side job) taps 'Edit budget', types into 'Maximum budget in
 // dollars', and reads 'Edit Budget' as the dialog's title — all three in the
 // open-bids state, none of them changed by this run. Those strings moved into
 // lib/pricingMode.ts; they did not move in meaning.
@@ -221,7 +221,7 @@ test('a4 · the money walk’s selectors are the ones the app renders, in the de
   const modes = read('lib/pricingMode.ts');
 
   // Each of these is still the whole text or label of the element
-  // .maestro/money-walk.yml finds, and the walk runs entirely in open bids.
+  // .maestro/02-customer-post-job.yml finds on its open-bids side job.
   // 2026-09-28 (LUX-LIST-64 #36, #42): the price field ("Edit budget") and its
   // list's "Enter your own amount" and Done live in components/PriceDropdown.tsx;
   // the live page's two actions in components/JobLivePage.tsx.
@@ -258,8 +258,8 @@ test('a4 · the money walk’s selectors are the ones the app renders, in the de
   }
 
   // The flow opens the field, picks "Enter your own amount", types, taps Done.
-  const walk = read('.maestro/money-walk.yml');
-  assert.ok(!walk.includes('Ask for bids') && !walk.includes('Set a price'));
+  // F2: 02 posts the main job at a set price; its side job runs this open-bids sequence.
+  const walk = read('.maestro/02-customer-post-job.yml');
   assert.match(
     walk,
     /- tapOn: "Edit budget"\n- tapOn: "Enter your own amount"\n- tapOn: "Maximum budget in dollars"\n- inputText: "50"\n- hideKeyboard:\n {4}optional: true\n- tapOn: "Done"\n- tapOn: "Publish"/

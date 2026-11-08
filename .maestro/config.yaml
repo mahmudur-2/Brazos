@@ -1,0 +1,25 @@
+# Maestro workspace: the lean v1 walk, one flow per screen group, run in this order (README.md).
+flows:
+  - 01-auth.yml
+  - 02-customer-post-job.yml
+  - 03-worker-discover-bid.yml
+  - 04-customer-accept-pay.yml
+  - 05-worker-start-complete.yml
+  - 06-customer-approve-review.yml
+  - 07-messages.yml
+  - 08-notifications-settings.yml
+  - 09-worker-profile-payout.yml
+  - 10-account-delete.yml
+executionOrder:
+  continueOnFailure: false
+  flowsOrder:
+    - 01-auth
+    - 02-customer-post-job
+    - 03-worker-discover-bid
+    - 04-customer-accept-pay
+    - 05-worker-start-complete
+    - 06-customer-approve-review
+    - 07-messages
+    - 08-notifications-settings
+    - 09-worker-profile-payout
+    - 10-account-delete

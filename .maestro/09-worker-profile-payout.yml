@@ -1,0 +1,93 @@
+appId: app.brazos.mobile.preview
+# F7 worker money and profile (account B): Earnings & Payouts (three buckets, the main job's row, payout CTA), Payouts status, Services & Availability (add + remove a priced service).
+# Proves the released main job shows in B's earnings without a false "Paid", the payout state is named, and a priced service can be added and removed.
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- runFlow:
+    file: subflows/sign-in-phone.yml
+    env:
+      PHONE: ${MAESTRO_E2E_PHONE_2}
+      OTP: ${MAESTRO_E2E_OTP_2}
+      NAME: "E2E Worker"
+      LANDING: "Find work"
+- runFlow: subflows/ensure-mode-worker.yml
+- evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
+
+# ─── Earnings & Payouts ──────────────────────────────────────────────────
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "You.re in Worker mode"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Earnings & payouts"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Earnings & payouts"
+- extendedWaitUntil:
+    visible: "PENDING"
+    timeout: 30000
+- assertVisible: "AVAILABLE"
+- assertVisible: "TRANSFERRED"
+- extendedWaitUntil:
+    visible: ".*${output.marker} main.*"
+    timeout: 30000
+# Approved is not paid out: no worker money surface says "Paid" before the transfer lands.
+- assertNotVisible: "Paid"
+- takeScreenshot: 09-earnings
+- tapOn: "Set up payouts|Finish setting up payouts|Payouts under review|Payouts are set up|Payouts"
+- extendedWaitUntil:
+    visible: "PAYOUT STATUS"
+    timeout: 30000
+- assertVisible: "Where approved payments land"
+- assertVisible: "Payouts aren.t set up yet|Payout setup isn.t finished|Payouts under review|Payouts are set up"
+- takeScreenshot: 09-payouts
+- tapOn: 'Back( to .*)?'
+- extendedWaitUntil:
+    visible: "PENDING"
+    timeout: 30000
+- tapOn: 'Back( to .*)?'
+
+# ─── Services & Availability: add a priced service, then remove it ───────
+- scrollUntilVisible:
+    element:
+      text: "Services & availability"
+    direction: UP
+    timeout: 20000
+- tapOn: "Services & availability"
+- extendedWaitUntil:
+    visible: "Add a service"
+    timeout: 30000
+- tapOn: "Service title"
+- inputText: "${output.marker} service"
+- tapOn: "Add a service"
+- tapOn: "Price in dollars"
+- inputText: "40"
+- tapOn: "Add a service"
+- scrollUntilVisible:
+    element:
+      text: "Add service"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Add service"
+- scrollUntilVisible:
+    element:
+      text: "Remove ${output.marker} service"
+    direction: UP
+    timeout: 30000
+- takeScreenshot: 09-service-added
+- tapOn: "Remove ${output.marker} service"
+- extendedWaitUntil:
+    visible: 'Remove this service\?'
+    timeout: 15000
+- tapOn:
+    text: "Remove"
+    rightOf: "Keep"
+- extendedWaitUntil:
+    notVisible: "Remove ${output.marker} service"
+    timeout: 30000
+- runFlow: subflows/sign-out.yml

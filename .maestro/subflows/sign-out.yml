@@ -1,0 +1,27 @@
+appId: app.brazos.mobile.preview
+# Shared: signs out through Profile's "Sign out" and its confirm (screens/ProfileScreen.tsx).
+# A relaunch keeps the session and lands on a tab root, so this works from any screen.
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: 'What do you need done\?|Search for jobs or areas'
+    timeout: 60000
+- runFlow: dismiss-permission-prompts.yml
+- tapOn: "Profile"
+- scrollUntilVisible:
+    element:
+      text: "Sign out"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Sign out"
+- extendedWaitUntil:
+    visible: 'Sign out\?'
+    timeout: 15000
+# The dialog's action sits right of its Cancel (components/ConfirmDialog.tsx); the row behind does not.
+- tapOn:
+    text: "Sign out"
+    rightOf: "Cancel"
+- extendedWaitUntil:
+    visible: "I already have an account"
+    timeout: 30000

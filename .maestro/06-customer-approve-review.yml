@@ -1,0 +1,227 @@
+appId: app.brazos.mobile.preview
+# F3 customer approve and close (account A): Review tab, Finished Work (photo, report + withdraw), approve and release, Review & Tip, decline a counter, Delete job; F2 Reuse a past job.
+# Proves the held main job is released only on approval, A rates B 5 stars and skips the tip, declines B's $42 counter, and a reused post can be published then deleted.
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- runFlow:
+    file: subflows/sign-in-phone.yml
+    env:
+      PHONE: ${MAESTRO_E2E_PHONE}
+      OTP: ${MAESTRO_E2E_OTP}
+      NAME: "E2E Customer"
+      LANDING: "Hire help"
+- runFlow: subflows/ensure-mode-customer.yml
+- evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
+
+# ─── Main job: Review tab → Finished Work ────────────────────────────────
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "My jobs"
+    timeout: 15000
+- tapOn: "My jobs"
+- extendedWaitUntil:
+    notVisible: "Loading your jobs…"
+    timeout: 30000
+- tapOn: "Review"
+- scrollUntilVisible:
+    element:
+      text: '.*${output.marker} main.*'
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: 06-review-tab
+- tapOn:
+    text: '.*${output.marker} main.*'
+    index: 0
+- extendedWaitUntil:
+    visible: "Job Details"
+    timeout: 30000
+- assertNotVisible: "Paid"
+- tapOn: "Review & approve.*"
+- extendedWaitUntil:
+    visible: "Finished Work"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Approve & release payment"
+    timeout: 30000
+# The worker's photo opens full screen.
+- tapOn:
+    text: "Open finished work photo"
+    index: 0
+- extendedWaitUntil:
+    visible: "Close"
+    timeout: 15000
+- takeScreenshot: 06-finished-photo
+- tapOn: "Close"
+# Report an issue (holds the payment), then withdraw it.
+- tapOn: "Report an issue"
+- extendedWaitUntil:
+    visible: "Something else"
+    timeout: 15000
+- tapOn: "Something else"
+- tapOn: "Send report"
+- extendedWaitUntil:
+    visible: "Issue reported|Could not send the report"
+    timeout: 60000
+- assertVisible: "Issue reported"
+- takeScreenshot: 06-issue-reported
+- tapOn: "Withdraw report"
+- extendedWaitUntil:
+    visible: 'Withdraw your issue report\?'
+    timeout: 15000
+- tapOn:
+    text: "Withdraw report"
+    rightOf: "Keep it open"
+- extendedWaitUntil:
+    visible: "Approve & release payment"
+    timeout: 60000
+- assertNotVisible: "Issue reported"
+# Approve: the release is its own confirmed step.
+- tapOn: "Approve & release payment"
+- extendedWaitUntil:
+    visible: 'Release the payment to the worker\?'
+    timeout: 15000
+- tapOn:
+    text: "Approve & release"
+    rightOf: "Not yet"
+- extendedWaitUntil:
+    visible: "Review & Tip"
+    timeout: 60000
+- assertVisible: '.*on your say-so.*|Released on your approval\.'
+- takeScreenshot: 06-released
+
+# ─── Review & Tip: five stars and a comment; the tip is skipped ──────────
+- scrollUntilVisible:
+    element:
+      id: "review-star-5"
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: "review-star-5"
+- tapOn: "Share how it went with .*"
+- inputText: "${output.marker} review: on time and careful."
+- tapOn: 'Comment \(optional\)'
+- scrollUntilVisible:
+    element:
+      text: "Submit review"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Submit review"
+- extendedWaitUntil:
+    visible: 'Thanks — .* has been rated\.|Thanks for rating .*'
+    timeout: 60000
+- assertVisible: 'Add a tip\?'
+- takeScreenshot: 06-reviewed
+- scrollUntilVisible:
+    element:
+      text: "Done"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Done"
+
+# ─── Side job: decline B's $42 counter on Bid Detail ─────────────────────
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: 'What do you need done\?'
+    timeout: 60000
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "My jobs"
+    timeout: 15000
+- tapOn: "My jobs"
+- extendedWaitUntil:
+    notVisible: "Loading your jobs…"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: '.*${output.marker} side.*'
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    text: '.*${output.marker} side.*'
+    index: 0
+- extendedWaitUntil:
+    visible: "Job & Bids"
+    timeout: 30000
+- extendedWaitUntil:
+    notVisible: "Loading bids…"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Open full bid detail with counter and decline options"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Open full bid detail with counter and decline options"
+- extendedWaitUntil:
+    visible: "Bid Detail"
+    timeout: 30000
+- assertVisible: 'Accept bid \(\$42\)'
+- tapOn: "Decline bid"
+- extendedWaitUntil:
+    visible: 'Decline this \$42 bid\?'
+    timeout: 15000
+- tapOn:
+    text: "Decline bid"
+    rightOf: "Cancel"
+- extendedWaitUntil:
+    notVisible: "Bid Detail"
+    timeout: 30000
+- takeScreenshot: 06-declined
+
+# ─── Reuse a past job: post the main job again, then delete the copy ─────
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: 'What do you need done\?'
+    timeout: 60000
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "Reuse a past job"
+    timeout: 15000
+- tapOn: "Reuse a past job"
+- extendedWaitUntil:
+    visible: "Post again: ${output.marker} main"
+    timeout: 30000
+- tapOn:
+    text: "Post again: ${output.marker} main"
+    index: 0
+- extendedWaitUntil:
+    visible: "STEP 4 OF 4"
+    timeout: 30000
+- assertVisible: "Copied from .*"
+- takeScreenshot: 06-reuse-review
+- tapOn: "Publish"
+- extendedWaitUntil:
+    visible: 'Your job is live\.|Get notified\?|Could not post job|Saved, but without a map pin'
+    timeout: 60000
+- assertNotVisible: "Could not post job|Saved, but without a map pin"
+- runFlow: subflows/dismiss-permission-prompts.yml
+- extendedWaitUntil:
+    visible: 'Your job is live\.'
+    timeout: 30000
+- tapOn: "View job and bids"
+- extendedWaitUntil:
+    visible: "Job & Bids|Job Details"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Delete job"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Delete job"
+- extendedWaitUntil:
+    visible: 'Delete this job\?'
+    timeout: 15000
+- tapOn:
+    text: "Delete job"
+    rightOf: "Cancel"
+- extendedWaitUntil:
+    visible: "My Jobs"
+    timeout: 30000
+- assertNotVisible: 'Delete this job\?'
+- takeScreenshot: 06-reuse-deleted
+- runFlow: subflows/sign-out.yml

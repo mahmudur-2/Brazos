@@ -1,0 +1,228 @@
+appId: app.brazos.mobile.preview
+# F3 customer hire and pay (account A): Payment methods, My Jobs hub, Job & Bids, Bid Detail + counter-offer, accept, Protected Checkout, Stripe test card, Job Confirmed.
+# Proves A counters the side bid, accepts the $50 main bid, pays the all-in total with 4242 (held; F8: never "Paid" before release), and the saved card can be removed.
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- runFlow:
+    file: subflows/sign-in-phone.yml
+    env:
+      PHONE: ${MAESTRO_E2E_PHONE}
+      OTP: ${MAESTRO_E2E_OTP}
+      NAME: "E2E Customer"
+      LANDING: "Hire help"
+- runFlow: subflows/ensure-mode-customer.yml
+- evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
+
+# ─── Payment methods: start with no saved card, so Checkout takes the sheet path ─
+- tapOn: "Profile"
+- scrollUntilVisible:
+    element:
+      text: "Payment methods"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Payment methods"
+- extendedWaitUntil:
+    visible: "Payment Methods"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Saved for one-tap hiring|No card saved"
+    timeout: 30000
+- repeat:
+    times: 5
+    while:
+      visible: 'Remove .*\d{4}'
+    commands:
+      - tapOn: 'Remove .*\d{4}'
+      - extendedWaitUntil:
+          visible: "Keep it"
+          timeout: 15000
+      - tapOn:
+          text: "Remove"
+          rightOf: "Keep it"
+      - extendedWaitUntil:
+          notVisible: "Keep it"
+          timeout: 30000
+- extendedWaitUntil:
+    visible: "No card saved"
+    timeout: 30000
+- tapOn: 'Back( to .*)?'
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: 'What do you need done\?'
+    timeout: 30000
+
+# ─── Side job: Bid Detail → counter-offer $45 ────────────────────────────
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "My jobs"
+    timeout: 15000
+- tapOn: "My jobs"
+- extendedWaitUntil:
+    notVisible: "Loading your jobs…"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: '.*${output.marker} side.*'
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: 04-hub
+- tapOn:
+    text: '.*${output.marker} side.*'
+    index: 0
+- extendedWaitUntil:
+    visible: "Job & Bids"
+    timeout: 30000
+- extendedWaitUntil:
+    notVisible: "Loading bids…"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Open full bid detail with counter and decline options"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Open full bid detail with counter and decline options"
+- extendedWaitUntil:
+    visible: "Bid Detail"
+    timeout: 30000
+- assertVisible: 'Accept bid \(\$40\)'
+- takeScreenshot: 04-bid-detail
+- tapOn: "Send counter-offer"
+- extendedWaitUntil:
+    visible: "Counter-Offer"
+    timeout: 30000
+- tapOn: "e.g. 45"
+- inputText: "45"
+- tapOn: "COUNTERING"
+- tapOn: "Send counter-offer"
+- extendedWaitUntil:
+    visible: 'Job & Bids|Job Details|No counter-offers left|Could not send.*'
+    timeout: 60000
+- assertNotVisible: 'No counter-offers left|Could not send.*'
+- takeScreenshot: 04-countered
+
+# ─── Main job: accept the $50 bid → Protected Checkout → Stripe test card ─
+- tapOn: 'Back( to .*)?'
+- extendedWaitUntil:
+    visible: '.*${output.marker} main.*'
+    timeout: 30000
+- tapOn:
+    text: '.*${output.marker} main.*'
+    index: 0
+- extendedWaitUntil:
+    visible: "Job & Bids"
+    timeout: 30000
+- extendedWaitUntil:
+    notVisible: "Loading bids…"
+    timeout: 30000
+- assertVisible: "WORKER OFFERS"
+- tapOn: 'Accept bid \(\$50\)'
+- extendedWaitUntil:
+    visible: 'Accept this bid for \$50\?'
+    timeout: 15000
+# The confirm names the server's all-in total once its quote loads (lib/offerCopy.ts).
+- extendedWaitUntil:
+    visible: 'Accept & pay \$.*'
+    timeout: 30000
+- tapOn: 'Accept & pay \$.*'
+- extendedWaitUntil:
+    visible: "Protected Checkout"
+    timeout: 60000
+- extendedWaitUntil:
+    visible: 'Protect \$.* by card'
+    timeout: 60000
+- assertVisible: "Total charged to your card"
+- tapOn: "Save this card for one-tap hiring"
+- takeScreenshot: 04-checkout
+- tapOn: 'Protect \$.* by card'
+- extendedWaitUntil:
+    visible: 'Charge \$.* to your card\?'
+    timeout: 15000
+- tapOn: "Pay & protect"
+# The Stripe PaymentSheet is native; its fields answer to their labels. The card goes in four groups.
+- extendedWaitUntil:
+    visible: 'Card number|1234 1234 1234 1234'
+    timeout: 60000
+- tapOn: 'Card number|1234 1234 1234 1234'
+- inputText: "4242"
+- inputText: "4242"
+- inputText: "4242"
+- inputText: "4242"
+- tapOn: 'expiration date|MM / YY'
+- inputText: "1234"
+- tapOn: "CVC"
+- inputText: "123"
+- tapOn: "ZIP"
+- inputText: "10001"
+- scrollUntilVisible:
+    element:
+      text: 'Pay \$.*'
+    direction: DOWN
+    timeout: 10000
+- tapOn: 'Pay \$.*'
+# Checkout polls the ledger for `held` and offers "Check again" past its window (screens/CheckoutScreen.tsx).
+- repeat:
+    times: 4
+    while:
+      notVisible: "Job Confirmed"
+    commands:
+      - runFlow:
+          when:
+            visible: "Check again"
+          commands:
+            - tapOn: "Check again"
+      - runFlow:
+          when:
+            visible: "Continue — job confirmed"
+          commands:
+            - tapOn: "Continue — job confirmed"
+      - extendedWaitUntil:
+          visible: 'Job Confirmed|The card was not charged|The payment did not go through|Payment timed out'
+          timeout: 30000
+          optional: true
+      - assertNotVisible: 'The card was not charged|The payment did not go through'
+- assertVisible: "Job Confirmed"
+- assertVisible: "Your card was charged. Nothing reaches the worker until you approve the finished work."
+- assertNotVisible: "Paid"
+- takeScreenshot: 04-job-confirmed
+- tapOn: "View job"
+- extendedWaitUntil:
+    visible: "Job Details"
+    timeout: 30000
+- assertNotVisible: "Paid"
+- takeScreenshot: 04-job-held
+
+# ─── The card the checkout saved, then removed (leaves the account card-free) ─
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: 'What do you need done\?'
+    timeout: 60000
+- tapOn: "Profile"
+- scrollUntilVisible:
+    element:
+      text: "Payment methods"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Payment methods"
+- extendedWaitUntil:
+    visible: "Payment Methods"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Saved for one-tap hiring"
+    timeout: 60000
+- takeScreenshot: 04-card-saved
+- tapOn: 'Remove .*4242'
+- extendedWaitUntil:
+    visible: "Keep it"
+    timeout: 15000
+- tapOn:
+    text: "Remove"
+    rightOf: "Keep it"
+- extendedWaitUntil:
+    visible: "No card saved"
+    timeout: 30000
+- runFlow: subflows/sign-out.yml

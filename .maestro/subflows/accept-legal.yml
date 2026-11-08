@@ -1,0 +1,23 @@
+appId: app.brazos.mobile.preview
+# Shared: the LegalGate (screens/LegalGateScreen.tsx), from "BEFORE YOU START" to "Agree and continue".
+# Proves the agreement stays locked until both documents are scrolled to their ends.
+---
+- extendedWaitUntil:
+    visible: "BEFORE YOU START"
+    timeout: 30000
+- assertVisible: 'Review (Terms of Service|Privacy Policy)'
+# The one button reads "Review <document>" until both blocks were dragged past their ends.
+- repeat:
+    times: 80
+    while:
+      notVisible: "Agree and continue"
+    commands:
+      - swipe:
+          start: 50%, 68%
+          end: 50%, 38%
+          duration: 250
+- tapOn: '.*I have read and agree.*'
+- tapOn: "Agree and continue"
+- extendedWaitUntil:
+    notVisible: "BEFORE YOU START"
+    timeout: 30000

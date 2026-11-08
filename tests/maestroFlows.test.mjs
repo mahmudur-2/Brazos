@@ -1,27 +1,27 @@
-// RUN E2E1 (2026-09-02) — GATE 2 BOX 4'S FLOW FILES ARE FENCED OFFLINE.
+// LEAN F2 — THE MAESTRO FLOWS ARE FENCED OFFLINE.
 //
-// The money walk (.maestro/money-walk.yml with .maestro/sign-in.yml) runs
-// against a simulator build of the e2e-test profile (eas.json); its EAS
-// workflow left in lean D7. None of that is exercised by `npm run verify`
-// — the first green run is the operator's — so what CAN be proven offline is
-// pinned here, as strings, the way every other fence in this directory reads
-// its subject:
+// .maestro/ holds one flow per screen group (01-auth … 10-account-delete) plus
+// the shared subflows/ they call, run in config.yaml's order against a
+// simulator build of the e2e-test profile (eas.json) by
+// .github/workflows/e2e-ios.yml. None of that runs in `npm run verify`, so what
+// CAN be proven offline is pinned here, as strings:
 //
-//   1. The flow launches the app the profile builds: its appId is the preview
+//   1. Every flow launches the app the profile builds: its appId is the preview
 //      bundle identifier, DERIVED from app.config.ts by regex, never retyped.
-//   2. No credential shape reaches a flow file (D3): no email-shaped literal,
-//      no pk_ / sk_ prefix, no digit run that could be a card or a phone —
-//      except the one Stripe test card the walk types on purpose (D8) — and
-//      the flows read the four MAESTRO_E2E_* names.
-//   3. The e2e-test profile is a credential-less simulator build in the
-//      Beta's shape (D2), so the appId above is the binary the job installs.
-//   4. The production ref appears in no flow file.
+//   2. config.yaml lists every top-level flow exactly once, in file order.
+//   3. No credential shape reaches .maestro/: no email-shaped literal, no
+//      pk_ / sk_ / eyJ, no 10+ digit run (a phone, an OTP pair, a card), no
+//      production ref; only the five allowed MAESTRO_* names are read.
+//   4. Every runFlow target exists, every flow starts clean and ends signed
+//      out, and each F group of docs/lean/MAESTRO-COVERAGE.md is named in a
+//      flow's header.
+//   5. The e2e-test profile is a credential-less simulator build (D2).
 //
 // Files are read as text, CRLF normalised, so the checks read the same on a
-// Windows checkout (core.autocrlf) and on the EAS worker.
+// Windows checkout and on the runner. No YAML parser: the repo declares none.
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { PRODUCTION_REF } from '../scripts/supabase-ref.mjs';
@@ -29,22 +29,39 @@ import { PRODUCTION_REF } from '../scripts/supabase-ref.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (rel) => readFileSync(join(root, rel), 'utf8').replace(/\r\n/g, '\n');
 
-const FLOW = '.maestro/money-walk.yml';
-const SIGN_IN = '.maestro/sign-in.yml';
-const STRIPE_TEST_CARD = '4242424242424242';
-const MAESTRO_NAMES = [
-  'MAESTRO_E2E_CUSTOMER_EMAIL',
-  'MAESTRO_E2E_CUSTOMER_PASSWORD',
-  'MAESTRO_E2E_WORKER_EMAIL',
-  'MAESTRO_E2E_WORKER_PASSWORD',
+const ALLOWED_ENV = [
+  'MAESTRO_E2E_PHONE',
+  'MAESTRO_E2E_OTP',
+  'MAESTRO_E2E_PHONE_2',
+  'MAESTRO_E2E_OTP_2',
+  'MAESTRO_RUN_ID',
 ];
 
-/** Every flow file, in name order — the whole set, not a hand-kept list. */
-function maestroFiles() {
+const isFlow = (name) => /\.ya?ml$/.test(name) && name !== 'config.yaml';
+
+/** Top-level flows, in name order — the whole set, not a hand-kept list. */
+function topFlows() {
   return readdirSync(join(root, '.maestro'))
-    .filter((name) => /\.ya?ml$/.test(name))
+    .filter(isFlow)
     .sort()
-    .map((name) => ({ name, text: read(join('.maestro', name)) }));
+    .map((name) => ({ rel: `.maestro/${name}`, name, text: read(`.maestro/${name}`) }));
+}
+
+/** Every flow, subflows included. */
+function allFlows() {
+  const subs = readdirSync(join(root, '.maestro/subflows'))
+    .filter(isFlow)
+    .sort()
+    .map((name) => ({ rel: `.maestro/subflows/${name}`, name, text: read(`.maestro/subflows/${name}`) }));
+  return [...topFlows(), ...subs];
+}
+
+/** Every file under .maestro/ (flows, config, README). */
+function allFiles() {
+  return [...allFlows(), { rel: '.maestro/config.yaml' }, { rel: '.maestro/README.md' }].map((f) => ({
+    rel: f.rel,
+    text: f.text ?? read(f.rel),
+  }));
 }
 
 /**
@@ -63,44 +80,90 @@ function previewBundleIdentifier() {
   return base[1] + suffix[1];
 }
 
-test('the money walk exists and launches the variant the e2e-test profile builds', () => {
+/** The `- item` lines directly under `key:` at the given indent. */
+function yamlList(text, key, indent) {
+  const pad = ' '.repeat(indent);
+  const block = text.match(new RegExp(`^${pad}${key}:\\n((?:${pad}  - .+\\n?)+)`, 'm'));
+  assert.ok(block, `config.yaml has a ${key} list`);
+  return block[1].trim().split('\n').map((line) => line.replace(/^\s*- /, '').trim());
+}
+
+test('every flow launches the preview variant the e2e-test profile builds', () => {
   const expected = previewBundleIdentifier();
   assert.equal(expected, 'app.brazos.mobile.preview', 'the preview identifier reads as expected');
-  for (const rel of [FLOW, SIGN_IN]) {
-    assert.ok(existsSync(join(root, rel)), `${rel} exists`);
-    const appId = read(rel).match(/^appId:\s*(\S+)\s*$/m);
-    assert.ok(appId, `${rel} declares an appId`);
-    assert.equal(appId[1], expected, `${rel} launches the preview variant`);
+  const flows = allFlows();
+  assert.ok(flows.length >= 16, `only ${flows.length} flow files — check the read`);
+  for (const { rel, text } of flows) {
+    assert.equal(text.split('\n')[0], `appId: ${expected}`, `${rel} starts with the preview appId`);
   }
-  // The walk really is the subflow's caller: one sign-in path, by file.
-  assert.match(read(FLOW), /^\s+file: sign-in\.yml$/m);
 });
 
-test('no credential shape reaches a flow file, and the four MAESTRO_E2E names are read', () => {
-  const files = maestroFiles();
-  assert.ok(files.length >= 2, `only ${files.length} flow files — check the read`);
-  for (const { name, text } of files) {
-    assert.doesNotMatch(
-      text,
-      /@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/,
-      `${name} carries an email-shaped literal`
-    );
-    assert.doesNotMatch(text, /\bpk_/, `${name} carries a publishable-key prefix`);
-    assert.doesNotMatch(text, /\bsk_/, `${name} carries a secret-key prefix`);
-    for (const run of text.match(/\d{13,}/g) ?? []) {
-      assert.equal(
-        run,
-        STRIPE_TEST_CARD,
-        `${name} carries a ${run.length}-digit run that is not the Stripe test card`
-      );
+test('config.yaml lists every top-level flow exactly once, in file order', () => {
+  const names = topFlows().map((f) => f.name);
+  assert.equal(names.length, 10, 'ten screen-group flows');
+  const config = read('.maestro/config.yaml');
+  assert.deepEqual(yamlList(config, 'flows', 0), names);
+  assert.deepEqual(
+    yamlList(config, 'flowsOrder', 2),
+    names.map((n) => n.replace(/\.ya?ml$/, ''))
+  );
+  assert.match(config, /^executionOrder:\n {2}continueOnFailure: false\n/m);
+});
+
+test('no credential shape reaches .maestro/, and only the allowed MAESTRO_* names are read', () => {
+  const files = allFiles();
+  for (const { rel, text } of files) {
+    assert.doesNotMatch(text, /@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/, `${rel}: email-shaped literal`);
+    assert.doesNotMatch(text, /\bpk_/, `${rel}: publishable-key prefix`);
+    assert.doesNotMatch(text, /\bsk_/, `${rel}: secret-key prefix`);
+    assert.doesNotMatch(text, /eyJ/, `${rel}: JWT-shaped literal`);
+    assert.doesNotMatch(text, /\d{10,}/, `${rel}: a 10+ digit run (phone, code or card)`);
+    assert.ok(!text.includes(PRODUCTION_REF), `${rel} names the production ref`);
+  }
+  const flowText = allFlows().map((f) => f.text).join('\n');
+  const used = new Set(flowText.match(/\bMAESTRO_[A-Z0-9_]+/g) ?? []);
+  for (const name of used) assert.ok(ALLOWED_ENV.includes(name), `${name} is not an allowed env name`);
+  for (const name of ALLOWED_ENV) assert.ok(used.has(name), `the flow set reads ${name}`);
+});
+
+test('every runFlow target exists, relative to the file that calls it', () => {
+  let targets = 0;
+  for (const { rel, text } of allFlows()) {
+    for (const m of text.matchAll(/^\s*-?\s*(?:runFlow|file):\s*([^\s#]+\.ya?ml)\s*$/gm)) {
+      targets += 1;
+      const target = join(dirname(rel), m[1]);
+      assert.ok(existsSync(join(root, target)), `${rel} runs ${m[1]}, which does not exist`);
     }
   }
-  const all = files.map((f) => f.text).join('\n');
-  for (const variable of MAESTRO_NAMES) {
-    assert.ok(all.includes(`\${${variable}}`), `the flow set reads \${${variable}}`);
+  assert.ok(targets >= 40, `only ${targets} runFlow targets — check the regex`);
+});
+
+test('each top-level flow has a 2-line header, starts clean and ends signed out', () => {
+  for (const { rel, text } of topFlows()) {
+    const lines = text.trimEnd().split('\n');
+    assert.match(lines[1], /^# F\d /, `${rel}: line 2 names its coverage group`);
+    assert.match(lines[2], /^# \S/, `${rel}: line 3 says what it proves`);
+    assert.equal(lines[3], '---', `${rel}: the header ends at line 3`);
+    assert.equal(lines[4], '- launchApp:', `${rel}: the first command launches the app`);
+    assert.equal(lines[5], '    clearState: true', `${rel}: from a clean state`);
+    // Signed out last: nothing but assertions after the final sign-out.
+    const signOut = lines.lastIndexOf('- runFlow: subflows/sign-out.yml');
+    assert.ok(signOut > 5, `${rel}: signs out`);
+    for (const line of lines.slice(signOut + 1)) {
+      assert.match(line, /^- assert(Not)?Visible: /, `${rel}: "${line}" runs after the final sign-out`);
+    }
   }
-  // D8: the test card is typed exactly once, in the money walk.
-  assert.equal(read(FLOW).split(STRIPE_TEST_CARD).length - 1, 1);
+});
+
+test('every F group of the coverage map is named in a flow header', () => {
+  const groups = [...read('docs/lean/MAESTRO-COVERAGE.md').matchAll(/^## (F\d+) /gm)].map((m) => m[1]);
+  assert.deepEqual(groups, ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8']);
+  const headers = topFlows()
+    .map((f) => f.text.split('\n').slice(1, 3).join('\n'))
+    .join('\n');
+  for (const group of groups) {
+    assert.match(headers, new RegExp(`\\b${group}\\b`), `${group} is named in no flow header`);
+  }
 });
 
 test('the e2e-test profile is a credential-less simulator build in the Beta shape (D2)', () => {
@@ -116,12 +179,4 @@ test('the e2e-test profile is a credential-less simulator build in the Beta shap
   // the appId the flows launch the binary this profile installs.
   assert.equal(profile.env.APP_VARIANT, 'preview');
   assert.equal(profile.env.EXPO_PUBLIC_APP_VARIANT, 'preview');
-});
-
-test('the production ref appears in no flow file', () => {
-  const subjects = maestroFiles().map((f) => join('.maestro', f.name));
-  assert.ok(subjects.length >= 3, `only ${subjects.length} files — check the read`);
-  for (const rel of subjects) {
-    assert.ok(!read(rel).includes(PRODUCTION_REF), `${rel} names the production ref`);
-  }
 });

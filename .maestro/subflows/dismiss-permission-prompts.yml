@@ -1,0 +1,19 @@
+appId: app.brazos.mobile.preview
+# Shared: answers the push pre-prompt (lib/pushNotifications.ts) and the "<thing> is off" prompts (lib/permissionPrompt.ts).
+# Proves nothing itself; flows call it after landing so no dialog can sit over the next tap.
+---
+- runFlow:
+    when:
+      visible: 'Get notified\?'
+    commands:
+      - tapOn: "Not now"
+- runFlow:
+    when:
+      visible: '(Camera|Microphone|Speech|Location) is off'
+    commands:
+      - tapOn: "Not now"
+- runFlow:
+    when:
+      visible: "Allow While Using App"
+    commands:
+      - tapOn: "Allow While Using App"

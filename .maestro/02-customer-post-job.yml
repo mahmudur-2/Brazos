@@ -1,0 +1,312 @@
+appId: app.brazos.mobile.preview
+# F2 customer home and post a job (account A): Home bell/avatar/tiles/All services, the four-step wizard twice, Save draft + resume; F3 Edit job.
+# Proves A publishes the main job (set price $50, needed today, exact address) and the side job (open bids up to $50) the later flows use.
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- runFlow:
+    file: subflows/sign-in-phone.yml
+    env:
+      PHONE: ${MAESTRO_E2E_PHONE}
+      OTP: ${MAESTRO_E2E_OTP}
+      NAME: "E2E Customer"
+      LANDING: "Hire help"
+- runFlow: subflows/ensure-mode-customer.yml
+- evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
+
+# ─── Home ────────────────────────────────────────────────────────────────
+- assertVisible: "Popular services"
+- assertVisible: "Post a job"
+- runFlow:
+    when:
+      visible: "Dismiss how Brazos works"
+    commands:
+      - tapOn: "Dismiss how Brazos works"
+      - assertNotVisible: "Dismiss how Brazos works"
+- takeScreenshot: 02-home
+# The bell (components/NotificationBell.tsx) opens the feed; its gear proves the screen.
+- tapOn: 'Notifications(, \d+ unread)?'
+- extendedWaitUntil:
+    visible: "Notification settings"
+    timeout: 30000
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: 'What do you need done\?'
+    timeout: 30000
+# The avatar opens Profile on its edit surface (components/HomeAvatarButton.tsx).
+- tapOn: "Edit your profile"
+- extendedWaitUntil:
+    visible: "Edit Profile"
+    timeout: 30000
+- takeScreenshot: 02-edit-profile
+- tapOn: 'Back( to .*)?'
+- runFlow:
+    when:
+      visible: "Keep editing"
+    commands:
+      - tapOn: "Discard"
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: 'What do you need done\?'
+    timeout: 30000
+
+# ─── Main job: a Home tile → the wizard with its category, set price $50 ─
+- tapOn: "House Cleaning"
+- extendedWaitUntil:
+    visible: "STEP 1 OF 4"
+    timeout: 30000
+- tapOn: "e.g. Walk my dog on weekdays"
+- inputText: "${output.marker} main"
+- tapOn: "Describe what you need done…"
+- inputText: "Deep clean of a two bedroom apartment for the lean end to end run."
+# Static step text: closes the keyboard (the step's ScrollView handles taps; a bare text does not).
+- tapOn: "STEP 1 OF 4"
+- runFlow:
+    when:
+      visible: "Show the questions"
+    commands:
+      - tapOn: "Show the questions"
+- scrollUntilVisible:
+    element:
+      text: 'How big is the place\? 2 beds'
+    direction: DOWN
+    timeout: 20000
+- tapOn: 'How big is the place\? 2 beds'
+- tapOn: "Continue to Media"
+# Media: one library photo added, then removed.
+- extendedWaitUntil:
+    visible: "STEP 2 OF 4"
+    timeout: 30000
+- tapOn: "Add a photo"
+- extendedWaitUntil:
+    visible: 'Photo, .*'
+    timeout: 30000
+- tapOn:
+    text: 'Photo, .*'
+    index: 0
+- extendedWaitUntil:
+    visible: "Remove photo 1"
+    timeout: 60000
+- takeScreenshot: 02-photo-added
+- tapOn: "Remove photo 1"
+- extendedWaitUntil:
+    notVisible: "Remove photo 1"
+    timeout: 30000
+- tapOn: "Continue to Location"
+# Location: typed area, then the GPS pin; the exact address is private to the hired worker.
+- extendedWaitUntil:
+    visible: "STEP 3 OF 4"
+    timeout: 30000
+- tapOn: "e.g. Sheepshead Bay"
+- inputText: "Sheepshead Bay, Brooklyn"
+- tapOn: "STEP 3 OF 4"
+- tapOn: "Use my current location"
+- waitForAnimationToEnd:
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Location unavailable|Area name needed"
+    commands:
+      - tapOn: "OK"
+- scrollUntilVisible:
+    element:
+      text: "e.g. 2410 Emmons Ave, Apt 3B"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "e.g. 2410 Emmons Ave, Apt 3B"
+- inputText: "2017 Emmons Ave, Brooklyn, NY 11235"
+- tapOn: "STEP 3 OF 4"
+- scrollUntilVisible:
+    element:
+      text: "Today"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Today"
+- scrollUntilVisible:
+    element:
+      text: "Morning.*"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Morning.*"
+- tapOn: "Continue to Review"
+# Review: set a price from the presets, needed today, repeat left Off.
+- extendedWaitUntil:
+    visible: "STEP 4 OF 4"
+    timeout: 30000
+- tapOn: ".*Set a price.*"
+- scrollUntilVisible:
+    element:
+      text: "Edit budget"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Edit budget"
+- tapOn: '\$50'
+- assertVisible: "Workers can request the job at this price. You still choose who gets it."
+- scrollUntilVisible:
+    element:
+      text: "Need it today"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Need it today"
+- scrollUntilVisible:
+    element:
+      text: "Repeat this job"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Repeat this job"
+- tapOn: "Off"
+- takeScreenshot: 02-main-review
+- tapOn: "Publish"
+- extendedWaitUntil:
+    visible: 'Your job is live\.|Get notified\?|Could not post job|Saved, but without a map pin'
+    timeout: 60000
+- assertNotVisible: "Could not post job|Saved, but without a map pin"
+- runFlow: subflows/dismiss-permission-prompts.yml
+- extendedWaitUntil:
+    visible: 'Your job is live\.'
+    timeout: 30000
+- takeScreenshot: 02-main-live
+- tapOn: "Back to Home"
+
+# ─── Side job: Post a job → open bids, saved as a draft, resumed, published ─
+- extendedWaitUntil:
+    visible: 'What do you need done\?'
+    timeout: 30000
+- tapOn: "Post a job"
+- extendedWaitUntil:
+    visible: "STEP 1 OF 4"
+    timeout: 30000
+- tapOn: "e.g. Walk my dog on weekdays"
+- inputText: "${output.marker} side"
+- tapOn: "Describe what you need done…"
+- inputText: "Help moving a sofa and two boxes down one flight of stairs."
+- tapOn: "STEP 1 OF 4"
+- tapOn: "Moving"
+- runFlow:
+    when:
+      visible: "Skip the questions"
+    commands:
+      - tapOn: "Skip the questions"
+- tapOn: "Continue to Media"
+- extendedWaitUntil:
+    visible: "STEP 2 OF 4"
+    timeout: 30000
+- tapOn: "Continue to Location"
+- extendedWaitUntil:
+    visible: "STEP 3 OF 4"
+    timeout: 30000
+- tapOn: "e.g. Sheepshead Bay"
+- inputText: "Sheepshead Bay, Brooklyn"
+- tapOn: "STEP 3 OF 4"
+- tapOn: "Use my current location"
+- waitForAnimationToEnd:
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Location unavailable|Area name needed"
+    commands:
+      - tapOn: "OK"
+- tapOn: "Continue to Review"
+- extendedWaitUntil:
+    visible: "STEP 4 OF 4"
+    timeout: 30000
+- tapOn: "Save draft and go Home"
+- extendedWaitUntil:
+    visible: '.*Not published yet.*'
+    timeout: 30000
+- assertVisible: '.*Not published yet.*${output.marker} side.*'
+- takeScreenshot: 02-draft-on-home
+- tapOn: '.*Not published yet.*'
+# The draft reopens on the step it was saved at; "Need it today" is not part of a draft.
+- extendedWaitUntil:
+    visible: "STEP 4 OF 4"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Need it today"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Need it today"
+- scrollUntilVisible:
+    element:
+      text: "Edit budget"
+    direction: UP
+    timeout: 20000
+# Default open bids: the custom maximum (pinned by tests/pricingMode.test.mjs, a4).
+- tapOn: "Edit budget"
+- tapOn: "Enter your own amount"
+- tapOn: "Maximum budget in dollars"
+- inputText: "50"
+- hideKeyboard:
+    optional: true
+- tapOn: "Done"
+- tapOn: "Publish"
+- extendedWaitUntil:
+    visible: 'Your job is live\.|Get notified\?|Could not post job|Saved, but without a map pin'
+    timeout: 60000
+- assertNotVisible: "Could not post job|Saved, but without a map pin"
+- runFlow: subflows/dismiss-permission-prompts.yml
+- extendedWaitUntil:
+    visible: 'Your job is live\.'
+    timeout: 30000
+- takeScreenshot: 02-side-live
+# Edit job (offered while the job is open with no bids, hooks/useJobOwnerActions.ts).
+- tapOn: "View job and bids"
+- extendedWaitUntil:
+    visible: "Job & Bids|Job Details"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Edit job"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Edit job"
+- extendedWaitUntil:
+    visible: "STEP 1 OF 4"
+    timeout: 30000
+- tapOn: "Continue to Media"
+- extendedWaitUntil:
+    visible: "STEP 2 OF 4"
+    timeout: 30000
+- tapOn: "Continue to Location"
+- extendedWaitUntil:
+    visible: "STEP 3 OF 4"
+    timeout: 30000
+- tapOn: "Continue to Review"
+- extendedWaitUntil:
+    visible: "STEP 4 OF 4"
+    timeout: 30000
+- tapOn: "Save changes"
+- extendedWaitUntil:
+    visible: 'Your job is updated\.|Could not save changes'
+    timeout: 60000
+- assertVisible: 'Your job is updated\.'
+- tapOn: "Back to job"
+- extendedWaitUntil:
+    visible: "Job & Bids|Job Details"
+    timeout: 30000
+
+# ─── All services: the sheet starts a post in the picked category ────────
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: 'What do you need done\?'
+    timeout: 60000
+- tapOn: "View all services"
+- extendedWaitUntil:
+    visible: "Pick what you need help with"
+    timeout: 15000
+- tapOn: "Moving Help"
+- extendedWaitUntil:
+    visible: "STEP 1 OF 4"
+    timeout: 30000
+- assertVisible: "Moving"
+- takeScreenshot: 02-all-services-pick
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: 'What do you need done\?'
+    timeout: 30000
+- runFlow: subflows/sign-out.yml
