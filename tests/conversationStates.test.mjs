@@ -487,14 +487,10 @@ test('[static] each live flag gates a real affordance, in a real file', () => {
   // does nothing is worse than an unflipped one, so each flag is followed from
   // its constant to the file that imports it to the call that runs.
   //
-  // Six on 2026-08-24 (RUN W1) and LIVE_LOCATION on 2026-08-25, whose guard
-  // site is the COMPOSER rather than the inbox, because the row it gates lives
-  // in the [ + ] menu. (Lean D3a removed READ_TICKS and DOCUMENTS with their
-  // features.)
+  // Six on 2026-08-24 (RUN W1). (Lean D3a removed READ_TICKS and DOCUMENTS,
+  // and lean D3b LIVE_LOCATION, with their features.)
   const flags = read('lib/featureFlags.ts');
   const screen = stripComments(read(INBOX));
-  const chat = stripComments(read(CHAT));
-  const composer = stripComments(read('components/ChatComposer.tsx'));
 
   const LIVE = {
     TIMED_BLOCK: [screen, /setBlockUntil\(/],
@@ -503,7 +499,6 @@ test('[static] each live flag gates a real affordance, in a real file', () => {
     HIDDEN_CHATS: [screen, /LocalAuthentication\.authenticateAsync\(/],
     ARCHIVE: [screen, /archived: !target\.archived/],
     DELETE_CHAT: [screen, /\{ delete: true \}/],
-    LIVE_LOCATION: [composer, /onPress: onShareLiveLocation,/],
   };
 
   for (const [name, [source, call]] of Object.entries(LIVE)) {
@@ -515,11 +510,6 @@ test('[static] each live flag gates a real affordance, in a real file', () => {
     assert.match(source, new RegExp(`\\b${name}\\b`), `${name} must be imported at its guard site`);
     assert.match(source, call, `${name} must gate a call that actually does something`);
   }
-
-  // The handler behind each row has to reach something too, or the flag would
-  // gate a prop nobody passes — the dead-row failure one level up.
-  assert.match(chat, /onShareLiveLocation=\{/);
-  assert.match(chat, /liveLocation\.start\(durationMs\)/);
 });
 
 test('[static] the money vocabulary is untouched by this run', () => {

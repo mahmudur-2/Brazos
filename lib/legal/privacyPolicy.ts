@@ -4,7 +4,6 @@
  * Describes what the app actually does today, checked against the real
  * schema and code rather than written generically:
  *   * location   — phase12 (job_locations, neighbourhood label on `jobs`),
- *                  live_location_shares (time-bounded, foreground only),
  *                  lib/reverseGeocode.ts (OpenStreetMap Nominatim)
  *   * photos     — phase13 job photos, phase17 completion photos + portfolio
  *   * moderation — phase13 blocks/mutes/reports/bans, FIX-RUN B3 word filter
@@ -63,7 +62,7 @@ select. These are shown on your public profile.
 
 ### Location
 
-Location is handled in three distinct ways, deliberately:
+Location is handled in two distinct ways, deliberately:
 
 - Approximate, and public. When a job is posted with a location, the app
   stores a neighbourhood-level text label (for example "Flatbush, Brooklyn,
@@ -76,11 +75,6 @@ Location is handled in three distinct ways, deliberately:
   job listing itself and are readable only by the job's Customer and its
   hired Worker. Exact coordinates are never sent to people browsing jobs, and
   the map's hotspot view shows counts per area, never individual pins.
-- Live, and only when you choose. In a conversation you can share your live
-  location for a period you pick (at most eight hours). It is read only while
-  the app is open, it is seen only by the other person in that conversation,
-  and you can stop it at any time. The last position shared is kept with that
-  share.
 
 If you turn on "New jobs nearby" notifications, the app stores one further
 coordinate: an approximate point for your own location, used solely to measure
@@ -169,7 +163,7 @@ either.
   is done by Stripe, and Brazos does not receive the documents.)
 - Your device's contact list.
 - Background location. Location is read only while the app is open and you are
-  using a feature that needs it, including a live share you started.
+  using a feature that needs it.
 
 ## 4. How we use it
 
@@ -237,8 +231,7 @@ Deletion is permanent and cannot be undone.
 
 ## 8. Your choices
 
-- Location: decline the permission, type a location manually instead, and
-  share your live location only when you choose to.
+- Location: decline the permission, or type a location manually instead.
 - Notifications: switch any category off under Profile → Notifications, or turn
   them off entirely in your device settings.
 - Saved cards: save one only if you want to, and remove it in Payment methods.

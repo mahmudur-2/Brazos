@@ -382,7 +382,6 @@ test('[static] C1 · every stage surface reads its words from lib/jobLifecycle.t
     'lib/liveJobStatus.ts',
     'lib/jobStage.ts',
     'components/JobProgress.tsx',
-    'screens/TrackWorkerScreen.tsx',
     'screens/WorkerJobScreen.tsx',
     'ui/primitives/StatusPill.tsx',
   ]) {

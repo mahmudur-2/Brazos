@@ -80,7 +80,6 @@ const INTENT_ALLOWLIST = [
   // permission all emit; unlike a funnel step, this cannot double-count a
   // conversion.
   'components/HotspotMap.tsx',
-  'hooks/useLiveLocation.ts',
   'screens/ChatScreen.tsx',
   'screens/ProfileScreen.tsx',
   // R7D · the two abandonment pairs. Both mount once per session of the thing

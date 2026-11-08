@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { GlowTextInput } from '../components/GlowTextInput';
 import { DropMenu, type DropMenuItem } from './DropMenu';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { LIVE_LOCATION } from '../lib/featureFlags';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import {
   radius,
@@ -17,8 +16,7 @@ import {
 /**
  * THE COMPOSER IS THREE ZONES — 2026-08-23.
  *
- *   [ + ]        the attachment drop-up. Camera, Photos, and (behind its
- *                flag) Live location.
+ *   [ + ]        the attachment drop-up. Camera and Photos.
  *   [ field ]    the message itself.
  *   [ send ]     the send arrow, which fades in the moment there is something
  *                to send.
@@ -80,16 +78,6 @@ type ChatComposerProps = {
    */
   allowAttachments?: boolean;
   /**
-   * Flagged entry. Renders only when its flag is true AND its handler exists —
-   * so flipping the flag without wiring the action still cannot produce a row
-   * that does nothing. See lib/featureFlags.ts.
-   *
-   * NOT GATED BY `allowAttachments`: a live share writes no file at all (it is
-   * a row in `live_location_shares`, reached through three RPCs that each take
-   * a job id or a direct thread id), so it renders on a direct thread.
-   */
-  onShareLiveLocation?: () => void;
-  /**
    * THE [ + ] MENU IS CONTROLLED, and deliberately owns none of its own state.
    *
    * It used to hold a `menuOpen` boolean here while the chat header held a
@@ -112,7 +100,6 @@ export function ChatComposer({
   onPickLibrary,
   showCameraAndMic = true,
   allowAttachments = true,
-  onShareLiveLocation,
   menuOpen,
   onToggleMenu,
   onCloseMenu,
@@ -176,14 +163,6 @@ export function ChatComposer({
   if (allowAttachments) {
     menuItems.push({ key: 'photos', label: 'Photos', icon: 'images-outline', onPress: onPickLibrary });
   }
-  if (LIVE_LOCATION && onShareLiveLocation) {
-    menuItems.push({
-      key: 'location',
-      label: 'Live location',
-      icon: 'navigate-outline',
-      onPress: onShareLiveLocation,
-    });
-  }
 
   return (
     // The anchor. DropMenu positions itself against this box's edges, so the
@@ -207,9 +186,8 @@ export function ChatComposer({
             accessibilityRole="button"
             accessibilityLabel="Attach"
             // Read off the menu that will actually open rather than a fixed
-            // sentence: on a direct thread Camera and Photos are absent and
-            // Live location is not, so a hardcoded "Camera or photos" would
-            // announce rows nobody is about to be shown.
+            // sentence, so the hint never announces rows nobody is about to
+            // be shown (a harness can hide Camera).
             accessibilityHint={menuItems.map((item) => item.label).join(', ')}
             accessibilityState={{ expanded: menuOpen }}
           >

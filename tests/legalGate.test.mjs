@@ -370,12 +370,11 @@ test('B1 · Terms and Privacy state the payment facts, name every processor, and
   assert.match(terms, /payments may run in a test mode, in which test cards are used\s+and no real money moves/);
   assert.doesNotMatch(terms, /says so wherever that applies/);
 
-  // Privacy: every processor by name, live location, on-device speech, the
-  // 90-day prune, and deletion as A18a built it.
+  // Privacy: every processor by name, on-device speech, the 90-day prune, and
+  // deletion as A18a built it (live location left with lean D3b).
   for (const processor of ['Supabase', 'Expo', 'Stripe', 'Resend', 'OpenStreetMap Nominatim', 'Sentry', 'PostHog']) {
     assert.ok(policy.includes(processor), `the policy names ${processor}`);
   }
-  assert.match(policy, /share your live\s+location for a period you pick \(at most eight hours\)/);
   assert.match(policy, /turned into\s+text on your device/);
   assert.match(policy, /removed after 90 days/);
   assert.match(policy, /Any card you saved is removed from Stripe before the account\s+goes/);

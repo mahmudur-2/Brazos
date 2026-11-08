@@ -325,8 +325,6 @@ export type MyJobsStackParamList = {
    *  location exists anywhere; these are two one-way taps. */
   /** Screen 57 — the worker's job checklist (Phase 6). */
   WorkChecklist: { jobId: string };
-  /** Screen 33 — the customer's static "where things stand" timeline (Phase 6). */
-  TrackWorker: { job: Job };
   /** Screen 36 — approve the finished work (releasing held funds) or report
    *  an issue that freezes release. Authorization is server-side (phase51). */
   ApproveOrDispute: { job: Job };

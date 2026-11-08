@@ -315,7 +315,6 @@ test('no module outside lib/jobLifecycle.ts maps a raw status to a step index (F
 
 test('screens derive lifecycle through the one helper, never locally', async () => {
   for (const screen of [
-    'screens/TrackWorkerScreen.tsx',
     'screens/WorkChecklistScreen.tsx',
   ]) {
     const src = await read(screen);

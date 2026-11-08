@@ -537,13 +537,6 @@ export function ClientJobDetailScreen() {
     const fundingAction = canFundNow ? (paymentsEnabled ? { label: 'Protect payment in checkout', onPress: () => navigation.navigate('Checkout', { job }) } : null) : undefined;
     if (fundingAction !== undefined) return fundingAction;
     switch (lifecycle) {
-      case 'confirmed':
-      case 'en_route':
-      case 'arrived':
-      case 'in_progress':
-        return job.assigned_worker_id
-          ? { label: 'Track worker', onPress: () => navigation.navigate('TrackWorker', { job }) }
-          : null;
       case 'awaiting_approval':
         return {
           label:
@@ -1239,11 +1232,6 @@ export function ClientJobDetailScreen() {
                 }
               />
             )}
-
-            {/* Phase 6 — the static tracking surface (screen 33): where the
-                worker is in the confirmed → done march, from their own
-                declarations. Meaningless once the job is completed. */}
-            {/* 2026-09-26: Track worker is the pinned primary while the job runs. */}
 
             {/* The money truth for this job (phase50 ledger). Labels come from
                 MoneyText's fixed §H.3 captions — never hand-written here. The

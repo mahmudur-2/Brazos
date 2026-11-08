@@ -190,7 +190,7 @@ export const STAGE = {
   done: 'Done',
 } as const;
 
-/** The five stages in order — the full track (Track worker). */
+/** The five stages in order — the full track. */
 export const STAGE_TRACK = [STAGE.booked, STAGE.onTheWay, STAGE.here, STAGE.working, STAGE.done] as const;
 
 /**

@@ -100,7 +100,7 @@ test('[static] no dead control: the send waits on text, the [ + ] on having an e
   assert.match(source, /\{menuItems\.length > 0 && \(/);
 });
 
-test('[static] the attachment gate survived the redesign, and the flag needs its handler', () => {
+test('[static] the attachment gate survived the redesign', () => {
   const source = stripComments(read(COMPOSER));
 
   // A direct thread (no job) has no path to key an upload on, so its media
@@ -108,25 +108,13 @@ test('[static] the attachment gate survived the redesign, and the flag needs its
   // additionally behind its own prop.
   assert.match(source, /if \(allowAttachments && showCameraAndMic\) \{\s*menuItems\.push\(\{ key: 'camera'/);
   assert.match(source, /if \(allowAttachments\) \{\s*menuItems\.push\(\{ key: 'photos'/);
-
-  // FLAG **AND** HANDLER. The flag alone is not enough: a flipped flag with
-  // no wired action would be exactly the dead row featureFlags.ts exists to
-  // prevent. The flag is TRUE since 2026-08-25 and this rule is what still
-  // makes it safe — it is a structural property of the menu, not a
-  // consequence of the flag being off.
-  assert.match(source, /if \(LIVE_LOCATION && onShareLiveLocation\) \{/);
-  assert.match(source, /import \{ LIVE_LOCATION \} from '\.\.\/lib\/featureFlags';/);
 });
 
-test('[static] the attachment gate SPLIT: Live location is not behind it', () => {
+test('[static] the attachment gate covers exactly the camera and photos rows', () => {
   const source = stripComments(read(COMPOSER));
 
-  // THE GATE COVERS TWO ROWS, NOT THREE — and this is the assertion that
-  // stops a later edit from "tidying" the menu by putting every entry behind
-  // one condition. chat-photos authorise on a JOB, so camera and photos go on
-  // a pair thread. All three live-location RPCs take a job id OR a direct
-  // thread id, so that row works on BOTH thread kinds. Folding it into
-  // `allowAttachments` would hide a working feature on every direct thread.
+  // chat-photos authorise on a JOB, so camera and photos are hidden on a pair
+  // thread (lean D3b removed the live-location row that sat outside the gate).
   const gated = [...source.matchAll(/if \(allowAttachments[^)]*\) \{/g)];
   assert.equal(gated.length, 2, 'exactly two menu rows are gated on allowAttachments');
 
@@ -140,14 +128,6 @@ test('[static] the attachment gate SPLIT: Live location is not behind it', () =>
       /^if \(allowAttachments/,
       `${key} must be gated on allowAttachments`,
     );
-  }
-  for (const [key, flag] of [['location', 'LIVE_LOCATION']]) {
-    const at = source.indexOf(`key: '${key}'`);
-    assert.ok(at > -1, `the ${key} row must exist`);
-    const preceding = source.slice(0, at);
-    const guard = preceding.slice(preceding.lastIndexOf('if ('));
-    assert.match(guard, new RegExp(`^if \\(${flag} && on`), `${key} is gated by its flag`);
-    assert.doesNotMatch(guard, /allowAttachments/, `${key} must NOT be gated on allowAttachments`);
   }
 
   // And the prop's own contract says so, so the next reader is not left to

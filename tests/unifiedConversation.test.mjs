@@ -350,7 +350,6 @@ test('every entry point from the audit still opens Chat with a shape Chat accept
     ['screens/MessagesInboxScreen.tsx', /navigation\.navigate\('Chat', \{ counterpartyId: item\.otherId \}\)/],
     ['screens/ClientJobDetailScreen.tsx', /navigation\.navigate\('Chat', \{ jobId: job\.id \}\)/],
     ['screens/JobConfirmedScreen.tsx', /navigation\.navigate\('Chat', \{ jobId: job\.id \}\)/],
-    ['screens/TrackWorkerScreen.tsx', /navigation\.navigate\('Chat', \{ jobId: job\.id \}\)/],
     ['screens/WorkerJobScreen.tsx', /navigation\.navigate\('Chat', \{ jobId: job\.id \}\)/],
     // Stage 4A: the feed stopped opening Chat itself and delegates to the same
     // router the push tap uses, so its entry point IS the delegation — since

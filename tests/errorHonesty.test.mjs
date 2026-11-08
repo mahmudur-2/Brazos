@@ -70,23 +70,6 @@ test('a settled dispute read still derives normally — unknown is only for fail
 });
 
 // ===========================================================================
-// The two dispute-read screens hold the tri-state and pass it through
-// ===========================================================================
-
-test('TrackWorkerScreen models a failed dispute read as unknown, not false', () => {
-  const src = read('screens/TrackWorkerScreen.tsx');
-  assert.match(src, /useState<boolean \| 'unknown'>\(false\)/);
-  assert.match(src, /disputeResult\.error \? 'unknown' : !!disputeResult\.data/);
-  // The screen-level surface: a failed read renders the shared error state
-  // with a retry, never the timeline.
-  assert.match(src, /statusReads === 'error'/);
-  assert.match(src, /kind: 'error'/);
-  assert.match(src, /onRetry: \(\) => setReadAttempt/);
-  // The dispute note renders only from a POSITIVE dispute answer.
-  assert.match(src, /\{hasOpenDispute === true \? \(/);
-});
-
-// ===========================================================================
 // F-026 — the discarded-error idiom is extinct
 // ===========================================================================
 
@@ -140,25 +123,8 @@ test('the remaining discarded reads each surface with a retry', () => {
 });
 
 // ===========================================================================
-// F-027 — TrackWorkerScreen earns its ready state
+// The dispute-read screen holds the tri-state and passes it through
 // ===========================================================================
-
-test('TrackWorkerScreen holds loading until its reads settle, through the shared template', () => {
-  const src = read('screens/TrackWorkerScreen.tsx');
-  // Configured, not reinvented: the states flow through DetailScreen's
-  // ScreenState prop, which renders the shared loading/error variants.
-  assert.match(src, /from '\.\.\/ui\/templates\/DetailScreen'/);
-  assert.match(src, /statusReads === 'loading' \|\| workerRead === 'pending'/);
-  assert.match(src, /\{ kind: 'loading' \}/);
-  // Both fetch paths settle the tracker — including the no-worker shortcut.
-  assert.match(src, /setWorkerRead\('settled'\)/);
-  // Ready is the ternary's LAST resort, after error and loading.
-  const ternary = src.slice(src.indexOf('const state: ScreenState'));
-  const errorAt = ternary.indexOf("kind: 'error'");
-  const loadingAt = ternary.indexOf("kind: 'loading'");
-  const readyAt = ternary.indexOf("kind: 'ready'");
-  assert.ok(errorAt >= 0 && loadingAt > errorAt && readyAt > loadingAt);
-});
 
 test('ClientJobDetailScreen passes unknown to the derivation and gates its money surfaces', () => {
   const src = read('screens/ClientJobDetailScreen.tsx');

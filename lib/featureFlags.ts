@@ -8,21 +8,20 @@
  * is worse than no row — it teaches a user the feature exists and then breaks
  * their trust the first time they use it.
  *
- * SEVEN OF THESE ARE LIVE, and phase77 is why all seven could be.
+ * SIX OF THESE ARE LIVE, and phase77 is why all six could be.
  *
  *   2026-08-24, RUN W1   supabase/phase77_conversation_features.sql landed on
  *                        staging and W1 wired what it declared: TIMED_BLOCK,
  *                        MARK_UNREAD, CLEAR_CHAT, HIDDEN_CHATS, ARCHIVE and
  *                        DELETE_CHAT.
- *   2026-08-25, RUN W2   LIVE_LOCATION, from that same migration.
  *
- * (Lean D3a removed DOCUMENTS, READ_TICKS, DELIVERED_TICKS and TRANSLATION
- * together with the features they gated: v1 messaging is text and photo.)
+ * (Lean D3a removed DOCUMENTS, READ_TICKS, DELIVERED_TICKS and TRANSLATION,
+ * and lean D3b removed LIVE_LOCATION, together with the features they gated:
+ * v1 messaging is text and photo.)
  *
  * Each one's block below records what it waited on and what closed it, because
  * a flag that has been flipped is still the place a later reader looks to find
- * out why it could be — and in LIVE_LOCATION's case, why half of its recorded
- * dependency was REFUSED rather than met.
+ * out why it could be.
  *
  * ONE REMAINS DARK: PRICE_GUIDANCE, which waits on an attributed source.
  *
@@ -44,50 +43,6 @@
  * is the whole change, and the flagged code stays compiled — and therefore
  * type-checked and testable — the entire time it is dark.
  */
-
-/**
- * Sharing a live position into a thread while a job is underway.
- *
- * WAITS ON: nothing since 2026-08-25. It waited on a location-sharing table —
- * a per-thread row carrying the sharer, the coordinates, a heartbeat and an
- * expiry — plus RLS restricting reads to the thread's two participants, AND
- * expo-location's BACKGROUND permission with expo-task-manager installed.
- * phase77's `live_location_shares` closed the first half outright.
- *
- * THE SECOND HALF WAS NOT SATISFIED. IT WAS REFUSED, and that is the one thing
- * to read before "fixing" the suspended-app case. Background location is the
- * most invasive permission iOS asks for, and this feature would be asking for
- * it in order to keep broadcasting a position while the app is not on screen —
- * which is the opposite of what makes a bounded, consensual share safe. So it
- * ships FOREGROUND ONLY: requestForegroundPermissionsAsync and
- * watchPositionAsync, no TaskManager task, no "Always" prompt. A share whose
- * updates stop because iOS suspended the app is an ACCEPTED outcome, because
- * the counterparty's honest upper bound is always the `expires_at` they
- * already hold and nothing can extend it. expo-task-manager has since been
- * removed from package.json; this feature never used it, and
- * tests/liveLocation.test.mjs sweeps both files to keep it that way.
- *
- * A SHARE IS NOT A MESSAGE. `live_location_shares` has no row in `messages`,
- * so starting or stopping one inserts nothing into the thread: it renders as
- * a card while it is live and is gone when it ends. Writing a "started
- * sharing" message would have made an ephemeral fact permanent in a transcript
- * both people keep.
- *
- * AND AN ENDED SHARE DELIVERS NO EVENT, which is where a later run is most
- * likely to go wrong. stop_live_location() sets `expires_at = now()`, and the
- * updated row immediately fails the SELECT policy's expiry term, so realtime
- * DROPS it — an expiry is the same shape, since no UPDATE happens at all. The
- * counterparty's card is therefore cleared by a REFETCH ON FOCUS and a LOCAL
- * CLOCK, never by waiting; the subscription exists only to make a moving pin
- * move. Waiting for an event leaves a stale pin on screen indefinitely.
- *
- * THE GUARD SITE is screens/ChatScreen.tsx and it guards the ASSEMBLY: with
- * this false nothing is read, nothing is subscribed, no watcher can start and
- * the two cards have no share to render. The composer row is gated by this
- * flag and its handler and NOT by `allowAttachments` — all three RPCs take a
- * job id or a direct thread id, so a share works on both thread kinds.
- */
-export const LIVE_LOCATION = true as boolean;
 
 // NOT A FLAG — MUTE WAS RETIRED FROM THIS TABLE ON 2026-08-23, before it ever
 // gated anything, because it had no unmet dependency to record and this table

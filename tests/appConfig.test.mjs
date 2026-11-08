@@ -33,7 +33,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const source = readFileSync(join(root, 'app.config.ts'), 'utf8');
 
 // Comments are stripped for the two absence sweeps below, and for the same
-// reason tests/themeTokens and tests/liveLocation strip theirs: the docblock
+// reason tests/themeTokens strips its own: the docblock
 // NAMES the keys that were removed, because a removal with no recorded reason
 // is a removal a later run undoes. A raw-text sweep would go red on the prose
 // explaining why it is red, which punishes writing the decision down.
@@ -60,8 +60,8 @@ test('iOS declares no tablet support', () => {
 
 test('no background mode and no Always-location permission survive anywhere', () => {
   // These two were one request, and they are refused rather than pending:
-  // live location sharing ships foreground-only by decision (the reasoning is
-  // recorded on LIVE_LOCATION in lib/featureFlags.ts). Asserted BOTH on the
+  // nothing reads location in the background (live location sharing, which
+  // was foreground-only by decision, left with lean D3b). Asserted BOTH on the
   // resolved object — so a key cannot hide behind a spread or a variable —
   // and on the comment-stripped source, so it cannot be reintroduced under a
   // different key path.

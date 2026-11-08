@@ -91,13 +91,8 @@ export default (_context: ConfigContext): ExpoConfig => ({
       NSFaceIDUsageDescription: 'Unlock hidden chats with Face ID.',
       // NSLocationAlwaysAndWhenInUseUsageDescription and UIBackgroundModes are
       // BOTH GONE, and they were removed together because they were one
-      // request. Live location sharing ships foreground-only by decision, not
-      // by omission (lib/featureFlags.ts LIVE_LOCATION records the refusal):
-      // it uses requestForegroundPermissionsAsync and watchPositionAsync, and
-      // defines no background task. Asking for Always, and declaring a
-      // location background mode, would have been asking for the most invasive
-      // permission iOS offers to support a case the feature deliberately does
-      // not serve — and App Review asks what uses them.
+      // request. Nothing reads location in the background (live location
+      // sharing was removed in lean D3b), and App Review asks what uses them.
     },
     // FIX-RUN B13 (2026-10-03, the operator switched it on): no entitlements
     // block. R6a (D8) declared Time Sensitive notifications here, but nothing
@@ -127,10 +122,9 @@ export default (_context: ConfigContext): ExpoConfig => ({
     [
       'expo-location',
       {
-        // FIX-RUN B9: live location sharing in a chat is disclosed here as well
-        // as in the Privacy Policy (foreground only — no Always permission).
+        // Lean D3b: live location sharing is gone; when-in-use only, no Always.
         locationWhenInUsePermission:
-          'Brazos uses your location to show nearby jobs, to place jobs on the map, and to share your live position in a chat only while you choose to.',
+          'Brazos uses your location to show nearby jobs and to place jobs on the map.',
       },
     ],
     [

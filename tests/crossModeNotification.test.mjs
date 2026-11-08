@@ -220,12 +220,10 @@ test('B14 · the owner\'s job screens stay live: a per-mount channel filtered to
   assert.match(live, /void supabase\.removeChannel\(channel\);/);
   const hook = read('hooks/useJobDetail.ts');
   assert.match(hook, /useJobLive\(snapshot\.id, liveRefresh, \(\) => \{\s*runRef\.current \+= 1;\s*setMissing\(true\);\s*\}\);/);
-  for (const path of ['screens/TrackWorkerScreen.tsx', 'screens/ClientJobDetailScreen.tsx']) {
+  for (const path of ['screens/ClientJobDetailScreen.tsx']) {
     const src = read(path);
     assert.match(src, /useFocusedPoll\(!!payment && isReleaseRequested\(payment\) && !isReleased\(payment\), \(\) =>/, `${path} polls a settling payment`);
   }
-  assert.match(read('screens/TrackWorkerScreen.tsx'), /\[job\.id, readAttempt, version\]/);
-  assert.match(read('screens/TrackWorkerScreen.tsx'), /setStatusReads\(\(prev\) => \(prev === 'ready' \? prev : 'loading'\)\);/);
   assert.match(read('screens/ClientJobDetailScreen.tsx'), /\[job\.id, job\.status, statusReadAttempt, jobVersion\]/);
   const poll = read('hooks/useFocusedPoll.ts');
   assert.match(poll, /if \(!enabled\) return;\s*const timer = setInterval\(\(\) => tick\.current\(\), ms\);\s*return \(\) => clearInterval\(timer\);/);

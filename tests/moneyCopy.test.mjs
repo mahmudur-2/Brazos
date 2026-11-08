@@ -113,7 +113,6 @@ test('[static] C4 · MoneyText and StatusPill hold no money words of their own; 
     'screens/ClientJobDetailScreen.tsx',
     'screens/ApproveOrDisputeScreen.tsx',
     'screens/ReviewAndTipScreen.tsx',
-    'screens/TrackWorkerScreen.tsx',
   ]) {
     const code = stripComments(read(file));
     assert.match(code, /paymentEyebrow\(/, `${file} uses the one eyebrow`);
@@ -124,7 +123,7 @@ test('[static] C4 · MoneyText and StatusPill hold no money words of their own; 
   assert.doesNotMatch(checkout, /Platform fee|Authorize & protect|Finish protecting/);
   assert.match(checkout, /\{FEE_NAME\}/);
   // The customer's amounts are their charge — never the bare agreed price under a payment caption.
-  for (const file of ['screens/CheckoutScreen.tsx', 'screens/ReviewAndTipScreen.tsx', 'screens/TrackWorkerScreen.tsx']) {
+  for (const file of ['screens/CheckoutScreen.tsx', 'screens/ReviewAndTipScreen.tsx']) {
     assert.doesNotMatch(read(file), /<MoneyText cents=\{payment\.amount_cents\}/, `${file} shows the charge`);
   }
 });

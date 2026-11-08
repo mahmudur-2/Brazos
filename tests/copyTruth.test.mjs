@@ -176,7 +176,6 @@ test('B5 · the rewritten lines are the product sentences', () => {
   assert.match(code('screens/WorkerJobScreen.tsx'), /'The customer hasn’t paid yet\. Nothing is held for this job\.'/);
   // F20: Route & arrival is gone; its reassurance is WorkerJob's stage note.
   assert.match(code('screens/WorkerJobScreen.tsx'), /`Each tap tells \$\{clientName\} where things stand — nothing tracks your location\.`/);
-  assert.match(code('screens/TrackWorkerScreen.tsx'), /If\s+they share their live location in chat, you’ll see it there\./);
   assert.match(code('screens/NotificationSettingsScreen.tsx'), /'Notifications aren’t available in this version\. Update Brazos to turn them on\.'/);
   assert.match(code('lib/adapters/payments.ts'), /'Payments aren’t available right now\. Nothing was charged or held\.'/);
   assert.match(code('lib/errorMessage.ts'), /'Can’t reach Brazos right now\. Check your connection and try again\.'/);

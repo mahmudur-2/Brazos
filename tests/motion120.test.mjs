@@ -792,13 +792,13 @@ test('[static] every feature flag carries the dependency it waits on, and only t
   // flipped is still where a later reader looks to find out why it could be.
   const source = read('lib/featureFlags.ts');
   const flags = [...source.matchAll(/export const (\w+) = (false|true) as boolean;/g)];
-  // Lean D3a removed DELIVERED_TICKS, DOCUMENTS, READ_TICKS and TRANSLATION
-  // together with the features they gated.
-  assert.equal(flags.length, 8, `the roster is eight flags (saw ${flags.length})`);
+  // Lean D3a removed DELIVERED_TICKS, DOCUMENTS, READ_TICKS and TRANSLATION,
+  // and lean D3b LIVE_LOCATION, together with the features they gated.
+  assert.equal(flags.length, 7, `the roster is seven flags (saw ${flags.length})`);
   assert.deepEqual(
     flags.map((f) => f[1]).sort(),
     [
-      'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'HIDDEN_CHATS', 'LIVE_LOCATION',
+      'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'HIDDEN_CHATS',
       'MARK_UNREAD', 'PRICE_GUIDANCE', 'TIMED_BLOCK',
     ],
     'the flag roster changed — say so in HANDOFF.md as well as here'
@@ -812,23 +812,13 @@ test('[static] every feature flag carries the dependency it waits on, and only t
   // WHICH FLAGS ARE LIVE, named rather than counted. Six of these flipped on
   // 2026-08-24 — the ones supabase/archive/phases/phase77_conversation_features.sql
   // supplied a dependency for, wired by RUN W1 on BOTH thread kinds.
-  // LIVE_LOCATION joined them on 2026-08-25 (RUN W2).
-  //
-  // LIVE_LOCATION IS THE ONE WORTH READING TWICE. Its recorded dependency was
-  // two things: a location-sharing table, which phase77 supplied, AND
-  // expo-location's BACKGROUND permission with expo-task-manager. The second
-  // was not satisfied — it was REFUSED, and the feature ships foreground-only.
-  // That is why this fence also insists every flag keeps its WAITS ON line
-  // after the flip: "waits on nothing" with no reason recorded would leave the
-  // next run to "finish" the job by asking for the permission this one
-  // declined.
   //
   // Pinning the ROSTER rather than asserting "all false" is what keeps this
   // fence useful now that flipping is a thing that happens: a flag going live
   // without its dependency turns this red exactly as a premature flip used to.
   const LIVE = [
     'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'HIDDEN_CHATS',
-    'LIVE_LOCATION', 'MARK_UNREAD', 'TIMED_BLOCK',
+    'MARK_UNREAD', 'TIMED_BLOCK',
   ];
   // PRICE_GUIDANCE (Tier A, 2026-08-30) is dark by the copy sweep's rule: the
   // seeded range table has no attributed source, so the guidance waits on one.
