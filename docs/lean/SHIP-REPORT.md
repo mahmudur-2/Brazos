@@ -1,6 +1,6 @@
 # SHIP-REPORT (lean v1 run, 2026-11-07 → 2026-11-08)
 
-Your time: ~5 min (steps 1-3 were done on 2026-11-08; step 4 is one paste once build 10 finishes; 5-7 are optional).
+Your time: 0 min required (steps 1-4 done on 2026-11-08; 5-7 are optional).
 Undo of the whole run: `git checkout -b restore pre-lean-2026-11` (the tag made before any change). Nothing on staging or production was changed by the run.
 
 ## What happened
@@ -41,6 +41,7 @@ BASELINE.md's "32794 lines" was a measuring error (xargs printed one batch's tot
 | e2e iOS run 4 | 01 green; 02 red: Publish spinner never ends, yet the job IS on staging (created within a second of the tap) | https://github.com/mahmudur-2/Brazos/actions/runs/42523731607 |
 | e2e iOS run 5 | same as run 4 (second job saved, spinner stuck). Cause found: the Seal animation race in `components/SealTransition.tsx`, fixed in 9b0064f | https://github.com/mahmudur-2/Brazos/actions/runs/42524845926 |
 | e2e iOS run 6 | old simulator build, started before the cause was known: 01 green, 02 stuck at Publish a third time (3 of 5 publishes on staging). Run 7 on the new build is the one that counts | https://github.com/mahmudur-2/Brazos/actions/runs/42526455514 |
+| e2e iOS run 7 (simulator build on the Seal fix) | 01 green; 02: both publishes, the draft and Edit job pass (the Seal fix holds), red at the last step: the "All services" sheet is open but its rows are folded into one accessibility element (fixed in the next commit, `accessible={false}`, as ActionSheet already had) | https://github.com/mahmudur-2/Brazos/actions/runs/42528070363 |
 
 Two earlier e2e attempts died downloading Maestro (installer CDN 504/503); the workflow now installs the pinned release with retries. Maestro stops at the first red flow, so 03-10 have not run yet; they get their first run in run 7 (new simulator build) and will likely need a few selector fixes, as 01 and 02 did. Each run costs 150-200 of the month's 2000 free Mac minutes; six runs on 2026-11-08 used about half the month.
 
@@ -49,8 +50,8 @@ Two earlier e2e attempts died downloading Maestro (installer CDN 504/503); the w
 |---|---|---|---|
 | e2e-test (simulator) | 68b4d69c-b3ec-4973-8b53-8e3d222bc41d | FINISHED; used by runs 1-6 | the app the Mac runner tests (has the Seal bug) |
 | testflight (store, build 9) | bfb47ced-8fb9-41ba-a4cd-2c083602f2b1 | on TestFlight (Brazos MVP) and on your phone since 2026-11-08 | staging backend + Stripe TEST keys; bundle `app.brazos.mobile`; has the Seal bug |
-| e2e-test (simulator, 9b0064f) | bd7ca0f1-7b5a-4982-a3d5-5bbfc24d5680 | building | run 7 and later |
-| testflight (store, build 10, 9b0064f) | 23bea9d2-bf1c-4ded-aeae-5480d835962f | building; not uploaded (step 4) | the Seal fix for testers |
+| e2e-test (simulator, 9b0064f) | bd7ca0f1-7b5a-4982-a3d5-5bbfc24d5680 | FINISHED | run 7 and later |
+| testflight (store, build 10, 9b0064f) | 23bea9d2-bf1c-4ded-aeae-5480d835962f | FINISHED; uploaded to Brazos MVP 2026-11-08 17:11 | the Seal fix for testers |
 
 App Store Connect has TWO records. "Brazos MVP" (Apple ID 6832193439, bundle `app.brazos.mobile`) is the TestFlight target: `eas.json` pins it in both submit profiles, and a test guards the pin. "BRAZOS Dev" (6832350967, `app.brazos.mobile.dev`) is your old personal dev record with the removed design studio; nothing from this run goes there (the first upload of build 9 landed there by mistake, Apple refused it, then it was re-sent with `--id` to Brazos MVP).
 
@@ -58,10 +59,8 @@ App Store Connect has TWO records. "Brazos MVP" (Apple ID 6832193439, bundle `ap
 1. ~~Apply the lean migration to staging~~ DONE 2026-11-08 (no backup: Backups need the Pro plan and you declined; staging holds test data only).
 2. ~~Second test phone~~ DONE 2026-11-08 (`13473208154`, code `123456`).
 3. ~~Upload build 9 to TestFlight~~ DONE 2026-11-08: build 9 is on Brazos MVP and installed on your phone. Friends later: App Store Connect → Users and Access → add each with the Marketing role → TestFlight → group "Friends" → add them.
-4. **Send build 10 (the publish fix) to TestFlight.** Wait for the EAS mail "Build finished" for build 10, then in a terminal in the repo:
-   `npx eas-cli@latest submit --platform ios --profile testflight --id 23bea9d2-bf1c-4ded-aeae-5480d835962f`
-   You should see "ASC App ID 6832193439" in its output and "Submitted to App Store Connect". 10-20 min later the TestFlight app on your phone shows an Update button for 1.0.0 (10). If it says anything about `app.brazos.mobile.dev`, stop and paste the output into a chat.
-   The phone-test run on the new simulator build (run 7) starts on its own when that build finishes; no click from you.
+4. ~~Send build 10 (the publish fix) to TestFlight~~ DONE 2026-11-08 17:11: uploaded to Brazos MVP (6832193439); Apple processes it in 5-10 min, then the TestFlight app on your phone offers Update to 1.0.0 (10). A later build needs the same one line, run inside `C:\Users\mdmah\BRAZOS`:
+   `npx eas-cli@latest submit --platform ios --profile testflight --id <build id from the chat>`
 5. **`.env.example` cleanup (the chat may not open that file).** Remove the lines for EXPO_PUBLIC_POSTHOG_KEY and TWILIO_* and any script names that no longer exist (around lines 11 and 15).
 6. **Supabase advisors.** Dashboard → Database → Security Advisor and Performance Advisor → export both; paste into a chat if anything is red.
 7. **Optional EAS cleanup.** `eas env:list preview` and delete EXPO_PUBLIC_POSTHOG_KEY and the old MAESTRO_E2E_*_EMAIL / _PASSWORD secrets; confirm the staging edge-function STRIPE_SECRET_KEY starts with `sk_test_` (Supabase → Edge Functions → Secrets).
