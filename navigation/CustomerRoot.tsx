@@ -222,8 +222,8 @@ export function CustomerRoot() {
         />
       </Tab.Navigator>
 
-      {/* The [ + ] creation sheet — the three actions it has carried since
-          prestige(0d) restored it, now on the docked glass CreateSheet
+      {/* The [ + ] creation sheet — the actions it has carried since
+          prestige(0d) restored it (lean D5 removed Hire again), now on the docked glass CreateSheet
           (2026-09-18, G1 "Clear") with two contextual rows of its own: the
           job that needs the customer's move, and the mode switch that left
           customer Home. Every destination still goes through
@@ -238,12 +238,6 @@ export function CustomerRoot() {
             label: 'Post a job',
             primary: true,
             onPress: () => runCreateAction(() => navigateAcrossTabs('Home', 'PostJob')),
-          },
-          {
-            key: 'hire-again',
-            label: 'Hire again',
-            icon: 'people-outline',
-            onPress: () => runCreateAction(() => navigateAcrossTabs('Profile', 'SavedWorkers')),
           },
           {
             key: 'my-jobs',

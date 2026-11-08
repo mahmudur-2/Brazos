@@ -66,10 +66,11 @@ test('B11 · every permission request has a way to Settings on denial', () => {
     assert.doesNotMatch(src, /'Camera access needed'/);
   }
 
-  // Speech: the provider reports the refusal; both mics offer Settings.
+  // Speech: the provider reports the refusal; the mic offers Settings (lean
+  // D5 removed the SearchBar mic, so DictationMic is the only one).
   assert.match(read('lib/voiceSearch/provider.ts'), /if \(!\(await ensurePermission\(mod\)\)\) \{\s*handlers\.onDenied\?\.\(\);\s*finish\(\);/);
   assert.match(read('lib/voiceSearch/types.ts'), /onDenied\?: \(\) => void;/);
-  for (const path of ['components/DictationMic.tsx', 'ui/primitives/SearchBar.tsx']) {
+  for (const path of ['components/DictationMic.tsx']) {
     assert.match(read(path), /onDenied: \(\) => void askOpenSettings\('speech'\),/, `${path} offers Settings`);
   }
 

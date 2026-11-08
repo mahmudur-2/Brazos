@@ -75,7 +75,8 @@ test('[static] the usage strings name dictation, one microphone sentence for bot
   const config = read('app.config.ts');
   // FIX-RUN B12: nothing films a video, so the sentence no longer says it.
   // Lean D3a: no voice messages and no expo-audio, so it no longer says that either.
-  const sentence = 'Brazos uses your microphone only while you search or dictate by voice, and stops listening when you finish.';
+  // Lean D5: no search mic, so it no longer says "search".
+  const sentence = 'Brazos uses your microphone only while you dictate a job by voice, and stops listening when you finish.';
   assert.equal(config.split(`'${sentence}'`).length - 1, 2, 'expo-image-picker and expo-speech-recognition');
   assert.match(config, /into the words of a job you post\. Nothing is sent to a server\./);
 });

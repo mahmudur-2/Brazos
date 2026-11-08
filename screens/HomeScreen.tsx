@@ -17,7 +17,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { HomeAtmosphere } from '../components/HomeAtmosphere';
 import { HubCard } from '../components/HubCard';
 import { DraftCard } from '../components/DraftCard';
-import { HireAgainRow } from '../components/HireAgainRow';
 import { HomeAvatarButton } from '../components/HomeAvatarButton';
 import { HomeLiveBar } from '../components/HomeLiveBar';
 import { HowBrazosWorks } from '../components/HowBrazosWorks';
@@ -28,7 +27,6 @@ import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import { useProfile } from '../hooks/useProfile';
 import { useAuth } from '../hooks/useAuth';
 import { usePostJobDraft } from '../hooks/usePostJobDraft';
-import { useRebookWorkers } from '../hooks/useRebookWorkers';
 import {
   fetchJobById,
   JOB_CATEGORIES,
@@ -438,8 +436,6 @@ export function HomeScreen() {
   // Draft section makes (hooks/usePostJobDraft.ts) — NEEDS YOUR ATTENTION's
   // first card.
   const { draft } = usePostJobDraft();
-  // #62: the people the customer can hire again — Discover's list, one read.
-  const rebook = useRebookWorkers('HomeScreen');
 
   const firstName = profile?.full_name?.trim().split(/\s+/)[0];
 
@@ -767,18 +763,11 @@ export function HomeScreen() {
             {/* The shared SearchBar (Prestige 1a), the SAME instance this
                 screen has always had — value, onChangeText, submitSearch, the
                 sentence posture — now inside the card at the card's own
-                54/27 (`design` above). The mic is the REAL voice
-                search, rendered by SearchBar itself only when the on-device
-                boundary is available; nothing about voice changes. 2026-09-21:
-                ONE trailing control — the mic while the field is empty, the
-                magnifier once it has text (`micBecomesSearch`, whose tap is
-                the same submitSearch the keyboard return fires); the divider
-                and the second button are gone (DECISIONS 2026-09-20 sitting
-                3, (8)). The leading glyph is omitted here and only here, so
-                the field never draws two magnifiers. */}
+                54/27 (`design` above). Lean D5 removed the search mic, so
+                the field has no trailing control. */}
             {/* M-12 — the return key starts the draft, exactly as the pill
-                does; the trailing control stays the mic, since a magnifier
-                would promise a search this field no longer runs. */}
+                does; no magnifier trails the field, since it would promise a
+                search this field no longer runs. */}
             <SearchBar
               value={query}
               onChangeText={setQuery}
@@ -787,7 +776,7 @@ export function HomeScreen() {
               autoCapitalize="sentences"
               autoCorrect
               // 2026-09-27 (the Lux remake, the operator's Home picture): the
-              // magnifier leads the field again, the mic trails it as today.
+              // magnifier leads the field again (lean D5: no mic trails it).
               // 2026-09-27 (the operator's review): the field's dark fill is
               // SearchBar's own Lux well now, so nothing here overrides it.
               style={[
@@ -845,20 +834,6 @@ export function HomeScreen() {
             {/* 2026-09-27 (the Lux remake, ruling 13): the refresh's "Looking
                 for a specific pro? Browse workers ›" line is GONE — the Discover
                 tab is the way to a person, and the card keeps to its one job. */}
-
-            {/* 2026-09-28 (LUX-LIST-64 #62): HIRE AGAIN, under the pill — the
-                faces of the people who can be hired again, each ringed in the
-                card's own colour; picking one starts the direct offer. */}
-            <HireAgainRow
-              items={rebook}
-              ringColor={colors.taskCardLitBottom}
-              onHire={(item) =>
-                navigation.navigate('PostJob', {
-                  hireWorkerId: item.id,
-                  hireWorkerName: item.name?.trim() || 'Worker',
-                })
-              }
-            />
           </EntranceView>
 
           {/* 2026-09-17 — THE SERVICE ROW: one sliding row of every service,

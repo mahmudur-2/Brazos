@@ -708,151 +708,33 @@ test('[static] app.config.ts registers the plugin with the two verbatim usage st
     // the ONE both microphone plugins carry.
     // FIX-RUN B12: no job video is ever filmed, so the sentence drops that claim.
     // Lean D3a: no voice messages, so it drops that claim too.
+    // Lean D5: no search mic, so both strings drop search.
     microphonePermission:
-      'Brazos uses your microphone only while you search or dictate by voice, and stops listening when you finish.',
+      'Brazos uses your microphone only while you dictate a job by voice, and stops listening when you finish.',
     speechRecognitionPermission:
-      'Speech is recognized on your device to turn what you say into a search, or into the words of a job you post. Nothing is sent to a server.',
+      'Speech is recognized on your device to turn what you say into the words of a job you post. Nothing is sent to a server.',
   });
 });
 
 // ===========================================================================
-// The SearchBar mic — tap-to-talk behind the onChangeText contract, scanned
-// as source facts (the component cannot render here).
+// The SearchBar — the onChangeText contract, scanned as source facts (the
+// component cannot render here). Lean D5 removed its mic: dictation lives in
+// Post a job's DictationMic alone, so the mic's interim, availability,
+// opt-out, tap-to-talk and palette pins left with it.
 // ===========================================================================
 
-const searchBar = read('ui/primitives/SearchBar.tsx');
-const searchBarCode = stripCommentsForScan(searchBar);
+const searchBarCode = stripCommentsForScan(read('ui/primitives/SearchBar.tsx'));
 
-test('[static] voice text arrives through onChangeText and no second write path exists', () => {
-  // The transcript handler IS the typed-text callback — not a wrapper that
-  // could store, log, or fork the phrase.
-  assert.match(searchBarCode, /onTranscript: onChangeText,/);
-  // One session entry point, and the recognized phrase never drives submit:
-  // typed text does not auto-submit, so neither may voice.
-  assert.equal(searchBarCode.match(/beginSession\(/g)?.length, 1);
+test('[static] text arrives through onChangeText and no second write path exists', () => {
+  // Typed text does not auto-submit: submit is the keyboard return alone.
   assert.doesNotMatch(searchBarCode, /onSubmit\(\)/);
-  // 2026-09-21: a fourth reading — the magnifier the mic becomes once the
-  // field has text (`micBecomesSearch`) is a Pressable whose onPress IS the
-  // same onSubmit; still never called from inside this file.
   assert.equal(
     (searchBarCode.match(/\bonSubmit\b/g) ?? []).length,
-    4,
-    'onSubmit appears as prop type, destructure, onSubmitEditing and the magnifier\'s onPress only'
+    3,
+    'onSubmit appears as prop type, destructure and onSubmitEditing only'
   );
-  assert.match(searchBarCode, /onPress=\{onSubmit\}/);
   // Still fully controlled: no internal copy of the query text exists.
   assert.doesNotMatch(searchBarCode, /useState<string>|useState\(''\)|useState\(value\)/);
-});
-
-test('[static] interim text is presentation-only: painted while live, never through onChangeText', () => {
-  // The provisional phrase lives in its own nullable state — not query state.
-  assert.match(
-    searchBarCode,
-    /const \[interimTranscript, setInterimTranscript\] = useState<string \| null>\(null\)/
-  );
-  // The boundary's display-only handler IS the state setter — no wrapper
-  // exists that could fork an interim into onChangeText (which would fire
-  // the consumer's debounced query once per interim).
-  assert.match(searchBarCode, /onInterimTranscript: setInterimTranscript,/);
-  assert.doesNotMatch(searchBarCode, /onChangeText\((interimTranscript|displayValue)/);
-  // The field shows the interim only while a session is live, the parent's
-  // value the rest of the time.
-  assert.match(searchBarCode, /const showingInterim = listening && interimTranscript != null;/);
-  assert.match(searchBarCode, /const displayValue = showingInterim \? interimTranscript : value;/);
-  assert.match(searchBarCode, /value=\{displayValue\}/);
-  // Session end (stop, cancel, ceiling alike) clears the interim inside the
-  // boundary's onEnd, snapping the field back to the parent-controlled value
-  // with nothing committed.
-  assert.match(searchBarCode, /setInterimTranscript\(null\);/);
-  // Provisional styling: the palette's muted (placeholder) treatment while
-  // interim, the normal input treatment for committed text.
-  // 2026-09-28 (LUX-LIST-64 #15): the Lux text size rides between the two.
-  assert.match(searchBarCode, /style=\{\[styles\.input, !ink && styles\.textLux, showingInterim && styles\.inputInterim\]\}/);
-  assert.match(searchBarCode, /inputInterim: \{\s*color: colors\.muted,\s*\}/);
-});
-
-test('[static] the mic renders only when the boundary reports available, absent otherwise', () => {
-  assert.match(searchBarCode, /const \[voiceReady, setVoiceReady\] = useState\(false\)/);
-  assert.match(searchBarCode, /availability\.status === 'available'/);
-  // 2026-09-21: the mic's slot shows the magnifier instead once a
-  // `micBecomesSearch` field has text and no session is listening (so a
-  // dictation can still be stopped by its own tap); the mic's own condition
-  // is unchanged behind it.
-  assert.match(searchBarCode, /\{micBecomesSearch && value\.length > 0 && !listening \? \(/);
-  assert.match(searchBarCode, /\) : voiceReady && !disableVoiceSearch \? \(/);
-  assert.match(searchBarCode, /micBecomesSearch = false,/);
-  // Unavailable means ABSENT: no disabled state, no ghost, no banner.
-  assert.doesNotMatch(searchBarCode, /disabled=|ghost|unavailable/i);
-});
-
-test('[static] the opt-out prop suppresses the mic and defaults to present', () => {
-  assert.match(searchBar, /disableVoiceSearch\?: boolean;/);
-  assert.match(searchBarCode, /disableVoiceSearch = false,/);
-  // Opting out also skips the availability probe, not just the render.
-  assert.match(searchBarCode, /if \(disableVoiceSearch \|\| isButton\) return;/);
-});
-
-test('[static] tap-to-talk: one tap toggles, and every exit path ends the session', () => {
-  // The mic is a plain tap target: one tap starts, a second stops.
-  assert.match(searchBarCode, /onPress=\{toggleVoiceSession\}/);
-
-  // RUN MOTION1 (C1) put the shared press spring on this primitive's controls,
-  // so the two handler NAMES are in the file again. Banning the names was
-  // never the guarantee — the HOLD DESIGN was: a session started on press-in
-  // and stopped on press-out, which made a slip of the finger a cancelled
-  // dictation. That is what must stay gone, so it is what is asserted now, and
-  // more precisely than a name ban could: every onPressIn/onPressOut in this
-  // file binds a press-feedback handler and nothing else, and the session
-  // toggle is reachable from onPress alone.
-  const pressHandlers = [...searchBarCode.matchAll(/onPress(?:In|Out)=\{([^}]*)\}/g)].map((hit) =>
-    hit[1].trim()
-  );
-  assert.ok(pressHandlers.length > 0, 'the press handlers must be found before they are judged');
-  for (const handler of pressHandlers) {
-    assert.match(
-      handler,
-      /^\w+\.onPress(In|Out)$/,
-      `onPressIn/onPressOut may carry press feedback and nothing else — saw ${handler}`
-    );
-  }
-  assert.doesNotMatch(
-    searchBarCode,
-    /onPress(In|Out)=\{[^}]*(toggleVoiceSession|sessionRef|beginSession)/,
-    'the voice session must never be driven by press-in or press-out'
-  );
-  // Second tap: stop-and-commit through the boundary, never a re-start.
-  assert.match(searchBarCode, /sessionRef\.current\.stop\(\);/);
-  // Unmount, screen blur, and app backgrounding all cancel without
-  // committing — the microphone cannot outlive what the user can see.
-  assert.match(searchBarCode, /sessionRef\.current\?\.cancel\(\);/);
-  assert.match(searchBarCode, /navigation\.addListener\('blur'/);
-  assert.match(searchBarCode, /AppState\.addEventListener\('change'/);
-  assert.match(searchBarCode, /state !== 'active'/);
-  // The blur hook must not hard-require a navigator: the raw context read
-  // (undefined outside one) keeps the primitive mountable anywhere.
-  assert.match(searchBarCode, /useContext\(NavigationContext\)/);
-  assert.doesNotMatch(searchBarCode, /useNavigation\(/);
-});
-
-test('[static] the mic is palette-fed and holds the 44pt touch floor', () => {
-  // Both mic states read the resolved palette (tests/themeResolution.test.mjs
-  // separately guarantees no raw literal anywhere in ui/).
-  // 2026-09-20: the 'ink' emphasis (the map's field) lifts the idle mic to
-  // the ink at 0.85 and 22pt; the default keeps navInactive at 20.
-  // 2026-09-27 (the operator's review, the Lux `.field svg`): the idle mic is
-  // the mint in dark; the map's ink pill and light are as they were.
-  assert.match(
-    searchBarCode,
-    /color=\{\s*listening \|\| \(isDark && !ink\)\s*\? colors\.emerald\s*: ink\s*\? withAlpha\(colors\.ink, 0\.85\)\s*: colors\.navInactive\s*\}/
-  );
-  assert.match(searchBarCode, /withAlpha\(colors\.emerald, 0\.15\)/);
-  // 20pt glyph + spacing.xs (4pt) padding + 8pt hitSlop = 44pt effective.
-  assert.match(searchBarCode, /hitSlop=\{8\}/);
-  // 23 in the ink emphasis since the map's pill grew to 62 (2026-09-20, sitting 2).
-  // 2026-09-28 (LUX-LIST-64 #15): 22 elsewhere, the Lux field's glyph — 22 + 4 +
-  // 8 of slop still clears the 44pt floor.
-  assert.match(searchBarCode, /size=\{ink \? 23 : 22\}/);
-  assert.match(searchBarCode, /padding: spacing\.xs,/);
 });
 
 test('[static] the installed plugin resolves those options into the two Info.plist keys', () => {
@@ -875,10 +757,10 @@ test('[static] the installed plugin resolves those options into the two Info.pli
 });
 
 // ===========================================================================
-// 4D-4 tail — voice search is REACHABLE: the live search surfaces render the
-// shared SearchBar (mic on for every one of them), each conversion pinned as
-// behaviour-preserving. HomeScreen's search surface is deliberately absent
-// from this list — it has not been converted.
+// 4D-4 tail — the live search surfaces render the shared SearchBar, each
+// conversion pinned as behaviour-preserving (lean D5 removed its mic).
+// HomeScreen's search surface is deliberately absent from this list — it has
+// not been converted.
 // ===========================================================================
 
 const CONVERTED_SURFACES = ['screens/WorkerSearchScreen.tsx', 'screens/WorkerHomeScreen.tsx'];
@@ -900,10 +782,9 @@ test('[static] each converted surface renders SearchBar and keeps no raw search 
   }
 });
 
-test('[static] the mic is on for every converted surface — no opt-out, no side channel', () => {
+test('[static] no converted surface touches the voice boundary itself', () => {
   for (const path of CONVERTED_SURFACES) {
     const code = stripCommentsForScan(read(path));
-    assert.doesNotMatch(code, /disableVoiceSearch/, `${path} must not opt out of the mic`);
     // The screen reaches voice only through SearchBar's onChangeText contract.
     assert.doesNotMatch(code, /voiceSearch|beginSession/, `${path} must not touch the boundary itself`);
   }
@@ -957,7 +838,7 @@ test('[static] WorkerHome keeps the locked-48 mirror behind the conversion', () 
   assert.match(code, /searchGo: \{[^}]*backgroundColor: colors\.emerald/s);
 });
 
-test("[static] customer Home's trailing magnifier submits — same contract as the worker's", () => {
+test("[static] customer Home's field return starts the draft, with no trailing control", () => {
   // 2026-08-22: the gold arrow was a bare <Ionicons> — decoration that did
   // nothing on tap. It is now a Pressable firing the SAME submitSearch() the
   // keyboard return fires, whose empty-query guard makes an empty tap a
@@ -985,20 +866,13 @@ test("[static] customer Home's trailing magnifier submits — same contract as t
   // pill's own action) and it no longer passes micBecomesSearch — a
   // magnifier would promise a search it does not run. The magnifier contract
   // below is SearchBar's, unchanged, for any caller that opts in.
+  //
+  // Lean D5 — the mic left SearchBar, and the magnifier that took its slot
+  // (micBecomesSearch) with it; Home's own field facts below still hold.
   const code = stripCommentsForScan(read('screens/HomeScreen.tsx'));
   assert.match(code, /onSubmit=\{startJobDraft\}/);
-  assert.doesNotMatch(code, /micBecomesSearch/, 'Home draws the mic only; no magnifier');
   assert.doesNotMatch(code, /trailing=\{/, 'the divider and the second button are gone from the field');
   assert.doesNotMatch(code, /searchDivider|searchGoPressed/);
-  const magnifier = /\{micBecomesSearch && value\.length > 0 && !listening \? \(([\s\S]*?)\) : voiceReady/.exec(searchBarCode);
-  assert.ok(magnifier, 'SearchBar draws the magnifier in the mic\'s slot');
-  assert.match(magnifier[1], /<Pressable/, 'the magnifier must be pressable, not decoration');
-  assert.match(magnifier[1], /onPress=\{onSubmit\}/);
-  // 2026-09-27 (the operator's review): the magnifier is the mint in dark too.
-  // 2026-09-28 (LUX-LIST-64 #15): the Lux field's 22pt glyph.
-  assert.match(magnifier[1], /name="search" size=\{22\} color=\{isDark \? colors\.emerald : colors\.navInactive\}/);
-  assert.match(magnifier[1], /accessibilityRole="button"/);
-  assert.match(magnifier[1], /accessibilityLabel="Search"/);
   // 2026-09-27 (the Lux remake, ruling 13): the "Browse workers" route left
   // Home with its line — the Discover tab is the way to a person, and nothing
   // on Home opens worker search any more.

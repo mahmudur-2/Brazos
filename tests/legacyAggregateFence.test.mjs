@@ -59,7 +59,6 @@ test('no app code reads profiles.rating_avg or profiles.rating_count', () => {
     'lib/profiles.ts',
     'lib/workerSearch.ts',
     'screens/WorkerSearchScreen.tsx',
-    'screens/SavedWorkersScreen.tsx',
     'screens/CompareBidsScreen.tsx',
     'components/OfferCard.tsx',
     'hooks/useJobOffers.ts',
@@ -122,7 +121,6 @@ test('every list surface makes ONE batch summary call for the ids it renders', (
   for (const [file, expected] of [
     ['hooks/useJobOffers.ts', 1],
     ['screens/WorkerSearchScreen.tsx', 1],
-    ['screens/SavedWorkersScreen.tsx', 1],
     ['lib/workerSearch.ts', 1],
   ]) {
     const source = codeOnly(read(file));

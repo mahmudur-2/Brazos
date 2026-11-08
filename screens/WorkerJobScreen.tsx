@@ -852,9 +852,9 @@ export function WorkerJobScreen() {
                 ) : null}
               </Card>
 
-              {/* M-3 — ONE STAGE BLOCK. The two cards ("Route & arrival /
-                  Work checklist" and "Ready to start?") are one stepper whose
-                  next step is the pinned button below. */}
+              {/* M-3 — ONE STAGE BLOCK. The two cards ("Route & arrival" and
+                  "Ready to start?") are one stepper whose next step is the
+                  pinned button below. */}
               <Card style={styles.stageCard}>
                 {/* F20: the head is a heading. Route & arrival repeated this screen, so it is gone. */}
                 <View style={styles.stageHead} accessibilityRole="header">
@@ -923,20 +923,6 @@ export function WorkerJobScreen() {
                     : `Each tap tells ${clientName} where things stand — nothing tracks your location.`}
                 </Text>
               </Card>
-
-              {/* M-3 — the checklist is one fixed row that never moves,
-                  whatever the stage. */}
-              <PressScale
-                haptic={false}
-                onPress={() => navigation.navigate('WorkChecklist', { jobId: job.id })}
-                style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Work checklist"
-              >
-                <Ionicons name="list-outline" size={20} color={colors.emerald} />
-                <Text style={styles.linkRowText}>Work checklist</Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </PressScale>
 
               {/* A10 (2026-10-03): the nudge at the hire — before any payment row exists — so
                   the payout account is ready by the time the money is, instead of the customer
@@ -1179,8 +1165,8 @@ export function WorkerJobScreen() {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
-  // M-3 — the stage screen: getting there, your progress, the checklist row,
-  // and the one pinned primary.
+  // M-3 — the stage screen: getting there, your progress, and the one pinned
+  // primary.
   thereCard: {
     gap: spacing.md,
   },

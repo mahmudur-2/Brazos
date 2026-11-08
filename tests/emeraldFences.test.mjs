@@ -182,12 +182,12 @@ test('emerald D1 fence: every cross-tab dispatch target is a registered tab', ()
     );
   }
 
-  const savedWorkers = flatten(read('screens/SavedWorkersScreen.tsx'));
-  assert.match(
-    savedWorkers,
-    /mode === 'customer' \? \(\) => navigateAcrossTabs\('Discover'/,
-    "the Discover dispatch must stay behind its mode gate — it is the only tab that " +
-      'does not exist in both trees'
+  // Lean D5 deleted the one Discover dispatch (SavedWorkersScreen's, behind
+  // its mode gate). A new one must come back behind a mode gate — Discover is
+  // the only tab that does not exist in both trees — and be pinned here.
+  assert.ok(
+    !targets.has('Discover'),
+    `${targets.get('Discover')} dispatches at Discover; gate it on mode and pin the gate here`
   );
 });
 

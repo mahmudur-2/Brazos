@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { JobCategory } from './jobs';
 
 // Combined profile shape. Public reads deliberately omit `phone`, `is_admin`,
 // and `banned`; get_my_profile() is the only client-facing read that returns
@@ -193,6 +194,27 @@ export async function fetchProfileById(id: string) {
     data: data ? ({ ...data, phone: null, is_admin: null, banned: null } as Profile) : null,
     error,
   };
+}
+
+export type CategoryStat = { category: JobCategory; count: number };
+
+/**
+ * Completed-jobs-by-category for a worker (moved from lib/portfolio.ts when
+ * lean D5 removed the portfolio).
+ *
+ * Goes through the worker_job_stats() RPC rather than querying `jobs`: a
+ * visitor can't read another user's completed job rows under RLS, so a direct
+ * count would silently return zero for exactly the case this is for.
+ */
+export async function fetchWorkerJobStats(workerId: string) {
+  const { data, error } = await supabase.rpc('worker_job_stats', {
+    p_worker: workerId,
+  });
+
+  const stats = ((data ?? []) as { category: string; job_count: number }[]).map(
+    (row) => ({ category: row.category as JobCategory, count: row.job_count })
+  );
+  return { data: stats, error };
 }
 
 /** Up to two initials from a name, e.g. "Carlos Reyes" -> "CR". */

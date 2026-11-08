@@ -34,9 +34,7 @@ import { AccountSafetyScreen } from '../screens/AccountSafetyScreen';
 import { ProfileDetailsScreen } from '../screens/ProfileDetailsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { ReviewAndTipScreen } from '../screens/ReviewAndTipScreen';
-import { SavedWorkersScreen } from '../screens/SavedWorkersScreen';
 import { ServicesPricingScreen } from '../screens/ServicesPricingScreen';
-import { WorkChecklistScreen } from '../screens/WorkChecklistScreen';
 import { WorkerJobScreen } from '../screens/WorkerJobScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
 
@@ -89,9 +87,8 @@ export function MyJobsStackNavigator() {
       <MyJobsStack.Screen name="Counteroffer" component={CounterofferScreen} />
       <MyJobsStack.Screen name="Checkout" component={CheckoutScreen} />
       <MyJobsStack.Screen name="JobConfirmed" component={JobConfirmedScreen} />
-      {/* Phase 6 — the active-work lifecycle. Worker side: arrival + checklist;
-          customer side: approval/release and post-release review. */}
-      <MyJobsStack.Screen name="WorkChecklist" component={WorkChecklistScreen} />
+      {/* Phase 6 — the active-work lifecycle, customer side: approval/release
+          and post-release review. */}
       <MyJobsStack.Screen name="ApproveOrDispute" component={ApproveOrDisputeScreen} />
       <MyJobsStack.Screen name="ReviewAndTip" component={ReviewAndTipScreen} />
       <MyJobsStack.Screen name="Chat" component={ChatScreen} />
@@ -147,9 +144,8 @@ export function ProfileStackNavigator() {
       />
       <ProfileStack.Screen name="LegalDocument" component={LegalDocumentScreen} />
       <ProfileStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
-      {/* Phase 9 — worker self-service + the customer people surface. */}
+      {/* Phase 9 — worker self-service. */}
       <ProfileStack.Screen name="ServicesPricing" component={ServicesPricingScreen} />
-      <ProfileStack.Screen name="SavedWorkers" component={SavedWorkersScreen} />
       <ProfileStack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
       <ProfileStack.Screen name="Earnings" component={EarningsScreen} />
       {/* R6c — the worker's payout state. On the shared profile stack, like

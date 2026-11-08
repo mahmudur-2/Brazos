@@ -79,8 +79,9 @@ type CreateSheetProps = {
  * fenced 0.55 stands in for the mockup's 0.30 (operator, 2026-09-18).
  *
  * THE ROWS, fixed (operator, 2026-09-18): Needs you (only when a job is
- * waiting on the customer) · Post a job · Hire again · My jobs · Switch to
- * Worker. The three actions and their dispatches stay in
+ * waiting on the customer) · Post a job · My jobs · Switch to Worker (lean
+ * D5 removed Hire again with saved workers). The two actions and their
+ * dispatches stay in
  * navigation/CustomerRoot.tsx and arrive as `items`; the two contextual
  * rows are props of their own. Every row's accessibility label is its text,
  * exactly — the E2E walk taps "My jobs" by label (E2E5).

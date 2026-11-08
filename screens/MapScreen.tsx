@@ -595,7 +595,7 @@ export function MapScreen() {
               autoCorrect
               style={styles.searchField}
               accessibilityLabel="Explore nearby jobs"
-              // The design's bright field: ink placeholder, ink mic, a 24pt
+              // The design's bright field: ink placeholder, a 24pt
               // magnifier — the phone walk found the muted default too dim
               // over the map.
               emphasis="ink"

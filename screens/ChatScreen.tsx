@@ -47,7 +47,7 @@ import {
 import { offerJobTarget } from '../lib/offerNavigation';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { askOpenSettings } from '../lib/permissionPrompt';
-import { isTombstonedName } from '../lib/rebook';
+import { isTombstonedName } from '../lib/tombstone';
 import { userMessage } from '../lib/errorMessage';
 import {
   fetchDirectThreadWith,
@@ -75,8 +75,6 @@ import {
   type RelationState,
 } from '../lib/moderation';
 import { ReportDialog } from '../components/ReportDialog';
-import { fetchSavedWorkerIds, saveWorker, unsaveWorker } from '../lib/savedWorkers';
-import { shareProfileLink } from '../lib/sharing';
 import { useMode } from '../modes';
 import {
   canUnsend,
@@ -185,9 +183,6 @@ export function ChatScreen() {
       onBlur();
     };
   }, [closeMenus, navigation]);
-  // Whether this customer has already saved this worker. `null` while the read
-  // is in flight, so the menu row never claims either state before it knows.
-  const [savedWorker, setSavedWorker] = useState<boolean | null>(null);
   // Long-press target for the message menu (Reply / Unsend).
   const [menuTarget, setMenuTarget] = useState<Message | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -531,40 +526,6 @@ export function ChatScreen() {
     };
   }, [user, counterpartyId]);
 
-  // WHETHER THIS WORKER IS ALREADY SAVED, for the menu's Save row. The same
-  // lib/savedWorkers calls the profile screen's "Saved — tap to remove" runs
-  // on — nothing was extracted or duplicated, the module was already shared.
-  // Customer perspective only: saved_workers is a customer's own private list.
-  useEffect(() => {
-    setSavedWorker(null);
-    if (mode !== 'customer' || !user || !counterpartyId || counterpartyId === user.id) return;
-    let active = true;
-    fetchSavedWorkerIds(user.id).then(({ data }) => {
-      if (active) setSavedWorker(data.has(counterpartyId));
-    });
-    return () => {
-      active = false;
-    };
-  }, [mode, user, counterpartyId]);
-
-  async function toggleSavedWorker() {
-    if (!user || !counterpartyId || savedWorker === null) return;
-    const next = !savedWorker;
-    // Optimistic, with a rollback: the row is a one-tap toggle and waiting on
-    // a round trip to redraw it reads as an unresponsive menu.
-    setSavedWorker(next);
-    const { error: saveError } = next
-      ? await saveWorker(user.id, counterpartyId)
-      : await unsaveWorker(user.id, counterpartyId);
-    if (saveError) {
-      setSavedWorker(!next);
-      await alertAsync(
-        next ? 'Could not save' : 'Could not remove',
-        userMessage(saveError)
-      );
-    }
-  }
-
   /**
    * 2026-09-26 (the refresh, audit M-10) — BLOCK AND REPORT, FROM THE PERSON.
    *
@@ -603,12 +564,6 @@ export function ChatScreen() {
     const { error: unblockError } = await unblockUser(user.id, counterpartyId);
     if (unblockError) await alertAsync('Could not unblock', userMessage(unblockError));
     await rereadRelation();
-  }
-
-  async function handleShareProfile() {
-    if (!counterpartyId) return;
-    const result = await shareProfileLink(counterpartyId, counterparty?.full_name);
-    if (!result.ok) await alertAsync('Could not share', result.message);
   }
 
   function openCounterpartyProfile() {
@@ -692,22 +647,6 @@ export function ChatScreen() {
         label: 'Rating / Reviews',
         icon: 'star-outline',
         onPress: openCounterpartyReviews,
-      });
-      // Hidden, not disabled, while the read is in flight: a row that cannot
-      // say which way it would toggle should not be offered yet.
-      if (savedWorker !== null) {
-        headerMenuItems.push({
-          key: 'save-worker',
-          label: savedWorker ? 'Saved — tap to remove' : 'Save Worker',
-          icon: savedWorker ? 'bookmark' : 'bookmark-outline',
-          onPress: () => void toggleSavedWorker(),
-        });
-      }
-      headerMenuItems.push({
-        key: 'share-profile',
-        label: 'Share Profile',
-        icon: 'share-outline',
-        onPress: () => void handleShareProfile(),
       });
     } else {
       headerMenuItems.push({

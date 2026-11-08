@@ -1,7 +1,6 @@
 import { Share } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { Directory, File, Paths } from 'expo-file-system';
-import { profileUrl } from './appLinks';
 import { Sentry } from './observability/sentry';
 
 /**
@@ -65,36 +64,6 @@ async function stageForSharing(url: string, fileName: string): Promise<string> {
 
   const downloaded = await File.downloadFileAsync(url, destination);
   return downloaded.uri;
-}
-
-/**
- * Hands someone's public profile LINK to the OS share sheet.
- *
- * A link, not a file, so this is React Native's own `Share` rather than the
- * download-then-share dance sharePhoto needs: link targets are exactly what is
- * wanted here, and staging anything locally would be work for no extra target.
- *
- * The message carries the NAME as well as the URL. A bare URL in Messages is a
- * grey rectangle its recipient has to open to understand, and — until
- * PROFILE_WEB_BASE_URL is pointed at a real host — the name is the part of the
- * share that still works.
- *
- * NOTHING PRIVATE CROSSES THIS. The only user datum in the URL is the id the
- * public profile page is keyed on, and the only other datum is the display
- * name the profile already shows to anyone who can see it.
- */
-export async function shareProfileLink(userId: string, name?: string | null): Promise<ShareResult> {
-  const url = profileUrl(userId);
-  const message = name ? `${name} on BRAZOS: ${url}` : url;
-
-  try {
-    await Share.share({ url, message });
-    return { ok: true };
-  } catch (err) {
-    console.error('[sharing] profile share failed', err);
-    Sentry?.captureException(err, { extra: { site: 'sharing.shareProfileLink', stage: 'native' } });
-    return { ok: false, message: 'Could not share this profile.' };
-  }
 }
 
 export async function sharePhoto(url: string): Promise<ShareResult> {

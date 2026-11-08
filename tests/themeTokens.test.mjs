@@ -483,12 +483,12 @@ test('L-010 fence: the one star treatment resolves in LIGHT too, at every bare-â
     );
   }
 
-  // The three L-010 sites, derived rather than trusted. A new bare star lands
-  // here as a failure with its own path, not as silence.
+  // The L-010 sites, derived rather than trusted (lean D5 deleted the third,
+  // SavedWorkersScreen). A new bare star lands here as a failure with its own
+  // path, not as silence.
   assert.deepEqual(sites, [
     'screens/BidDetailScreen.tsx',
     'screens/ProfileScreen.tsx',
-    'screens/SavedWorkersScreen.tsx',
   ]);
 
   // The style keys the three sites used to carry are gone, not merely unused â€”
@@ -903,7 +903,7 @@ test('E2 contrast: the dark secondary inks and the one dark red clear 4.5:1 on t
   // One dark red: the error ink, the dropdown's red rows and the map's palette agree.
   assert.equal(darkColors.danger, dark.danger);
   assert.equal(dark.dropDanger, dark.danger);
-  // Content on a solid danger fill (the bell's count, PastWork's remove glyph) reads in both themes.
+  // Content on a solid danger fill (the bell's count) reads in both themes.
   assertAA(colors.onPrimary, colors.danger, 'light onPrimary on the danger fill');
   assertAA(darkColors.onPrimary, darkColors.danger, 'dark onPrimary on the danger fill');
   for (const stop of [litCard.dark.top, litCard.dark.bottom]) {
@@ -1145,9 +1145,7 @@ const MIGRATED_FILES = [
   'components/ConversationRow.tsx',
   'components/JobVideo.tsx',
   'components/ModeTransitionOverlay.tsx',
-  'components/PastWork.tsx',
   'components/PhotoViewer.tsx',
-  'components/PortfolioPicker.tsx',
   'components/ReportDialog.tsx',
   'components/ReviewSection.tsx',
   'components/ServicePickerSheet.tsx',
@@ -1159,7 +1157,6 @@ const MIGRATED_FILES = [
   'screens/PaymentMethodsScreen.tsx',
   'screens/ProfileScreen.tsx',
   'screens/ServicesPricingScreen.tsx',
-  'screens/WorkChecklistScreen.tsx',
   'screens/WorkerHomeScreen.tsx',
   'screens/WorkerJobScreen.tsx',
   'screens/WorkerProfileScreen.tsx',

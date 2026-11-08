@@ -532,27 +532,24 @@ test('a customer can still reach My Jobs after D1 took its tab', () => {
 });
 
 test('the [ + ] sheet is a shortcut: each action also keeps a standing surface', () => {
-  // D3 restored the sheet, and the surfaces decision 4 gave those three
-  // actions all remain — so the sheet is never the ONLY way to anything and
-  // retiring it again would strand nothing.
+  // D3 restored the sheet, and the surfaces decision 4 gave its actions all
+  // remain — so the sheet is never the ONLY way to anything and retiring it
+  // again would strand nothing. (Lean D5 removed Hire again with saved workers.)
   // Post a job: Customer Home still navigates to PostJob, and the My Jobs hub
   // carries its own post affordance.
   assert.match(home, /navigate\('PostJob'/);
   assert.match(read('screens/MyJobsHubScreen.tsx'), /navigate\('PostJob'\)/);
-  // Hire someone again: SavedWorkers lives on the shared Profile stack.
-  assert.match(read('navigation/sharedStacks.tsx'), /name="SavedWorkers"/);
   // My jobs: since emerald D1 the sheet is the customer's PRIMARY way in, not
   // a shortcut past a tab — so its reachability gets its own test above rather
   // than riding on the tab contract.
   const codeOnly = (source) =>
     source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-  // Exactly those three, and every one dispatched through the ONE guarded
+  // Exactly those two, and every one dispatched through the ONE guarded
   // cross-tab path rather than a raw navigate.
   const sheet = codeOnly(customerRoot);
   assert.match(sheet, /navigateAcrossTabs\('Home', 'PostJob'\)/);
-  assert.match(sheet, /navigateAcrossTabs\('Profile', 'SavedWorkers'\)/);
   assert.match(sheet, /navigateAcrossTabs\('MyJobs'\)/);
-  assert.equal((sheet.match(/key: '/g) ?? []).length, 3, 'the sheet carries exactly three actions');
+  assert.equal((sheet.match(/key: '/g) ?? []).length, 2, 'the sheet carries exactly two actions');
   // Create is a slot, never a destination: nothing navigates to it.
   assert.doesNotMatch(sheet, /navigate\('Create'/);
 });

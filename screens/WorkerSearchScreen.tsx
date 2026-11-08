@@ -35,8 +35,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useHiddenUserIds } from '../hooks/useHiddenUserIds';
 import { userMessage } from '../lib/errorMessage';
-import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
-import { useRebookWorkers } from '../hooks/useRebookWorkers';
+import { goBackOrHome } from '../lib/navigationRef';
 import { fetchProfileReviewSummaries, type ProfileReviewSummaryRow } from '../lib/reviews';
 import { SKILL_CATEGORIES, skillCategoryLabel } from '../lib/skillCategories';
 import {
@@ -45,7 +44,6 @@ import {
   interpretQuery,
   matchReasonText,
   resultHeading,
-  type RankingMode,
   type WorkerMatch,
 } from '../lib/workerSearch';
 import type {
@@ -64,8 +62,6 @@ import {
   useThemeColors,
   type ColorPalette,
   screenGround,
-  textLine,
-  touchSlop,
 } from '../lib/theme';
 import { CategoryGlyph } from '../components/CategoryGlyph';
 import { SearchBar, useScrollClearance } from '../ui/primitives';
@@ -83,9 +79,8 @@ type SearchState =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  // `mode` is whatever actually ranked these rows, and only the lib decides how
-  // that reads on screen — see resultHeading().
-  | { kind: 'results'; matches: WorkerMatch[]; categories: string[]; mode: RankingMode };
+  // Only the lib decides how the result count reads on screen — see resultHeading().
+  | { kind: 'results'; matches: WorkerMatch[]; categories: string[] };
 
 export function WorkerSearchScreen() {
   const { palette: colors, isDark } = useThemeColors();
@@ -136,11 +131,6 @@ export function WorkerSearchScreen() {
   );
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardMs, setKeyboardMs] = useState(KEYBOARD_FALLBACK_MS);
-  // §4.4 — the Saved / Worked-for-you-before sections collapsed into one
-  // horizontal strip at the top of this surface's landing state.
-  // 2026-09-28 (LUX-LIST-64 #62): the one rebook read, shared with the Home's
-  // "Hire again" row (hooks/useRebookWorkers.ts).
-  const rebook = useRebookWorkers('WorkerSearch');
 
   // Guards a slow response from overwriting a newer one — a fast second search
   // finishing first would otherwise leave the older results on screen.
@@ -179,16 +169,11 @@ export function WorkerSearchScreen() {
       setState({ kind: 'loading' });
 
       const categories = category ? [category] : interpretQuery(trimmed);
-      // findWorkers() only asks the server's best-match ranking to run when
-      // there's an actual sentence to compare meanings against — a bare chip
-      // tap sends no typed text, so without this it never got that ranking at
-      // all and could only ever find workers who had literally checked this
-      // exact category box. The category's own label ("TV Mounting") is real
-      // language, not a raw enum key, so it's a legitimate phrase to embed —
-      // this is what lets a worker with the right completed-job history but a
-      // different advertised tag still surface.
+      // A bare chip tap sends no typed text; the category's own label ("TV
+      // Mounting") is real language, not a raw enum key, so it also searches
+      // names and bios rather than only the advertised category box.
       const searchText = trimmed || (category ? skillCategoryLabel(category) : '');
-      const { data, error, mode } = await findWorkers({
+      const { data, error } = await findWorkers({
         query: searchText,
         categories,
         excludeUserId: user?.id ?? null,
@@ -199,7 +184,7 @@ export function WorkerSearchScreen() {
         setState({ kind: 'error', message: userMessage(error) });
         return;
       }
-      setState({ kind: 'results', matches: data, categories, mode });
+      setState({ kind: 'results', matches: data, categories });
     },
     [user?.id]
   );
@@ -296,7 +281,7 @@ export function WorkerSearchScreen() {
     : undefined;
   // The results' count line: shown over the list, and spoken on iOS (E4) as it changes.
   const resultLine =
-    state.kind === 'results' ? resultHeading(state.mode, state.matches.length, appliedCategoryLabel) : null;
+    state.kind === 'results' ? resultHeading(state.matches.length, appliedCategoryLabel) : null;
 
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
@@ -332,8 +317,7 @@ export function WorkerSearchScreen() {
             </Text>
           </KeyboardAway>
 
-          {/* The shared SearchBar (mic included when the device supports it).
-              Its standard clear control performs exactly what the old custom
+          {/* The shared SearchBar. Its standard clear control performs exactly what the old custom
               one did: onChangeText('') resets the run guard, the results and
               the pinned chip. */}
           <KeyboardShift durationMs={keyboardMs}>
@@ -488,63 +472,7 @@ export function WorkerSearchScreen() {
             </SearchStateCard>
           </SearchStateScroll>
         ) : state.kind === 'idle' ? (
-          <SearchStateScroll resetKey="idle" alignTop={rebook.length > 0}>
-            {/* §4.4 — Saved first (bookmark-marked), then past workers, one
-                strip. Renders nothing when both populations are empty;
-                tombstoned accounts are excluded (nothing to hire). */}
-            {rebook.length > 0 ? (
-              <View style={styles.rebookBlock}>
-                <View style={styles.rebookHeaderRow}>
-                  <Text style={styles.rebookTitle}>Hire someone again</Text>
-                  <Pressable
-                    onPress={() => navigateAcrossTabs('Profile', 'SavedWorkers')}
-                    hitSlop={touchSlop(textLine(styles.rebookSeeAll))}
-                    accessibilityRole="button"
-                    accessibilityLabel="See all saved and past workers"
-                  >
-                    <Text style={styles.rebookSeeAll}>See all</Text>
-                  </Pressable>
-                </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.rebookRow}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {rebook.map((item) => {
-                    const displayName = item.name?.trim() || 'Worker';
-                    const firstName = displayName.split(/\s+/)[0];
-                    return (
-                      <Pressable
-                        key={item.id}
-                        style={({ pressed }) => [
-                          styles.rebookItem,
-                          pressed && styles.controlPressed,
-                        ]}
-                        onPress={() =>
-                          navigation.navigate('PostJob', {
-                            hireWorkerId: item.id,
-                            hireWorkerName: displayName,
-                          })
-                        }
-                        accessibilityRole="button"
-                        accessibilityLabel={`Hire ${displayName} again`}
-                      >
-                        <Avatar name={displayName} uri={item.avatarUrl} size={56} />
-                        <View style={styles.rebookNameRow}>
-                          {item.saved ? (
-                            <Ionicons name="bookmark" size={11} color={colors.emerald} />
-                          ) : null}
-                          <Text style={styles.rebookName} numberOfLines={1}>
-                            {firstName}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            ) : null}
+          <SearchStateScroll resetKey="idle">
             <SearchStateCard
               icon="people-outline"
               eyebrow="START WITH THE JOB"
@@ -613,20 +541,16 @@ export function WorkerSearchScreen() {
 function SearchStateScroll({
   children,
   resetKey,
-  alignTop = false,
 }: {
   children: ReactNode;
   resetKey: string;
-  /** Top-align instead of centering — for when real content (the rebook
-   *  strip) sits above the state card and must hug the top of the surface. */
-  alignTop?: boolean;
 }) {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   return (
     <FadeIn style={styles.resultsFlex} resetKey={resetKey}>
       <ScrollView
-        contentContainerStyle={[styles.stateScrollContent, alignTop && styles.stateScrollTop]}
+        contentContainerStyle={styles.stateScrollContent}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
@@ -871,9 +795,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   searchButtonPressedDark: {
     backgroundColor: 'transparent',
   },
-  controlPressed: {
-    backgroundColor: colors.mint,
-  },
   serviceSection: {
     gap: spacing.sm,
   },
@@ -937,51 +858,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
-  },
-  stateScrollTop: {
-    justifyContent: 'flex-start',
-  },
-  rebookBlock: {
-    gap: spacing.sm,
-    marginBottom: spacing.xl,
-  },
-  rebookHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  // 2026-09-27 (the Lux remake, ruling 4): a section heading is the eyebrow.
-  rebookTitle: {
-    ...EYEBROW_TYPE,
-    // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
-    color: colors.eyebrowGold,
-  },
-  rebookSeeAll: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.emerald,
-  },
-  rebookRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    paddingRight: spacing.sm,
-  },
-  rebookItem: {
-    alignItems: 'center',
-    gap: spacing.xs,
-    width: 72,
-  },
-  rebookNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    maxWidth: 72,
-  },
-  rebookName: {
-    flexShrink: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.text,
   },
   stateCard: {
     alignItems: 'center',

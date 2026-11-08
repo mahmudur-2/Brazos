@@ -229,15 +229,13 @@ test('[static] the overflow menu is MODE-shaped, and perspective comes from Mode
   assert.match(chat, /const \{ mode \} = useMode\(\);/);
   assert.match(chat, /if \(mode === 'customer'\) \{/);
 
-  // The customer's set. Hire Again is gated on the relationship, and Save is
-  // gated on the read having landed — a row that cannot say which way it
-  // would toggle is not offered yet.
+  // The customer's set. Hire Again is gated on the relationship. Lean D5:
+  // Save Worker and Share Profile left with saved workers and the web page.
   const customer = chat.slice(chat.indexOf("if (mode === 'customer') {"), chat.indexOf('} else {'));
-  for (const key of ['hire-again', 'reviews', 'save-worker', 'share-profile']) {
+  for (const key of ['hire-again', 'reviews']) {
     assert.match(customer, new RegExp(`key: '${key}'`), `the customer menu must offer ${key}`);
   }
-  assert.match(customer, /if \(savedWorker !== null\) \{/);
-  assert.match(customer, /label: savedWorker \? 'Saved — tap to remove' : 'Save Worker'/);
+  assert.doesNotMatch(customer, /key: 'save-worker'|key: 'share-profile'/);
 
   // The worker's set. There is deliberately no "save a customer": no such
   // list exists in this product, and inventing one to balance the two menus
@@ -255,37 +253,6 @@ test('[static] the overflow menu is MODE-shaped, and perspective comes from Mode
   // ...and it re-reads rather than flipping a local copy: the same relation
   // carries the block state the composer gate reads.
   assert.match(chat, /setRelation\(await fetchRelation\(user\.id, counterpartyId\)\)/);
-
-  // Nothing was extracted or duplicated for Save: lib/savedWorkers was
-  // already shared, and this calls it directly — with a rollback.
-  assert.match(chat, /import \{ fetchSavedWorkerIds, saveWorker, unsaveWorker \} from '\.\.\/lib\/savedWorkers';/);
-  assert.match(chat, /setSavedWorker\(!next\);/, 'an optimistic toggle owes a rollback');
-});
-
-test('[static] Share Profile builds its URL from ONE constant and shares a name with it', () => {
-  const chat = stripComments(read(CHAT));
-  // RAW, not comment-stripped: the naive stripper every fence in this repo
-  // uses eats `//` wherever it appears, and a URL literal contains one.
-  const links = read('lib/appLinks.ts');
-  const sharing = stripComments(read('lib/sharing.ts'));
-
-  // One constant, one path shape, one place to change when the domain exists.
-  assert.match(links, /export const PROFILE_WEB_BASE_URL = '[^']+';/);
-  assert.match(links, /return `\$\{PROFILE_WEB_BASE_URL\}\/profile\/\$\{encodeURIComponent\(userId\)\}`;/);
-  // The id is the ONLY user datum in the URL, and it is encoded.
-  assert.doesNotMatch(links, /full_name|email|phone/);
-
-  // React Native's own Share for a LINK — the download-then-share dance
-  // sharePhoto needs would buy no extra target here.
-  assert.match(sharing, /export async function shareProfileLink\(/);
-  assert.match(sharing, /const url = profileUrl\(userId\);/);
-  assert.match(sharing, /await Share\.share\(\{ url, message \}\)/);
-  // A bare URL is a grey rectangle in Messages, and the name is also the part
-  // that still works before the domain resolves.
-  assert.match(sharing, /const message = name \? `\$\{name\} on BRAZOS: \$\{url\}` : url;/);
-
-  assert.match(chat, /await shareProfileLink\(counterpartyId, counterparty\?\.full_name\)/);
-  assert.match(chat, /if \(!result\.ok\) await alertAsync\('Could not share', result\.message\);/);
 });
 
 test('[static] the report sheet can block in the same breath, and says so when it is done', () => {
@@ -834,7 +801,8 @@ test('[static] the tombstone has one spelling', () => {
   // AUDIT F4 — one spelling of the tombstone, in one place. A second literal
   // is a second thing to get wrong the day the wording changes, and
   // isDeletedUser() compares against the constant.
-  assert.match(read('lib/rebook.ts'), /export const DELETED_USER_LABEL = 'Deleted user';/);
+  // Lean D5: the constant moved from lib/rebook.ts (deleted) to lib/tombstone.ts.
+  assert.match(read('lib/tombstone.ts'), /export const DELETED_USER_LABEL = 'Deleted user';/);
 });
 
 test('[static] lean D3a: v1 chat is text and photo — the media extras stay deleted', () => {

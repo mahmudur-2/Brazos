@@ -299,19 +299,6 @@ test('no module outside lib/jobLifecycle.ts maps a raw status to a step index (F
   assert.deepEqual(offenders, [], 'raw status→step-index maps outside the canonical file');
 });
 
-test('screens derive lifecycle through the one helper, never locally', async () => {
-  for (const screen of [
-    'screens/WorkChecklistScreen.tsx',
-  ]) {
-    const src = await read(screen);
-    assert.match(src, /deriveJobLifecycle|trackStepIndex/, `${screen} must use lib/jobLifecycle`);
-    assert.ok(
-      !/status\s*===\s*'assigned'\s*&&.*'held'/s.test(src),
-      `${screen} must not re-derive confirmed locally`
-    );
-  }
-});
-
 test('§9 ordering: the inline review survives only on the legacy no-payment path', async () => {
   const src = await read('screens/ClientJobDetailScreen.tsx');
   // The completed branch forks on `payment ?` BEFORE any ReviewSection.

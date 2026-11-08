@@ -545,8 +545,7 @@ export function WorkerHomeScreen() {
 
           {/* --- Search (mirrors the locked 48's field — the one route to
               WorkerResults mode 'search'). The shared SearchBar carries the
-              input (and the mic where the device supports it); the locked
-              twin renders no clear control, so disableClear keeps the
+              input; the locked twin renders no clear control, so disableClear keeps the
               mirror, and its divider + arrow submit stays verbatim. ------- */}
           <SearchBar
             style={styles.searchField}

@@ -323,8 +323,6 @@ export type MyJobsStackParamList = {
   JobConfirmed: { job: Job };
   /** Screen 56 — the worker's static arrival declarations (Phase 6). No live
    *  location exists anywhere; these are two one-way taps. */
-  /** Screen 57 — the worker's job checklist (Phase 6). */
-  WorkChecklist: { jobId: string };
   /** Screen 36 — approve the finished work (releasing held funds) or report
    *  an issue that freezes release. Authorization is server-side (phase51). */
   ApproveOrDispute: { job: Job };
@@ -448,8 +446,6 @@ export type ProfileStackParamList = {
   /** Screens 64+66 (Phase 9): the worker's services & pricing manager with
    *  the availability toggle and the honest verification state. */
   ServicesPricing: undefined;
-  /** Screen 46 + the Rebook 08 fold-in (Phase 9): saved + past workers. */
-  SavedWorkers: undefined;
   /** Screen 45 (Phase 9): the sandbox payment-methods surface. */
   PaymentMethods: undefined;
   /** Screens 59+60 (Phase 11): the ledger-derived wallet + simulated cash-out. */
@@ -466,8 +462,8 @@ export type ProfileStackParamList = {
   Payouts: { from?: PayoutsLinkFrom; at?: number } | undefined;
   /** Screen 42 (Phase 12): the in-app event feed over the phase20/56 outbox. */
   Notifications: undefined;
-  /** Phase 9 — SavedWorkers surfaces other users, so WorkerProfile and the
-   *  PostJob hire-again entry ride along (the standing every-stack-that-
+  /** Phase 9 — the profile stack surfaces other users, so WorkerProfile and
+   *  the PostJob hire entry ride along (the standing every-stack-that-
    *  surfaces-a-user rule). */
   WorkerProfile: { workerId: string; workerName?: string };
   PostJob:
@@ -556,9 +552,8 @@ export type CustomerParamList = {
   /**
    * VISIBLE customer tab since emerald D1, in the slot Map used to hold: the
    * customer browse surface (workers and services, never job postings). It was
-   * registered-but-hidden from 4D-1a until D1 — SavedWorkers has always
-   * dispatched into it — so D1 gave a bar item to an existing destination
-   * rather than inventing a screen.
+   * registered-but-hidden from 4D-1a until D1, so D1 gave a bar item to an
+   * existing destination rather than inventing a screen.
    */
   Discover: NavigatorScreenParams<DiscoverStackParamList> | undefined;
 };

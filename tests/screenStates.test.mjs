@@ -51,7 +51,8 @@ test('E7: no load retry says "Retry" or "Refresh"', () => {
 test('E7: a full-screen wait is the shared spinner, never a hand-rolled one', () => {
   // A large spinner may still sit INSIDE a sheet or a picker that owns its own
   // body; a screen's own loading branch uses ScreenStateView.
-  const ownBody = new Set(['components/PortfolioPicker.tsx']);
+  // (Lean D5 deleted PortfolioPicker, the one such body this set named.)
+  const ownBody = new Set();
   // Inline waits, not a screen's: the bids section on the job page.
   const inline = new Set(['screens/ClientJobDetailScreen.tsx']);
   const handRolled = sources.filter(

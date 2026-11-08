@@ -1,7 +1,7 @@
 /**
- * The voice-search boundary the search UI talks to.
+ * The voice boundary Post a job's dictation talks to.
  *
- * SearchBar calls this interface and nothing else — never
+ * DictationMic calls this interface and nothing else — never
  * `expo-speech-recognition` directly (the lib/phoneAuth arrangement: a narrow
  * typed surface, so the vendor API stays swappable and the tests can execute
  * the whole decision surface against an injected double).
@@ -9,7 +9,7 @@
  * The two iOS usage strings in app.json are a behavioural contract this
  * boundary enforces, not copy:
  *
- *   - "…only while you search or dictate by voice, … and stops listening when you
+ *   - "…only while you dictate a job by voice, and stops listening when you
  *     finish." → recognition runs only inside a bounded tap session:
  *     one tap starts it, and it ends on ~3s of silence after speech has
  *     begun, a hard 30s ceiling, a second tap, focus loss, backgrounding, or

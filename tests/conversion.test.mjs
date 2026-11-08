@@ -138,38 +138,15 @@ test('§3.4 · the photo nudge is gone, and photos never gate advancing [static]
 });
 
 // ---------------------------------------------------------------------------
-// §4 — rebook: saved and past workers
+// §4 — the deleted-account tombstone. Lean D5 deleted saved workers and the
+// rebook strip (§4.1, §4.4 and the SavedWorkersScreen pins went with them);
+// the tombstone rule moved from lib/rebook.ts to lib/tombstone.ts.
 // ---------------------------------------------------------------------------
 
-const rebookModule = importLibModule('lib/rebook.ts');
-
-test('§4.1 · a worker in both populations appears once, under Saved', async () => {
-  const { pastOnlyIds, rebookStripItems } = await rebookModule;
-
-  const savedIds = new Set(['w1', 'w2']);
-  assert.deepEqual(pastOnlyIds(['w2', 'w3', 'w1', 'w4'], savedIds), ['w3', 'w4']);
-  assert.deepEqual(pastOnlyIds([], savedIds), []);
-  assert.deepEqual(pastOnlyIds(['w9'], new Set()), ['w9']);
-
-  // The strip applies the same rule even when handed overlapping inputs.
-  const both = { id: 'w1', full_name: 'Ada Reyes', avatar_url: null };
-  const items = rebookStripItems(
-    [both],
-    [both, { id: 'w2', full_name: 'Bo Chen', avatar_url: null }]
-  );
-  assert.deepEqual(
-    items.map((i) => [i.id, i.saved]),
-    [
-      ['w1', true],
-      ['w2', false],
-    ],
-    'the duplicate renders once, and as Saved'
-  );
-});
+const tombstoneModule = importLibModule('lib/tombstone.ts');
 
 test('§4.3 · a tombstoned profile carries no Hire, and the label is phase67\'s, verbatim', async () => {
-  const { DELETED_USER_LABEL, canHire, isTombstonedName, rebookStripItems } =
-    await rebookModule;
+  const { DELETED_USER_LABEL, canHire, isTombstonedName } = await tombstoneModule;
 
   assert.equal(DELETED_USER_LABEL, 'Deleted user');
   // Pin the label against the migration that writes it — the client constant
@@ -181,65 +158,6 @@ test('§4.3 · a tombstoned profile carries no Hire, and the label is phase67\'s
   assert.equal(isTombstonedName('Deleted user'), true);
   assert.equal(canHire('Ada Reyes'), true);
   assert.equal(canHire(null), true, 'a merely-missing name is not a tombstone');
-
-  // The strip is a hire shortcut, so tombstones never enter it at all.
-  const items = rebookStripItems(
-    [{ id: 'w1', full_name: 'Deleted user', avatar_url: null }],
-    [{ id: 'w2', full_name: 'Deleted user', avatar_url: null }]
-  );
-  assert.deepEqual(items, []);
-});
-
-test('§4 · SavedWorkersScreen: sections, suppressed Hire, no writes, no verification vocabulary [static]', async () => {
-  const screen = await read('screens/SavedWorkersScreen.tsx');
-
-  // Empty sections are omitted entirely (conditional spread), not rendered
-  // as empty headers.
-  assert.match(screen, /\.\.\.\(saved\.length > 0/);
-  assert.match(screen, /\.\.\.\(past\.length > 0/);
-
-  // The trust line's availability suffix requires accepting_work to be
-  // EXPLICITLY false — null is unknown and renders nothing.
-  assert.match(
-    screen,
-    /profile\.accepting_work === false \? ' · Not taking work right now' : ''/
-  );
-
-  // The dedup goes through the shared rule, not a local re-derivation.
-  assert.match(screen, /pastOnlyIds\(/);
-
-  // Hire is a navigation into the prefilled composer — the screen itself
-  // performs no offer write of any kind.
-  assert.match(screen, /navigation\.navigate\('PostJob', \{\s*hireWorkerId: profile\.id/);
-  assert.ok(!screen.includes('createDirectOffer'), 'no direct-offer write from this screen');
-  assert.ok(!screen.includes('supabase.rpc'), 'no raw RPC from this screen');
-  assert.ok(!screen.includes('accept_offer'), 'no acceptance path from this screen');
-
-  // A tombstoned row renders no Hire control.
-  assert.match(screen, /\{canHire\(profile\.full_name\) \? \(/);
-
-  // The verification badge died at 43d1e7f and must not return here.
-  assert.ok(!/verif/i.test(screen), 'no verification vocabulary on this surface');
-});
-
-test('§4.4 · the rebook strip tops the search surface and "Hire someone again" resolves to SavedWorkers [static]', async () => {
-  const search = await read('screens/WorkerSearchScreen.tsx');
-
-  // 2026-09-28 (LUX-LIST-64 #62): the loader moved into hooks/useRebookWorkers.ts
-  // so the customer Home's "Hire again" row reads the same list; Discover calls it.
-  assert.match(await read('hooks/useRebookWorkers.ts'), /rebookStripItems\(/);
-  assert.match(search, /useRebookWorkers\('WorkerSearch'\)/);
-  assert.match(search, /Hire someone again/);
-  assert.match(search, /navigateAcrossTabs\('Profile', 'SavedWorkers'\)/);
-  // Strip taps open the SAME prefilled composer as the Hire control.
-  assert.match(search, /hireWorkerId: item\.id/);
-  // An empty strip renders nothing — the block is gated on having items.
-  assert.match(search, /rebook\.length > 0 \? \(/);
-
-  // (The 4D-era centre [+] sheet's hire-again row used to be pinned here;
-  // Prestige 0d retired the sheet with the masters' five-tab bar — see
-  // tests/mode.test.mjs "the retired [ + ] actions each keep a standing
-  // surface", which now owns that reachability contract.)
 });
 
 // ---------------------------------------------------------------------------
@@ -563,27 +481,26 @@ test('§6.2 · over-ceiling amounts refuse with written text before any RPC', as
 
 const completenessModule = importLibModule('lib/profileCompleteness.ts');
 
-test('§6.4 · five steps, complete at 5/5 (where the meter disappears)', async () => {
+test('§6.4 · four steps, complete at 4/4 (where the meter disappears)', async () => {
   const { profileCompleteness } = await completenessModule;
 
   // 2026-09-26 (the refresh, audit M-29): job categories lead the meter.
+  // Lean D5: the portfolio step left with the portfolio.
   const done = profileCompleteness({
     categoryCount: 2,
     avatarUrl: 'https://x/avatar.jpg',
     bio: 'I fix things.',
     publishedServiceCount: 3,
-    portfolioCount: 1,
   });
   assert.equal(done.complete, true);
-  assert.equal(done.done, 5);
-  assert.equal(done.total, 5);
+  assert.equal(done.done, 4);
+  assert.equal(done.total, 4);
 
   const partial = profileCompleteness({
     categoryCount: 0,
     avatarUrl: null,
     bio: '   ',
     publishedServiceCount: 2,
-    portfolioCount: 0,
   });
   assert.equal(partial.complete, false);
   assert.equal(partial.done, 0);
@@ -594,7 +511,6 @@ test('§6.4 · five steps, complete at 5/5 (where the meter disappears)', async 
       ['avatar', false],
       ['bio', false],
       ['services', false],
-      ['portfolio', false],
     ],
     'a whitespace bio and two published services are not done steps'
   );
@@ -610,7 +526,6 @@ test('§6.4 · the meter renders own-worker-profile only, and never at 4/4 [stat
   );
   // Each unmet step routes to the surface that fixes it.
   assert.match(own, /navigation\.navigate\('ServicesPricing'\)/);
-  assert.match(own, /setPickerOpen\(true\)/);
   // No other user's profile carries a meter.
   assert.ok(!other.includes('profileCompleteness'));
 });

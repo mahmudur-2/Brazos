@@ -6,15 +6,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
-import { PastWork } from '../components/PastWork';
 import { PhotoViewer } from '../components/PhotoViewer';
-import { PortfolioPicker } from '../components/PortfolioPicker';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { goBackOrHome } from '../lib/navigationRef';
 import { formatPhoneDisplay } from '../lib/phone';
-import { fetchWorkerJobStats, type CategoryStat } from '../lib/portfolio';
+import { fetchWorkerJobStats, type CategoryStat } from '../lib/profiles';
 import { fetchBothRoleSummaries, type ReviewSummary } from '../lib/reviews';
 import { skillCategoryLabel } from '../lib/skillCategories';
 import type { ProfileStackNavigation } from '../lib/navigation';
@@ -69,11 +67,6 @@ export function ProfileDetailsScreen() {
   const [statsReadFailed, setStatsReadFailed] = useState(false);
   const [statsReadAttempt, setStatsReadAttempt] = useState(0);
   const [avatarViewerUri, setAvatarViewerUri] = useState<string | null>(null);
-  // 2026-09-29 (LUX-LIST-2 #7): the curation sheet, and the bump that makes
-  // PastWork refetch after it adds something — both moved here with the past
-  // work itself.
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [portfolioVersion, setPortfolioVersion] = useState(0);
   // R8b-c: the rating comes from the per-role REVEALED summaries, never
   // profiles.rating_avg/rating_count — the legacy aggregate mixes both roles
   // and counts reviews the blind window still holds back. Null is a read
@@ -280,31 +273,7 @@ export function ProfileDetailsScreen() {
             </View>
           ) : null}
         </Card>
-
-        {/* 2026-09-29 (LUX-LIST-2 #7) — THE PAST WORK LIVES HERE NOW. The hub
-            dropped its Past Work block (its card opens this page), so this is
-            where your featured photos are seen and managed: the same PastWork
-            the hub drew, editable, with its curation sheet. It replaces the
-            placeholder that sent you back to the hub to manage them — and
-            that always said "no photos", even when there were some. */}
-        {user ? (
-          <PastWork
-            workerId={user.id}
-            editable
-            onManage={() => setPickerOpen(true)}
-            refreshToken={portfolioVersion}
-          />
-        ) : null}
       </ScrollView>
-
-      {user ? (
-        <PortfolioPicker
-          visible={pickerOpen}
-          workerId={user.id}
-          onClose={() => setPickerOpen(false)}
-          onChanged={() => setPortfolioVersion((v) => v + 1)}
-        />
-      ) : null}
 
       <PhotoViewer
         visible={!!avatarViewerUri}

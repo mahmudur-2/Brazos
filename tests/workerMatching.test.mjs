@@ -344,20 +344,13 @@ test('8 · ordering is stable across runs and independent of input order', () =>
 // 9-11 · Failure, staleness, empty
 // ===========================================================================
 
-test('9 · every server failure shape falls back to the deterministic ranking', () => {
-  // One helper resolves null for thrown, rejected and never-answered alike, so
-  // there is a single fallback path rather than one per error type.
-  assert.match(workerSearch, /function withTimeout<T>\(promise: Promise<T>, ms: number\)/);
-  assert.match(workerSearch, /promise\.then\(settle, \(\) => settle\(null\)\)/);
-
-  assert.match(workerSearch, /if \(!response \|\| response\.error\) return null;/);
-  assert.match(workerSearch, /if \(!Array\.isArray\(rows\)\) return null;/);
-
-  // Falling back means re-using the ORIGINAL matcher, not a second copy of it.
-  assert.match(workerSearch, /const \{ data, error \} = await searchWorkers\(args\);/);
-  assert.match(workerSearch, /return \{ data, error, mode: 'fallback' \};/);
+test('9 · the Edge Function signals every failure, and the client ranks one way only', () => {
+  // Lean D5 removed the client's server ranking and its fallback (withTimeout,
+  // rankWorkersOnServer): the app calls the one deterministic matcher, never
+  // the Edge Function. The function itself stays until D6 drops it.
+  assert.doesNotMatch(workerSearch, /functions\.invoke|rankWorkersOnServer|withTimeout/);
   assert.equal(
-    (workerSearch.match(/export async function searchWorkers/g) ?? []).length,
+    (workerSearch.match(/export async function findWorkers/g) ?? []).length,
     1,
     'there must be exactly one deterministic matcher'
   );
@@ -409,33 +402,15 @@ test('10 · missing and stale embeddings are handled without a manual flag', () 
   assert.match(phase39, /exception when others then\s*\n\s*raise notice 'worker semantic refresh skipped/);
 });
 
-test('11 · an empty semantic result falls back rather than displaying a false no-match state', () => {
-  // Reversed from the original design on purpose, after a live deployment
-  // with only 6 (thinly-evidenced) embedded workers showed every one of them
-  // scoring below MIN_SIMILARITY for a query the deterministic matcher could
-  // answer immediately by category. An unmeasured floor plus a small corpus
-  // makes "nothing cleared the bar" far more likely to be a false negative
-  // than a genuine "nobody is relevant" — so it is no longer treated as final.
+test('11 · a below-floor semantic score ranks nobody, and a true no-match still shows', () => {
+  // The SQL model drops a worker below MIN_SIMILARITY rather than ranking it
+  // at a fabricated score.
   assert.deepEqual(rank([{ ...GENERIC, similarity: 0.1 }], { searched: ['packing'] }), []);
 
-  // The gate is ranked.length > 0, not just ranked being non-null — an empty
-  // array must fall through exactly like a null (failed) response.
-  assert.match(workerSearch, /if \(ranked && ranked\.length > 0\) \{/);
-  assert.doesNotMatch(workerSearch, /if \(ranked\) \{/);
-
-  // And it must actually fall through to the SAME deterministic matcher used
-  // for every other failure — not a second copy, not a different code path.
-  const findWorkersFn = workerSearch.slice(
-    workerSearch.indexOf('export async function findWorkers'),
-    workerSearch.indexOf('// --- Result copy')
-  );
-  assert.match(findWorkersFn, /const \{ data, error \} = await searchWorkers\(args\);/);
-  assert.match(findWorkersFn, /return \{ data, error, mode: 'fallback' \};/);
-
-  // A TRUE "no workers matched" now requires BOTH rankings to come back
-  // empty — that is still a real state, and the screen still has to show it.
-  // The wording moved into the lib so it could name the applied category, so
-  // this follows it: the screen renders the state, the lib words it, and the
+  // Lean D5: the client no longer ranks on the server, so its empty-result
+  // fallback left with it; "no workers matched" is the deterministic
+  // matcher's own empty answer, and the screen still has to show it. The
+  // wording lives in the lib so it can name the applied category; the
   // unfiltered wording is still exactly what it was.
   assert.match(screen, /title=\{emptyResultTitle\(appliedCategoryLabel\)\}/);
   assert.match(workerSearch, /: 'No workers matched';/);
@@ -637,52 +612,46 @@ test('the embedding is normalised to a plain number array', () => {
 // 13 · Wording
 // ===========================================================================
 
-test('13 · "best matches" is claimed only when server ranking actually ran', () => {
+test('13 · the heading counts what is shown, never claims "best", and names its filter', () => {
   // Mirrors resultHeading(); the literals it depends on are asserted below.
-  const heading = (mode, count, categoryLabel) => {
-    const qualifier = mode === 'semantic' ? 'best ' : '';
+  // Lean D5: one deterministic ranking, so the "best" qualifier (claimed only
+  // when server ranking ran) left with the server ranking.
+  const heading = (count, categoryLabel) => {
     const base =
       count >= RESULT_LIMIT
-        ? `Top ${RESULT_LIMIT} ${qualifier}matches`
-        : `${count} ${qualifier}${count === 1 ? 'match' : 'matches'}`;
+        ? `Top ${RESULT_LIMIT} matches`
+        : `${count} ${count === 1 ? 'match' : 'matches'}`;
     return categoryLabel ? `${base} · ${categoryLabel}` : base;
   };
 
-  assert.match(heading('semantic', 5), /best matches/);
-  assert.match(heading('semantic', 1), /best match$/);
-  assert.match(heading('semantic', RESULT_LIMIT), /^Top \d+ best matches$/);
-
-  assert.equal(heading('fallback', 5), '5 matches');
-  assert.equal(heading('fallback', 1), '1 match');
-  assert.doesNotMatch(heading('fallback', RESULT_LIMIT), /best/);
+  assert.equal(heading(5), '5 matches');
+  assert.equal(heading(1), '1 match');
+  assert.equal(heading(RESULT_LIMIT), `Top ${RESULT_LIMIT} matches`);
 
   // A filtered search names its filter, in every shape the heading has.
   const LABEL = 'Dog Walking/Pet Care';
-  assert.equal(heading('fallback', 3, LABEL), `3 matches · ${LABEL}`);
-  assert.equal(heading('semantic', 1, LABEL), `1 best match · ${LABEL}`);
-  assert.equal(
-    heading('fallback', RESULT_LIMIT, LABEL),
-    `Top ${RESULT_LIMIT} matches · ${LABEL}`
-  );
+  assert.equal(heading(3, LABEL), `3 matches · ${LABEL}`);
+  assert.equal(heading(1, LABEL), `1 match · ${LABEL}`);
+  assert.equal(heading(RESULT_LIMIT, LABEL), `Top ${RESULT_LIMIT} matches · ${LABEL}`);
 
   // ...and an unlabelled call still returns exactly what it always returned,
   // so the unfiltered wording cannot drift in behind the label.
-  for (const [mode, count] of [
-    ['semantic', 5],
-    ['semantic', 1],
-    ['semantic', RESULT_LIMIT],
-    ['fallback', 5],
-    ['fallback', 1],
-    ['fallback', RESULT_LIMIT],
-  ]) {
-    assert.equal(heading(mode, count, undefined), heading(mode, count));
+  for (const count of [5, 1, RESULT_LIMIT]) {
+    assert.equal(heading(count, undefined), heading(count));
   }
 
   assert.match(
     workerSearch,
-    /export function resultHeading\(\s*mode: RankingMode,\s*count: number,\s*categoryLabel\?: string,?\s*\): string/
+    /export function resultHeading\(count: number, categoryLabel\?: string\): string/
   );
-  assert.match(workerSearch, /const qualifier = mode === 'semantic' \? 'best ' : '';/);
+  const headingFn = workerSearch.slice(
+    workerSearch.indexOf('export function resultHeading'),
+    workerSearch.indexOf('export function emptyResultTitle')
+  );
+  assert.match(headingFn, /\? `Top \$\{WORKER_RESULT_LIMIT\} matches`/);
+  assert.match(headingFn, /: `\$\{count\} \$\{count === 1 \? 'match' : 'matches'\}`;/);
+  assert.match(headingFn, /return categoryLabel \? `\$\{base\} · \$\{categoryLabel\}` : base;/);
+  assert.doesNotMatch(headingFn, /'best '|best match/);
 
   // The empty state is worded in the same place, for the same reason: an
   // empty result that does not name its filter is the one most likely to be
@@ -701,10 +670,7 @@ test('13 · "best matches" is claimed only when server ranking actually ran', ()
   );
 
   // The screen must not be able to word either of these itself.
-  assert.match(
-    screen,
-    /resultHeading\(state\.mode, state\.matches\.length, appliedCategoryLabel\)/
-  );
+  assert.match(screen, /resultHeading\(state\.matches\.length, appliedCategoryLabel\)/);
   assert.match(screen, /title=\{emptyResultTitle\(appliedCategoryLabel\)\}/);
   // And the label it hands over is only ever the pinned chip's: a category the
   // typed text merely implied is never announced as one the customer chose.
@@ -722,13 +688,12 @@ test('result explanations only ever restate stored evidence', () => {
   // Every claim in the PDF's "do not say" list.
   assert.doesNotMatch(reasonBlock, /\bexpert\b|available now|best in\b|top rated|highly rated/i);
 
-  // The four wordings, each keyed to a reason the server derived from counts.
-  assert.match(reasonBlock, /Completed \$\{count\} related/);
-  assert.match(reasonBlock, /Matched similar \$\{labels\.join\(' and '\)\.toLowerCase\(\)\} work/);
-
-  // Explanations are built from category keys and counts only, so one cannot
-  // quote a client's job title even if the server started sending them.
-  assert.match(workerSearch, /\.map\(evidenceLabel\)/);
+  // Lean D5: the server-derived "related" and "similar work" wordings left
+  // with server ranking; the one sentence left is a count worker_job_stats()
+  // actually returned, so it cannot quote a client's job title.
+  assert.match(reasonBlock, /const count = match\.completedInCategory;/);
+  assert.match(reasonBlock, /return `\$\{count\} similar \$\{count === 1 \? 'job' : 'jobs'\} completed`;/);
+  assert.doesNotMatch(reasonBlock, /Completed \$\{count\} related|Matched similar/);
   assert.match(phase39, /jsonb_each_text\(coalesce\(d\.evidence -> 'completed_by_category'/);
 });
 
@@ -964,22 +929,19 @@ test('embedding evidence excludes job descriptions, review text and names', () =
   }
 });
 
-test('the deterministic matcher is unchanged and still the fallback', () => {
+test('the deterministic matcher is unchanged and is the only ranking', () => {
   // Same two candidate reads, same aggregate RPC, same exclusion.
   assert.match(workerSearch, /rpc\('worker_job_stats'/);
   assert.match(workerSearch, /\.overlaps\('categories', searchedCategories\)/);
   assert.match(workerSearch, /profile\.id === excludeUserId/);
 
-  // No fabricated relevance on the fallback path.
-  const fallbackScore = workerSearch.slice(
+  // No fabricated relevance in the score.
+  const score = workerSearch.slice(
     workerSearch.indexOf('function scoreMatch'),
     workerSearch.indexOf('function sanitizeForFilter')
   );
-  assert.doesNotMatch(fallbackScore, /relevance/);
-
-  // A chip with no typed text has no sentence to compare meanings against and
-  // must not be embedded on its own.
-  assert.match(workerSearch, /if \(trimmed\.length >= 2\) \{/);
+  assert.doesNotMatch(score, /relevance/);
+  // (Lean D5: the chip-without-text embedding guard left with server ranking.)
 });
 
 // ===========================================================================

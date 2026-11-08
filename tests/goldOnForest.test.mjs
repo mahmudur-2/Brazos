@@ -307,8 +307,7 @@ const D6_SURFACES = [
   // FILLED with the one mint (the Lux `.seg2`), not gold-lined — so
   // components/SegmentedControl.tsx and MyJobsHub's tabs, which are that
   // control now, no longer resolve through selectedInDark.
-  ['components/PortfolioPicker.tsx', ['categoryChipSelectedDark']],
-  ['components/PastWork.tsx', ['tabActiveDark', 'tabTextActiveDark']],
+  // Lean D5: PortfolioPicker and PastWork were deleted with the portfolio.
   ['components/ReportDialog.tsx', ['reasonSelectedDark', 'reasonTextSelectedDark']],
   ['screens/ServicesPricingScreen.tsx', ['categoryChipActiveDark']],
   ['screens/ApproveOrDisputeScreen.tsx', ['reasonRowActiveDark', 'radioActiveDark']],
@@ -512,19 +511,12 @@ test('[static] master 26: an EMERALD glyph inside a GOLD ring, not both gold', (
   assert.doesNotMatch(feed, /read_at\s*\?\s*colors\./, 'read state never dims the glyph');
 });
 
-test('[static] master 22 and master 18 were already built', () => {
-  // Both D10 sub-items are CONDITIONAL — "only if the action already exists",
-  // "only if the screen genuinely lacks it". Neither condition holds: the work
-  // is already there, so the correct action was to confirm it rather than add
-  // a second copy. Pinned so a future run does not "restore" a duplicate.
-
-  // Master 22 — each saved-worker row carries its bookmark affordance, and it
-  // is wired to the unsave action that already existed in lib/savedWorkers.ts.
-  const saved = stripComments(read('screens/SavedWorkersScreen.tsx'));
-  assert.match(saved, /import \{ fetchSavedWorkers, unsaveWorker \}/);
-  assert.match(saved, /onPress=\{\(\) => removeSaved\(profile\.id\)\}/);
-  assert.match(saved, /<Ionicons name="bookmark"/);
-  assert.match(saved, /accessibilityLabel="Remove from saved"/);
+test('[static] master 18 was already built', () => {
+  // The D10 sub-item is CONDITIONAL — "only if the screen genuinely lacks
+  // it". The condition does not hold: the work is already there, so the
+  // correct action was to confirm it rather than add a second copy. Pinned so
+  // a future run does not "restore" a duplicate. (Master 22, the saved-worker
+  // row's bookmark, left with saved workers in lean D5.)
 
   // Master 18 — the worker profile draws "Send an offer" WITH its explanation,
   // and it dispatches the existing offer flow (PostJob with hireWorkerId), not

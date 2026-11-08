@@ -2,11 +2,11 @@
  * Worker profile completeness (4D-3 §6.4) — pure, import-free, executed by
  * tests.
  *
- * Five steps, own worker-mode profile only: job categories, a profile photo,
- * a bio, three or more PUBLISHED worker_services rows, and one or more
- * portfolio_items (portfolio rows carry no draft state — existing is
- * published). The meter is a prompt, not a scoreboard: at 5/5 it disappears
- * entirely, and it never renders on anyone else's profile.
+ * Four steps, own worker-mode profile only: job categories, a profile photo,
+ * a bio, and three or more PUBLISHED worker_services rows (lean D5 removed
+ * the portfolio step with the portfolio). The meter is a prompt, not a
+ * scoreboard: at 4/4 it disappears entirely, and it never renders on anyone
+ * else's profile.
  *
  * 2026-09-26 (the refresh, audit M-29): categories lead. They are the
  * fastest tick and the one that makes skill matches, Best Match and nearby
@@ -14,9 +14,8 @@
  */
 
 export const SERVICES_TARGET = 3;
-export const PORTFOLIO_TARGET = 1;
 
-export type CompletenessStepKey = 'categories' | 'avatar' | 'bio' | 'services' | 'portfolio';
+export type CompletenessStepKey = 'categories' | 'avatar' | 'bio' | 'services';
 
 export type CompletenessStep = {
   key: CompletenessStepKey;
@@ -29,7 +28,6 @@ export type CompletenessInput = {
   avatarUrl: string | null | undefined;
   bio: string | null | undefined;
   publishedServiceCount: number;
-  portfolioCount: number;
 };
 
 export type Completeness = {
@@ -60,11 +58,6 @@ export function profileCompleteness(input: CompletenessInput): Completeness {
       key: 'services',
       label: `Publish ${SERVICES_TARGET} services`,
       done: input.publishedServiceCount >= SERVICES_TARGET,
-    },
-    {
-      key: 'portfolio',
-      label: 'Feature one past job',
-      done: input.portfolioCount >= PORTFOLIO_TARGET,
     },
   ];
   const done = steps.filter((s) => s.done).length;

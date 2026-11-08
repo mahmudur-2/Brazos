@@ -13,22 +13,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
-import { PastWork } from '../components/PastWork';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { ReportContentLink } from '../components/ReportContentLink';
 import {
   fetchProfileById,
+  fetchWorkerJobStats,
   isProfileActive,
   type Profile,
 } from '../lib/profiles';
 import { canRehireWorker, JOB_CATEGORIES, JOB_CATEGORY_LABELS, type JobCategory } from '../lib/jobs';
-import { fetchWorkerJobStats } from '../lib/portfolio';
-import { canHire } from '../lib/rebook';
+import { canHire } from '../lib/tombstone';
 import { fetchProfileReviewSummary, type ReviewSummary } from '../lib/reviews';
 import { deriveWorkerHeroTrust } from '../lib/workerHeroCard';
-import { fetchSavedWorkerIds, saveWorker, unsaveWorker } from '../lib/savedWorkers';
 import {
   fetchWorkerServices,
   servicePriceLabel,
@@ -61,11 +59,11 @@ import { SPINNER_STATE, ScreenStateView, loadErrorTitle } from '../ui/templates/
  * Read-only view of another user's profile — the public face of a worker's
  * reputation: the 4E hero trust content (rating · jobs completed ·
  * responds-in, positive-only and non-null only — lib/workerHeroCard.ts),
- * the categories they work in, and their curated Past Work gallery.
+ * and the categories they work in.
  *
  * Everything here is readable by any signed-in user: `profiles` is already
- * public-readable, portfolio_items has a permissive SELECT policy, and the
- * completed-job stats come from the worker_job_stats() RPC (phase17).
+ * public-readable, and the completed-job stats come from the
+ * worker_job_stats() RPC (phase17).
  */
 export function WorkerProfileScreen() {
   const { palette: colors, isDark } = useThemeColors();
@@ -96,11 +94,8 @@ export function WorkerProfileScreen() {
    * direct thread for exactly that case.
    */
   const [workedTogether, setWorkedTogether] = useState(false);
-  // Phase 9: published services (RLS hides other people's drafts) and the
-  // viewer's own saved state for this worker.
+  // Phase 9: published services (RLS hides other people's drafts).
   const [services, setServices] = useState<WorkerService[]>([]);
-  const [savedByMe, setSavedByMe] = useState(false);
-  const [savingBookmark, setSavingBookmark] = useState(false);
   // 4E — worker_job_stats rows for the hero trust content. Null until the
   // RPC answers (and null again on failure): UNKNOWN renders nothing, and
   // can never produce the "New worker" verdict (lib/workerHeroCard.ts).
@@ -152,9 +147,6 @@ export function WorkerProfileScreen() {
     });
     isProfileActive(params.workerId).then(({ data }) => {
       if (active) setRecipientActive(data);
-    });
-    fetchSavedWorkerIds(user.id).then(({ data }) => {
-      if (active) setSavedByMe(data.has(params.workerId));
     });
     return () => {
       active = false;
@@ -222,22 +214,12 @@ export function WorkerProfileScreen() {
     });
   }
 
-  async function toggleSaved() {
-    if (!user || isSelf || savingBookmark) return;
-    setSavingBookmark(true);
-    const { error: saveError } = savedByMe
-      ? await unsaveWorker(user.id, params.workerId)
-      : await saveWorker(user.id, params.workerId);
-    setSavingBookmark(false);
-    if (!saveError) setSavedByMe((v) => !v);
-  }
-
   const name = profile?.full_name ?? params.workerName ?? 'Worker';
   // Headings address the person, so they use the first name the way a message
   // to them would; the button stays the same in both cases.
   const firstName = name.trim().split(/\s+/)[0] || name;
-  // 4E: a tombstoned account cannot be hired or saved — the mockup's
-  // Hire-on-a-deleted-user is a recorded defect, and lib/rebook.ts's canHire
+  // 4E: a tombstoned account cannot be hired — the mockup's
+  // Hire-on-a-deleted-user is a recorded defect, and lib/tombstone.ts's canHire
   // is the ONE predicate for it (create_offer's own gate refuses it
   // server-side regardless). The profile itself still renders: the history
   // and any reviews are real.
@@ -354,7 +336,7 @@ export function WorkerProfileScreen() {
             )}
           </Card>
 
-          {/* Phase 9 — availability truth + saved toggle + services. */}
+          {/* Phase 9 — availability truth + services. */}
           {profile && (profile.accepting_work === false || profile.availability_note) ? (
             <Card style={styles.availabilityCard}>
               <Ionicons
@@ -369,35 +351,6 @@ export function WorkerProfileScreen() {
                 {profile.availability_note ? ` ${profile.availability_note}` : ''}
               </Text>
             </Card>
-          ) : null}
-
-          {/* Saving a tombstoned account would be a dead-end bookmark — the
-              same §4.3 reasoning that suppresses Hire suppresses Save. */}
-          {/* Masters 5 and 18 draw the saved state as a full-width card, and
-              they disagree on its colour (5: green text + green bookmark;
-              18: cream serif + gold bookmark). Decision 8 settles it — a
-              saved-state control is emerald text and an emerald bookmark —
-              so B-7 resolves to master 5's form. */}
-          {!isSelf && user && hireable ? (
-            <Pressable
-              onPress={() => void toggleSaved()}
-              disabled={savingBookmark}
-              accessibilityRole="button"
-              accessibilityState={{ selected: savedByMe, disabled: savingBookmark }}
-              style={({ pressed }) => [
-                styles.savedCard,
-                pressed && styles.savedCardPressed,
-              ]}
-            >
-              <Text style={[styles.savedLabel, savedByMe && styles.savedLabelActive]}>
-                {savedByMe ? 'Saved — tap to remove' : `Save ${firstName} for later`}
-              </Text>
-              <Ionicons
-                name={savedByMe ? 'bookmark' : 'bookmark-outline'}
-                size={20}
-                color={savedByMe ? colors.emerald : colors.textMuted}
-              />
-            </Pressable>
           ) : null}
 
           {services.length > 0 ? (
@@ -472,8 +425,6 @@ export function WorkerProfileScreen() {
               />
             </Card>
           )}
-
-          <PastWork workerId={params.workerId} />
 
           {/* FIX-RUN B3 (Apple 1.2): the profile can be reported, and its
               owner blocked, from the profile itself. Hidden on your own. */}
@@ -648,28 +599,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.primary,
   },
   chipTextDark: { color: colors.ink },
-  // Masters 5/18's saved control: one full-width hairlined card, its label
-  // centred, with the bookmark at the trailing edge.
-  savedCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-    minHeight: 56,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  savedCardPressed: { opacity: 0.82 },
-  savedLabel: {
-    fontFamily: fonts.display,
-    fontSize: 19,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  savedLabelActive: { color: colors.emerald },
   hireCard: {
     gap: spacing.xs,
   },

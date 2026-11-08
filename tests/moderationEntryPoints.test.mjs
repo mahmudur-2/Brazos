@@ -65,11 +65,8 @@ test('B3 · every surface that shows another person\'s content offers Report (an
     assert.ok(code.includes(kind), `${path} reports a ${kind}`);
   }
 
-  // Portfolio photos: from the viewer, which closes before the dialog opens.
-  const pastWork = stripComments(read('components/PastWork.tsx'));
-  assert.match(pastWork, /subject=\{\{ kind: 'portfolio_item', id: reportItem\.id \}\}/);
-  assert.match(pastWork, /const canReport = !editable && !!user && user\.id !== workerId;/);
-  assert.match(pastWork, /modalSettleDelay\(\)/);
+  // Photos: from the viewer, which closes before the dialog opens. (Lean D5
+  // deleted the portfolio, PastWork's portfolio_item report with it.)
   const viewer = stripComments(read('components/PhotoViewer.tsx'));
   assert.match(viewer, /onPress=\{\(\) => \{\s*onClose\(\);\s*onReport\(\);\s*\}\}/);
   assert.match(viewer, /accessibilityLabel="Report photo"/);

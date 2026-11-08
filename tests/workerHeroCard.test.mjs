@@ -161,12 +161,12 @@ test('[static] 4E · stats arrive via worker_job_stats and stay null on failure'
   assert.match(screen, /if \(active && !statsError\) setJobStats\(data\);/);
 });
 
-test('[static] 4E · a tombstoned profile carries no hire, book, or save affordance', async () => {
+test('[static] 4E · a tombstoned profile carries no hire or book affordance', async () => {
   const screen = await read('screens/WorkerProfileScreen.tsx');
-  // One predicate — lib/rebook.ts's canHire — feeds every affordance.
+  // One predicate — lib/tombstone.ts's canHire — feeds every affordance.
+  // (The save toggle left with saved workers in lean D5.)
   assert.match(screen, /const hireable = canHire\(profile\?\.full_name\);/);
   assert.match(screen, /recipientActive && hireable/);
-  assert.match(screen, /!isSelf && user && hireable \?/);
   // Service booking rides canOffer, which now includes hireable.
   assert.match(screen, /!isSelf && canOffer && service\.published \?/);
 });

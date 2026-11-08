@@ -23,15 +23,14 @@ const ADDRESS = 'brazosmvp@gmail.com';
 // lib/appLinks.ts executed for real. It imports nothing, so it loads straight
 // from its own file URL the way tests/errorMessage.test.mjs loads
 // lib/errorMessage.ts — no data-URL rewrite is needed here.
-const { SUPPORT_EMAIL, supportMailtoUrl, PROFILE_WEB_BASE_URL } = await import(
+const { SUPPORT_EMAIL, supportMailtoUrl } = await import(
   pathToFileURL(join(root, 'lib/appLinks.ts')).href
 );
 
 test('a1 · lib/appLinks.ts publishes the address and assembles the mailto in one place', () => {
   assert.equal(SUPPORT_EMAIL, ADDRESS);
   assert.equal(supportMailtoUrl(), `mailto:${ADDRESS}`);
-  // Nothing else in the module moved.
-  assert.equal(PROFILE_WEB_BASE_URL, 'https://brazos.app');
+  // (Lean D5 removed the public profile link, PROFILE_WEB_BASE_URL with it.)
 
   // Import-free, which is the property that lets the import above work.
   const code = stripComments(read('lib/appLinks.ts'));
@@ -73,7 +72,6 @@ test('a1 · the Profile hub carries Contact support as a row that opens the mail
   // settings — and Payment methods and Account & safety joined the table
   // (Payment methods moved off Account & safety).
   assert.deepEqual(labels, [
-    'Saved & past workers',
     'Services & availability',
     'Earnings & payouts',
     'Payment methods',
@@ -113,7 +111,6 @@ test('a1 · the Profile hub carries Contact support as a row that opens the mail
     'Notifications',
     'Earnings',
     'ServicesPricing',
-    'SavedWorkers',
     'PaymentMethods',
     'AccountSafety',
   ]) {

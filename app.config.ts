@@ -115,7 +115,7 @@ export default (_context: ConfigContext): ExpoConfig => ({
         cameraPermission:
           'Brazos uses the camera to take photos of jobs, completed work, and your profile.',
         microphonePermission:
-          'Brazos uses your microphone only while you search or dictate by voice, and stops listening when you finish.',
+          'Brazos uses your microphone only while you dictate a job by voice, and stops listening when you finish.',
       },
     ],
     [
@@ -134,15 +134,15 @@ export default (_context: ConfigContext): ExpoConfig => ({
     ],
     // 2026-09-30 (the build run, idea 18): expo-image-picker and this plugin each write
     // NSMicrophoneUsageDescription and one wins at prebuild, so both carry the one complete
-    // sentence — search and dictation into Post a job (FIX-RUN B12: nothing films a video;
-    // lean D3a: no voice messages, so the sentence says neither).
+    // sentence — dictation into Post a job (FIX-RUN B12: nothing films a video; lean D3a: no
+    // voice messages; lean D5: no search mic, so the sentence says none of them).
     [
       'expo-speech-recognition',
       {
         microphonePermission:
-          'Brazos uses your microphone only while you search or dictate by voice, and stops listening when you finish.',
+          'Brazos uses your microphone only while you dictate a job by voice, and stops listening when you finish.',
         speechRecognitionPermission:
-          'Speech is recognized on your device to turn what you say into a search, or into the words of a job you post. Nothing is sent to a server.',
+          'Speech is recognized on your device to turn what you say into the words of a job you post. Nothing is sent to a server.',
       },
     ],
     'expo-video',

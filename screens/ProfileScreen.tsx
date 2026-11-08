@@ -27,7 +27,6 @@ import { Card } from '../components/Card';
 import { CategoryAccordion } from '../components/CategoryAccordion';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PhotoViewer } from '../components/PhotoViewer';
-import { PortfolioPicker } from '../components/PortfolioPicker';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
@@ -41,15 +40,13 @@ import { alertAsync, confirmAsync } from '../lib/dialog';
 import { askOpenSettings } from '../lib/permissionPrompt';
 import { goBackOrHome } from '../lib/navigationRef';
 import { userMessage } from '../lib/errorMessage';
-import { fetchPortfolio, fetchWorkerJobStats, type CategoryStat } from '../lib/portfolio';
 import {
   profileCompleteness,
   type CompletenessStepKey,
 } from '../lib/profileCompleteness';
 import { fetchBothRoleSummaries, type ReviewSummary } from '../lib/reviews';
-import { fetchRehirePeople, type RehirePerson } from '../lib/savedWorkers';
 import { fetchWorkerServices } from '../lib/services';
-import { updateProfile } from '../lib/profiles';
+import { fetchWorkerJobStats, updateProfile, type CategoryStat } from '../lib/profiles';
 import { useMode } from '../modes/ModeProvider';
 import { ModeSwitchRow } from '../components/ModeSwitchRow';
 import { uploadAvatar } from '../lib/storage';
@@ -65,7 +62,6 @@ import {
   EYEBROW_TYPE,
   emeraldRadius,
   fonts,
-  litCardGround,
   litCardStyle,
   radius,
   spacing,
@@ -98,15 +94,14 @@ type SettingsRow = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   sub: string;
-  /** What sits before the chevron: the people's faces, or the unread count. */
-  trail?: 'people' | 'unread';
+  /** What sits before the chevron: the unread count. */
+  trail?: 'unread';
 } & (
   | {
       route:
         | 'Notifications'
         | 'Earnings'
         | 'ServicesPricing'
-        | 'SavedWorkers'
         | 'PaymentMethods'
         | 'AccountSafety';
     }
@@ -123,14 +118,6 @@ type SettingsRow = {
  * a1's row (`docs/DECISIONS.md` 2026-09-05 entry (3)), unchanged.
  */
 const HUB_SETTINGS: SettingsRow[] = [
-  {
-    route: 'SavedWorkers',
-    icon: 'bookmark-outline',
-    label: 'Saved & past workers',
-    // Their first names replace this once the list is known ("Sam and Priya").
-    sub: 'Rehire people you trust.',
-    trail: 'people',
-  },
   {
     route: 'ServicesPricing',
     icon: 'pricetag-outline',
@@ -194,18 +181,20 @@ const HUB_ROW = new Map(HUB_SETTINGS.map((row) => [row.label, row]));
  * behind ONE row that opens in place ("Worker tools" / "Customer tools"), so
  * nothing is deleted and nothing is shown to a mode that does not use it.
  * NOTIFICATIONS and ACCOUNT are the same in both. Every row of HUB_SETTINGS
- * is drawn exactly once in each mode (tests/supportContact.test.mjs).
+ * is drawn exactly once in each mode (tests/supportContact.test.mjs). Lean D5
+ * removed Saved & past workers, so a list can be empty; an empty section and
+ * an empty tools row are not drawn.
  */
 const HUB_LAYOUT: Record<'customer' | 'worker', { profile: string[]; money: string[]; tools: string[] }> = {
   customer: {
-    profile: ['Saved & past workers'],
+    profile: [],
     money: ['Payment methods'],
     tools: ['Services & availability', 'Earnings & payouts'],
   },
   worker: {
     profile: ['Services & availability'],
     money: ['Earnings & payouts', 'Payment methods'],
-    tools: ['Saved & past workers'],
+    tools: [],
   },
 };
 const HUB_NOTIFICATIONS = ['Notifications'];
@@ -223,17 +212,6 @@ const APPEARANCE_OPTIONS: { label: string; value: ThemePreference }[] = [
   { label: 'Dark', value: 'dark' },
   { label: 'Auto', value: 'system' },
 ];
-
-/** "Sam", "Sam and Priya", "Sam, Priya and 3 more" — first names, as the people wrote them. */
-function peopleLine(people: RehirePerson[]): string | null {
-  const named = people
-    .map((person) => person.full_name?.trim().split(/\s+/)[0] ?? '')
-    .filter((name) => name.length > 0)
-    .slice(0, 2);
-  if (named.length === 0) return null;
-  const more = people.length - named.length;
-  return more > 0 ? `${named.join(', ')} and ${more} more` : named.join(' and ');
-}
 
 async function openSupportMail(): Promise<void> {
   try {
@@ -283,9 +261,6 @@ export function ProfileScreen() {
   const [pendingAsset, setPendingAsset] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [saving, setSaving] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  // Bumped after the picker adds an item, so PastWork refetches.
-  const [portfolioVersion, setPortfolioVersion] = useState(0);
   // Named distinctly from avatarUrl (the editable draft value) — this is just
   // which photo the full-screen viewer is currently showing.
   const [avatarViewerUri, setAvatarViewerUri] = useState<string | null>(null);
@@ -301,8 +276,7 @@ export function ProfileScreen() {
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [removingAvatar, setRemovingAvatar] = useState(false);
   const [phoneError, setPhoneError] = useState<string | null>(null);
-  // Backs the above-the-fold summary line — same worker_job_stats() RPC
-  // PastWork's own stat line further down the page already calls.
+  // Backs the above-the-fold summary line — the worker_job_stats() RPC.
   const [jobStats, setJobStats] = useState<CategoryStat[]>([]);
   // R8b-c: the rating comes from the per-role REVEALED summaries, never
   // profiles.rating_avg/rating_count — the legacy aggregate mixes both roles
@@ -312,37 +286,20 @@ export function ProfileScreen() {
     worker: ReviewSummary | null;
     customer: ReviewSummary | null;
   } | null>(null);
-  // §6.4 — published-services and portfolio counts behind the completeness
-  // meter. Null = not yet known, and an UNKNOWN count renders no meter at
-  // all rather than a guessed one.
+  // §6.4 — the published-services count behind the completeness meter.
+  // Null = not yet known, and an UNKNOWN count renders no meter at all rather
+  // than a guessed one.
   const [meterCounts, setMeterCounts] = useState<{
     services: number;
-    portfolio: number;
   } | null>(null);
 
   // 2026-09-29 (LUX-LIST-2 #7): the hub's two rows that open in place, the
-  // people its Saved & past workers row names, the unread count its
-  // Notifications row carries (the bell's own read), and Sign out.
+  // unread count its Notifications row carries (the bell's own read), and
+  // Sign out.
   const [legalOpen, setLegalOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [rehirePeople, setRehirePeople] = useState<RehirePerson[]>([]);
   const [signingOut, setSigningOut] = useState(false);
   const unread = useUnreadNotificationCount();
-
-  // Re-read on focus, so someone saved elsewhere shows here on return. A
-  // failed read keeps the row's plain subtitle — never a guessed list.
-  useFocusEffect(
-    useCallback(() => {
-      if (!user) return;
-      let active = true;
-      fetchRehirePeople(user.id).then(({ people, error }) => {
-        if (active) setRehirePeople(error ? [] : people);
-      });
-      return () => {
-        active = false;
-      };
-    }, [user])
-  );
 
   const loadedRef = useRef<string | null>(null);
 
@@ -374,8 +331,8 @@ export function ProfileScreen() {
 
   // Master 42's pencil and its "Edit profile" chip both dispatch here with
   // `edit: true` — decision 10's "Edit → the edit screens", expressed as a
-  // route param because the form and the hub share one avatar/portfolio
-  // state and splitting them would fork it.
+  // route param because the form and the hub share one avatar state and
+  // splitting them would fork it.
   const wantsEdit = params?.edit === true;
   useEffect(() => {
     if (wantsEdit) {
@@ -400,10 +357,7 @@ export function ProfileScreen() {
     return () => {
       active = false;
     };
-    // portfolioVersion isn't really about jobs, but a newly-completed job is
-    // usually followed by adding it to the portfolio, so re-checking here
-    // too keeps this line from going stale without a dedicated subscription.
-  }, [user, portfolioVersion]);
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -418,28 +372,22 @@ export function ProfileScreen() {
     };
   }, [user]);
 
-  // §6.4 — refreshed on focus so publishing a service or featuring a photo
-  // elsewhere moves the meter the moment this screen returns. Worker mode
-  // only; a failed read leaves the counts unknown and the meter hidden.
+  // §6.4 — refreshed on focus so publishing a service elsewhere moves the
+  // meter the moment this screen returns. Worker mode only; a failed read
+  // leaves the count unknown and the meter hidden.
   const loadMeterCounts = useCallback(async () => {
     if (!user || mode !== 'worker') return;
-    const [servicesRes, portfolioRes] = await Promise.all([
-      fetchWorkerServices(user.id),
-      fetchPortfolio(user.id),
-    ]);
-    if (servicesRes.error || portfolioRes.error) return;
+    const servicesRes = await fetchWorkerServices(user.id);
+    if (servicesRes.error) return;
     setMeterCounts({
       services: servicesRes.data.filter((s) => s.published).length,
-      portfolio: portfolioRes.data.length,
     });
   }, [user, mode]);
 
   useFocusEffect(
     useCallback(() => {
       void loadMeterCounts();
-      // portfolioVersion: the on-screen picker adds items without a focus
-      // change, so it re-runs this the same way it re-runs the stats line.
-    }, [loadMeterCounts, portfolioVersion])
+    }, [loadMeterCounts])
   );
 
   const completeness = profileCompleteness({
@@ -447,20 +395,15 @@ export function ProfileScreen() {
     avatarUrl: profile?.avatar_url ?? null,
     bio: profile?.bio ?? null,
     publishedServiceCount: meterCounts?.services ?? 0,
-    portfolioCount: meterCounts?.portfolio ?? 0,
   });
 
   /** Each unmet meter step routes to the surface that fixes it. */
   function meterAction(key: CompletenessStepKey) {
-    if (key === 'categories' || key === 'avatar' || key === 'bio') {
-      setIsEditing(true);
-      return;
-    }
     if (key === 'services') {
       navigation.navigate('ServicesPricing');
       return;
     }
-    setPickerOpen(true);
+    setIsEditing(true);
   }
 
   function toggleCategory(c: string) {
@@ -640,8 +583,7 @@ export function ProfileScreen() {
 
   // Replaces static, identical-for-every-user copy ("You can post jobs and
   // find work") with something that's actually true of this specific
-  // account — same signals PastWork's own stat line further down already
-  // shows (job count by category), plus rating and tenure where there's
+  // account — job count by category, plus rating and tenure where there's
   // something real to say.
   const totalCompletedJobs = jobStats.reduce((sum, s) => sum + s.count, 0);
   const memberSince = user?.created_at
@@ -727,7 +669,6 @@ export function ProfileScreen() {
 
   /** THE one drawing of a HUB_SETTINGS row, wherever it sits. */
   const renderRow = (row: SettingsRow, divided: boolean) => {
-    const people = row.trail === 'people' ? peopleLine(rehirePeople) : null;
     const showUnread = row.trail === 'unread' && unread > 0;
     return (
       <PressScale
@@ -750,20 +691,8 @@ export function ProfileScreen() {
         <Ionicons name={row.icon} size={settingsGlyphSize} color={iconColour} />
         <View style={styles.rowCopy}>
           <Text style={styles.rowTitle} numberOfLines={1}>{row.label}</Text>
-          <Text style={styles.rowSub} numberOfLines={1}>{people ?? row.sub}</Text>
+          <Text style={styles.rowSub} numberOfLines={1}>{row.sub}</Text>
         </View>
-        {people ? (
-          <View style={styles.faces}>
-            {rehirePeople.slice(0, 2).map((person, index) => (
-              <View
-                key={person.id}
-                style={[styles.face, { borderColor: litCardGround(isDark) }, index > 0 && styles.faceOverlap]}
-              >
-                <Avatar name={person.full_name ?? ''} uri={person.avatar_url ?? null} size={30} initialsSize={10} />
-              </View>
-            ))}
-          </View>
-        ) : null}
         {showUnread ? (
           <View style={[styles.badge, isDark && styles.badgeDark]}>
             <Text style={styles.badgeText}>{unread > 9 ? '9+' : String(unread)}</Text>
@@ -840,7 +769,7 @@ export function ProfileScreen() {
               is who you are here: photo, name, the revealed rating (it opens
               the reviews) or "No reviews yet", and "View profile" — the whole
               card opens Profile details, which carries what left this page
-              (jobs completed, member since, and the past work). The Edit pill
+              (jobs completed and member since). The Edit pill
               opens the edit surface in place. */}
           {!isEditing ? (
             <View style={styles.topGroup}>
@@ -1104,7 +1033,9 @@ export function ProfileScreen() {
               mode's behind the tools row (HUB_LAYOUT). */}
           {!isEditing ? (
             <>
-              {renderSection('Your profile', rowsOf(layout.profile).map((row, index) => renderRow(row, index > 0)))}
+              {layout.profile.length > 0
+                ? renderSection('Your profile', rowsOf(layout.profile).map((row, index) => renderRow(row, index > 0)))
+                : null}
               {renderSection('Money', rowsOf(layout.money).map((row, index) => renderRow(row, index > 0)))}
               {renderSection('Notifications', rowsOf(HUB_NOTIFICATIONS).map((row, index) => renderRow(row, index > 0)))}
               {renderSection(
@@ -1185,28 +1116,32 @@ export function ProfileScreen() {
                   {rowsOf(HUB_ACCOUNT.slice(1)).map((row) => renderRow(row, true))}
 
                   {/* The other mode's rows, behind one row that opens in place. */}
-                  <PressScale
-                    haptic={false}
-                    style={({ pressed }) => [styles.row, { minHeight: settingsRowHeight }, styles.rowDivider, pressed && styles.rowPressed]}
-                    onPress={() => setToolsOpen((open) => !open)}
-                    accessibilityRole="button"
-                    accessibilityLabel={toolsTitle}
-                    accessibilityState={{ expanded: toolsOpen }}
-                  >
-                    <Ionicons name="grid-outline" size={settingsGlyphSize} color={iconColour} />
-                    <View style={styles.rowCopy}>
-                      <Text style={styles.rowTitle} numberOfLines={1}>{toolsTitle}</Text>
-                      <Text style={styles.rowSub} numberOfLines={1}>
-                        {toolsRows.map((row) => row.label).join(' · ')}
-                      </Text>
-                    </View>
-                    <DropdownChevron open={toolsOpen}>
-                      <Ionicons name="chevron-down" size={18} color={colors.textSubtle} />
-                    </DropdownChevron>
-                  </PressScale>
-                  <DropdownBody open={toolsOpen}>
-                      {toolsRows.map((row) => renderRow(row, true))}
-                  </DropdownBody>
+                  {toolsRows.length > 0 ? (
+                    <>
+                      <PressScale
+                        haptic={false}
+                        style={({ pressed }) => [styles.row, { minHeight: settingsRowHeight }, styles.rowDivider, pressed && styles.rowPressed]}
+                        onPress={() => setToolsOpen((open) => !open)}
+                        accessibilityRole="button"
+                        accessibilityLabel={toolsTitle}
+                        accessibilityState={{ expanded: toolsOpen }}
+                      >
+                        <Ionicons name="grid-outline" size={settingsGlyphSize} color={iconColour} />
+                        <View style={styles.rowCopy}>
+                          <Text style={styles.rowTitle} numberOfLines={1}>{toolsTitle}</Text>
+                          <Text style={styles.rowSub} numberOfLines={1}>
+                            {toolsRows.map((row) => row.label).join(' · ')}
+                          </Text>
+                        </View>
+                        <DropdownChevron open={toolsOpen}>
+                          <Ionicons name="chevron-down" size={18} color={colors.textSubtle} />
+                        </DropdownChevron>
+                      </PressScale>
+                      <DropdownBody open={toolsOpen}>
+                          {toolsRows.map((row) => renderRow(row, true))}
+                      </DropdownBody>
+                    </>
+                  ) : null}
                 </>
               )}
 
@@ -1231,15 +1166,6 @@ export function ProfileScreen() {
         </ScrollView>
       )}
 
-      {user && (
-        <PortfolioPicker
-          visible={pickerOpen}
-          workerId={user.id}
-          onClose={() => setPickerOpen(false)}
-          onChanged={() => setPortfolioVersion((v) => v + 1)}
-        />
-      )}
-
       <PhotoViewer
         visible={!!avatarViewerUri}
         uri={avatarViewerUri}
@@ -1247,8 +1173,8 @@ export function ProfileScreen() {
         allowShare={false}
       />
 
-      {/* Plain in-tree overlay, not a nested Modal — see PortfolioPicker for
-          why stacking a second native Modal here would be a bug risk. */}
+      {/* Plain in-tree overlay, not a nested Modal — stacking a second native
+          Modal here would be a bug risk. */}
       {avatarMenuOpen && (
         <Pressable
           style={styles.menuBackdrop}
@@ -1611,11 +1537,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '600',
     color: colors.ink,
   },
-  // Two faces, the second overlapping the first by 6 — each ringed in the
-  // card's own ground so the overlap reads as a cut, not a smudge.
-  faces: { flexDirection: 'row', alignItems: 'center' },
-  face: { borderWidth: 2, borderRadius: radius.pill },
-  faceOverlap: { marginLeft: -10 },
   badge: {
     minWidth: 22,
     height: 22,

@@ -37,12 +37,9 @@ const NAMED = [
   ['components/JobFilterSheet.tsx', 'onPress={reset}', 'Reset filters'],
   ['screens/MapScreen.tsx', 'onPress={toggleToday}', 'the Map’s Today chip'],
   ['screens/MapScreen.tsx', 'onPress={() => setSelected(null)}', 'the Map card’s close'],
-  ['screens/SavedWorkersScreen.tsx', 'accessibilityLabel={`Hire ${', 'Hire'],
   ['screens/WorkerProfileScreen.tsx', 'onPress={() => bookService(service)}', 'Book'],
   ['screens/WorkerHomeScreen.tsx', 'accessibilityLabel="See all in My Jobs"', 'See all (Needs you)'],
-  ['screens/WorkerSearchScreen.tsx', 'accessibilityLabel="See all saved and past workers"', 'See all (Hire again)'],
   ['components/PriceDropdown.tsx', 'onPress={finishEntry}', 'the price Done pill'],
-  ['components/PastWork.tsx', 'style={[styles.tab, active', 'the Past work tabs'],
   ['screens/ChatScreen.tsx', 'accessibilityLabel="Cancel reply"', 'Cancel reply'],
   ['ui/primitives/SearchBar.tsx', 'accessibilityLabel="Clear search"', 'Clear search'],
 ];
@@ -61,7 +58,7 @@ test('E3: the Filters pill draws one height and slops from that same constant', 
 });
 
 // F12 review — A PRESS WRAPPER CARRIES ITS PRESSABLE'S SLOP. Pinned as the spring wrappers' shape
-// (SearchBar's clear and mic, the Toggle, PressScale on both paths) — but NOT for the reason first
+// (SearchBar's clear, the Toggle, PressScale on both paths; lean D5 removed the mic) — but NOT for the reason first
 // given. On the New Architecture a parent whose overflow is visible does not clip a child's
 // hitSlop: Yoga folds every child's hitSlop into the parent's overflow inset
 // (YogaLayoutableShadowNode.cpp getContentBounds), so RCTViewComponentView's betterHitTest — which
@@ -89,7 +86,7 @@ test('[static] F12 review: a press wrapper around a slopped Pressable carries th
       assert.match(match[1], /hitSlop=/, `${file}: the press wrapper at ${match.index} drops its Pressable's slop`);
     }
   }
-  assert.ok(wrappers >= 3, 'the SearchBar clear and mic and the Toggle are among the wrappers checked');
+  assert.ok(wrappers >= 2, 'the SearchBar clear and the Toggle are among the wrappers checked');
   // The shared press passes it to both views, on both paths (tests/smoothPass.test.mjs pins the shape).
   for (const file of ['components/PressScale.tsx', 'components/PressScale.motion120.tsx']) {
     assert.match(read(file), /onLayout=\{onLayout\} hitSlop=\{hitSlop\}>/, `${file} wrapper carries the slop`);

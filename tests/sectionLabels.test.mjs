@@ -41,7 +41,6 @@ const NAMED = {
   'screens/ProfileScreen.tsx': ['fieldLabel'],
   'components/JobLivePage.tsx': ['label'],
   'components/JobSummaryCard.tsx': ['label'],
-  'components/PortfolioPicker.tsx': ['gridLabel'],
 };
 const LABEL_KEY = /(eyebrow|sectionLabel|sectionTitle|Eyebrow)/;
 

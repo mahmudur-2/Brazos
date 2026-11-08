@@ -43,12 +43,7 @@ const CONTRACTS = [
     typeName: 'Conversation',
     selects: 1,
   },
-  {
-    file: 'lib/portfolio.ts',
-    constName: 'PORTFOLIO_ITEM_COLUMNS',
-    typeName: 'PortfolioItem',
-    selects: 2, // the gallery fetch + the insert's returning list
-  },
+  // (lib/portfolio.ts's PORTFOLIO_ITEM_COLUMNS left with the portfolio, lean D5.)
   {
     file: 'lib/notificationPrefs.ts',
     constName: 'NOTIFICATION_PREFS_COLUMNS',
@@ -82,7 +77,6 @@ test('no runtime select(\'*\') remains anywhere in lib/', async () => {
   // the class closed — a new '*' needs a written reason, not a default.
   const files = [
     'lib/conversations.ts',
-    'lib/portfolio.ts',
     'lib/notificationPrefs.ts',
   ];
   for (const file of files) {
