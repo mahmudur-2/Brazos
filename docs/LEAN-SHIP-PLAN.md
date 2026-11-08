@@ -273,6 +273,7 @@ GitHub Actions, TestSprite (server-function HTTP tests, decision 10 and step E6)
 | Before the run (optional) | In this app, run `/mcp` and authorize **Supabase**. Then the run fetches the Security Advisor itself and you skip the export below. | 2 |
 | During (parked) | Supabase dashboard → Advisors → export, only if you skipped the step above. | 3 |
 | During (parked) | Re-run the staging pipeline with "allow drops" checked, once, when the run says the drop migration is ready. | 2 |
+| Build 1 (Phase G) | Be at the keyboard for about 3 minutes: EAS has no App Store signing credentials yet (no production build has ever been made), so the first build asks for your Apple ID sign-in and a 2-factor code. The run pings you when it gets there. | 3 |
 | After build 1 | App Store Connect → TestFlight → Internal Testing → add your friends' Apple emails; accept the invite on your own phone; walk the app for 10 minutes. | 10 |
 | After build 1 | Open BrowserStack → App Live, upload the `.ipa` the run links, look at it on a real iPhone for 10 minutes. | 10 |
 
