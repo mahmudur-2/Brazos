@@ -223,12 +223,12 @@ test('a4 · the money walk’s selectors are the ones the app renders, in the de
   // Each of these is still the whole text or label of the element
   // .maestro/02-customer-post-job.yml finds on its open-bids side job.
   // 2026-09-28 (LUX-LIST-64 #36, #42): the price field ("Edit budget") and its
-  // list's "Enter your own amount" and Done live in components/PriceDropdown.tsx;
-  // the live page's two actions in components/JobLivePage.tsx.
+  // open-bids helper live in components/PriceDropdown.tsx; the live page's two
+  // actions in components/JobLivePage.tsx. F4c: the side job picks the $50 preset
+  // ("Enter your own amount" sits below the menu's fold on the simulator).
   for (const [source, selector] of [
     [drop, 'accessibilityLabel="Edit budget"'],
-    [drop, "'Enter your own amount'"],
-    [drop, 'accessibilityLabel="Done"'],
+    [drop, "'Workers can bid up to this amount.'"],
     [screen, "'Publish'"],
     [live, "'Back to Home'"],
     [live, "'View job and bids'"],
@@ -236,15 +236,14 @@ test('a4 · the money walk’s selectors are the ones the app renders, in the de
   ]) {
     assert.ok(source.includes(selector), `${selector} is an E2E selector and must not move`);
   }
-  assert.ok(modes.includes("fieldLabel: 'Maximum budget in dollars'"), 'the field the walk types into');
+  assert.ok(modes.includes("fieldLabel: 'Maximum budget in dollars'"), 'the custom $ entry label');
   assert.match(drop, /accessibilityLabel=\{copy\.fieldLabel\}/, 'the $ entry carries it');
 
   // …and neither segment label shadows one of them.
   const walkStrings = [
     'Edit budget',
-    'Enter your own amount',
-    'Maximum budget in dollars',
-    'Done',
+    '$50',
+    'Workers can bid up to this amount.',
     'Publish',
     'STEP 4 OF 4',
     'Your job is live.',
@@ -257,12 +256,12 @@ test('a4 · the money walk’s selectors are the ones the app renders, in the de
     assert.ok(!walkStrings.includes(label), `the segment label ${label} must not shadow a selector`);
   }
 
-  // The flow opens the field, picks "Enter your own amount", types, taps Done.
+  // The flow opens the field, picks the $50 preset, sees the open-bids helper, publishes.
   // F2: 02 posts the main job at a set price; its side job runs this open-bids sequence.
   const walk = read('.maestro/02-customer-post-job.yml');
   assert.match(
     walk,
-    /- tapOn: "Edit budget"\n- tapOn: "Enter your own amount"\n- tapOn: "Maximum budget in dollars"\n- inputText: "50"\n- hideKeyboard:\n {4}optional: true\n- tapOn: "Done"\n- tapOn: "Publish"/
+    /- tapOn: "Edit budget"\n- tapOn: '\\\$50'\n- assertVisible: "Workers can bid up to this amount\."\n- tapOn: "Publish"/
   );
 });
 

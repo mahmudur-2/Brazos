@@ -235,14 +235,11 @@ appId: app.brazos.mobile.preview
       text: "Edit budget"
     direction: UP
     timeout: 20000
-# Default open bids: the custom maximum (pinned by tests/pricingMode.test.mjs, a4).
+# Default open bids: a preset maximum. "Enter your own amount" sits below the menu's fold
+# (e2e run 3 missed it); $50 is on screen and saves the same budget.
 - tapOn: "Edit budget"
-- tapOn: "Enter your own amount"
-- tapOn: "Maximum budget in dollars"
-- inputText: "50"
-- hideKeyboard:
-    optional: true
-- tapOn: "Done"
+- tapOn: '\$50'
+- assertVisible: "Workers can bid up to this amount."
 - tapOn: "Publish"
 - extendedWaitUntil:
     visible: 'Your job is live\.|Get notified\?|Could not post job|Saved, but without a map pin'
