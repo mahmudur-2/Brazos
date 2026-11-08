@@ -252,7 +252,7 @@ select is((select count(*) from public.jobs where id = :'j_done'), 0::bigint, 's
 select throws_ok($$ update public.jobs set title = 'hijacked' where id = (select v from fx where k = 'j_open') $$,
   '42501', 'permission denied for table jobs', 'stranger: direct UPDATE of someone else''s job is refused');
 select tests.authenticate_anon();
-select is((select count(*) from public.jobs where id = :'j_open'), 0::bigint, 'anon: sees zero rows of jobs, even the open one (SELECT is granted; no policy admits anon)');
+select throws_ok($$ select count(*) from public.jobs $$, '42501', 'permission denied for table jobs', 'anon: cannot read jobs at all, even the open one (lean E4 revoked anon''s SELECT; no policy admitted anon before it)');
 
 -- ---------------------------------------------------------------------------
 -- §3. job_locations — job_locations_select_party. The exact address.
@@ -268,7 +268,7 @@ select is((select count(*) from public.job_locations where job_id = :'j_open'), 
 select tests.authenticate_as(:'stranger');
 select is((select count(*) from public.job_locations where job_id in (:'j_open', :'j_live', :'j_done')), 0::bigint, 'stranger: reads no address at all');
 select tests.authenticate_anon();
-select is((select count(*) from public.job_locations where job_id in (:'j_open', :'j_live', :'j_done')), 0::bigint, 'anon: reads no address at all');
+select throws_ok($$ select count(*) from public.job_locations $$, '42501', 'permission denied for table job_locations', 'anon: reads no address at all (refused at the grant since lean E4)');
 
 -- ---------------------------------------------------------------------------
 -- §4. job_offers + bids — job_offers_select_party; the bids projection's
@@ -288,7 +288,7 @@ select is((select count(*) from public.job_offers where job_id in (:'j_open', :'
 select is((select count(*) from public.bids where job_id in (:'j_open', :'j_live')), 0::bigint, 'stranger: sees no bids');
 select tests.authenticate_anon();
 select throws_ok($$ select count(*) from public.job_offers $$, '42501', 'permission denied for table job_offers', 'anon: cannot read job_offers at all');
-select is((select count(*) from public.bids where job_id = :'j_open'), 0::bigint, 'anon: sees zero bids');
+select throws_ok($$ select count(*) from public.bids $$, '42501', 'permission denied for table bids', 'anon: cannot read bids at all (lean E4)');
 
 -- ---------------------------------------------------------------------------
 -- §4a. bids — the DELETE grant (R7b). R7's census of client-writable tables
@@ -318,11 +318,11 @@ select policies_are('public', 'bids', ARRAY[
   'workers view own bids'],
   'catalog: public.bids carries exactly these four SELECT policies, and NONE for DELETE');
 select table_privs_are('public', 'bids', 'authenticated',
-  ARRAY['SELECT', 'REFERENCES', 'DELETE', 'TRIGGER', 'TRUNCATE'],
-  'catalog: authenticated really does hold DELETE on bids (recorded, not inferred), plus SELECT/REFERENCES/TRIGGER/TRUNCATE');
+  ARRAY['SELECT', 'DELETE'],
+  'catalog: authenticated really does hold DELETE on bids (recorded, not inferred), plus SELECT (lean E4 took REFERENCES/TRIGGER/TRUNCATE)');
 select table_privs_are('public', 'bids', 'anon',
-  ARRAY['SELECT', 'REFERENCES', 'TRIGGER', 'TRUNCATE'],
-  'catalog: anon holds no DELETE on bids');
+  '{}'::text[],
+  'catalog: anon holds nothing on bids, DELETE included (lean E4)');
 select ok((select relrowsecurity from pg_class where oid = 'public.bids'::regclass),
   'catalog: row level security is enabled on bids, so a command with no policy of its own is default-denied');
 
@@ -540,7 +540,7 @@ select is((select count(*) from public.messages where direct_thread_id in (:'dt_
 select throws_ok($$ insert into public.messages (job_id, sender_id, content) values ((select v from fx where k = 'j_live'), (select v from fx where k = 'stranger'), 'intrusion') $$,
   '42501', 'new row violates row-level security policy for table "messages"', 'stranger: cannot post on j_live');
 select tests.authenticate_anon();
-select is((select count(*) from public.messages where id = :'m_live_owner'), 0::bigint, 'anon: reads zero messages');
+select throws_ok($$ select count(*) from public.messages $$, '42501', 'permission denied for table messages', 'anon: cannot read messages at all (lean E4)');
 
 -- messaging_unlocked, the gate itself
 select tests.authenticate_as(:'owner');
@@ -563,7 +563,7 @@ select tests.clear_auth();
 select isnt((select case when user_a = :'owner' then user_a_read_at else user_b_read_at end from public.direct_threads where id = :'dt_ow'), null, 'runner: the owner''s own read marker moved');
 select is((select case when user_a = :'owner' then user_b_read_at else user_a_read_at end from public.direct_threads where id = :'dt_ow'), null, 'runner: the worker''s read marker did not');
 select tests.authenticate_anon();
-select is((select count(*) from public.direct_threads where id in (:'dt_ow', :'dt_ob')), 0::bigint, 'anon: sees zero threads');
+select throws_ok($$ select count(*) from public.direct_threads $$, '42501', 'permission denied for table direct_threads', 'anon: cannot read threads at all (lean E4)');
 select throws_ok($$ select public.mark_direct_thread_read((select v from fx where k = 'dt_ow')) $$,
   '42501', 'permission denied for function mark_direct_thread_read', 'anon: cannot execute mark_direct_thread_read');
 
@@ -587,7 +587,7 @@ select is((select count(*) from public.conversations where job_id = :'j_live'), 
 select tests.authenticate_as(:'stranger');
 select is((select count(*) from public.conversations where job_id = :'j_live' or direct_thread_id in (:'dt_ow', :'dt_ob')), 0::bigint, 'stranger: the conversations view lists none of them');
 select tests.authenticate_anon();
-select is((select count(*) from public.conversations where job_id = :'j_live'), 0::bigint, 'anon: the conversations view is empty');
+select throws_ok($$ select count(*) from public.conversations $$, '42501', 'permission denied for view conversations', 'anon: cannot read the conversations view at all (lean E4)');
 
 -- conversation states went in lean v1: the RPC anon was refused is gone
 select hasnt_function('public', 'set_conversation_state', 'anon: set_conversation_state does not exist (lean v1)');
@@ -745,7 +745,7 @@ select is((select count(*) from public.reviews where job_id = :'j_done'), 0::big
 select is((select count(*) from public.profile_reviews(:'worker')), 1::bigint, 'stranger: profile_reviews shows only the revealed worker-role review (the counterpart is customer-role, about the owner)');
 select is((select total from public.profile_review_summary(:'worker')), 1, 'stranger: profile_review_summary counts it');
 select tests.authenticate_anon();
-select is((select count(*) from public.reviews where job_id = :'j_done'), 0::bigint, 'anon: reads zero reviews');
+select throws_ok($$ select count(*) from public.reviews $$, '42501', 'permission denied for table reviews', 'anon: cannot read reviews at all (lean E4)');
 select throws_ok($$ select * from public.profile_reviews((select v from fx where k = 'worker')) $$,
   '42501', 'permission denied for function profile_reviews', 'anon: cannot execute profile_reviews');
 
@@ -808,7 +808,7 @@ select is((select count(*) from u), 0::bigint, 'owner: an UPDATE of the worker''
 select throws_ok($$ insert into public.notification_prefs (user_id) values ((select v from fx where k = 'stranger')) $$,
   '42501', 'new row violates row-level security policy for table "notification_prefs"', 'owner: cannot insert prefs for someone else');
 select tests.authenticate_anon();
-select is((select count(*) from public.notification_prefs where user_id = :'owner'), 0::bigint, 'anon: reads zero prefs');
+select throws_ok($$ select count(*) from public.notification_prefs $$, '42501', 'permission denied for table notification_prefs', 'anon: cannot read prefs at all (lean E4)');
 
 -- notification_outbox (rows come from the fixture's triggers)
 select tests.authenticate_as(:'worker');
@@ -836,7 +836,7 @@ select throws_ok($$ insert into public.push_tokens (user_id, token) values ((sel
 with d as (delete from public.push_tokens where user_id = :'worker' returning 1)
 select is((select count(*) from d), 0::bigint, 'stranger: a DELETE of the worker''s token touches zero rows');
 select tests.authenticate_anon();
-select is((select count(*) from public.push_tokens where user_id = :'worker'), 0::bigint, 'anon: reads zero tokens');
+select throws_ok($$ select count(*) from public.push_tokens $$, '42501', 'permission denied for table push_tokens', 'anon: cannot read tokens at all (lean E4)');
 select throws_ok($$ select public.register_push_token('anon-token', 'ios') $$, '42501', 'permission denied for function register_push_token', 'anon: cannot execute register_push_token');
 
 -- legal_acceptances
@@ -972,7 +972,7 @@ select is((select count(*) from public.banned_phones where banned_profile_id = :
 select tests.authenticate_as(:'admin');
 select is((select count(*) from public.banned_phones where banned_profile_id = :'bidder'), 0::bigint, 'admin: banned_phones has no SELECT policy, so even an admin reads zero rows through the table');
 select tests.authenticate_anon();
-select is((select count(*) from public.banned_phones), 0::bigint, 'anon: reads zero banned phones');
+select throws_ok($$ select count(*) from public.banned_phones $$, '42501', 'permission denied for table banned_phones', 'anon: cannot read banned phones at all (lean E4)');
 select tests.authenticate_as(:'bidder');
 select throws_ok($$ select public.create_offer(p_amount_cents := 100, p_job_id := (select v from fx where k = 'j_open')) $$,
   'P0001', 'Active authentication required', 'bidder (banned): can no longer bid — is_active_user() gates the RPC');
@@ -992,14 +992,14 @@ select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), '')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  'review_is_revealed',
-  'anon may execute exactly one SECURITY DEFINER function: review_is_revealed (R8a — the reviews SELECT policy calls it, and the policy must evaluate for anon''s column-probe grant; a boolean about row visibility, no rows)');
+  '',
+  'anon may execute no SECURITY DEFINER function (lean E4 revoked review_is_revealed, the last one: anon holds no grant on reviews, so the reviews SELECT policy never evaluates for anon)');
 select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), '')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  'accept_legal_documents, accept_offer, account_deletion_blockers, admin_open_reports, ban_user, begin_job_payment, begin_tip_payment, can_delete_own_job, cancel_job, client_job_stats, counter_offer, create_job, create_offer, create_review, current_fee, current_user_is_admin, current_user_is_banned, decline_offer, delete_my_account, drop_series_worker, get_my_active_mode, get_my_profile, is_active_user, is_blocked_between, is_profile_active, job_hotspots, job_offer_count, job_offer_counts, job_payment_state, job_request_parties_ok, jobs_in_cell, jobs_within_radius, mark_direct_thread_read, mark_worker_arrival, messaging_unlocked, my_payouts_status, my_pending_offers, open_job_dispute, profile_review_summaries, profile_review_summary, profile_reviews, quote_job_price, register_push_token, release_job_payment, report_running_late, review_is_revealed, set_active_mode, should_notify, start_job_series, stop_job_series, transition_job_status, unban_user, unsend_message, update_job_details, update_my_profile, withdraw_job_dispute, withdraw_offer, worker_job_stats',
-  'the SECURITY DEFINER functions authenticated may execute are exactly this list (R4 added begin_job_payment, begin_tip_payment, cancel_job, current_fee, quote_job_price, release_job_payment; R5b added my_payouts_status; R8a added review_is_revealed; n6 added profile_review_summaries — the batch per-role revealed summary, any signed-in user, refused to anon, proven in 120_reputation_batch.sql §10; idea 5 (2026-09-30) added report_running_late — the hired worker only, before arriving, refused to anon, proven in 150_running_late.sql §5-§8; idea 14 (2026-09-30) added start_job_series, stop_job_series and drop_series_worker — the customer''s own job / series, the series'' worker, refused to anon, proven in 180_job_series.sql §1-§2, §10-§11; lean v1 (20261108000000) removed thirty: the cut features'' RPCs, the sandbox money RPCs, the deprecated shims and the probe markers)');
+  'accept_legal_documents, accept_offer, account_deletion_blockers, admin_open_reports, ban_user, begin_job_payment, begin_tip_payment, can_delete_own_job, cancel_job, client_job_stats, counter_offer, create_job, create_offer, create_review, current_fee, current_user_is_admin, current_user_is_banned, decline_offer, delete_my_account, drop_series_worker, get_my_active_mode, get_my_profile, is_active_user, is_blocked_between, is_profile_active, job_hotspots, job_offer_count, job_offer_counts, job_payment_state, jobs_in_cell, jobs_within_radius, mark_direct_thread_read, mark_worker_arrival, messaging_unlocked, my_payouts_status, my_pending_offers, open_job_dispute, profile_review_summaries, profile_review_summary, profile_reviews, quote_job_price, register_push_token, release_job_payment, report_running_late, review_is_revealed, set_active_mode, start_job_series, stop_job_series, transition_job_status, unban_user, unsend_message, update_job_details, update_my_profile, withdraw_job_dispute, withdraw_offer, worker_job_stats',
+  'the SECURITY DEFINER functions authenticated may execute are exactly this list (R4 added begin_job_payment, begin_tip_payment, cancel_job, current_fee, quote_job_price, release_job_payment; R5b added my_payouts_status; R8a added review_is_revealed; n6 added profile_review_summaries — the batch per-role revealed summary, any signed-in user, refused to anon, proven in 120_reputation_batch.sql §10; idea 5 (2026-09-30) added report_running_late — the hired worker only, before arriving, refused to anon, proven in 150_running_late.sql §5-§8; idea 14 (2026-09-30) added start_job_series, stop_job_series and drop_series_worker — the customer''s own job / series, the series'' worker, refused to anon, proven in 180_job_series.sql §1-§2, §10-§11; lean v1 (20261108000000) removed thirty: the cut features'' RPCs, the sandbox money RPCs, the deprecated shims and the probe markers; lean E4 (20261108010000) removed should_notify and job_request_parties_ok, whose only callers are definer functions, proven in 310_grants.sql)');
 select ok(has_function_privilege('service_role', 'public.claim_notification_batch(integer)', 'EXECUTE'), 'service_role may execute claim_notification_batch (positive control for the two refusals below)');
 -- R4: the service-role-only money functions, same pattern — the positive
 -- control is service_role's privilege, the proof is the stranger's refusal.
@@ -1041,8 +1041,8 @@ select hasnt_function('public', 'respond_job_request', 'the respond_job_request 
 --      (four INSERT, one UPDATE, three DELETE) and three SELECT.
 --
 --      The bucket ROWS are storage data, not schema: the baseline is a
---      schema-only dump, so a fresh stack has none. supabase/seed.sql creates
---      the three the policies name, which is why the behaviour half below can
+--      schema-only dump, so a fresh stack has none. 20261108010000_lean_v1_grants.sql
+--      creates the three the policies name (seed.sql keeps a backstop), which is why the behaviour half below can
 --      run at all — and why `npm run db:reset` must precede `npm run db:test`.
 --      phase29_security_contract.sql's conditional skip closes for the same
 --      reason.
@@ -1084,7 +1084,7 @@ select ok((select relrowsecurity from pg_class where oid = 'storage.objects'::re
 -- The bucket rows the policies name, and the control that the behaviour half
 -- below is measuring something real.
 select is((select count(*) from storage.buckets where id in ('avatars', 'chat-photos', 'job-photos')), 3::bigint,
-  'runner: all three buckets the policies name exist and none of them is public (seed.sql) — the behaviour half below is live, not vacuous');
+  'runner: all three buckets the policies name exist (20261108010000_lean_v1_grants.sql; seed.sql backstop) — the behaviour half below is live, not vacuous');
 
 -- avatars: own folder only, but readable by every account.
 select tests.authenticate_as(:'worker');

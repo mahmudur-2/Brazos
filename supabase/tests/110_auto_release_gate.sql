@@ -152,8 +152,8 @@ select throws_ok($$ select public.auto_release_due_payments() $$,
   '42501', 'permission denied for function auto_release_due_payments',
   '0: customer — a client cannot run the clock (030 §14''s proof, still green after the restatement)');
 select tests.clear_auth();
-select ok(has_function_privilege('authenticated', 'public.should_notify(uuid, uuid, text)', 'EXECUTE'),
-  '0: authenticated may execute should_notify (the baseline''s grant, restated)');
+select ok(not has_function_privilege('authenticated', 'public.should_notify(uuid, uuid, text)', 'EXECUTE'),
+  '0: authenticated holds no EXECUTE on should_notify (lean E4 revoked the baseline''s grant: its callers are definer functions)');
 select ok(not has_function_privilege('anon', 'public.should_notify(uuid, uuid, text)', 'EXECUTE'),
   '0: anon holds no EXECUTE on should_notify (PUBLIC revoked, restated)');
 select ok(not has_function_privilege('anon', 'public.notify_on_job_status()', 'EXECUTE'),

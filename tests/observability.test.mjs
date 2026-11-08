@@ -226,6 +226,8 @@ test('the init is inert without a vendor or a DSN, and tags only when the vendor
     body,
     /tracesSampleRate: env\.EXPO_PUBLIC_APP_VARIANT === 'production' \? 0\.1 : 1,/
   );
+  // lean E4 (S4): a development run sends no event.
+  assert.match(body, /enabled: env\.EXPO_PUBLIC_APP_VARIANT !== 'development',/);
 });
 
 // ---------------------------------------------------------------------------

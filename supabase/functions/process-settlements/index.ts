@@ -63,6 +63,7 @@
 // non-money columns and can never move money.
 // ============================================================================
 
+import { requireServiceRole } from '../_shared/serviceAuth.ts';
 import { classifySettlementFailure } from './classify.mjs';
 
 const STRIPE_API = 'https://api.stripe.com';
@@ -438,10 +439,8 @@ Deno.serve(async (req) => {
   // Before anything else. Supabase's own verify_jwt would accept any signed-in
   // user's token, so this comparison — not that gate — is what keeps ordinary
   // users out of the money queues.
-  const auth = req.headers.get('Authorization') ?? '';
-  if (auth !== `Bearer ${SERVICE_KEY}`) {
-    return json({ error: 'forbidden' }, 403);
-  }
+  const refused = requireServiceRole(req, SERVICE_KEY);
+  if (refused) return refused;
 
   // Transfers first, then refunds. Each pass is independent: a pass that throws
   // outright still leaves the other's counts in the summary, because the

@@ -26,6 +26,8 @@
 // the first line of defence, the GRANTs are the real one.
 // ============================================================================
 
+import { requireServiceRole } from '../_shared/serviceAuth.ts';
+
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 // Expo's documented ceiling is 100 messages per request.
@@ -218,13 +220,8 @@ Deno.serve(async (req) => {
   // Only the service role may drain the outbox. Supabase's own verify_jwt (if
   // left on) would accept any signed-in user's token, so this comparison — not
   // that gate — is what keeps ordinary users out.
-  const auth = req.headers.get('Authorization') ?? '';
-  if (auth !== `Bearer ${SERVICE_KEY}`) {
-    return new Response(JSON.stringify({ error: 'forbidden' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const refused = requireServiceRole(req, SERVICE_KEY);
+  if (refused) return refused;
 
   const totals = { claimed: 0, sent: 0, failed: 0, passes: 0 };
   try {

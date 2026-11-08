@@ -10,7 +10,9 @@
       "environment": "development",
       "env": {
         "APP_VARIANT": "development",
-        "EXPO_PUBLIC_APP_VARIANT": "development"
+        "EXPO_PUBLIC_APP_VARIANT": "development",
+        "EXPO_PUBLIC_PHONE_AUTH_MODE": "mock",
+        "EXPO_PUBLIC_PAYMENTS_MODE": "disabled"
       }
     },
     "preview": {
@@ -20,7 +22,9 @@
       "autoIncrement": true,
       "env": {
         "APP_VARIANT": "preview",
-        "EXPO_PUBLIC_APP_VARIANT": "preview"
+        "EXPO_PUBLIC_APP_VARIANT": "preview",
+        "EXPO_PUBLIC_PHONE_AUTH_MODE": "supabase",
+        "EXPO_PUBLIC_PAYMENTS_MODE": "stripe"
       }
     },
     "production": {
@@ -29,7 +33,9 @@
       "autoIncrement": true,
       "env": {
         "APP_VARIANT": "production",
-        "EXPO_PUBLIC_APP_VARIANT": "production"
+        "EXPO_PUBLIC_APP_VARIANT": "production",
+        "EXPO_PUBLIC_PHONE_AUTH_MODE": "supabase",
+        "EXPO_PUBLIC_PAYMENTS_MODE": "stripe"
       }
     },
     "e2e-test": {
@@ -41,7 +47,9 @@
       },
       "env": {
         "APP_VARIANT": "preview",
-        "EXPO_PUBLIC_APP_VARIANT": "preview"
+        "EXPO_PUBLIC_APP_VARIANT": "preview",
+        "EXPO_PUBLIC_PHONE_AUTH_MODE": "supabase",
+        "EXPO_PUBLIC_PAYMENTS_MODE": "stripe"
       }
     }
   },

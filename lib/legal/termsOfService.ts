@@ -131,7 +131,7 @@ VERIFICATION, REFERENCE CHECKS, LICENCE VERIFICATION, OR INSURANCE
 VERIFICATION ON ANY USER, unless a specific check is explicitly described in
 the app at the time you use it.
 
-Ratings, reviews, badges, completion counts, and portfolio photos are supplied
+Ratings, reviews, badges, and completion counts are supplied
 by users. Brazos does not independently verify them and does not guarantee
 they are accurate.
 
@@ -241,9 +241,7 @@ and reviews.
 
 By posting content, you grant Brazos a non-exclusive, worldwide, royalty-free
 licence to host, store, display, and distribute that content within the
-platform for the purpose of operating it. For portfolio photos, which you
-choose to feature on your public profile, that includes displaying them to
-anyone who views your profile.
+platform for the purpose of operating it.
 
 You confirm you have the right to post what you post, including permission
 from anyone whose property or home appears in a photo.

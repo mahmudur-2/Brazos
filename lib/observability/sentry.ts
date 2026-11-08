@@ -174,6 +174,8 @@ export function initSentry(): void {
   Sentry.init({
     dsn,
     environment: env.EXPO_PUBLIC_APP_VARIANT,
+    // Development runs send nothing (SECURITY-VERDICT S4); preview and production report.
+    enabled: env.EXPO_PUBLIC_APP_VARIANT !== 'development',
     // Never. This is the switch that would attach IP address, username and
     // email to every event server-side, which is precisely what `scrubEvent`
     // spends its whole body removing client-side.

@@ -294,7 +294,12 @@ test('the preview profile is a standalone staging build on its own channel', () 
   assert.equal(text.includes(STAGING), false, 'no staging ref in eas.json');
   assert.doesNotMatch(text, /supabase\.(co|in)/i, 'no Supabase URL may appear in eas.json');
   assert.doesNotMatch(text, /\beyJ|sb_publishable_|sb_pu_|sb_secret_/, 'no key may appear in eas.json');
-  assert.doesNotMatch(text, /SUPABASE/i, 'eas.json must not name a Supabase variable at all');
+  // lean E4 (B4): the one sanctioned mention is the phone-auth MODE value `supabase`, cut out exactly.
+  assert.doesNotMatch(
+    text.replace(/"EXPO_PUBLIC_PHONE_AUTH_MODE": "supabase"/g, ''),
+    /SUPABASE/i,
+    'eas.json must not name a Supabase variable at all'
+  );
 
   // An env block alone does not decide what a build reads. EAS resolves the
   // profile's `environment` first and lets that environment's server-side
@@ -331,10 +336,11 @@ test('the preview profile is a standalone staging build on its own channel', () 
       `${name} sets the two variant variables to different values`
     );
     assert.match(profile.env.APP_VARIANT, /^(development|preview|production)$/);
+    // lean E4 (B4) added the two non-secret build modes on purpose; tests/easProfiles.test.mjs pins their values.
     assert.deepEqual(
       Object.keys(profile.env).sort(),
-      ['APP_VARIANT', 'EXPO_PUBLIC_APP_VARIANT'],
-      `${name} declares a build variable beyond the two variant names`
+      ['APP_VARIANT', 'EXPO_PUBLIC_APP_VARIANT', 'EXPO_PUBLIC_PAYMENTS_MODE', 'EXPO_PUBLIC_PHONE_AUTH_MODE'],
+      `${name} declares a build variable beyond the two variant names and the two modes`
     );
     assert.equal(
       profile.env.SENTRY_DISABLE_AUTO_UPLOAD,

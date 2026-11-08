@@ -305,9 +305,9 @@ select is((select would_again_total from public.client_job_stats(:'customer3')),
 
 -- ---------------------------------------------------------------------------
 -- §9. GRANTS — everything the migration created or recreated. anon executes
---     none of the four app RPCs; review_is_revealed is the one deliberate
---     anon grant (the reviews SELECT policy must evaluate for anon's
---     column-probe SELECT — 040_authz.sql §17 fences the full allow-list).
+--     none of the four app RPCs, and since lean E4 (20261108010000) not
+--     review_is_revealed either: anon holds no grant on reviews any more
+--     (040_authz.sql §17 fences the full allow-list, 310_grants.sql the sweep).
 -- ---------------------------------------------------------------------------
 select ok(not has_function_privilege('anon', 'public.create_review(uuid, uuid, integer, text, jsonb, boolean)', 'EXECUTE'),
   '9: anon may not execute create_review');
@@ -317,8 +317,8 @@ select ok(not has_function_privilege('anon', 'public.profile_review_summary(uuid
   '9: anon may not execute profile_review_summary');
 select ok(not has_function_privilege('anon', 'public.client_job_stats(uuid)', 'EXECUTE'),
   '9: anon may not execute client_job_stats');
-select ok(has_function_privilege('anon', 'public.review_is_revealed(uuid, uuid, uuid, timestamp with time zone)', 'EXECUTE'),
-  '9: anon MAY execute review_is_revealed — the deliberate exception the policy needs');
+select ok(not has_function_privilege('anon', 'public.review_is_revealed(uuid, uuid, uuid, timestamp with time zone)', 'EXECUTE'),
+  '9: anon may not execute review_is_revealed — lean E4 took anon''s grant on reviews, so the policy never evaluates for anon');
 select ok(has_function_privilege('authenticated', 'public.create_review(uuid, uuid, integer, text, jsonb, boolean)', 'EXECUTE'),
   '9: authenticated may execute create_review (positive control)');
 select ok(has_function_privilege('authenticated', 'public.profile_reviews(uuid, integer, integer, text)', 'EXECUTE'),

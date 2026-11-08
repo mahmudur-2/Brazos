@@ -221,9 +221,12 @@ test('no client-side jobs.status writer exists anywhere', () => {
 });
 
 test('chat media is private, membership-scoped, and stored by caller-owned path', () => {
-  // Buckets are storage data, not schema: the local stack's seed creates the
-  // chat bucket private (staging's was created the same way by hand).
-  assert.match(read('supabase/seed.sql'), /\('chat-photos',\s+'chat-photos',\s+false\)/);
+  // Buckets are storage data, not schema. Since lean E4 (B2) the grants migration upserts them on
+  // every stack and the seed keeps a backstop with the same values: chat-photos private in both
+  // (supabase/tests/310_grants.sql asserts the live flag).
+  for (const file of ['supabase/migrations/20261108010000_lean_v1_grants.sql', 'supabase/seed.sql']) {
+    assert.match(read(file), /\('chat-photos', false\)/, `${file}: the chat bucket is private`);
+  }
   assert.match(
     policy('chat_photos_insert_party'),
     /\(\("storage"\."foldername"\("name"\)\)\[2\] = \("auth"\."uid"\(\)\)::"text"\)/

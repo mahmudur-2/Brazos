@@ -91,9 +91,10 @@ The app collects photos in three places, with different visibility:
 - Job photos, attached by a Customer when posting. Visible to anyone who can
   see that job.
 - Completion photos, attached by a Worker when marking a job done. Shown in
-  the app to the Customer and the Worker on that job. Job media files are
-  currently stored in a public storage bucket, so someone with an exact file
-  link could access them; private storage for completion media is planned.
+  the app to the Customer and the Worker on that job. Job media files and
+  profile photos are currently stored in public storage buckets, so someone
+  with an exact file link could access them;
+  private storage for completion media is planned.
 - Profile photos. Visible to other users.
 
 Photos may show the inside of homes and personal property. Only post photos you

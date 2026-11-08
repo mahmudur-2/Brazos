@@ -12,7 +12,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(17);
+select plan(20);
 
 -- ---------------------------------------------------------------------------
 -- §1. Sign-up creates the profile (ruling 44).
@@ -51,6 +51,42 @@ select throws_ok($$ insert into auth.users (
   '44: a banned phone is refused at sign-up: the trigger raises');
 select is((select count(*) from auth.users where email = 'lean.banned@brazos.test'), 0::bigint,
   '44: … and the refused sign-up leaves no auth.users row behind');
+
+-- S1 (20261108010000_lean_v1_grants.sql §3): the verified auth.users.phone wins over the metadata.
+select gen_random_uuid() as verified \gset
+insert into auth.users (
+  instance_id, id, aud, role, email, phone, raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, recovery_token, email_change, email_change_token_new
+) values (
+  '00000000-0000-0000-0000-000000000000', :'verified', 'authenticated', 'authenticated', 'lean.verified@brazos.test', '+15550000001',
+  '{"provider":"phone","providers":["phone"]}'::jsonb, '{"full_name":"Veri Fied","phone":"+15550000002"}'::jsonb,
+  now(), now(), '', '', '', ''
+);
+select is((select phone from public.profiles where id = :'verified'), '+15550000001',
+  'S1: the profile takes the verified phone, not the one the client put in the metadata');
+
+select gen_random_uuid() as bare \gset
+insert into auth.users (
+  instance_id, id, aud, role, email, phone, raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, recovery_token, email_change, email_change_token_new
+) values (
+  '00000000-0000-0000-0000-000000000000', :'bare', 'authenticated', 'authenticated', 'lean.bare@brazos.test', '15550000003',
+  '{"provider":"phone","providers":["phone"]}'::jsonb, '{"full_name":"Bare Phone"}'::jsonb,
+  now(), now(), '', '', '', ''
+);
+select is((select phone from public.profiles where id = :'bare'), '+15550000003',
+  'S1: a verified phone stored without its + is kept in E.164');
+
+select throws_ok($$ insert into auth.users (
+    instance_id, id, aud, role, email, phone, raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, recovery_token, email_change, email_change_token_new
+  ) values (
+    '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', 'authenticated', 'lean.banned2@brazos.test', '15550002222',
+    '{"provider":"phone","providers":["phone"]}'::jsonb, '{"phone":"+15550009999"}'::jsonb,
+    now(), now(), '', '', '', ''
+  ) $$,
+  'P0001', 'This phone number is not eligible to register.',
+  'S1: the ban check reads the verified phone, so a clean metadata phone cannot slip a banned number past it');
 
 -- ---------------------------------------------------------------------------
 -- §2. The push drain's timer (ruling 45).

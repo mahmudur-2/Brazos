@@ -166,13 +166,14 @@ test('[static] the category words are the app\'s own, word for word', () => {
 
 test('[static] the function: service role only, skipped and logged without the key, the test inbox, no package', () => {
   const fn = read('supabase/functions/send-receipts/index.ts');
-  assert.match(fn, /if \(auth !== `Bearer \$\{SERVICE_KEY\}`\) \{/);
+  // lean E4 (B3): the constant-time shared gate, fenced in tests/edgeServiceAuth.test.mjs.
+  assert.match(fn, /const refused = requireServiceRole\(req, SERVICE_KEY\);\s*if \(refused\) return refused;/);
   assert.match(fn, /if \(!RESEND_API_KEY\) \{[\s\S]*?await resolve\(row, 'skipped', 'no email service key on this project yet'\);/);
   assert.match(fn, /const to = RECEIPT_TEST_TO \|\| \(await recipientEmail\(row\.recipient_id\)\);/);
   assert.match(fn, /subject: RECEIPT_TEST_TO \? `\[Test\] \$\{message\.subject\}` : message\.subject,/);
   assert.match(fn, /'Idempotency-Key': `receipt-\$\{row\.id\}`,/);
   const imports = [...fn.matchAll(/^import .* from '([^']+)';$/gm)].map((m) => m[1]);
-  assert.deepEqual(imports, ['./receipt.mjs'], 'plain fetch, no npm package');
+  assert.deepEqual(imports, ['../_shared/serviceAuth.ts', './receipt.mjs'], 'plain fetch, no npm package');
   const sql = read('supabase/migrations/20260930001100_receipts.sql');
   assert.match(sql, /when \(new\.status = 'released' and old\.status is distinct from 'released'\s*and new\.kind = 'job_payment' and new\.provider in \('stripe'\)\)/, 'a sandbox payment moved no money: no receipt');
   assert.match(sql, /constraint receipt_outbox_one_per_side unique \(payment_id, role\)/);

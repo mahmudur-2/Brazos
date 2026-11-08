@@ -373,7 +373,8 @@ skips there with a notice.
 
 ## Account deletion
 
-`delete_my_account()` is the only path. The gate: `account_deletion_blockers()` must return no rows
+`delete_my_account()` is the only path. delete_my_account requires only a signed-in caller, so a
+banned user can still delete their data. The gate: `account_deletion_blockers()` must return no rows
 or the call raises `ACCOUNT_DELETION_BLOCKED` (assigned or in-progress jobs, unsettled money and
 open disputes block; the screen lists them). Then, in one transaction: lock the person's jobs;
 cancel their open postings (drafts stay drafts; offers on them are settled by

@@ -16,8 +16,9 @@ export { PRIVACY_POLICY, TERMS_OF_SERVICE };
 // record months later is which text was on screen at the time.
 // ---------------------------------------------------------------------------
 
-export const TERMS_VERSION = '2026-10-03-draft2';
-export const PRIVACY_VERSION = '2026-10-03-draft2';
+// draft3 (lean E4): portfolio photos left the Terms; the Privacy Policy says profile photos are public too.
+export const TERMS_VERSION = '2026-11-08-draft3';
+export const PRIVACY_VERSION = '2026-11-08-draft3';
 
 export type LegalDocumentKey = 'terms' | 'privacy';
 

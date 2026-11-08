@@ -347,14 +347,15 @@ $seed$;
 -- write policies for real, and what closes the conditional skip in
 -- supabase/tests/phase29_security_contract.sql.
 --
--- Every one is PRIVATE. Reads are RLS's to grant (avatars_read and
--- job_photos_read admit any authenticated account; the chat-photos bucket
--- admits thread parties only); a public bucket would bypass that entirely.
+-- Since 20261108010000_lean_v1_grants.sql (SECURITY-VERDICT B2) that migration
+-- creates them, so this insert is a backstop with the same values: avatars and
+-- job-photos PUBLIC (the app stores getPublicUrl links), chat-photos PRIVATE
+-- (thread parties only, signed URLs); 25 MB and the six media types on all three.
 -- Outside the do-block above deliberately: it touches no fixture id, and it
 -- is idempotent on its own.
 -- ---------------------------------------------------------------------------
-insert into storage.buckets (id, name, public) values
-  ('avatars',        'avatars',        false),
-  ('chat-photos',    'chat-photos',    false),
-  ('job-photos',     'job-photos',     false)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+select b.id, b.id, b.public, 26214400,
+       array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'video/mp4', 'video/quicktime']
+from (values ('avatars', true), ('chat-photos', false), ('job-photos', true)) as b(id, public)
 on conflict (id) do nothing;

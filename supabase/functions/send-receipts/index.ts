@@ -44,6 +44,7 @@
 // recipient's address is read from the auth admin API with the service key and never logged.
 // ============================================================================
 
+import { requireServiceRole } from '../_shared/serviceAuth.ts';
 import { buildReceipt, cardLabel } from './receipt.mjs';
 
 const RESEND_URL = 'https://api.resend.com/emails';
@@ -220,13 +221,8 @@ Deno.serve(async (req) => {
   }
 
   // Only the service role may drain the outbox — verify_jwt alone would admit any signed-in user.
-  const auth = req.headers.get('Authorization') ?? '';
-  if (auth !== `Bearer ${SERVICE_KEY}`) {
-    return new Response(JSON.stringify({ error: 'forbidden' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const refused = requireServiceRole(req, SERVICE_KEY);
+  if (refused) return refused;
 
   const totals: Record<Status | 'claimed', number> = { claimed: 0, sent: 0, skipped: 0, failed: 0, pending: 0 };
   try {
