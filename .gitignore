@@ -77,3 +77,5 @@ _archive/
 
 # graphify AST cache (rebuilt by graphify extract)
 graphify-out/cache/
+graphify-out/.graphify_labels*
+graphify-out/.rebuild.lock

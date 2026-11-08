@@ -3268,5 +3268,401 @@
     "seen": 1794133948.564758,
     "ast_hash": "b7d2b62cf50b1a455c185bd1efd35aa8",
     "semantic_hash": "b7d2b62cf50b1a455c185bd1efd35aa8"
+  },
+  ".claude/rules/native-ui.md": {
+    "mtime": 1791287101.9595563,
+    "seen": 1794133973.9086964,
+    "ast_hash": "09be8a3fd7ae6c305e18f022d138bd60",
+    "semantic_hash": ""
+  },
+  ".claude/rules/supabase.md": {
+    "mtime": 1791287101.9590554,
+    "seen": 1794133973.9091957,
+    "ast_hash": "95f8d0ef14da7ae4601e13d37fe2c625",
+    "semantic_hash": ""
+  },
+  ".claude/skills/testsprite-ci/SKILL.md": {
+    "mtime": 1794133625.7442138,
+    "seen": 1794133973.9091957,
+    "ast_hash": "6e94e283d0d96da6b6ecc291f7af36b6",
+    "semantic_hash": ""
+  },
+  ".claude/skills/testsprite-onboard/SKILL.md": {
+    "mtime": 1794133625.7447152,
+    "seen": 1794133973.9091957,
+    "ast_hash": "ddc6fe342948c4b012634510f7df113a",
+    "semantic_hash": ""
+  },
+  ".claude/skills/testsprite-verify/SKILL.md": {
+    "mtime": 1794133625.7457163,
+    "seen": 1794133973.9091957,
+    "ast_hash": "48e9f155e348f84d05f5698ebcde5648",
+    "semantic_hash": ""
+  },
+  ".github/workflows/ci.yml": {
+    "mtime": 1786727030.3412032,
+    "seen": 1794133973.9091957,
+    "ast_hash": "a82f2ca1427fba35292f7da3dc10233a",
+    "semantic_hash": ""
+  },
+  ".github/workflows/e2e-ios.yml": {
+    "mtime": 1794133625.7467203,
+    "seen": 1794133973.9091957,
+    "ast_hash": "7d4bde1ee05d9e8b08908ecbf0107b56",
+    "semantic_hash": ""
+  },
+  ".github/workflows/pgtap.yml": {
+    "mtime": 1788606385.3699095,
+    "seen": 1794133973.9091957,
+    "ast_hash": "f9e7cbe7f146456f54b6f05b6e5921fb",
+    "semantic_hash": ""
+  },
+  ".github/workflows/staging.yml": {
+    "mtime": 1794133625.7477252,
+    "seen": 1794133973.9091957,
+    "ast_hash": "2229bb2ae7a0d5781b5e132ba7c49d2d",
+    "semantic_hash": ""
+  },
+  ".github/workflows/testsprite.yml": {
+    "mtime": 1794133625.748224,
+    "seen": 1794133973.9091957,
+    "ast_hash": "4908362e8fd6fab07217e885750302e3",
+    "semantic_hash": ""
+  },
+  ".maestro/01-auth.yml": {
+    "mtime": 1794133625.7492292,
+    "seen": 1794133973.9091957,
+    "ast_hash": "496bd9acbca05dd6feaffe6424cad13c",
+    "semantic_hash": ""
+  },
+  ".maestro/02-customer-post-job.yml": {
+    "mtime": 1794133625.7497327,
+    "seen": 1794133973.9091957,
+    "ast_hash": "0c9bdb811a8ce1b4cb3ac203a4fab821",
+    "semantic_hash": ""
+  },
+  ".maestro/03-worker-discover-bid.yml": {
+    "mtime": 1794133625.7502322,
+    "seen": 1794133973.9091957,
+    "ast_hash": "db2380a445e7840546331a128bd8d69b",
+    "semantic_hash": ""
+  },
+  ".maestro/04-customer-accept-pay.yml": {
+    "mtime": 1794133625.7507346,
+    "seen": 1794133973.9091957,
+    "ast_hash": "679608571d69ddfdcb1144d028515071",
+    "semantic_hash": ""
+  },
+  ".maestro/05-worker-start-complete.yml": {
+    "mtime": 1794133625.7507346,
+    "seen": 1794133973.9091957,
+    "ast_hash": "3b36875ff351388148e0274f46c2dbcb",
+    "semantic_hash": ""
+  },
+  ".maestro/06-customer-approve-review.yml": {
+    "mtime": 1794133625.7512343,
+    "seen": 1794133973.9091957,
+    "ast_hash": "9ecc4130cbe3d61df48d9f24bd903854",
+    "semantic_hash": ""
+  },
+  ".maestro/07-messages.yml": {
+    "mtime": 1794133625.7517338,
+    "seen": 1794133973.9091957,
+    "ast_hash": "1d3de64e9978d42cc437fce0d4d9875a",
+    "semantic_hash": ""
+  },
+  ".maestro/08-notifications-settings.yml": {
+    "mtime": 1794133625.7517338,
+    "seen": 1794133973.9091957,
+    "ast_hash": "11aa8f5e7070eda80d6856107e6ba1b1",
+    "semantic_hash": ""
+  },
+  ".maestro/09-worker-profile-payout.yml": {
+    "mtime": 1794133625.7522347,
+    "seen": 1794133973.9091957,
+    "ast_hash": "b5c215b564aaa8d94dea04817985477e",
+    "semantic_hash": ""
+  },
+  ".maestro/10-account-delete.yml": {
+    "mtime": 1794133625.7522347,
+    "seen": 1794133973.9091957,
+    "ast_hash": "8357292ec06b5b7d2416d0b16a4e8813",
+    "semantic_hash": ""
+  },
+  ".maestro/README.md": {
+    "mtime": 1794133625.7527356,
+    "seen": 1794133973.9091957,
+    "ast_hash": "29e17dd3546350873ea262e3bce3ef4b",
+    "semantic_hash": ""
+  },
+  ".maestro/config.yaml": {
+    "mtime": 1794133625.7527356,
+    "seen": 1794133973.9091957,
+    "ast_hash": "ba830d633fc92d38aeb87b916cfe2b49",
+    "semantic_hash": ""
+  },
+  ".maestro/subflows/accept-legal.yml": {
+    "mtime": 1794133625.7532363,
+    "seen": 1794133973.9091957,
+    "ast_hash": "9e0b5e179cd3561db2194292a5d75003",
+    "semantic_hash": ""
+  },
+  ".maestro/subflows/dismiss-permission-prompts.yml": {
+    "mtime": 1794133625.7537363,
+    "seen": 1794133973.9091957,
+    "ast_hash": "67b1f2b9605d3729c6d815c382fc6c24",
+    "semantic_hash": ""
+  },
+  ".maestro/subflows/ensure-mode-customer.yml": {
+    "mtime": 1794133625.754234,
+    "seen": 1794133973.9091957,
+    "ast_hash": "d6e029ca489cae878f57645577a4fb49",
+    "semantic_hash": ""
+  },
+  ".maestro/subflows/ensure-mode-worker.yml": {
+    "mtime": 1794133625.754234,
+    "seen": 1794133973.9091957,
+    "ast_hash": "2559d7985e98c1ce656e0d0945a4110a",
+    "semantic_hash": ""
+  },
+  ".maestro/subflows/sign-in-phone.yml": {
+    "mtime": 1794133625.7547321,
+    "seen": 1794133973.9091957,
+    "ast_hash": "0b126be5d85e98a55a855ad19beb8c91",
+    "semantic_hash": ""
+  },
+  ".maestro/subflows/sign-out.yml": {
+    "mtime": 1794133625.7547321,
+    "seen": 1794133973.9091957,
+    "ast_hash": "f5437c4c78afc7343a91a4f9a7edd7f3",
+    "semantic_hash": ""
+  },
+  "CLAUDE.md": {
+    "mtime": 1794133625.7562344,
+    "seen": 1794133973.9091957,
+    "ast_hash": "84b76bc56a374e1c2584a5a798452ff0",
+    "semantic_hash": ""
+  },
+  "HANDOFF.md": {
+    "mtime": 1794133625.7572322,
+    "seen": 1794133973.9091957,
+    "ast_hash": "fb9d9dbe16903d768726d4819922ea68",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1794133625.757734,
+    "seen": 1794133973.9091957,
+    "ast_hash": "d9f28a8524c2bcb4545980688b491ed0",
+    "semantic_hash": ""
+  },
+  "docs/ARCHITECTURE.md": {
+    "mtime": 1794133625.7742472,
+    "seen": 1794133973.9091957,
+    "ast_hash": "6e3fd52616352c6a0ce8e495a8606b26",
+    "semantic_hash": ""
+  },
+  "docs/BACKLOG.md": {
+    "mtime": 1794133625.7752497,
+    "seen": 1794133973.9091957,
+    "ast_hash": "56246b3894f40f45c22e91dc2dbcf24a",
+    "semantic_hash": ""
+  },
+  "docs/DECISIONS.md": {
+    "mtime": 1794133625.7762494,
+    "seen": 1794133973.9091957,
+    "ast_hash": "e5cfb909137ddf7d129e74d37cfc1d23",
+    "semantic_hash": ""
+  },
+  "docs/LEAN-SHIP-PLAN.md": {
+    "mtime": 1794133625.776749,
+    "seen": 1794133973.9091957,
+    "ast_hash": "d7e0f498b3b41b5f8a9e72aa17a0310d",
+    "semantic_hash": ""
+  },
+  "docs/TESTING.md": {
+    "mtime": 1794133820.6980438,
+    "seen": 1794133973.9091957,
+    "ast_hash": "4689c19fdf68bd563df14cc439292c25",
+    "semantic_hash": ""
+  },
+  "docs/lean/BASELINE.md": {
+    "mtime": 1794133625.7787497,
+    "seen": 1794133973.9091957,
+    "ast_hash": "cbb3dcdf9094d860ea55a5855f978d6e",
+    "semantic_hash": ""
+  },
+  "docs/lean/CUT-LIST.md": {
+    "mtime": 1794133625.77925,
+    "seen": 1794133973.9091957,
+    "ast_hash": "b586b13a95437fc2573ba8c62d3026f3",
+    "semantic_hash": ""
+  },
+  "docs/lean/MAESTRO-COVERAGE.md": {
+    "mtime": 1794133625.7797475,
+    "seen": 1794133973.9091957,
+    "ast_hash": "7eccfd5157d8e9553d8850e12b877880",
+    "semantic_hash": ""
+  },
+  "docs/lean/SECURITY-VERDICT.md": {
+    "mtime": 1794133625.7802472,
+    "seen": 1794133973.9091957,
+    "ast_hash": "8de39acf0a512fe4285ef7f2a439919c",
+    "semantic_hash": ""
+  },
+  "docs/lean/TARGET-SHAPE.md": {
+    "mtime": 1794133625.7812493,
+    "seen": 1794133973.9091957,
+    "ast_hash": "d097e2746e7e856ceb18abb2c3cc87cb",
+    "semantic_hash": ""
+  },
+  "docs/lean/audit-facts.md": {
+    "mtime": 1794133625.7822502,
+    "seen": 1794133973.9091957,
+    "ast_hash": "d0716d2aaa01e89fb3ab4186938baf3f",
+    "semantic_hash": ""
+  },
+  "docs/lean/inventory-app.md": {
+    "mtime": 1794133625.7832477,
+    "seen": 1794133973.9091957,
+    "ast_hash": "fff94e64eb5fc35ab605fffb5aa30daa",
+    "semantic_hash": ""
+  },
+  "docs/lean/inventory-db.md": {
+    "mtime": 1794133625.7837474,
+    "seen": 1794133973.9091957,
+    "ast_hash": "bde2b43ef18b08c6ba73c01171a28dbc",
+    "semantic_hash": ""
+  },
+  "docs/lean/inventory-deps-tests.md": {
+    "mtime": 1794133625.7847517,
+    "seen": 1794133973.9091957,
+    "ast_hash": "11785823bb997cf7a2d27bc12efb91af",
+    "semantic_hash": ""
+  },
+  "docs/lean/inventory-docs-tools.md": {
+    "mtime": 1794133625.785766,
+    "seen": 1794133973.9091957,
+    "ast_hash": "5d5a7159eb8dce041f91a7849c36cf88",
+    "semantic_hash": ""
+  },
+  "docs/lean/inventory-lib.md": {
+    "mtime": 1794133625.786769,
+    "seen": 1794133973.9091957,
+    "ast_hash": "f5eb75aa9befcee06694681cdd9cc459",
+    "semantic_hash": ""
+  },
+  "docs/lean/security-facts.md": {
+    "mtime": 1794133625.7872682,
+    "seen": 1794133973.9091957,
+    "ast_hash": "d79c6cdb45a6defd5a860a4d8d57efb8",
+    "semantic_hash": ""
+  },
+  "tests/testsprite/README.md": {
+    "mtime": 1794133625.9102154,
+    "seen": 1794133973.9091957,
+    "ast_hash": "3f5becb3da29117d146bc36efecc3739",
+    "semantic_hash": ""
+  },
+  "assets/brand/app-icon-b-leaf.png": {
+    "mtime": 1787545388.0712366,
+    "seen": 1794133973.9091957,
+    "ast_hash": "8ae6a01c612aaaad91709003b54d6e2c",
+    "semantic_hash": ""
+  },
+  "assets/brand/brazos-b-leaf.png": {
+    "mtime": 1786674832.1612954,
+    "seen": 1794133973.9091957,
+    "ast_hash": "040c2ea3107b15fe1a8ffb17b3551e4f",
+    "semantic_hash": ""
+  },
+  "assets/glyphs/drill-fill.png": {
+    "mtime": 1790597132.28324,
+    "seen": 1794133973.9091957,
+    "ast_hash": "23438e5bfdf3407df1cba26bd3a5516f",
+    "semantic_hash": ""
+  },
+  "assets/glyphs/drill.png": {
+    "mtime": 1790597132.2743356,
+    "seen": 1794133973.9091957,
+    "ast_hash": "6c2f843c87e1c97c44f585293b0b967d",
+    "semantic_hash": ""
+  },
+  "assets/glyphs/home-flat.png": {
+    "mtime": 1790753683.000129,
+    "seen": 1794133973.9091957,
+    "ast_hash": "97f64f2434a0add06073500f9e31e888",
+    "semantic_hash": ""
+  },
+  "assets/glyphs/home-outline-flat.png": {
+    "mtime": 1790753683.0036278,
+    "seen": 1794133973.9091957,
+    "ast_hash": "d65eaa717672bc3dd8b0928cce96b845",
+    "semantic_hash": ""
+  },
+  "assets/glyphs/roller-fill.png": {
+    "mtime": 1790597132.277336,
+    "seen": 1794133973.9091957,
+    "ast_hash": "a232024ade7424afbac0aff7b1d4aaf4",
+    "semantic_hash": ""
+  },
+  "assets/glyphs/roller.png": {
+    "mtime": 1790597132.2663367,
+    "seen": 1794133973.9091957,
+    "ast_hash": "33565f2b4b16615e8dd6affd87462052",
+    "semantic_hash": ""
+  },
+  "assets/glyphs/trash-fill.png": {
+    "mtime": 1790597132.2807374,
+    "seen": 1794133973.9091957,
+    "ast_hash": "4cda91a4298689c8a9f31edbd8a9f2cf",
+    "semantic_hash": ""
+  },
+  "assets/glyphs/trash.png": {
+    "mtime": 1790597132.2713354,
+    "seen": 1794133973.9091957,
+    "ast_hash": "7da48b1bf97e7b758f32fd50a856da3e",
+    "semantic_hash": ""
+  },
+  "assets/prestige/hero_armchair_customer_glow_dark.png": {
+    "mtime": 1790696979.641183,
+    "seen": 1794133973.9091957,
+    "ast_hash": "9641adcdbf0ed9cc7cb011150264ec89",
+    "semantic_hash": ""
+  },
+  "assets/prestige/hero_armchair_customer_glow_light.png": {
+    "mtime": 1790696979.7247014,
+    "seen": 1794133973.9091957,
+    "ast_hash": "475bf47e56ed754bfe4475955d36704d",
+    "semantic_hash": ""
+  },
+  "assets/prestige/hero_armchair_customer_lamp_dark.webp": {
+    "mtime": 1790696979.3112156,
+    "seen": 1794133973.9091957,
+    "ast_hash": "d2746971f014e68f54d72ae752bf4e9c",
+    "semantic_hash": ""
+  },
+  "assets/prestige/hero_armchair_customer_lamp_light.webp": {
+    "mtime": 1790696979.3927412,
+    "seen": 1794133973.9091957,
+    "ast_hash": "5e960eafa931de854db913480eba38a3",
+    "semantic_hash": ""
+  },
+  "assets/prestige/hero_armchair_customer_shadow_dark.png": {
+    "mtime": 1790696979.8072405,
+    "seen": 1794133973.9091957,
+    "ast_hash": "b4805fd598f390d813cb5d2a8a89475f",
+    "semantic_hash": ""
+  },
+  "assets/prestige/hero_armchair_customer_shadow_light.png": {
+    "mtime": 1790696979.8932796,
+    "seen": 1794133973.9091957,
+    "ast_hash": "a9d4163a7d122dcf4b7a6468b31ad92e",
+    "semantic_hash": ""
+  },
+  "assets/prestige/hero_toolbox_worker.webp": {
+    "mtime": 1789975231.107813,
+    "seen": 1794133973.9091957,
+    "ast_hash": "ba51bc7f6827c829d562e272c0dc49dc",
+    "semantic_hash": ""
   }
 }
