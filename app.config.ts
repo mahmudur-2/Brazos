@@ -104,7 +104,6 @@ export default (_context: ConfigContext): ExpoConfig => ({
   // form is the app's NAME — DISPLAY_NAME and slug — never its prose voice).
   // A usage string is what App Review reads out loud.
   plugins: [
-    'expo-font',
     [
       'expo-image-picker',
       {

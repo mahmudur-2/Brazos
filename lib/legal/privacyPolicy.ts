@@ -5,7 +5,7 @@
  * schema and code rather than written generically:
  *   * location   — phase12 (job_locations, neighbourhood label on `jobs`),
  *                  lib/reverseGeocode.ts (OpenStreetMap Nominatim)
- *   * photos     — phase13 job photos, phase17 completion photos + portfolio
+ *   * photos     — phase13 job photos, phase17 completion photos
  *   * moderation — blocks/reports/bans, FIX-RUN B3 word filter
  *   * push       — phase20 push_tokens, notification_prefs.home_lat/lng,
  *                  live_activity_tokens (the lock-screen card)
@@ -86,7 +86,7 @@ instead, and nearby-job notifications simply stay off.
 
 ### Photos
 
-The app collects photos in four places, with different visibility:
+The app collects photos in three places, with different visibility:
 
 - Job photos, attached by a Customer when posting. Visible to anyone who can
   see that job.
@@ -94,11 +94,6 @@ The app collects photos in four places, with different visibility:
   the app to the Customer and the Worker on that job. Job media files are
   currently stored in a public storage bucket, so someone with an exact file
   link could access them; private storage for completion media is planned.
-- Portfolio photos. A Worker may choose to feature completion photos on their
-  profile. THESE ARE PUBLIC — visible to anyone who views that profile,
-  including people not involved in the original job. The app warns you before
-  your first one, but you should assume anything you feature can be seen by
-  anyone.
 - Profile photos. Visible to other users.
 
 Photos may show the inside of homes and personal property. Only post photos you
@@ -232,8 +227,6 @@ Deletion is permanent and cannot be undone.
 - Notifications: switch any category off under Profile → Notifications, or turn
   them off entirely in your device settings.
 - Saved cards: save one only if you want to, and remove it in Payment methods.
-- Portfolio photos: choose which completion photos, if any, are featured
-  publicly, and remove any of them at any time.
 - Profile details: edit or clear your bio, photo, and categories whenever you
   want.
 - Other users: block anyone, and report what they post.
