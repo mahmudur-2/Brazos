@@ -46,83 +46,16 @@ async function importLibModule(path) {
 }
 
 const skillCategoriesModule = importLibModule('lib/skillCategories.ts');
-const priceGuidanceModule = importLibModule('lib/priceGuidance.ts');
 const validationModule = importLibModule('lib/validation.ts');
 
 // ---------------------------------------------------------------------------
-// §3.1 — the static price table, keyed by the real category list
+// §3.1 — the real category list (the static price table and its §3.2
+// guidance card left in lean D3c: no source ever backed the ranges)
 // ---------------------------------------------------------------------------
 
-test('§3.1 · every skill category resolves to a range or an explicit null', async () => {
+test('§3.1 · the skill list is the ten skill keys', async () => {
   const { SKILL_CATEGORIES } = await skillCategoriesModule;
-  const { PRICE_GUIDANCE, priceGuidanceFor } = await priceGuidanceModule;
-
   assert.equal(SKILL_CATEGORIES.length, 10, 'the §1.2 list is the ten skill keys');
-
-  const expectedNulls = new Set(['dog_walking', 'packing']);
-  for (const { key } of SKILL_CATEGORIES) {
-    assert.ok(
-      Object.prototype.hasOwnProperty.call(PRICE_GUIDANCE, key),
-      `category "${key}" must be an explicit table entry, range or null`
-    );
-    const range = priceGuidanceFor(key);
-    if (expectedNulls.has(key)) {
-      assert.equal(range, null, `"${key}" has no seeded range and must stay null`);
-    } else {
-      assert.ok(range, `"${key}" must carry a seeded range`);
-    }
-  }
-
-  const actualNulls = Object.entries(PRICE_GUIDANCE)
-    .filter(([, v]) => v === null)
-    .map(([k]) => k)
-    .sort();
-  assert.deepEqual(actualNulls, [...expectedNulls].sort(), 'exactly the reported nulls');
-
-  // 'other' is a JOB_CATEGORIES-only key — absent from the table, null from
-  // the lookup, so the post flow's eleventh chip renders no guidance.
-  assert.equal(priceGuidanceFor('other'), null);
-  assert.equal(priceGuidanceFor(null), null);
-  assert.equal(priceGuidanceFor('not-a-category'), null);
-});
-
-test('§3.1 · every range is ordered and inside the phase75 money ceiling', async () => {
-  const { PRICE_GUIDANCE } = await priceGuidanceModule;
-  const { MONEY_CEILING_CENTS } = await validationModule;
-
-  for (const [key, range] of Object.entries(PRICE_GUIDANCE)) {
-    if (range === null) continue;
-    assert.ok(Number.isInteger(range.minCents) && Number.isInteger(range.maxCents), key);
-    assert.ok(range.minCents > 0, `${key}: min must be positive cents`);
-    assert.ok(range.minCents < range.maxCents, `${key}: min must be strictly under max`);
-    assert.ok(range.maxCents <= MONEY_CEILING_CENTS, `${key}: max must be under the ceiling`);
-  }
-});
-
-test('§3.2 · the guidance copy is exact, formatBudget-formatted, and claims no locality', async () => {
-  const { SKILL_CATEGORIES } = await skillCategoriesModule;
-  const { priceGuidanceLines } = await priceGuidanceModule;
-
-  const cleaning = priceGuidanceLines('cleaning');
-  assert.ok(cleaning);
-  // "Suggested starting range" — product decision 2026-08-18. "Typical"
-  // overclaimed what a static seed table knows.
-  assert.equal(cleaning[0], 'Suggested starting range: $60–$120');
-  assert.equal(cleaning[1], 'A guide, not a quote. You set the budget.');
-
-  for (const { key } of SKILL_CATEGORIES) {
-    const lines = priceGuidanceLines(key);
-    if (!lines) continue;
-    const joined = lines.join(' ');
-    assert.match(lines[0], /^Suggested starting range: \$[\d,]+–\$[\d,]+$/);
-    assert.doesNotMatch(
-      joined,
-      /\b(here|nearby|in your area|near you|local|locally|around you)\b/i,
-      `${key}: a static table cannot support a locality claim`
-    );
-  }
-
-  assert.equal(priceGuidanceLines('dog_walking'), null, 'a null category renders NO guidance');
 });
 
 // ---------------------------------------------------------------------------
@@ -202,21 +135,6 @@ test('§3.4 · the photo nudge is gone, and photos never gate advancing [static]
     !draft.includes('brazos.photoNudge'),
     'no dedicated global storage key for a nudge'
   );
-});
-
-// ---------------------------------------------------------------------------
-// §3.2 — guidance visibility predicate (empty or unfocused, fresh posts only)
-// ---------------------------------------------------------------------------
-
-test('§3.2 · guidance shows only for a seeded category while the budget is empty or unfocused [static]', async () => {
-  const screen = await read('screens/PostJobScreen.tsx');
-
-  assert.match(screen, /const guidanceLines = isFreshPost && PRICE_GUIDANCE \? priceGuidanceLines\(category\) : null;/);
-  // RUN P1 RENAMED THE SECOND TERM, not the rule. The min/max pair became one
-  // display pill with a single editor behind a pencil, so "an amount is being
-  // typed" is now "the budget editor is open" — `editingBudget` — rather than
-  // either inline field holding focus. Same predicate, same two branches.
-  assert.match(screen, /\(bothBudgetsEmpty \|\| !editingBudget\)/);
 });
 
 // ---------------------------------------------------------------------------

@@ -4,12 +4,11 @@ import { supabase } from './supabase';
  * Server-driven configuration — the small set of values that must be
  * changeable without shipping a binary.
  *
- * THE THIRD CONFIGURATION SURFACE, AND THE ONLY ONE THAT MOVES AT RUNTIME.
- * lib/featureFlags.ts is a compile-time constant table: flipping a flag is a
- * release. config/env.ts is deployment configuration: changing a value is a
- * rebuild, because Metro inlines it. This file is the one place a value can
- * change while a binary is in a user's hands, which is exactly why it is kept
- * SMALL. A kill-switch belongs here; a feature flag does not.
+ * THE ONLY CONFIGURATION SURFACE THAT MOVES AT RUNTIME. config/env.ts is
+ * deployment configuration: changing a value is a rebuild, because Metro
+ * inlines it. This file is the one place a value can change while a binary is
+ * in a user's hands, which is exactly why it is kept SMALL. A kill-switch
+ * belongs here; a feature flag does not.
  *
  * IT CANNOT BLOCK THE APP. Every failure — no table, no network, no session,
  * a row of the wrong shape, a value of the wrong type — resolves to FALLBACK.

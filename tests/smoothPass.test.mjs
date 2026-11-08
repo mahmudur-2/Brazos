@@ -282,7 +282,7 @@ test('[static] F12: a list\'s first rows cascade in once, and never replay', () 
   assert.match(fast, /animated \? motion : undefined/, 'no identity transform on a still section');
   const LISTS = {
     'ui/templates/DetailScreen.tsx': /<EntranceView\s+key=\{section\.title \?\? `section-\$\{index\}`\}\s+index=\{entranceSlot\(index\)\}\s+skip=\{sectionsEntered\}/,
-    'screens/MessagesInboxScreen.tsx': /<EntranceView index=\{entranceSlot\(index\)\} skip=\{rowsEntered\}>\s*<SwipeableRow/,
+    'screens/MessagesInboxScreen.tsx': /<EntranceView index=\{entranceSlot\(index\)\} skip=\{rowsEntered\}>\s*<ConversationRow/,
     'screens/WorkerResultsScreen.tsx': /<EntranceView index=\{entranceSlot\(index\)\} skip=\{resultsEntered\}>\s*<WorkerJobCard/,
     'screens/ProfileReviewsScreen.tsx': /<EntranceView index=\{entranceSlot\(index\)\} skip=\{reviewsEntered\}>\s*<Card/,
     'screens/CellJobsScreen.tsx': /<EntranceView index=\{entranceSlot\(index\)\} skip=\{jobsEntered\}>\s*<BrowseJobCard/,

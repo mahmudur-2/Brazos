@@ -36,9 +36,9 @@ function normalized(value: unknown): unknown {
  * module: the app config is evaluated by `expo start`, `expo export` and every
  * EAS build, and a throw there breaks all three rather than one screen.
  *
- * NOT A FEATURE-FLAG TABLE. lib/featureFlags.ts is the compile-time flag
- * surface and lib/remoteConfig.ts is the server-driven one. This file is
- * deployment configuration only: which project, which mode, which keys.
+ * NOT A FEATURE-FLAG TABLE. lib/remoteConfig.ts is the server-driven
+ * surface. This file is deployment configuration only: which project, which
+ * mode, which keys.
  */
 
 /**

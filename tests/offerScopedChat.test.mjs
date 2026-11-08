@@ -125,13 +125,12 @@ test('the inbox and chat keep their unread contract', async () => {
   assert.match(chat, /mark-read failed/);
   // W1 moved the rule, not the contract. The inbox used to read `my_read_at`
   // inline; a direct thread's read timestamp still decides its unread state,
-  // but the derivation is now threadUnread() in lib/conversations.ts, shared
-  // with the Face-ID-gated hidden list so the two cannot disagree about the
-  // same conversation. The contract is asserted where it now lives.
+  // but the derivation is now threadUnread() in lib/conversations.ts. The
+  // contract is asserted where it now lives.
   const rule = await read('lib/conversations.ts');
   assert.match(rule, /export function threadUnread\(/);
   assert.match(rule, /thread\.job_id \? readMap\[thread\.job_id\] : thread\.my_read_at/);
-  for (const file of ['screens/MessagesInboxScreen.tsx', 'screens/HiddenChatsScreen.tsx']) {
+  for (const file of ['screens/MessagesInboxScreen.tsx']) {
     assert.match(await read(file), /threadUnread\(/, `${file} uses the one unread rule`);
   }
 });

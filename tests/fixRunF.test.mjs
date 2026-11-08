@@ -169,28 +169,26 @@ test('F20: both person menus draw the same safety rows, in the same order, from 
   const { personSafetyItems } = await import(new URL('../lib/chatMenus.ts', import.meta.url).href);
   const calls = [];
   const handlers = {
-    onMute: () => calls.push('mute'),
     onBlock: () => calls.push('block'),
     onUnblock: () => calls.push('unblock'),
     onReport: () => calls.push('report'),
   };
-  const open = personSafetyItems({ muted: false, blocking: false, ...handlers });
-  assert.deepEqual([open.mute, ...open.safety].map((i) => [i.key, i.label, !!i.destructive]), [
-    ['mute', 'Mute', false],
+  // Lean D3c: Mute left both menus; Block and Report remain.
+  const open = personSafetyItems({ blocking: false, ...handlers });
+  assert.deepEqual(open.map((i) => [i.key, i.label, !!i.destructive]), [
     ['block', 'Block', true],
     ['report', 'Report', true],
   ]);
-  const blocked = personSafetyItems({ muted: true, blocking: true, ...handlers });
-  assert.deepEqual([blocked.mute, ...blocked.safety].map((i) => [i.key, i.label]), [
-    ['mute', 'Unmute'],
+  const blocked = personSafetyItems({ blocking: true, ...handlers });
+  assert.deepEqual(blocked.map((i) => [i.key, i.label]), [
     ['block', 'Unblock'],
     ['report', 'Report'],
   ]);
-  for (const item of [open.mute, ...open.safety, ...blocked.safety]) item.onPress();
-  assert.deepEqual(calls, ['mute', 'block', 'report', 'unblock', 'report']);
+  for (const item of [...open, ...blocked]) item.onPress();
+  assert.deepEqual(calls, ['block', 'report', 'unblock', 'report']);
 
-  assert.match(strip(read('screens/ChatScreen.tsx')), /headerMenuItems\.push\(\.\.\.personRows\.safety\);/);
-  assert.match(strip(read('screens/MessagesInboxScreen.tsx')), /const safety: GlassDropdownItem\[\] = \[\.\.\.person\.safety\];/);
+  assert.match(strip(read('screens/ChatScreen.tsx')), /headerMenuItems\.push\(\.\.\.personRows\);/);
+  assert.match(strip(read('screens/MessagesInboxScreen.tsx')), /\[\s*personSafetyItems\(\{\s*blocking: menuTarget\.blocking,/);
 });
 
 test('[static] F20: ProfileDetails keeps one door to the editor — the header pencil', () => {

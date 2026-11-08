@@ -10,9 +10,8 @@ import { fileURLToPath } from 'node:url';
 // the name, the stamp in the 44pt column, the job chip's stage, and the glass
 // ••• menu. The two pure modules are RUN; the screen and the row are read.
 //
-// CATCHES: a count that is estimated rather than counted, or that counts a
-// cleared message; a stamp too wide for its column; a second state → stage
-// mapping; the swipe tiles drawing through a see-through row (#28).
+// CATCHES: a count that is estimated rather than counted; a stamp too wide for
+// its column; a second state → stage mapping.
 // ===========================================================================
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,31 +22,22 @@ const stripComments = (source) =>
 const visibility = await import('../lib/conversationVisibility.ts');
 const time = await import('../lib/time.ts');
 
-test('[executed] the unseen count is COUNTED: newer than the read, still in my copy, never a hand-set mark', () => {
-  const { countUnseen, FULLY_UNREAD_AT } = visibility;
+test('[executed] the unseen count is COUNTED: newer than the read, every one when never read', () => {
+  const { countUnseen } = visibility;
   const stamps = [
     { key: 'job:a', created_at: '2026-09-28T10:00:00.000Z' },
     { key: 'job:a', created_at: '2026-09-28T11:00:00.000Z' },
     { key: 'job:a', created_at: '2026-09-28T12:00:00.000Z' },
     { key: 'direct:b', created_at: '2026-09-27T09:00:00.000Z' },
-    { key: 'job:c', created_at: '2026-09-28T12:00:00.000Z' },
     { key: 'job:z', created_at: '2026-09-28T12:00:00.000Z' },
   ];
   const counts = countUnseen(stamps, [
     // Read at 10:30 — the two after it count, the one before does not.
-    { key: 'job:a', readAt: '2026-09-28T10:30:00+00:00', state: null },
+    { key: 'job:a', readAt: '2026-09-28T10:30:00+00:00' },
     // Never opened: every one of theirs counts.
-    { key: 'direct:b', readAt: null, state: null },
-    // Marked unread by hand: no number — the mark is the fact.
-    { key: 'job:c', readAt: FULLY_UNREAD_AT, state: null },
+    { key: 'direct:b', readAt: null },
   ]);
   assert.deepEqual(counts, { 'job:a': 2, 'direct:b': 1 }, 'job:z was never asked about');
-
-  // A CLEARED message never counts: the ONE clearedBy decides.
-  const cleared = countUnseen(stamps, [
-    { key: 'job:a', readAt: null, state: { cleared_before: '2026-09-28T11:00:00.000Z' } },
-  ]);
-  assert.deepEqual(cleared, { 'job:a': 1 }, 'at or before the watermark is out of my copy');
 });
 
 test('[executed] the stamp fits the 44pt column: now, 12m, 4h, 1d, a weekday, then the date', () => {
@@ -89,28 +79,14 @@ test('[static] the row: the count or the mark, the stamp, the 44 column, the chi
   assert.doesNotMatch(row, /<Card\b/, 'no card: the clean list');
 });
 
-test('[static] #28 — the swipe tiles draw only in the strip the row has uncovered', () => {
-  const fast = stripComments(read('components/SwipeableRow.motion120.tsx'));
-  assert.match(fast, /translateX: revealWidth \+ translateX\.value/);
-  assert.match(fast, /translateX: -\(revealWidth \+ translateX\.value\)/);
-  assert.match(fast, /<Animated\.View style=\{\[styles\.tilesClip, \{ width: revealWidth \}, clipStyle\]\}>/);
-  const shared = stripComments(read('components/SwipeableRow.shared.tsx'));
-  assert.match(shared, /tilesClip: \{\s*position: 'absolute',\s*right: 0,\s*top: 0,\s*bottom: 0,\s*overflow: 'hidden',\s*\}/);
-});
-
-test('[static] #53 — the ••• opens the glass dropdown: two groups, no "…", the red rows red', () => {
+test('[static] #53 — the ••• opens the glass dropdown: one group, no "…", the red rows red', () => {
   const screen = stripComments(read('screens/MessagesInboxScreen.tsx'));
   assert.match(screen, /<GlassDropdown\s+request=\{menuRequest\}\s+groups=\{menuGroups\}/);
   assert.doesNotMatch(screen, /subtitle="Manage this conversation"/, 'the bottom sheet is gone');
-  // F20: Mute, Block and Report are the one person-menu builder's, which the screen reads.
+  // F20: Block and Report are the one person-menu builder's, which the screen reads.
   const personMenus = stripComments(read('lib/chatMenus.ts'));
-  assert.match(screen, /const person = personSafetyItems\(\{/);
-  assert.match(screen, /const items: GlassDropdownItem\[\] = \[person\.mute\];/);
-  assert.match(screen, /const safety: GlassDropdownItem\[\] = \[\.\.\.person\.safety\];/);
-  for (const label of ["'Mark as Unread'", "'Archive'", "'Clear chat'", "'Delete chat'"]) {
-    assert.ok(screen.includes(label), `the menu carries ${label}`);
-  }
-  for (const label of ["'Mute'", "'Block'", "'Report'"]) {
+  assert.match(screen, /const menuGroups: GlassDropdownItem\[\]\[\] = menuTarget\s*\?\s*\[\s*personSafetyItems\(\{/);
+  for (const label of ["'Block'", "'Report'"]) {
     assert.ok(personMenus.includes(label), `the menu carries ${label}`);
   }
   assert.doesNotMatch(screen, /label: '[^']*…'/, 'no row ends in "…"');

@@ -8,12 +8,7 @@ import {
   threadUnread,
   type Conversation,
 } from '../lib/conversations';
-import { countUnseen, FULLY_UNREAD_AT, type UnseenThread } from '../lib/conversationVisibility';
-import {
-  fetchMyConversationStates,
-  indexConversationStates,
-  type ConversationState,
-} from '../lib/conversationStates';
+import { countUnseen, type UnseenThread } from '../lib/conversationVisibility';
 import { fetchMyModerationLists } from '../lib/moderation';
 import { fetchProfilesByIds, type Profile } from '../lib/profiles';
 import { supabase } from '../lib/supabase';
@@ -24,7 +19,6 @@ type CounterpartyInfo = Pick<Profile, 'id' | 'full_name' | 'avatar_url'>;
 type ModerationLists = {
   blocking: Set<string>;
   blockedBy: Set<string>;
-  muted: Set<string>;
 };
 
 /**
@@ -37,7 +31,6 @@ const REFRESH_DEBOUNCE_MS = 250;
 const EMPTY_MODERATION: ModerationLists = {
   blocking: new Set(),
   blockedBy: new Set(),
-  muted: new Set(),
 };
 
 /**
@@ -50,17 +43,11 @@ export function useConversations() {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [readMap, setReadMap] = useState<Record<string, string>>({});
-  // Per-user hidden / archived / cleared / deleted state, keyed by the SAME
-  // `job:`/`direct:` conversation key readMap's rows are keyed by. The phase77
-  // view deliberately does not filter these — hidden and archived rows must
-  // still be DELIVERED, to the Face-ID list and the Archived pill — so the
-  // client joins them exactly the way it already joins message_reads.
-  const [stateByKey, setStateByKey] = useState<Record<string, ConversationState>>({});
   const [profiles, setProfiles] = useState<Record<string, CounterpartyInfo>>({});
   const [moderation, setModeration] = useState<ModerationLists>(EMPTY_MODERATION);
   // 2026-09-28 (LUX-LIST-64 #54) — the number beside the name: each unread
-  // thread's unseen messages, COUNTED from the rows (countUnseen), keyed like
-  // readMap and stateByKey. A thread with no entry shows the mark alone.
+  // thread's unseen messages, COUNTED from the rows (countUnseen), keyed by the
+  // `job:`/`direct:` conversation key. A thread with no entry shows the mark alone.
   const [unseenByKey, setUnseenByKey] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,36 +73,27 @@ export function useConversations() {
     }
     setError(null);
 
-    const [convRes, readRes, stateRes] = await Promise.all([
+    const [convRes, readRes] = await Promise.all([
       fetchConversations(user.id),
       fetchMyReadStates(user.id),
-      fetchMyConversationStates(user.id),
     ]);
 
-    const firstError = convRes.error || readRes.error || stateRes.error;
+    const firstError = convRes.error || readRes.error;
     if (firstError) setError(firstError.message);
 
     const reads: Record<string, string> = {};
     for (const r of readRes.data) reads[r.job_id] = r.last_read_at;
     setReadMap(reads);
-    // A FAILED state read is an empty index, which is exactly "no conversation
-    // has any state" — the behaviour of every build before phase77. It cannot
-    // hide a row, cannot clear a thread, and cannot silently archive anything.
-    const states = indexConversationStates(stateRes.data);
-    setStateByKey(states);
     setConversations(convRes.data);
 
-    // The threads with something unseen, and where each one's count starts. A
-    // job thread marked unread by hand has no count (its mark is the fact), so
-    // it is not asked about; the read starts at the earliest position left.
+    // The threads with something unseen, and where each one's count starts:
+    // the read starts at the earliest position among them.
     const unseenThreads: UnseenThread[] = convRes.data
       .filter((c) => threadUnread(c, user.id, reads))
       .map((c) => ({
         key: conversationKey(c),
         readAt: (c.job_id ? reads[c.job_id] : c.my_read_at) ?? null,
-        state: states[conversationKey(c)],
-      }))
-      .filter((thread) => thread.readAt !== FULLY_UNREAD_AT);
+      }));
     // Compared as instants: the database's ISO form and JavaScript's differ.
     const since = new Date(
       unseenThreads.reduce(
@@ -195,7 +173,6 @@ export function useConversations() {
   return {
     conversations,
     readMap,
-    stateByKey,
     profiles,
     moderation,
     unseenByKey,

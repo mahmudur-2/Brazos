@@ -24,7 +24,6 @@ type ConversationRowProps = {
   /** The unseen messages, COUNTED (hooks/useConversations `unseenByKey`). With
    *  `unread` and no count, the row shows the mark alone — never a made-up number. */
   unreadCount?: number | null;
-  muted?: boolean;
   blocked?: boolean;
   /** The job the conversation is about — its title, and its live stage while it
    *  is hired and underway (null once it is finished: the title alone). */
@@ -41,9 +40,7 @@ type ConversationRowProps = {
   onMore?: () => void;
   /** The ••• itself, which the menu opens under. */
   moreRef?: Ref<View>;
-  /** How this build reveals the row's actions. Passed in rather than derived
-   *  here because the MECHANIC depends on the binary's gesture capability and
-   *  the row must not have an opinion about that (2026-08-23). */
+  /** How the row's actions are reached (the inbox's long press). */
   accessibilityHint?: string;
 };
 
@@ -52,7 +49,7 @@ type ConversationRowProps = {
  * (docs/mockups/html/refs/inbox-clean-list.html, version 9): no card — the rows
  * sit on the page, a hairline between them (the list draws it), 13 above and
  * below. The top line is the 58 photo; the name at 16 bold with the unread count
- * beside it (or a 19pt muted / blocked glyph); the message 2 under it at 15/20,
+ * beside it (or a 19pt blocked glyph); the message 2 under it at 15/20,
  * the brighter ink, full strength and bolder when unread; and a 44-wide right
  * column — the time over the ••• with their right edges lined up, the time in
  * the accent when unread. Ten under that, from the row's left edge: the job
@@ -67,7 +64,6 @@ export function ConversationRow({
   lastMessageAt,
   unread,
   unreadCount,
-  muted = false,
   blocked = false,
   job,
   awaitingRequest = false,
@@ -84,7 +80,7 @@ export function ConversationRow({
   const stamp = formatInboxStamp(lastMessageAt);
 
   // The one mark beside the name: the count (or, unread with none counted, the
-  // plain mark), else blocked, else muted.
+  // plain mark), else blocked.
   const mark = unread ? (
     count != null ? (
       <View style={[styles.badge, { backgroundColor: colors.emerald }]}>
@@ -97,8 +93,6 @@ export function ConversationRow({
     )
   ) : blocked ? (
     <Ionicons name="ban-outline" size={19} color={colors.textSubtle} accessibilityLabel="Blocked" />
-  ) : muted ? (
-    <Ionicons name="notifications-off-outline" size={19} color={colors.textSubtle} accessibilityLabel="Muted" />
   ) : null;
 
   const chipFill = withAlpha(isDark ? colors.white : colors.emerald, isDark ? 0.045 : 0.055);

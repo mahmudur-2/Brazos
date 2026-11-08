@@ -683,7 +683,7 @@ test('D13/D14 · the price is ONE field that opens its list — no pencil, no di
 
   assert.match(
     flat,
-    /<PriceDropdown ref=\{priceRef\} mode=\{pricingMode\} amount=\{budgetMax\} onModeChange=\{setPricingMode\} onAmountChange=\{setBudgetMax\} onEditingChange=\{setEditingBudget\} viewport=\{priceViewport\} palette=\{emeraldColors\} \/>/,
+    /<PriceDropdown ref=\{priceRef\} mode=\{pricingMode\} amount=\{budgetMax\} onModeChange=\{setPricingMode\} onAmountChange=\{setBudgetMax\} viewport=\{priceViewport\} palette=\{emeraldColors\} \/>/,
     'the review step\'s price is the one dropdown, on the screen\'s one figure'
   );
   // The pencil and its dialog are gone from the screen.

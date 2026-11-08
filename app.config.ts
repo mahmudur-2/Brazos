@@ -88,7 +88,6 @@ export default (_context: ConfigContext): ExpoConfig => ({
       ITSAppUsesNonExemptEncryption: false,
       NSPhotoLibraryAddUsageDescription:
         'Brazos saves job and work photos you choose to share to your photo library.',
-      NSFaceIDUsageDescription: 'Unlock hidden chats with Face ID.',
       // NSLocationAlwaysAndWhenInUseUsageDescription and UIBackgroundModes are
       // BOTH GONE, and they were removed together because they were one
       // request. Nothing reads location in the background (live location

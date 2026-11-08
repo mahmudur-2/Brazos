@@ -58,40 +58,28 @@ export type PersonMenuItem = {
 
 /**
  * F20 (fix run, 2026-10-03) — THE PERSON'S SAFETY ROWS, built once. The chat
- * header's menu and the inbox row's menu both offer Mute, Block (or Unblock)
- * and Report for the same person; each built its own and the words drifted
- * ("Block…" in one, "Block" in the other). Now each menu places `mute` where
- * its own order puts it and appends `safety` last, in red, in this order. The
- * handlers stay the screen's: this decides the words, the glyphs and the order.
+ * header's menu and the inbox row's menu both offer Block (or Unblock) and
+ * Report for the same person; each built its own and the words drifted
+ * ("Block…" in one, "Block" in the other). Now each menu appends these last,
+ * in red, in this order. The handlers stay the screen's: this decides the
+ * words, the glyphs and the order.
  */
 export function personSafetyItems({
-  muted,
   blocking,
-  onMute,
   onBlock,
   onUnblock,
   onReport,
 }: {
-  muted: boolean;
   blocking: boolean;
-  onMute: () => void;
-  /** Opens the one chooser (permanently, or for a time). */
+  /** Confirms, then blocks. */
   onBlock: () => void;
   onUnblock: () => void;
   onReport: () => void;
-}): { mute: PersonMenuItem; safety: PersonMenuItem[] } {
-  return {
-    mute: {
-      key: 'mute',
-      label: muted ? 'Unmute' : 'Mute',
-      icon: muted ? 'notifications' : 'notifications-off-outline',
-      onPress: onMute,
-    },
-    safety: [
-      blocking
-        ? { key: 'block', label: 'Unblock', icon: 'lock-open-outline', onPress: onUnblock }
-        : { key: 'block', label: 'Block', icon: 'ban-outline', destructive: true, onPress: onBlock },
-      { key: 'report', label: 'Report', icon: 'flag-outline', destructive: true, onPress: onReport },
-    ],
-  };
+}): PersonMenuItem[] {
+  return [
+    blocking
+      ? { key: 'block', label: 'Unblock', icon: 'lock-open-outline', onPress: onUnblock }
+      : { key: 'block', label: 'Block', icon: 'ban-outline', destructive: true, onPress: onBlock },
+    { key: 'report', label: 'Report', icon: 'flag-outline', destructive: true, onPress: onReport },
+  ];
 }

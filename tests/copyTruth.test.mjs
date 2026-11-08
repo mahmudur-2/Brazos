@@ -103,14 +103,12 @@ test('C6 · the unprovable claims are gone: verification, the photo statistic, "
   assert.match(home, /across \$\{potential\.count\}/);
 });
 
-test('C6 · the seeded price range renders OFF behind PRICE_GUIDANCE, default false', () => {
-  const flags = code('lib/featureFlags.ts');
-  assert.match(flags, /export const PRICE_GUIDANCE = false as boolean;/);
+test('C6 · the unsourced price range is gone, not merely hidden (lean D3c)', () => {
+  // It rendered OFF behind PRICE_GUIDANCE because no source backed it; lean
+  // D3c deleted the table, the flag and the card instead.
+  assert.throws(() => statSync(join(root, 'lib/priceGuidance.ts')), { code: 'ENOENT' });
   const post = code('screens/PostJobScreen.tsx');
-  assert.match(post, /import \{ PRICE_GUIDANCE \} from '\.\.\/lib\/featureFlags';/);
-  assert.match(post, /const guidanceLines = isFreshPost && PRICE_GUIDANCE \? priceGuidanceLines\(category\) : null;/);
-  // The guidance module itself is untouched — its own fence (tests/conversion.test.mjs §3.2) still executes it.
-  assert.match(read('lib/priceGuidance.ts'), /export function priceGuidanceLines\(/);
+  assert.doesNotMatch(post, /priceGuidance|PRICE_GUIDANCE|guidanceLines|Suggested starting range/);
 });
 
 // ---------------------------------------------------------------------------

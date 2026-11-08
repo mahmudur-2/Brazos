@@ -73,8 +73,6 @@ import {
   pricingModeFrom,
   type PricingMode,
 } from '../lib/pricingMode';
-import { priceGuidanceLines } from '../lib/priceGuidance';
-import { PRICE_GUIDANCE } from '../lib/featureFlags';
 import { descriptionCharsNeeded } from '../lib/validation';
 import { answerLine, withAnswerLine, type PostAnswers } from '../lib/postQuestions';
 import { dictateBeforeLine } from '../lib/dictation';
@@ -424,10 +422,6 @@ export function PostJobScreen() {
   const [step, setStep] = useState(0);
   // 2026-09-28 (LUX-LIST-64 #32): the §3.4 photo nudge ("Add photos so workers
   // can see the work.") is gone, with its dismissal state and its draft field.
-  // D13 — whether an amount is being typed: since 2026-09-28 (LUX-LIST-64 #36)
-  // the price list's own-amount entry being open. The typical-range guidance
-  // still steps aside while it is (§3.2).
-  const [editingBudget, setEditingBudget] = useState(false);
   // #36 — the price list, opened from the summary's BUDGET cell too. It drops
   // down inside the scroller's band (under the header, above the bar), which
   // it reads from the scroller's frame and the first thing it scrolls.
@@ -1466,11 +1460,6 @@ export function PostJobScreen() {
   // (no floor retro-applied to an old description) and a hire request is a
   // negotiated single amount, not a budget to be guided.
   const descNeeded = isFreshPost ? descriptionCharsNeeded(description) : 0;
-  // Tier A (C6): the seeded range renders only behind PRICE_GUIDANCE (off
-  // until a source is attributed) — the predicate below is otherwise unchanged.
-  const guidanceLines = isFreshPost && PRICE_GUIDANCE ? priceGuidanceLines(category) : null;
-  const bothBudgetsEmpty = !budgetMin.trim() && !budgetMax.trim();
-  const showPriceGuidance = !!guidanceLines && (bothBudgetsEmpty || !editingBudget);
 
   // D1-D4 — NAVIGATION LIVES IN THE HEADER NOW, derived from the step list so
   // the two links can never name a step the wizard does not have. Leaving the
@@ -1979,22 +1968,9 @@ export function PostJobScreen() {
                     amount={budgetMax}
                     onModeChange={setPricingMode}
                     onAmountChange={setBudgetMax}
-                    onEditingChange={setEditingBudget}
                     viewport={priceViewport}
                     palette={emeraldColors}
                   />
-                  {/* §3.2 — static typical range for the chosen category.
-                      Steps aside while an amount is being typed; categories
-                      with no seeded range render nothing. No locality claim:
-                      the table is static and cannot support one. */}
-                  {showPriceGuidance && guidanceLines ? (
-                    <View style={styles.guidanceCard}>
-                      <Text style={[styles.guidanceRange, isDark && styles.guidanceRangeDark]}>
-                        {guidanceLines[0]}
-                      </Text>
-                      <Text style={styles.guidanceNote}>{guidanceLines[1]}</Text>
-                    </View>
-                  ) : null}
                 </View>
               )}
 
@@ -2495,25 +2471,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     letterSpacing: -0.3,
     color: colors.textMuted,
     marginTop: -spacing.xs,
-  },
-  guidanceCard: {
-    gap: spacing.xs,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.mint,
-  },
-  guidanceRange: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.forest,
-  },
-  guidanceRangeDark: { color: colors.ink },
-  guidanceNote: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.textMuted,
   },
   chipRow: {
     flexDirection: 'row',

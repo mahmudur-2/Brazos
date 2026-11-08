@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 // ---------------------------------------------------------------------------
-// Blocks, mutes and reports.
+// Blocks and reports.
 //
 // Blocking is enforced in the database (see phase13 SQL): the messages INSERT
 // policy rejects a write when either party has blocked the other, so a blocked
@@ -14,52 +14,39 @@ export type RelationState = {
   blocking: boolean;
   /** The other party has blocked this user. */
   blockedBy: boolean;
-  /** This user has muted the other party. */
-  muted: boolean;
 };
 
 export const EMPTY_RELATION: RelationState = {
   blocking: false,
   blockedBy: false,
-  muted: false,
 };
 
-/** Block/mute state between the signed-in user and one other person. */
+/** Block state between the signed-in user and one other person. */
 export async function fetchRelation(
   userId: string,
   otherId: string
 ): Promise<RelationState> {
-  const [blocksRes, mutesRes] = await Promise.all([
-    supabase
-      .from('blocks')
-      .select('blocker_id, blocked_id')
-      .or(
-        `and(blocker_id.eq.${userId},blocked_id.eq.${otherId}),` +
-          `and(blocker_id.eq.${otherId},blocked_id.eq.${userId})`
-      ),
-    supabase
-      .from('mutes')
-      .select('muted_id')
-      .eq('muter_id', userId)
-      .eq('muted_id', otherId),
-  ]);
+  const blocksRes = await supabase
+    .from('blocks')
+    .select('blocker_id, blocked_id')
+    .or(
+      `and(blocker_id.eq.${userId},blocked_id.eq.${otherId}),` +
+        `and(blocker_id.eq.${otherId},blocked_id.eq.${userId})`
+    );
 
   const blocks = blocksRes.data ?? [];
   return {
     blocking: blocks.some((b) => b.blocker_id === userId),
     blockedBy: blocks.some((b) => b.blocker_id === otherId),
-    muted: (mutesRes.data ?? []).length > 0,
   };
 }
 
-/** Every user the signed-in user has blocked or muted (for the inbox list). */
+/** Every user the signed-in user has blocked or is blocked by (for the inbox list). */
 export async function fetchMyModerationLists(userId: string) {
-  const [blocksRes, mutesRes] = await Promise.all([
-    supabase.from('blocks').select('blocker_id, blocked_id').or(
-      `blocker_id.eq.${userId},blocked_id.eq.${userId}`
-    ),
-    supabase.from('mutes').select('muted_id').eq('muter_id', userId),
-  ]);
+  const blocksRes = await supabase
+    .from('blocks')
+    .select('blocker_id, blocked_id')
+    .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`);
 
   const blocking = new Set<string>();
   const blockedBy = new Set<string>();
@@ -68,11 +55,7 @@ export async function fetchMyModerationLists(userId: string) {
     else blockedBy.add(b.blocker_id);
   }
 
-  return {
-    blocking,
-    blockedBy,
-    muted: new Set((mutesRes.data ?? []).map((m) => m.muted_id)),
-  };
+  return { blocking, blockedBy };
 }
 
 export async function blockUser(userId: string, otherId: string) {
@@ -151,22 +134,6 @@ export function ensureHiddenUsers(userId: string): Promise<void> {
 function hideUser(otherId: string) {
   if (hiddenIds.has(otherId)) return;
   setHidden(new Set([...hiddenIds, otherId]));
-}
-
-export async function muteUser(userId: string, otherId: string) {
-  const { error } = await supabase
-    .from('mutes')
-    .insert({ muter_id: userId, muted_id: otherId });
-  return { error };
-}
-
-export async function unmuteUser(userId: string, otherId: string) {
-  const { error } = await supabase
-    .from('mutes')
-    .delete()
-    .eq('muter_id', userId)
-    .eq('muted_id', otherId);
-  return { error };
 }
 
 // ---------------------------------------------------------------------------

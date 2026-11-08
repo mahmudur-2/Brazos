@@ -54,19 +54,9 @@ import {
   fetchSharedJobs,
   markConversationRead,
   resolveOtherId,
-  visibleMessages,
   type SharedJob,
 } from '../lib/conversations';
 import { isLiveJob } from '../lib/jobLifecycle';
-import {
-  BLOCK_DURATIONS,
-  blockExpiryFrom,
-  fetchMyConversationStates,
-  indexConversationStates,
-  setBlockUntil,
-  type BlockDuration,
-} from '../lib/conversationStates';
-import type { ConversationState } from '../lib/conversationVisibility';
 import {
   resolveConversation,
   type ActiveJobCandidate,
@@ -76,15 +66,12 @@ import {
   otherParticipant,
   type DirectThread,
 } from '../lib/directThreads';
-import { TIMED_BLOCK } from '../lib/featureFlags';
 import { chatTargetKey, type ChatTarget } from '../lib/messages';
 import {
   blockUser,
   EMPTY_RELATION,
   fetchRelation,
-  muteUser,
   unblockUser,
-  unmuteUser,
   type RelationState,
 } from '../lib/moderation';
 import { ReportDialog } from '../components/ReportDialog';
@@ -288,55 +275,6 @@ export function ChatScreen() {
     { anchorJobId: routeJobId }
   );
 
-  /** The `job:`/`direct:` key of the thread a message belongs to. */
-  const threadKeyOf = useCallback(
-    (message: Pick<Message, 'job_id' | 'direct_thread_id'>) =>
-      chatTargetKey(
-        message.job_id
-          ? { jobId: message.job_id }
-          : { directThreadId: message.direct_thread_id as string }
-      ),
-    []
-  );
-
-  /**
-   * THIS USER'S OWN CLEAR / DELETE WATERMARKS (phase77, S-2).
-   *
-   * Per THREAD, because one conversation is several threads folded together
-   * and clearing the pair's direct thread must not empty the job thread
-   * interleaved with it. Read once on entry; the watermark only moves when
-   * this user moves it, and they cannot do that from inside this screen.
-   */
-  const [stateByKey, setStateByKey] = useState<Record<string, ConversationState>>({});
-  useEffect(() => {
-    if (!user) return;
-    let active = true;
-    fetchMyConversationStates(user.id).then(({ data, error: stateError }) => {
-      if (!active) return;
-      // A failed read is an empty index — every message visible, which is the
-      // behaviour of every build before phase77. It can never hide a message
-      // the user did not clear.
-      if (stateError) {
-        console.warn('[Chat] conversation-state read failed', stateError.message);
-        return;
-      }
-      setStateByKey(indexConversationStates(data));
-    });
-    return () => {
-      active = false;
-    };
-  }, [user]);
-
-  /**
-   * The timeline as this user actually holds it. D7's one visibility rule,
-   * applied here and in the inbox from the same import — a message they
-   * cleared is out of the thread, and stays out until something newer arrives.
-   */
-  const visibleTimeline = useMemo(
-    () => visibleMessages(messages, (message) => stateByKey[threadKeyOf(message)]),
-    [messages, stateByKey, threadKeyOf]
-  );
-
   // conversations.last_message_at IS the newest message in a job's thread, so
   // the canonical activity timestamp is read straight off the timeline that is
   // already loaded rather than fetched a second time.
@@ -473,20 +411,13 @@ export function ChatScreen() {
 
   // Messages by id, for resolving a reply's quoted original without a join —
   // the quoted message is always somewhere in this conversation.
-  // Off the VISIBLE timeline: a reply whose original this user cleared has no
-  // quote left to show, because in their copy the original is not there.
-  // F5: an original outside the loaded window arrives in quotedById, through
-  // the same visibility rule, so a cleared original still shows no quote.
-  const visibleQuoted = useMemo(
-    () => visibleMessages(Object.values(quotedById), (message) => stateByKey[threadKeyOf(message)]),
-    [quotedById, stateByKey, threadKeyOf]
-  );
+  // F5: an original outside the loaded window arrives in quotedById.
   const messagesById = useMemo(() => {
     const map: Record<string, Message> = {};
-    for (const m of visibleQuoted) map[m.id] = m;
-    for (const m of visibleTimeline) map[m.id] = m;
+    for (const m of Object.values(quotedById)) map[m.id] = m;
+    for (const m of messages) map[m.id] = m;
     return map;
-  }, [visibleTimeline, visibleQuoted]);
+  }, [messages, quotedById]);
 
   const jobTitles = useMemo(() => {
     const map: Record<string, string> = {};
@@ -508,10 +439,7 @@ export function ChatScreen() {
   const items = useMemo<TimelineItem[]>(() => {
     const list: TimelineItem[] = [];
     let context: string | null = null;
-    // The visible timeline, never the raw one: a cleared message is out of
-    // this user's copy, and a divider for a job whose messages are all gone
-    // would head an empty section.
-    for (const message of visibleTimeline) {
+    for (const message of messages) {
       const messageJobId = message.job_id ?? null;
       if (messageJobId !== context) {
         context = messageJobId;
@@ -526,7 +454,7 @@ export function ChatScreen() {
       list.push({ kind: 'message', key: message.id, message });
     }
     return list;
-  }, [visibleTimeline, jobTitles]);
+  }, [messages, jobTitles]);
 
   // A supplied jobId is ONLY an initial scroll target: the conversation opens
   // at that job's first chronological message rather than at the bottom.
@@ -639,52 +567,24 @@ export function ChatScreen() {
   }
 
   /**
-   * MUTE IS LIVE, not flagged.
-   *
-   * The overnight dispatch expected this to wait on a per-conversation mute
-   * row. It does not: `mutes` has shipped since phase13 and the inbox row has
-   * been calling muteUser/unmuteUser all along — and a conversation in BRAZOS
-   * IS a person (the inbox is keyed by counterparty), so per-user and
-   * per-conversation mute are the same feature here. `relation` already
-   * carries the current state, so the menu row can say which way it toggles.
-   */
-  async function toggleMute() {
-    if (!user || !counterpartyId) return;
-    const { error: muteError } = relation.muted
-      ? await unmuteUser(user.id, counterpartyId)
-      : await muteUser(user.id, counterpartyId);
-    if (muteError) {
-      await alertAsync(
-        relation.muted ? 'Could not unmute' : 'Could not mute',
-        userMessage(muteError)
-      );
-      return;
-    }
-    // Re-read rather than assuming: the same relation carries the block state
-    // the composer gate reads, and a locally-flipped copy of it could disagree
-    // with the server about more than mute.
-    if (user && counterpartyId) setRelation(await fetchRelation(user.id, counterpartyId));
-  }
-
-  /**
    * 2026-09-26 (the refresh, audit M-10) — BLOCK AND REPORT, FROM THE PERSON.
    *
-   * They lived only behind a long press or a swipe on the inbox row, so in a
+   * They lived only behind a long press on the inbox row, so in a
    * conversation — where a person is most likely to need them — there was no
    * visible way to reach either. The header menu now carries both, through
-   * the same calls the inbox makes: blockUser / unblockUser / setBlockUntil
-   * and the shared ReportDialog, each confirming exactly as the inbox does.
+   * the same calls the inbox makes: blockUser / unblockUser and the shared
+   * ReportDialog, each confirming exactly as the inbox does.
    */
   const [reportOpen, setReportOpen] = useState(false);
-  const [blockChooserOpen, setBlockChooserOpen] = useState(false);
   const counterpartyName = counterparty?.full_name ?? 'this person';
 
+  // Re-read rather than assuming: the relation carries the block state the
+  // composer gate reads, and a locally-flipped copy could disagree with the server.
   async function rereadRelation() {
     if (user && counterpartyId) setRelation(await fetchRelation(user.id, counterpartyId));
   }
 
-  async function blockPermanently() {
-    setBlockChooserOpen(false);
+  async function block() {
     if (!user || !counterpartyId) return;
     const ok = await confirmAsync({
       title: `Block ${counterpartyName}?`,
@@ -699,50 +599,12 @@ export function ChatScreen() {
     await rereadRelation();
   }
 
-  async function blockForDuration(duration: BlockDuration) {
-    setBlockChooserOpen(false);
-    if (!counterpartyId) return;
-    const ok = await confirmAsync({
-      title: `Block ${counterpartyName} for ${duration.label}?`,
-      message: "You won't be able to message each other until it lapses. You can unblock sooner.",
-      confirmText: 'Block',
-      cancelText: 'Cancel',
-      destructive: true,
-    });
-    if (!ok) return;
-    const { error: blockError } = await setBlockUntil(
-      counterpartyId,
-      blockExpiryFrom(Date.now(), duration.ms)
-    );
-    if (blockError) await alertAsync('Could not block', userMessage(blockError));
-    await rereadRelation();
-  }
-
   async function unblock() {
     if (!user || !counterpartyId) return;
     const { error: unblockError } = await unblockUser(user.id, counterpartyId);
     if (unblockError) await alertAsync('Could not unblock', userMessage(unblockError));
     await rereadRelation();
   }
-
-  /** Block's one chooser — permanently first, then the timed durations. */
-  const blockChooserItems: ActionSheetItem[] = [
-    {
-      key: 'block-permanent',
-      label: 'Permanently',
-      icon: 'ban-outline',
-      destructive: true,
-      onPress: () => void blockPermanently(),
-    },
-    ...(TIMED_BLOCK
-      ? BLOCK_DURATIONS.map((duration) => ({
-          key: duration.key,
-          label: duration.label,
-          icon: 'time-outline' as const,
-          onPress: () => void blockForDuration(duration),
-        }))
-      : []),
-  ];
 
   async function handleShareProfile() {
     if (!counterpartyId) return;
@@ -784,21 +646,18 @@ export function ChatScreen() {
    *
    * 2026-09-26 (the refresh, audit M-10): ONE SKELETON IN BOTH MODES — the
    * person's profile rows first (View profile, Rating / Reviews, and for a
-   * customer Save, Hire again and Share), then Mute, Block… and Report, which
+   * customer Save, Hire again and Share), then Block and Report, which
    * reach the same calls the inbox row makes. They were reachable only by a
    * hidden gesture on the inbox, never from the conversation itself.
    */
-  // F20: the person's Mute, Block and Report rows come from the one builder the
+  // F20: the person's Block and Report rows come from the one builder the
   // inbox menu also reads (lib/chatMenus.ts); this screen keeps the handlers.
   const personRows = personSafetyItems({
-    muted: relation.muted,
     blocking: relation.blocking,
-    onMute: () => void toggleMute(),
-    onBlock: () => setBlockChooserOpen(true),
+    onBlock: () => void block(),
     onUnblock: () => void unblock(),
     onReport: () => setReportOpen(true),
   });
-  const muteMenuItem: DropMenuItem = personRows.mute;
 
   const headerMenuItems: DropMenuItem[] = [];
   if (counterparty && !isSelfConversation) {
@@ -851,7 +710,6 @@ export function ChatScreen() {
         icon: 'share-outline',
         onPress: () => void handleShareProfile(),
       });
-      headerMenuItems.push(muteMenuItem);
     } else {
       headerMenuItems.push({
         key: 'view-profile',
@@ -865,11 +723,10 @@ export function ChatScreen() {
         icon: 'star-outline',
         onPress: openCounterpartyReviews,
       });
-      headerMenuItems.push(muteMenuItem);
     }
     // M-10 — the safety pair, last and in red, the same in both modes and the
     // same as the inbox row's menu (F20).
-    headerMenuItems.push(...personRows.safety);
+    headerMenuItems.push(...personRows);
   }
 
   // F4 — ONE SCROLL PATH. The list is inverted: the newest message is row 0
@@ -1608,14 +1465,6 @@ export function ChatScreen() {
         title="Message"
         items={messageMenuItems}
         onClose={() => setMenuTarget(null)}
-      />
-
-      <ActionSheet
-        visible={blockChooserOpen}
-        title={counterpartyName}
-        subtitle="Block — for how long?"
-        items={blockChooserItems}
-        onClose={() => setBlockChooserOpen(false)}
       />
 
       {user && counterpartyId ? (

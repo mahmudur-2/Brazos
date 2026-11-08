@@ -66,7 +66,7 @@ export function ReportDialog({
   const [submitting, setSubmitting] = useState(false);
   // Opt-in, and it drives the EXISTING permanent block — lib/moderation's
   // blockUser, the same call the inbox row runs. Nothing new is stored and no
-  // timed variant is implied here; that one waits on TIMED_BLOCK.
+  // timed variant is implied here.
   const [alsoBlock, setAlsoBlock] = useState(false);
   // The sheet's own sent state. It replaces the alert that used to fire AFTER
   // the sheet had already closed — a confirmation that appears somewhere else

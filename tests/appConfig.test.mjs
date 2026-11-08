@@ -71,13 +71,13 @@ test('no background mode and no Always-location permission survive anywhere', ()
   assert.doesNotMatch(code, /UIBackgroundModes/);
   assert.doesNotMatch(code, /NSLocationAlways/);
 
-  // The three that remain, byte-identical to what app.json carried. Pinned as
-  // a whole object so a fourth key cannot arrive unnoticed either.
+  // The two that remain, byte-identical to what app.json carried. Pinned as
+  // a whole object so a third key cannot arrive unnoticed either. (Face ID
+  // left with hidden chats, lean D3c.)
   assert.deepEqual(infoPlist, {
     ITSAppUsesNonExemptEncryption: false,
     NSPhotoLibraryAddUsageDescription:
       'Brazos saves job and work photos you choose to share to your photo library.',
-    NSFaceIDUsageDescription: 'Unlock hidden chats with Face ID.',
   });
 });
 

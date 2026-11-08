@@ -65,7 +65,6 @@ test('E7: a full-screen wait is the shared spinner, never a hand-rolled one', ()
     'screens/AdminReportsScreen.tsx',
     'screens/CellJobsScreen.tsx',
     'screens/ChatScreen.tsx',
-    'screens/HiddenChatsScreen.tsx',
     'screens/MessagesInboxScreen.tsx',
     'screens/MyJobsHubScreen.tsx',
     'screens/NotificationSettingsScreen.tsx',

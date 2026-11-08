@@ -271,7 +271,6 @@ test('every tab-contained scroll surface clears the floating pill', async () => 
     'screens/MessagesInboxScreen.tsx',
     'screens/MyJobsHubScreen.tsx',
     'screens/ProfileScreen.tsx',
-    'screens/HiddenChatsScreen.tsx',
     'screens/PostJobScreen.tsx',
   ];
   for (const path of surfaces) {

@@ -120,7 +120,6 @@ test('[static] D12: a rule drawn as a view of its own is the Divider; nothing ha
   const adopted = [
     ['screens/ChatScreen.tsx', /<Divider thickness=\{1\} style=\{styles\.jobDividerRule\} \/>/],
     ['screens/MessagesInboxScreen.tsx', /<Divider thickness=\{1\} color=\{withAlpha\(colors\.inboxRule, isDark \? 0\.11 : 1\)\} \/>/],
-    ['screens/HiddenChatsScreen.tsx', /<Divider thickness=\{1\} color=\{withAlpha\(colors\.inboxRule, isDark \? 0\.11 : 1\)\} \/>/],
     ['components/GlassDropdown.tsx', /<Divider thickness=\{1\} color=\{rule\} style=\{styles\.rule\} \/>/],
     ['components/JobLivePage.tsx', /<Divider thickness=\{1\} style=\{styles\.hr\} \/>/],
     ['components/JobSummaryCard.tsx', /<Divider thickness=\{1\} style=\{styles\.divider\} \/>/],

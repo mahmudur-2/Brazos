@@ -784,137 +784,22 @@ test("[static] riseFor opens with the 'worklet' directive, so the fast path may 
   );
 });
 
-test('[static] every feature flag carries the dependency it waits on, and only the landed ones are live', () => {
-  // M2's contract: the UI behind a flag is BUILT, and the flag is what keeps
-  // it from being offered. A flag with no recorded dependency is a flag
-  // nobody can ever safely flip, so the WAITS ON line is part of the flag —
-  // and it stays part of it after the flip, because a flag that HAS been
-  // flipped is still where a later reader looks to find out why it could be.
-  const source = read('lib/featureFlags.ts');
-  const flags = [...source.matchAll(/export const (\w+) = (false|true) as boolean;/g)];
-  // Lean D3a removed DELIVERED_TICKS, DOCUMENTS, READ_TICKS and TRANSLATION,
-  // and lean D3b LIVE_LOCATION, together with the features they gated.
-  assert.equal(flags.length, 7, `the roster is seven flags (saw ${flags.length})`);
-  assert.deepEqual(
-    flags.map((f) => f[1]).sort(),
-    [
-      'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'HIDDEN_CHATS',
-      'MARK_UNREAD', 'PRICE_GUIDANCE', 'TIMED_BLOCK',
-    ],
-    'the flag roster changed — say so in HANDOFF.md as well as here'
-  );
-  // MUTE was REMOVED from this table (2026-08-23) rather than shipped false:
-  // it had no unmet dependency to record, because `mutes` and
-  // muteUser/unmuteUser already exist and are already wired. A flag with
-  // nothing to wait on is a flag nobody can ever safely flip.
-  assert.doesNotMatch(source, /export const MUTE\b/);
-  assert.match(source, /NOT A FLAG — MUTE WAS RETIRED/);
-  // WHICH FLAGS ARE LIVE, named rather than counted. Six of these flipped on
-  // 2026-08-24 — the ones supabase/archive/phases/phase77_conversation_features.sql
-  // supplied a dependency for, wired by RUN W1 on BOTH thread kinds.
-  //
-  // Pinning the ROSTER rather than asserting "all false" is what keeps this
-  // fence useful now that flipping is a thing that happens: a flag going live
-  // without its dependency turns this red exactly as a premature flip used to.
-  const LIVE = [
-    'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'HIDDEN_CHATS',
-    'MARK_UNREAD', 'TIMED_BLOCK',
-  ];
-  // PRICE_GUIDANCE (Tier A, 2026-08-30) is dark by the copy sweep's rule: the
-  // seeded range table has no attributed source, so the guidance waits on one.
-  const DARK = ['PRICE_GUIDANCE'];
-  assert.deepEqual(
-    [...LIVE, ...DARK].sort(),
-    flags.map((f) => f[1]).sort(),
-    'every flag must be listed as live or dark — say which in HANDOFF.md too'
-  );
-
-  for (const [, name, value] of flags) {
-    const expected = LIVE.includes(name) ? 'true' : 'false';
-    assert.equal(
-      value,
-      expected,
-      expected === 'false'
-        ? `${name} is live — flip it here only once its dependency has landed`
-        : `${name} is dark — its dependency landed, so it belongs at true`
-    );
-    const doc = source.slice(0, source.indexOf(`export const ${name}`));
-    const block = doc.slice(doc.lastIndexOf('/**'));
-    assert.match(block, /WAITS ON:/, `${name} must record the table, column, policy, deploy or key it waits on`);
-  }
-});
-
-test('[static] every feature flag either gates something or says plainly that it does not', () => {
-  // AUDIT F1. A flag table's implicit contract is "flip this and the feature
-  // appears". READ_TICKS and DELIVERED_TICKS broke it: both were named only in
-  // PROSE — components/MessageTicks.tsx and lib/messageTicks.ts mention them,
-  // neither imports them — so flipping either changed nothing on screen.
-  // ChatBubble calls `tickStateFor(delivery ?? {})` and no caller passes
-  // `delivery`, so every own message draws one tick whatever the flags say.
-  //
-  // READ_TICKS IS NO LONGER ONE OF THEM. phase77's message_reads_select_party
-  // supplied the half that was missing — the counterparty's read position on a
-  // JOB thread — and RUN W1 built the assembly in screens/ChatScreen.tsx, so
-  // the flag now guards something and its NO GUARD SITE paragraph came out
-  // with the wiring, which is exactly what this fence demands in that
-  // direction.
-  //
-  // Lean D3a then deleted READ_TICKS and DELIVERED_TICKS together with the
-  // ticks, so every flag left in the table gates something.
-  //
-  // This fence keeps that honest in BOTH directions: a flag with a guard site
-  // is fine, a flag without one must SAY it has none, and the day the wiring
-  // lands the declaration has to come back out.
-  const source = read('lib/featureFlags.ts');
-  const flags = [...source.matchAll(/export const (\w+) = (?:false|true) as boolean;/g)].map(
-    (m) => m[1],
-  );
-
-  const sources = [];
-  for (const dir of ['components', 'screens', 'hooks', 'lib']) {
+test('[static] lib/featureFlags.ts does not exist, and nothing imports it', () => {
+  // Lean D3c deleted the compile-time flag table with the seven features it
+  // gated (TIMED_BLOCK, HIDDEN_CHATS, ARCHIVE, CLEAR_CHAT, DELETE_CHAT,
+  // MARK_UNREAD, PRICE_GUIDANCE); none became always-on code. A runtime kill
+  // switch belongs in lib/remoteConfig.ts.
+  assert.throws(() => statSync(join(root, 'lib/featureFlags.ts')), { code: 'ENOENT' });
+  for (const dir of ['components', 'screens', 'hooks', 'lib', 'navigation']) {
     for (const name of readdirSync(join(root, dir))) {
       if (!name.endsWith('.ts') && !name.endsWith('.tsx')) continue;
-      if (`${dir}/${name}` === 'lib/featureFlags.ts') continue;
-      sources.push([`${dir}/${name}`, stripComments(read(`${dir}/${name}`))]);
-    }
-  }
-
-  let gated = 0;
-  let declared = 0;
-  for (const name of flags) {
-    const pattern = new RegExp(`\\b${name}\\b`);
-    const sites = sources.filter(([, body]) => pattern.test(body)).map(([file]) => file);
-    const doc = source.slice(0, source.indexOf(`export const ${name}`));
-    const block = doc.slice(doc.lastIndexOf('/**'));
-    const declaresNoGuard = /NO GUARD SITE/.test(block);
-
-    if (sites.length > 0) {
-      gated += 1;
-      assert.ok(
-        !declaresNoGuard,
-        `${name} is guarded at ${sites.join(', ')} but its doc still says NO GUARD SITE — ` +
-          'delete that paragraph now the wiring exists',
-      );
-    } else {
-      declared += 1;
-      assert.ok(
-        declaresNoGuard,
-        `${name} gates nothing — no file outside lib/featureFlags.ts references it — so ` +
-          'flipping it changes nothing. Say so in its doc block and name what must be built.',
-      );
-      assert.match(
-        block,
-        /WHAT MUST BE BUILT/,
-        `${name} declares no guard site but does not name the wiring that would give it one`,
+      assert.doesNotMatch(
+        stripComments(read(`${dir}/${name}`)),
+        /featureFlags/,
+        `${dir}/${name} still imports the deleted flag table`,
       );
     }
   }
-
-  // The sweep must be measuring both halves; an empty `sources` would make
-  // every flag look unguarded and still pass the loop above.
-  assert.ok(flags.length > 0, 'the flag sweep must find the roster');
-  assert.equal(gated, flags.length, `every flag gates something (saw ${gated} of ${flags.length})`);
-  assert.equal(declared, 0, `no flag is left with nothing to gate (saw ${declared})`);
 });
 
 // ===========================================================================
@@ -942,13 +827,6 @@ const SIBLINGS = [
     fast: 'components/DropMenu.motion120.tsx',
     shared: 'components/DropMenu.shared.tsx',
     needs: 'reanimated',
-  },
-  {
-    name: 'SwipeableRow',
-    fallback: 'components/SwipeableRow.tsx',
-    fast: 'components/SwipeableRow.motion120.tsx',
-    shared: 'components/SwipeableRow.shared.tsx',
-    needs: 'gestures',
   },
   {
     name: 'KeyboardRisingColumn',
@@ -1312,35 +1190,13 @@ test('[static] the peek sheet slides by a transform on both drivers, and the fal
   assert.match(shared, /export const SHEET_SPRING = \{ damping: \d+, stiffness: \d+, mass: [\d.]+ \} as const;/);
 });
 
-test('[static] the swipe surface needs BOTH natives, which is what consumes canWorklet', () => {
+test('[static] a swipe needs BOTH natives, and canWorklet is consumed', () => {
   // AUDIT F3. `canWorklet` was exported and read by nothing, which made it a
-  // claim rather than a check. The swipe row is where it belongs: a build with
-  // a recogniser but no worklets could swipe, and would swipe BADLY — a JS
-  // round trip per frame under exactly the load a list scroll produces —
-  // which is worse than not offering the mechanic.
-  const row = stripComments(read('components/SwipeableRow.tsx'));
-  // The two QUESTIONS must be imported, asserted by name rather than as an
-  // exact member list — the list grew a third entry when the boundary did, and
-  // pinning the whole line would make every future addition look like a
-  // regression here.
-  const rowImport = row.match(/import \{([^}]*)\} from '\.\.\/lib\/motion120';/);
-  assert.ok(rowImport, 'SwipeableRow must import from the boundary');
-  for (const name of ['canSwipe', 'canWorklet', 'resolveMotion120']) {
-    assert.ok(
-      rowImport[1].split(',').some((member) => member.trim() === name),
-      `SwipeableRow must import ${name} from the boundary`
-    );
-  }
-  assert.match(
-    row,
-    /gestures: canSwipe\(\) && canWorklet\(\), reanimated: canWorklet\(\)/,
-    'the swipe needs a recogniser AND worklets; either false takes the fallback'
-  );
-  // The capability it hands over is the REAL one with those two keys
-  // overridden — a swipe row inventing a value for a vendor it does not use
-  // would be a claim it has no basis for.
-  assert.match(row, /\{ \.\.\.motionCapability, gestures:/);
-
+  // claim rather than a check. A build with a recogniser but no worklets could
+  // swipe, and would swipe BADLY — a JS round trip per frame — which is worse
+  // than not offering the mechanic. (The inbox's SwipeableRow, where this
+  // started, left in lean D3c; the gesture surfaces below still pair the two.)
+  //
   // Executed, every combination: neither native alone opens the fast path.
   //
   // The two predicates are read out of lib/motion120/index.tsx rather than
@@ -1357,10 +1213,6 @@ test('[static] the swipe surface needs BOTH natives, which is what consumes canW
   assert.equal(swipeReady({ gestures: false, reanimated: true }), false, 'no recogniser, no swipe');
   assert.equal(swipeReady({ gestures: false, reanimated: false }), false);
 
-  // The FALLBACK is the row itself — not a disabled swipe and not dead tiles.
-  // A capability-false device shows no affordance that does nothing.
-  assert.match(row, /function SwipeableRowFallback\(\{ children \}: SwipeableRowProps\) \{\s*return <>\{children\}<\/>;/);
-
   // canWorklet is READ by app code now, not merely exported. This is the
   // assertion that fails if it goes back to being decorative.
   const consumers = [];
@@ -1373,55 +1225,6 @@ test('[static] the swipe surface needs BOTH natives, which is what consumes canW
     }
   }
   assert.ok(consumers.length > 0, 'canWorklet must be consumed or removed — it cannot just exist');
-});
-
-test('[static] the inbox swipe and its long press share ONE action model', () => {
-  // The rule canSwipe states: a swipe chooses the MECHANIC, never the action
-  // set. Both entries read `actionsFor`, so an action cannot exist on one and
-  // not the other, and no handler is written twice.
-  const screen = stripComments(read('screens/MessagesInboxScreen.tsx'));
-
-  assert.match(screen, /const actionsFor = useCallback\(/, 'the action model is built once');
-  // 2026-09-28 (LUX-LIST-64 #53): the long-press sheet is the glass dropdown
-  // under the row's •••, rendering the same model in its two groups.
-  assert.match(
-    screen,
-    /const menuGroups: GlassDropdownItem\[\]\[\] = menuTarget\s*\?\s*\(\(\{ everyday, safety \}\) => \[everyday, safety\]\)\(actionsFor\(menuTarget\)\)/,
-    'the long-press menu renders the shared model'
-  );
-  assert.match(
-    screen,
-    /const \{ everyday, safety \} = actionsFor\(target\);\s*const model = \[\.\.\.everyday, \.\.\.safety\];/,
-    'the swipe reads the same model'
-  );
-  assert.match(
-    screen,
-    /<SwipeableRow actions=\{swipeActionsFor\(item\.otherId\)\} enabled=\{!item\.isSelf\}>/,
-    'every row offers the swipe, except a self-conversation with nobody to act on'
-  );
-
-  // The three tiles the dispatch named, and Block deliberately NOT among them:
-  // it is the destructive one, it confirms, and a tile a thumb reaches by
-  // accident is the wrong home for it. It stays one tap away, inside More.
-  assert.match(screen, /byKey\('mute'\)/);
-  assert.match(screen, /byKey\('report'\)/);
-  assert.doesNotMatch(screen, /byKey\('block'\)/, 'block is not a swipe tile');
-  assert.match(screen, /tone: 'gold'/, 'the overflow tile is the gold one');
-  assert.match(
-    screen,
-    /onPress: \(\) => openMenu\(userId, SWIPE_SETTLE_MS\)/,
-    'the More tile opens the very menu the long press opens'
-  );
-
-  // Flag-gated rows still do not render, and the swipe inherits that because
-  // it renders entries of the same array rather than a list of its own.
-  // 2026-09-26 (the refresh, audit M-11): the flagged rows live IN the one
-  // model now, each behind its own flag, rather than behind a More row.
-  assert.match(screen, /if \(MARK_UNREAD\) \{\s*items\.push\(/);
-  // 2026-09-28 (#53): Clear chat and Delete chat are two rows of the menu's
-  // red group, each behind its own flag.
-  assert.match(screen, /if \(CLEAR_CHAT\) \{\s*safety\.push\(/);
-  assert.match(screen, /if \(DELETE_CHAT\) \{\s*safety\.push\(/);
 });
 
 // ===========================================================================
@@ -2261,7 +2064,6 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       // piece, and the segmented control's thumb sprung by translateX.
       'components/Selection.motion120.tsx',
       'components/SheetCard.motion120.tsx',
-      'components/SwipeableRow.motion120.tsx',
       // 2026-09-30 (the build run, idea 23) — the chosen category tile's check slot: one shared
       // value, 0 → 1, the slot's width and the box's opacity computed from it on the UI thread.
       'components/TileCheck.motion120.tsx',

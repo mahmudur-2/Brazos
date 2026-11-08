@@ -35,27 +35,6 @@ export type Conversation = {
   my_read_at: string | null;
 };
 
-// ---------------------------------------------------------------------------
-// THE CLEAR / DELETE WATERMARK (phase77, S-2).
-//
-// D7's ONE visibility helper, re-exported here so the two surfaces that read
-// it — the inbox deciding whether a row is still in the list, and the chat
-// timeline deciding which messages are still in the thread — share one import
-// as well as one implementation.
-//
-// THE RULE ITSELF lives in lib/conversationVisibility.ts, which imports
-// nothing, so a test can RUN the comparison rather than read it: a module that
-// imports `./supabase` cannot be loaded by `node --test` at all. There is
-// exactly one `<=` in this app comparing an instant to `cleared_before`, and
-// it is over there. A second copy is the P3-31 bug the arrangement prevents.
-// ---------------------------------------------------------------------------
-export {
-  clearedBy,
-  conversationHiddenByDelete,
-  visibleMessages,
-  type ClearWatermark,
-} from './conversationVisibility';
-
 /** The chat target a conversation row opens. */
 export function conversationTarget(c: Conversation): ChatTarget {
   return c.job_id
@@ -105,10 +84,6 @@ export type UnreadableConversation = Pick<
  * message_reads map. YOUR OWN last message never counts: offer events and
  * status cards are inserted with your id from screens you may never revisit,
  * and lighting the inbox for your own action is noise, not news.
- *
- * MUTE IS NOT PART OF THIS RULE. It is a property of the person, not of the
- * thread, and it is applied by the caller — the same reason the sheet resolves
- * `muted` off the row rather than off the conversation.
  */
 export function threadUnread(
   thread: UnreadableConversation,
@@ -235,7 +210,7 @@ export async function fetchSharedJobs(userId: string, otherId: string) {
  * inbox has unread, sent after `since` — the earliest read position among
  * them. One read per kind of thread; RLS already limits `messages` to threads
  * the caller is a party to. countUnseen() (lib/conversationVisibility.ts) does
- * the counting, the clear watermark included. Capped: a row says "99+" long
+ * the counting. Capped: a row says "99+" long
  * before the cap could matter.
  */
 const UNSEEN_READ_CAP = 500;

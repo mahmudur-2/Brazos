@@ -22,7 +22,6 @@ import { JobDetailScreen } from '../screens/JobDetailScreen';
 import { SubmitBidScreen } from '../screens/SubmitBidScreen';
 import { LegalDocumentScreen } from '../screens/LegalDocumentScreen';
 import { MapScreen } from '../screens/MapScreen';
-import { HiddenChatsScreen } from '../screens/HiddenChatsScreen';
 import { MessagesInboxScreen } from '../screens/MessagesInboxScreen';
 import { MyJobsHubScreen } from '../screens/MyJobsHubScreen';
 import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';
@@ -107,9 +106,6 @@ export function MessagesStackNavigator() {
   return (
     <MessagesStack.Navigator screenOptions={{ headerShown: false }}>
       <MessagesStack.Screen name="MessagesInbox" component={MessagesInboxScreen} />
-      {/* Reached only from the inbox's foot row, after the device
-          authentication prompt succeeds (phase77 HIDDEN_CHATS). */}
-      <MessagesStack.Screen name="HiddenChats" component={HiddenChatsScreen} />
       <MessagesStack.Screen name="Chat" component={ChatScreen} />
       <MessagesStack.Screen name="PostJob" component={PostJobScreen} />
       <MessagesStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />

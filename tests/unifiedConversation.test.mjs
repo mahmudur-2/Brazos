@@ -188,14 +188,7 @@ test('the inbox renders one row per person and never counts conversations', asyn
 
   // Unread and the waiting-offer badge fold across every thread of that
   // person's, or a conversation could go unanswered with nothing to show it.
-  //
-  // W1 narrowed the UNREAD fold to the threads still in this user's copy: a
-  // thread they cleared has no messages left to have missed, so counting it
-  // would light the row for something they cannot open. The waiting-offer
-  // badge still folds across ALL of them, because an offer waiting on this
-  // user is live whatever they did to their own copy of the thread.
-  assert.match(inbox, /unread: liveThreads\.some\(unreadInThread\)/);
-  assert.match(inbox, /const liveThreads = person\.threads\.filter\(/);
+  assert.match(inbox, /unread: person\.threads\.some\(unreadInThread\)/);
   assert.match(inbox, /awaitingRequest: person\.threads\.some\(awaitingInThread\)/);
 });
 

@@ -248,18 +248,10 @@ test('[static] the overflow menu is MODE-shaped, and perspective comes from Mode
   }
   assert.doesNotMatch(worker, /key: 'save-worker'|key: 'hire-again'|key: 'share-profile'/);
 
-  // MUTE IS LIVE IN BOTH MENUS, not flagged. The dispatch expected a flag; the
-  // repo already had `mutes` (phase13) and lib/moderation's muteUser/unmuteUser
-  // wired into the inbox, and a conversation in BRAZOS IS a person — the inbox
-  // is keyed by counterparty — so per-user and per-conversation mute are the
-  // same feature. Flagging it would have hidden working behaviour.
-  assert.equal((chat.match(/headerMenuItems\.push\(muteMenuItem\);/g) ?? []).length, 2);
+  // Lean D3c: mute is gone from both menus.
+  assert.doesNotMatch(chat, /muteMenuItem|muteUser|unmuteUser/);
   // F20: the row's words come from the one person-menu builder, fed this relation.
-  assert.match(chat, /const personRows = personSafetyItems\(\{\s*muted: relation\.muted,\s*blocking: relation\.blocking,/);
-  assert.match(chat, /const muteMenuItem: DropMenuItem = personRows\.mute;/);
-  assert.match(stripComments(read('lib/chatMenus.ts')), /label: muted \? 'Unmute' : 'Mute'/);
-  assert.match(chat, /await unmuteUser\(user\.id, counterpartyId\)/);
-  assert.match(chat, /await muteUser\(user\.id, counterpartyId\)/);
+  assert.match(chat, /const personRows = personSafetyItems\(\{\s*blocking: relation\.blocking,/);
   // ...and it re-reads rather than flipping a local copy: the same relation
   // carries the block state the composer gate reads.
   assert.match(chat, /setRelation\(await fetchRelation\(user\.id, counterpartyId\)\)/);
@@ -300,7 +292,7 @@ test('[static] the report sheet can block in the same breath, and says so when i
   const dialog = stripComments(read('components/ReportDialog.tsx'));
 
   // The EXISTING permanent block, opt-in. No new store, and no timed variant
-  // implied — that one waits on TIMED_BLOCK.
+  // implied (lean D3c removed it).
   assert.match(dialog, /import \{ blockUser, createReport, REPORT_REASONS, type ReportReason \}/);
   assert.match(dialog, /const \[alsoBlock, setAlsoBlock\] = useState\(false\);/);
   assert.match(dialog, /if \(alsoBlock\) \{\s*const \{ error: blockError \} = await blockUser\(reporterId, reportedId\);/);
@@ -423,25 +415,11 @@ test('[static+executed] the bubble cap resolves against the row, not against the
   );
 });
 
-test('[static] the mark-unread verdict is recorded where the next run will look', () => {
-  // The flag must carry the EVIDENCE, not a shrug: the schema run read it to
-  // know what to build, and W1 flipped it once phase77 built it. The verdict
-  // stays — a flag that HAS been flipped is still where a later reader looks
-  // to find out why it could be. (READ_TICKS went with the ticks, lean D3a.)
-  const flags = read('lib/featureFlags.ts');
-  assert.match(flags, /export const MARK_UNREAD = true as boolean;/);
-  // Mark-as-unread: was rewindable on job threads, not on direct threads.
-  assert.match(flags, /message_reads_update_own/);
-  assert.match(flags, /mark_direct_thread_read\(\), hard-codes `now\(\)`/);
-  // And it names what CLOSED it, not just what blocked it.
-  assert.match(flags, /set_direct_thread_read_at\(\)/);
-});
-
 // ---------------------------------------------------------------------------
-// THE INBOX — five pills, one action model, two entry mechanics.
+// THE INBOX — four pills, one action model.
 // ---------------------------------------------------------------------------
 
-test('[executed] two pills filter live state and three are honestly empty', () => {
+test('[executed] three pills filter live state and Support is honestly empty', () => {
   const rows = [
     { key: 'a', unread: true, awaitingRequest: false },
     { key: 'b', unread: false, awaitingRequest: true },
@@ -452,28 +430,27 @@ test('[executed] two pills filter live state and three are honestly empty', () =
   assert.deepEqual(inbox.filterRows(rows, 'all').map((r) => r.key), ['a', 'b', 'c', 'd']);
   assert.deepEqual(inbox.filterRows(rows, 'unread').map((r) => r.key), ['a', 'd']);
   assert.deepEqual(inbox.filterRows(rows, 'requests').map((r) => r.key), ['b', 'd']);
-  // Nothing can be archived and there is no support conversation, so these
-  // return NOTHING rather than quietly falling through to everything — which
-  // is the failure mode a default case invites.
-  assert.deepEqual(inbox.filterRows(rows, 'archived'), []);
+  // There is no support conversation, so this returns NOTHING rather than
+  // quietly falling through to everything — which is the failure mode a
+  // default case invites.
   assert.deepEqual(inbox.filterRows(rows, 'support'), []);
   // 'all' preserves the order the inbox already built; the pills are a VIEW,
   // never a re-sort and never a second fetch.
   assert.deepEqual(inbox.filterRows(rows, 'all'), rows);
 
-  // Five pills, in order, with the labels the dispatch named.
+  // Four pills, in order (lean D3c removed Archived).
   assert.deepEqual(
     inbox.INBOX_FILTERS.map((p) => p.key),
-    ['all', 'unread', 'archived', 'requests', 'support']
+    ['all', 'unread', 'requests', 'support']
   );
   assert.deepEqual(
     inbox.INBOX_FILTERS.map((p) => p.label),
-    ['All', 'Unread', 'Archived', 'Requests', 'Support']
+    ['All', 'Unread', 'Requests', 'Support']
   );
 });
 
 test('[executed] every pill has its OWN empty state, and each one is true', () => {
-  // "No messages yet" under the Archived pill would be a different and untrue
+  // "No messages yet" under the Requests pill would be a different and untrue
   // statement, which is why this is per-filter rather than one shared line.
   const seen = new Set();
   for (const { key } of inbox.INBOX_FILTERS) {
@@ -482,7 +459,6 @@ test('[executed] every pill has its OWN empty state, and each one is true', () =
     assert.ok(!seen.has(state.title), `${key} must not reuse another pill's empty title`);
     seen.add(state.title);
   }
-  assert.equal(inbox.emptyStateFor('archived').title, 'Nothing archived yet');
   assert.equal(inbox.emptyStateFor('requests').title, 'No requests yet');
   // FIX-RUN B3: Support offers a real contact, not a promise.
   assert.equal(inbox.emptyStateFor('support').title, 'Talk to the Brazos team');
@@ -490,53 +466,43 @@ test('[executed] every pill has its OWN empty state, and each one is true', () =
 });
 
 test('[executed] a refresh between opening the sheet and tapping it moves the action', () => {
-  // AUDIT F2, played out. The sheet used to copy { muted, blocking } out of
-  // the long-pressed row. Those two values decide what the row SAYS and which
-  // call the tap MAKES, so a realtime refresh landing in between left the
-  // sheet offering "Mute" for somebody already muted — and the tap then
-  // unmuted them. The user read one thing and got its opposite.
-  const { resolveSheetTarget, muteActionFor, blockActionFor } = inbox;
+  // AUDIT F2, played out. The sheet used to copy { blocking } out of the
+  // long-pressed row. That value decides what the row SAYS and which call the
+  // tap MAKES, so a realtime refresh landing in between left the sheet
+  // offering the wrong action — and the tap then inverted it. The user read
+  // one thing and got its opposite. (Mute, the other copied fact, left in
+  // lean D3c.)
+  const { resolveSheetTarget, blockActionFor } = inbox;
 
   const row = (over = {}) => ({
     otherId: 'u1',
     rawName: 'Sam',
     jobId: 'job-1',
     blocking: false,
-    muted: false,
     ...over,
   });
 
-  // OPEN. The user long-presses an unmuted row; the sheet offers to mute.
-  let rows = [row(), row({ otherId: 'u2', rawName: 'Alex', muted: true })];
+  // OPEN. The user long-presses an unblocked row; the sheet offers to block.
+  let rows = [row(), row({ otherId: 'u2', rawName: 'Alex', blocking: true })];
   const opened = resolveSheetTarget(rows, 'u1');
-  assert.equal(opened.muted, false);
-  assert.equal(muteActionFor(opened), 'mute');
+  assert.equal(opened.blocking, false);
+  assert.equal(blockActionFor(opened), 'block');
 
-  // REFRESH. Another device mutes Sam and blocks them while the sheet is up.
-  // This is the whole point: `rows` is a NEW array, exactly as a realtime
-  // refresh produces, and the sheet is still open on the same id.
-  rows = [row({ muted: true, blocking: true }), row({ otherId: 'u2', rawName: 'Alex', muted: true })];
+  // REFRESH. Another device blocks Sam while the sheet is up. This is the
+  // whole point: `rows` is a NEW array, exactly as a realtime refresh
+  // produces, and the sheet is still open on the same id.
+  rows = [row({ blocking: true }), row({ otherId: 'u2', rawName: 'Alex', blocking: true })];
 
   // TAP. The action follows the LIVE row, not the one that was on screen when
-  // the sheet opened. Under the old snapshot this said 'mute' and would have
-  // unmuted somebody who was already muted.
+  // the sheet opened.
   const tapped = resolveSheetTarget(rows, 'u1');
-  assert.equal(tapped.muted, true);
-  assert.equal(muteActionFor(tapped), 'unmute', 'the tap must not invert the intent');
-  assert.equal(blockActionFor(tapped), 'unblock');
+  assert.equal(tapped.blocking, true);
+  assert.equal(blockActionFor(tapped), 'unblock', 'the tap must not invert the intent');
   // Identity is stable across the refresh — it is only the mutable facts that
   // moved.
   assert.equal(tapped.userId, 'u1');
   assert.equal(tapped.name, 'Sam');
   assert.equal(tapped.jobId, 'job-1');
-
-  // The label and the call read the SAME value, which is the property that
-  // makes the inversion impossible rather than merely unlikely.
-  for (const muted of [true, false]) {
-    const target = resolveSheetTarget([row({ muted })], 'u1');
-    const label = target.muted ? 'Unmute' : 'Mute';
-    assert.equal(muteActionFor(target), label.toLowerCase());
-  }
 
   // A row that has GONE closes the sheet rather than acting on a conversation
   // that is no longer there.
@@ -548,7 +514,7 @@ test('[executed] a refresh between opening the sheet and tapping it moves the ac
 test('[static] the inbox sheet holds an id, and re-reads the row it acts on', () => {
   const screen = stripComments(read('screens/MessagesInboxScreen.tsx'));
 
-  // The state is the identity only. The snapshot that carried the two mutable
+  // The state is the identity only. The snapshot that carried the mutable
   // facts must not come back. 2026-09-28 (LUX-LIST-64 #53): the sheet is now
   // the glass dropdown under the row's ••• — the same rule under the menu's
   // names: it holds the person's id and reads the row again every render.
@@ -562,7 +528,7 @@ test('[static] the inbox sheet holds an id, and re-reads the row it acts on', ()
   assert.match(screen, /openMenu\(item\.otherId\)/, 'the long press stores the id');
   assert.match(
     screen,
-    /function openMenu\(userId: string, delayMs = 0\) \{\s*setMenuDelay\(delayMs\);\s*setMenuUserId\(userId\);\s*\}/,
+    /function openMenu\(userId: string\) \{\s*setMenuUserId\(userId\);\s*\}/,
     'the one way the menu opens stores the id and nothing else',
   );
 
@@ -802,7 +768,7 @@ test('[static] the filter pills measure themselves, not their scroller', () => {
   );
 });
 
-test('[static] one action model, two entry mechanics, and no empty second sheet', () => {
+test('[static] one action model, one entry mechanic, and no empty second sheet', () => {
   const screen = stripComments(read('screens/MessagesInboxScreen.tsx'));
 
   // The pills are a VIEW over the rows already built.
@@ -810,55 +776,29 @@ test('[static] one action model, two entry mechanics, and no empty second sheet'
   assert.match(screen, /data=\{visibleRows\}/);
   assert.match(screen, /emptyStateFor\(filter\)\.title/);
 
-  // MUTE IS LIVE and always was — `mutes` has shipped since phase13. It is not
-  // flagged, and flagging it would have hidden working behaviour.
-  // The labels now read a `target` because the action model became a function
-  // both mechanics call — see the swipe fence below. Same rule, one caller.
-  // F20: the words are the one person-menu builder's (lib/chatMenus.ts), fed this target.
+  // F20: the words are the one person-menu builder's (lib/chatMenus.ts), fed the live target.
   const personMenus = stripComments(read('lib/chatMenus.ts'));
-  assert.match(screen, /const person = personSafetyItems\(\{\s*muted: target\.muted,\s*blocking: target\.blocking,\s*onMute: \(\) => toggleMute\(target\),/);
-  assert.match(personMenus, /label: muted \? 'Unmute' : 'Mute'/);
-  assert.doesNotMatch(screen, /\bMUTE\b/, 'the retired MUTE flag must not come back');
+  assert.match(screen, /personSafetyItems\(\{\s*blocking: menuTarget\.blocking,/);
 
-  // 2026-09-26 (the refresh, audit M-11): ONE Block. The sheet's row is
-  // "Block…" (or "Unblock" when it applies) and opens one chooser whose FIRST
-  // row is the permanent block — the existing blockUser path, unchanged —
-  // and whose others are the timed durations, still behind TIMED_BLOCK so
-  // shipping them cannot quietly change what the permanent one does.
+  // 2026-09-26 (the refresh, audit M-11): ONE Block. The menu's row is "Block"
+  // (or "Unblock" when it applies) — the existing blockUser path, unchanged.
   assert.match(personMenus, /key: 'block', label: 'Unblock',/);
   // 2026-09-28 (LUX-LIST-64 #53): the glass menu's words carry no "…".
   assert.match(personMenus, /key: 'block', label: 'Block',/);
-  // The row opens the one chooser; unblocking is the screen's own toggle.
-  assert.match(screen, /onBlock: \(\) => \{\s*setMenuUserId\(null\);\s*setBlockDurationUserId\(target\.userId\);\s*\},\s*onUnblock: \(\) => toggleBlock\(target\),/);
-  assert.match(screen, /key: 'block-permanent',\s*label: 'Permanently',/);
-  assert.match(screen, /\.\.\.\(TIMED_BLOCK\s*\?\s*BLOCK_DURATIONS\.map/);
-  assert.ok(
-    screen.indexOf("key: 'block-permanent'") < screen.indexOf('...(TIMED_BLOCK'),
-    'the permanent block is the chooser’s first row'
+  // Both rows go through the screen's own toggle, which confirms before a block.
+  assert.match(screen, /onBlock: \(\) => toggleBlock\(menuTarget\),\s*onUnblock: \(\) => toggleBlock\(menuTarget\),/);
+  assert.match(screen, /async function toggleBlock\(target: SheetTarget\) \{[\s\S]*?const ok = await confirmAsync\(\{[\s\S]*?destructive: true,[\s\S]*?await blockUser\(user\.id, target\.userId\);/);
+
+  // Lean D3c: the inbox states are gone — no mute, timed block, mark unread,
+  // archive, hide, clear or delete, no Face ID gate and no swipe.
+  assert.doesNotMatch(
+    screen,
+    /muteUser|toggleMute|BLOCK_DURATIONS|setBlockUntil|markUnread|applyConversationState|'Clear chat'|'Delete chat'|LocalAuthentication|SwipeableRow|HiddenChats|featureFlags/,
   );
-
-  // No second sheet behind a visible button can be empty. 2026-09-28
-  // (LUX-LIST-64 #53): there is no clean-up sheet at all now — Clear chat and
-  // Delete chat are rows of the one menu, each under its own flag.
-  assert.doesNotMatch(screen, /clearOrDeleteItemsFor|Clear or delete chat/, 'the clean-up chooser is gone');
-  assert.match(screen, /key: 'clear-chat',\s*label: 'Clear chat',/);
-  assert.match(screen, /key: 'delete-chat',\s*label: 'Delete chat',/);
   assert.doesNotMatch(screen, /key: 'more',\s*label: 'More',\s*icon: 'ellipsis-horizontal' as const/, 'no More row in the sheet');
-  for (const flag of ['MARK_UNREAD', 'CLEAR_CHAT', 'ARCHIVE', 'DELETE_CHAT']) {
-    assert.ok(screen.includes(`if (${flag}) {`), `the sheet must carry a ${flag} row`);
-  }
-  // HIDDEN_CHATS carries a SECOND condition, and that is the point (W1 D3):
-  // with no biometric or passcode enrolled the authentication prompt could
-  // never be shown, so the row is absent rather than offered and then failing.
-  assert.ok(screen.includes('if (HIDDEN_CHATS && deviceAuthReady) {'));
-  assert.match(screen, /LocalAuthentication\.hasHardwareAsync\(\)/);
-  assert.match(screen, /LocalAuthentication\.isEnrolledAsync\(\)/);
 
-  // The MECHANIC is capability-chosen; the ACTIONS are not. An action
-  // reachable by one mechanic and not the other would be two apps.
-  assert.match(screen, /import \{ canSwipe \} from '\.\.\/lib\/motion120';/);
-  assert.match(screen, /const rowActionHint = canSwipe\(\)/);
-  assert.match(screen, /'Press and hold for mute, block, report and more'/);
+  // What the row tells a screen reader it can do.
+  assert.match(screen, /const rowActionHint = 'Press and hold for block and report';/);
   assert.match(screen, /accessibilityHint=\{item\.isSelf \? undefined : rowActionHint\}/);
 });
 
