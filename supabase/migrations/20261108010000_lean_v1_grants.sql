@@ -11,6 +11,9 @@
 do $grants$
 declare
   r record;
+  -- shortcut: maintain only on PG17+, drop the guard once staging is confirmed 17
+  v_privs text := 'truncate, references, trigger'
+    || case when current_setting('server_version_num')::int >= 170000 then ', maintain' else '' end;
 begin
   for r in
     select n.nspname, c.relname, c.relkind
@@ -21,10 +24,12 @@ begin
       execute format('revoke all on sequence %I.%I from anon', r.nspname, r.relname);
     else
       execute format('revoke all on table %I.%I from anon', r.nspname, r.relname);
-      execute format('revoke truncate, references, trigger, maintain on table %I.%I from authenticated',
-                     r.nspname, r.relname);
+      execute format('revoke %s on table %I.%I from authenticated', v_privs, r.nspname, r.relname);
     end if;
   end loop;
+
+  execute format('alter default privileges for role postgres in schema public revoke %s on tables from authenticated',
+                 v_privs);
 end
 $grants$;
 
@@ -48,8 +53,7 @@ revoke execute on function public.job_request_parties_ok(uuid, uuid) from public
 
 alter default privileges for role postgres in schema public revoke all on tables from anon;
 alter default privileges for role postgres in schema public revoke all on sequences from anon;
-alter default privileges for role postgres in schema public
-  revoke truncate, references, trigger, maintain on tables from authenticated;
+-- authenticated's table defaults (truncate, references, trigger, maintain) are revoked in the DO block above.
 -- shortcut: supabase_admin's defaults cannot be altered from a migration (Supabase-owned), BACKLOG L3.
 
 -- ---------------------------------------------------------------------------
