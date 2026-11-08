@@ -11,7 +11,6 @@ import {
   tierForCount,
   type HotspotMapProps,
 } from '../lib/hotspots';
-import { permissionOutcome, trackIntent } from '../lib/observability/analytics';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { litBetween } from '../ui/primitives/LitSurface';
 
@@ -55,16 +54,7 @@ export function HotspotMap({
     (async () => {
       // Foreground-only ("while using the app"); rationale copy comes from the
       // NSLocationWhenInUseUsageDescription string configured in app.json.
-      const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
-      // Emitted before the `active` bail-out: the dialog was shown and
-      // answered whether or not this component is still mounted to hear it,
-      // and dropping the event on an unmount would under-count exactly the
-      // people who left because of the prompt.
-      trackIntent({
-        name: 'permission_result',
-        kind: 'location',
-        outcome: permissionOutcome(status, canAskAgain),
-      });
+      const { status } = await Location.requestForegroundPermissionsAsync();
       if (!active) return;
       setPerm(status === 'granted' ? 'granted' : 'denied');
     })();

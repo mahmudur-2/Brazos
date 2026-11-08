@@ -14,7 +14,6 @@ import { alertAsync } from '../lib/dialog';
 import { invalidateJobs } from '../lib/queryClient';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
-import { paymentsMode } from '../lib/adapters/payments';
 import { completionPercent } from '../lib/profiles';
 import {
   acceptOffer,
@@ -406,8 +405,7 @@ export function BidDetailScreen() {
         visible={confirming === 'accept'}
         title={acceptOfferConfirmTitle(formatBudget(offer?.amount_cents ?? null), false)}
         // A5: the one accept-confirm body, shared with the client's job page (lib/offerCopy.ts):
-        // the agreed price, the protection fee and the total, then what the tap does. D16 (R6a):
-        // the sandbox sentence renders in sandbox mode only.
+        // the agreed price, the protection fee and the total, then what the tap does.
         message={acceptOfferConfirmMessage({
           quote: quote
             ? {
@@ -416,7 +414,6 @@ export function BidDetailScreen() {
                 totalLabel: formatBudget(quote.total_cents),
               }
             : null,
-          sandbox: paymentsMode === 'sandbox',
         })}
         // With the quote the button says what the tap does — "Accept & pay $129" — as on the job page.
         confirmText={acceptOfferConfirmText(false, quote ? formatBudget(quote.total_cents) : undefined)}

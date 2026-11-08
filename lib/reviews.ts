@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { track } from './observability/analytics';
 import type { Database } from './supabaseTypes';
 
 /** The row create_review() returns, as the generated types spell it (F7). */
@@ -57,12 +56,6 @@ export async function createReview(_reviewerId: string, input: NewReviewInput) {
       p_would_again: input.wouldAgain ?? null,
     })
     .single();
-
-  // The one review write in the app — create_review() is the only path, and
-  // every other reviews query in this file reads. The rating and nothing else:
-  // the comment the reviewer typed is prose, and prose does not leave the
-  // device (tests/analyticsPrivacy.test.mjs rule 2).
-  if (!error && data) track({ name: 'review_left', stars: input.rating });
 
   // F7: create_review() returns ONE reviews row (not a set); .single() keeps the
   // request exactly as it was, so the row is named once here, by the generated type.

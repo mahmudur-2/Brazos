@@ -6,7 +6,6 @@ import { SuccessScreen } from '../ui/templates/SuccessScreen';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
-import { paymentsMode } from '../lib/adapters/payments';
 import { fetchJobPayment, isHeld, type Payment } from '../lib/payments';
 import { customerChargeCents } from '../lib/paymentRules';
 import { invalidateJobs } from '../lib/queryClient';
@@ -35,7 +34,7 @@ export function JobConfirmedScreen() {
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'JobConfirmed'>>();
   const job = params.job;
-  // F13: every funding path lands here (the sandbox authorize, the card poll, the recheck), so this
+  // F13: every funding path lands here (the card poll, the recheck), so this
   // is where the cached hub learns the payment is held.
   useEffect(() => {
     invalidateJobs();
@@ -133,13 +132,10 @@ export function JobConfirmedScreen() {
             {/* C8: the caption under the figure says the state once — no pill
                 beside it repeating "held in protection". */}
             <MoneyText cents={customerChargeCents(payment)} state={payment.status} size="lg" />
-            {/* D16: the sandbox note renders only in sandbox mode; the card
-                path states the money fact — the row reads held, which is the
-                only state this screen renders over. */}
-            <Text style={styles.sandboxNote}>
-              {paymentsMode === 'sandbox'
-                ? 'Test mode — no real money moved.'
-                : 'Your card was charged. Nothing reaches the worker until you approve the finished work.'}
+            {/* The money fact — the row reads held, which is the only state
+                this screen renders over. */}
+            <Text style={styles.paymentNote}>
+              Your card was charged. Nothing reaches the worker until you approve the finished work.
             </Text>
           </View>
         </View>
@@ -214,7 +210,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderTopWidth: 1,
     borderTopColor: colors.mint2,
   },
-  sandboxNote: {
+  paymentNote: {
     fontSize: 12,
     color: colors.textMuted,
     lineHeight: 17,

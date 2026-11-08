@@ -158,14 +158,3 @@ test('create_offer and counter_offer refuse over-ceiling amounts before the RPC'
   const counter = sliceOf(src, 'export async function counterOffer', 'export async function declineOffer');
   assertRefusesBeforeRpc(counter, 'moneyCeilingError(amountCents)', ".rpc('counter_offer'");
 });
-
-test('sandbox_tip_worker refuses over-cap tips before the RPC, at the tip cap', async () => {
-  const src = stripComments(await read('lib/adapters/payments.ts'));
-
-  const tip = sliceOf(src, 'tipWorker: async (jobId, amountCents)', 'cashOut:');
-  assertRefusesBeforeRpc(
-    tip,
-    'moneyCeilingError(amountCents, TIP_CEILING_CENTS)',
-    "rpc('sandbox_tip_worker'"
-  );
-});

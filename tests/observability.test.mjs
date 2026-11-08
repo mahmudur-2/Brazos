@@ -10,8 +10,7 @@ import { fileURLToPath } from 'node:url';
 //   11. No PII leaves the device: message, breadcrumbs, exception values and
 //       extra are all scrubbed, request data is deleted, and the Sentry user
 //       is an id only.
-//   12. Analytics events are a closed typed union with no free-text property;
-//       money in integer cents.
+//   12. (Retired in lean D4 with PostHog: no analytics module remains.)
 //
 // HOW THESE ARE PROVEN, STATED PLAINLY: by STATIC SCAN of the two sources, not
 // by executing them. Neither module can be executed under `node --test`, and
@@ -41,16 +40,13 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(root, rel), 'utf8');
 
 const SENTRY = 'lib/observability/sentry.ts';
-const ANALYTICS = 'lib/observability/analytics.ts';
 
 const sentrySource = read(SENTRY);
-const analyticsSource = read(ANALYTICS);
 
 const strip = (source) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
 const sentryCode = strip(sentrySource);
-const analyticsCode = strip(analyticsSource);
 
 /**
  * The body of a top-level `function name() { ... }`, brace-matched. The name
@@ -77,7 +73,7 @@ function functionBody(code, name) {
 // THE VENDOR SEAM — invariant 11's precondition and the harness's protection.
 // ---------------------------------------------------------------------------
 
-test('neither module statically imports anything but the validated environment', () => {
+test('the Sentry module statically imports nothing but the validated environment', () => {
   // THE STRONGEST FORM THIS CLAIM HAS: an exact import set, not a list of
   // forbidden names. A static import of @sentry/react-native or
   // posthog-react-native evaluates the package at module load, and whether
@@ -86,7 +82,6 @@ test('neither module statically imports anything but the validated environment',
   // depends on. Pinning the set means a THIRD vendor cannot arrive either.
   for (const [file, code] of [
     [SENTRY, sentryCode],
-    [ANALYTICS, analyticsCode],
   ]) {
     const specifiers = [...code.matchAll(/^import\b[^;]*?from\s*'([^']+)'/gm)].map((m) => m[1]);
     assert.deepEqual(
@@ -110,7 +105,6 @@ test('every vendor package is reached through a caught require that returns null
   const loaders = [
     [SENTRY, sentryCode, 'loadSentry', '@sentry/react-native'],
     [SENTRY, sentryCode, 'loadUpdates', 'expo-updates'],
-    [ANALYTICS, analyticsCode, 'loadPostHog', 'posthog-react-native'],
   ];
 
   for (const [file, code, name, pkg] of loaders) {
@@ -127,7 +121,6 @@ test('every vendor package is reached through a caught require that returns null
   // Non-vacuity, and a fence against a require appearing OUTSIDE a checked
   // loader: the only `require(` calls in either file are the ones above.
   assert.equal((sentryCode.match(/require\(/g) ?? []).length, 2);
-  assert.equal((analyticsCode.match(/require\(/g) ?? []).length, 1);
 });
 
 test('the Sentry export is nullable, and consumers are given a null-safe wrapper', () => {
@@ -232,150 +225,6 @@ test('the init is inert without a vendor or a DSN, and tags only when the vendor
   assert.match(
     body,
     /tracesSampleRate: env\.EXPO_PUBLIC_APP_VARIANT === 'production' \? 0\.1 : 1,/
-  );
-});
-
-// ---------------------------------------------------------------------------
-// INVARIANT 12 — a closed typed union, no free text, money in integer cents.
-// ---------------------------------------------------------------------------
-
-/**
- * The union, extracted as data. Each variant is `{ name: '...'; ...props }`
- * with no nested braces, so the properties can be read off directly and
- * compared as a table rather than probed one regex at a time.
- */
-const unionStart = analyticsSource.indexOf('export type FunnelEvent =');
-// Stops at the SECOND union rather than at the first non-union declaration.
-// R7D added IntentEvent between FunnelEvent and POSTHOG_HOST, and this
-// invariant is about the funnel — the events with a write and therefore a row
-// behind them. IntentEvent is fenced by tests/analyticsPrivacy.test.mjs.
-const unionEnd = analyticsSource.indexOf('export type IntentEvent =');
-assert.ok(unionStart > -1 && unionEnd > unionStart, 'the FunnelEvent union is gone');
-const union = analyticsSource.slice(unionStart, unionEnd);
-
-const variants = [...union.matchAll(/\{\s*name:\s*'([a-z_]+)'([^}]*)\}/g)].map((match) => [
-  match[1],
-  match[2].replace(/\s+/g, ' ').trim().replace(/^;\s*/, ''),
-]);
-
-test('INVARIANT 12 · the funnel is a closed union, pinned variant by variant', () => {
-  // TWELVE. It was fourteen — copied from §3.2 of the target architecture,
-  // which itself declared fourteen against a dispatch that said sixteen, and
-  // the discrepancy was reported rather than papered over. R7D took the count
-  // DOWN, which is the direction this list is meant to be able to move:
-  // `worker_onboarded` overlapped `connect_onboarding_completed` and a server
-  // column, and `job_viewed` / `bid_viewed` are reads that belong in an
-  // exposure ledger in the database with a rank position, not in a funnel that
-  // cannot say where the view happened. `checkout_result` replaced none of
-  // them — it is the sibling `checkout_started` never had, and without it a
-  // dismissed payment sheet and a failed one are the same missing number.
-  assert.deepEqual(variants, [
-    ['job_posted', 'category: string; hasBudget: boolean'],
-    ['offer_accepted', ''],
-    ['checkout_started', ''],
-    ['checkout_result', "outcome: 'succeeded' | 'cancelled' | 'failed'"],
-    ['payment_held', 'amountCents: number'],
-    ['payment_released', "reason: 'approved' | 'auto_approved'"],
-    ['review_left', 'stars: number'],
-    ['offer_sent', "kind: 'bid' | 'direct'; secondsSincePosted: number"],
-    ['job_completed', 'hasEvidencePhoto: boolean'],
-    ['connect_onboarding_started', ''],
-    ['connect_onboarding_completed', ''],
-    ['mode_switched', "to: 'customer' | 'worker'"],
-  ]);
-
-  // The worker side is still here on purpose: the one number that says whether
-  // this marketplace has a supply side is bids per job, and an event list that
-  // tracks only the customer cannot compute it. `offer_sent` carries the
-  // numerator and `secondsSincePosted` the leading indicator; the two Connect
-  // events say whether a worker can be paid at all.
-  const names = variants.map(([name]) => name);
-  for (const required of [
-    'offer_sent',
-    'job_completed',
-    'connect_onboarding_started',
-    'connect_onboarding_completed',
-  ]) {
-    assert.ok(names.includes(required), `the worker-side event ${required} is gone`);
-  }
-});
-
-test('INVARIANT 12 · no free-text property, and money is integer cents', () => {
-  // EXACTLY ONE property in the whole union is typed `string`, and it is the
-  // job category — a closed set in the app, not prose. Every other property is
-  // a literal union, a boolean or a number. This is the assertion that stops a
-  // job title, an address or a message body from reaching a third party by
-  // being added as "just one more field".
-  const stringProps = [...union.matchAll(/(\w+):\s*string\b/g)].map((match) => match[1]);
-  assert.deepEqual(stringProps, ['category'], 'a free-text property has been added to the funnel');
-
-  // Money is integer cents everywhere in this codebase, and an analytics
-  // payload is not an exception — a float dollar amount here is a rounding
-  // error in the one number the business is measured on.
-  assert.ok(union.includes('amountCents: number'), 'the held amount is no longer in cents');
-  assert.doesNotMatch(
-    union,
-    /\b(amount|price|total|budget|fee)\s*:/,
-    'a money property that is not named in cents has been added'
-  );
-});
-
-test('INVARIANT 12 · track and identify are no-ops when there is no client', () => {
-  // Analytics is the least important thing the app does and must never be
-  // able to break the thing it is measuring. Both functions return before
-  // touching the client, and neither throws.
-  const trackBody = functionBody(analyticsCode, 'track');
-  assert.match(trackBody, /if \(!client\) return;/);
-  assert.match(trackBody, /const \{ name, \.\.\.props \} = event;/);
-  assert.match(trackBody, /client\.capture\(name, props\);/);
-
-  const identifyBody = functionBody(analyticsCode, 'identify');
-  assert.match(identifyBody, /if \(!client\) return;/);
-  assert.match(identifyBody, /if \(userId\) client\.identify\(userId\);/);
-  assert.match(identifyBody, /else client\.reset\(\);/);
-
-  // The client is null on both roads to it: no vendor, or no key.
-  const createBody = functionBody(analyticsCode, 'createClient');
-  assert.match(createBody, /if \(!PostHog \|\| !key\) return null;/);
-  assert.match(createBody, /catch\s*\{\s*return null;\s*\}/);
-  assert.match(createBody, /new PostHog\(key, \{ host: POSTHOG_HOST \}\)/);
-
-  // The client stays module-private: exporting it would hand call sites a way
-  // round the typed union, which is the whole protection.
-  assert.match(analyticsCode, /^const client: PostHogLike \| null = createClient\(\);$/m);
-  assert.ok(!analyticsCode.includes('export const client'), 'the raw client must not be exported');
-});
-
-test('the analytics module does not emit its own events, and does not import itself', () => {
-  // WHAT THIS PROVES, AND WHAT IT NO LONGER CLAIMS. It was named "nothing
-  // emits an analytics event yet — the mutation layer owns that, in R8" and
-  // was written when track() had no callers at all. R7C gave it ten and R7D
-  // added more, so the name became false while every assertion below stayed
-  // true: they are scoped to analytics.ts's OWN source, and what they say is
-  // that the module is a leaf. It emits nothing of its own, so no event in
-  // the funnel can originate from the emitter rather than from a write; and
-  // it does not import itself, which is what would let the scan below read a
-  // call site it should not.
-  //
-  // The rule the old name was reaching for now lives where it can be
-  // enforced: tests/analyticsPrivacy.test.mjs, rules 3 and 4.
-  //
-  // Scoped to the analytics module's own exports so it cannot go red on an
-  // unrelated `track(` somewhere in the tree.
-  const importers = [...analyticsSource.matchAll(/from '\.\/analytics'/g)];
-  assert.equal(importers.length, 0, 'analytics.ts imports itself — check the scan');
-  assert.equal(
-    (analyticsCode.match(/\btrack\(/g) ?? []).length,
-    1,
-    'track is called inside its own module'
-  );
-  // The second emitter, held to the same rule. One occurrence, and it is the
-  // declaration — `\btrack\(` above cannot see this name, so without this line
-  // the module could emit an intent event from inside itself unnoticed.
-  assert.equal(
-    (analyticsCode.match(/\btrackIntent\(/g) ?? []).length,
-    1,
-    'trackIntent is called inside its own module'
   );
 });
 

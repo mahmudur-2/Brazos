@@ -24,7 +24,7 @@ export const PAY_AND_PROTECT = 'Pay & protect';
 export type MoneyViewer = 'customer' | 'worker';
 
 /** The eyebrow over every payment amount. The state is the caption's job. */
-export const paymentEyebrow = (sandbox: boolean): string => (sandbox ? 'PAYMENT · TEST MODE' : 'PAYMENT');
+export const paymentEyebrow = (): string => 'PAYMENT';
 
 /**
  * A payment state in a word or two, for nobody in particular — the status

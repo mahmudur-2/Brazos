@@ -170,7 +170,7 @@ test('the three fee surfaces read the database, and Job details shows the RPC’
   // Checkout: the row's all-in figures, or the quote before a row exists.
   assert.match(checkout, /charge_amount_cents/);
   assert.match(checkout, /quoteJobPrice\(amountCents\)/);
-  assert.match(checkout, /payment\.platform_fee_cents/);
+  assert.match(checkout, /fee: payment\.customer_fee_cents \?\? 0/);
   // Earnings: the ledger's own sum, and no rate sentence.
   assert.match(earnings, /formatBudget\(s\.feeCents\)/);
   assert.doesNotMatch(earnings, /% rate/);

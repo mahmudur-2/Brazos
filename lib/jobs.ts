@@ -5,7 +5,6 @@ import type { Ionicons } from '@expo/vector-icons';
 import { categoryAccents } from '../ui/tokens';
 import { supabase } from './supabase';
 import { coordinateLocationError, publicLocationLabel } from './locationPrivacy';
-import { track } from './observability/analytics';
 import { DEFAULT_PRICING_MODE, pricingModeFrom, type PricingMode } from './pricingMode';
 import { moneyCeilingError } from './validation';
 
@@ -541,21 +540,6 @@ export async function createJob(_clientId: string, input: NewJobInput) {
     })
     .single();
 
-  // The top of the funnel, and only when a job actually exists: every refusal
-  // above returns before the RPC ever runs, and a refused post is not a post.
-  // `hasBudget` is whether the customer named ANY figure — the single amount or
-  // either end of the range — never the figure itself.
-  if (!error && data) {
-    track({
-      name: 'job_posted',
-      category: input.category,
-      hasBudget:
-        input.budgetCents != null ||
-        input.budgetMinCents != null ||
-        input.budgetMaxCents != null,
-    });
-  }
-
   return {
     data: data ? mapJobRow(data) : null,
     error,
@@ -789,14 +773,6 @@ export async function updateJobStatus(
     p_completion_photos: photoUrls ?? null,
     p_completion_videos: videoUrls ?? null,
   });
-
-  // Completion only. `in_progress` is a step through the lifecycle, not an
-  // outcome the funnel measures, and a transition the database refused is not
-  // a completion at all. Whether evidence was attached is a boolean about the
-  // photos, never the photos.
-  if (!error && status === 'completed') {
-    track({ name: 'job_completed', hasEvidencePhoto: (photoUrls?.length ?? 0) > 0 });
-  }
 
   return { error };
 }

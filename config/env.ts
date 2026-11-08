@@ -69,21 +69,18 @@ const EnvSchema = z.object({
 
   /**
    * Declared, never inferred from the build type. The schema says what may be
-   * written; lib/adapters/paymentsMode.ts says what runs (unset: sandbox in
-   * development, disabled otherwise; 'stripe' is the card path, R6a). FIX-RUN
-   * B15: the value is trimmed and lower-cased first, as the resolver reads it,
-   * so a value the resolver accepts can never crash the launch here.
+   * written; lib/adapters/payments.ts says what runs ('stripe' with the
+   * publishable key is the card path, R6a; anything else is disabled). FIX-RUN
+   * B15: the value is trimmed and lower-cased first, so a value the adapter
+   * accepts can never crash the launch here.
    */
-  EXPO_PUBLIC_PAYMENTS_MODE: z.preprocess(normalized, z.enum(['sandbox', 'stripe', 'disabled']).default('disabled')),
+  EXPO_PUBLIC_PAYMENTS_MODE: z.preprocess(normalized, z.enum(['stripe', 'disabled']).default('disabled')),
 
   /** Publishable only. A secret key here would ship in the bundle. */
   EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().startsWith('pk_').optional(),
 
   /** Absent means crash reporting is off, which is a valid configuration. */
   EXPO_PUBLIC_SENTRY_DSN: z.url().optional(),
-
-  /** Absent means product analytics is off, which is a valid configuration. */
-  EXPO_PUBLIC_POSTHOG_KEY: z.string().optional(),
 
   /**
    * Which phone-auth backend the OTP flow uses — lib/phoneAuth/mode.ts decides
@@ -102,7 +99,6 @@ const parsed = EnvSchema.safeParse({
   EXPO_PUBLIC_PAYMENTS_MODE: unset(process.env.EXPO_PUBLIC_PAYMENTS_MODE),
   EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: unset(process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY),
   EXPO_PUBLIC_SENTRY_DSN: unset(process.env.EXPO_PUBLIC_SENTRY_DSN),
-  EXPO_PUBLIC_POSTHOG_KEY: unset(process.env.EXPO_PUBLIC_POSTHOG_KEY),
   EXPO_PUBLIC_PHONE_AUTH_MODE: unset(process.env.EXPO_PUBLIC_PHONE_AUTH_MODE),
 });
 

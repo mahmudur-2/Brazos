@@ -53,8 +53,6 @@ import { EYEBROW_TYPE, radius, spacing, themedStyles, useThemeColors, type Color
 export const PAYOUTS_LINK_EXPIRED_NOTICE =
   'That setup link had expired, so a fresh one was requested — continue below.';
 /** Outside the card path there is no payout account to show. */
-export const PAYOUTS_SANDBOX_BODY =
-  'Test mode: cash out from Earnings is a test, and no payout account exists.';
 export const PAYOUTS_DISABLED_BODY =
   'Payments aren’t available right now, so there is no payout account to set up.';
 export const PAYOUTS_OPEN_FAILED =
@@ -233,7 +231,7 @@ export function PayoutsScreen() {
       ? {
           kind: 'permissionDenied',
           title: 'Payouts are on the card path only',
-          body: paymentsMode === 'sandbox' ? PAYOUTS_SANDBOX_BODY : PAYOUTS_DISABLED_BODY,
+          body: PAYOUTS_DISABLED_BODY,
         }
       : loadError
         ? { kind: 'error', message: loadError, onRetry: () => void readStatus() }

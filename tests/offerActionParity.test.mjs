@@ -425,23 +425,19 @@ test('A5 — the accept confirmation body is one text: three money lines, then w
   const lines = 'Agreed price $120 · Protection fee $9 · Total charged $129.\n\n';
   const selects = 'This selects their bid for the job — the other active bids will no longer be eligible.';
   // Card path, no saved card: checkout is next.
-  assert.equal(acceptOfferConfirmMessage({ quote, sandbox: false }), `${lines}${selects} Next you’ll protect the payment in checkout.`);
+  assert.equal(acceptOfferConfirmMessage({ quote }), `${lines}${selects} Next you’ll protect the payment in checkout.`);
   // Card path, the confirm names the saved card: it is charged now — only with a quote.
   assert.equal(
-    acceptOfferConfirmMessage({ quote, sandbox: false, savedCardLabel: 'Visa ···· 4242' }),
+    acceptOfferConfirmMessage({ quote, savedCardLabel: 'Visa ···· 4242' }),
     `${lines}${selects} Visa ···· 4242 is charged the total now, and the funds are held in protection until you approve the work.`
   );
   assert.equal(
-    acceptOfferConfirmMessage({ quote: null, sandbox: false, savedCardLabel: 'Visa ···· 4242' }),
+    acceptOfferConfirmMessage({ quote: null, savedCardLabel: 'Visa ···· 4242' }),
     `${selects} Next you’ll protect the payment in checkout.`,
     'no quote, no "charged now" — the card pays only against a total the confirm showed'
   );
-  // Sandbox: its sentence, and never "development build".
-  const sandbox = acceptOfferConfirmMessage({ quote, sandbox: true });
-  assert.equal(sandbox, `${lines}${selects} Next you’ll authorize and protect the payment in checkout, in test mode (no real money moves).`);
-  assert.doesNotMatch(sandbox, /development build/);
   // Without a quote the money lines are left out, never guessed.
-  assert.doesNotMatch(acceptOfferConfirmMessage({ quote: null, sandbox: false }), /Agreed price|Protection fee|Total charged/);
+  assert.doesNotMatch(acceptOfferConfirmMessage({ quote: null }), /Agreed price|Protection fee|Total charged/);
   // Both accept paths read the helper and name the total on the button (the job page already did).
   for (const file of ['screens/ClientJobDetailScreen.tsx', 'screens/BidDetailScreen.tsx']) {
     const src = (await read(file)).replace(/\s+/g, ' ');

@@ -13,7 +13,6 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { confirmAsync } from './dialog';
-import { permissionOutcome, trackIntent } from './observability/analytics';
 import { Sentry } from './observability/sentry';
 import { supabase } from './supabase';
 
@@ -204,17 +203,6 @@ export async function registerPushToken(
       }
       const requested = await Notifications.requestPermissionsAsync();
       status = requested.status;
-      // THE ONE THAT MATTERS MOST. A blocked notification permission means a
-      // worker never sees a bid arrive, and in every other number this system
-      // holds that worker is indistinguishable from one who is not interested.
-      // iOS shows this dialog once per install, so this line runs at most once
-      // per install too — the earlier `canAskAgain === false` branch returns
-      // before it and is a Settings state, not a dialog.
-      trackIntent({
-        name: 'permission_result',
-        kind: 'notifications',
-        outcome: permissionOutcome(status, requested.canAskAgain),
-      });
       await markAskedForPush();
     }
   } catch (err) {

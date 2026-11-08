@@ -57,7 +57,7 @@ import {
  * Screen 36 — Approve or report an issue (Phase 6, customer side).
  *
  * The decision point after the worker submits the finished work: approving
- * releases the held sandbox funds (sandbox_release_job_payment — ownership,
+ * requests the release of the held funds (release_job_payment — ownership,
  * completed status, the dispute freeze and idempotency are all enforced in
  * the RPC, not by this screen's navigation), while reporting an issue opens
  * a dispute that freezes release — including the 72h auto-release clock —
@@ -322,13 +322,11 @@ export function ApproveOrDisputeScreen() {
 
         {payment && !canFundNow ? (
           <View style={[styles.paymentCard, litCardStyle(isDark)]}>
-            {/* D16: mode-aware copy. Sandbox keeps its wording verbatim;
-                stripe says the same money fact without the sandbox label.
-                MoneyText keeps the row's real status — held is still
+            {/* MoneyText keeps the row's real status — held is still
                 literally true on an approved stripe row (D23); C4: the
                 eyebrow is PAYMENT in every state and the caption carries the
                 approval ("Approved — on its way to …"). */}
-            <Text style={styles.eyebrow}>{paymentEyebrow(paymentsMode === 'sandbox')}</Text>
+            <Text style={styles.eyebrow}>{paymentEyebrow()}</Text>
             {/* Tier A (C2, D-4): the customer's held figure is the row's own
                 charge_amount_cents, in the card, the CTA and the dialog alike. */}
             <MoneyText
@@ -346,26 +344,20 @@ export function ApproveOrDisputeScreen() {
               </Text>
             ) : null}
             <Text style={styles.paymentNote}>
-              {paymentsMode === 'sandbox'
-                ? released
+              {released
+                ? payment.release_reason === 'auto_approved'
+                  ? 'Released automatically after 72 hours with no issue reported.'
+                  : 'You approved the work and the payment was released to the worker.'
+                : releaseRequested
                   ? payment.release_reason === 'auto_approved'
-                    ? 'Released automatically after 72 hours with no issue reported. Test mode — no real money moved.'
-                    : 'You approved the work and the funds were released. Test mode — no real money moved.'
-                  : 'Approving releases these funds to the worker. If something isn’t right, report the issue instead — release waits while a report is open. Test mode, no real money.'
-                : released
-                  ? payment.release_reason === 'auto_approved'
-                    ? 'Released automatically after 72 hours with no issue reported.'
-                    : 'You approved the work and the payment was released to the worker.'
-                  : releaseRequested
-                    ? payment.release_reason === 'auto_approved'
-                      ? // C4: requested is not released — the word waits for the transfer.
-                        'Approved automatically after 72 hours with no issue reported. The payment is on its way to the worker and shows as released when the transfer lands.'
-                      : 'You approved the work. The payment is on its way to the worker and shows as released when the transfer lands.'
-                    : releaseAllowed
-                      ? // Tier A (C3, D23): approving REQUESTS the release; the
-                        // transfer lands later, so the payment is "on its way".
-                        'Approving sends this payment on its way to the worker. If something isn’t right, report the issue instead — release waits while a report is open.'
-                      : 'Payments are paused right now, so approval is unavailable for the moment. If something isn’t right, you can still report the issue.'}
+                    ? // C4: requested is not released — the word waits for the transfer.
+                      'Approved automatically after 72 hours with no issue reported. The payment is on its way to the worker and shows as released when the transfer lands.'
+                    : 'You approved the work. The payment is on its way to the worker and shows as released when the transfer lands.'
+                  : releaseAllowed
+                    ? // Tier A (C3, D23): approving REQUESTS the release; the
+                      // transfer lands later, so the payment is "on its way".
+                      'Approving sends this payment on its way to the worker. If something isn’t right, report the issue instead — release waits while a report is open.'
+                    : 'Payments are paused right now, so approval is unavailable for the moment. If something isn’t right, you can still report the issue.'}
             </Text>
           </View>
         ) : canFundNow ? (
@@ -491,9 +483,7 @@ export function ApproveOrDisputeScreen() {
         title="Release the payment to the worker?"
         message={
           `Your card was charged ${formatBudget(payment ? customerChargeCents(payment) : null)} at checkout, including the protection fee — nothing more is charged.\n\n` +
-          (paymentsMode === 'sandbox'
-            ? 'This approves the finished work and releases the held funds to the worker. It can’t be undone. Test mode — no real money moves.'
-            : 'This approves the finished work and releases the payment to the worker. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands.')
+          'This approves the finished work and releases the payment to the worker. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands.'
         }
         confirmText="Approve & release"
         cancelText="Not yet"

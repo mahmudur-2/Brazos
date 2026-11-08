@@ -179,7 +179,7 @@ export function WorkerHomeScreen() {
   }, [pendingBids, working, payments, openDisputeJobIds, reviewedJobIds, user]);
 
   // 2026-09-28 (LUX-LIST-64 #63, audit M-14) — MONEY WAITING ON THE WORKER'S
-  // OWN SETUP: on the card path only (no RPC on the sandbox path), the stored
+  // OWN SETUP: on the card path only, the stored
   // payout status; and only when it was read and is not enabled, the ledger,
   // whose approved-and-waiting rows the ONE rule (payoutSetupNotice) picks.
   // Their takes, summed, head the "Needs you" strip as one tap to Payouts.

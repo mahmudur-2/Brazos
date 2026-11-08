@@ -27,7 +27,6 @@
     "expo-image": "~3.0.11",
     "expo-image-picker": "~17.0.11",
     "expo-linking": "~8.0.12",
-    "expo-localization": "~17.0.9",
     "expo-location": "~19.0.8",
     "expo-notifications": "~0.32.17",
     "expo-secure-store": "~15.0.8",
@@ -36,10 +35,7 @@
     "expo-status-bar": "~3.0.9",
     "expo-updates": "~29.0.20",
     "expo-video": "~3.0.16",
-    "i18next": "^26.4.0",
-    "posthog-react-native": "^4.66.0",
     "react": "19.1.0",
-    "react-i18next": "^17.0.12",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-keyboard-controller": "1.18.5",
@@ -54,7 +50,6 @@
   "devDependencies": {
     "@types/react": "~19.1.10",
     "babel-preset-expo": "~54.0.10",
-    "i18next-parser": "^9.0.2",
     "supabase": "^2.116.0",
     "typescript": "~5.9.2"
   },
@@ -69,7 +64,6 @@
     "db:reset": "npx supabase db reset --local",
     "db:types": "npx supabase gen types --local --lang typescript --schema public > types/database.ts",
     "db:test": "npx supabase test db --local supabase/tests",
-    "i18n:extract": "i18next",
     "fingerprint": "npx expo-updates fingerprint:generate",
     "release:testflight": "npx eas-cli@latest build --platform ios --profile production --auto-submit",
     "update:preview": "npx eas-cli@latest update --channel preview --environment preview"

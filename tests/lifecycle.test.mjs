@@ -79,11 +79,9 @@ test('the completed fork follows the payment and the dispute', () => {
   assert.equal(deriveJobLifecycle({ job: done, payment: null }), 'completed');
 });
 
-test('the 72h clock is mirrored on read: an elapsed hold reads as completed', () => {
-  // phase51's auto-release is checked on read (job_payment_state), and there
-  // is no cron — so a held payment past completed_at + 72h has already
-  // released from the server's point of view the moment anything looks. The
-  // client mirror renders that truth early, exactly like effectiveOfferStatus.
+test('the 72h clock: the deadline is derived, a dispute freezes the job, no completed_at means no clock', () => {
+  // Lean D4: the client-side on-read release mirror went with the sandbox; an
+  // elapsed hold is never advanced here (see the D23 test below).
   const HOUR = 3_600_000;
   const completedAt = '2026-08-01T00:00:00Z';
   const deadline = Date.parse(completedAt) + 72 * HOUR;
@@ -99,12 +97,6 @@ test('the 72h clock is mirrored on read: an elapsed hold reads as completed', ()
   assert.equal(
     deriveJobLifecycle({ job: done, payment: { status: 'held' } }, deadline - HOUR),
     'awaiting_approval'
-  );
-  // Past the window: the hold has effectively released. (R6a, D23: the mirror
-  // is sandbox-only, so the row says which provider wrote it.)
-  assert.equal(
-    deriveJobLifecycle({ job: done, payment: { status: 'held', provider: 'sandbox' } }, deadline + HOUR),
-    'completed'
   );
   // An open dispute freezes release — the server refuses the auto-release
   // while one exists, and so does the mirror.
@@ -124,7 +116,7 @@ test('the 72h clock is mirrored on read: an elapsed hold reads as completed', ()
   );
 });
 
-test('D23 · a held row with release_requested_at is approved (completed); the clock mirror is sandbox-only', () => {
+test('D23 · a held row with release_requested_at is approved (completed); without one it awaits approval', () => {
   // release_job_payment (and the 72h auto_release_due_payments) set
   // release_requested_at on a STRIPE row and leave its status held until the
   // provider's transfer.created lands. That row is decided: completed, closed
@@ -154,12 +146,6 @@ test('D23 · a held row with release_requested_at is approved (completed); the c
   assert.equal(deriveJobLifecycle({ job: done, payment: stripeHeld }, deadline - HOUR), 'awaiting_approval');
   assert.equal(deriveJobLifecycle({ job: done, payment: stripeHeld }, deadline + HOUR), 'awaiting_approval');
   assert.equal(deriveMyJobsTab(deriveJobLifecycle({ job: done, payment: stripeHeld }, deadline + HOUR)), 'review');
-
-  // sandbox held past the deadline → completed (unchanged: phase51's on-read
-  // clock releases it the moment job_payment_state() looks).
-  const sandboxHeld = { status: 'held', provider: 'sandbox', release_requested_at: null };
-  assert.equal(deriveJobLifecycle({ job: done, payment: sandboxHeld }, deadline - HOUR), 'awaiting_approval');
-  assert.equal(deriveJobLifecycle({ job: done, payment: sandboxHeld }, deadline + HOUR), 'completed');
 
   // A row whose provider is unknown is never advanced early — the whitelist.
   assert.equal(deriveJobLifecycle({ job: done, payment: { status: 'held' } }, deadline + HOUR), 'awaiting_approval');
@@ -372,11 +358,12 @@ test('phase51 defers the §H.1 enum and grants every new function', async () => 
 
 test('release and tip exist only behind the payment adapter', async () => {
   const adapter = await read('lib/adapters/payments.ts');
-  assert.match(adapter, /sandbox_release_job_payment/);
-  assert.match(adapter, /sandbox_tip_worker/);
+  // Lean D4: the sandbox RPCs are gone; release and the card tip are the stripe provider's.
+  assert.match(adapter, /rpc\('release_job_payment'/);
+  assert.match(adapter, /createPaymentSession\(jobId, \{ tipAmountCents: amountCents \}\)/);
   // The disabled provider refuses both — fail closed, not half-working.
   assert.match(adapter, /releaseJobPayment: refuse/);
-  assert.match(adapter, /tipWorker: refuse/);
+  assert.match(adapter, /beginTipCheckout: async \(\) => \(\{ data: null, error: \{ message \} \}\)/);
 
   // No screen reaches the money RPCs around the adapter.
   for (const screen of [
@@ -387,8 +374,7 @@ test('release and tip exist only behind the payment adapter', async () => {
   ]) {
     const src = await read(screen);
     assert.ok(
-      !src.includes("rpc('sandbox_release_job_payment'") &&
-        !src.includes("rpc('sandbox_tip_worker'"),
+      !src.includes("rpc('release_job_payment'") && !src.includes("rpc('begin_tip_payment'"),
       `${screen} must go through paymentProvider, not the RPCs`
     );
   }

@@ -86,12 +86,10 @@ export function acceptOfferConfirmText(viewerIsWorker: boolean, totalLabel?: str
  * total). The three money lines are the server's quote_job_price(), each label already
  * formatBudget()'d by the caller — never a sum made here; without a quote they are left out, never
  * guessed. `savedCardLabel` names the card this confirm charges at once (the card path with a
- * saved card and a quote); otherwise checkout is the next step. `sandbox` is the resolved payments
- * mode, and its sentence renders in that mode only.
+ * saved card and a quote); otherwise checkout is the next step.
  */
 export function acceptOfferConfirmMessage(input: {
   quote: { priceLabel: string; feeLabel: string; totalLabel: string } | null;
-  sandbox: boolean;
   savedCardLabel?: string | null;
 }): string {
   const { quote } = input;
@@ -100,8 +98,7 @@ export function acceptOfferConfirmMessage(input: {
     : '';
   const selects = 'This selects their bid for the job — the other active bids will no longer be eligible.';
   const next =
-    input.sandbox ? ' Next you’ll authorize and protect the payment in checkout, in test mode (no real money moves).'
-    : input.savedCardLabel && quote
+    input.savedCardLabel && quote
       ? ` ${input.savedCardLabel} is charged the total now, and the funds are held in protection until you approve the work.`
       : ' Next you’ll protect the payment in checkout.';
   return lines + selects + next;

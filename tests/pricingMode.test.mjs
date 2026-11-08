@@ -266,7 +266,7 @@ test('a4 · the money walk’s selectors are the ones the app renders, in the de
   );
 });
 
-test('a4 · the worker side, the offer projection and the funnel are untouched', () => {
+test('a4 · the worker side and the offer projection are untouched', () => {
   // R2 rules the CUSTOMER side only: a request at the listed price stays an
   // ordinary offer, so nothing on the worker's road reads the mode.
   assert.ok(
@@ -276,11 +276,5 @@ test('a4 · the worker side, the offer projection and the funnel are untouched',
   assert.ok(
     !read('screens/JobDetailScreen.tsx').includes('pricing_mode'),
     'the worker job detail must not read the mode'
-  );
-  // The funnel union is closed on purpose (tests/observability.test.mjs
-  // INVARIANT 12); the mode is on the jobs row, which is the instrument.
-  assert.ok(
-    !read('lib/observability/analytics.ts').includes('pricing'),
-    'no analytics event changed for this run'
   );
 });

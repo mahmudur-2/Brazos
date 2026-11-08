@@ -18,11 +18,10 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 const code = (path) => stripComments(read(path));
 
-test('C3 · ApproveOrDispute in stripe mode: approving sends the payment on its way; the sandbox sentence is unchanged', () => {
+test('C3 · ApproveOrDispute in stripe mode: approving sends the payment on its way', () => {
   const approve = code('screens/ApproveOrDisputeScreen.tsx');
   assert.match(approve, /'Approving sends this payment on its way to the worker\. If something isn’t right, report the issue instead — release waits while a report is open\.'/);
   assert.doesNotMatch(approve, /Approving releases this payment/);
-  assert.match(approve, /'Approving releases these funds to the worker\. If something isn’t right, report the issue instead — release waits while a report is open\. Test mode, no real money\.'/);
 });
 
 test('C5 · the brand is out of prose at the named sites', () => {

@@ -431,9 +431,6 @@ export function JobDetailScreen() {
 
     const { data: offerId, error } = await createMarketplaceOffer({
       jobId: job.id,
-      // The job being bid on is the screen's own subject; time-to-bid costs no
-      // read here either (lib/offers.ts NewMarketplaceOffer).
-      postedAt: job.created_at,
       amountCents,
       message: pitch,
     });

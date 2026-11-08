@@ -141,9 +141,9 @@ test('[static] the app: the buttons registered, the intents allow-listed, the co
   // A5 (2026-10-03): the confirm's body is the ONE shared text in lib/offerCopy.ts; the job page
   // hands it the card it names, and the sentence that says the card is charged now renders only
   // with a named card AND the quote.
-  assert.match(detail, /message=\{acceptOfferConfirmMessage\(\{ quote: acceptQuote \? \{ priceLabel: formatBudget\(acceptQuote\.job_price_cents\), feeLabel: formatBudget\(acceptQuote\.customer_fee_cents\), totalLabel: formatBudget\(acceptQuote\.total_cents\), \} : null, sandbox: paymentsMode === 'sandbox', savedCardLabel: stripe && savedCard \? cardLabel\(savedCard\) : null, \}\)\}/);
+  assert.match(detail, /message=\{acceptOfferConfirmMessage\(\{ quote: acceptQuote \? \{ priceLabel: formatBudget\(acceptQuote\.job_price_cents\), feeLabel: formatBudget\(acceptQuote\.customer_fee_cents\), totalLabel: formatBudget\(acceptQuote\.total_cents\), \} : null, savedCardLabel: stripe && savedCard \? cardLabel\(savedCard\) : null, \}\)\}/);
   const offerCopy = flat(read('lib/offerCopy.ts'));
-  assert.match(offerCopy, /: input\.savedCardLabel && quote \? ` \$\{input\.savedCardLabel\} is charged the total now, and the funds are held in protection until you approve the work\.`/);
+  assert.match(offerCopy, /input\.savedCardLabel && quote \? ` \$\{input\.savedCardLabel\} is charged the total now, and the funds are held in protection until you approve the work\.`/);
   // Checkout: the opt-in is off by default and only offered while no card is saved.
   const checkout = flat(read('screens/CheckoutScreen.tsx'));
   assert.match(checkout, /const \[saveCard, setSaveCard\] = useState\(false\);/);
@@ -165,7 +165,7 @@ test('[static] the app: the buttons registered, the intents allow-listed, the co
   const checkoutCode = read('screens/CheckoutScreen.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
   const savedCardCalls = checkoutCode.match(/fundBySavedCard\b/g) ?? [];
   assert.equal(savedCardCalls.length, 3, 'one definition and two callers (the named-card branch, the confirm)');
-  assert.match(checkout, /onConfirm=\{stripe \? \(dialogPath === 'saved' && savedCard \? fundBySavedCard : fundByCard\) : fundProtection\}/);
+  assert.match(checkout, /onConfirm=\{dialogPath === 'saved' && savedCard \? fundBySavedCard : fundByCard\}/);
   assert.doesNotMatch(checkout, /if \(params\.oneTapCard && params\.oneTapCard !== savedCard\.id\) return;/, 'a missing oneTapCard must not fall through to a charge');
   // The confirm it opens names the card and the total.
   assert.match(checkout, /`Charge \$\{formatBudget\(figures\?\.total \?\? null\)\} to \$\{dialogPath === 'saved' && savedCard \? cardLabel\(savedCard\) : 'your card'\}\?`/);

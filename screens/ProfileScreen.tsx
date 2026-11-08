@@ -41,7 +41,6 @@ import { alertAsync, confirmAsync } from '../lib/dialog';
 import { askOpenSettings } from '../lib/permissionPrompt';
 import { goBackOrHome } from '../lib/navigationRef';
 import { userMessage } from '../lib/errorMessage';
-import { permissionOutcome, trackIntent } from '../lib/observability/analytics';
 import { fetchPortfolio, fetchWorkerJobStats, type CategoryStat } from '../lib/portfolio';
 import {
   profileCompleteness,
@@ -149,15 +148,9 @@ const HUB_SETTINGS: SettingsRow[] = [
     route: 'PaymentMethods',
     icon: 'card-outline',
     label: 'Payment methods',
-    // D16 (R6a): the sandbox subtitle renders in sandbox mode only.
     // Idea 20: on the card path a card may now be saved — for one-tap hiring, kept by the provider.
-    // Sandbox and a build with payments off keep their words.
-    sub:
-      paymentsMode === 'stripe'
-        ? 'Cards and one-tap hiring.'
-        : paymentsMode === 'sandbox'
-          ? 'Test mode · no stored card.'
-          : 'No stored cards · entered at checkout.',
+    // A build with payments off keeps its words.
+    sub: paymentsMode === 'stripe' ? 'Cards and one-tap hiring.' : 'No stored cards · entered at checkout.',
   },
   {
     route: 'Notifications',
@@ -494,11 +487,6 @@ export function ProfileScreen() {
 
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
-    trackIntent({
-      name: 'permission_result',
-      kind: 'camera',
-      outcome: permissionOutcome(permission.status, permission.canAskAgain),
-    });
     if (!permission.granted) {
       // B11: the prompt offers Settings instead of only naming it.
       await askOpenSettings('camera');

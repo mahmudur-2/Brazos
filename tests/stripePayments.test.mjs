@@ -8,9 +8,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
  * R6a — the customer money path on Stripe, the client half.
  *
  * What must stay true:
- *   1. The resolver admits 'stripe' as a third mode beside sandbox and
- *      disabled, keeps the unset row exactly as it was, and still fails CLOSED
- *      on anything it does not recognise — executed against the real function.
+ *   1. (Lean D4: the three-way resolver is gone with the sandbox mode; the
+ *      two-way, fail-closed rule is tests/paymentsDisabled.test.mjs.)
  *   2. The poll classifier, the checkout-response validator, the invoke-error
  *      extractor and the sheet-outcome rule are pure and EXECUTED here (D24):
  *      every payment status classifies, every malformed payload is refused,
@@ -28,9 +27,6 @@ const stripComments = (source) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 const flatten = (source) => stripComments(source).replace(/\s+/g, ' ');
 
-const { resolvePaymentsMode } = await import(
-  pathToFileURL(join(root, 'lib/adapters/paymentsMode.ts')).href
-);
 const rules = await import(pathToFileURL(join(root, 'lib/payments/stripeRules.ts')).href);
 const {
   CHECKOUT_POLL_INTERVAL_MS,
@@ -48,47 +44,6 @@ const {
   serverErrorSentence,
   validateCheckoutResponse,
 } = rules;
-
-// ---------------------------------------------------------------------------
-// 1. The resolver's new arm (D1)
-// ---------------------------------------------------------------------------
-
-const mode = (configured, dev) => resolvePaymentsMode({ configured, dev }).mode;
-
-test('D1 · a declared stripe mode is honoured on every build type, without a config error', () => {
-  for (const dev of [true, false]) {
-    const resolution = resolvePaymentsMode({ configured: 'stripe', dev });
-    assert.equal(resolution.mode, 'stripe', `stripe must resolve to stripe (dev=${dev})`);
-    assert.equal(resolution.configError, null, 'declaring stripe is a supported configuration');
-  }
-  for (const value of ['  stripe', 'stripe  ', 'STRIPE', 'Stripe', '\tstripe\n']) {
-    assert.equal(mode(value, false), 'stripe', `${JSON.stringify(value)} must read as stripe`);
-  }
-});
-
-test('D1 · the unset row keeps its exact previous behaviour, and sandbox/disabled are unchanged', () => {
-  for (const unset of [undefined, null, '', ' ', '\t\n']) {
-    assert.equal(mode(unset, true), 'sandbox');
-    assert.equal(mode(unset, false), 'disabled');
-    assert.equal(resolvePaymentsMode({ configured: unset, dev: false }).configError, null);
-  }
-  assert.equal(mode('sandbox', false), 'sandbox');
-  assert.equal(mode('disabled', true), 'disabled');
-});
-
-test('D1 · anything unrecognised still fails CLOSED to disabled with the reason surfaced', () => {
-  for (const value of ['stripe2', 'stripe,sandbox', 'stripe sandbox', 'live', 'real', 'production', 'card', 'on', '1']) {
-    for (const dev of [true, false]) {
-      const resolution = resolvePaymentsMode({ configured: value, dev });
-      assert.equal(resolution.mode, 'disabled', `${JSON.stringify(value)} must not enable money (dev=${dev})`);
-      assert.match(
-        String(resolution.configError),
-        /Unrecognized EXPO_PUBLIC_PAYMENTS_MODE/,
-        `${JSON.stringify(value)} must surface why payments are off`
-      );
-    }
-  }
-});
 
 // ---------------------------------------------------------------------------
 // 2. The poll classifier (D7)
@@ -347,55 +302,36 @@ test('[static] the pure rules modules carry no runtime import, and the boundary 
 });
 
 // ---------------------------------------------------------------------------
-// 6b. The adapter (D3, D4, D19) — three providers, one boundary
+// 6b. The adapter (D3, D4, D19; lean D4) — two providers, one boundary
 // ---------------------------------------------------------------------------
 
-test('[static] the adapter selects three ways, and the stripe provider refuses what has no stripe meaning', () => {
+test('[static] the adapter selects two ways, and the stripe provider refuses when the card path is not ready', () => {
   const adapter = stripComments(read('lib/adapters/payments.ts'));
   const flat = flatten(read('lib/adapters/payments.ts'));
-  // Three-way selection at module load, still declared from the env var.
-  assert.match(flat, /resolution\.mode === 'sandbox' \? createSandboxPaymentProvider\(\) : resolution\.mode === 'stripe' \? createStripePaymentProvider\(\) : createDisabledPaymentProvider\(/);
-  assert.match(adapter, /configured: process\.env\.EXPO_PUBLIC_PAYMENTS_MODE/);
+  // Lean D4: two-way selection at module load, still declared from the env var.
+  assert.match(flat, /paymentsMode === 'stripe' \? createStripePaymentProvider\(\) : createDisabledPaymentProvider\(DISABLED_MESSAGE\)/);
+  assert.match(adapter, /env\.EXPO_PUBLIC_PAYMENTS_MODE === 'stripe'/);
   // D4: the interface gained beginJobCheckout, and every provider answers it.
   // Idea 20: the customer's opt-in to save the card rides along.
   assert.match(adapter, /beginJobCheckout\(jobId: string, options\?: \{ saveCard\?: boolean \}\): Promise<CheckoutSessionResult>;/);
-  assert.equal((adapter.match(/beginJobCheckout: async/g) ?? []).length, 3, 'sandbox, stripe and disabled each carry an arm');
+  assert.equal((adapter.match(/beginJobCheckout: async/g) ?? []).length, 2, 'stripe and disabled each carry an arm');
   // The stripe provider reaches the card path through the one boundary and
   // never names the SDK itself.
   assert.match(adapter, /from '\.\.\/payments\/stripe'/);
   assert.doesNotMatch(adapter, /stripe-react-native/);
   assert.match(adapter, /return createPaymentSession\(jobId, \{ saveCard: options\?\.saveCard === true \}\);/);
-  // Stripe release is release_job_payment; the sandbox pair is untouched.
+  // Stripe release is release_job_payment.
   assert.match(adapter, /rpc\('release_job_payment', \{ p_job_id: jobId \}\)/);
-  assert.match(adapter, /sandbox_release_job_payment/);
-  assert.match(adapter, /sandbox_authorize_job_payment/);
-  assert.match(adapter, /sandbox_hold_job_payment/);
-  // D3 (R6c): the one-step tipWorker still refuses in stripe mode — a card tip
-  // is beginTipCheckout + the sheet — and never says paid.
-  assert.match(adapter, /tipWorker: async \(\) => \(stripeReady\(\) \? refuse\(STRIPE_TIP_MESSAGE\)/);
-  assert.match(adapter, /STRIPE_TIP_MESSAGE =\s*'Card tips are sent through the payment sheet — nothing was recorded or charged\.'/);
+  // D3 (R6c): a card tip is beginTipCheckout + the sheet, never the tip RPC from the client.
   assert.doesNotMatch(adapter, /begin_tip_payment/);
-  // D19: stripe cash-out refuses and never calls sandbox_cash_out.
-  assert.match(flat, /cashOut: async \(\) => \(\{ data: \[\], error: \{ message: stripeReady\(\) \? STRIPE_CASH_OUT_MESSAGE : STRIPE_UNAVAILABLE_MESSAGE \},? \}\)/);
-  assert.equal((adapter.match(/sandbox_cash_out/g) ?? []).length, 1, 'only the sandbox provider calls sandbox_cash_out');
-  // D4: the sandbox two-step is refused in stripe mode; the sheet is refused in sandbox mode.
-  assert.match(adapter, /authorizeJobPayment: async \(\) =>\s*stripeReady\(\) \? refuse\(STRIPE_NO_TWO_STEP_MESSAGE\) : unavailable\(\)/);
-  assert.match(adapter, /protectJobPayment: async \(\) =>\s*stripeReady\(\) \? refuse\(STRIPE_NO_TWO_STEP_MESSAGE\) : unavailable\(\)/);
-  assert.match(adapter, /beginJobCheckout: async \(\) => \(\{ data: null, error: \{ message: SANDBOX_NO_SHEET_MESSAGE \} \}\)/);
   // The SDK-absent / key-absent refusal guards every stripe method.
   const stripeProvider = adapter.slice(
     adapter.indexOf('function createStripePaymentProvider'),
     adapter.indexOf('function createDisabledPaymentProvider')
   );
-  assert.equal((stripeProvider.match(/stripeReady\(\)/g) ?? []).length, 7, 'all seven stripe methods consult stripeReady() (R6c added beginTipCheckout)');
-  for (const message of ['STRIPE_TIP_MESSAGE', 'STRIPE_CASH_OUT_MESSAGE', 'STRIPE_NO_TWO_STEP_MESSAGE', 'SANDBOX_NO_SHEET_MESSAGE']) {
-    const value = adapter.match(new RegExp(`${message} =\\s*'([^']+)'`));
-    assert.ok(value, `${message} must be a literal sentence`);
-    assert.doesNotMatch(value[1], /\bpaid\b/i, `${message} must never say paid`);
-  }
+  assert.equal((stripeProvider.match(/stripeReady\(\)/g) ?? []).length, 3, 'all three stripe methods consult stripeReady()');
   // The disabled provider still refuses everything.
   assert.match(adapter, /releaseJobPayment: refuse/);
-  assert.match(adapter, /tipWorker: refuse/);
 });
 
 // ---------------------------------------------------------------------------
@@ -419,7 +355,7 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
   assert.doesNotMatch(code, /stripe-react-native/);
   assert.doesNotMatch(code, /\.rpc\(|\.from\(|functions\.invoke/);
   // Idea 20: the confirm pays with the saved card only on the path that named it.
-  assert.match(code, /onConfirm=\{stripe \? \(dialogPath === 'saved' && savedCard \? fundBySavedCard : fundByCard\) : fundProtection\}/);
+  assert.match(code, /onConfirm=\{dialogPath === 'saved' && savedCard \? fundBySavedCard : fundByCard\}/);
   // A dismissed sheet: no alert, no poll, one re-read.
   assert.match(code, /sheet\.outcome === 'dismissed'[\s\S]{0,200}await loadPayment\(\);\s*return;/);
   assert.doesNotMatch(code, /dismissed'[\s\S]{0,120}alertAsync/);
@@ -433,9 +369,9 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
   assert.match(code, /outcome === 'gone'[\s\S]{0,80}setPhase\('gone'\)/);
   assert.match(code, /if \(activeRef\.current\) setPhase\('timeout'\);/);
   // The sheet's success never navigates by itself: JobConfirmed is reached
-  // only from the poll, the recheck, or the sandbox hold.
+  // only from the poll or the recheck (lean D4: the sandbox hold is gone).
   const successPaths = code.match(/navigation\.replace\('JobConfirmed'/g) ?? [];
-  assert.equal(successPaths.length, 4, 'held-continue, sandbox hold, the poll, and the recheck');
+  assert.equal(successPaths.length, 3, 'held-continue, the poll, and the recheck');
   assert.doesNotMatch(code, /outcome === 'completed'[\s\S]{0,200}JobConfirmed/);
   // The confirming state: the template's spinner, the words in the header,
   // and no action bar (DetailScreen drops it while the state is not ready).
@@ -458,9 +394,8 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
   assert.match(code, /`Charge \$\{formatBudget\(figures\?\.total \?\? null\)\} to \$\{dialogPath === 'saved' && savedCard \? cardLabel\(savedCard\) : 'your card'\}\?`/);
   assert.match(code, /disabled=\{funding \|\| !figures \|\| state\.kind !== 'ready'\}/);
   assert.match(code, /quoteError && !figures/);
-  // D10: no client-side fee arithmetic — the sandbox fee row reads the ledger.
+  // D10: no client-side fee arithmetic.
   assert.doesNotMatch(code, /platformFeeCents|PLATFORM_FEE_RATE|workerPayoutCents|\* 0\.|\/ 100 \*/);
-  assert.match(code, /payment\.platform_fee_cents > 0/);
   // D14: the countdown reuses the one formatter; a closed window has no CTA.
   // C6: the window names the moment it closes, off the one formatter.
   assert.match(code, />Pay by<\/Text>\s*<Text style=\{styles\.summaryValue\}>\s*\{releaseAtLabel\(fundingDueMs as number, nowMs\)\}/);
@@ -469,16 +404,11 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
   // D15: the kill switch is read on focus and hides the CTA in every mode.
   assert.match(code, /fetchRemoteConfig\(\)\.then\(\(config\) => \{\s*if \(active\) setPaymentsEnabled\(config\.paymentsEnabled\);/);
   assert.match(code, /!paymentsEnabled \? undefined/);
-  // D16: every sandbox string is behind the resolved mode; none renders in
-  // stripe mode. The sandbox strings themselves are verbatim.
-  assert.match(code, /TEST MODE — no real money moves\. No real money is charged/);
-  assert.match(code, /'None in test mode'/);
-  assert.match(code, /Total \(test\)/);
-  // C4: one action word — Pay & protect — in both modes.
-  assert.match(code, /`\$\{PAY_AND_PROTECT\} \(test\)`/);
+  // Lean D4: the sandbox strings are gone with the sandbox mode.
+  assert.doesNotMatch(code, /TEST MODE|test mode|\(test\)/);
+  // C4: one action word — Pay & protect.
   assert.match(code, /confirmText=\{PAY_AND_PROTECT\}/);
   assert.doesNotMatch(code, /Authorize & protect|Finish protecting/);
-  assert.match(code, /This authorizes the amount and holds it in protection/);
   // The stripe copy never says paid, and the sheet's success is never "held".
   const stripeCopy = [
     'Your card is charged the all-in total now, through the secure payment sheet.',
@@ -532,10 +462,9 @@ test('[static] a held row with release_requested_at cannot bounce between Review
   assert.match(review, /tip by card/);
   assert.match(review, /<ReviewSection/);
   assert.doesNotMatch(review, /paymentsMode !== 'sandbox'/);
-  // D16: the sandbox strings are verbatim and gated on the resolved mode.
-  // C4: one eyebrow, its sandbox arm in lib/moneyCopy.ts.
-  assert.match(review, /\{paymentEyebrow\(paymentsMode === 'sandbox'\)\}/);
-  assert.match(approve, /\{paymentEyebrow\(paymentsMode === 'sandbox'\)\}/);
+  // C4: one eyebrow (lean D4: no sandbox arm).
+  assert.match(review, /\{paymentEyebrow\(\)\}/);
+  assert.match(approve, /\{paymentEyebrow\(\)\}/);
 });
 
 test('[static] ClientJobDetail offers Review on an approved row, counts down an unfunded one, and hides checkout when paused', () => {
@@ -565,25 +494,25 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   const closedAt = code.indexOf('payment && fundingWindowClosed ? (');
   const closedCard = code.slice(closedAt, code.indexOf(') : payment ? (', closedAt));
   // FIX-RUN B5: the closed window reads as a payment that didn't go through in time.
-  assert.match(closedCard, />\{paymentEyebrow\(paymentsMode === 'sandbox'\)\}</);
+  assert.match(closedCard, />\{paymentEyebrow\(\)\}</);
   assert.match(closedCard, /Your payment didn’t go through in time\. Nothing was charged\./);
   assert.match(closedCard, /title="Check again"/);
   assert.doesNotMatch(closedCard, /navigate\('Checkout'/);
   // D15: the checkout CTA is behind the kill switch.
   // 2026-09-26: the checkout CTA is the pinned primary, still behind the kill switch.
   assert.match(code, /canFundNow \? \(paymentsEnabled \? \{ label: 'Protect payment in checkout'/);
-  // D16 → C4: one eyebrow in every state, its sandbox arm in lib/moneyCopy.ts — the protected,
+  // D16 → C4: one eyebrow in every state — the protected,
   // window-closed and approved cards, and (final sweep) the cancelled job's.
-  assert.equal((code.match(/paymentEyebrow\(paymentsMode === 'sandbox'\)/g) ?? []).length, 4);
+  assert.equal((code.match(/paymentEyebrow\(\)/g) ?? []).length, 4);
   assert.doesNotMatch(code, /PROTECTED PAYMENT|APPROVED · PAYOUT ON ITS WAY/);
   // A5 (2026-10-03): the accept confirm's body is the one shared text in lib/offerCopy.ts, which
   // the job page renders with the resolved mode; the checkout sentence lives there.
   assert.match(code, /message=\{acceptOfferConfirmMessage\(\{/);
   assert.match(stripComments(read('lib/offerCopy.ts')), /Next you’ll protect the payment in checkout\./);
   assert.doesNotMatch(code, /\bpaid\b(?! early| out| until)/i);
-  // JobConfirmed's note is mode-aware too.
+  // JobConfirmed's note is the card sentence only (lean D4: no test-mode arm).
   const confirmed = stripComments(read('screens/JobConfirmedScreen.tsx'));
-  assert.match(confirmed, /paymentsMode === 'sandbox'\s*\?\s*'Test mode — no real money moved\.'/);
+  assert.doesNotMatch(confirmed, /Test mode/);
   // C8: the caption carries "held in protection"; the note says what it means, once.
   assert.match(confirmed, /Your card was charged\. Nothing reaches the worker until you approve the finished work\./);
   assert.doesNotMatch(confirmed, /<StatusPill/);

@@ -23,7 +23,7 @@ import {
 /**
  * Screen 45 (Phase 9) — Payment methods, told honestly. There is no card
  * vault in this app — so the screen SAYS what it can truthfully show: which
- * payment mode the build runs (sandbox / stripe / disabled — D16, D18) and what
+ * payment mode the build runs (stripe / disabled — D16, D18) and what
  * that mode actually does with money states.
  *
  * 2026-09-30 (idea 20): on the card path a customer may SAVE a card for
@@ -34,7 +34,6 @@ import {
 export function PaymentMethodsScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
-  const sandbox = paymentsMode === 'sandbox';
   const stripe = paymentsMode === 'stripe';
 
   // Idea 20: the saved card, read at the provider on every visit (stripe only).
@@ -113,11 +112,9 @@ export function PaymentMethodsScreen() {
               <Text style={styles.eyebrow}>PAYMENT PROTECTION</Text>
               <Text style={styles.heroTitle}>Honest by design.</Text>
               <Text style={styles.bodyText}>
-                {sandbox
-                  ? 'Test mode: nothing here is a real charge.'
-                  : stripe
-                    ? 'Your card is charged only when you protect a payment, and the funds stay held until you approve the finished work.'
-                    : 'Payments aren’t available right now, so nothing here can move money.'}
+                {stripe
+                  ? 'Your card is charged only when you protect a payment, and the funds stay held until you approve the finished work.'
+                  : 'Payments aren’t available right now, so nothing here can move money.'}
               </Text>
             </View>
           ),
@@ -127,21 +124,19 @@ export function PaymentMethodsScreen() {
             <View style={[styles.modeCard, litCardStyle(isDark)]}>
               <View style={[styles.modeGlyph, isDark && styles.modeGlyphDark]}>
                 <Ionicons
-                  name={sandbox ? 'flask-outline' : 'card-outline'}
+                  name="card-outline"
                   size={22}
-                  color={isDark ? colors.gold : sandbox ? colors.warning : colors.textMuted}
+                  color={isDark ? colors.gold : colors.textMuted}
                 />
               </View>
               <View style={styles.modeCopy}>
                 <Text style={styles.modeTitle}>
-                  {sandbox ? 'Test mode payments' : stripe ? 'Card payments' : 'Payments are off'}
+                  {stripe ? 'Card payments' : 'Payments are off'}
                 </Text>
                 <Text style={styles.modeNote}>
-                  {sandbox
-                    ? 'Test mode: checkout, protection, release and tips all work, but no card is charged and no real money ever moves.'
-                    : stripe
-                      ? 'Cards are taken through the provider’s secure payment sheet at checkout. Brazos never sees your card number.'
-                      : 'Payments aren’t available right now. Nothing can be authorized, held or moved.'}
+                  {stripe
+                    ? 'Cards are taken through the provider’s secure payment sheet at checkout. Brazos never sees your card number.'
+                    : 'Payments aren’t available right now. Nothing can be authorized, held or moved.'}
                 </Text>
               </View>
             </View>
@@ -221,37 +216,8 @@ export function PaymentMethodsScreen() {
             </View>
           ),
         },
-        ...(sandbox
-          ? [
-              {
-                content: (
-                  <View style={[styles.sectionCard, litCardStyle(isDark)]}>
-                    <Text style={styles.eyebrow}>TEST MODE</Text>
-                    <Text accessibilityRole="header" style={styles.sectionTitle}>What test mode does</Text>
-                    <View style={styles.list}>
-                      <Row text="Authorize — records the agreed amount. Nothing is charged." />
-                      <Row text="Hold in protection — sets the funds aside while the work happens." />
-                      <Row text="Release — marks the payment released after you approve the finished work (or 72 hours pass with no issue reported)." />
-                      <Row text="Every step works as it will for real — none of it is real money." />
-                    </View>
-                  </View>
-                ),
-              },
-            ]
-          : []),
       ]}
     />
-  );
-}
-
-function Row({ text }: { text: string }) {
-  const { palette: colors } = useThemeColors();
-  const styles = stylesFor(colors);
-  return (
-    <View style={styles.row}>
-      <Ionicons name="checkmark-circle-outline" size={18} color={colors.emerald} />
-      <Text style={styles.rowText}>{text}</Text>
-    </View>
   );
 }
 
@@ -360,20 +326,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 14,
     color: colors.textMuted,
     lineHeight: 20,
-  },
-  list: {
-    gap: spacing.sm,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  rowText: {
-    flex: 1,
-    fontSize: 13,
-    color: colors.textMuted,
-    lineHeight: 19,
   },
   }),
 );

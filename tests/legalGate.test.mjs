@@ -372,7 +372,7 @@ test('B1 · Terms and Privacy state the payment facts, name every processor, and
 
   // Privacy: every processor by name, on-device speech, the 90-day prune, and
   // deletion as A18a built it (live location left with lean D3b).
-  for (const processor of ['Supabase', 'Expo', 'Stripe', 'Resend', 'OpenStreetMap Nominatim', 'Sentry', 'PostHog']) {
+  for (const processor of ['Supabase', 'Expo', 'Stripe', 'Resend', 'OpenStreetMap Nominatim', 'Sentry']) {
     assert.ok(policy.includes(processor), `the policy names ${processor}`);
   }
   assert.match(policy, /turned into\s+text on your device/);

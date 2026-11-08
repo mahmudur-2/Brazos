@@ -1,5 +1,4 @@
 import * as Location from 'expo-location';
-import { permissionOutcome, trackIntent } from './observability/analytics';
 import { Sentry } from './observability/sentry';
 import { publicLocationLabel } from './locationPrivacy';
 import { reverseGeocodeArea } from './reverseGeocode';
@@ -82,16 +81,7 @@ function formatNativePlace(place: Location.LocationGeocodedAddress): string {
  * hotspot map even though only the neighbourhood-level label is shown.
  */
 export async function resolveCurrentPlace(): Promise<ResolveResult> {
-  const permission = await Location.requestForegroundPermissionsAsync();
-  const { status } = permission;
-  // A permission dialog is a real event every time it is shown, so this fires
-  // at every asking surface rather than once per app. It is not a funnel step
-  // and cannot double-count a conversion.
-  trackIntent({
-    name: 'permission_result',
-    kind: 'location',
-    outcome: permissionOutcome(status, permission.canAskAgain),
-  });
+  const { status } = await Location.requestForegroundPermissionsAsync();
   if (status !== 'granted') {
     return {
       ok: false,

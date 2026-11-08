@@ -33,8 +33,7 @@ test('C4 · the glossary: one fee name, one held state, one action, one eyebrow'
   assert.equal(FEE_NAME, 'Protection fee');
   assert.equal(HELD_IN_PROTECTION, 'Held in protection');
   assert.equal(PAY_AND_PROTECT, 'Pay & protect');
-  assert.equal(paymentEyebrow(false), 'PAYMENT');
-  assert.equal(paymentEyebrow(true), 'PAYMENT · TEST MODE');
+  assert.equal(paymentEyebrow(), 'PAYMENT');
   assert.deepEqual(Object.keys(PAYMENT_STATE_WORDS).sort(), [...STATUSES].sort());
   assert.ok(STATUSES.length >= 9, 'the union is real');
 });

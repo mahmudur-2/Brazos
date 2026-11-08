@@ -42,17 +42,9 @@ import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from
  * Screen 31 — Protected Checkout, over the payment ADAPTER
  * (lib/adapters/payments.ts), never the RPCs directly.
  *
- * TWO FUNCTIONAL MODES, ONE SCREEN (R6a).
- *
- * SANDBOX says so on screen — the VerifyPhoneScreen "MOCK MODE" banner
- * precedent (06_DEFERRED_INTEGRATIONS: every dev surface visibly labeled, not
- * just documented). What is NOT fake: the ledger row is real Supabase state,
- * authorize -> held are real audited transitions, and the money vocabulary is
- * §H.3's — authorized means authorized, held means held, and nothing on this
- * screen (or anywhere) can say released or paid. One decision, stated before
- * the tap; both provider calls are idempotent, so a retry after a dropped
- * response continues from wherever the ledger truthfully is instead of
- * double-charging (the DB's partial unique index is the second lock).
+ * The money vocabulary is §H.3's — held means held, and nothing on this
+ * screen (or anywhere) can say released or paid. A disabled payments mode
+ * renders the unavailable state and no checkout control.
  *
  * STRIPE takes the card (D5): create-payment mints the ledger row and the
  * intent → the payment sheet takes the card → the screen POLLS the row until
@@ -105,7 +97,7 @@ export function CheckoutScreen() {
   const [dialogPath, setDialogPath] = useState<'saved' | 'sheet'>('sheet');
   const [saveCard, setSaveCard] = useState(false);
   const oneTapRef = useRef(false);
-  // The pre-row price (D22) — stripe only; sandbox never asks for it.
+  // The pre-row price (D22) — stripe only.
   const [quote, setQuote] = useState<JobPriceQuote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
@@ -181,7 +173,7 @@ export function CheckoutScreen() {
     }, [loadPayment, loadQuote])
   );
 
-  // Idea 20: the saved card, read once per visit (stripe only — sandbox never holds a card).
+  // Idea 20: the saved card, read once per visit (stripe only).
   useFocusEffect(
     useCallback(() => {
       let active = true;
@@ -293,13 +285,12 @@ export function CheckoutScreen() {
                   : { kind: 'ready' };
 
   const held = !!payment && isHeld(payment);
-  const authorizedOnly = payment?.status === 'authorized';
   // D9 / D14: THE one derivation of whether checkout may be offered on this
   // row — an unfunded row inside its window is, a lapsed one never is.
   const canFund = canOfferJobFunding({ viewerId: user?.id, job, payment, nowMs });
 
   // D13 / D22: the customer's all-in figures — the row's once a row exists,
-  // the quote before it. Sandbox keeps its own rows below, untouched.
+  // the quote before it.
   const figures: CustomerFigures | null = !stripe
     ? null
     : payment && payment.charge_amount_cents != null
@@ -319,45 +310,6 @@ export function CheckoutScreen() {
             source: 'quote',
           }
         : null;
-
-  /**
-   * The one sandbox funding action. Runs whichever half is still missing —
-   * both calls are idempotent, so a retry after a half-completed attempt
-   * picks up from the ledger's real state.
-   */
-  async function fundProtection() {
-    if (fundingRef.current) return;
-    fundingRef.current = true;
-    setFunding(true);
-    try {
-      const authorized = await paymentProvider.authorizeJobPayment(job.id);
-      if (authorized.error || !authorized.data) {
-        await alertAsync(
-          'Could not authorize the payment',
-          `${userMessage(authorized.error, 'Check your connection and try again.')}\n\nYour accepted offer is unchanged — nothing was authorized or held.`
-        );
-        await loadPayment();
-        return;
-      }
-      setPayment(authorized.data);
-
-      const heldResult = await paymentProvider.protectJobPayment(job.id);
-      if (heldResult.error || !heldResult.data) {
-        await alertAsync(
-          'Authorized, but not yet protected',
-          `${userMessage(heldResult.error, 'Check your connection and try again.')}\n\nThe payment is authorized — not charged — and your accepted offer is unchanged. Tap the button again to finish protecting the funds.`
-        );
-        await loadPayment();
-        return;
-      }
-      setPayment(heldResult.data);
-      navigation.replace('JobConfirmed', { job });
-    } finally {
-      fundingRef.current = false;
-      setFunding(false);
-      setConfirmVisible(false);
-    }
-  }
 
   /**
    * D7: poll fetchJobPayment every 2 seconds for up to 30 seconds after a
@@ -515,18 +467,7 @@ export function CheckoutScreen() {
       title="Continue — job confirmed"
       onPress={() => navigation.replace('JobConfirmed', { job })}
     />
-  ) : !paymentsEnabled ? undefined : !stripe ? (
-    <Button
-      title={
-        authorizedOnly
-          ? `${PAY_AND_PROTECT} (test)`
-          : `${PAY_AND_PROTECT} ${formatBudget(amountCents)} (test)`
-      }
-      onPress={() => setConfirmVisible(true)}
-      loading={funding}
-      disabled={funding || state.kind !== 'ready'}
-    />
-  ) : phase === 'timeout' || windowClosed ? (
+  ) : !paymentsEnabled ? undefined : !stripe ? undefined : phase === 'timeout' || windowClosed ? (
     <Button title="Check again" onPress={() => void recheck()} disabled={funding} />
   ) : canFund && savedCard && figures ? (
     // Idea 20: the saved card first; another card, through the sheet, one tap away.
@@ -572,30 +513,6 @@ export function CheckoutScreen() {
         onBack={goBackOrHome}
         state={state}
         sections={[
-          /**
-           * The banner states the MONEY fact, not the build fact. Stage 4A
-           * moved availability to EXPO_PUBLIC_PAYMENTS_MODE, so sandbox
-           * payments run on a release binary too — "development build" was a
-           * false statement to a TestFlight tester. It renders iff the
-           * RESOLVED mode is sandbox; a configError always resolves to
-           * disabled, so that case is covered by the same condition.
-           */
-          ...(paymentsMode === 'sandbox'
-            ? [
-                {
-                  content: (
-                    <View style={styles.sandboxBanner} accessibilityRole="alert">
-                      <Ionicons name="flask-outline" size={18} color={colors.warning} />
-                      <Text style={styles.sandboxText}>
-                        TEST MODE — no real money moves. No real money is charged,
-                        held or transferred. The payment states below are real
-                        app records used to test the flow.
-                      </Text>
-                    </View>
-                  ),
-                },
-              ]
-            : []),
           ...(!paymentsEnabled
             ? [
                 {
@@ -681,7 +598,7 @@ export function CheckoutScreen() {
                 {stripe ? (
                   <>
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Protection fee</Text>
+                      <Text style={styles.summaryLabel}>{FEE_NAME}</Text>
                       <Text style={styles.summaryValue}>
                         {figures ? formatBudget(figures.fee) : quoteLoading ? '…' : '—'}
                       </Text>
@@ -713,24 +630,7 @@ export function CheckoutScreen() {
                       </>
                     ) : null}
                   </>
-                ) : (
-                  <>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>{FEE_NAME}</Text>
-                      {/* Read off the ledger row, never computed here (D10):
-                          sandbox rows are written with a zero fee. */}
-                      <Text style={styles.summaryValue}>
-                        {payment && payment.platform_fee_cents > 0
-                          ? formatBudget(payment.platform_fee_cents)
-                          : 'None in test mode'}
-                      </Text>
-                    </View>
-                    <View style={[styles.summaryRow, styles.totalRow]}>
-                      <Text style={styles.totalLabel}>Total (test)</Text>
-                      <Text style={styles.totalValue}>{formatBudget(amountCents)}</Text>
-                    </View>
-                  </>
-                )}
+                ) : null}
               </View>
             ),
           },
@@ -771,13 +671,7 @@ export function CheckoutScreen() {
                         : 'charges the all-in total shown above through the secure payment sheet. Nothing is charged until you confirm in the sheet.'
                     }
                   />
-                ) : (
-                  <ExplainRow
-                    icon="card-outline"
-                    strong="Authorize"
-                    text="confirms the amount in test mode. Nothing is charged."
-                  />
-                )}
+                ) : null}
                 <ExplainRow
                   icon="lock-closed-outline"
                   strong="Hold in protection"
@@ -811,22 +705,16 @@ export function CheckoutScreen() {
 
       <ConfirmDialog
         visible={confirmVisible}
-        title={
-          stripe
-            ? `Charge ${formatBudget(figures?.total ?? null)} to ${dialogPath === 'saved' && savedCard ? cardLabel(savedCard) : 'your card'}?`
-            : `Protect ${formatBudget(amountCents)} for this job?`
-        }
+        title={`Charge ${formatBudget(figures?.total ?? null)} to ${dialogPath === 'saved' && savedCard ? cardLabel(savedCard) : 'your card'}?`}
         message={
-          stripe
-            ? dialogPath === 'saved' && savedCard
-              ? `${cardLabel(savedCard)} is charged the all-in total now. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done.`
-              : 'Your card is charged the all-in total now, through the secure payment sheet. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
-            : 'This authorizes the amount and holds it in protection. Test mode — no real money is charged. Funds stay held until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
+          dialogPath === 'saved' && savedCard
+            ? `${cardLabel(savedCard)} is charged the all-in total now. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done.`
+            : 'Your card is charged the all-in total now, through the secure payment sheet. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
         }
         confirmText={PAY_AND_PROTECT}
         cancelText="Not now"
         loading={funding}
-        onConfirm={stripe ? (dialogPath === 'saved' && savedCard ? fundBySavedCard : fundByCard) : fundProtection}
+        onConfirm={dialogPath === 'saved' && savedCard ? fundBySavedCard : fundByCard}
         onCancel={() => setConfirmVisible(false)}
       />
     </>
@@ -856,23 +744,6 @@ function ExplainRow({
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
-  sandboxBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.warning,
-    backgroundColor: colors.warningBg,
-  },
-  sandboxText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.warning,
-    lineHeight: 18,
-  },
   summaryCard: {
     gap: spacing.sm,
     padding: spacing.lg,

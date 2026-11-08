@@ -185,7 +185,6 @@ export default (_context: ConfigContext): ExpoConfig => ({
         url: 'https://sentry.io/',
       },
     ],
-    'expo-localization',
   ],
   extra: {
     eas: {

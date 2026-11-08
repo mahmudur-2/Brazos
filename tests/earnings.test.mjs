@@ -62,12 +62,8 @@ test('the screen derives from the ledger and only the ledger', async () => {
   // No local arithmetic invents a balance: every displayed sum comes from
   // the summary object.
   assert.ok(!/\+=\s*|useState<number>/.test(src), 'no hand-kept balance state');
-  // Cash-out goes through the adapter, never the RPC.
-  assert.match(src, /paymentProvider\.cashOut\(\)/);
+  // Lean D4: there is no cash-out (ruling 1) — never the RPC.
   assert.ok(!src.includes("rpc('sandbox_cash_out'"), 'screen must not call the RPC');
-  // Simulated, and disabled at zero.
-  assert.match(src, /simulated/i);
-  assert.match(src, /availableCents === 0/);
 });
 
 // ---------------------------------------------------------------------------
@@ -116,10 +112,11 @@ test('a6 · every payment state gets its own sentence, and nothing else gets one
   );
   // No clock at all (a job carrying no completed_at): today's plain sentence.
   assert.equal(earningsRowMeta(facts(), NOW, FAKE), 'Held in protection');
-  // Released on the sandbox provider: today's exact strings, both reasons.
+  // Released: the bank leg as a DIRECTION, never a date — the sentence
+  // notify_on_payment_release already sends a card-path payee. Both reasons.
   assert.equal(
     earningsRowMeta(facts({ status: 'released', released_at: '2026-09-05T10:00:00Z' }), NOW, FAKE),
-    'Released 2 h ago'
+    `Released 2 h ago ${EM} on its way to your bank`
   );
   assert.equal(
     earningsRowMeta(
@@ -131,22 +128,8 @@ test('a6 · every payment state gets its own sentence, and nothing else gets one
       NOW,
       FAKE
     ),
-    'Released (auto) 2 h ago'
+    `Released (auto) 2 h ago ${EM} on its way to your bank`
   );
-  // Released on the card path: the bank leg as a DIRECTION, never a date —
-  // the sentence notify_on_payment_release already sends a non-sandbox payee.
-  // The provider test is an allow-list on sandbox, so a provider nobody has
-  // heard of gets the real-money sentence too (the fail-safe direction).
-  for (const provider of ['stripe', 'something_new']) {
-    assert.equal(
-      earningsRowMeta(
-        facts({ status: 'released', provider, released_at: '2026-09-05T10:00:00Z' }),
-        NOW,
-        FAKE
-      ),
-      `Released 2 h ago ${EM} on its way to your bank`
-    );
-  }
   // Transferred: today's string.
   assert.equal(
     earningsRowMeta(facts({ status: 'paid_out', paid_out_at: '2026-09-05T10:00:00Z' }), NOW, FAKE),
@@ -208,7 +191,6 @@ test('a6 · a missing timestamp is TRIMMED, not left with a trailing space', () 
   // suffix reads as one sentence instead of carrying a double space. The
   // visible line is unchanged — trailing space in a Text node renders as
   // nothing — and no other case moves.
-  assert.equal(earningsRowMeta(facts({ status: 'released' }), NOW, FAKE), 'Released');
   assert.equal(
     earningsRowMeta(facts({ status: 'released', provider: 'stripe' }), NOW, FAKE),
     `Released ${EM} on its way to your bank`

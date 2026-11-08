@@ -503,7 +503,6 @@ test('[static] F15: every screen that ranks by the worker’s history reads the 
     'screens/JobConfirmedScreen.tsx': 1,
     'screens/JobDetailScreen.tsx': 4,
     'screens/PostJobScreen.tsx': 3,
-    'screens/ReviewAndTipScreen.tsx': 1,
     'screens/WorkerJobScreen.tsx': 5,
   };
   for (const [file, count] of Object.entries(sites)) {

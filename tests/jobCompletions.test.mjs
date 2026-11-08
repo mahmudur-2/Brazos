@@ -150,7 +150,7 @@ test('5 · no client file outside the helper subtracts a fee from an amount, add
   assert.deepEqual(offenders, [], 'fee arithmetic lives in lib/payments.ts and nowhere else');
 });
 
-test('6 · Earnings buckets and rows read the take through the helper, bucketed by the one deriveEarnings; the sandbox arm is unchanged', () => {
+test('6 · Earnings buckets and rows read the take through the helper, bucketed by the one deriveEarnings', () => {
   assert.match(
     earningsFlat,
     /const take = s \? deriveEarnings\(s\.rows\.map\(\(row\) => \(\{ \.\.\.row, amount_cents: workerTakeCents\(row\) \}\)\)\) : null;/
@@ -161,9 +161,6 @@ test('6 · Earnings buckets and rows read the take through the helper, bucketed 
   assert.doesNotMatch(earnings, /cents=\{s\.(pending|available|transferred)Cents\}/, 'no bucket shows the raw amount any more');
   assert.match(earnings, /<MoneyText cents=\{workerTakeCents\(row\)\} state=\{row\.status\} captionHidden \/>/);
   assert.doesNotMatch(earnings, /cents=\{row\.amount_cents\}/);
-  // D16/D19: the sandbox cash-out still sums the ledger's own released rows.
-  assert.match(earnings, /`Cash out \$\{formatBudget\(s\.availableCents\)\} \(test\)`/);
-  assert.match(earnings, /disabled=\{s\.availableCents === 0 \|\| cashingOut\}/);
   assert.match(earnings, /note="Held in protection"/);
   assert.match(earnings, /note="Released to you"/);
   // FIX-RUN B5: product copy, the fee by its one name (C4's glossary).

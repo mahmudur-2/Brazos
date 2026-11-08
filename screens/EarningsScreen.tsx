@@ -3,16 +3,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
-import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { useMode } from '../modes/ModeProvider';
-import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
+import { paymentsMode } from '../lib/adapters/payments';
 import { payoutSetupNotice, payoutsCta, workerTakeCents, type PayoutsStatus } from '../lib/payments';
 import { fetchMyPayoutsStatus } from '../lib/payments/stripe';
 import { deriveEarnings, fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
@@ -37,9 +35,7 @@ import {
  * per-job breakdown, every figure DERIVED from payments rows on each focus
  * (§G: no hand-kept balance anywhere). The three buckets are the §H.3
  * vocabulary: held = pending approval, released = available, paid_out =
- * transferred — by the SIMULATED cash-out in sandbox mode, by the provider's
- * own transfer on the card path — and the screen says "sandbox" wherever
- * money could be misread as real, and only there (D16).
+ * transferred by the provider's own transfer on the card path.
  *
  * The fee figure is the ledger's sum of platform_fee_cents, nothing else
  * (D10): no rate lives on the client any more.
@@ -55,8 +51,6 @@ export function EarningsScreen() {
 
   const [summary, setSummary] = useState<EarningsSummary | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [confirmCashOut, setConfirmCashOut] = useState(false);
-  const [cashingOut, setCashingOut] = useState(false);
   // R6c (D1): the stored payout state, read on the card path only, so the
   // entry below can say where setup stands. A failed read is null — the
   // entry then just says "Payouts"; it never guesses a state.
@@ -80,30 +74,6 @@ export function EarningsScreen() {
     }, [load])
   );
 
-  async function cashOut() {
-    if (cashingOut) return;
-    setCashingOut(true);
-    try {
-      const { data, error } = await paymentProvider.cashOut();
-      if (error) {
-        await alertAsync('Could not cash out', `${userMessage(error)}\n\nNothing moved.`);
-        return;
-      }
-      await load();
-      await alertAsync(
-        paymentsMode === 'sandbox' ? 'Test cash-out complete' : 'Cash-out complete',
-        data.length === 0
-          ? 'Nothing was available to cash out.'
-          : paymentsMode === 'sandbox'
-            ? `${data.length} ${data.length === 1 ? 'payment' : 'payments'} moved to Transferred. Test mode — no real transfer exists.`
-            : `${data.length} ${data.length === 1 ? 'payment' : 'payments'} moved to Transferred.`
-      );
-    } finally {
-      setCashingOut(false);
-      setConfirmCashOut(false);
-    }
-  }
-
   const state: ScreenState = !user
     ? { kind: 'permissionDenied', title: 'Sign in required', body: '' }
     : loadError
@@ -116,8 +86,7 @@ export function EarningsScreen() {
   // R6c (D7): every figure a worker reads as "yours" is the take —
   // amount_cents − platform_fee_cents through the one helper — bucketed by
   // the same deriveEarnings the ledger read uses, so there is still one
-  // bucketing rule. Sandbox rows carry a zero fee, so no sandbox figure
-  // changes; the fee card below still sums the fees themselves.
+  // bucketing rule; the fee card below still sums the fees themselves.
   const take = s
     ? deriveEarnings(s.rows.map((row) => ({ ...row, amount_cents: workerTakeCents(row) })))
     : null;
@@ -129,11 +98,7 @@ export function EarningsScreen() {
     <>
       <DetailScreen
         title="Earnings & Payouts"
-        subtitle={
-          paymentsMode === 'sandbox'
-            ? 'Test mode — no real money'
-            : 'What you’ve earned, what’s held, what’s been paid'
-        }
+        subtitle={'What you’ve earned, what’s held, what’s been paid'}
         onBack={goBackOrHome}
         state={state}
         sections={
@@ -161,7 +126,7 @@ export function EarningsScreen() {
                         label="TRANSFERRED"
                         icon="arrow-up-circle-outline"
                         cents={take.transferredCents}
-                        note={paymentsMode === 'sandbox' ? 'Test cash-outs' : 'Transferred to you'}
+                        note="Transferred to you"
                       />
                     </View>
                   ),
@@ -212,7 +177,6 @@ export function EarningsScreen() {
                                 {earningsRowMeta(
                                   {
                                     status: row.status,
-                                    provider: row.provider,
                                     release_requested_at: row.release_requested_at,
                                     release_reason: row.release_reason,
                                     released_at: row.released_at,
@@ -239,24 +203,13 @@ export function EarningsScreen() {
               ]
         }
         actionBar={
-          // D19: the cash-out control exists in sandbox mode only. On the card
-          // path payouts arrive on the provider's own schedule once payout
-          // setup is complete — there is nothing for the worker to trigger.
-          s && paymentsMode === 'sandbox' ? (
-            <Button
-              title={
-                s.availableCents > 0
-                  ? `Cash out ${formatBudget(s.availableCents)} (test)`
-                  : 'Nothing available to cash out'
-              }
-              onPress={() => setConfirmCashOut(true)}
-              disabled={s.availableCents === 0 || cashingOut}
-              loading={cashingOut}
-            />
-          ) : s && paymentsMode === 'stripe' ? (
-            // R6c (D1): the card path has no cash-out, so this slot leads to
-            // the payout state instead — titled by the stored status when it
-            // was readable (the same status → CTA mapping the screen uses).
+          // D19: there is no cash-out. Payouts arrive on the provider's own
+          // schedule once payout setup is complete — there is nothing for the
+          // worker to trigger.
+          s && paymentsMode === 'stripe' ? (
+            // R6c (D1): this slot leads to the payout state instead — titled
+            // by the stored status when it was readable (the same status → CTA
+            // mapping the screen uses).
             <Button
               title={payouts ? payoutsCta(payouts).cta ?? payoutsCta(payouts).headline : 'Payouts'}
               variant={payouts && payoutsCta(payouts).cta ? 'primary' : 'secondary'}
@@ -265,21 +218,6 @@ export function EarningsScreen() {
             />
           ) : undefined
         }
-      />
-
-      <ConfirmDialog
-        visible={confirmCashOut}
-        title={`Cash out ${formatBudget(s?.availableCents ?? 0)}?`}
-        message={
-          paymentsMode === 'sandbox'
-            ? 'This is a test cash-out: your released payments move to Transferred. Test mode — no bank is connected and no real money moves.'
-            : 'Payouts arrive on the provider’s own schedule once payout setup is complete — there is nothing to trigger here.'
-        }
-        confirmText={paymentsMode === 'sandbox' ? 'Cash out (test)' : 'Cash out'}
-        cancelText="Not now"
-        loading={cashingOut}
-        onConfirm={cashOut}
-        onCancel={() => setConfirmCashOut(false)}
       />
     </>
   );

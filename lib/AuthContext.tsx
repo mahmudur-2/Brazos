@@ -12,7 +12,6 @@ import { supabase } from './supabase';
 import { fetchCurrentUserBanned, updateProfile } from './profiles';
 import { unregisterPushToken } from './pushNotifications';
 import { setSentryUser } from './observability/sentry';
-import { identify } from './observability/analytics';
 
 /**
  * Ends the session on this device without the network (B6). The public
@@ -106,11 +105,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   // Kept as its own effect rather than folded into the ban check below, which
   // reads the same key: that one returns early when there is no user, so the
   // sign-out edge — the one that matters for not mixing two people's data —
-  // would never run. Both calls are no-ops when their vendor module is absent.
+  // would never run. The call is a no-op when its vendor module is absent.
   useEffect(() => {
     const userId = session?.user?.id ?? null;
     setSentryUser(userId);
-    identify(userId);
   }, [session?.user?.id]);
 
   // Enforce bans on the client: a banned user is signed straight back out.

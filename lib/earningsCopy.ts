@@ -24,19 +24,13 @@
  *      bank-arrival estimate would be invented — SKIPPED by decision
  *      (docs/BACKLOG.md). The bank leg is stated as a direction and never as
  *      a date: the sentence the database's own release notification already
- *      sends a non-sandbox payee (20260910000000_settlement_schedules.sql,
+ *      sends a card-path payee (20260910000000_settlement_schedules.sql,
  *      notify_on_payment_release — "Neither sentence carries a dollar amount,
  *      and the live one promises no timing").
- *
- * The provider test is an ALLOW-LIST on 'sandbox', mirroring that trigger: a
- * provider this module has never heard of gets the real-money sentence, which
- * is the fail-safe direction — claiming a sandbox ledger about real money is
- * the failure worth preventing.
  */
 
 export type EarningsRowFacts = {
   status: string;
-  provider?: string | null;
   release_requested_at?: string | null;
   release_reason?: string | null;
   released_at?: string | null;
@@ -83,7 +77,7 @@ export function earningsRowMeta(
     const base = (
       row.release_reason === 'auto_approved' ? `Released (auto) ${when}` : `Released ${when}`
     ).trimEnd();
-    return row.provider === 'sandbox' ? base : `${base} — on its way to your bank`;
+    return `${base} — on its way to your bank`;
   }
 
   if (row.status === 'paid_out') {

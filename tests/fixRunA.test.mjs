@@ -28,7 +28,7 @@ test('A10 · "payout on its way" says what it waits for; the tip opens once the 
   // The customer's job page: the eyebrow stays, and a note under the figure says what "on its
   // way" waits for — card path only (the sandbox releases on approval), never a "paid" claim.
   const detail = code('screens/ClientJobDetailScreen.tsx');
-  assert.match(detail, /\{paymentEyebrow\(paymentsMode === 'sandbox'\)\} <\/Text> <MoneyText cents=\{customerChargeCents\(payment\)\} state=\{payment\.status\} releaseRequested=\{releaseRequested\} issueOpen=\{!!openDispute\} counterpartFirstName=\{workerFirstName\} \/> (?:\{\} )?\{stripe && releaseRequested \? \( <Text style=\{styles\.paymentNote\}> The payment reaches \{workerFirstName\} once their payout account is ready — it shows as released when the transfer lands\. If they haven’t set up payouts yet, their job screen asks them to\. <\/Text> \) : null\}/);
+  assert.match(detail, /\{paymentEyebrow\(\)\} <\/Text> <MoneyText cents=\{customerChargeCents\(payment\)\} state=\{payment\.status\} releaseRequested=\{releaseRequested\} issueOpen=\{!!openDispute\} counterpartFirstName=\{workerFirstName\} \/> (?:\{\} )?\{stripe && releaseRequested \? \( <Text style=\{styles\.paymentNote\}> The payment reaches \{workerFirstName\} once their payout account is ready — it shows as released when the transfer lands\. If they haven’t set up payouts yet, their job screen asks them to\. <\/Text> \) : null\}/);
   assert.doesNotMatch(detail, /paymentsMode !== 'sandbox'/, 'stripe is never locked out by a sandbox-only gate (D18)');
 
   // The worker's job page: a nudge to set up payouts from the hire onwards, before any payment

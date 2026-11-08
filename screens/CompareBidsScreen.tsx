@@ -131,8 +131,8 @@ export function CompareBidsScreen() {
                     {pending.length} {pending.length === 1 ? 'bid' : 'bids'} · {job.title}
                   </Text>
                   {/* Configuration truth: every job on this build runs through
-                      the sandbox protection flow, which is what the pill
-                      names — no per-job claim is made. */}
+                      the protection flow, which is what the pill names — no
+                      per-job claim is made. */}
                   <View style={styles.protectedPill}>
                     <Text style={styles.protectedPillText}>Protected job</Text>
                   </View>

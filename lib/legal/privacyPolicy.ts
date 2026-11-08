@@ -13,7 +13,7 @@
  *                  cards through supabase/functions/payment-methods); the
  *                  90-day payload prune (20261003000500)
  *   * receipts   — supabase/functions/send-receipts (Resend)
- *   * analytics  — lib/observability (PostHog, no PII; Sentry crash reports)
+ *   * crashes    — lib/observability (Sentry crash reports, no PII)
  *   * speech     — on-device only (requiresOnDeviceRecognition: true)
  *   * deletion   — phase67/68, FIX-RUN A18a (saved cards removed, the payout
  *                  account kept open while money is owed)
@@ -151,10 +151,8 @@ allow the lock-screen card for a job, a token for that card, used only to
 update it.
 
 When the app crashes or hits an error, a crash report (what failed, and the
-device and app version) is sent to Sentry. Product analytics — which screens
-and steps are used — go to PostHog. Both are identified by your account id
-only: no name, email, phone number, message text or location is sent to
-either.
+device and app version) is sent to Sentry. It is identified by your account id
+only: no name, email, phone number, message text or location is sent to it.
 
 ## 3. What we do not collect
 
@@ -191,8 +189,7 @@ third-party advertising.
   - Stripe — payments, saved cards, and Worker payouts;
   - Resend — receipt emails;
   - OpenStreetMap Nominatim — naming the neighbourhood for a location;
-  - Sentry — crash reports;
-  - PostHog — product analytics, without names or contact details.
+  - Sentry — crash reports.
 - Law enforcement or others where required by law, or where necessary to
   protect someone's safety.
 

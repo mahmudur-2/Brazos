@@ -40,9 +40,7 @@ test('the reliability signal is counted and honest', async () => {
   assert.match(detail, /posterStats\.cancelled > 0/, 'cancelled renders only when non-zero');
 });
 
-test('review ordering and the tip ledger stay as Phase 6 left them', async () => {
+test('review ordering stays as Phase 6 left it', async () => {
   const reviewAndTip = await read('screens/ReviewAndTipScreen.tsx');
   assert.match(reviewAndTip, /payment && !released/);
-  const adapter = await read('lib/adapters/payments.ts');
-  assert.match(adapter, /sandbox_tip_worker/);
 });

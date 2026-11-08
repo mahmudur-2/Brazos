@@ -9,7 +9,6 @@ import { TextField } from './TextField';
 import { alertAsync } from '../lib/dialog';
 import { invalidateJobs } from '../lib/queryClient';
 import { userMessage } from '../lib/errorMessage';
-import { trackIntent } from '../lib/observability/analytics';
 import {
   availabilityLine,
   chipsAvailable,
@@ -169,32 +168,6 @@ export function OfferComposer({
 
   const isBid = context.kind === 'bid';
 
-  // R7D — offer_compose_started / offer_compose_abandoned.
-  //
-  // ABANDONMENT FIRES ON UNMOUNT, SO AN APP KILLED MID-COMPOSE NEVER REPORTS
-  // IT. The number is a FLOOR, not the truth: at least this many people opened
-  // a composer and left without sending.
-  //
-  // One mount is one compose session. This component is rendered by
-  // SubmitBidScreen and CounterofferScreen, which mount once, and by
-  // JobDetailScreen's counter form, which mounts when the customer taps
-  // Counter and unmounts when they tap it again — a deliberate open and a
-  // deliberate close, not a keystroke. Nothing keys it on form state, so
-  // typing re-renders it and never remounts it.
-  const composeStartedAtRef = useRef(Date.now());
-  const offerSentRef = useRef(false);
-
-  useEffect(() => {
-    trackIntent({ name: 'offer_compose_started' });
-    return () => {
-      if (offerSentRef.current) return;
-      trackIntent({
-        name: 'offer_compose_abandoned',
-        secondsSpent: Math.round((Date.now() - composeStartedAtRef.current) / 1000),
-      });
-    };
-  }, []);
-
   const dayChoices = useMemo(() => upcomingStartDays(12), []);
   const longestLine = useMemo(
     () => longestAvailabilityLineLength(dayChoices.map((d) => d.label)),
@@ -272,9 +245,6 @@ export function OfferComposer({
       if (context.kind === 'bid') {
         const { data: offerId, error } = await createMarketplaceOffer({
           jobId: context.job.id,
-          // The job row this composer is bidding on is already in hand, so
-          // time-to-bid costs no read (lib/offers.ts NewMarketplaceOffer).
-          postedAt: context.job.created_at,
           amountCents,
           // The pitch plus at most ONE trailing availability line. With no
           // chips selected this is exactly message.trim(), as it always was.
@@ -294,9 +264,6 @@ export function OfferComposer({
           await alertAsync('Could not send bid', msg);
           return;
         }
-        // Sent — so leaving this composer is not an abandonment. Set before
-        // the callback, which navigates away and unmounts us.
-        offerSentRef.current = true;
         onSubmitted(offerId, amountCents);
       } else {
         const { data: newOfferId, error } = await counterOffer(context.offer.id, amountCents);
@@ -320,7 +287,6 @@ export function OfferComposer({
           );
           return;
         }
-        offerSentRef.current = true;
         onSubmitted(newOfferId, amountCents);
       }
     } finally {

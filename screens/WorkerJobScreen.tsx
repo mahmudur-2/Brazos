@@ -220,7 +220,7 @@ export function WorkerJobScreen() {
   // Idea 5's "Dana was told ✓" — the first name, as a person would say it.
   const clientFirstName = client?.full_name?.trim().split(/\s+/)[0] || 'Your customer';
 
-  // The job's sandbox ledger row: the hired worker is the payee, so RLS
+  // The job's ledger row: the hired worker is the payee, so RLS
   // grants this read, and the card below shows the honest §H.3 state — held
   // is held, released is released, never "paid" beyond the truth. Read
   // through job_payment_state() (phase51) so the 72h auto-release clock is
@@ -229,7 +229,7 @@ export function WorkerJobScreen() {
   const [payment, setPayment] = useState<Payment | null>(null);
   const [issueOpen, setIssueOpen] = useState(false);
   // 2026-09-28 (LUX-LIST-64 #63, audit M-14) — the stored payout state, read on
-  // the card path only (no RPC on the sandbox path), so an approved payment
+  // the card path only, so an approved payment
   // that is waiting on the worker's own setup says so. A failed read is null,
   // and null says nothing — the card is then today's.
   const [payouts, setPayouts] = useState<PayoutsStatus | null>(null);
@@ -600,23 +600,20 @@ export function WorkerJobScreen() {
             color={isDark ? colors.gold : colors.emerald}
           />
         </View>
-        {/* D16: sandbox keeps its wording verbatim; the card path says
-            the same money fact without the label. D23: a held row the
-            customer approved (release_requested_at set) is approved —
+        {/* D23: a held row the customer approved (release_requested_at set) is approved —
             the payout is on its way; MoneyText keeps the row's real
             status, and nothing here says released before it is. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
         <Text style={[styles.paymentEyebrow, isDark && styles.paymentEyebrowDark, isHeld(payment) && !isRefundQueued(payment) && !isReleaseRequested(payment) && !isReleased(payment) && styles.eyebrowGold]}>
           {/* C4: PAYMENT in every state; the caption under the take says which. */}
-          {paymentEyebrow(paymentsMode === 'sandbox')}
+          {paymentEyebrow()}
         </Text>
         {isReleased(payment) ? (
           <ReleasedTick paymentId={payment.id} releasedAt={payment.released_at} color={isDark ? colors.gold : colors.emerald} size={18} />
         ) : null}
         </View>
         {/* R6c (D7): the figure a worker reads as "yours" is the take —
-            amount_cents − platform_fee_cents through the one helper.
-            Sandbox rows carry a zero fee, so nothing changes there. */}
+            amount_cents − platform_fee_cents through the one helper. */}
         <MoneyText
           cents={workerTakeCents(payment)}
           state={payment.status}
@@ -633,7 +630,6 @@ export function WorkerJobScreen() {
             // A7: the disputed/awaiting fork comes from THE derivation
             // point; the money predicates stay payment vocabulary.
             const lifecycle = deriveJobLifecycle({ job, payment, hasOpenDispute: issueOpen });
-            const sandbox = paymentsMode === 'sandbox';
             // Final sweep: a cancelled job first — its row is the ledger's
             // cancellation shape (refund queued, or the late-cancel fee), and
             // none of the live sentences below may describe it.
@@ -642,20 +638,14 @@ export function WorkerJobScreen() {
                 return `This job was cancelled late. The cancellation fee is on its way to you; the rest goes back to ${clientName}.`;
               }
               if (isRefundQueued(payment) || payment.status === 'refunded' || payment.status === 'partially_refunded') {
-                return sandbox
-                  ? `This job was cancelled. ${clientName}’s payment goes back to them. Test mode — no real money.`
-                  : `This job was cancelled. ${clientName}’s payment goes back to them.`;
+                return `This job was cancelled. ${clientName}’s payment goes back to them.`;
               }
               return 'This job was cancelled. Nothing is held for it.';
             }
             if (isReleased(payment)) {
               return payment.release_reason === 'auto_approved'
-                ? sandbox
-                  ? 'Released automatically after 72 hours with no response from the customer. Test mode — no real money.'
-                  : 'Released automatically after 72 hours with no response from the customer.'
-                : sandbox
-                  ? `${clientName} approved the finished work and the funds were released. Test mode — no real money.`
-                  : `${clientName} approved the finished work and the payment was released.`;
+                ? 'Released automatically after 72 hours with no response from the customer.'
+                : `${clientName} approved the finished work and the payment was released.`;
             }
             if (lifecycle === 'disputed') {
               return `${clientName} reported an issue, which holds the funds while it’s open. Sort it out together in chat — release resumes when the report is withdrawn or resolved.`;
@@ -671,18 +661,12 @@ export function WorkerJobScreen() {
                 : `${clientName} approved the finished work. Your payout is on its way and shows as released when the transfer lands.`;
             }
             if (lifecycle === 'awaiting_approval') {
-              return sandbox
-                ? `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically. Test mode — no real money.`
-                : `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically.`;
+              return `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically.`;
             }
             if (isHeld(payment)) {
-              return sandbox
-                ? `${clientName} placed the funds in protection. They’re released only after the finished work is approved — test mode, no real money.`
-                : `${clientName} placed the funds in protection. They’re released only after the finished work is approved.`;
+              return `${clientName} placed the funds in protection. They’re released only after the finished work is approved.`;
             }
-            return sandbox
-              ? 'Test mode — no real money moves for this job.'
-              : 'The customer hasn’t paid yet. Nothing is held for this job.';
+            return 'The customer hasn’t paid yet. Nothing is held for this job.';
           })()}
         </Text>
         {/* #63 (M-14) — one tap to Payouts, where the setup is (it was three). */}
@@ -699,7 +683,7 @@ export function WorkerJobScreen() {
         {/* R6c (D7): the three-line breakdown, off the row's own
             columns, once the customer's charge has actually landed
             (held or later) — never on an unfunded row. Card path
-            only: the sandbox ledger carries no charge figure. */}
+            only. */}
         {paymentsMode === 'stripe' &&
         payment.charge_amount_cents != null &&
         ((isHeld(payment) && !isRefundQueued(payment)) || isReleased(payment)) ? (

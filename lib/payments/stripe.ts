@@ -32,7 +32,6 @@
 
 import { env } from '../../config/env';
 import { userMessage } from '../errorMessage';
-import { track } from '../observability/analytics';
 import {
   validatePayoutsOnboardingResponse,
   validatePayoutsStatusResponse,
@@ -215,28 +214,7 @@ export async function createPaymentSession(
     return { data: null, error: { message: userMessage(message) } };
   }
 
-  const session = validateCheckoutResponse(invoked.data);
-
-  // "The customer began", not "the customer paid": this fires once the payment
-  // intent exists and BEFORE the sheet is presented, so a dismissed sheet still
-  // counts as a checkout started — which is the whole point of measuring it.
-  // The funded/held half of the story is payment_held, and that one is the
-  // webhook's to tell (lib/observability/analytics.ts).
-  //
-  // Job checkout only. A tip runs through this same function (R6c) but is not
-  // a step in post -> bid -> accept -> fund; counting it here would inflate the
-  // funding step with money that was never funding, and the event carries no
-  // property that could tell the two apart.
-  if (tipAmountCents == null && !session.error && session.data) {
-    track({ name: 'checkout_started' });
-    // ...and the id is remembered so its RESULT can be counted from the same
-    // population. See jobCheckoutPaymentIds below: without this, the sibling
-    // event would count tip sheets that this one deliberately does not, and
-    // the pair would not divide.
-    jobCheckoutPaymentIds.add(session.data.paymentId);
-  }
-
-  return session;
+  return validateCheckoutResponse(invoked.data);
 }
 
 // ---------------------------------------------------------------------------
@@ -285,14 +263,7 @@ export async function beginPayoutsOnboarding(): Promise<{
     const { message } = extractInvokeError(invoked.error as InvokeErrorLike, body);
     return { data: null, error: { message: userMessage(message) } };
   }
-  const onboarding = validatePayoutsOnboardingResponse(invoked.data);
-
-  // Started = the client asked for the link and got one back. It says nothing
-  // about whether the worker went on to finish the hosted flow; that is
-  // connect_onboarding_completed, and only connect-status can answer it.
-  if (!onboarding.error && onboarding.data) track({ name: 'connect_onboarding_started' });
-
-  return onboarding;
+  return validatePayoutsOnboardingResponse(invoked.data);
 }
 
 /**
@@ -316,45 +287,12 @@ export async function refreshPayoutsStatus(): Promise<{
     const { message } = extractInvokeError(invoked.error as InvokeErrorLike, body);
     return { data: null, error: { message: userMessage(message) } };
   }
-  const refreshed = validatePayoutsStatusResponse(invoked.data);
-
-  // Completed = the on-demand refresh came back 'enabled'. Read off THIS call
-  // and not off a stored payouts_enabled flag: connect-status is the only thing
-  // that moves the stored state (R5b D3), so anywhere else would be reporting
-  // a state someone else had already recorded.
-  //
-  // KNOWN, and left as it is: a worker who taps refresh twice on an already
-  // enabled account emits this twice. Deduplicating would mean inventing
-  // client-side state that a fresh launch would forget anyway, so the count is
-  // "times a completed status was observed", not "workers onboarded".
-  if (!refreshed.error && refreshed.data === 'enabled') {
-    track({ name: 'connect_onboarding_completed' });
-  }
-
-  return refreshed;
+  return validatePayoutsStatusResponse(invoked.data);
 }
 
 export type SheetOutcome =
   | { outcome: 'completed' | 'dismissed'; error: null }
   | { outcome: 'failed'; error: { message: string } };
-
-/**
- * THE PAYMENT IDS THAT BELONG TO A JOB CHECKOUT RATHER THAN A TIP.
- *
- * `CheckoutSession` carries four strings from the server and none of them says
- * which kind of payment it is, so by the time the sheet resolves this module
- * can no longer tell a funding charge from a tip. `checkout_started` already
- * excludes tips (R7C: a tip is not a step in post -> bid -> accept -> fund),
- * and `checkout_result` has to exclude exactly the same ones or the two events
- * count different populations and their ratio is meaningless — the second
- * would report a success rate above 100% on a busy tipping day.
- *
- * An id is added when `checkout_started` fires and removed when its result is
- * read, so this holds at most the sessions whose sheets have not resolved yet.
- * Both callers create a fresh session per attempt and present it once, so a
- * retry gets a new id and its own started/result pair rather than being lost.
- */
-const jobCheckoutPaymentIds = new Set<string>();
 
 /**
  * 2026-09-30 (idea 20) — CONFIRM WITH THE SAVED CARD: create-payment, as the caller, with
@@ -447,34 +385,8 @@ export async function presentCardSetupSheet(session: {
  * `dismissed` is the SDK's Canceled code and is never shown as an error.
  */
 export async function presentCheckoutSheet(session: CheckoutSession): Promise<SheetOutcome> {
-  // THE OTHER HALF OF checkout_started, and the only place the app learns why
-  // a funding attempt ended. `dismissed` is the customer closing the sheet and
-  // `failed` is everything else — a card refused, the SDK unavailable, the
-  // sheet never shown. Without this event those two are the same absence: a
-  // checkout_started with no payment_held after it, and no way to tell someone
-  // who changed their mind from someone whose card would not go through.
-  //
-  // Emitted through `track()` and NOT through `trackIntent()`. A money outcome
-  // has a payments row behind it and can be reconciled against the database,
-  // which is the one distinction the two emitters exist to preserve.
-  const isJobCheckout = jobCheckoutPaymentIds.delete(session.paymentId);
-  const report = (result: SheetOutcome): SheetOutcome => {
-    if (isJobCheckout) {
-      track({
-        name: 'checkout_result',
-        outcome:
-          result.outcome === 'completed'
-            ? 'succeeded'
-            : result.outcome === 'dismissed'
-              ? 'cancelled'
-              : 'failed',
-      });
-    }
-    return result;
-  };
-
   if (!stripe || !(await ensureInitialised())) {
-    return report({ outcome: 'failed', error: { message: STRIPE_UNAVAILABLE_MESSAGE } });
+    return { outcome: 'failed', error: { message: STRIPE_UNAVAILABLE_MESSAGE } };
   }
   try {
     const initialisedSheet = await stripe.initPaymentSheet({
@@ -486,23 +398,19 @@ export async function presentCheckoutSheet(session: CheckoutSession): Promise<Sh
     });
     if (initialisedSheet.error) {
       const classified = classifySheetError(initialisedSheet.error);
-      return report(
-        classified.outcome === 'dismissed'
-          ? { outcome: 'dismissed', error: null }
-          : { outcome: 'failed', error: { message: userMessage(classified.message) } }
-      );
+      return classified.outcome === 'dismissed'
+        ? { outcome: 'dismissed', error: null }
+        : { outcome: 'failed', error: { message: userMessage(classified.message) } };
     }
     const presented = await stripe.presentPaymentSheet();
     if (presented.error) {
       const classified = classifySheetError(presented.error);
-      return report(
-        classified.outcome === 'dismissed'
-          ? { outcome: 'dismissed', error: null }
-          : { outcome: 'failed', error: { message: userMessage(classified.message) } }
-      );
+      return classified.outcome === 'dismissed'
+        ? { outcome: 'dismissed', error: null }
+        : { outcome: 'failed', error: { message: userMessage(classified.message) } };
     }
-    return report({ outcome: 'completed', error: null });
+    return { outcome: 'completed', error: null };
   } catch {
-    return report({ outcome: 'failed', error: { message: SHEET_UNSHOWN_MESSAGE } });
+    return { outcome: 'failed', error: { message: SHEET_UNSHOWN_MESSAGE } };
   }
 }

@@ -75,7 +75,6 @@ import {
   type RelationState,
 } from '../lib/moderation';
 import { ReportDialog } from '../components/ReportDialog';
-import { permissionOutcome, trackIntent } from '../lib/observability/analytics';
 import { fetchSavedWorkerIds, saveWorker, unsaveWorker } from '../lib/savedWorkers';
 import { shareProfileLink } from '../lib/sharing';
 import { useMode } from '../modes';
@@ -1040,11 +1039,6 @@ export function ChatScreen() {
 
   async function pickFromCamera() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
-    trackIntent({
-      name: 'permission_result',
-      kind: 'camera',
-      outcome: permissionOutcome(permission.status, permission.canAskAgain),
-    });
     if (!permission.granted) {
       // B11: never a dead end — the prompt offers Settings.
       await askOpenSettings('camera');

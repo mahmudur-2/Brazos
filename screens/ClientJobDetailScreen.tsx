@@ -168,8 +168,8 @@ export function ClientJobDetailScreen() {
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [pendingAccept, setPendingAccept] = useState<OfferWithWorker | null>(null);
   const [worker, setWorker] = useState<Profile | null>(null);
-  // The job's sandbox ledger row (phase50). Loaded on focus so returning from
-  // Checkout immediately reflects authorized/held truthfully.
+  // The job's ledger row. Loaded on focus so returning from Checkout
+  // immediately reflects its state truthfully.
   const [payment, setPayment] = useState<Payment | null>(null);
   // The open issue report, if any (phase51) — it freezes release and reroutes
   // the completed-job section to the approval surface.
@@ -706,7 +706,6 @@ export function ClientJobDetailScreen() {
   // that is over.
   const cancelledMoneyNote = (() => {
     if (!payment) return null;
-    if (paymentsMode === 'sandbox') return 'Test mode — no real money moves.';
     if (isCancellationFeeKept(payment)) {
       return `The cancellation fee goes to ${workerFirstName}; the rest goes back to your card — usually within 5–10 business days.`;
     }
@@ -1126,7 +1125,7 @@ export function ClientJobDetailScreen() {
                       <Ionicons name="shield-outline" size={22} color={colors.mark} />
                     </View>
                     <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
-                      {paymentEyebrow(paymentsMode === 'sandbox')}
+                      {paymentEyebrow()}
                     </Text>
                     <MoneyText
                       cents={customerChargeCents(payment)}
@@ -1284,7 +1283,7 @@ export function ClientJobDetailScreen() {
                 </View>
                 {/* C4: PAYMENT in every state; the caption carries "Held in protection". */}
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark, styles.eyebrowGold]}>
-                  {paymentEyebrow(paymentsMode === 'sandbox')}
+                  {paymentEyebrow()}
                 </Text>
                 {/* Tier A (C2, D-4): the customer's held figure is the row's
                     charge_amount_cents — the agreed price is said beside the
@@ -1296,11 +1295,6 @@ export function ClientJobDetailScreen() {
                 <Text style={styles.paymentNote}>
                   Charged to your card · {formatBudget(job.final_amount_cents ?? job.budget_cents)} agreed price
                 </Text>
-                {/* C8: the caption already says "Held in protection — released when you
-                    approve"; the sandbox keeps only its test-mode line. */}
-                {paymentsMode === 'sandbox' ? (
-                  <Text style={styles.paymentNote}>Test mode — no real money moves.</Text>
-                ) : null}
               </Card>
               </HeldPulse>
             ) : payment && fundingWindowClosed ? (
@@ -1311,7 +1305,7 @@ export function ClientJobDetailScreen() {
                 <View style={styles.paymentShield}>
                   <Ionicons name="shield-outline" size={22} color={colors.mark} />
                 </View>
-                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>{paymentEyebrow(paymentsMode === 'sandbox')}</Text>
+                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>{paymentEyebrow()}</Text>
                 <MoneyText cents={customerChargeCents(payment)} state={payment.status} />
                 <Text style={styles.paymentNote}>
                   Your payment didn’t go through in time. Nothing was charged.
@@ -1330,7 +1324,7 @@ export function ClientJobDetailScreen() {
                   <Ionicons name="shield-outline" size={22} color={colors.mark} />
                 </View>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
-                  {paymentEyebrow(paymentsMode === 'sandbox')}
+                  {paymentEyebrow()}
                 </Text>
                 <MoneyText
                   cents={customerChargeCents(payment)}
@@ -1342,7 +1336,7 @@ export function ClientJobDetailScreen() {
                 {/* A10 (2026-10-03): "on its way" says what it waits for. The transfer lands only
                     once the worker's payout account is enabled; until then the row stays here
                     with release requested, and the worker's own job screen nudges them to set
-                    it up. Card path only — the sandbox releases on approval. */}
+                    it up. Card path only. */}
                 {stripe && releaseRequested ? (
                   <Text style={styles.paymentNote}>
                     The payment reaches {workerFirstName} once their payout account is ready — it
@@ -1577,7 +1571,6 @@ export function ClientJobDetailScreen() {
                 totalLabel: formatBudget(acceptQuote.total_cents),
               }
             : null,
-          sandbox: paymentsMode === 'sandbox',
           savedCardLabel: stripe && savedCard ? cardLabel(savedCard) : null,
         })}
         // #64 (M-17): the confirmation repeats the button's verb and noun; the
