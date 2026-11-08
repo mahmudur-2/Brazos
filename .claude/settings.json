@@ -1,7 +1,4 @@
 {
-  "enabledPlugins": {
-    "expo@claude-plugins-official": true
-  },
   "permissions": {
     "deny": [
       "Bash(git push --force:*)",
@@ -12,29 +9,16 @@
       "PowerShell(git push --force-with-lease:*)",
       "Bash(git push --delete:*)",
       "PowerShell(git push --delete:*)",
-      "Bash(git push -d:*)",
-      "PowerShell(git push -d:*)",
       "Bash(git push --mirror:*)",
       "PowerShell(git push --mirror:*)",
-      "Bash(git push --all:*)",
-      "PowerShell(git push --all:*)",
-      "Bash(git push --tags:*)",
-      "PowerShell(git push --tags:*)",
-      "Bash(git push --prune:*)",
-      "PowerShell(git push --prune:*)",
       "Bash(git reset --hard:*)",
       "PowerShell(git reset --hard:*)",
       "Bash(git clean:*)",
       "PowerShell(git clean:*)",
-      "Bash(git stash:*)",
-      "PowerShell(git stash:*)",
-      "Edit(/design-reference/**)",
-      "Edit(/public/**)",
-      "Edit(/hosting/**)",
-      "Edit(/dist/**)",
-      "Edit(/WEB_DEPLOYMENT.md)",
-      "Edit(**/*.web.ts)",
-      "Edit(**/*.web.tsx)",
+      "Bash(git filter-branch:*)",
+      "PowerShell(git filter-branch:*)",
+      "Bash(*--amend*)",
+      "PowerShell(*--amend*)",
       "Bash(*avkighsiufeefyycbebf*)",
       "PowerShell(*avkighsiufeefyycbebf*)",
       "Read(./start.ps1)",
@@ -43,7 +27,7 @@
       "Edit(./start.ps1)",
       "Edit(./.env)",
       "Edit(./.env.*)",
-      "Edit(/.claude/**)",
+      "Edit(./.claude/**)",
       "Bash(psql:*)",
       "PowerShell(psql:*)",
       "Bash(pg_dump:*)",
@@ -57,8 +41,6 @@
       "PowerShell(*--project-ref*)",
       "Bash(*supabase login*)",
       "PowerShell(*supabase login*)",
-      "Bash(*supabase logout*)",
-      "PowerShell(*supabase logout*)",
       "Bash(*supabase link*)",
       "PowerShell(*supabase link*)",
       "Bash(*supabase db push*)",
@@ -73,107 +55,12 @@
       "PowerShell(*supabase migration repair*)",
       "Bash(*supabase secrets*)",
       "PowerShell(*supabase secrets*)",
-      "Bash(*supabase projects*)",
-      "PowerShell(*supabase projects*)",
-      "Bash(*supabase orgs*)",
-      "PowerShell(*supabase orgs*)",
-      "Bash(*supabase branches*)",
-      "PowerShell(*supabase branches*)",
       "Bash(*supabase functions deploy*)",
-      "PowerShell(*supabase functions deploy*)",
-      "Bash(claude)",
-      "Bash(claude *)",
-      "Bash(claude.exe)",
-      "Bash(claude.exe *)",
-      "PowerShell(claude)",
-      "PowerShell(claude *)",
-      "PowerShell(claude.exe *)",
-      "PowerShell(Invoke-Expression *)",
-      "Bash(*-EncodedCommand*)",
-      "PowerShell(*-EncodedCommand*)",
-      "Bash(*cmd /c*)",
-      "Bash(*cmd /k*)",
-      "Bash(node -e *)",
-      "Bash(node --eval *)",
-      "Bash(node -p *)",
-      "Bash(python -c *)",
-      "PowerShell(node -e *)",
-      "Bash(*--amend*)",
-      "PowerShell(*--amend*)",
-      "Bash(git add .)",
-      "Bash(git add -A)",
-      "Bash(git add -A *)",
-      "Bash(git add -u)",
-      "Bash(git add -u *)",
-      "Bash(git add --all*)",
-      "Bash(git pull:*)",
-      "PowerShell(git pull:*)",
-      "Bash(git fetch:*)",
-      "PowerShell(git fetch:*)",
-      "Bash(git checkout:*)",
-      "PowerShell(git checkout:*)",
-      "Bash(git switch:*)",
-      "PowerShell(git switch:*)",
-      "Bash(git restore:*)",
-      "PowerShell(git restore:*)",
-      "Bash(git rebase:*)",
-      "PowerShell(git rebase:*)",
-      "Bash(git merge:*)",
-      "PowerShell(git merge:*)",
-      "Bash(git cherry-pick:*)",
-      "PowerShell(git cherry-pick:*)",
-      "Bash(git revert:*)",
-      "PowerShell(git revert:*)",
-      "Bash(git tag:*)",
-      "PowerShell(git tag:*)",
-      "Bash(git worktree:*)",
-      "PowerShell(git worktree:*)",
-      "Bash(git submodule:*)",
-      "PowerShell(git submodule:*)",
-      "Bash(git reset:*)",
-      "PowerShell(git reset:*)",
-      "Bash(git filter-branch:*)",
-      "PowerShell(git filter-branch:*)"
-    ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash|PowerShell|Edit|Write|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell.exe",
-            "args": [
-              "-NoProfile",
-              "-ExecutionPolicy",
-              "Bypass",
-              "-File",
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard.ps1"
-            ]
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell.exe",
-            "args": [
-              "-NoProfile",
-              "-ExecutionPolicy",
-              "Bypass",
-              "-File",
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/session-context.ps1"
-            ]
-          }
-        ]
-      }
+      "PowerShell(*supabase functions deploy*)"
     ]
   },
   "claudeMdExcludes": [
-    "**/.shots/**"
+    "**/.shots/**",
+    "**/_archive/**"
   ]
 }
