@@ -5,33 +5,39 @@ HEAD and tree; older sections of this file are in git history.
 
 ## Now
 
-Lean v1 is on `mainexpo` (branch `lean-v1` merged, pushed 2026-11-08). Read `docs/lean/SHIP-REPORT.md`
-first: numbers, test-run links, build ids, the owner's seven "For you" steps, and "Decided for you".
-- Gates on HEAD: `npm run verify` 1241 pass; `npm run db:test` 1782 pass (after `npm run db:reset`);
-  CI, pgTAP and TestSprite (9/9 against staging) green on GitHub.
-- EAS builds finished: e2e-test simulator `68b4d69c…` and TestFlight build 9 `bfb47ced…` (store,
-  staging backend, Stripe test keys). Build 9 is NOT uploaded to TestFlight: owner command in the report.
-- Staging has NOT received `20261108000000_lean_v1.sql` / `20261108010000_lean_v1_grants.sql`: the
-  pipeline halts on destructive files until the owner re-runs it with `allow_destructive` (backup first).
-- e2e iOS workflow (`.github/workflows/e2e-ios.yml`, manual dispatch only): account A passes 01-auth end
-  to end; account B is blocked (below). Flows 02-10 have not run yet.
+Lean v1 is on `mainexpo`. Read `docs/lean/SHIP-REPORT.md` first: numbers, every test-run link, build
+ids, the two App Store Connect records, the owner's remaining steps and "Decided for you".
+- Gates on HEAD (9b0064f): `npm run verify` 1243 pass; CI, pgTAP, TestSprite (9/9 against the
+  MIGRATED staging, run 42522047765) green.
+- Staging has the lean migration and the 9 functions (pipeline run 42521851967, 2026-11-08). Both
+  test phones (`13473208153`, `13473208154`, code `123456`) are Supabase test numbers.
+- TestFlight: build 9 (`bfb47ced…`) is on record "Brazos MVP" (Apple ID 6832193439, bundle
+  `app.brazos.mobile`) and on the owner's phone. `eas.json` pins that record in both submit profiles
+  (`tests/easProfiles.test.mjs`). "BRAZOS Dev" (6832350967, `.dev`) is the owner's old record: never submit there.
+- Found and fixed 2026-11-08 (9b0064f): `components/SealTransition.tsx` could strand Publish with the
+  ring turning over a job that WAS saved (a fast answer let the intro animation stop the saved sequence).
+  Build 9 still has it. New builds on 9b0064f: simulator `bd7ca0f1…` (e2e-test) and store build 10
+  `23bea9d2…` (testflight); both were queued at 21:51 UTC, not yet finished when this was written.
+- e2e iOS (`.github/workflows/e2e-ios.yml`, manual dispatch, `build_id` input): runs 1-6 on the old
+  simulator build; 01-auth green on both accounts, 02 red at Publish (the Seal bug). Maestro stops at the
+  first red flow, so 03-10 have never run. Run 7 on `bd7ca0f1…` was set to start when that build finishes.
 
 ## Blocked
 
-- Phone `13473208154` must be added as a Supabase test number (code `123456`) on staging before the
-  e2e flows can sign account B in. Owner step 2 in the report.
+- Nothing for the chat. Owner: send build 10 to TestFlight once it finishes (SHIP-REPORT step 4).
 
 ## Next
 
-1. Owner steps 1-4 from the report (staging migration with backup, second test phone, TestFlight
-   upload, e2e run 3).
-2. After e2e run 3: fix red flows (flow edits need no build; an app fix needs a new `e2e-test` build and,
-   if it ships, a new `testflight` build via `npm run release:testflight`).
+1. Read run 7's result; fix red flows (a flow edit needs no build; an app fix needs a new `e2e-test`
+   build and a new `testflight` build: plain `npx eas-cli@latest build --platform ios --profile <p>`,
+   never `release:testflight`, which auto-submits; store submits are the owner's).
+2. Keep SHIP-REPORT's run table and "For you" current after each run.
 3. Backlog: `docs/BACKLOG.md` ("Security (from the lean verdict)" first).
 
 ## Revert
 
 - The whole run: `git checkout -b restore pre-lean-2026-11` (tag before any change).
-- One slice: `git revert <hash>` (commits `lean D1` … `lean H2b` on `mainexpo`).
-- Database: a corrective migration; rows in dropped tables do not return. Staging is still unmigrated.
+- One slice: `git revert <hash>` (commits `lean D1` … `lean F6` on `mainexpo`).
+- Database: a corrective migration; rows in the dropped practice-money tables do not return (staging had
+  no backup: Pro-only). Production was never touched.
 - Moved files: `_archive/2026-11-lean/` (git-ignored) with `MOVED.txt`; the lean working docs are there too.
