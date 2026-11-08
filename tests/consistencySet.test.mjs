@@ -115,6 +115,15 @@ test('[static] M-31 — one way to close a sheet: the handle, the title, one wor
   assert.match(sheet, /dismissWord = 'Close',/, 'closing only dismisses unless a sheet says Done');
   assert.doesNotMatch(stripComments(read('components/ActionSheet.tsx')), /accessibilityLabel="Cancel"/, 'no bottom Cancel row');
   assert.doesNotMatch(stripComments(read('components/ServicePickerSheet.tsx')), /name="close"/, 'no X');
+  // E2E5 / e2e run 7 (2026-11-08): the tap-absorbing Pressable must not be an accessible container,
+  // or the header and every service row fold into one element.
+  for (const file of ['components/ActionSheet.tsx', 'components/ServicePickerSheet.tsx']) {
+    assert.match(
+      stripComments(read(file)).replace(/\s+/g, ' '),
+      /<Pressable[^>]*accessible=\{false\}[^>]*onPress=\{\(\) => \{\}\}/,
+      `${file}: the absorber is accessible={false}`
+    );
+  }
   const header = stripComments(read('ui/primitives/SheetHeader.tsx'));
   assert.match(header, /export type SheetDismissWord = 'Done' \| 'Close';/);
   assert.match(header, /accessibilityLabel=\{dismissWord\}/);

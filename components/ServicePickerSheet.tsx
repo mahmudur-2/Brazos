@@ -90,7 +90,10 @@ export function ServicePickerSheet({
         <SheetCard visible={visible} onClosed={presence.onClosed}>
         <Pressable
           style={[styles.sheet, { maxHeight, paddingBottom: insets.bottom + spacing.sm }]}
-          // Absorbs taps so a press inside the sheet can't reach the backdrop.
+          // Absorbs taps so a press inside the sheet can't reach the backdrop. accessible={false}
+          // as in ActionSheet (E2E5): an accessible container folds the header and every row into one
+          // element, so VoiceOver (and e2e run 7, 2026-11-08) could not reach a single service.
+          accessible={false}
           onPress={() => {}}
         >
           {/* #64 (M-31) — the one sheet header: "Close" on the right, in place
