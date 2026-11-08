@@ -20,7 +20,7 @@ appId: app.brazos.mobile.preview
 # ─── Earnings & Payouts ──────────────────────────────────────────────────
 - tapOn: "Profile"
 - extendedWaitUntil:
-    visible: "You.re in Worker mode"
+    visible: "Switch to Customer"
     timeout: 30000
 - scrollUntilVisible:
     element:

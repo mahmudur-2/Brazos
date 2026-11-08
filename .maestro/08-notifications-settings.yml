@@ -106,7 +106,7 @@ appId: app.brazos.mobile.preview
 # ─── Profile: appearance, Legal, details, Account & safety ───────────────
 - tapOn: "Profile"
 - extendedWaitUntil:
-    visible: "You.re in Customer mode"
+    visible: "Switch to Worker"
     timeout: 30000
 - scrollUntilVisible:
     element:

@@ -1,6 +1,7 @@
 appId: app.brazos.mobile.preview
 # Shared: leaves the signed-in account in Customer mode (Profile's mode row, components/ModeSwitchRow.tsx).
 # Proves the switch confirm ("Switch") swaps the tree to customer Home.
+# The row's own label is "Switch to Worker" (it hides the "You're in … mode" title), so that label is the mode proof.
 ---
 - extendedWaitUntil:
     visible: 'What do you need done\?|Search for jobs or areas'
@@ -21,11 +22,11 @@ appId: app.brazos.mobile.preview
           timeout: 15000
       - tapOn: "Switch"
       - extendedWaitUntil:
-          visible: 'What do you need done\?|You.re in Customer mode'
+          visible: 'What do you need done\?|Switch to Worker'
           timeout: 60000
       - runFlow:
           when:
-            visible: "You.re in Customer mode"
+            visible: "Switch to Worker"
           commands:
             - tapOn: "Home"
 - extendedWaitUntil:
