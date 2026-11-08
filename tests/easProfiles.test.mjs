@@ -1,4 +1,4 @@
-// lean E4, docs/lean/SECURITY-VERDICT.md B4: every build profile pins its phone-auth and payments
+// lean E4, the lean security verdict B4 (archived 2026-11-08): every build profile pins its phone-auth and payments
 // modes in eas.json, so a build never inherits them from whatever the EAS environment holds. Only
 // development may run the mock phone provider. Secrets (Supabase URL and key, Stripe key) stay in
 // the EAS environment and never appear here.

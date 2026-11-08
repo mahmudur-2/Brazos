@@ -1,6 +1,6 @@
 // The service-role gate for the functions the database wakes (send-push, send-receipts,
 // process-settlements). verify_jwt alone would admit any signed-in user's token, so this check is
-// what keeps ordinary users out. Constant-time: docs/lean/SECURITY-VERDICT.md B3.
+// what keeps ordinary users out. Constant-time: the lean security verdict B3 (archived: _archive/2026-11-lean/SECURITY-VERDICT.md).
 import { timingSafeEqual } from 'https://deno.land/std@0.224.0/crypto/timing_safe_equal.ts';
 
 const encoder = new TextEncoder();

@@ -1,4 +1,4 @@
-// lean E4, docs/lean/SECURITY-VERDICT.md B3: the three functions the database wakes check the
+// lean E4, the lean security verdict B3 (archived 2026-11-08): the three functions the database wakes check the
 // service key through one constant-time gate, supabase/functions/_shared/serviceAuth.ts. Deno cannot
 // run here, so the gate's own body is executed under node with its one URL import swapped for
 // node's crypto.timingSafeEqual, which THROWS on unequal lengths: a pass also proves the helper never
