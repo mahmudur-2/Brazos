@@ -211,6 +211,14 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 - assertVisible: '.*Not published yet.*${output.marker} side.*'
 - takeScreenshot: 02-draft-on-home
+# Run 11: earlier runs' jobs pushed the draft card under the tab bar, and its centre tap hit the + tab
+# (the create sheet opened). Centre the card first; Home's list grows with every run until flow 10 passes.
+- scrollUntilVisible:
+    element:
+      text: '.*Not published yet.*'
+    direction: DOWN
+    centerElement: true
+    timeout: 20000
 - tapOn: '.*Not published yet.*'
 # The draft reopens on the step it was saved at; "Need it today" is not part of a draft.
 - extendedWaitUntil:
