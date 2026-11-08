@@ -1,0 +1,143 @@
+name: e2e iOS
+
+# The Maestro flows in .maestro/ on an iOS simulator, on a free GitHub macOS
+# runner. The app binary is the latest finished EAS `e2e-test` simulator build
+# (or the one named by build_id). This workflow never starts an EAS build:
+# builds are metered quota, and one per push would be unbounded.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        description: EAS build id to test (empty = latest finished e2e-test build)
+        type: string
+        required: false
+  push:
+    branches: [mainexpo]
+    paths:
+      - '.maestro/**'
+      - '.github/workflows/e2e-ios.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-ios
+  cancel-in-progress: true
+
+jobs:
+  maestro:
+    name: Maestro flows on the iOS simulator
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      # Third-party actions are pinned to a full commit SHA, as in ci.yml.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # eas-cli reads the project id from app.config.ts, which needs the deps.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download the simulator build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          # Passed through env, never spliced into the script (injection).
+          BUILD_ID: ${{ inputs.build_id }}
+        run: |
+          meta="$RUNNER_TEMP/build.json"
+          if [ -n "$BUILD_ID" ]; then
+            npx --yes eas-cli@latest build:view "$BUILD_ID" --json > "$meta"
+          else
+            npx --yes eas-cli@latest build:list --platform ios --profile e2e-test --status finished --limit 1 --json --non-interactive > "$meta"
+          fi
+          # build:list prints an array, build:view one object.
+          url=$(node -e '
+            const b = [].concat(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")))[0];
+            const url = b && b.artifacts && b.artifacts.applicationArchiveUrl;
+            if (!b || b.status !== "FINISHED" || !b.isForIosSimulator || !url) {
+              throw new Error("no finished iOS simulator build with an app archive");
+            }
+            console.error(`build ${b.id} (${b.buildProfile}, ${b.gitCommitHash})`);
+            console.log(url);
+          ' "$meta")
+          archive="$RUNNER_TEMP/app-archive"
+          dir="$RUNNER_TEMP/e2e-app"
+          rm -rf "$dir" && mkdir "$dir"
+          curl -fsSL "$url" -o "$archive"
+          # EAS simulator builds ship as .tar.gz; accept .zip too.
+          if unzip -tq "$archive" > /dev/null 2>&1; then
+            unzip -q "$archive" -d "$dir"
+          else
+            tar -xzf "$archive" -C "$dir"
+          fi
+          app=$(find "$dir" -maxdepth 3 -type d -name '*.app' -print -quit)
+          [ -n "$app" ] || { echo "no .app in the build archive"; exit 1; }
+          echo "APP_PATH=$app" >> "$GITHUB_ENV"
+
+      - name: Boot an iPhone simulator and install the app
+        run: |
+          # Prefer an "iPhone 16", else any iPhone; newest iOS runtime first.
+          udid=$(xcrun simctl list devices available --json | node -e '
+            const devices = JSON.parse(require("fs").readFileSync(0, "utf8")).devices;
+            const version = (key) => (key.match(/iOS-([\d-]+)$/) || [, "0"])[1].split("-").map(Number);
+            const newer = (a, b) => { const x = version(a), y = version(b); for (let i = 0; i < 3; i++) if ((y[i] || 0) !== (x[i] || 0)) return (y[i] || 0) - (x[i] || 0); return 0; };
+            const phones = Object.keys(devices).filter((k) => /iOS-/.test(k)).sort(newer)
+              .flatMap((k) => devices[k].filter((d) => d.isAvailable !== false && /^iPhone/.test(d.name)));
+            const pick = phones.find((d) => d.name === "iPhone 16") || phones[0];
+            if (!pick) throw new Error("no available iPhone simulator");
+            console.error(`simulator ${pick.name} ${pick.udid}`);
+            console.log(pick.udid);
+          ')
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl install booted "$APP_PATH"
+
+      - name: Install Maestro
+        env:
+          MAESTRO_VERSION: 2.12.1
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+          # The installer exits 0 on a corrupt download; this call does not.
+          "$HOME/.maestro/bin/maestro" --version
+
+      - name: Run the Maestro flows
+        env:
+          MAESTRO_E2E_PHONE: ${{ secrets.MAESTRO_E2E_PHONE }}
+          MAESTRO_E2E_OTP: ${{ secrets.MAESTRO_E2E_OTP }}
+          MAESTRO_E2E_PHONE_2: ${{ secrets.MAESTRO_E2E_PHONE_2 }}
+          MAESTRO_E2E_OTP_2: ${{ secrets.MAESTRO_E2E_OTP_2 }}
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: 120000
+          MAESTRO_CLI_NO_ANALYTICS: 1
+        run: |
+          xcrun simctl io booted recordVideo --codec=h264 --force e2e.mp4 &
+          recorder=$!
+          status=0
+          maestro test .maestro/ --format junit --output e2e-junit.xml --debug-output e2e-debug || status=$?
+          # SIGINT lets simctl finish the mp4; the flows' exit code is kept.
+          kill -INT "$recorder"
+          wait "$recorder" || true
+          exit "$status"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e2e-ios
+          path: |
+            e2e-junit.xml
+            e2e-debug/
+            e2e.mp4
+          retention-days: 14
+
+      - name: Shut the simulator down
+        if: always()
+        run: xcrun simctl shutdown all
