@@ -5,40 +5,33 @@ HEAD and tree; older sections of this file are in git history.
 
 ## Now
 
-Lean v1 run on branch `lean-v1` (plan: `docs/LEAN-SHIP-PLAN.md`, working notes: `docs/lean/`).
-Cut-down slices done, one commit each:
-- D1 `d65e0b4`: design studio and dead UI removed.
-- D2 `d19519e`: web/PWA surface and Android config removed.
-- D3a `1ffee33`: voice, documents, translation, read ticks, reactions, chat mic removed.
-- D3b `0336c73`: live location sharing and Track worker removed.
-- D3c `2227d62`: inbox states, feature-flag table, price guidance removed.
-- D4 `96f83f6`: sandbox money path, PostHog and i18n removed.
-- D5 `36d9415`: saved workers, portfolio, checklist, live card, semantic search, search mic removed.
-- D6 `065fe9d`: cut tables, functions, triggers and edge functions dropped (28 tables, 126 functions,
-  9 edge functions); auth.users trigger and push schedule added.
-- D7 `dfcd3ec`: one-off scripts, dev-tools, old EAS workflows and phase SQL archived.
-- D8 (the commit that rewrote this file): 570 docs folded into seven, mockups and unused assets
-  archived, `CLAUDE.md`, `README.md` and this file rewritten.
-
-Still to come: D9 dependency sweep, then Phase E security, F Maestro flows, G TestFlight, H merge to
-`mainexpo`. `npm run verify` is green at every slice. Everything moved is in the git-ignored
-`_archive/2026-11-lean/` with a `MOVED.txt`.
+Lean v1 is on `mainexpo` (branch `lean-v1` merged, pushed 2026-11-08). Read `docs/lean/SHIP-REPORT.md`
+first: numbers, test-run links, build ids, the owner's seven "For you" steps, and "Decided for you".
+- Gates on HEAD: `npm run verify` 1241 pass; `npm run db:test` 1782 pass (after `npm run db:reset`);
+  CI, pgTAP and TestSprite (9/9 against staging) green on GitHub.
+- EAS builds finished: e2e-test simulator `68b4d69c…` and TestFlight build 9 `bfb47ced…` (store,
+  staging backend, Stripe test keys). Build 9 is NOT uploaded to TestFlight: owner command in the report.
+- Staging has NOT received `20261108000000_lean_v1.sql` / `20261108010000_lean_v1_grants.sql`: the
+  pipeline halts on destructive files until the owner re-runs it with `allow_destructive` (backup first).
+- e2e iOS workflow (`.github/workflows/e2e-ios.yml`, manual dispatch only): account A passes 01-auth end
+  to end; account B is blocked (below). Flows 02-10 have not run yet.
 
 ## Blocked
 
-None.
+- Phone `13473208154` must be added as a Supabase test number (code `123456`) on staging before the
+  e2e flows can sign account B in. Owner step 2 in the report.
 
 ## Next
 
-D9: remove `@shopify/flash-list`, `@tanstack/query-async-storage-persister`,
-`@tanstack/react-query-persist-client`, `expo-font` (and its plugin line in `app.config.ts`),
-`expo-asset`, `expo-linking`; then `npm install`, `npx expo-doctor`, `npm run verify`, and a Metro
-bundle proof (`npx expo export --platform ios --output-dir <scratch>`).
+1. Owner steps 1-4 from the report (staging migration with backup, second test phone, TestFlight
+   upload, e2e run 3).
+2. After e2e run 3: fix red flows (flow edits need no build; an app fix needs a new `e2e-test` build and,
+   if it ships, a new `testflight` build via `npm run release:testflight`).
+3. Backlog: `docs/BACKLOG.md` ("Security (from the lean verdict)" first).
 
 ## Revert
 
-- The whole run: `git checkout pre-lean-2026-11` (tag, before the run).
-- One slice: `git revert <hash>` from the list in Now, newest first.
-- Database: a corrective migration; rows in dropped tables do not return. Staging has not been
-  migrated yet (`20261108000000_lean_v1.sql` waits for the owner's click, backup first).
-- Moved files: copy back from `_archive/2026-11-lean/` using `MOVED.txt`.
+- The whole run: `git checkout -b restore pre-lean-2026-11` (tag before any change).
+- One slice: `git revert <hash>` (commits `lean D1` … `lean H2b` on `mainexpo`).
+- Database: a corrective migration; rows in dropped tables do not return. Staging is still unmigrated.
+- Moved files: `_archive/2026-11-lean/` (git-ignored) with `MOVED.txt`; the lean working docs are there too.
