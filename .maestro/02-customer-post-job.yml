@@ -286,7 +286,8 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 - assertVisible: "Moving"
 - takeScreenshot: 02-all-services-pick
-- tapOn: "Back"
+# The wizard's back pill is "Back to Home" (components/ScreenHeader.tsx); run 8 missed a bare "Back".
+- tapOn: 'Back( to .*)?'
 - extendedWaitUntil:
     visible: 'What do you need done\?'
     timeout: 30000
