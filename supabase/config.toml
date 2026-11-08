@@ -399,18 +399,14 @@ deno_version = 2
 # executes; it defaults to ON, and a request it rejects gets a 401 without the
 # function's code ever running.
 #
-# Only functions that need a NON-DEFAULT answer are listed. send-push and
-# worker-search have no entry and work over the default, so
+# Only functions that need a NON-DEFAULT answer are listed. send-push has no
+# entry and works over the default, so
 # process-settlements has none either — it is woken by pg_cron through
 # net.http_post carrying the service-role key as a Bearer token, and its own
 # first statement compares that token to the service-role key regardless.
 # send-receipts (idea 8, 2026-09-30) is the same shape: woken by pg_cron through
 # drain_receipts() with the service-role key, first statement the same comparison,
-# so it too has no entry here. send-live-cards (idea 9, 2026-09-30) is that shape
-# again, woken through drain_live_cards(), and has none either.
-# translate is listed only to be DISABLED (`enabled = false`, at the end of
-# this block): drafted, deliberately never deployed — docs/SCOPE.md,
-# TRANSLATION is DARK.
+# so it too has no entry here.
 # ---------------------------------------------------------------------------
 [functions.stripe-webhook]
 # THE PROVIDER SENDS NO SUPABASE JWT. Without this line the platform answers
@@ -461,11 +457,6 @@ verify_jwt = true
 # connect-return still shows JWT verification OFF, exactly as for
 # stripe-webhook.
 verify_jwt = false
-
-[functions.translate]
-# night1 (n8): drafted and deliberately NOT deployed (docs/SCOPE.md, TRANSLATION is DARK). The
-# folder stays; the pipeline's uniform deploy skips it because of this line.
-enabled = false
 
 [analytics]
 enabled = true

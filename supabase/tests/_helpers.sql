@@ -17,13 +17,10 @@
 -- THE HELPER LEDGER — what these helpers do differently from staging, and
 -- what that means the tests do NOT prove:
 --
---   ADAPTATION 1 (D1): tests.create_user inserts the public.profiles row
---   itself. On staging the row is created by the handle_new_user trigger on
---   auth.users; the baseline dump excludes the auth schema, so the trigger
---   does not exist on the local stack. The insert mirrors the trigger's
---   columns (id, full_name, phone, role='both') exactly, but NOTHING here
---   proves the trigger still does that on staging, or that the trigger's
---   banned_phones refusal still fires. Same adaptation R3a made in seed.sql.
+--   ADAPTATION 1 (D1) is gone since 20261108000000_lean_v1.sql: the
+--   handle_new_user trigger on auth.users (on_auth_user_created) is now a
+--   migration, so tests.create_user's auth.users insert creates the profile
+--   exactly as sign-up does. 300_signup_and_push_schedule.sql proves it.
 --
 --   ADAPTATION 2: no auth.identities row is written. GoTrue needs one to log
 --   the account in; these tests never log in — identity is asserted with
@@ -47,8 +44,8 @@ create schema if not exists tests;
 -- those roles need to reach the schema and the functions.
 grant usage on schema tests to anon, authenticated;
 
--- Creates an account the way staging would leave it after sign-up: an
--- auth.users row plus its profile (ADAPTATION 1). Returns the new id.
+-- Creates an account the way sign-up leaves it: an auth.users row, whose
+-- handle_new_user trigger writes the profile. Returns the new id.
 create or replace function tests.create_user(p_email text, p_full_name text default null)
 returns uuid
 language plpgsql
@@ -67,13 +64,37 @@ begin
     '{"provider":"email","providers":["email"]}'::jsonb,
     jsonb_build_object('full_name', v_name), now(), now(), '', '', '', ''
   );
-  -- ADAPTATION 1 (D1): what handle_new_user writes on staging, written here.
-  insert into public.profiles (id, full_name, phone, role)
-  values (v_id, v_name, null, 'both');
   return v_id;
 end
 $$;
 revoke all on function tests.create_user(text, text) from public;
+
+-- Funds an assigned job the way checkout does on the stripe path: begin_job_payment as the job's
+-- customer, the intent id attached, a synthesized payment_intent.succeeded applied, so the
+-- job_payment ends held. Runner only; the identity is the runner's again on return. Returns the
+-- payment id. One call per job: a second one is refused, as a second checkout would be.
+create or replace function tests.test_fund_job(p_job_id uuid)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_pid uuid;
+  v_evt text := 'evt_fund_' || replace(p_job_id::text, '-', '');
+begin
+  perform tests.authenticate_as((select client_id from public.jobs where id = p_job_id));
+  v_pid := (public.begin_job_payment(p_job_id)).id;
+  perform tests.clear_auth();
+  perform public.attach_provider_ref(v_pid, 'pi_' || v_evt);
+  insert into public.payment_events (id, type, payload)
+  values (v_evt, 'payment_intent.succeeded', jsonb_build_object(
+    'id', v_evt, 'type', 'payment_intent.succeeded',
+    'data', jsonb_build_object('object', jsonb_build_object(
+      'id', 'pi_' || v_evt, 'metadata', jsonb_build_object('payment_id', v_pid)))));
+  perform public.apply_payment_event(v_evt);
+  return v_pid;
+end
+$$;
+revoke all on function tests.test_fund_job(uuid) from public;
 
 -- Becomes p_user for the rest of the transaction: the same two settings
 -- PostgREST applies for a bearer token. Deliberately NOT security definer —
@@ -137,7 +158,7 @@ select tests.create_user('helper.smoke@brazos.test') as smoke_user \gset
 select is(
   (select count(*) from public.profiles where id = :'smoke_user'),
   1::bigint,
-  'create_user wrote the profiles row the staging trigger would have written'
+  'create_user''s auth.users row got its profiles row from the handle_new_user trigger'
 );
 select is(
   (select role::text from public.profiles where id = :'smoke_user'),

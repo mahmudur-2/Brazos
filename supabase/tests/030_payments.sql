@@ -15,8 +15,8 @@
 -- THE FIXTURE: every job is hired through the real RPCs (create_job,
 -- create_offer, accept_offer) by tests.r4_hire, funded through
 -- begin_job_payment + a synthesized payment_intent.succeeded event
--- (tests.r4_fund) or through the sandbox pair (tests.r4_sandbox_fund), and
--- rolled back at the end. Provider events are payment_events rows carrying
+-- (tests.r4_fund, or the shared tests.test_fund_job), and rolled back at the
+-- end. Provider events are payment_events rows carrying
 -- the minimum payload shape apply_payment_event reads, applied by the runner.
 --
 -- FIXTURE SURGERY, DECLARED (each one is a state the product cannot reach in
@@ -45,7 +45,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(299);
+select plan(286);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -122,16 +122,6 @@ begin
   return v_pid;
 end $$;
 
-create or replace function tests.r4_sandbox_fund(p_customer uuid, p_job uuid) returns uuid language plpgsql as $$
-declare v_pid uuid;
-begin
-  perform tests.authenticate_as(p_customer);
-  v_pid := (public.sandbox_authorize_job_payment(p_job)).id;
-  perform public.sandbox_hold_job_payment(p_job);
-  perform tests.clear_auth();
-  return v_pid;
-end $$;
-
 create or replace function tests.r4_work(p_worker uuid, p_job uuid, p_complete boolean default true) returns void language plpgsql as $$
 begin
   perform tests.authenticate_as(p_worker);
@@ -161,7 +151,6 @@ begin
   alter table public.job_agreements enable trigger job_agreements_immutable;
 end $$;
 
-select ok(public.stripe_foundation_enabled(), 'the sentinel exists: the whole migration committed');
 -- D5's measurement, taken before this file hires anything: a job hired
 -- before the migration has no snapshot and no 15-minute grace. Locally the
 -- seed's two hires set accepted_offer_id after the migration, so the trigger
@@ -547,34 +536,25 @@ select is(tests.r4_event('evt_j8_tr', 'transfer.created', :'p8'::text, '{"id":"t
 select ok((select status = 'partially_refunded' and transfer_ref = 'tr_j8' and released_at is not null from public.payments where id = :'p8'),
   '10: the terminal status is partially_refunded regardless of the order; transfer_ref is recorded');
 
--- J7: sandbox path — the held gate (§3), the "before the work starts" gate
--- (§9), the fee once in_progress with no scheduled_date, capped at $35 (§8)
-select tests.r4_hire(:'customer', :'worker', 20000, 'R4 J7 sandbox in progress') as j7 \gset
+-- J7: the "before the work starts" gate (§9), the fee once in_progress with
+-- no scheduled_date, capped at $35 (§8)
+select tests.r4_hire(:'customer', :'worker', 20000, 'R4 J7 in progress') as j7 \gset
 insert into fx values ('j7', :'j7');
-select tests.authenticate_as(:'customer');
-select (public.sandbox_authorize_job_payment(:'j7')).id as p7 \gset
+select tests.test_fund_job(:'j7') as p7 \gset
 insert into fx values ('p7', :'p7');
 select tests.authenticate_as(:'worker');
-select throws_ok($$ select public.transition_job_status((select v from fx where k = 'j7'), 'in_progress') $$,
-  'P0001', 'The customer hasn''t protected the payment yet. You''ll get a notification the moment it''s held.',
-  '3: sandbox path: assigned -> in_progress is refused while the payment is only authorized');
-select tests.authenticate_as(:'customer');
-select is((public.sandbox_hold_job_payment(:'j7')).status::text, 'held', 'J7: the sandbox hold lands');
-select tests.authenticate_as(:'worker');
-select is((public.transition_job_status(:'j7', 'in_progress')).status::text, 'in_progress', '3: sandbox path: the start succeeds once held');
+select is((public.transition_job_status(:'j7', 'in_progress')).status::text, 'in_progress', '3: the start succeeds once held');
 select throws_ok($$ select public.cancel_job((select v from fx where k = 'j7'), 'customer_no_show') $$,
   'P0001', 'A no-show can only be reported before the work starts', '9: gate — the job is no longer assigned (in_progress)');
 select tests.authenticate_as(:'customer');
 select ok((select j.status = 'cancelled' and j.cancel_reason = 'customer_cancelled' from public.cancel_job(:'j7', 'customer_cancelled') j),
   '8: the customer cancels a job that is in_progress');
 select tests.clear_auth();
-select ok((select status = 'partially_refunded' and transfer_cents = 3500 and refund_cents = 16500
-             and release_reason = 'cancellation_fee' and release_requested_at is not null and released_at is not null
+select ok((select status = 'held' and transfer_cents = 3500 and transfer_cents + refund_cents = charge_amount_cents
+             and release_reason = 'cancellation_fee' and release_requested_at is not null
              and refund_reason = 'customer_cancelled_late'
            from public.payments where id = :'p7'),
-  '8: in_progress always carries the fee (no scheduled_date notwithstanding); 20% of $200 caps at $35; the sandbox row finalizes partially_refunded with released_at');
-select is((select count(*) from public.transfers_due where id = :'p7') + (select count(*) from public.refunds_due where id = :'p7'), 0::bigint,
-  '8: a sandbox row never enters the stripe queues');
+  '8: in_progress always carries the fee (no scheduled_date notwithstanding); 20% of $200 caps at $35; the rest refunds');
 
 -- J9: the worker cancels — full refund, the customer notified; §4's second half
 select tests.r4_hire(:'customer', :'worker', 5000, 'R4 J9 worker cancels') as j9 \gset
@@ -731,17 +711,17 @@ select throws_ok($$ select public.resolve_job_dispute((select v from fx where k 
   'P0001', 'This job has nothing to resolve', '11: a second resolve is refused');
 select throws_ok($$ select public.resolve_job_dispute((select v from fx where k = 'j17'), 'nobody', 'x') $$,
   'P0001', 'Resolve in favour of the worker or the customer', '11: the outcome is binary');
--- J18: sandbox completed + a customer report, resolved for the customer
+-- J18: completed + a customer report, resolved for the customer
 select tests.r4_hire(:'customer', :'worker', 5000, 'R4 J18 completed dispute customer') as j18 \gset
 insert into fx values ('j18', :'j18');
-select tests.r4_sandbox_fund(:'customer', :'j18') as p18 \gset
+select tests.test_fund_job(:'j18') as p18 \gset
 select tests.r4_work(:'worker', :'j18');
 select tests.authenticate_as(:'customer');
 select (public.open_job_dispute(:'j18', 'damage', 'R4 scratched floor')).id as d18 \gset
 select tests.clear_auth();
-select ok((select p.status = 'refunded' and p.refund_cents = 5000 and p.transfer_cents = 0 and p.refund_reason = 'dispute_refund'
+select ok((select p.status = 'held' and p.refund_cents = p.charge_amount_cents and p.transfer_cents = 0 and p.refund_reason = 'dispute_refund'
            from public.resolve_job_dispute(:'j18', 'customer', 'damage confirmed') p),
-  '11: completed + customer: refunded in full — the sandbox row finalizes refunded immediately');
+  '11: completed + customer: refunded in full');
 select is((select status::text from public.job_disputes where id = :'d18'), 'resolved', '11: the report is resolved');
 select tests.authenticate_as(:'customer');
 select throws_ok($$ select public.release_job_payment((select v from fx where k = 'j18')) $$,
@@ -763,20 +743,8 @@ select throws_ok($$ select public.resolve_job_dispute((select v from fx where k 
   'P0001', 'This job has nothing to resolve', '11: a second resolve is refused');
 
 -- ===========================================================================
--- §13. Two clocks
+-- §13. The auto-release clock
 -- ===========================================================================
--- J19: sandbox — job_payment_state auto-releases after 72h
-select tests.r4_hire(:'customer', :'worker', 3000, 'R4 J19 sandbox clock') as j19 \gset
-select tests.r4_sandbox_fund(:'customer', :'j19') as p19 \gset
-select tests.r4_work(:'worker', :'j19');
-select tests.authenticate_as(:'worker');
-select is((public.job_payment_state(:'j19')).status::text, 'held', '13: before 72h the sandbox row is held');
-select tests.clear_auth();
-update public.jobs set completed_at = now() - interval '73 hours' where id = :'j19';   -- SURGERY
-select tests.authenticate_as(:'worker');
-select ok((select p.status = 'released' and p.release_reason = 'auto_approved' and p.released_at is not null from public.job_payment_state(:'j19') p),
-  '13: job_payment_state auto-releases a sandbox row after 72 hours (auto_approved)');
-select tests.clear_auth();
 -- J20: stripe — job_payment_state never moves it; auto_release_due_payments is gated on the outbox
 select tests.r4_hire(:'customer', :'worker', 5000, 'R4 J20 stripe clock') as j20 \gset
 insert into fx values ('j20', :'j20');
@@ -801,12 +769,12 @@ select is((select count(*) from public.transfers_due where id = :'p20'), 1::bigi
 select is(public.auto_release_due_payments(), 0, '13: a second run releases nothing more');
 
 -- ===========================================================================
--- §2 (rest) + §5 (sandbox path). J22: "not held", the sandbox release, the
--- sandbox tip ceilings
+-- §2 (rest) + §5 (direct inserts). J22: "not held"; the tip trigger on a
+-- runner's direct insert
 -- ===========================================================================
-select tests.r4_hire(:'customer', :'worker', 5000, 'R4 J22 sandbox release') as j22 \gset
+select tests.r4_hire(:'customer', :'worker', 5000, 'R4 J22 not held') as j22 \gset
 insert into fx values ('j22', :'j22');
-select tests.r4_sandbox_fund(:'customer', :'j22') as p22 \gset
+select tests.test_fund_job(:'j22') as p22 \gset
 insert into fx values ('p22', :'p22');
 select tests.r4_work(:'worker', :'j22');
 update public.payments set status = 'authorized' where id = :'p22';   -- SURGERY: unreachable since the held gate
@@ -815,34 +783,18 @@ select throws_ok($$ select public.release_job_payment((select v from fx where k 
   'P0001', 'This payment is not held (authorized)', '2: release refused when the payment is not held');
 select tests.clear_auth();
 update public.payments set status = 'held' where id = :'p22';
-select tests.authenticate_as(:'customer');
-select ok((select p.status = 'released' and p.release_reason = 'approved' and p.released_at is not null and p.release_requested_at is not null and p.transfer_cents = 5000
-           from public.release_job_payment(:'j22') p),
-  '2: release_job_payment on a sandbox row finalizes it released immediately (D3)');
-select throws_ok($$ select public.sandbox_tip_worker((select v from fx where k = 'j22'), 3000) $$,
-  'P0001', 'A tip on this job can be at most $25.00', '5: sandbox path: the trigger refuses a tip above 50% of the job price through sandbox_tip_worker');
-select ok((select t.status = 'released' and t.amount_cents = 500 and t.platform_fee_cents = 0 from public.sandbox_tip_worker(:'j22', 500) t),
-  '5: sandbox path: the positive control under the ratio');
-select tests.clear_auth();
-select tests.r4_hire(:'customer', :'worker', 300000, 'R4 Jbig sandbox') as jbigsb \gset
+select tests.r4_hire(:'customer', :'worker', 300000, 'R4 Jbig direct insert') as jbigsb \gset
 insert into fx values ('jbigsb', :'jbigsb');
-select tests.r4_sandbox_fund(:'customer', :'jbigsb') as pbigsb \gset
+select tests.test_fund_job(:'jbigsb') as pbigsb \gset
 select tests.r4_work(:'worker', :'jbigsb');
-select tests.authenticate_as(:'customer');
-select lives_ok($$ select public.sandbox_release_job_payment((select v from fx where k = 'jbigsb')) $$, 'Jbig sandbox: released');
-select tests.clear_auth();
 select throws_ok($$ insert into public.payments (job_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, released_at)
   values ((select v from fx where k = 'jbigsb'), (select v from fx where k = 'customer'), (select v from fx where k = 'worker'),
           'tip', 100001, 0, 'sandbox', 'sandbox_r4_big_tip', 'released', now()) $$,
-  'P0001', 'A tip on this job can be at most $1,000.00', '5: sandbox path: the trigger refuses a tip above $1,000 even on a direct insert by the runner');
+  'P0001', 'A tip on this job can be at most $1,000.00', '5: the trigger refuses a tip above $1,000 even on a direct insert by the runner');
 select throws_ok($$ insert into public.payments (job_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, released_at)
   values ((select v from fx where k = 'jbigsb'), (select v from fx where k = 'customer'), (select v from fx where k = 'worker'),
           'tip', 500, 1, 'sandbox', 'sandbox_r4_fee_tip', 'released', now()) $$,
   'P0001', 'Tips carry no worker-side fee', '5: a tip with a worker-side fee is refused');
-select tests.authenticate_as(:'customer');
-select ok((select t.status = 'released' and t.amount_cents = 100000 from public.sandbox_tip_worker(:'jbigsb', 100000) t),
-  '5: sandbox path: the positive control at exactly $1,000');
-select tests.clear_auth();
 
 -- ===========================================================================
 -- §7. quote_job_price at the rate boundaries; the future-dated row
@@ -885,7 +837,7 @@ select ok(not has_table_privilege('authenticated', 'public.payment_events', 'SEL
 select ok(not has_table_privilege('authenticated', 'public.payment_accounts', 'INSERT'), '14: authenticated has no INSERT on payment_accounts');
 select ok(not has_table_privilege('authenticated', 'public.payment_accounts', 'UPDATE'), '14: authenticated has no UPDATE on payment_accounts');
 select ok(not has_table_privilege('authenticated', 'public.payment_accounts', 'DELETE'), '14: authenticated has no DELETE on payment_accounts');
-select ok(not has_table_privilege('authenticated', 'public.payment_accounts', 'SELECT'), '14: authenticated has no SELECT on payment_accounts (my_payouts_enabled is the path)');
+select ok(not has_table_privilege('authenticated', 'public.payment_accounts', 'SELECT'), '14: authenticated has no SELECT on payment_accounts (my_payouts_status is the path)');
 select ok(not has_table_privilege('authenticated', 'public.app_config', 'INSERT'), '14: authenticated has no INSERT on app_config');
 select ok(not has_table_privilege('authenticated', 'public.app_config', 'UPDATE'), '14: authenticated has no UPDATE on app_config');
 select ok(not has_table_privilege('authenticated', 'public.app_config', 'DELETE'), '14: authenticated has no DELETE on app_config');
@@ -938,7 +890,6 @@ select throws_ok($$ insert into public.job_agreements (job_id, offer_id, custome
   '42501', 'permission denied for table job_agreements', '14: direct INSERT into job_agreements (forging written terms) is refused');
 select throws_ok($$ select count(*) from public.transfers_due $$, '42501', 'permission denied for view transfers_due', '14: the transfer queue is not readable by a client');
 select throws_ok($$ select count(*) from public.refunds_due $$, '42501', 'permission denied for view refunds_due', '14: the refund queue is not readable by a client');
-select is(public.my_payouts_enabled(), false, '14: my_payouts_enabled is the customer''s one window on payment_accounts (false with no row)');
 select throws_ok($$ select public.apply_payment_event('evt_j1_succeeded') $$, '42501', 'permission denied for function apply_payment_event', '14: authenticated cannot execute apply_payment_event');
 select throws_ok($$ select public.attach_provider_ref((select v from fx where k = 'p1'), 'pi_forged') $$, '42501', 'permission denied for function attach_provider_ref', '14: authenticated cannot execute attach_provider_ref');
 select throws_ok($$ select public.set_payouts_enabled('acct_forged', true) $$, '42501', 'permission denied for function set_payouts_enabled', '14: authenticated cannot execute set_payouts_enabled');
@@ -961,7 +912,6 @@ select throws_ok($$ select public.begin_job_payment((select v from fx where k = 
 select throws_ok($$ select public.cancel_job((select v from fx where k = 'j20'), 'customer_cancelled') $$, '42501', 'permission denied for function cancel_job', '14: anon cannot execute cancel_job');
 select throws_ok($$ select public.release_job_payment((select v from fx where k = 'j20')) $$, '42501', 'permission denied for function release_job_payment', '14: anon cannot execute release_job_payment');
 select throws_ok($$ select public.begin_tip_payment((select v from fx where k = 'j20'), 100) $$, '42501', 'permission denied for function begin_tip_payment', '14: anon cannot execute begin_tip_payment');
-select throws_ok($$ select public.stripe_foundation_enabled() $$, '42501', 'permission denied for function stripe_foundation_enabled', '14: anon cannot execute the sentinel');
 select tests.clear_auth();
 -- the kill switch (D12): only the jsonb boolean true enables; a fresh hire is
 -- the fixture (J21 is also §7''s "keeps its quoted terms" job below)

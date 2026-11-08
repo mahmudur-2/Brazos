@@ -8,28 +8,44 @@
 -- RLS, triggers, ledger) and nothing about PostgREST or the app. The
 -- identities are its own (D2):
 --   customer   posts, funds, reports, approves, tips, reviews
---   worker_a   bids, is hired, declares arrival, plans, completes, cashes out
+--   worker_a   bids, is hired, declares arrival, completes
 --   worker_b   the unassigned worker who must be refused everywhere
 --
 -- Walk: post → bid → pair thread → pre-hire chat REFUSED → accept (worker
--- notified) → hold → en route → arrived → checklist → in progress →
--- completion evidence → post-hire chat both ways → dispute freeze (manual and
--- the auto clock) → withdraw → approve/release (worker notified) → tip →
--- mutual reviews → auto-release on the second job → cash-out → ledger and
--- feed sweeps → the phase58 late-funding and retry regressions.
+-- notified) → hold → en route → arrived → in progress → completion evidence
+-- → post-hire chat both ways → dispute freeze (manual and the auto clock) →
+-- withdraw → approve/release (worker notified) → tip → mutual reviews →
+-- auto-release on the second job → ledger and feed sweeps → the phase58
+-- late-funding and retry regressions.
+--
+-- Money moves on the stripe path: tests.test_fund_job is checkout, and the
+-- runner applies the provider events (tests.lc_event) the webhook would.
 --
 -- FIXTURE SURGERY, DECLARED (unchanged from the proof): the 72-hour clocks
 -- cannot be waited out, so completed_at is rewound by the runner, twice, on
--- probe rows only.
+-- probe rows only; and job2's job_completed notification is flipped to sent,
+-- as the drain would, for the auto-release gate.
 \set tests_included 1
 \ir _helpers.sql
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(75);
+select plan(63);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
+
+-- A provider event in the minimum shape apply_payment_event reads, applied by
+-- the runner. Created inside the transaction, gone at rollback.
+create or replace function tests.lc_event(p_type text, p_payment uuid, p_object_id text)
+returns jsonb language plpgsql as $$
+begin
+  insert into public.payment_events (id, type, payload)
+  values ('evt_' || p_object_id, p_type, jsonb_build_object('id', 'evt_' || p_object_id, 'type', p_type,
+    'data', jsonb_build_object('object', jsonb_build_object('id', p_object_id,
+      'metadata', jsonb_build_object('payment_id', p_payment)))));
+  return public.apply_payment_event('evt_' || p_object_id);
+end $$;
 
 select tests.create_user('lifecycle.customer@brazos.test', 'Lia Lifecycle') as customer \gset
 select tests.create_user('lifecycle.worker.a@brazos.test', 'Wes Lifecycle') as worker_a \gset
@@ -70,10 +86,11 @@ select is(public.accept_offer(:'offer1'), :'job1'::uuid, 'accept: the customer a
 select is(public.accept_offer(:'offer2'), :'job2'::uuid, 'accept: the customer accepts on job2');
 select is((select status::text from public.jobs where id = :'job1'), 'assigned', 'accept: job1 is assigned');
 select is((select assigned_worker_id from public.jobs where id = :'job1'), :'worker_a'::uuid, 'accept: job1 is assigned to worker A');
-select lives_ok($$ select public.sandbox_authorize_job_payment((select v from fx where k = 'job1')) $$, 'hold: authorize job1');
-select is((public.sandbox_hold_job_payment(:'job1')).status::text, 'held', 'hold: protect job1 — the payment is held');
-select lives_ok($$ select public.sandbox_authorize_job_payment((select v from fx where k = 'job2')) $$, 'hold: authorize job2');
-select is((public.sandbox_hold_job_payment(:'job2')).status::text, 'held', 'hold: protect job2 — the payment is held');
+select tests.clear_auth();
+select lives_ok($$ select tests.test_fund_job((select v from fx where k = 'job1')) $$, 'hold: checkout funds job1');
+select is((select status::text from public.payments where job_id = :'job1' and kind = 'job_payment'), 'held', 'hold: protect job1 — the payment is held');
+select lives_ok($$ select tests.test_fund_job((select v from fx where k = 'job2')) $$, 'hold: checkout funds job2');
+select is((select status::text from public.payments where job_id = :'job2' and kind = 'job_payment'), 'held', 'hold: protect job2 — the payment is held');
 select tests.authenticate_as(:'worker_a');
 select ok((select count(*) from public.notification_outbox where recipient_id = :'worker_a') >= 1, 'accept: the worker got a notification');
 select ok((select status = 'held' and amount_cents = 5000 from public.payments where job_id = :'job1' and kind = 'job_payment'),
@@ -104,27 +121,11 @@ select ok((select j.arrived_at is not null and j.en_route_at = :'first_en_route'
   'B4: arrived sets arrived_at and leaves en_route_at alone');
 
 -- ---------------------------------------------------------------------------
--- C. CHECKLIST — the RLS boundary, both directions
--- ---------------------------------------------------------------------------
-select lives_ok($$ insert into public.job_checklist_items (job_id, position, label)
-  values ((select v from fx where k = 'job1'), 0, 'LIFECYCLE step one'), ((select v from fx where k = 'job1'), 1, 'LIFECYCLE step two') $$,
-  'C1: the assigned worker writes the checklist');
-with u as (update public.job_checklist_items set done = true, done_at = now() where job_id = :'job1' and position = 0 returning 1)
-select is((select count(*) from u), 1::bigint, 'C1: the assigned worker toggles a step');
-select is((select count(*) from public.job_checklist_items where job_id = :'job1'), 2::bigint, 'C1: the worker reads their two steps');
-select tests.authenticate_as(:'customer');
-select is((select count(*) from public.job_checklist_items where job_id = :'job1'), 2::bigint, 'C2: the customer reads the checklist');
-select throws_ok($$ insert into public.job_checklist_items (job_id, position, label) values ((select v from fx where k = 'job1'), 9, 'LIFECYCLE customer intrusion') $$,
-  '42501', 'new row violates row-level security policy for table "job_checklist_items"', 'C2: the customer reads but cannot write');
-select tests.authenticate_as(:'worker_b');
-select is((select count(*) from public.job_checklist_items where job_id = :'job1'), 0::bigint, 'C3: an outsider sees zero checklist rows');
-
--- ---------------------------------------------------------------------------
 -- D. TRANSITIONS — release refused early; completed_at stamped; the arrival
---    window and the checklist close once work starts / ends
+--    window closes once work starts
 -- ---------------------------------------------------------------------------
 select tests.authenticate_as(:'customer');
-select throws_ok($$ select public.sandbox_release_job_payment((select v from fx where k = 'job1')) $$,
+select throws_ok($$ select public.release_job_payment((select v from fx where k = 'job1')) $$,
   'P0001', 'Funds release only after the job is completed', 'D1: release is refused while the job is only assigned');
 select tests.authenticate_as(:'worker_a');
 select is((public.transition_job_status(:'job1', 'in_progress')).status::text, 'in_progress', 'D2: the worker starts the job');
@@ -135,8 +136,6 @@ select ok((select j.status = 'completed' and j.completed_at is not null
              and j.completion_photo_url = 'https://example.com/proof-done.jpg'
            from public.transition_job_status(:'job1', 'completed', '["https://example.com/proof-done.jpg"]'::jsonb) j),
   'D3: completed with evidence; completed_at stamped; the first photo becomes the cover');
-select throws_ok($$ insert into public.job_checklist_items (job_id, position, label) values ((select v from fx where k = 'job1'), 5, 'LIFECYCLE after the fact') $$,
-  '42501', 'new row violates row-level security policy for table "job_checklist_items"', 'D4: the checklist closes at completion');
 select tests.authenticate_as(:'customer');
 select ok((select count(*) from public.notification_outbox where recipient_id = :'customer') >= 2, 'start + complete: the customer was notified of the status changes');
 
@@ -167,7 +166,7 @@ select tests.authenticate_as(:'customer');
 select (public.open_job_dispute(:'job1', 'incomplete', 'LIFECYCLE second shelf missing')).id as dispute1 \gset
 insert into fx values ('dispute1', :'dispute1');
 select is((public.open_job_dispute(:'job1', 'other', null)).id, :'dispute1'::uuid, 'E2: a second open returns the existing report — one open report per job');
-select throws_ok($$ select public.sandbox_release_job_payment((select v from fx where k = 'job1')) $$,
+select throws_ok($$ select public.release_job_payment((select v from fx where k = 'job1')) $$,
   'P0001', 'An open issue report is holding this payment', 'E2: manual release is frozen while the report is open');
 select tests.clear_auth();
 update public.jobs set completed_at = now() - interval '73 hours' where id = :'job1';
@@ -185,16 +184,18 @@ select is((public.withdraw_job_dispute(:'dispute1')).status::text, 'withdrawn', 
 -- F. RELEASE — payer-only, idempotent, honestly recorded, notified
 -- ---------------------------------------------------------------------------
 select tests.authenticate_as(:'worker_a');
-select throws_ok($$ select public.sandbox_release_job_payment((select v from fx where k = 'job1')) $$,
+select throws_ok($$ select public.release_job_payment((select v from fx where k = 'job1')) $$,
   'P0001', 'Job not found', 'F1: the payee cannot release to themselves');
 select tests.authenticate_as(:'customer');
-select ok((select p.status = 'released' and p.release_reason = 'approved' and p.released_at is not null
-           from public.sandbox_release_job_payment(:'job1') p),
-  'F2: held -> released, recorded as approved with released_at');
+select (public.release_job_payment(:'job1')).id as pay1 \gset
 select tests.clear_auth();
+select tests.lc_event('transfer.created', :'pay1', 'tr_lc_job1');
+select ok((select p.status = 'released' and p.release_reason = 'approved' and p.released_at is not null
+           from public.payments p where p.id = :'pay1'),
+  'F2: held -> released (the approval, then the transfer), recorded as approved with released_at');
 select released_at as first_release from public.payments where job_id = :'job1' and kind = 'job_payment' \gset
 select tests.authenticate_as(:'customer');
-select ok((select p.status = 'released' and p.released_at = :'first_release'::timestamptz from public.sandbox_release_job_payment(:'job1') p),
+select ok((select p.status = 'released' and p.released_at = :'first_release'::timestamptz from public.release_job_payment(:'job1') p),
   'F2: a repeated release is a no-op that returns the same row');
 select tests.authenticate_as(:'worker_b');
 select throws_ok($$ select public.job_payment_state((select v from fx where k = 'job1')) $$,
@@ -204,7 +205,7 @@ select is((select count(*) from public.notification_outbox where recipient_id = 
   'approve/release: the worker was notified of the release exactly once (phase56)');
 
 -- ---------------------------------------------------------------------------
--- G. TIP — release-first, payer-only, capped, one per job
+-- G. TIP — release-first, payer-only (the cap, zero and one-per-job: 030 §5)
 -- ---------------------------------------------------------------------------
 select lives_ok($$ select public.transition_job_status((select v from fx where k = 'job2'), 'in_progress') $$, 'G: the worker starts job2');
 select throws_ok($$ select public.transition_job_status((select v from fx where k = 'job2'), 'completed') $$,
@@ -212,22 +213,19 @@ select throws_ok($$ select public.transition_job_status((select v from fx where 
   'G: the worker cannot complete job2 without a photo (R6c D-14; 080_job_completions.sql carries the full proof)');
 select lives_ok($$ select public.transition_job_status((select v from fx where k = 'job2'), 'completed', '["https://example.com/proof-job2.jpg"]'::jsonb) $$, 'G: the worker completes job2 with a photo, without releasing it');
 select tests.authenticate_as(:'customer');
-select throws_ok($$ select public.sandbox_tip_worker((select v from fx where k = 'job2'), 500) $$,
+select throws_ok($$ select public.begin_tip_payment((select v from fx where k = 'job2'), 500) $$,
   'P0001', 'The job payment releases first — then a tip can be added', 'G1: a tip is refused until the job payment releases');
 select tests.authenticate_as(:'worker_a');
-select throws_ok($$ select public.sandbox_tip_worker((select v from fx where k = 'job1'), 500) $$,
+select throws_ok($$ select public.begin_tip_payment((select v from fx where k = 'job1'), 500) $$,
   'P0001', 'Job not found', 'G2: the payee cannot tip themselves');
 select tests.authenticate_as(:'customer');
-select throws_ok($$ select public.sandbox_tip_worker((select v from fx where k = 'job1'), 200000) $$,
-  'P0001', 'Tip must be between $0.01 and $1,000', 'G3: the $1,000 cap is enforced');
-select throws_ok($$ select public.sandbox_tip_worker((select v from fx where k = 'job1'), 0) $$,
-  'P0001', 'Tip must be between $0.01 and $1,000', 'G4: a zero tip is refused');
-select (public.sandbox_tip_worker(:'job1', 500)).id as tip1 \gset
+select (public.begin_tip_payment(:'job1', 500)).id as tip1 \gset
 insert into fx values ('tip1', :'tip1');
+select tests.clear_auth();
+select tests.lc_event('payment_intent.succeeded', :'tip1', 'pi_lc_tip1');
 select ok((select kind = 'tip' and status = 'released' and amount_cents = 500 and released_at is not null from public.payments where id = :'tip1'),
   'G5: the tip is a released tip ledger row at 500');
-select ok((select t.id = :'tip1' and t.amount_cents = 500 from public.sandbox_tip_worker(:'job1', 1000) t),
-  'G5: a second tip on the same job returns the original, not a new row');
+select tests.authenticate_as(:'customer');
 
 -- ---------------------------------------------------------------------------
 -- Reviews — mutual, aggregates move (lifecycle-proof.mjs)
@@ -241,26 +239,29 @@ select tests.authenticate_as(:'customer');
 select ok((select rating_count >= 1 from public.profiles where id = :'worker_a'), 'reviews: the worker''s public aggregate moved');
 
 -- ---------------------------------------------------------------------------
--- H. AUTO-RELEASE — the 72h on-read clock on job2, nothing holding it
+-- H. AUTO-RELEASE — the 72h clock on job2 (auto_release_due_payments, the
+--    cron's function, then the transfer), nothing holding it
 -- ---------------------------------------------------------------------------
 select tests.clear_auth();
 update public.jobs set completed_at = now() - interval '73 hours' where id = :'job2';
+update public.notification_outbox set status = 'sent'
+ where recipient_id = :'customer' and type = 'job_completed' and data ->> 'jobId' = :'job2';
+select public.auto_release_due_payments();
+select tests.lc_event('transfer.created', (select id from public.payments where job_id = :'job2' and kind = 'job_payment'), 'tr_lc_job2');
 select tests.authenticate_as(:'worker_a');
 select ok((select p.status = 'released' and p.release_reason = 'auto_approved' from public.job_payment_state(:'job2') p),
-  'H: the 72h on-read auto-release fired and recorded auto_approved');
+  'H: the 72h auto-release fired and recorded auto_approved');
 select is((public.job_payment_state(:'job2')).release_reason, 'auto_approved', 'H: a second read does not disturb the record');
 
 -- ---------------------------------------------------------------------------
--- Wallet + cash-out; ledger and feed sweeps (lifecycle-proof.mjs)
+-- Wallet; ledger and feed sweeps (lifecycle-proof.mjs)
 -- ---------------------------------------------------------------------------
 select is((select sum(amount_cents) from public.payments where payee_id = :'worker_a' and status = 'released'), 8500::bigint,
   'wallet: available = 5000 job1 + 500 tip + 3000 job2, all released to the worker');
-select is((select count(*) from public.sandbox_cash_out()), 3::bigint, 'cash-out: the sweep moves the three released rows to paid_out');
-select is((select count(*) from public.sandbox_cash_out()), 0::bigint, 'cash-out: a second sweep moves nothing');
 select tests.clear_auth();
 select is((select sum(amount_cents) from public.payments where job_id = :'job1'), 5500::bigint, 'ledger: job1 nets 5500');
-select ok((select bool_and(payer_id = :'customer' and payee_id = :'worker_a' and provider = 'sandbox') from public.payments where job_id in (:'job1', :'job2')),
-  'ledger: every row is customer -> worker A, sandbox — no self-pay, no other provider');
+select ok((select bool_and(payer_id = :'customer' and payee_id = :'worker_a' and provider = 'stripe') from public.payments where job_id in (:'job1', :'job2')),
+  'ledger: every row is customer -> worker A, stripe — no self-pay, no other provider');
 select is((select count(*) from public.payments p left join public.jobs j on j.id = p.job_id where p.payer_id = :'customer' and j.id is null), 0::bigint,
   'ledger: no orphaned payments');
 select is((select count(*) - count(distinct dedupe_key) from public.notification_outbox where recipient_id in (:'customer', :'worker_a')), 0::bigint,
@@ -283,15 +284,15 @@ select tests.authenticate_as(:'customer');
 select is(public.accept_offer(:'offer3'), :'job3'::uuid, 'I: the customer accepts on job3');
 -- R4 (D8) re-pointed this section: the held gate now refuses a start before
 -- checkout, so I1 proves the refusal and I2 proves the start lands once the
--- late authorize + hold (which the section already performed) have landed.
+-- late checkout (which the section already performed) has landed.
 -- The phase58 retry regression keeps its own assertion after the start.
 select tests.authenticate_as(:'worker_a');
 select throws_ok($$ select public.transition_job_status((select v from fx where k = 'job3'), 'in_progress') $$,
   'P0001', 'The customer hasn''t protected the payment yet. You''ll get a notification the moment it''s held.',
   'I1: the worker cannot start BEFORE checkout — the held gate refuses while no payment exists');
-select tests.authenticate_as(:'customer');
-select is((public.sandbox_authorize_job_payment(:'job3')).status::text, 'authorized', 'I1: a late authorize still lands');
-select is((public.sandbox_hold_job_payment(:'job3')).status::text, 'held', 'I1: a late hold still lands — a job refused at the gate can be funded');
+select tests.clear_auth();
+select lives_ok($$ select tests.test_fund_job((select v from fx where k = 'job3')) $$, 'I1: a late checkout still lands');
+select is((select status::text from public.payments where job_id = :'job3' and kind = 'job_payment'), 'held', 'I1: a late hold still lands — a job refused at the gate can be funded');
 select tests.authenticate_as(:'worker_a');
 select is((public.transition_job_status(:'job3', 'in_progress')).status::text, 'in_progress', 'I2: the start succeeds once the payment is held');
 select is((public.transition_job_status(:'job3', 'in_progress')).status::text, 'in_progress', 'I2: a repeated transition returns the row instead of raising (phase58)');

@@ -8,13 +8,14 @@
 -- FIXTURE SURGERY, DECLARED: the three jobs and their payments are raw rows by the runner, in the
 -- shapes the product reaches through accept_offer + checkout (030_payments.sql proves those
 -- writers): an undirected held card row, an approved card row (release requested), and an
--- undirected held sandbox row. The proof is about what the BAN does to each.
+-- undirected held legacy sandbox row (lean v1 removed its at-once settlement; it stays only for
+-- the cancel and the thread notice). The proof is about what the BAN does to each.
 \set tests_included 1
 \ir _helpers.sql
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(17);
+select plan(16);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated, service_role;
@@ -100,13 +101,6 @@ select is(
   '3g: a row whose release the customer already requested is left exactly as it was — a ban never claws money back'
 );
 select is((select count(*) from public.refunds_due where id = :'p_b'), 0::bigint, '3h: and it is not in refunds_due');
--- C: the sandbox row — refunded at once, the sandbox ledger's own settlement.
-select is(
-  (select row(p.refund_cents, p.transfer_cents, p.refund_reason, p.status::text)
-     from public.payments p where p.id = :'p_c'),
-  row(3000, 0, 'account_suspended'::text, 'refunded'::text),
-  '3i: the sandbox row is refunded at once'
-);
 -- The counterparty is told in each thread, as before.
 select is(
   (select count(*) from public.messages m where m.job_id in (:'j_a', :'j_b', :'j_c') and m.sender_id = :'worker'

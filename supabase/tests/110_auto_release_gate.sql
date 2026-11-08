@@ -35,8 +35,8 @@
 --     (030 §13 flips pending -> sent the same way).
 --   * the customer's notification_prefs row (every profile gets one from the
 --     create_default_notification_prefs trigger) is upserted to
---     job_updates = false, and mutes and blocks rows are inserted, by the
---     runner (case 8), in the shapes the prefs upsert, the mute and set_block
+--     job_updates = false, and a blocks row is inserted, by the runner
+--     (case 8), in the shapes the prefs upsert and the app's block insert
 --     write; written AFTER the hire because create_offer refuses under a
 --     block while transition_job_status carries no block check.
 --
@@ -286,7 +286,7 @@ select is(public.auto_release_due_payments(), 0, '7: fallback — after the reso
 select ok((select release_reason = 'dispute_resolved' and status = 'held' from public.payments where id = :'p7b'), '7: … and the resolution''s release_reason stands, not overwritten by auto_approved');
 
 -- ---------------------------------------------------------------------------
--- §8. THE CATEGORY: with Job updates OFF, a mute AND a block, completing a
+-- §8. THE CATEGORY: with Job updates OFF and a block, completing a
 --     job STILL tells the customer — under 'jobs'. The suppressors go in
 --     after the hire (create_offer refuses under a block; transition_job_status
 --     carries no block check).
@@ -295,14 +295,12 @@ select tests.r4_hire(:'customer', :'worker', 5000, 'n3 C8 always-on category') a
 select tests.r4_fund(:'customer', :'j8', 'evt_n3_c8') as p8 \gset
 insert into public.notification_prefs (user_id, job_updates) values (:'customer', false)
   on conflict (user_id) do update set job_updates = excluded.job_updates;   -- SURGERY: the customer switched Job updates off (the prefs upsert shape; the row may already exist)
-insert into public.mutes (muter_id, muted_id) values (:'customer', :'worker');   -- SURGERY: the customer muted the worker
 insert into public.blocks (blocker_id, blocked_id) values (:'customer', :'worker');   -- SURGERY: the customer blocked the worker (permanent: expires_at null)
 select ok(public.is_blocked_between(:'customer', :'worker')
-          and exists (select 1 from public.mutes where muter_id = :'customer' and muted_id = :'worker')
           and (select job_updates = false from public.notification_prefs where user_id = :'customer'),
-  '8: runner — ground truth: the block, the mute and job_updates = false are all in place');
-select is(public.should_notify(:'customer', :'worker', 'job_updates'), false, '8: control — under those three the old category, job_updates, is suppressed by should_notify');
-select is(public.should_notify(:'customer', :'worker', 'jobs'), true, '8: … and the always-on category, jobs, is not: a preference, a mute or a block never suppresses it (n3)');
+  '8: runner — ground truth: the block and job_updates = false are both in place');
+select is(public.should_notify(:'customer', :'worker', 'job_updates'), false, '8: control — under those two the old category, job_updates, is suppressed by should_notify');
+select is(public.should_notify(:'customer', :'worker', 'jobs'), true, '8: … and the always-on category, jobs, is not: a preference or a block never suppresses it (n3)');
 select is(public.should_notify(null::uuid, :'worker', 'jobs'), false, '8: … a null recipient still refuses above the insertion');
 select is(public.should_notify(:'customer', :'customer', 'jobs'), false, '8: … and so does a self-actor');
 select tests.r4_work(:'worker', :'j8');

@@ -27,54 +27,6 @@ export type Database = {
         }
         Relationships: []
       }
-      areas: {
-        Row: {
-          aliases: string[]
-          borough: string
-          centroid_lat: number
-          centroid_lng: number
-          code: string
-          created_at: string
-          display_name: string
-          max_lat: number
-          max_lng: number
-          min_lat: number
-          min_lng: number
-          name: string
-          rings: Json
-        }
-        Insert: {
-          aliases?: string[]
-          borough: string
-          centroid_lat: number
-          centroid_lng: number
-          code: string
-          created_at?: string
-          display_name: string
-          max_lat: number
-          max_lng: number
-          min_lat: number
-          min_lng: number
-          name: string
-          rings: Json
-        }
-        Update: {
-          aliases?: string[]
-          borough?: string
-          centroid_lat?: number
-          centroid_lng?: number
-          code?: string
-          created_at?: string
-          display_name?: string
-          max_lat?: number
-          max_lng?: number
-          min_lat?: number
-          min_lng?: number
-          name?: string
-          rings?: Json
-        }
-        Relationships: []
-      }
       banned_phones: {
         Row: {
           banned_profile_id: string | null
@@ -191,64 +143,6 @@ export type Database = {
           {
             foreignKeyName: "blocks_blocker_id_fkey"
             columns: ["blocker_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      conversation_states: {
-        Row: {
-          archived: boolean
-          cleared_before: string | null
-          created_at: string
-          deleted: boolean
-          direct_thread_id: string | null
-          hidden: boolean
-          job_id: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          archived?: boolean
-          cleared_before?: string | null
-          created_at?: string
-          deleted?: boolean
-          direct_thread_id?: string | null
-          hidden?: boolean
-          job_id?: string | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          archived?: boolean
-          cleared_before?: string | null
-          created_at?: string
-          deleted?: boolean
-          direct_thread_id?: string | null
-          hidden?: boolean
-          job_id?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "conversation_states_direct_thread_id_fkey"
-            columns: ["direct_thread_id"]
-            isOneToOne: false
-            referencedRelation: "direct_threads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "conversation_states_job_id_fkey"
-            columns: ["job_id"]
-            isOneToOne: false
-            referencedRelation: "jobs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "conversation_states_user_id_fkey"
-            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -446,44 +340,6 @@ export type Database = {
             columns: ["worker_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      job_checklist_items: {
-        Row: {
-          created_at: string
-          done: boolean
-          done_at: string | null
-          id: string
-          job_id: string
-          label: string
-          position: number
-        }
-        Insert: {
-          created_at?: string
-          done?: boolean
-          done_at?: string | null
-          id?: string
-          job_id: string
-          label: string
-          position?: number
-        }
-        Update: {
-          created_at?: string
-          done?: boolean
-          done_at?: string | null
-          id?: string
-          job_id?: string
-          label?: string
-          position?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "job_checklist_items_job_id_fkey"
-            columns: ["job_id"]
-            isOneToOne: false
-            referencedRelation: "jobs"
             referencedColumns: ["id"]
           },
         ]
@@ -782,121 +638,6 @@ export type Database = {
           },
         ]
       }
-      job_requests: {
-        Row: {
-          amount_cents: number
-          awaiting_id: string
-          category: string
-          client_counters: number
-          client_id: string
-          created_at: string
-          created_job_id: string | null
-          description: string
-          direct_thread_id: string | null
-          id: string
-          lat: number | null
-          lng: number | null
-          location: string | null
-          photos: Json
-          status: string
-          thread_job_id: string | null
-          title: string
-          updated_at: string
-          videos: Json
-          worker_counters: number
-          worker_id: string
-        }
-        Insert: {
-          amount_cents: number
-          awaiting_id: string
-          category: string
-          client_counters?: number
-          client_id: string
-          created_at?: string
-          created_job_id?: string | null
-          description?: string
-          direct_thread_id?: string | null
-          id?: string
-          lat?: number | null
-          lng?: number | null
-          location?: string | null
-          photos?: Json
-          status?: string
-          thread_job_id?: string | null
-          title: string
-          updated_at?: string
-          videos?: Json
-          worker_counters?: number
-          worker_id: string
-        }
-        Update: {
-          amount_cents?: number
-          awaiting_id?: string
-          category?: string
-          client_counters?: number
-          client_id?: string
-          created_at?: string
-          created_job_id?: string | null
-          description?: string
-          direct_thread_id?: string | null
-          id?: string
-          lat?: number | null
-          lng?: number | null
-          location?: string | null
-          photos?: Json
-          status?: string
-          thread_job_id?: string | null
-          title?: string
-          updated_at?: string
-          videos?: Json
-          worker_counters?: number
-          worker_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "job_requests_awaiting_id_fkey"
-            columns: ["awaiting_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "job_requests_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "job_requests_created_job_id_fkey"
-            columns: ["created_job_id"]
-            isOneToOne: false
-            referencedRelation: "jobs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "job_requests_direct_thread_id_fkey"
-            columns: ["direct_thread_id"]
-            isOneToOne: false
-            referencedRelation: "direct_threads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "job_requests_thread_job_id_fkey"
-            columns: ["thread_job_id"]
-            isOneToOne: false
-            referencedRelation: "jobs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "job_requests_worker_id_fkey"
-            columns: ["worker_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       job_series: {
         Row: {
           anchor_date: string | null
@@ -987,7 +728,6 @@ export type Database = {
         Row: {
           accepted_bid_id: string | null
           accepted_offer_id: string | null
-          area_code: string | null
           arrival_end_hour: number | null
           arrival_start_hour: number | null
           arrived_at: string | null
@@ -1017,7 +757,6 @@ export type Database = {
           needed_today: boolean
           photos: Json
           pricing_mode: string
-          property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
           series_id: string | null
@@ -1029,7 +768,6 @@ export type Database = {
         Insert: {
           accepted_bid_id?: string | null
           accepted_offer_id?: string | null
-          area_code?: string | null
           arrival_end_hour?: number | null
           arrival_start_hour?: number | null
           arrived_at?: string | null
@@ -1059,7 +797,6 @@ export type Database = {
           needed_today?: boolean
           photos?: Json
           pricing_mode?: string
-          property_id?: string | null
           scheduled_date?: string | null
           scheduled_for?: string | null
           series_id?: string | null
@@ -1071,7 +808,6 @@ export type Database = {
         Update: {
           accepted_bid_id?: string | null
           accepted_offer_id?: string | null
-          area_code?: string | null
           arrival_end_hour?: number | null
           arrival_start_hour?: number | null
           arrived_at?: string | null
@@ -1101,7 +837,6 @@ export type Database = {
           needed_today?: boolean
           photos?: Json
           pricing_mode?: string
-          property_id?: string | null
           scheduled_date?: string | null
           scheduled_for?: string | null
           series_id?: string | null
@@ -1126,13 +861,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "jobs_area_code_fkey"
-            columns: ["area_code"]
-            isOneToOne: false
-            referencedRelation: "areas"
-            referencedColumns: ["code"]
-          },
-          {
             foreignKeyName: "jobs_assigned_worker_id_fkey"
             columns: ["assigned_worker_id"]
             isOneToOne: false
@@ -1151,13 +879,6 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "jobs_property_id_fkey"
-            columns: ["property_id"]
-            isOneToOne: false
-            referencedRelation: "properties"
             referencedColumns: ["id"]
           },
           {
@@ -1201,190 +922,6 @@ export type Database = {
           },
         ]
       }
-      live_activity_tokens: {
-        Row: {
-          activity_id: string
-          job_id: string
-          push_token: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          activity_id: string
-          job_id: string
-          push_token: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          activity_id?: string
-          job_id?: string
-          push_token?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "live_activity_tokens_job_id_fkey"
-            columns: ["job_id"]
-            isOneToOne: false
-            referencedRelation: "jobs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "live_activity_tokens_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      live_card_outbox: {
-        Row: {
-          attempts: number
-          created_at: string
-          id: string
-          job_id: string
-          last_error: string | null
-          sent_at: string | null
-          status: string
-        }
-        Insert: {
-          attempts?: number
-          created_at?: string
-          id?: string
-          job_id: string
-          last_error?: string | null
-          sent_at?: string | null
-          status?: string
-        }
-        Update: {
-          attempts?: number
-          created_at?: string
-          id?: string
-          job_id?: string
-          last_error?: string | null
-          sent_at?: string | null
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "live_card_outbox_job_id_fkey"
-            columns: ["job_id"]
-            isOneToOne: false
-            referencedRelation: "jobs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      live_location_shares: {
-        Row: {
-          direct_thread_id: string | null
-          expires_at: string
-          id: string
-          job_id: string | null
-          lat: number
-          lng: number
-          sharer_id: string
-          started_at: string
-          updated_at: string
-        }
-        Insert: {
-          direct_thread_id?: string | null
-          expires_at: string
-          id?: string
-          job_id?: string | null
-          lat: number
-          lng: number
-          sharer_id: string
-          started_at?: string
-          updated_at?: string
-        }
-        Update: {
-          direct_thread_id?: string | null
-          expires_at?: string
-          id?: string
-          job_id?: string | null
-          lat?: number
-          lng?: number
-          sharer_id?: string
-          started_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "live_location_shares_direct_thread_id_fkey"
-            columns: ["direct_thread_id"]
-            isOneToOne: false
-            referencedRelation: "direct_threads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "live_location_shares_job_id_fkey"
-            columns: ["job_id"]
-            isOneToOne: false
-            referencedRelation: "jobs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "live_location_shares_sharer_id_fkey"
-            columns: ["sharer_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      message_reactions: {
-        Row: {
-          created_at: string
-          emoji: string
-          id: string
-          job_id: string
-          message_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          emoji: string
-          id?: string
-          job_id: string
-          message_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          emoji?: string
-          id?: string
-          job_id?: string
-          message_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "message_reactions_job_id_fkey"
-            columns: ["job_id"]
-            isOneToOne: false
-            referencedRelation: "jobs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "message_reactions_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "message_reactions_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       message_reads: {
         Row: {
           job_id: string
@@ -1420,19 +957,13 @@ export type Database = {
       }
       messages: {
         Row: {
-          audio_duration_ms: number | null
-          audio_url: string | null
           content: string
           created_at: string
           direct_thread_id: string | null
-          document_name: string | null
-          document_size_bytes: number | null
-          document_url: string | null
           id: string
           image_url: string | null
           job_id: string | null
           job_offer_id: string | null
-          job_request_id: string | null
           reply_to_id: string | null
           request_amount_cents: number | null
           request_event: string | null
@@ -1440,19 +971,13 @@ export type Database = {
           unsent_at: string | null
         }
         Insert: {
-          audio_duration_ms?: number | null
-          audio_url?: string | null
           content?: string
           created_at?: string
           direct_thread_id?: string | null
-          document_name?: string | null
-          document_size_bytes?: number | null
-          document_url?: string | null
           id?: string
           image_url?: string | null
           job_id?: string | null
           job_offer_id?: string | null
-          job_request_id?: string | null
           reply_to_id?: string | null
           request_amount_cents?: number | null
           request_event?: string | null
@@ -1460,19 +985,13 @@ export type Database = {
           unsent_at?: string | null
         }
         Update: {
-          audio_duration_ms?: number | null
-          audio_url?: string | null
           content?: string
           created_at?: string
           direct_thread_id?: string | null
-          document_name?: string | null
-          document_size_bytes?: number | null
-          document_url?: string | null
           id?: string
           image_url?: string | null
           job_id?: string | null
           job_offer_id?: string | null
-          job_request_id?: string | null
           reply_to_id?: string | null
           request_amount_cents?: number | null
           request_event?: string | null
@@ -1502,13 +1021,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "messages_job_request_fk"
-            columns: ["job_request_id"]
-            isOneToOne: false
-            referencedRelation: "job_requests"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "messages_reply_to_id_fkey"
             columns: ["reply_to_id"]
             isOneToOne: false
@@ -1518,42 +1030,6 @@ export type Database = {
           {
             foreignKeyName: "messages_sender_id_fkey"
             columns: ["sender_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mutes: {
-        Row: {
-          created_at: string
-          id: string
-          muted_id: string
-          muter_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          muted_id: string
-          muter_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          muted_id?: string
-          muter_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mutes_muted_id_fkey"
-            columns: ["muted_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mutes_muter_id_fkey"
-            columns: ["muter_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1937,57 +1413,6 @@ export type Database = {
           },
         ]
       }
-      portfolio_items: {
-        Row: {
-          caption: string | null
-          category: string
-          created_at: string
-          display_order: number
-          id: string
-          photo_url: string
-          published: boolean
-          source_job_id: string | null
-          worker_id: string
-        }
-        Insert: {
-          caption?: string | null
-          category: string
-          created_at?: string
-          display_order?: number
-          id?: string
-          photo_url: string
-          published?: boolean
-          source_job_id?: string | null
-          worker_id: string
-        }
-        Update: {
-          caption?: string | null
-          category?: string
-          created_at?: string
-          display_order?: number
-          id?: string
-          photo_url?: string
-          published?: boolean
-          source_job_id?: string | null
-          worker_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "portfolio_items_source_job_id_fkey"
-            columns: ["source_job_id"]
-            isOneToOne: false
-            referencedRelation: "jobs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "portfolio_items_worker_id_fkey"
-            columns: ["worker_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
           accepting_work: boolean
@@ -2062,65 +1487,6 @@ export type Database = {
           verification_status?: Database["public"]["Enums"]["verification_status"]
         }
         Relationships: []
-      }
-      properties: {
-        Row: {
-          area_code: string | null
-          city: string
-          created_at: string
-          id: string
-          label: string | null
-          lat: number | null
-          lng: number | null
-          notes: string | null
-          owner_id: string
-          postal_code: string | null
-          state: string
-          street: string
-          unit: string | null
-          updated_at: string
-        }
-        Insert: {
-          area_code?: string | null
-          city: string
-          created_at?: string
-          id?: string
-          label?: string | null
-          lat?: number | null
-          lng?: number | null
-          notes?: string | null
-          owner_id: string
-          postal_code?: string | null
-          state: string
-          street: string
-          unit?: string | null
-          updated_at?: string
-        }
-        Update: {
-          area_code?: string | null
-          city?: string
-          created_at?: string
-          id?: string
-          label?: string | null
-          lat?: number | null
-          lng?: number | null
-          notes?: string | null
-          owner_id?: string
-          postal_code?: string | null
-          state?: string
-          street?: string
-          unit?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "properties_area_code_fkey"
-            columns: ["area_code"]
-            isOneToOne: false
-            referencedRelation: "areas"
-            referencedColumns: ["code"]
-          },
-        ]
       }
       push_tokens: {
         Row: {
@@ -2374,86 +1740,6 @@ export type Database = {
           },
         ]
       }
-      saved_workers: {
-        Row: {
-          created_at: string
-          user_id: string
-          worker_id: string
-        }
-        Insert: {
-          created_at?: string
-          user_id: string
-          worker_id: string
-        }
-        Update: {
-          created_at?: string
-          user_id?: string
-          worker_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "saved_workers_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "saved_workers_worker_id_fkey"
-            columns: ["worker_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      worker_semantic_docs: {
-        Row: {
-          embedded_hash: string | null
-          embedding: string | null
-          embedding_model: string | null
-          evidence: Json
-          generated_at: string | null
-          is_stale: boolean | null
-          source_hash: string
-          source_text: string
-          updated_at: string
-          worker_id: string
-        }
-        Insert: {
-          embedded_hash?: string | null
-          embedding?: string | null
-          embedding_model?: string | null
-          evidence?: Json
-          generated_at?: string | null
-          is_stale?: boolean | null
-          source_hash?: string
-          source_text?: string
-          updated_at?: string
-          worker_id: string
-        }
-        Update: {
-          embedded_hash?: string | null
-          embedding?: string | null
-          embedding_model?: string | null
-          evidence?: Json
-          generated_at?: string | null
-          is_stale?: boolean | null
-          source_hash?: string
-          source_text?: string
-          updated_at?: string
-          worker_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "worker_semantic_docs_worker_id_fkey"
-            columns: ["worker_id"]
-            isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       worker_services: {
         Row: {
           category: string
@@ -2514,10 +1800,7 @@ export type Database = {
           job_id: string | null
           job_title: string | null
           last_message_at: string | null
-          last_message_audio_url: string | null
           last_message_content: string | null
-          last_message_document_name: string | null
-          last_message_document_url: string | null
           last_message_id: string | null
           last_message_image_url: string | null
           last_message_sender_id: string | null
@@ -3116,25 +2399,8 @@ export type Database = {
           },
         ]
       }
-      v_bids_projection_drift: {
-        Row: {
-          drift: string | null
-          job_id: string | null
-          live_amount_cents: number | null
-          live_status: Database["public"]["Enums"]["bid_status"] | null
-          mirrored_amount_cents: number | null
-          mirrored_status: Database["public"]["Enums"]["bid_status"] | null
-          root_offer_id: string | null
-          worker_id: string | null
-        }
-        Relationships: []
-      }
     }
     Functions: {
-      accept_bid: {
-        Args: { p_bid_id: string; p_job_id: string }
-        Returns: undefined
-      }
       accept_legal_documents: { Args: { p_documents: Json }; Returns: number }
       accept_offer: { Args: { p_offer_id: string }; Returns: string }
       account_deletion_blockers: {
@@ -3146,8 +2412,6 @@ export type Database = {
           ref_id: string
         }[]
       }
-      account_deletion_enabled: { Args: never; Returns: boolean }
-      active_work_lifecycle_enabled: { Args: never; Returns: boolean }
       admin_open_reports: {
         Args: never
         Returns: {
@@ -3167,14 +2431,6 @@ export type Database = {
       }
       advance_job_series: { Args: { p_now?: string }; Returns: number }
       apply_payment_event: { Args: { p_event_id: string }; Returns: Json }
-      apply_worker_embeddings: {
-        Args: { p_model: string; p_rows: Json }
-        Returns: number
-      }
-      area_for_point: {
-        Args: { p_lat: number; p_lng: number }
-        Returns: string
-      }
       attach_provider_ref: {
         Args: { p_payment_id: string; p_ref: string }
         Returns: undefined
@@ -3280,23 +2536,12 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      bids_projection_enabled: { Args: never; Returns: boolean }
-      bids_projection_v2_enabled: { Args: never; Returns: boolean }
-      build_worker_semantic_source: {
-        Args: { p_worker: string }
-        Returns: {
-          evidence: Json
-          source_hash: string
-          source_text: string
-        }[]
-      }
       can_delete_own_job: { Args: { p_job_id: string }; Returns: boolean }
       cancel_job: {
         Args: { p_job_id: string; p_reason: string }
         Returns: {
           accepted_bid_id: string | null
           accepted_offer_id: string | null
-          area_code: string | null
           arrival_end_hour: number | null
           arrival_start_hour: number | null
           arrived_at: string | null
@@ -3326,7 +2571,6 @@ export type Database = {
           needed_today: boolean
           photos: Json
           pricing_mode: string
-          property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
           series_id: string | null
@@ -3345,15 +2589,6 @@ export type Database = {
       cancellation_fee_cents: {
         Args: { p_amount_cents: number; p_job_id: string }
         Returns: number
-      }
-      claim_live_card_batch: {
-        Args: { p_limit?: number }
-        Returns: {
-          job_id: string
-          outbox_id: string
-          state: Json
-          tokens: string[]
-        }[]
       }
       claim_notification_batch: {
         Args: { p_limit?: number }
@@ -3402,36 +2637,9 @@ export type Database = {
           would_again_yes: number
         }[]
       }
-      clock_label: { Args: { p_minutes: number }; Returns: string }
-      connect_onboarding_enabled: { Args: never; Returns: boolean }
-      conversation_parties: {
-        Args: { p_direct_thread_id: string; p_job_id: string }
-        Returns: Record<string, unknown>
-      }
-      counter_notification_copy_enabled: { Args: never; Returns: boolean }
-      counter_notification_enabled: { Args: never; Returns: boolean }
       counter_offer: {
         Args: { p_amount_cents: number; p_offer_id: string }
         Returns: string
-      }
-      counteroffer_cap_enabled: { Args: never; Returns: boolean }
-      create_bid: {
-        Args: { p_amount_cents: number; p_job_id: string; p_message?: string }
-        Returns: {
-          amount_cents: number
-          created_at: string
-          id: string
-          job_id: string
-          message: string | null
-          status: Database["public"]["Enums"]["bid_status"]
-          worker_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "bids"
-          isOneToOne: true
-          isSetofReturn: false
-        }
       }
       create_job: {
         Args: {
@@ -3456,7 +2664,6 @@ export type Database = {
         Returns: {
           accepted_bid_id: string | null
           accepted_offer_id: string | null
-          area_code: string | null
           arrival_end_hour: number | null
           arrival_start_hour: number | null
           arrived_at: string | null
@@ -3486,7 +2693,6 @@ export type Database = {
           needed_today: boolean
           photos: Json
           pricing_mode: string
-          property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
           series_id: string | null
@@ -3501,22 +2707,6 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
-      }
-      create_job_request: {
-        Args: {
-          p_amount_cents: number
-          p_category: string
-          p_description: string
-          p_lat?: number
-          p_lng?: number
-          p_location: string
-          p_photos?: Json
-          p_thread_job_id?: string
-          p_title: string
-          p_videos?: Json
-          p_worker_id: string
-        }
-        Returns: string
       }
       create_offer: {
         Args: {
@@ -3585,8 +2775,6 @@ export type Database = {
       deactivate_push_token: { Args: { p_token: string }; Returns: undefined }
       decline_offer: { Args: { p_offer_id: string }; Returns: undefined }
       delete_my_account: { Args: never; Returns: undefined }
-      direct_thread_notifications_enabled: { Args: never; Returns: boolean }
-      drain_live_cards: { Args: never; Returns: number }
       drain_notification_outbox: { Args: never; Returns: number }
       drain_receipts: { Args: never; Returns: number }
       drain_settlements: { Args: never; Returns: number }
@@ -3704,9 +2892,8 @@ export type Database = {
       }
       get_payment_account: { Args: { p_user_id: string }; Returns: string }
       get_payment_customer: { Args: { p_user_id: string }; Returns: string }
-      hardening_fixes_enabled: { Args: never; Returns: boolean }
-      install_live_card_schedule: { Args: never; Returns: string }
       install_payment_events_prune: { Args: never; Returns: string }
+      install_push_schedule: { Args: never; Returns: string }
       install_receipt_schedule: { Args: never; Returns: string }
       install_reminder_schedule: { Args: never; Returns: string }
       install_series_schedule: { Args: never; Returns: string }
@@ -3714,16 +2901,6 @@ export type Database = {
       is_active_user: { Args: never; Returns: boolean }
       is_blocked_between: { Args: { a: string; b: string }; Returns: boolean }
       is_profile_active: { Args: { p_user: string }; Returns: boolean }
-      job_bid_count: { Args: { p_job_id: string }; Returns: number }
-      job_bid_counts: {
-        Args: { p_job_ids: string[] }
-        Returns: {
-          bid_count: number
-          job_id: string
-        }[]
-      }
-      job_categories_expanded: { Args: never; Returns: boolean }
-      job_completions_enabled: { Args: never; Returns: boolean }
       job_hotspots: {
         Args: never
         Returns: {
@@ -3743,8 +2920,6 @@ export type Database = {
           offer_count: number
         }[]
       }
-      job_offer_rpcs_enabled: { Args: never; Returns: boolean }
-      job_offers_enabled: { Args: never; Returns: boolean }
       job_payment_state: {
         Args: { p_job_id: string }
         Returns: {
@@ -3845,8 +3020,6 @@ export type Database = {
           videos: Json
         }[]
       }
-      legal_acceptance_enabled: { Args: never; Returns: boolean }
-      live_card_state: { Args: { p_job_id: string }; Returns: Json }
       mark_direct_thread_read: {
         Args: { p_thread_id: string }
         Returns: undefined
@@ -3856,7 +3029,6 @@ export type Database = {
         Returns: {
           accepted_bid_id: string | null
           accepted_offer_id: string | null
-          area_code: string | null
           arrival_end_hour: number | null
           arrival_start_hour: number | null
           arrived_at: string | null
@@ -3886,7 +3058,6 @@ export type Database = {
           needed_today: boolean
           photos: Json
           pricing_mode: string
-          property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
           series_id: string | null
@@ -3902,52 +3073,12 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      marketplace_thread_identity_enabled: { Args: never; Returns: boolean }
-      match_workers_semantic: {
-        Args: {
-          p_categories?: string[]
-          p_limit?: number
-          p_min_similarity?: number
-          p_query_embedding: number[]
-        }
-        Returns: {
-          avatar_url: string
-          categories: string[]
-          completed_total: number
-          evidence_categories: string[]
-          final_score: number
-          full_name: string
-          matched_categories: string[]
-          rating_avg: number
-          rating_count: number
-          reason_code: string
-          related_completed: number
-          semantic_score: number
-          verification_status: string
-          worker_id: string
-        }[]
-      }
-      messaging_lock_enabled: { Args: never; Returns: boolean }
       messaging_unlocked: {
         Args: { p_direct_thread_id?: string; p_job_id?: string }
         Returns: boolean
       }
       money_label: { Args: { p_cents: number }; Returns: string }
-      my_payouts_enabled: { Args: never; Returns: boolean }
       my_payouts_status: { Args: never; Returns: string }
-      my_pending_job_requests: {
-        Args: never
-        Returns: {
-          amount_cents: number
-          client_id: string
-          direct_thread_id: string
-          id: string
-          status: string
-          thread_job_id: string
-          updated_at: string
-          worker_id: string
-        }[]
-      }
       my_pending_offers: {
         Args: never
         Returns: {
@@ -3963,7 +3094,6 @@ export type Database = {
           worker_id: string
         }[]
       }
-      notification_feed_enabled: { Args: never; Returns: boolean }
       notify_display_name: { Args: { p_user: string }; Returns: string }
       notify_nearby_for_job: { Args: { p_job_id: string }; Returns: undefined }
       offer_post_event: {
@@ -3976,7 +3106,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      offer_scoped_chat_enabled: { Args: never; Returns: boolean }
       open_job_dispute: {
         Args: { p_details?: string; p_job_id: string; p_reason: string }
         Returns: {
@@ -4002,22 +3131,6 @@ export type Database = {
         Args: { p_name: string; p_namespace: string }
         Returns: boolean
       }
-      phase68_deleted_at_authorization_enabled: {
-        Args: never
-        Returns: boolean
-      }
-      phase69_execute_lockdown_enabled: { Args: never; Returns: boolean }
-      phase70_unsend_message_authz_enabled: { Args: never; Returns: boolean }
-      phase71_reviews_read_lockdown_enabled: { Args: never; Returns: boolean }
-      phase72_storage_read_lockdown_enabled: { Args: never; Returns: boolean }
-      phase73_null_safe_guards_enabled: { Args: never; Returns: boolean }
-      phase75_security_hardening_enabled: { Args: never; Returns: boolean }
-      phase76_corrections_enabled: { Args: never; Returns: boolean }
-      phase76_rls_posture: { Args: never; Returns: Json }
-      phase77_conversation_features_enabled: { Args: never; Returns: boolean }
-      phase78_properties_enabled: { Args: never; Returns: boolean }
-      portfolio_category_freeform_enabled: { Args: never; Returns: boolean }
-      post_wizard_fields_enabled: { Args: never; Returns: boolean }
       profile_review_summaries: {
         Args: { p_role?: string; p_users: string[] }
         Returns: {
@@ -4076,8 +3189,6 @@ export type Database = {
         Args: { p_older_than?: string }
         Returns: number
       }
-      push_notifications_enabled: { Args: never; Returns: boolean }
-      push_scheduler_enabled: { Args: never; Returns: boolean }
       quiet_hours_until: { Args: { p_recipient: string }; Returns: string }
       quote_job_price: {
         Args: { p_amount_cents: number; p_at?: string }
@@ -4099,14 +3210,6 @@ export type Database = {
           p_rotate: boolean
         }
         Returns: boolean
-      }
-      refresh_worker_semantic_doc: {
-        Args: { p_worker: string }
-        Returns: undefined
-      }
-      register_live_activity: {
-        Args: { p_activity_id: string; p_job_id: string; p_push_token: string }
-        Returns: undefined
       }
       register_push_token: {
         Args: { p_platform?: string; p_token: string }
@@ -4165,7 +3268,6 @@ export type Database = {
         Returns: {
           accepted_bid_id: string | null
           accepted_offer_id: string | null
-          area_code: string | null
           arrival_end_hour: number | null
           arrival_start_hour: number | null
           arrived_at: string | null
@@ -4195,7 +3297,6 @@ export type Database = {
           needed_today: boolean
           photos: Json
           pricing_mode: string
-          property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
           series_id: string | null
@@ -4259,10 +3360,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      resolve_live_card: {
-        Args: { p_error?: string; p_outbox_id: string; p_status: string }
-        Returns: undefined
-      }
       resolve_notification: {
         Args: { p_error?: string; p_outbox_id: string; p_status: string }
         Returns: undefined
@@ -4276,15 +3373,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      respond_job_request: {
-        Args: {
-          p_action: string
-          p_amount_cents?: number
-          p_request_id: string
-        }
-        Returns: string
-      }
-      review_integrity_enabled: { Args: never; Returns: boolean }
       review_is_revealed: {
         Args: {
           p_created_at: string
@@ -4294,249 +3382,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      sandbox_authorize_job_payment: {
-        Args: { p_job_id: string }
-        Returns: {
-          amount_cents: number
-          authorized_at: string | null
-          charge_amount_cents: number | null
-          chargeback_at: string | null
-          chargeback_ref: string | null
-          created_at: string
-          customer_fee_bps: number | null
-          customer_fee_cents: number
-          funding_due_at: string | null
-          held_at: string | null
-          id: string
-          job_id: string
-          kind: Database["public"]["Enums"]["payment_kind"]
-          last_error: string | null
-          offer_id: string | null
-          paid_out_at: string | null
-          payee_id: string
-          payer_id: string
-          platform_fee_cents: number
-          provider: string
-          provider_ref: string | null
-          refund_attempts: number
-          refund_cents: number | null
-          refund_reason: string | null
-          refund_ref: string | null
-          release_reason: string | null
-          release_requested_at: string | null
-          released_at: string | null
-          status: Database["public"]["Enums"]["payment_status"]
-          stripe_payment_intent_id: string | null
-          tax_cents: number
-          transfer_attempts: number
-          transfer_cents: number | null
-          transfer_ref: string | null
-          transfer_reversed_at: string | null
-          updated_at: string
-          worker_fee_bps: number | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "payments"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      sandbox_cash_out: {
-        Args: never
-        Returns: {
-          amount_cents: number
-          authorized_at: string | null
-          charge_amount_cents: number | null
-          chargeback_at: string | null
-          chargeback_ref: string | null
-          created_at: string
-          customer_fee_bps: number | null
-          customer_fee_cents: number
-          funding_due_at: string | null
-          held_at: string | null
-          id: string
-          job_id: string
-          kind: Database["public"]["Enums"]["payment_kind"]
-          last_error: string | null
-          offer_id: string | null
-          paid_out_at: string | null
-          payee_id: string
-          payer_id: string
-          platform_fee_cents: number
-          provider: string
-          provider_ref: string | null
-          refund_attempts: number
-          refund_cents: number | null
-          refund_reason: string | null
-          refund_ref: string | null
-          release_reason: string | null
-          release_requested_at: string | null
-          released_at: string | null
-          status: Database["public"]["Enums"]["payment_status"]
-          stripe_payment_intent_id: string | null
-          tax_cents: number
-          transfer_attempts: number
-          transfer_cents: number | null
-          transfer_ref: string | null
-          transfer_reversed_at: string | null
-          updated_at: string
-          worker_fee_bps: number | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "payments"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      sandbox_cash_out_enabled: { Args: never; Returns: boolean }
-      sandbox_hold_job_payment: {
-        Args: { p_job_id: string }
-        Returns: {
-          amount_cents: number
-          authorized_at: string | null
-          charge_amount_cents: number | null
-          chargeback_at: string | null
-          chargeback_ref: string | null
-          created_at: string
-          customer_fee_bps: number | null
-          customer_fee_cents: number
-          funding_due_at: string | null
-          held_at: string | null
-          id: string
-          job_id: string
-          kind: Database["public"]["Enums"]["payment_kind"]
-          last_error: string | null
-          offer_id: string | null
-          paid_out_at: string | null
-          payee_id: string
-          payer_id: string
-          platform_fee_cents: number
-          provider: string
-          provider_ref: string | null
-          refund_attempts: number
-          refund_cents: number | null
-          refund_reason: string | null
-          refund_ref: string | null
-          release_reason: string | null
-          release_requested_at: string | null
-          released_at: string | null
-          status: Database["public"]["Enums"]["payment_status"]
-          stripe_payment_intent_id: string | null
-          tax_cents: number
-          transfer_attempts: number
-          transfer_cents: number | null
-          transfer_ref: string | null
-          transfer_reversed_at: string | null
-          updated_at: string
-          worker_fee_bps: number | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "payments"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      sandbox_payments_enabled: { Args: never; Returns: boolean }
-      sandbox_release_job_payment: {
-        Args: { p_job_id: string }
-        Returns: {
-          amount_cents: number
-          authorized_at: string | null
-          charge_amount_cents: number | null
-          chargeback_at: string | null
-          chargeback_ref: string | null
-          created_at: string
-          customer_fee_bps: number | null
-          customer_fee_cents: number
-          funding_due_at: string | null
-          held_at: string | null
-          id: string
-          job_id: string
-          kind: Database["public"]["Enums"]["payment_kind"]
-          last_error: string | null
-          offer_id: string | null
-          paid_out_at: string | null
-          payee_id: string
-          payer_id: string
-          platform_fee_cents: number
-          provider: string
-          provider_ref: string | null
-          refund_attempts: number
-          refund_cents: number | null
-          refund_reason: string | null
-          refund_ref: string | null
-          release_reason: string | null
-          release_requested_at: string | null
-          released_at: string | null
-          status: Database["public"]["Enums"]["payment_status"]
-          stripe_payment_intent_id: string | null
-          tax_cents: number
-          transfer_attempts: number
-          transfer_cents: number | null
-          transfer_ref: string | null
-          transfer_reversed_at: string | null
-          updated_at: string
-          worker_fee_bps: number | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "payments"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      sandbox_tip_worker: {
-        Args: { p_amount_cents: number; p_job_id: string }
-        Returns: {
-          amount_cents: number
-          authorized_at: string | null
-          charge_amount_cents: number | null
-          chargeback_at: string | null
-          chargeback_ref: string | null
-          created_at: string
-          customer_fee_bps: number | null
-          customer_fee_cents: number
-          funding_due_at: string | null
-          held_at: string | null
-          id: string
-          job_id: string
-          kind: Database["public"]["Enums"]["payment_kind"]
-          last_error: string | null
-          offer_id: string | null
-          paid_out_at: string | null
-          payee_id: string
-          payer_id: string
-          platform_fee_cents: number
-          provider: string
-          provider_ref: string | null
-          refund_attempts: number
-          refund_cents: number | null
-          refund_reason: string | null
-          refund_ref: string | null
-          release_reason: string | null
-          release_requested_at: string | null
-          released_at: string | null
-          status: Database["public"]["Enums"]["payment_status"]
-          stripe_payment_intent_id: string | null
-          tax_cents: number
-          transfer_attempts: number
-          transfer_cents: number | null
-          transfer_ref: string | null
-          transfer_reversed_at: string | null
-          updated_at: string
-          worker_fee_bps: number | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "payments"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      security_definer_search_path_enabled: { Args: never; Returns: boolean }
       series_close_offers: {
         Args: { p_actor: string; p_job_id: string }
         Returns: undefined
@@ -4561,29 +3406,6 @@ export type Database = {
         Returns: string
       }
       set_active_mode: { Args: { p_mode: string }; Returns: string }
-      set_block: {
-        Args: { p_blocked: string; p_expires_at?: string }
-        Returns: undefined
-      }
-      set_conversation_state: {
-        Args: {
-          p_archived?: boolean
-          p_clear?: boolean
-          p_delete?: boolean
-          p_direct_thread_id?: string
-          p_hidden?: boolean
-          p_job_id?: string
-        }
-        Returns: undefined
-      }
-      set_direct_thread_read_at: {
-        Args: { p_read_at: string; p_thread_id: string }
-        Returns: undefined
-      }
-      set_job_property: {
-        Args: { p_job_id: string; p_property_id: string }
-        Returns: undefined
-      }
       set_payment_account: {
         Args: { p_account_id: string; p_user_id: string }
         Returns: string
@@ -4600,8 +3422,6 @@ export type Database = {
         Args: { p_status: string; p_user_id: string }
         Returns: boolean
       }
-      settlement_retry_enabled: { Args: never; Returns: boolean }
-      settlement_schedules_enabled: { Args: never; Returns: boolean }
       should_notify: {
         Args: { p_actor: string; p_category: string; p_recipient: string }
         Returns: boolean
@@ -4633,16 +3453,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      start_live_location: {
-        Args: {
-          p_direct_thread_id?: string
-          p_expires_at: string
-          p_job_id?: string
-          p_lat: number
-          p_lng: number
-        }
-        Returns: string
-      }
       stop_job_series: {
         Args: { p_series_id: string }
         Returns: {
@@ -4670,11 +3480,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      stop_live_location: {
-        Args: { p_direct_thread_id?: string; p_job_id?: string }
-        Returns: undefined
-      }
-      stripe_foundation_enabled: { Args: never; Returns: boolean }
       transition_job_status: {
         Args: {
           p_completion_photos?: Json
@@ -4685,7 +3490,6 @@ export type Database = {
         Returns: {
           accepted_bid_id: string | null
           accepted_offer_id: string | null
-          area_code: string | null
           arrival_end_hour: number | null
           arrival_start_hour: number | null
           arrived_at: string | null
@@ -4715,7 +3519,6 @@ export type Database = {
           needed_today: boolean
           photos: Json
           pricing_mode: string
-          property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
           series_id: string | null
@@ -4756,7 +3559,6 @@ export type Database = {
         Returns: {
           accepted_bid_id: string | null
           accepted_offer_id: string | null
-          area_code: string | null
           arrival_end_hour: number | null
           arrival_start_hour: number | null
           arrived_at: string | null
@@ -4786,7 +3588,6 @@ export type Database = {
           needed_today: boolean
           photos: Json
           pricing_mode: string
-          property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
           series_id: string | null
@@ -4801,15 +3602,6 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
-      }
-      update_live_location: {
-        Args: {
-          p_direct_thread_id?: string
-          p_job_id?: string
-          p_lat: number
-          p_lng: number
-        }
-        Returns: undefined
       }
       update_my_profile: {
         Args: { p_patch: Json }
@@ -4844,7 +3636,6 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      view_security_invoker_enabled: { Args: never; Returns: boolean }
       withdraw_job_dispute: {
         Args: { p_dispute_id: string }
         Returns: {
@@ -4872,23 +3663,6 @@ export type Database = {
         Returns: {
           category: string
           job_count: number
-        }[]
-      }
-      worker_self_service_enabled: { Args: never; Returns: boolean }
-      worker_semantic_coverage: {
-        Args: never
-        Returns: {
-          embedded: number
-          stale: number
-          total: number
-        }[]
-      }
-      worker_semantic_refresh_queue: {
-        Args: { p_limit?: number }
-        Returns: {
-          source_hash: string
-          source_text: string
-          worker_id: string
         }[]
       }
     }

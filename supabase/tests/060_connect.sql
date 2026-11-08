@@ -42,7 +42,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(136);
+select plan(130);
 
 -- psql does not interpolate :'vars' inside dollar quotes, so ids also live in
 -- this temp table for the statements throws_ok/lives_ok execute.
@@ -386,8 +386,6 @@ select ok(
 );
 select has_function('public', 'set_payouts_enabled', array['text', 'boolean'],
   '5: R5''s set_payouts_enabled(text, boolean) still exists, untouched');
-select has_function('public', 'my_payouts_enabled', array[]::text[],
-  '5: R4''s my_payouts_enabled() still exists, untouched');
 
 -- The catalog: EXECUTE on the three service functions, and on the one
 -- client function, by role.
@@ -467,8 +465,6 @@ select throws_ok(
 );
 select is(public.my_payouts_status(), 'none',
   '5: owner — my_payouts_status() is none with no row');
-select is(public.my_payouts_enabled(), false,
-  '5: owner — my_payouts_enabled() is false (R4''s function, unchanged)');
 select tests.clear_auth();
 
 -- As a stranger: the owner's id and state are not theirs either.
@@ -592,8 +588,6 @@ select isnt((select payouts_checked_at from public.payment_accounts where user_i
   '6: runner — payouts_checked_at is stamped');
 
 select tests.authenticate_as(:'worker');
-select is(public.my_payouts_enabled(), true,
-  '6: owner — my_payouts_enabled() is true (R4''s function reads the derived column)');
 select is(public.my_payouts_status(), 'enabled',
   '6: owner — my_payouts_status() is enabled');
 select tests.clear_auth();
@@ -648,17 +642,10 @@ select is(
 select tests.authenticate_as(:'worker');
 select is(public.my_payouts_status(), 'under_review',
   '6: owner — my_payouts_status() follows: under_review');
-select is(public.my_payouts_enabled(), false,
-  '6: owner — my_payouts_enabled() follows: false');
 select tests.clear_auth();
 
--- ---------------------------------------------------------------------------
--- §7. P7 — THE SENTINEL.
--- ---------------------------------------------------------------------------
-select ok(public.connect_onboarding_enabled(),
-  '7: connect_onboarding_enabled() is true — the whole migration committed');
-select ok(has_function_privilege('authenticated', 'public.connect_onboarding_enabled()', 'EXECUTE'),
-  '7: and authenticated may read the sentinel, as with the other two');
+-- §7 (the connect_onboarding_enabled sentinel) went with the probe markers in
+-- lean v1 (ruling 53).
 
 select * from finish();
 rollback;

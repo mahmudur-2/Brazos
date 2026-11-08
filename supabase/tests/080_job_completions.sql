@@ -16,15 +16,14 @@
 -- accept_offer) by tests.r4_hire with a losing bidder, and funded on the
 -- stripe path through begin_job_payment + a synthesized
 -- payment_intent.succeeded event (tests.r4_fund). J2 and J3 are hired the same
--- way and funded on the sandbox path (sandbox_authorize_job_payment +
--- sandbox_hold_job_payment), because the guard is provider-independent and
--- both paths must refuse identically. The three helpers are copied from
+-- way and funded through the shared tests.test_fund_job (lean v1 removed the
+-- sandbox path they used to take). The three helpers are copied from
 -- 070_settlement_retry.sql verbatim — same names, same call shapes — because
 -- each file's transaction owns its own copy and rolls it back. Everything
 -- rolls back.
 --
 -- WHAT IS PROVEN, section by section:
---   §0 the sentinel, the ACLs the migration must not have moved, the table's
+--   §0 the ACLs the migration must not have moved, the table's
 --      shape and its privilege posture (one SELECT policy, no client writes).
 --   §2 the guard, stripe path: null photos, an empty array and a video-only
 --      payload are each refused with the one sentence; the job is untouched
@@ -39,7 +38,7 @@
 --   §5 RLS and privileges as every member of the cast: the two parties read,
 --      the bidder and the stranger get zero rows, anon is refused outright,
 --      nobody inserts, updates or deletes, service reads.
---   §6 the sandbox path refuses and records identically.
+--   §6 a second job (J2) refuses and records identically.
 --   §7 five photos keep their order; six still hit the unchanged cap.
 --   §8 the money path after a guarded completion is unchanged: the customer
 --      can still approve (release_job_payment requests the transfer, D23).
@@ -51,7 +50,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(69);
+select plan(64);
 
 -- psql does not interpolate :'vars' inside dollar quotes, so ids also live in
 -- this temp table for the statements throws_ok/lives_ok execute.
@@ -128,17 +127,9 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- §0. THE SENTINEL, the ACLs the migration must not have moved, and the
---     table's shape and privilege posture.
+-- §0. The ACLs the migration must not have moved, and the table's shape and
+--     privilege posture (its sentinel went in lean v1, ruling 53).
 -- ---------------------------------------------------------------------------
-select ok(public.job_completions_enabled(),
-  '0: job_completions_enabled() is true — the whole migration committed');
-select ok(has_function_privilege('authenticated', 'public.job_completions_enabled()', 'EXECUTE'),
-  '0: and authenticated may read the sentinel, as with the three sentinels before it');
-select ok(not has_function_privilege('anon', 'public.job_completions_enabled()', 'EXECUTE'),
-  '0: … and anon may not');
-select ok(public.settlement_retry_enabled() and public.stripe_foundation_enabled(),
-  '0: the migrations the pre-flight requires are applied beneath it');
 select ok(has_function_privilege('authenticated', 'public.transition_job_status(uuid, text, jsonb, jsonb)', 'EXECUTE'),
   '0: create or replace preserved transition_job_status''s ACL — authenticated still executes it');
 select ok(not has_function_privilege('anon', 'public.transition_job_status(uuid, text, jsonb, jsonb)', 'EXECUTE'),
@@ -228,7 +219,7 @@ select is((select count(*) from public.notification_outbox where recipient_id = 
 -- §4. THE TABLE'S OWN CONSTRAINTS, as the runner (RLS bypassed): one per job,
 --     at least one photo, never null. J2 is hired here for the next sections.
 -- ---------------------------------------------------------------------------
-select tests.r4_hire(:'customer', :'worker', 4000, 'R6c J2 sandbox') as j2 \gset
+select tests.r4_hire(:'customer', :'worker', 4000, 'R6c J2') as j2 \gset
 insert into fx values ('j2', :'j2');
 select throws_ok($$ insert into public.job_completions (job_id, completed_by, photos)
   values ((select v from fx where k = 'j1'), (select v from fx where k = 'worker'), array['https://example.com/second.jpg']) $$,
@@ -285,8 +276,6 @@ select throws_ok($$ insert into public.job_completions (job_id, completed_by, ph
   '42501', 'permission denied for table job_completions', '5: anon — cannot insert');
 select throws_ok($$ select public.transition_job_status((select v from fx where k = 'j2'), 'in_progress') $$,
   '42501', 'permission denied for function transition_job_status', '5: anon — cannot execute transition_job_status');
-select throws_ok($$ select public.job_completions_enabled() $$,
-  '42501', 'permission denied for function job_completions_enabled', '5: anon — cannot execute the sentinel');
 select tests.clear_auth();
 select set_config('role', 'service_role', true);
 select is((select count(*) from public.job_completions), 1::bigint,
@@ -294,26 +283,25 @@ select is((select count(*) from public.job_completions), 1::bigint,
 select set_config('role', 'none', true);
 
 -- ---------------------------------------------------------------------------
--- §6. THE SANDBOX PATH (J2): the guard refuses and the row is written
---     identically — the guard is mode-independent.
+-- §6. A SECOND JOB (J2): the guard refuses and the row is written
+--     identically.
 -- ---------------------------------------------------------------------------
-select tests.authenticate_as(:'customer');
-select (public.sandbox_authorize_job_payment(:'j2')).id as p2 \gset
+select tests.test_fund_job(:'j2') as p2 \gset
 insert into fx values ('p2', :'p2');
-select is((public.sandbox_hold_job_payment(:'j2')).status::text, 'held', 'J2: the sandbox hold lands');
+select is((select status::text from public.payments where id = :'p2'), 'held', 'J2: the hold lands');
 select tests.authenticate_as(:'worker');
 select is((public.transition_job_status(:'j2', 'in_progress')).status::text, 'in_progress',
-  '6: sandbox path: the start succeeds once held');
+  '6: J2: the start succeeds once held');
 select throws_ok($$ select public.transition_job_status((select v from fx where k = 'j2'), 'completed') $$,
   'P0001', 'At least one photo of the finished work is required to mark this job complete',
-  '6: sandbox path: completing without a photo is refused identically');
+  '6: J2: completing without a photo is refused identically');
 select ok((select j.status = 'completed' and j.completed_at is not null
            from public.transition_job_status(:'j2', 'completed', '["https://example.com/r6c-j2.jpg"]'::jsonb) j),
-  '6: sandbox path: the completion lands with one photo');
+  '6: J2: the completion lands with one photo');
 select tests.clear_auth();
 select ok((select c.completed_by = :'worker' and c.photos = array['https://example.com/r6c-j2.jpg']
            from public.job_completions c where c.job_id = :'j2'),
-  '6: sandbox path: the row is written the same way');
+  '6: J2: the row is written the same way');
 select is((select count(*) from public.job_completions), 2::bigint, '6: two completed jobs, two rows');
 
 -- ---------------------------------------------------------------------------
@@ -321,10 +309,9 @@ select is((select count(*) from public.job_completions), 2::bigint, '6: two comp
 -- ---------------------------------------------------------------------------
 select tests.r4_hire(:'customer', :'worker', 3000, 'R6c J3 five photos') as j3 \gset
 insert into fx values ('j3', :'j3');
-select tests.authenticate_as(:'customer');
-select (public.sandbox_authorize_job_payment(:'j3')).id as p3 \gset
+select tests.test_fund_job(:'j3') as p3 \gset
 insert into fx values ('p3', :'p3');
-select is((public.sandbox_hold_job_payment(:'j3')).status::text, 'held', 'J3: the sandbox hold lands');
+select is((select status::text from public.payments where id = :'p3'), 'held', 'J3: the hold lands');
 select tests.authenticate_as(:'worker');
 select is((public.transition_job_status(:'j3', 'in_progress')).status::text, 'in_progress', 'J3: started');
 select throws_ok($$ select public.transition_job_status((select v from fx where k = 'j3'), 'completed',

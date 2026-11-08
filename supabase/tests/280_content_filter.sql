@@ -4,7 +4,7 @@
 -- THE CAST: a customer and a worker, plus the runner — the connection's own role, RLS bypassed —
 -- for fixture rows. The job is posted and the bio saved AS THEIR OWNERS, on the paths the app
 -- takes (create_job, update_my_profile); the offer goes through create_offer() as the worker.
--- Job edits, reviews, messages and portfolio items are written by the runner: their app paths need a
+-- Job edits, reviews and messages are written by the runner: their app paths need a
 -- completed or assigned job, and a BEFORE trigger fires for every role alike, so the runner's
 -- write proves the same refusal without rebuilding the lifecycle here (020/040 prove those paths).
 -- Everything rolls back; no commit.
@@ -13,7 +13,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(23);
+select plan(22);
 
 select tests.create_user('b3.customer@brazos.test', 'Cara Customer') as customer \gset
 select tests.create_user('b3.worker@brazos.test',   'Wren Worker')   as worker   \gset
@@ -105,7 +105,7 @@ select throws_ok(
 select tests.clear_auth();
 
 -- ---------------------------------------------------------------------------
--- 4. Messages, reviews and portfolio captions (runner; see the header).
+-- 4. Messages and reviews (runner; see the header).
 -- ---------------------------------------------------------------------------
 select throws_ok(
   format($$ insert into public.messages (job_id, sender_id, content) values (%L, %L, 'FUCKING late') $$, :'job', :'customer'),
@@ -120,11 +120,6 @@ select throws_ok(
   format($$ insert into public.reviews (job_id, reviewer_id, reviewee_id, rating, comment) values (%L, %L, %L, 1, 'a total retard') $$, :'job', :'customer', :'worker'),
   'P0001', 'That includes words Brazos doesn''t allow. Edit it and try again.',
   '4c: a blocked word in a review comment is refused'
-);
-select throws_ok(
-  format($$ insert into public.portfolio_items (worker_id, photo_url, category, caption) values (%L, 'https://example.test/p.jpg', 'other', 'porn shelf') $$, :'worker'),
-  'P0001', 'That includes words Brazos doesn''t allow. Edit it and try again.',
-  '4d: a blocked word in a portfolio caption is refused'
 );
 
 -- ---------------------------------------------------------------------------
@@ -164,8 +159,8 @@ select ok(
 select is(
   (select count(*)::int from pg_trigger t join pg_proc p on p.oid = t.tgfoid
     where p.proname = 'reject_blocked_terms' and not t.tgisinternal),
-  7,
-  '6c: the filter guards exactly the seven surfaces (20261003000900 added service listings)'
+  6,
+  '6c: the filter guards exactly the six surfaces (20261003000900 added service listings; lean v1 dropped portfolio captions)'
 );
 
 select * from finish();

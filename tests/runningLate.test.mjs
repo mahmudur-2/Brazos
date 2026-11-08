@@ -73,7 +73,7 @@ test('[static] the server: one writer for the hired worker before arriving, one 
   assert.match(sql, /revoke all on function public\.report_running_late\(uuid, integer\) from public, anon;/);
   assert.match(sql, /grant execute on function public\.report_running_late\(uuid, integer\) to authenticated;/);
   assert.doesNotMatch(sql, /set status|assigned_worker_id =/, 'status and assignment are not this function\'s');
-  assert.match(read('supabase/tests/040_authz.sql'), /report_running_late, respond_job_request/, 'the authz roster names it');
+  assert.match(read('supabase/tests/040_authz.sql'), /report_running_late, /, 'the authz roster names it');
 });
 
 test('[static] the app: the three chips inside the progress card, before arriving, once the payment is held', () => {

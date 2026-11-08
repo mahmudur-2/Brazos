@@ -13,10 +13,9 @@
 --   runner     the connection's own role, RLS bypassed — fixtures, ground
 --              truth, and the stand-in for anything the edge functions do
 --
--- THE FIXTURE: two jobs and two payments rows written directly by the runner,
--- one provider = 'sandbox' and one provider = 'stripe', because §4 needs the
--- SAME release on both providers and payments_one_active_per_job_kind allows
--- only one live money row per (job, kind). Everything rolls back.
+-- THE FIXTURE: one job and one provider = 'stripe' payments row written
+-- directly by the runner (lean v1 removed the sandbox row's sentence, and
+-- with it the sandbox twin). Everything rolls back.
 --
 -- FIXTURE SURGERY, DECLARED:
 --   * the jobs and payments rows are INSERTed by the runner rather than hired
@@ -48,7 +47,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(71);
+select plan(70);
 
 -- psql does not interpolate :'vars' inside dollar quotes, so ids also live in
 -- this temp table for the statements throws_ok/lives_ok execute.
@@ -61,15 +60,11 @@ select tests.create_user('r5.stranger@brazos.test', 'Sam Stranger')  as stranger
 insert into fx values ('payer', :'payer'), ('payee', :'payee'), ('stranger', :'stranger');
 
 insert into public.jobs (client_id, title, assigned_worker_id)
-values (:'payer', 'R5 sandbox release fixture', :'payee') returning id as j_sandbox \gset
-insert into public.jobs (client_id, title, assigned_worker_id)
 values (:'payer', 'R5 stripe release fixture', :'payee') returning id as j_stripe \gset
 
 insert into public.payments (job_id, payer_id, payee_id, amount_cents, platform_fee_cents, provider, status)
-values (:'j_sandbox', :'payer', :'payee', 12000, 0, 'sandbox', 'held') returning id as p_sandbox \gset
-insert into public.payments (job_id, payer_id, payee_id, amount_cents, platform_fee_cents, provider, status)
 values (:'j_stripe', :'payer', :'payee', 12000, 0, 'stripe', 'held') returning id as p_stripe \gset
-insert into fx values ('p_sandbox', :'p_sandbox'), ('p_stripe', :'p_stripe');
+insert into fx values ('p_stripe', :'p_stripe');
 
 -- ---------------------------------------------------------------------------
 -- §1. THE CORRECTED GUARD (C-2 bullet 1)
@@ -219,10 +214,10 @@ select throws_ok(
 delete from vault.secrets where name = 'process_settlements_service_key';
 
 -- ---------------------------------------------------------------------------
--- §4. THE RELEASE NOTIFICATION IS PROVIDER-AWARE (C-2 bullet 4)
+-- §4. THE RELEASE NOTIFICATION (C-2 bullet 4)
 --
--- The sandbox sentence is the baseline's, byte for byte. The stripe sentence
--- is the one a real worker reads about real money: no amount, no timing.
+-- The one sentence is the one a real worker reads about real money: no
+-- amount, no timing (lean v1 removed the sandbox sentence).
 -- Everything else about this trigger — when it fires, who it reaches, how it
 -- de-duplicates — is asserted UNCHANGED.
 -- ---------------------------------------------------------------------------
@@ -235,15 +230,8 @@ select is(
 );
 
 update public.payments set status = 'released', release_reason = 'approved', released_at = now()
- where id = :'p_sandbox';
-update public.payments set status = 'released', release_reason = 'approved', released_at = now()
  where id = :'p_stripe';
 
-select is(
-  (select body from public.notification_outbox where dedupe_key = 'payment_released:' || :'p_sandbox'::text),
-  'The payment is released to you in the sandbox ledger.',
-  '4: runner — a sandbox row keeps the baseline sentence BYTE FOR BYTE'
-);
 select is(
   (select body from public.notification_outbox where dedupe_key = 'payment_released:' || :'p_stripe'::text),
   'Your payment has been released and is on its way to your bank.',

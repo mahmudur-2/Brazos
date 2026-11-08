@@ -41,7 +41,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(540);
+select plan(438);
 
 -- psql does not interpolate :'vars' inside dollar quotes, so ids also live in
 -- this temp table for the statements throws_ok/lives_ok execute.
@@ -106,13 +106,10 @@ select lives_ok($$ select public.accept_offer((select v from fx where k = 'o_liv
   'owner: accept_offer on the worker''s j_live bid succeeds (positive control for every accept_offer refusal below)');
 select lives_ok($$ select public.accept_offer((select v from fx where k = 'o_done_w')) $$,
   'owner: accept_offer on the worker''s j_done bid succeeds');
-select (public.sandbox_authorize_job_payment(:'j_live')).id as p_live \gset
-select (public.sandbox_authorize_job_payment(:'j_done')).id as p_done \gset
+select tests.clear_auth();
+select tests.test_fund_job(:'j_live') as p_live \gset
+select tests.test_fund_job(:'j_done') as p_done \gset
 insert into fx values ('p_live', :'p_live'), ('p_done', :'p_done');
-select lives_ok($$ select public.sandbox_hold_job_payment((select v from fx where k = 'j_live')) $$,
-  'owner: sandbox_hold_job_payment holds j_live''s payment (positive control for the hold refusals)');
-select lives_ok($$ select public.sandbox_hold_job_payment((select v from fx where k = 'j_done')) $$,
-  'owner: sandbox_hold_job_payment holds j_done''s payment');
 
 -- The worker carries j_done to completed.
 select tests.authenticate_as(:'worker');
@@ -167,22 +164,13 @@ select ok(not has_table_privilege('authenticated', 'public.notification_outbox',
 select ok(not has_table_privilege('authenticated', 'public.notification_outbox', 'DELETE'), 'grant: authenticated has no DELETE on notification_outbox');
 select ok(not has_table_privilege('authenticated', 'public.direct_threads', 'INSERT'), 'grant: authenticated has no INSERT on direct_threads');
 select ok(not has_table_privilege('authenticated', 'public.direct_threads', 'UPDATE'), 'grant: authenticated has no UPDATE on direct_threads');
-select ok(not has_table_privilege('authenticated', 'public.conversation_states', 'INSERT'), 'grant: authenticated has no INSERT on conversation_states');
-select ok(not has_table_privilege('authenticated', 'public.conversation_states', 'UPDATE'), 'grant: authenticated has no UPDATE on conversation_states');
-select ok(not has_table_privilege('authenticated', 'public.live_location_shares', 'INSERT'), 'grant: authenticated has no INSERT on live_location_shares');
-select ok(not has_table_privilege('authenticated', 'public.live_location_shares', 'UPDATE'), 'grant: authenticated has no UPDATE on live_location_shares');
-select ok(not has_table_privilege('authenticated', 'public.job_requests', 'INSERT'), 'grant: authenticated has no INSERT on job_requests (legacy table)');
 select ok(not has_table_privilege('authenticated', 'public.banned_phones', 'INSERT'), 'grant: authenticated has no INSERT on banned_phones');
-select ok(not has_table_privilege('authenticated', 'public.areas', 'INSERT'), 'grant: authenticated has no INSERT on areas');
-select ok(not has_table_privilege('authenticated', 'public.worker_semantic_docs', 'SELECT'), 'grant: authenticated has no SELECT on worker_semantic_docs');
-select ok(not has_table_privilege('anon', 'public.worker_semantic_docs', 'SELECT'), 'grant: anon has no SELECT on worker_semantic_docs');
 select ok(not has_table_privilege('anon', 'public.profiles', 'SELECT'), 'grant: anon has no SELECT on profiles');
 select ok(not has_table_privilege('anon', 'public.job_offers', 'SELECT'), 'grant: anon has no SELECT on job_offers');
 select ok(not has_table_privilege('anon', 'public.payments', 'SELECT'), 'grant: anon has no SELECT on payments');
 select ok(not has_table_privilege('anon', 'public.job_disputes', 'SELECT'), 'grant: anon has no SELECT on job_disputes');
 select ok(not has_table_privilege('anon', 'public.notification_outbox', 'SELECT'), 'grant: anon has no SELECT on notification_outbox');
 select ok(not has_table_privilege('anon', 'public.worker_services', 'SELECT'), 'grant: anon has no SELECT on worker_services');
-select ok(not has_table_privilege('anon', 'public.areas', 'SELECT'), 'grant: anon has no SELECT on areas');
 
 -- The refusals, as the owner — the most-entitled real identity for these rows.
 select tests.authenticate_as(:'owner');
@@ -217,7 +205,7 @@ select throws_ok($$ update public.job_offers set status = 'accepted' where id = 
 select throws_ok($$ delete from public.job_offers where id = (select v from fx where k = 'o_open_b') $$,
   '42501', 'permission denied for table job_offers', 'owner: direct DELETE from job_offers is refused');
 select is((select count(*) from public.payments where id = :'p_live'), 1::bigint,
-  'owner: reads j_live''s held payment, the row the sandbox RPCs made (positive control for the payments refusals)');
+  'owner: reads j_live''s held payment, the row checkout made (positive control for the payments refusals)');
 select throws_ok($$ insert into public.payments (job_id, payer_id, payee_id, amount_cents, platform_fee_cents)
   values ((select v from fx where k = 'j_open'), (select v from fx where k = 'owner'), (select v from fx where k = 'worker'), 1, 0) $$,
   '42501', 'permission denied for table payments', 'owner: direct INSERT into payments is refused');
@@ -240,25 +228,9 @@ select throws_ok($$ insert into public.notification_outbox (recipient_id, catego
   '42501', 'permission denied for table notification_outbox', 'owner: direct INSERT into notification_outbox (forging a notification) is refused');
 select throws_ok($$ insert into public.direct_threads (user_a, user_b) values (least((select v from fx where k = 'owner'), (select v from fx where k = 'stranger')), greatest((select v from fx where k = 'owner'), (select v from fx where k = 'stranger'))) $$,
   '42501', 'permission denied for table direct_threads', 'owner: direct INSERT into direct_threads is refused');
-select throws_ok($$ insert into public.conversation_states (user_id, job_id) values ((select v from fx where k = 'owner'), (select v from fx where k = 'j_live')) $$,
-  '42501', 'permission denied for table conversation_states', 'owner: direct INSERT into conversation_states is refused (set_conversation_state is the path, §7)');
-select throws_ok($$ insert into public.live_location_shares (sharer_id, job_id, lat, lng, expires_at)
-  values ((select v from fx where k = 'owner'), (select v from fx where k = 'j_live'), 1, 1, now() + interval '1 hour') $$,
-  '42501', 'permission denied for table live_location_shares', 'owner: direct INSERT into live_location_shares is refused (start_live_location is the path, §8)');
-select throws_ok($$ insert into public.job_requests (client_id, worker_id, title, category, amount_cents, awaiting_id, direct_thread_id)
-  values ((select v from fx where k = 'owner'), (select v from fx where k = 'worker'), 'legacy', 'other', 1, (select v from fx where k = 'worker'), (select v from fx where k = 'dt_ow')) $$,
-  '42501', 'permission denied for table job_requests', 'owner: direct INSERT into the legacy job_requests table is refused (no sanctioned write path exists)');
 select throws_ok($$ insert into public.banned_phones (phone) values ('+15550000000') $$,
   '42501', 'permission denied for table banned_phones', 'owner: direct INSERT into banned_phones is refused');
-select throws_ok($$ select count(*) from public.worker_semantic_docs $$,
-  '42501', 'permission denied for table worker_semantic_docs', 'owner: SELECT on worker_semantic_docs (embeddings) is refused');
-select throws_ok($$ select count(*) from public.v_bids_projection_drift $$,
-  '42501', 'permission denied for view v_bids_projection_drift', 'owner: the drift diagnostic view is not readable by a client');
 select tests.clear_auth();
-select is((select count(*) from public.worker_semantic_docs where worker_id = :'worker'), 1::bigint,
-  'runner: the worker''s semantic doc row exists (positive control: the refusal above hid a real row)');
-select is((select count(*) from public.v_bids_projection_drift where job_id in (:'j_open', :'j_live', :'j_done')), 0::bigint,
-  'runner: the bids projection has zero drift for the fixture chains (positive control: the view is readable and empty)');
 
 -- ---------------------------------------------------------------------------
 -- §2. jobs — jobs_select_own / jobs_select_assigned_worker /
@@ -322,7 +294,7 @@ select is((select count(*) from public.bids where job_id = :'j_open'), 0::bigint
 -- §4a. bids — the DELETE grant (R7b). R7's census of client-writable tables
 --      found this the one table in `public` reachable by a client write with
 --      no authorization proof: `authenticated` holds DELETE
---      (20260901000000_baseline.sql:7813), RLS is on, and not one of the six
+--      (20260901000000_baseline.sql:7813), RLS is on, and not one of the four
 --      policies is FOR DELETE. The grant is therefore real and the command
 --      default-denied — every row is unreachable through it. That is asserted
 --      here on ONE row, as five identities, rather than inferred from the
@@ -330,11 +302,9 @@ select is((select count(*) from public.bids where job_id = :'j_open'), 0::bigint
 --      record what the shape actually does.
 --
 --      `bids` is the LEGACY projection, not the live write surface: it is
---      maintained from job_offers by the phase47/48 projection (see
---      v_bids_projection_drift's comment) and §1 already proves authenticated
---      holds no INSERT and no UPDATE on it, which leaves its three PUBLIC-role
---      "workers insert/update own bids" policies dead letters with no grant
---      behind them. It retires with the compatibility shims.
+--      maintained from job_offers by the phase47/48 projection and §1 already
+--      proves authenticated holds no INSERT and no UPDATE on it; its dead
+--      "workers insert/update own bids" policies went in lean v1 (ruling 52).
 -- ---------------------------------------------------------------------------
 select tests.clear_auth();
 select id as b_live from public.bids where job_id = :'j_live' and worker_id = :'worker' \gset
@@ -345,8 +315,8 @@ select is((select count(*) from public.bids where id = :'b_live'), 1::bigint,
 -- The catalog, as fact rather than inference.
 select policies_are('public', 'bids', ARRAY[
   'bids_select_job_owner', 'bids_select_own', 'job owner views bids on their job',
-  'workers insert own bids', 'workers update own bids', 'workers view own bids'],
-  'catalog: public.bids carries exactly these six policies — four SELECT, one INSERT, one UPDATE, and NONE for DELETE');
+  'workers view own bids'],
+  'catalog: public.bids carries exactly these four SELECT policies, and NONE for DELETE');
 select table_privs_are('public', 'bids', 'authenticated',
   ARRAY['SELECT', 'REFERENCES', 'DELETE', 'TRIGGER', 'TRUNCATE'],
   'catalog: authenticated really does hold DELETE on bids (recorded, not inferred), plus SELECT/REFERENCES/TRIGGER/TRUNCATE');
@@ -470,14 +440,10 @@ select throws_ok($$ select public.decline_offer((select v from fx where k = 'o_o
 select throws_ok($$ select public.withdraw_offer((select v from fx where k = 'o_open_w')) $$,
   '42501', 'permission denied for function withdraw_offer', 'anon: cannot execute withdraw_offer');
 
--- create_offer and the two deprecated shims that delegate to it
+-- create_offer
 select tests.authenticate_as(:'owner');
 select throws_ok($$ select public.create_offer(p_amount_cents := 100, p_job_id := (select v from fx where k = 'j_open')) $$,
   'P0001', 'A client cannot bid on their own job', 'owner: cannot bid on their own job');
-select throws_ok($$ select public.create_bid((select v from fx where k = 'j_open'), 100, '') $$,
-  'P0001', 'A client cannot bid on their own job', 'owner: the create_bid shim delegates to create_offer, so the same refusal holds');
-select throws_ok($$ select public.create_job_request((select v from fx where k = 'owner'), 'self', 'self', 'other', 'x', 100) $$,
-  'P0001', 'You cannot send an offer to yourself', 'owner: the create_job_request shim cannot target its own caller');
 select tests.authenticate_as(:'stranger');
 select throws_ok($$ select public.create_offer(p_amount_cents := 100, p_job_id := (select v from fx where k = 'j_live')) $$,
   'P0001', 'Job is not open', 'stranger: cannot bid on the assigned j_live');
@@ -534,9 +500,9 @@ select tests.clear_auth();
 select is((select status::text from public.jobs where id = :'j_live'), 'in_progress', 'runner: j_live is in_progress after the worker''s call');
 
 -- ---------------------------------------------------------------------------
--- §7. Messaging: messages, direct_threads, message_reads, message_reactions,
---     the conversations view, conversation_states, unsend_message, the
---     read-marker RPCs, and the phase66 pre-hire lock.
+-- §7. Messaging: messages, direct_threads, message_reads, the conversations
+--     view, unsend_message, the read-marker RPC, and the phase66 pre-hire
+--     lock.
 -- ---------------------------------------------------------------------------
 select tests.authenticate_as(:'owner');
 select lives_ok($$ insert into public.messages (job_id, sender_id, content) values ((select v from fx where k = 'j_live'), (select v from fx where k = 'owner'), 'AUTHZ owner message') $$,
@@ -583,13 +549,12 @@ select ok(not public.messaging_unlocked(p_direct_thread_id := :'dt_ob'), 'owner:
 select tests.authenticate_as(:'stranger');
 select ok(not public.messaging_unlocked(p_job_id := :'j_live'), 'stranger: messaging_unlocked is false for j_live');
 
--- direct_threads + the read-marker RPCs
+-- direct_threads + the read-marker RPC
 select tests.authenticate_as(:'owner');
 select is((select count(*) from public.direct_threads where id in (:'dt_ow', :'dt_ob')), 2::bigint, 'owner: sees both of their pair threads');
 select tests.authenticate_as(:'stranger');
 select is((select count(*) from public.direct_threads where id in (:'dt_ow', :'dt_ob')), 0::bigint, 'stranger: sees neither pair thread');
 select lives_ok($$ select public.mark_direct_thread_read((select v from fx where k = 'dt_ow')) $$, 'stranger: mark_direct_thread_read on someone else''s thread does not raise…');
-select lives_ok($$ select public.set_direct_thread_read_at((select v from fx where k = 'dt_ow'), now()) $$, 'stranger: …nor does set_direct_thread_read_at…');
 select tests.clear_auth();
 select ok((select user_a_read_at is null and user_b_read_at is null from public.direct_threads where id = :'dt_ow'), 'runner: …and neither read marker on dt_ow moved');
 select tests.authenticate_as(:'owner');
@@ -606,8 +571,7 @@ select throws_ok($$ select public.mark_direct_thread_read((select v from fx wher
 select tests.authenticate_as(:'worker');
 select lives_ok($$ insert into public.message_reads (user_id, job_id) values ((select v from fx where k = 'worker'), (select v from fx where k = 'j_live')) $$,
   'worker: records their own read marker on j_live');
-select tests.authenticate_as(:'owner');
-select is((select count(*) from public.message_reads where job_id = :'j_live' and user_id = :'worker'), 1::bigint, 'owner: sees the worker''s read marker on their job (message_reads_select_party)');
+select is((select count(*) from public.message_reads where job_id = :'j_live' and user_id = :'worker'), 1::bigint, 'worker: sees their own read marker on j_live (message_reads_select_own; the party-read policy went with read ticks)');
 select tests.authenticate_as(:'bidder');
 select is((select count(*) from public.message_reads where job_id = :'j_live'), 0::bigint, 'bidder: sees no read markers on j_live');
 select tests.authenticate_as(:'stranger');
@@ -617,21 +581,6 @@ select throws_ok($$ insert into public.message_reads (user_id, job_id) values ((
 with u as (update public.message_reads set last_read_at = now() where user_id = :'worker' returning 1)
 select is((select count(*) from u), 0::bigint, 'stranger: an UPDATE of the worker''s read marker touches zero rows');
 
--- message_reactions
-select tests.authenticate_as(:'worker');
-select lives_ok($$ insert into public.message_reactions (message_id, job_id, user_id, emoji) values ((select v from fx where k = 'm_live_owner'), (select v from fx where k = 'j_live'), (select v from fx where k = 'worker'), '👍') $$,
-  'worker: reacts to the owner''s message on their job');
-select tests.authenticate_as(:'owner');
-select is((select count(*) from public.message_reactions where message_id = :'m_live_owner'), 1::bigint, 'owner: sees the worker''s reaction');
-select tests.authenticate_as(:'bidder');
-select is((select count(*) from public.message_reactions where message_id = :'m_live_owner'), 0::bigint, 'bidder: does NOT see the reaction');
-select tests.authenticate_as(:'stranger');
-select is((select count(*) from public.message_reactions where message_id = :'m_live_owner'), 0::bigint, 'stranger: does NOT see the reaction');
-select throws_ok($$ insert into public.message_reactions (message_id, job_id, user_id, emoji) values ((select v from fx where k = 'm_live_owner'), (select v from fx where k = 'j_live'), (select v from fx where k = 'stranger'), '👎') $$,
-  '42501', 'new row violates row-level security policy for table "message_reactions"', 'stranger: cannot react on a job they are not party to');
-with d as (delete from public.message_reactions where message_id = :'m_live_owner' returning 1)
-select is((select count(*) from d), 0::bigint, 'stranger: a DELETE of the worker''s reaction touches zero rows');
-
 -- the conversations view (security_invoker: the base tables'' RLS applies)
 select tests.authenticate_as(:'owner');
 select is((select count(*) from public.conversations where job_id = :'j_live'), 1::bigint, 'owner: the conversations view lists j_live');
@@ -640,20 +589,8 @@ select is((select count(*) from public.conversations where job_id = :'j_live' or
 select tests.authenticate_anon();
 select is((select count(*) from public.conversations where job_id = :'j_live'), 0::bigint, 'anon: the conversations view is empty');
 
--- conversation_states (RPC-written, own rows only)
-select tests.authenticate_as(:'owner');
-select lives_ok($$ select public.set_conversation_state(p_job_id := (select v from fx where k = 'j_live'), p_hidden := true) $$, 'owner: set_conversation_state hides their j_live conversation');
-select is((select count(*) from public.conversation_states where job_id = :'j_live' and user_id = :'owner'), 1::bigint, 'owner: sees their own conversation state');
-select tests.authenticate_as(:'worker');
-select is((select count(*) from public.conversation_states where job_id = :'j_live'), 0::bigint, 'worker: does NOT see the owner''s conversation state (the counterparty is never told)');
-select tests.authenticate_as(:'stranger');
-select throws_ok($$ select public.set_conversation_state(p_job_id := (select v from fx where k = 'j_live'), p_hidden := true) $$,
-  'P0001', 'Conversation not found', 'stranger: set_conversation_state on j_live is refused');
-select throws_ok($$ select public.set_conversation_state(p_direct_thread_id := (select v from fx where k = 'dt_ow'), p_archived := true) $$,
-  'P0001', 'Conversation not found', 'stranger: set_conversation_state on the owner-worker thread is refused');
-select tests.authenticate_anon();
-select throws_ok($$ select public.set_conversation_state(p_job_id := (select v from fx where k = 'j_live'), p_hidden := true) $$,
-  '42501', 'permission denied for function set_conversation_state', 'anon: cannot execute set_conversation_state');
+-- conversation states went in lean v1: the RPC anon was refused is gone
+select hasnt_function('public', 'set_conversation_state', 'anon: set_conversation_state does not exist (lean v1)');
 
 -- unsend_message
 select tests.authenticate_as(:'worker');
@@ -671,106 +608,50 @@ select tests.clear_auth();
 select ok((select content = '' and unsent_at is not null from public.messages where id = :'m_live_owner'), 'runner: the owner''s message is blanked and stamped unsent');
 
 -- ---------------------------------------------------------------------------
--- §8. live_location_shares + start/update/stop_live_location. A moving pin.
+-- §8 and §9. Live location (slice D6) and the checklist (ruling 49) went in lean v1;
+--     the live-location RPC anon was refused is gone.
 -- ---------------------------------------------------------------------------
-select tests.authenticate_as(:'stranger');
-select throws_ok($$ select public.start_live_location(10.1, 10.1, now() + interval '1 hour', p_job_id := (select v from fx where k = 'j_live')) $$,
-  'P0001', 'Conversation not found', 'stranger: cannot start sharing location into j_live');
-select tests.authenticate_as(:'bidder');
-select throws_ok($$ select public.start_live_location(10.1, 10.1, now() + interval '1 hour', p_job_id := (select v from fx where k = 'j_live')) $$,
-  'P0001', 'Conversation not found', 'bidder: cannot start sharing location into the job they lost');
-select tests.authenticate_anon();
-select throws_ok($$ select public.start_live_location(10.1, 10.1, now() + interval '1 hour', p_job_id := (select v from fx where k = 'j_live')) $$,
-  '42501', 'permission denied for function start_live_location', 'anon: cannot execute start_live_location');
-select tests.authenticate_as(:'worker');
-select public.start_live_location(10.1, 10.1, now() + interval '1 hour', p_job_id := :'j_live') as lls_live \gset
-insert into fx values ('lls_live', :'lls_live');
-select is((select count(*) from public.live_location_shares where id = :'lls_live'), 1::bigint, 'worker: start_live_location on j_live succeeds and they see their own share');
-select tests.authenticate_as(:'owner');
-select is((select count(*) from public.live_location_shares where id = :'lls_live'), 1::bigint, 'owner: sees the worker''s live share on their job (positive control)');
-select throws_ok($$ select public.update_live_location(10.2, 10.2, p_job_id := (select v from fx where k = 'j_live')) $$,
-  'P0001', 'No active location share', 'owner: cannot move the worker''s pin even as the other party');
-select tests.authenticate_as(:'bidder');
-select is((select count(*) from public.live_location_shares where id = :'lls_live'), 0::bigint, 'bidder: does NOT see the worker''s live position');
-select tests.authenticate_as(:'stranger');
-select is((select count(*) from public.live_location_shares where id = :'lls_live'), 0::bigint, 'stranger: does NOT see the worker''s live position');
-select throws_ok($$ select public.update_live_location(10.2, 10.2, p_job_id := (select v from fx where k = 'j_live')) $$,
-  'P0001', 'Conversation not found', 'stranger: cannot move a pin in j_live');
-select lives_ok($$ select public.stop_live_location(p_job_id := (select v from fx where k = 'j_live')) $$, 'stranger: stop_live_location on j_live does not raise…');
-select tests.clear_auth();
-select ok((select expires_at > now() from public.live_location_shares where id = :'lls_live'), 'runner: …and the worker''s share is still live');
-select tests.authenticate_as(:'worker');
-select lives_ok($$ select public.update_live_location(10.2, 10.2, p_job_id := (select v from fx where k = 'j_live')) $$, 'worker: update_live_location moves their own pin');
-select lives_ok($$ select public.stop_live_location(p_job_id := (select v from fx where k = 'j_live')) $$, 'worker: stop_live_location ends their own share');
-select tests.authenticate_as(:'owner');
-select is((select count(*) from public.live_location_shares where id = :'lls_live'), 0::bigint, 'owner: an ended share reads as absent (the policy hides expired rows)');
+select hasnt_function('public', 'start_live_location', 'start_live_location (anon was refused it) does not exist (lean v1)');
 
 -- ---------------------------------------------------------------------------
--- §9. job_checklist_items — worker-written, both parties read.
--- ---------------------------------------------------------------------------
-select tests.authenticate_as(:'worker');
-select lives_ok($$ insert into public.job_checklist_items (job_id, position, label) values ((select v from fx where k = 'j_live'), 0, 'AUTHZ step one') $$,
-  'worker: writes a checklist item on j_live');
-select tests.authenticate_as(:'owner');
-select is((select count(*) from public.job_checklist_items where job_id = :'j_live'), 1::bigint, 'owner: reads the checklist');
-select throws_ok($$ insert into public.job_checklist_items (job_id, position, label) values ((select v from fx where k = 'j_live'), 1, 'customer intrusion') $$,
-  '42501', 'new row violates row-level security policy for table "job_checklist_items"', 'owner: cannot write the worker''s checklist');
-with u as (update public.job_checklist_items set done = true where job_id = :'j_live' returning 1)
-select is((select count(*) from u), 0::bigint, 'owner: an UPDATE of the checklist touches zero rows');
-select tests.authenticate_as(:'bidder');
-select is((select count(*) from public.job_checklist_items where job_id = :'j_live'), 0::bigint, 'bidder: sees no checklist');
-select tests.authenticate_as(:'stranger');
-select is((select count(*) from public.job_checklist_items where job_id = :'j_live'), 0::bigint, 'stranger: sees no checklist');
-select throws_ok($$ insert into public.job_checklist_items (job_id, position, label) values ((select v from fx where k = 'j_live'), 2, 'intrusion') $$,
-  '42501', 'new row violates row-level security policy for table "job_checklist_items"', 'stranger: cannot write to the checklist');
-
--- ---------------------------------------------------------------------------
--- §10. Money: payments, job_payment_state, the sandbox RPCs, disputes.
+-- §10. Money: payments, job_payment_state, the checkout, release and tip
+--      RPCs, disputes.
 -- ---------------------------------------------------------------------------
 select tests.authenticate_as(:'owner');
 select is((select status::text from public.payments where id = :'p_live'), 'held', 'owner (payer): reads j_live''s payment as held');
 select is((public.job_payment_state(:'j_live')).status::text, 'held', 'owner: job_payment_state reports held');
-select is((public.sandbox_authorize_job_payment(:'j_live')).id, :'p_live'::uuid, 'owner: an authorize retry returns the same ledger row (no second payment)');
-select is((public.sandbox_hold_job_payment(:'j_live')).status::text, 'held', 'owner: a hold retry is a no-op on held');
 select tests.authenticate_as(:'worker');
 select is((select status::text from public.payments where id = :'p_live'), 'held', 'worker (payee): reads j_live''s payment as held');
 select is((public.job_payment_state(:'j_live')).status::text, 'held', 'worker: job_payment_state reports held');
-select throws_ok($$ select public.sandbox_authorize_job_payment((select v from fx where k = 'j_live')) $$,
-  'P0001', 'Job not found', 'worker: cannot authorize a payment on the job they work');
-select throws_ok($$ select public.sandbox_hold_job_payment((select v from fx where k = 'j_live')) $$,
-  'P0001', 'No payment to protect — authorize it first', 'worker: cannot hold the payer''s payment');
-select throws_ok($$ select public.sandbox_release_job_payment((select v from fx where k = 'j_done')) $$,
+select throws_ok($$ select public.begin_job_payment((select v from fx where k = 'j_live')) $$,
+  'P0001', 'Job not found', 'worker: cannot start checkout on the job they work');
+select throws_ok($$ select public.release_job_payment((select v from fx where k = 'j_done')) $$,
   'P0001', 'Job not found', 'worker: cannot release their own payment');
-select throws_ok($$ select public.sandbox_tip_worker((select v from fx where k = 'j_done'), 500) $$,
+select throws_ok($$ select public.begin_tip_payment((select v from fx where k = 'j_done'), 500) $$,
   'P0001', 'Job not found', 'worker: cannot tip themselves');
 select tests.authenticate_as(:'bidder');
 select is((select count(*) from public.payments where id in (:'p_live', :'p_done')), 0::bigint, 'bidder: sees no payment rows');
 select throws_ok($$ select public.job_payment_state((select v from fx where k = 'j_live')) $$,
   'P0001', 'Job not found', 'bidder: job_payment_state is refused');
-select throws_ok($$ select public.sandbox_authorize_job_payment((select v from fx where k = 'j_live')) $$,
-  'P0001', 'Job not found', 'bidder: cannot authorize a payment on the job they lost');
+select throws_ok($$ select public.begin_job_payment((select v from fx where k = 'j_live')) $$,
+  'P0001', 'Job not found', 'bidder: cannot start checkout on the job they lost');
 select tests.authenticate_as(:'stranger');
 select is((select count(*) from public.payments where id in (:'p_live', :'p_done')), 0::bigint, 'stranger: sees no payment rows');
 select throws_ok($$ select public.job_payment_state((select v from fx where k = 'j_live')) $$,
   'P0001', 'Job not found', 'stranger: job_payment_state is refused');
-select throws_ok($$ select public.sandbox_authorize_job_payment((select v from fx where k = 'j_live')) $$,
-  'P0001', 'Job not found', 'stranger: cannot authorize a payment');
-select throws_ok($$ select public.sandbox_hold_job_payment((select v from fx where k = 'j_live')) $$,
-  'P0001', 'No payment to protect — authorize it first', 'stranger: cannot hold a payment');
-select throws_ok($$ select public.sandbox_release_job_payment((select v from fx where k = 'j_done')) $$,
+select throws_ok($$ select public.begin_job_payment((select v from fx where k = 'j_live')) $$,
+  'P0001', 'Job not found', 'stranger: cannot start checkout');
+select throws_ok($$ select public.release_job_payment((select v from fx where k = 'j_done')) $$,
   'P0001', 'Job not found', 'stranger: cannot release a payment');
-select throws_ok($$ select public.sandbox_tip_worker((select v from fx where k = 'j_done'), 500) $$,
+select throws_ok($$ select public.begin_tip_payment((select v from fx where k = 'j_done'), 500) $$,
   'P0001', 'Job not found', 'stranger: cannot tip on someone else''s job');
 select tests.authenticate_anon();
 select throws_ok($$ select count(*) from public.payments $$, '42501', 'permission denied for table payments', 'anon: cannot read payments at all');
 select throws_ok($$ select public.job_payment_state((select v from fx where k = 'j_live')) $$,
   '42501', 'permission denied for function job_payment_state', 'anon: cannot execute job_payment_state');
-select throws_ok($$ select public.sandbox_authorize_job_payment((select v from fx where k = 'j_live')) $$,
-  '42501', 'permission denied for function sandbox_authorize_job_payment', 'anon: cannot execute sandbox_authorize_job_payment');
-select throws_ok($$ select public.sandbox_release_job_payment((select v from fx where k = 'j_done')) $$,
-  '42501', 'permission denied for function sandbox_release_job_payment', 'anon: cannot execute sandbox_release_job_payment');
-select throws_ok($$ select public.sandbox_cash_out() $$,
-  '42501', 'permission denied for function sandbox_cash_out', 'anon: cannot execute sandbox_cash_out');
+select hasnt_function('public', 'sandbox_authorize_job_payment', 'sandbox_authorize_job_payment (anon was refused it) does not exist (ruling 47)');
+select hasnt_function('public', 'sandbox_release_job_payment', 'sandbox_release_job_payment (anon was refused it) does not exist (ruling 47)');
+select hasnt_function('public', 'sandbox_cash_out', 'sandbox_cash_out (anon was refused it) does not exist (ruling 47)');
 
 -- disputes on j_done, before the release
 select tests.authenticate_as(:'worker');
@@ -788,7 +669,7 @@ select throws_ok($$ select public.open_job_dispute((select v from fx where k = '
 select (public.open_job_dispute(:'j_done', 'incomplete', 'AUTHZ second shelf missing')).id as d_done \gset
 insert into fx values ('d_done', :'d_done');
 select is((select count(*) from public.job_disputes where id = :'d_done'), 1::bigint, 'owner: open_job_dispute on j_done succeeds and they read the report');
-select throws_ok($$ select public.sandbox_release_job_payment((select v from fx where k = 'j_done')) $$,
+select throws_ok($$ select public.release_job_payment((select v from fx where k = 'j_done')) $$,
   'P0001', 'An open issue report is holding this payment', 'owner: release is frozen while the report is open');
 select tests.authenticate_as(:'worker');
 select is((select count(*) from public.job_disputes where id = :'d_done'), 1::bigint, 'worker: reads the report on their job (disputes_select_parties)');
@@ -805,22 +686,21 @@ select throws_ok($$ select count(*) from public.job_disputes $$, '42501', 'permi
 select tests.authenticate_as(:'owner');
 select is((public.withdraw_job_dispute(:'d_done')).status::text, 'withdrawn', 'owner: withdraw_job_dispute on their own report succeeds');
 
--- release, tip, cash-out
-select throws_ok($$ select public.sandbox_release_job_payment((select v from fx where k = 'j_live')) $$,
+-- release, tip
+select throws_ok($$ select public.release_job_payment((select v from fx where k = 'j_live')) $$,
   'P0001', 'Funds release only after the job is completed', 'owner: cannot release j_live''s payment before completion (money never moves early)');
-select throws_ok($$ select public.sandbox_tip_worker((select v from fx where k = 'j_live'), 500) $$,
+select throws_ok($$ select public.begin_tip_payment((select v from fx where k = 'j_live'), 500) $$,
   'P0001', 'Tips are for completed jobs', 'owner: cannot tip before completion');
-select is((public.sandbox_release_job_payment(:'j_done')).release_reason, 'approved', 'owner: sandbox_release_job_payment on the completed j_done succeeds as approved');
-select is((public.sandbox_tip_worker(:'j_done', 500)).amount_cents, 500, 'owner: sandbox_tip_worker after release succeeds');
-select is((select count(*) from public.sandbox_cash_out()), 0::bigint, 'owner: sandbox_cash_out sweeps nothing — the payer has no released inflow');
-select tests.authenticate_as(:'bidder');
-select is((select count(*) from public.sandbox_cash_out()), 0::bigint, 'bidder: sandbox_cash_out sweeps nothing');
+select is((public.release_job_payment(:'j_done')).release_reason, 'approved', 'owner: release_job_payment on the completed j_done succeeds as approved');
+-- the transfer lands (the runner stands in for the webhook), so the tip may follow
 select tests.clear_auth();
-select is((select count(*) from public.payments where job_id = :'j_done' and status = 'released'), 2::bigint, 'runner: both j_done rows (payment + tip) are still released — nobody else''s cash-out moved them');
-select tests.authenticate_as(:'worker');
-select is((select count(*) from public.sandbox_cash_out()), 2::bigint, 'worker: sandbox_cash_out sweeps their own two released rows');
+insert into public.payment_events (id, type, payload)
+values ('evt_authz_tr_done', 'transfer.created', jsonb_build_object('id', 'evt_authz_tr_done', 'type', 'transfer.created',
+  'data', jsonb_build_object('object', jsonb_build_object('id', 'tr_authz_done', 'metadata', jsonb_build_object('payment_id', :'p_done'::text)))));
+select public.apply_payment_event('evt_authz_tr_done');
+select tests.authenticate_as(:'owner');
+select is((public.begin_tip_payment(:'j_done', 500)).amount_cents, 500, 'owner: begin_tip_payment after release succeeds');
 select tests.clear_auth();
-select is((select count(*) from public.payments where job_id = :'j_done' and status = 'paid_out' and payee_id = :'worker'), 2::bigint, 'runner: the swept rows are paid_out and belong to the worker');
 
 -- ---------------------------------------------------------------------------
 -- §11. reviews — create_review, the double-blind reviews_select_party (R8a
@@ -915,8 +795,7 @@ select throws_ok($$ select public.set_active_mode('worker') $$, '42501', 'permis
 
 -- ---------------------------------------------------------------------------
 -- §13. Per-user tables: notification_prefs, notification_outbox, push_tokens,
---      legal_acceptances, saved_workers, mutes, blocks, properties (+
---      set_job_property), portfolio_items, worker_services.
+--      legal_acceptances, blocks, worker_services.
 -- ---------------------------------------------------------------------------
 -- notification_prefs (rows come from the profiles trigger)
 select tests.authenticate_as(:'owner');
@@ -971,36 +850,9 @@ select throws_ok($$ insert into public.legal_acceptances (user_id, document, ver
 select tests.authenticate_anon();
 select throws_ok($$ select public.accept_legal_documents('[]'::jsonb) $$, '42501', 'permission denied for function accept_legal_documents', 'anon: cannot execute accept_legal_documents');
 
--- saved_workers
-select tests.authenticate_as(:'owner');
-select lives_ok($$ insert into public.saved_workers (user_id, worker_id) values ((select v from fx where k = 'owner'), (select v from fx where k = 'worker')) $$, 'owner: saves the worker');
-select is((select count(*) from public.saved_workers where user_id = :'owner'), 1::bigint, 'owner: reads their saved list');
+-- blocks (the app inserts through blocks_insert_own; blocks_delete_own unblocks)
 select tests.authenticate_as(:'stranger');
-select is((select count(*) from public.saved_workers where user_id = :'owner'), 0::bigint, 'stranger: does NOT read the owner''s saved list');
-select throws_ok($$ insert into public.saved_workers (user_id, worker_id) values ((select v from fx where k = 'owner'), (select v from fx where k = 'stranger')) $$,
-  '42501', 'new row violates row-level security policy for table "saved_workers"', 'stranger: cannot add themselves to the owner''s saved list');
-with d as (delete from public.saved_workers where user_id = :'owner' returning 1)
-select is((select count(*) from d), 0::bigint, 'stranger: a DELETE from the owner''s saved list touches zero rows');
-select tests.authenticate_as(:'owner');
-with d as (delete from public.saved_workers where user_id = :'owner' and worker_id = :'worker' returning 1)
-select is((select count(*) from d), 1::bigint, 'owner: removes their own saved worker');
-
--- mutes
-select tests.authenticate_as(:'stranger');
-select lives_ok($$ insert into public.mutes (muter_id, muted_id) values ((select v from fx where k = 'stranger'), (select v from fx where k = 'admin')) $$, 'stranger: mutes the admin');
-select is((select count(*) from public.mutes where muter_id = :'stranger'), 1::bigint, 'stranger: reads their own mute');
-select tests.authenticate_as(:'admin');
-select is((select count(*) from public.mutes where muted_id = :'admin'), 0::bigint, 'admin (the muted): is not told they were muted');
-select tests.authenticate_as(:'bidder');
-select throws_ok($$ insert into public.mutes (muter_id, muted_id) values ((select v from fx where k = 'stranger'), (select v from fx where k = 'owner')) $$,
-  '42501', 'new row violates row-level security policy for table "mutes"', 'bidder: cannot mute on the stranger''s behalf');
-with d as (delete from public.mutes where muter_id = :'stranger' returning 1)
-select is((select count(*) from d), 0::bigint, 'bidder: a DELETE of the stranger''s mute touches zero rows');
-
--- blocks (set_block writes; blocks_delete_own unblocks)
-select tests.authenticate_as(:'stranger');
-select throws_ok($$ select public.set_block((select v from fx where k = 'stranger')) $$, 'P0001', 'You cannot block yourself', 'stranger: set_block refuses a self-block');
-select lives_ok($$ select public.set_block((select v from fx where k = 'admin')) $$, 'stranger: set_block blocks the admin');
+select lives_ok($$ insert into public.blocks (blocker_id, blocked_id) values ((select v from fx where k = 'stranger'), (select v from fx where k = 'admin')) $$, 'stranger: blocks the admin');
 select is((select count(*) from public.blocks where blocker_id = :'stranger' and blocked_id = :'admin'), 1::bigint, 'stranger: reads their own block');
 select tests.authenticate_as(:'admin');
 select is((select count(*) from public.blocks where blocker_id = :'stranger' and blocked_id = :'admin'), 1::bigint, 'admin (the blocked): can see the block involving them (blocks_select_involved, by design)');
@@ -1010,53 +862,10 @@ select throws_ok($$ insert into public.blocks (blocker_id, blocked_id) values ((
   '42501', 'new row violates row-level security policy for table "blocks"', 'bidder: cannot block on the stranger''s behalf');
 with d as (delete from public.blocks where blocker_id = :'stranger' returning 1)
 select is((select count(*) from d), 0::bigint, 'bidder: a DELETE of the stranger''s block touches zero rows');
-select tests.authenticate_anon();
-select throws_ok($$ select public.set_block((select v from fx where k = 'admin')) $$, '42501', 'permission denied for function set_block', 'anon: cannot execute set_block');
+select hasnt_function('public', 'set_block', 'set_block (anon was refused it) does not exist (slice D6)');
 select tests.authenticate_as(:'stranger');
 with d as (delete from public.blocks where blocker_id = :'stranger' and blocked_id = :'admin' returning 1)
 select is((select count(*) from d), 1::bigint, 'stranger: unblocks the admin through blocks_delete_own');
-
--- properties + set_job_property
-select tests.authenticate_as(:'owner');
-insert into public.properties (owner_id, label, street, city, state) values (:'owner', 'Home', '1 Owner Way', 'Waco', 'TX') returning id as prop_owner \gset
-insert into fx values ('prop_owner', :'prop_owner');
-select is((select count(*) from public.properties where id = :'prop_owner'), 1::bigint, 'owner: creates and reads their own property');
-select tests.authenticate_as(:'stranger');
-insert into public.properties (owner_id, label, street, city, state) values (:'stranger', 'Flat', '9 Stranger Rd', 'Waco', 'TX') returning id as prop_stranger \gset
-insert into fx values ('prop_stranger', :'prop_stranger');
-select is((select count(*) from public.properties where id = :'prop_owner'), 0::bigint, 'stranger: does NOT read the owner''s property');
-select throws_ok($$ insert into public.properties (owner_id, street, city, state) values ((select v from fx where k = 'owner'), 'planted', 'Waco', 'TX') $$,
-  '42501', 'new row violates row-level security policy for table "properties"', 'stranger: cannot add a property to the owner');
-with u as (update public.properties set street = 'moved' where id = :'prop_owner' returning 1)
-select is((select count(*) from u), 0::bigint, 'stranger: an UPDATE of the owner''s property touches zero rows');
-with d as (delete from public.properties where id = :'prop_owner' returning 1)
-select is((select count(*) from d), 0::bigint, 'stranger: a DELETE of the owner''s property touches zero rows');
-select throws_ok($$ select public.set_job_property((select v from fx where k = 'j_open'), (select v from fx where k = 'prop_stranger')) $$,
-  'P0001', 'phase78: not your job', 'stranger: cannot attach a property to the owner''s job');
-select tests.authenticate_as(:'owner');
-select throws_ok($$ select public.set_job_property((select v from fx where k = 'j_open'), (select v from fx where k = 'prop_stranger')) $$,
-  'P0001', 'phase78: not your property', 'owner: cannot attach the stranger''s property to their job');
-select lives_ok($$ select public.set_job_property((select v from fx where k = 'j_open'), (select v from fx where k = 'prop_owner')) $$, 'owner: attaches their own property to their own job');
-select tests.clear_auth();
-select is((select property_id from public.jobs where id = :'j_open'), :'prop_owner'::uuid, 'runner: j_open now points at the owner''s property');
-
--- portfolio_items
-select tests.authenticate_as(:'worker');
-select lives_ok($$ insert into public.portfolio_items (worker_id, photo_url, category, published) values ((select v from fx where k = 'worker'), 'https://example.com/authz-1.jpg', 'handyman', true) $$, 'worker: publishes a portfolio item');
-select lives_ok($$ insert into public.portfolio_items (worker_id, photo_url, category, published) values ((select v from fx where k = 'worker'), 'https://example.com/authz-2.jpg', 'handyman', false) $$, 'worker: keeps a portfolio draft');
-select lives_ok($$ insert into public.portfolio_items (worker_id, source_job_id, photo_url, category) values ((select v from fx where k = 'worker'), (select v from fx where k = 'j_live'), 'https://example.com/authz-3.jpg', 'cleaning') $$, 'worker: attaches a portfolio item to the job they were hired on');
-select is((select count(*) from public.portfolio_items where worker_id = :'worker'), 3::bigint, 'worker: reads all three of their items');
-select tests.authenticate_as(:'stranger');
-select is((select count(*) from public.portfolio_items where worker_id = :'worker'), 2::bigint, 'stranger: reads only the two published items — the draft stays owner-only');
-select throws_ok($$ insert into public.portfolio_items (worker_id, photo_url, category) values ((select v from fx where k = 'worker'), 'https://example.com/planted.jpg', 'other') $$,
-  '42501', 'new row violates row-level security policy for table "portfolio_items"', 'stranger: cannot add to the worker''s portfolio');
-with u as (update public.portfolio_items set caption = 'defaced' where worker_id = :'worker' returning 1)
-select is((select count(*) from u), 0::bigint, 'stranger: an UPDATE of the worker''s portfolio touches zero rows');
-with d as (delete from public.portfolio_items where worker_id = :'worker' returning 1)
-select is((select count(*) from d), 0::bigint, 'stranger: a DELETE from the worker''s portfolio touches zero rows');
-select tests.authenticate_as(:'bidder');
-select throws_ok($$ insert into public.portfolio_items (worker_id, source_job_id, photo_url, category) values ((select v from fx where k = 'bidder'), (select v from fx where k = 'j_live'), 'https://example.com/claimed.jpg', 'cleaning') $$,
-  '42501', 'new row violates row-level security policy for table "portfolio_items"', 'bidder: cannot claim the job they lost as portfolio work');
 
 -- worker_services
 select tests.authenticate_as(:'worker');
@@ -1177,20 +986,20 @@ select is((select count(*) from public.banned_phones where banned_profile_id = :
 -- §17. The SECURITY DEFINER grant contract, as an allow-list. Every function
 --      anon or authenticated may execute is named here, so a new grant fails
 --      this test until someone adds it on purpose. The deprecated shims are
---      pinned to their delegation so they can never grow their own path.
+--      gone (ruling 46) and pinned absent so they cannot come back.
 -- ---------------------------------------------------------------------------
 select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), '')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  'phase76_rls_posture, review_is_revealed',
-  'anon may execute exactly two SECURITY DEFINER functions: phase76_rls_posture (RLS on/off flags, no names, no rows) and review_is_revealed (R8a — the reviews SELECT policy calls it, and the policy must evaluate for anon''s column-probe grant; a boolean about row visibility, no rows)');
+  'review_is_revealed',
+  'anon may execute exactly one SECURITY DEFINER function: review_is_revealed (R8a — the reviews SELECT policy calls it, and the policy must evaluate for anon''s column-probe grant; a boolean about row visibility, no rows)');
 select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), '')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  'accept_bid, accept_legal_documents, accept_offer, account_deletion_blockers, account_deletion_enabled, admin_open_reports, ban_user, begin_job_payment, begin_tip_payment, can_delete_own_job, cancel_job, client_job_stats, counter_offer, create_bid, create_job, create_job_request, create_offer, create_review, current_fee, current_user_is_admin, current_user_is_banned, decline_offer, delete_my_account, drop_series_worker, get_my_active_mode, get_my_profile, is_active_user, is_blocked_between, is_profile_active, job_bid_count, job_bid_counts, job_hotspots, job_offer_count, job_offer_counts, job_payment_state, job_request_parties_ok, jobs_in_cell, jobs_within_radius, live_card_state, mark_direct_thread_read, mark_worker_arrival, match_workers_semantic, messaging_unlocked, my_payouts_enabled, my_payouts_status, my_pending_job_requests, my_pending_offers, open_job_dispute, phase68_deleted_at_authorization_enabled, phase69_execute_lockdown_enabled, phase70_unsend_message_authz_enabled, phase71_reviews_read_lockdown_enabled, phase72_storage_read_lockdown_enabled, phase76_rls_posture, profile_review_summaries, profile_review_summary, profile_reviews, quote_job_price, register_live_activity, register_push_token, release_job_payment, report_running_late, respond_job_request, review_is_revealed, sandbox_authorize_job_payment, sandbox_cash_out, sandbox_hold_job_payment, sandbox_release_job_payment, sandbox_tip_worker, set_active_mode, set_block, set_conversation_state, set_direct_thread_read_at, set_job_property, should_notify, start_job_series, start_live_location, stop_job_series, stop_live_location, transition_job_status, unban_user, unsend_message, update_job_details, update_live_location, update_my_profile, withdraw_job_dispute, withdraw_offer, worker_job_stats',
-  'the SECURITY DEFINER functions authenticated may execute are exactly this list (R4 added begin_job_payment, begin_tip_payment, cancel_job, current_fee, my_payouts_enabled, quote_job_price, release_job_payment; R5b added my_payouts_status; R8a added review_is_revealed; n6 added profile_review_summaries — the batch per-role revealed summary, any signed-in user, refused to anon, proven in 120_reputation_batch.sql §10; idea 5 (2026-09-30) added report_running_late — the hired worker only, before arriving, refused to anon, proven in 150_running_late.sql §5-§8; idea 14 (2026-09-30) added start_job_series, stop_job_series and drop_series_worker — the customer''s own job / series, the series'' worker, refused to anon, proven in 180_job_series.sql §1-§2, §10-§11; idea 9 (2026-09-30) added live_card_state and register_live_activity — the job''s customer only, refused to anon, proven in 210_live_card.sql §2-§4)');
+  'accept_legal_documents, accept_offer, account_deletion_blockers, admin_open_reports, ban_user, begin_job_payment, begin_tip_payment, can_delete_own_job, cancel_job, client_job_stats, counter_offer, create_job, create_offer, create_review, current_fee, current_user_is_admin, current_user_is_banned, decline_offer, delete_my_account, drop_series_worker, get_my_active_mode, get_my_profile, is_active_user, is_blocked_between, is_profile_active, job_hotspots, job_offer_count, job_offer_counts, job_payment_state, job_request_parties_ok, jobs_in_cell, jobs_within_radius, mark_direct_thread_read, mark_worker_arrival, messaging_unlocked, my_payouts_status, my_pending_offers, open_job_dispute, profile_review_summaries, profile_review_summary, profile_reviews, quote_job_price, register_push_token, release_job_payment, report_running_late, review_is_revealed, set_active_mode, should_notify, start_job_series, stop_job_series, transition_job_status, unban_user, unsend_message, update_job_details, update_my_profile, withdraw_job_dispute, withdraw_offer, worker_job_stats',
+  'the SECURITY DEFINER functions authenticated may execute are exactly this list (R4 added begin_job_payment, begin_tip_payment, cancel_job, current_fee, quote_job_price, release_job_payment; R5b added my_payouts_status; R8a added review_is_revealed; n6 added profile_review_summaries — the batch per-role revealed summary, any signed-in user, refused to anon, proven in 120_reputation_batch.sql §10; idea 5 (2026-09-30) added report_running_late — the hired worker only, before arriving, refused to anon, proven in 150_running_late.sql §5-§8; idea 14 (2026-09-30) added start_job_series, stop_job_series and drop_series_worker — the customer''s own job / series, the series'' worker, refused to anon, proven in 180_job_series.sql §1-§2, §10-§11; lean v1 (20261108000000) removed thirty: the cut features'' RPCs, the sandbox money RPCs, the deprecated shims and the probe markers)');
 select ok(has_function_privilege('service_role', 'public.claim_notification_batch(integer)', 'EXECUTE'), 'service_role may execute claim_notification_batch (positive control for the two refusals below)');
 -- R4: the service-role-only money functions, same pattern — the positive
 -- control is service_role's privilege, the proof is the stranger's refusal.
@@ -1215,12 +1024,8 @@ select throws_ok($$ select public.ensure_direct_thread((select v from fx where k
   '42501', 'permission denied for function ensure_direct_thread', 'stranger: cannot open a thread with the owner by calling the internal helper');
 select throws_ok($$ select public.drain_notification_outbox() $$, '42501', 'permission denied for function drain_notification_outbox', 'stranger: cannot drain the outbox');
 select tests.clear_auth();
-select ok((select prosrc from pg_proc where proname = 'accept_bid' and pronamespace = 'public'::regnamespace) ~ 'perform public\.accept_offer\(p_bid_id\)'
-       and (select prosrc from pg_proc where proname = 'accept_bid' and pronamespace = 'public'::regnamespace) !~* 'update public\.jobs',
-  'the accept_bid shim still only delegates to accept_offer — it has no assignment path of its own (never called: CLAUDE.md)');
-select ok((select prosrc from pg_proc where proname = 'respond_job_request' and pronamespace = 'public'::regnamespace) ~ 'public\.accept_offer\(p_request_id\)'
-       and (select prosrc from pg_proc where proname = 'respond_job_request' and pronamespace = 'public'::regnamespace) !~* 'update public\.(jobs|job_offers)',
-  'the respond_job_request shim still only delegates to accept/decline/counter_offer (never called: CLAUDE.md)');
+select hasnt_function('public', 'accept_bid', 'the accept_bid shim does not exist — accept_offer is the only assignment path (CLAUDE.md, ruling 46)');
+select hasnt_function('public', 'respond_job_request', 'the respond_job_request shim does not exist (CLAUDE.md, ruling 46)');
 
 
 -- ---------------------------------------------------------------------------
@@ -1231,13 +1036,13 @@ select ok((select prosrc from pg_proc where proname = 'respond_job_request' and 
 --      five buckets that this file had never mentioned. Every privilege a
 --      client holds here is therefore RLS's to withhold, and nothing else's.
 --
---      Ten of the fifteen policies are writes — six INSERT, one UPDATE, three
---      DELETE. (R7 recorded twelve; the catalog says ten, and the catalog is
---      what these assertions read.) The remaining five are SELECT.
+--      Lean v1 (20261108000000) dropped the chat-audio and chat-documents
+--      policies with voice and document messages. Eleven remain: eight writes
+--      (four INSERT, one UPDATE, three DELETE) and three SELECT.
 --
 --      The bucket ROWS are storage data, not schema: the baseline is a
 --      schema-only dump, so a fresh stack has none. supabase/seed.sql creates
---      the five the policies name, which is why the behaviour half below can
+--      the three the policies name, which is why the behaviour half below can
 --      run at all — and why `npm run db:reset` must precede `npm run db:test`.
 --      phase29_security_contract.sql's conditional skip closes for the same
 --      reason.
@@ -1245,18 +1050,14 @@ select ok((select prosrc from pg_proc where proname = 'respond_job_request' and 
 select tests.clear_auth();
 select policies_are('storage', 'objects', ARRAY[
   'avatars_insert', 'avatars_read', 'avatars_update',
-  'chat_audio_insert_party', 'chat_audio_read_party',
-  'chat_documents_insert_party', 'chat_documents_read_party',
   'chat_photos_insert_party', 'chat_photos_read_party',
   'job_photos_delete_own_completion', 'job_photos_delete_own_posting', 'job_photos_delete_own_review',
   'job_photos_insert', 'job_photos_insert_review', 'job_photos_read'],
-  'catalog: storage.objects carries exactly these fifteen policies — ten writes and five reads, across five buckets');
+  'catalog: storage.objects carries exactly these eleven policies — eight writes and three reads, across three buckets');
 
--- The ten write policies: command and roles, one assertion each.
+-- The eight write policies: command and roles, one assertion each.
 select policy_cmd_is('storage', 'objects', 'avatars_insert', 'INSERT', 'catalog: avatars_insert is FOR INSERT');
 select policy_cmd_is('storage', 'objects', 'avatars_update', 'UPDATE', 'catalog: avatars_update is FOR UPDATE');
-select policy_cmd_is('storage', 'objects', 'chat_audio_insert_party', 'INSERT', 'catalog: chat_audio_insert_party is FOR INSERT');
-select policy_cmd_is('storage', 'objects', 'chat_documents_insert_party', 'INSERT', 'catalog: chat_documents_insert_party is FOR INSERT');
 select policy_cmd_is('storage', 'objects', 'chat_photos_insert_party', 'INSERT', 'catalog: chat_photos_insert_party is FOR INSERT');
 select policy_cmd_is('storage', 'objects', 'job_photos_insert', 'INSERT', 'catalog: job_photos_insert is FOR INSERT');
 select policy_cmd_is('storage', 'objects', 'job_photos_insert_review', 'INSERT', 'catalog: job_photos_insert_review is FOR INSERT');
@@ -1265,8 +1066,6 @@ select policy_cmd_is('storage', 'objects', 'job_photos_delete_own_posting', 'DEL
 select policy_cmd_is('storage', 'objects', 'job_photos_delete_own_review', 'DELETE', 'catalog: job_photos_delete_own_review is FOR DELETE');
 select policy_roles_are('storage', 'objects', 'avatars_insert', ARRAY['authenticated']::name[], 'catalog: avatars_insert admits authenticated only');
 select policy_roles_are('storage', 'objects', 'avatars_update', ARRAY['authenticated']::name[], 'catalog: avatars_update admits authenticated only');
-select policy_roles_are('storage', 'objects', 'chat_audio_insert_party', ARRAY['authenticated']::name[], 'catalog: chat_audio_insert_party admits authenticated only');
-select policy_roles_are('storage', 'objects', 'chat_documents_insert_party', ARRAY['authenticated']::name[], 'catalog: chat_documents_insert_party admits authenticated only');
 select policy_roles_are('storage', 'objects', 'chat_photos_insert_party', ARRAY['authenticated']::name[], 'catalog: chat_photos_insert_party admits authenticated only');
 select policy_roles_are('storage', 'objects', 'job_photos_insert', ARRAY['authenticated']::name[], 'catalog: job_photos_insert admits authenticated only');
 select policy_roles_are('storage', 'objects', 'job_photos_insert_review', ARRAY['authenticated']::name[], 'catalog: job_photos_insert_review admits authenticated only');
@@ -1284,8 +1083,8 @@ select ok((select relrowsecurity from pg_class where oid = 'storage.objects'::re
 
 -- The bucket rows the policies name, and the control that the behaviour half
 -- below is measuring something real.
-select is((select count(*) from storage.buckets where id in ('avatars', 'chat-audio', 'chat-documents', 'chat-photos', 'job-photos')), 5::bigint,
-  'runner: all five buckets the policies name exist and none of them is public (seed.sql) — the behaviour half below is live, not vacuous');
+select is((select count(*) from storage.buckets where id in ('avatars', 'chat-photos', 'job-photos')), 3::bigint,
+  'runner: all three buckets the policies name exist and none of them is public (seed.sql) — the behaviour half below is live, not vacuous');
 
 -- avatars: own folder only, but readable by every account.
 select tests.authenticate_as(:'worker');
@@ -1319,27 +1118,6 @@ select tests.authenticate_as(:'stranger');
 select throws_ok($$ insert into storage.objects (bucket_id, name) values ('chat-photos', (select v from fx where k = 'j_live')::text || '/' || (select v from fx where k = 'stranger')::text || '/authz.jpg') $$,
   '42501', 'new row violates row-level security policy for table "objects"', 'stranger: cannot write a chat photo into j_live');
 select is((select count(*) from storage.objects where bucket_id = 'chat-photos'), 0::bigint, 'stranger: reads no chat photo');
-
--- chat-audio: the same shape, job threads only.
-select tests.authenticate_as(:'owner');
-select lives_ok($$ insert into storage.objects (bucket_id, name) values ('chat-audio', (select v from fx where k = 'j_live')::text || '/' || (select v from fx where k = 'owner')::text || '/authz.m4a') $$,
-  'owner: writes a voice note into j_live''s thread (positive control)');
-select tests.authenticate_as(:'stranger');
-select throws_ok($$ insert into storage.objects (bucket_id, name) values ('chat-audio', (select v from fx where k = 'j_live')::text || '/' || (select v from fx where k = 'stranger')::text || '/authz.m4a') $$,
-  '42501', 'new row violates row-level security policy for table "objects"', 'stranger: cannot write a voice note into j_live');
-select is((select count(*) from storage.objects where bucket_id = 'chat-audio'), 0::bigint, 'stranger: reads no voice note');
-
--- chat-documents: the one attachment kind that also works on a pair thread.
-select tests.authenticate_as(:'owner');
-select lives_ok($$ insert into storage.objects (bucket_id, name) values ('chat-documents', (select v from fx where k = 'dt_ow')::text || '/' || (select v from fx where k = 'owner')::text || '/authz.pdf') $$,
-  'owner: writes a document into the owner-worker pair thread (positive control)');
-select tests.authenticate_as(:'worker');
-select is((select count(*) from storage.objects where bucket_id = 'chat-documents'), 1::bigint,
-  'worker: reads the owner''s document — the other party to that pair thread');
-select tests.authenticate_as(:'stranger');
-select throws_ok($$ insert into storage.objects (bucket_id, name) values ('chat-documents', (select v from fx where k = 'dt_ow')::text || '/' || (select v from fx where k = 'stranger')::text || '/authz.pdf') $$,
-  '42501', 'new row violates row-level security policy for table "objects"', 'stranger: cannot write a document into someone else''s pair thread');
-select is((select count(*) from storage.objects where bucket_id = 'chat-documents'), 0::bigint, 'stranger: reads no document');
 
 -- job-photos: three write paths — postings/<uid>/…, <job>/… for the assigned
 -- worker, reviews/<uid>/… — and one bucket-wide read.
@@ -1390,7 +1168,7 @@ select ok(exists (select 1 from pg_trigger where tgrelid = 'storage.objects'::re
 select tests.authenticate_anon();
 select throws_ok($$ insert into storage.objects (bucket_id, name) values ('avatars', 'anon/authz.jpg') $$,
   '42501', 'new row violates row-level security policy for table "objects"', 'anon: holds every grant on storage.objects and can still write nothing — no policy admits it');
-select is((select count(*) from storage.objects), 0::bigint, 'anon: reads zero objects of the seven this section created');
+select is((select count(*) from storage.objects), 0::bigint, 'anon: reads zero objects of the five this section created');
 
 select * from finish();
 rollback;

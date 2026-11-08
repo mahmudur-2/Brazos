@@ -205,12 +205,11 @@ export function isOfferActionableBy(
 /**
  * Which offer a thread message is about.
  *
- * phase46 added messages.job_offer_id; rows written before it carry only
- * job_request_id. Both are read so a conversation that predates the migration
- * still renders its negotiation cards.
+ * phase46 added messages.job_offer_id; lean v1 dropped the older
+ * job_request_id column, so job_offer_id is the only link.
  */
 export function offerIdOf(message: Message): string | null {
-  return message.job_offer_id ?? message.job_request_id;
+  return message.job_offer_id;
 }
 
 // ---------------------------------------------------------------------------

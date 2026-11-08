@@ -11,7 +11,7 @@
 --
 -- Sections keep the proof's letters so the two can be read side by side:
 --   A worker bid path · F address privacy (both halves) · B counter path ·
---   C acceptance atomicity · D sandbox checkout · G money honesty ·
+--   C acceptance atomicity · D checkout · G money honesty ·
 --   E negative states (decline / withdraw / unauthorized / expiry)
 --
 -- FIXTURE SURGERY, DECLARED (unchanged from the proof): expiry cannot be
@@ -114,23 +114,27 @@ select tests.authenticate_as(:'worker_b');
 select is((select count(*) from public.job_locations where job_id = :'job1'), 0::bigint, 'F5: the losing worker still cannot read the address');
 
 -- ---------------------------------------------------------------------------
--- D. SANDBOX CHECKOUT — authorize -> held, idempotent, single row
+-- D. CHECKOUT — the stripe path (tests.test_fund_job) -> held, idempotent, single row
 -- ---------------------------------------------------------------------------
-select throws_ok($$ select public.sandbox_authorize_job_payment((select v from fx where k = 'job1')) $$,
+select throws_ok($$ select public.begin_job_payment((select v from fx where k = 'job1')) $$,
   'P0001', 'Job not found', 'D1: only the job owner can start checkout (worker B refused)');
-select tests.authenticate_as(:'customer');
-select (public.sandbox_authorize_job_payment(:'job1')).id as p1 \gset
+select tests.clear_auth();
+select tests.test_fund_job(:'job1') as p1 \gset
 insert into fx values ('p1', :'p1');
-select ok((select status = 'authorized' and amount_cents = 4800 and provider = 'sandbox'
-             and provider_ref like 'sandbox_%' and authorized_at is not null
+select ok((select amount_cents = 4800 and provider = 'stripe'
              and payee_id = :'worker_a' and offer_id = :'offer_a2'
            from public.payments where id = :'p1'),
-  'D2: authorize produced an authorized sandbox row at 4800 for worker A against the winning revision');
-select is((public.sandbox_authorize_job_payment(:'job1')).id, :'p1'::uuid, 'D2: an authorize retry returns the same row, no duplicate');
-select ok((select h.status = 'held' and h.held_at is not null and h.id = :'p1' from public.sandbox_hold_job_payment(:'job1') h),
-  'D2: hold moved the same row to held');
-select ok((select h.status = 'held' and h.id = :'p1' from public.sandbox_hold_job_payment(:'job1') h),
-  'D2: a hold retry is still one row, still held');
+  'D2: checkout produced a stripe row at 4800 for worker A against the winning revision');
+select tests.authenticate_as(:'customer');
+select throws_ok($$ select public.begin_job_payment((select v from fx where k = 'job1')) $$,
+  'P0001', 'This job already has a protected payment', 'D2: a checkout retry is refused, no duplicate');
+select ok((select status = 'held' and held_at is not null and id = :'p1' from public.payments where job_id = :'job1'),
+  'D2: the succeeded event moved the same row to held');
+select tests.clear_auth();
+select ok((select (public.apply_payment_event(e.id) ->> 'already')::boolean from public.payment_events e where e.payment_id = :'p1')
+          and (select status = 'held' from public.payments where id = :'p1'),
+  'D2: a replayed succeeded event is still one row, still held');
+select tests.authenticate_as(:'customer');
 select is((select count(*) from public.payments where job_id = :'job1'), 1::bigint, 'D2: exactly one ledger row for the job');
 select tests.authenticate_as(:'worker_a');
 select is((select status::text from public.payments where job_id = :'job1'), 'held', 'D3: the hired worker (payee) sees funds held in protection');
@@ -149,19 +153,16 @@ select is(
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and (p.proname ilike '%release%payment%' or p.proname ilike '%payout%' or p.proname ilike '%cash_out%')
-      -- R4 added the stripe-path successors of the sandbox release pair
-      -- (release_job_payment, auto_release_due_payments) and two functions
-      -- that only read/record the payouts_enabled flag and move no money
-      -- (my_payouts_enabled, set_payouts_enabled). R5b added their
-      -- payouts_status successors (my_payouts_status, set_payouts_status),
-      -- which likewise read/record the payout state and move no money. The
-      -- scan itself is unchanged.
-      and p.proname not in ('sandbox_release_job_payment', 'sandbox_cash_out', 'sandbox_cash_out_enabled',
-                            'release_job_payment', 'auto_release_due_payments',
-                            'my_payouts_enabled', 'set_payouts_enabled',
+      -- The stripe release pair (release_job_payment, auto_release_due_payments)
+      -- and the functions that only read/record the payout state and move no
+      -- money (set_payouts_enabled, my_payouts_status, set_payouts_status).
+      -- The sandbox pair and my_payouts_enabled were dropped by
+      -- 20261108000000_lean_v1.sql. The scan itself is unchanged.
+      and p.proname not in ('release_job_payment', 'auto_release_due_payments',
+                            'set_payouts_enabled',
                             'my_payouts_status', 'set_payouts_status')),
   '',
-  'G: the only functions that can move money past held are the sanctioned release pairs (sandbox and stripe)');
+  'G: the only functions that can move money past held are the sanctioned stripe release pair');
 
 -- ---------------------------------------------------------------------------
 -- E. NEGATIVE STATES — on a second job so job1's hire stays untouched

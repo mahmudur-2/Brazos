@@ -38,17 +38,11 @@ export type Message = {
    *  already-loaded thread rather than joined — it's always in the same one. */
   reply_to_id: string | null;
   /**
-   * Hire-request event (phase18). When job_request_id is set this message is
-   * a negotiation card rather than ordinary content. `request_event` and
+   * The offer revision this message records (phase46): when set, this message
+   * is a negotiation card rather than ordinary content. `request_event` and
    * `request_amount_cents` are a snapshot of what happened at that moment, so
-   * the thread reads correctly as history even after the request moves on.
-   */
-  job_request_id: string | null;
-  /**
-   * The offer revision this message records (phase46). Successor to
-   * job_request_id, which stays populated on rows written before the
-   * unification so historical threads keep rendering. Read this first and
-   * fall back to job_request_id — see offerIdOf() in lib/offers.ts.
+   * the thread reads correctly as history even after the offer moves on.
+   * (Lean v1 dropped the older job_request_id column.)
    */
   job_offer_id: string | null;
   request_event:
@@ -100,7 +94,7 @@ export async function unsendMessage(messageId: string) {
 // that screen in fix run F20; WorkerJobScreen's stepper took its place.)
 
 const MESSAGE_COLUMNS =
-  'id, job_id, direct_thread_id, sender_id, content, image_url, reply_to_id, job_request_id, job_offer_id, request_event, request_amount_cents, unsent_at, created_at';
+  'id, job_id, direct_thread_id, sender_id, content, image_url, reply_to_id, job_offer_id, request_event, request_amount_cents, unsent_at, created_at';
 
 /** Replace the stored private photo reference with a short-lived display URL. */
 export async function resolveMessageMedia(message: Message): Promise<Message> {
@@ -300,7 +294,6 @@ export async function sendMessage(input: NewMessageInput) {
  */
 export function messagePreviewText(message: Message): string {
   if (message.unsent_at) return 'This message was unsent';
-  if (message.job_request_id) return 'Job request';
   if (message.image_url) return message.content || 'Photo';
   return message.content || '…';
 }

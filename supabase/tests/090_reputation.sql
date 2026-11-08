@@ -18,7 +18,7 @@
 --               marked SURGERY, and ground truth
 --
 -- THE FIXTURE: every job goes through the real RPCs (create_job,
--- create_offer, accept_offer, the sandbox funding pair, transition_job_status
+-- create_offer, accept_offer, tests.test_fund_job, transition_job_status
 -- with a completion photo) via tests.r8_complete_job — the same chain
 -- 040_authz.sql §0 uses. tests.r8_hire stops at assigned, for the
 -- cancelled-after-hire job. Reviews go through create_review only. Everything
@@ -104,16 +104,15 @@ begin
   return v_job;
 end $$;
 
--- The whole chain: hire, fund on the sandbox path, start, complete with one
+-- The whole chain: hire, fund (tests.test_fund_job), start, complete with one
 -- photo — the completed_at clock every review window here hangs off.
 create or replace function tests.r8_complete_job(p_customer uuid, p_worker uuid, p_amount integer, p_title text)
 returns uuid language plpgsql as $$
 declare
   v_job uuid := tests.r8_hire(p_customer, p_worker, p_amount, p_title);
 begin
-  perform tests.authenticate_as(p_customer);
-  perform public.sandbox_authorize_job_payment(v_job);
-  perform public.sandbox_hold_job_payment(v_job);
+  perform tests.clear_auth();
+  perform tests.test_fund_job(v_job);
   perform tests.authenticate_as(p_worker);
   perform public.transition_job_status(v_job, 'in_progress');
   perform public.transition_job_status(v_job, 'completed', '["https://example.com/r8a-done.jpg"]'::jsonb);

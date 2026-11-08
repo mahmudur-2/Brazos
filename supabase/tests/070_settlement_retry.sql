@@ -45,7 +45,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(97);
+select plan(94);
 
 -- psql does not interpolate :'vars' inside dollar quotes, so ids also live in
 -- this temp table for the statements throws_ok/lives_ok execute.
@@ -122,15 +122,8 @@ begin
   return v_pid;
 end $$;
 
--- ---------------------------------------------------------------------------
--- §0. THE SENTINEL, and the two migrations §0 of the file pre-flights against.
--- ---------------------------------------------------------------------------
-select ok(public.settlement_retry_enabled(),
-  '0: settlement_retry_enabled() is true — the whole migration committed');
-select ok(has_function_privilege('authenticated', 'public.settlement_retry_enabled()', 'EXECUTE'),
-  '0: and authenticated may read the sentinel, as with stripe_foundation_enabled and connect_onboarding_enabled');
-select ok(public.stripe_foundation_enabled() and public.connect_onboarding_enabled(),
-  '0: the two migrations the pre-flight requires are applied beneath it');
+-- §0 (the settlement_retry_enabled sentinel and its two pre-flight markers)
+-- went with the probe markers in lean v1 (ruling 53).
 
 -- ---------------------------------------------------------------------------
 -- §1. THE COLUMN AND ITS CONSTRAINT (D4): refund_attempts, shaped exactly on

@@ -21,10 +21,10 @@
 --               case 7
 --
 -- THE FIXTURE is 090_reputation.sql §0's: every job goes through the real RPCs
--- (create_job, create_offer, accept_offer, the sandbox funding pair,
+-- (create_job, create_offer, accept_offer, tests.test_fund_job,
 -- transition_job_status with a completion photo) via tests.r8_complete_job;
 -- tests.r8_hire stops at assigned. Both helpers are copied verbatim from
--- 090_reputation.sql lines 87-122 — each file's transaction owns its own copy
+-- 090_reputation.sql lines 87-121 — each file's transaction owns its own copy
 -- and rolls it back (the 070 / 110 precedent); create_user, authenticate_as,
 -- authenticate_anon and clear_auth are _helpers.sql's. Reviews go through
 -- create_review only. Everything rolls back.
@@ -123,17 +123,16 @@ begin
   return v_job;
 end $$;
 
--- The whole chain: hire, fund on the sandbox path, start, complete with one
+-- The whole chain: hire, fund (tests.test_fund_job), start, complete with one
 -- photo — the completed_at clock every review window here hangs off.
--- (090_reputation.sql lines 109-122, verbatim.)
+-- (090_reputation.sql lines 109-121, verbatim.)
 create or replace function tests.r8_complete_job(p_customer uuid, p_worker uuid, p_amount integer, p_title text)
 returns uuid language plpgsql as $$
 declare
   v_job uuid := tests.r8_hire(p_customer, p_worker, p_amount, p_title);
 begin
-  perform tests.authenticate_as(p_customer);
-  perform public.sandbox_authorize_job_payment(v_job);
-  perform public.sandbox_hold_job_payment(v_job);
+  perform tests.clear_auth();
+  perform tests.test_fund_job(v_job);
   perform tests.authenticate_as(p_worker);
   perform public.transition_job_status(v_job, 'in_progress');
   perform public.transition_job_status(v_job, 'completed', '["https://example.com/r8a-done.jpg"]'::jsonb);

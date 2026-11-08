@@ -10,9 +10,9 @@
 --     before executing them, so a statement that reads the temp table would
 --     be parsed before the statement that creates it ran; inside one block
 --     each statement is planned only when it is reached.
---   * public.profiles rows are inserted explicitly. On staging the trigger on
---     auth.users (handle_new_user) creates them; the dump the baseline came
---     from excludes the auth schema, so the local stack has no such trigger.
+--   * public.profiles rows are also inserted explicitly, on conflict nothing:
+--     the trigger on auth.users (handle_new_user, migration 20261108000000)
+--     creates them first; the insert stays as an idempotent backstop.
 --   * The closing report is the same check, folded into the block.
 --
 -- Safe to re-run: each run RESETS the seeded fixtures to their starting state
@@ -21,7 +21,7 @@
 --
 -- Identities (password for all three: brazos-test-1234):
 --   phase6.customer@brazos.test  — posts the jobs, approves, tips
---   phase6.worker@brazos.test    — arrival taps, checklist, completes
+--   phase6.worker@brazos.test    — arrival taps, completes
 --   phase6.workerb@brazos.test   — the second worker the RLS probe needs
 --
 -- Fixtures:
@@ -65,8 +65,6 @@ insert into seed_ids (k, v) values
 -- ---------------------------------------------------------------------------
 delete from public.payments      where job_id in (select v from seed_ids where k like 'job%');
 delete from public.job_disputes  where job_id in (select v from seed_ids where k like 'job%');
-delete from public.job_checklist_items
-                                 where job_id in (select v from seed_ids where k like 'job%');
 delete from public.reviews       where job_id in (select v from seed_ids where k like 'job%');
 delete from public.message_reads where job_id in (select v from seed_ids where k like 'job%');
 delete from public.messages      where job_id in (select v from seed_ids where k like 'job%');
@@ -78,8 +76,8 @@ delete from public.job_locations where job_id in (select v from seed_ids where k
 delete from public.jobs          where id in (select v from seed_ids where k like 'job%');
 
 -- ---------------------------------------------------------------------------
--- 2. Identities. On staging, inserting auth.users fires public.handle_new_user,
---    which creates the profiles rows. The identities row is what lets GoTrue's
+-- 2. Identities. Inserting auth.users fires public.handle_new_user (trigger
+--    on_auth_user_created), which creates the profiles rows. The identities row is what lets GoTrue's
 --    email/password login find the account.
 -- ---------------------------------------------------------------------------
 insert into auth.users (
@@ -130,9 +128,8 @@ where s.k in ('customer', 'worker', 'worker_b')
     where i.user_id = s.v and i.provider = 'email'
   );
 
--- The local stack has no handle_new_user trigger on auth.users (the auth
--- schema is outside the baseline dump), so the profiles the trigger creates
--- on staging are created here, with the same columns the trigger writes.
+-- The handle_new_user trigger has already created these profiles; this insert
+-- is a backstop with the same columns the trigger writes.
 insert into public.profiles (id, full_name, role)
 select
   s.v,
@@ -346,20 +343,18 @@ $seed$;
 -- schema-only dump, so a fresh local stack carries none of them and every
 -- policy on storage.objects sits over an empty bucket list. On staging they
 -- were created through the Storage API. Seeding them here is what lets the
--- authorization proofs in supabase/tests/040_authz.sql §18 exercise the ten
+-- authorization proofs in supabase/tests/040_authz.sql §18 exercise the eight
 -- write policies for real, and what closes the conditional skip in
 -- supabase/tests/phase29_security_contract.sql.
 --
 -- Every one is PRIVATE. Reads are RLS's to grant (avatars_read and
--- job_photos_read admit any authenticated account; the three chat buckets
--- admit thread parties only); a public bucket would bypass that entirely.
+-- job_photos_read admit any authenticated account; the chat-photos bucket
+-- admits thread parties only); a public bucket would bypass that entirely.
 -- Outside the do-block above deliberately: it touches no fixture id, and it
 -- is idempotent on its own.
 -- ---------------------------------------------------------------------------
 insert into storage.buckets (id, name, public) values
   ('avatars',        'avatars',        false),
-  ('chat-audio',     'chat-audio',     false),
-  ('chat-documents', 'chat-documents', false),
   ('chat-photos',    'chat-photos',    false),
   ('job-photos',     'job-photos',     false)
 on conflict (id) do nothing;
