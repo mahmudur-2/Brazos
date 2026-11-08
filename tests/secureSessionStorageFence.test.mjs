@@ -24,16 +24,14 @@ const flatten = (source) => stripComments(source).replace(/\s+/g, ' ');
 // app code reaching for the session key (supabase-js's default
 // `sb-<ref>-auth-token`) around the adapter.
 //
-// SCOPE, decided in HANDOFF 2026-08-22: `scripts/shots.mjs` (which
-// `scripts/home-shots.mjs` now forwards to) seeds a fabricated web session for
-// a host that does not exist — it is OUTSIDE this native fence by design, so
-// the walk never enters scripts/. (Lean D2 deleted lib/supabase.web.ts and
+// SCOPE, decided in HANDOFF 2026-08-22: the walk never enters scripts/ (the
+// shot harness there seeded a fabricated web session; it left in lean D7).
+// (Lean D2 deleted lib/supabase.web.ts and
 // every `*.web.ts(x)`, so the walk no longer needs to skip web modules.)
 // ===========================================================================
 
 const SOURCE_DIRS = [
   'components',
-  'dev-tools',
   'hooks',
   'lib',
   'modes',

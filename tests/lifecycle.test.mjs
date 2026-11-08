@@ -318,28 +318,27 @@ test('ReviewAndTip refuses to render its form while the payment is held', async 
 });
 
 test('phase51 defers the §H.1 enum and grants every new function', async () => {
-  const sql = await read('supabase/archive/phases/phase51_active_work_lifecycle.sql');
-  assert.ok(
-    !/alter\s+type\s+public\.job_status/i.test(sql),
-    'phase51 must NOT widen job_status — the §H.1 enum migration is deferred'
-  );
+  const files = readdirSync(join(root, 'supabase/migrations')).filter((f) => f.endsWith('.sql'));
+  assert.ok(files.length > 0, 'the migrations are read');
+  for (const file of files) {
+    assert.ok(
+      !/alter\s+type\s+"?public"?\."?job_status"?\s+add/i.test(await read(`supabase/migrations/${file}`)),
+      `${file} must NOT widen job_status — the §H.1 enum migration is deferred`
+    );
+  }
+  // phase51's surviving RPCs (the sandbox pair and the marker went in lean D4/D6),
+  // in the baseline's ACL form: PUBLIC revoked, authenticated granted, anon never.
+  const baseline = await read('supabase/migrations/20260901000000_baseline.sql');
   for (const fn of [
-    'mark_worker_arrival(uuid, text)',
-    'sandbox_release_job_payment(uuid)',
-    'job_payment_state(uuid)',
-    'open_job_dispute(uuid, text, text)',
-    'withdraw_job_dispute(uuid)',
-    'sandbox_tip_worker(uuid, integer)',
-    'active_work_lifecycle_enabled()',
+    '"mark_worker_arrival"("p_job_id" "uuid", "p_step" "text")',
+    '"job_payment_state"("p_job_id" "uuid")',
+    '"open_job_dispute"("p_job_id" "uuid", "p_reason" "text", "p_details" "text")',
+    '"withdraw_job_dispute"("p_dispute_id" "uuid")',
   ]) {
-    assert.ok(
-      sql.includes(`grant execute on function public.${fn} to authenticated`),
-      `phase51 must grant EXECUTE on ${fn} (the phase32 lesson)`
-    );
-    assert.ok(
-      sql.includes(`revoke all on function public.${fn} from public, anon`),
-      `phase51 must revoke PUBLIC/anon on ${fn}`
-    );
+    const acl = baseline.split('\n').filter((line) => line.includes(` ON FUNCTION "public".${fn} `));
+    assert.ok(acl.includes(`REVOKE ALL ON FUNCTION "public".${fn} FROM PUBLIC;`), `${fn} must revoke PUBLIC`);
+    assert.ok(acl.includes(`GRANT ALL ON FUNCTION "public".${fn} TO "authenticated";`), `${fn} must grant authenticated (the phase32 lesson)`);
+    assert.ok(!acl.some((line) => line.endsWith(' TO "anon";')), `${fn} must never grant anon`);
   }
 });
 
@@ -364,21 +363,6 @@ test('release and tip exist only behind the payment adapter', async () => {
       !src.includes("rpc('release_job_payment'") && !src.includes("rpc('begin_tip_payment'"),
       `${screen} must go through paymentProvider, not the RPCs`
     );
-  }
-});
-
-test('verify-schema covers phase51', async () => {
-  const src = await read('scripts/verify-schema.mjs');
-  assert.match(src, /phase51_active_work_lifecycle\.sql/);
-  for (const rpc of [
-    'mark_worker_arrival',
-    'sandbox_release_job_payment',
-    'job_payment_state',
-    'open_job_dispute',
-    'withdraw_job_dispute',
-    'sandbox_tip_worker',
-  ]) {
-    assert.ok(src.includes(`'${rpc}'`), `verify-schema must probe ${rpc}`);
   }
 });
 

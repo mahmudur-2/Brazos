@@ -37,15 +37,24 @@ const messagesModule = (async () => {
   return import(toDataUrl(stubbed));
 })();
 
-const migration = () => read('supabase/archive/phases/phase66_messaging_locked_until_confirmed.sql');
+const baseline = () => read('supabase/migrations/20260901000000_baseline.sql');
 
-/** The `with check (...)` body of the new INSERT policy. */
+/** One function's dump block in the baseline. */
+async function baselineFunction(name) {
+  const sql = await baseline();
+  const start = sql.indexOf(`CREATE OR REPLACE FUNCTION "public"."${name}"(`);
+  const end = sql.indexOf(`ALTER FUNCTION "public"."${name}"(`, start);
+  assert.ok(start > 0 && end > start, `the baseline must define ${name}()`);
+  return sql.slice(start, end);
+}
+
+/** The `with check (...)` body of the INSERT policy, as lean_v1 restated it. */
 async function insertPolicyBody() {
-  const sql = await migration();
-  const start = sql.indexOf('create policy "messages_insert_party"');
-  assert.ok(start > 0, 'the migration must create messages_insert_party');
-  const end = sql.indexOf('comment on policy', start);
-  assert.ok(end > start, 'the policy must be bounded by its comment');
+  const sql = await read('supabase/migrations/20261108000000_lean_v1.sql');
+  const start = sql.indexOf('alter policy messages_insert_party on public.messages with check (');
+  assert.ok(start > 0, 'lean_v1 must restate messages_insert_party');
+  const end = sql.indexOf('\n);', start);
+  assert.ok(end > start, 'the policy must be bounded by its closing parenthesis');
   return sql.slice(start, end);
 }
 
@@ -58,44 +67,21 @@ test('offer, counteroffer, accept and decline all still succeed pre-confirmation
   const policy = await insertPolicyBody();
 
   // The policy exempts a structured negotiation row outright, keyed on the
-  // discriminator the app itself reads first.
-  assert.match(policy, /messages\.job_offer_id is not null or messages\.job_request_id is not null/);
-
+  // discriminator the app itself reads first. (Hire requests and voice notes,
+  // the other two shapes, went in lean D6 with their columns.)
   // And the exemption cannot be abused as a free-form channel: a client-
-  // supplied event row may carry no text, photo or audio — exactly the shape
+  // supplied event row may carry no text or photo — exactly the shape
   // offer_post_event() and create_offer() write.
-  assert.match(policy, /coalesce\(btrim\(messages\.content\), ''\) = ''/);
-  assert.match(policy, /messages\.image_url is null/);
-  assert.match(policy, /messages\.audio_url is null/);
+  assert.match(
+    policy,
+    /or \(job_offer_id is not null and coalesce\(btrim\(content\), ''\) = '' and image_url is null\)/
+  );
 
   // The stronger reason it cannot break: every writer of a negotiation event
   // is SECURITY DEFINER, so it does not meet this policy at all.
-  const writers = [
-    ['supabase/archive/phases/phase46_offer_rpcs_and_rls.sql', 'offer_post_event'],
-    ['supabase/archive/phases/phase61_marketplace_thread_identity.sql', 'create_offer'],
-  ];
-  for (const [file, fn] of writers) {
-    const sql = await read(file);
-    const start = sql.indexOf(`create or replace function public.${fn}(`);
-    assert.ok(start > 0, `${fn} must be defined in ${file}`);
-    const head = sql.slice(start, start + 1200);
-    assert.match(head, /security definer/, `${fn} must stay SECURITY DEFINER`);
-  }
-
-  // The migration must not touch the negotiation RPCs or their grants at all.
-  const sql = await migration();
-  for (const fn of [
-    'create_offer',
-    'counter_offer',
-    'accept_offer',
-    'decline_offer',
-    'withdraw_offer',
-    'offer_post_event',
-  ]) {
-    assert.ok(
-      !new RegExp(`create or replace function public\\.${fn}\\(`).test(sql),
-      `phase66 must not redefine ${fn}()`
-    );
+  for (const fn of ['offer_post_event', 'create_offer']) {
+    const head = (await baselineFunction(fn)).slice(0, 1200);
+    assert.match(head, /SECURITY DEFINER/, `${fn} must stay SECURITY DEFINER`);
   }
 });
 
@@ -106,18 +92,21 @@ test('offer, counteroffer, accept and decline all still succeed pre-confirmation
 test('a pre-confirmation free-form message is rejected by the database', async () => {
   const policy = await insertPolicyBody();
   // Every free-form insert must satisfy the gate; there is no other branch.
-  assert.match(policy, /public\.messaging_unlocked\(messages\.job_id, messages\.direct_thread_id\)/);
+  assert.match(policy, /public\.messaging_unlocked\(job_id, direct_thread_id\)/);
 
-  const sql = await migration();
+  const sql = await baselineFunction('messaging_unlocked');
   // The gate is a real predicate over real state, not a flag.
-  assert.match(sql, /create or replace function public\.messaging_unlocked\(/);
   assert.match(sql, /j\.assigned_worker_id is not null/);
   assert.match(sql, /j\.status in \('assigned', 'in_progress', 'completed'\)/);
   // It answers only about the caller's own conversations.
   assert.match(sql, /j\.client_id = auth\.uid\(\) or j\.assigned_worker_id = auth\.uid\(\)/);
   assert.match(sql, /t\.user_a = auth\.uid\(\) or t\.user_b = auth\.uid\(\)/);
   // Reachable from the app (phase32 revoked the default EXECUTE).
-  assert.match(sql, /grant execute on function public\.messaging_unlocked\(uuid, uuid\) to authenticated/);
+  assert.ok(
+    (await baseline()).includes(
+      'GRANT ALL ON FUNCTION "public"."messaging_unlocked"("p_job_id" "uuid", "p_direct_thread_id" "uuid") TO "authenticated";'
+    )
+  );
 });
 
 test('every send path is the same rejected mutation', async () => {
@@ -245,10 +234,7 @@ test('no Message CTA survives on a pre-confirmation surface', async () => {
 // ---------------------------------------------------------------------------
 
 test('a confirmed/assigned job permits messaging', async () => {
-  const sql = await migration();
-  const start = sql.indexOf('create or replace function public.messaging_unlocked(');
-  const end = sql.indexOf('comment on function public.messaging_unlocked', start);
-  const body = sql.slice(start, end);
+  const body = await baselineFunction('messaging_unlocked');
 
   // Job thread: the client or the hired worker of an assigned job.
   assert.match(body, /when p_job_id is not null then exists \(/);
@@ -263,48 +249,12 @@ test('a confirmed/assigned job permits messaging', async () => {
 });
 
 test('existing pre-confirmation history still reads', async () => {
-  const sql = await migration();
-  // SELECT is untouched, so no historical row disappears for either party.
-  assert.ok(
-    !/create policy "messages_select_party"/.test(sql),
-    'phase66 must not rewrite the read policy'
-  );
-  assert.ok(
-    !/\bdelete from public\.messages\b/i.test(sql) && !/\bupdate public\.messages\b/i.test(sql),
-    'phase66 must not delete or migrate any message row'
-  );
-  // And it says so, out loud, in the file.
-  assert.match(sql, /messages_select_party \(phase36\) is UNCHANGED/);
-});
-
-// ---------------------------------------------------------------------------
-// The migration follows the phase-file convention
-// ---------------------------------------------------------------------------
-
-test('phase66 is a single idempotent transaction with a registered sentinel', async () => {
-  const sql = await migration();
-
-  assert.match(sql, /^begin;/m);
-  assert.match(sql, /^commit;/m);
-  // Re-runnable: every object is create-or-replace / drop-if-exists.
-  assert.match(sql, /drop policy if exists "messages_insert_party" on public\.messages;/);
-  assert.match(sql, /create or replace function public\.messaging_lock_enabled\(\)/);
-  assert.match(sql, /revoke all on function public\.messaging_lock_enabled\(\) from public, anon;/);
-  assert.match(sql, /grant execute on function public\.messaging_lock_enabled\(\) to authenticated;/);
-  assert.match(sql, /notify pgrst, 'reload schema';/);
-
-  // The post-condition runs BEFORE the sentinel, so a green verify line can
-  // only mean the policy actually carries the gate.
-  const guard = sql.indexOf('phase66 post-condition failed');
-  const sentinel = sql.indexOf('create or replace function public.messaging_lock_enabled()');
-  assert.ok(guard > 0 && guard < sentinel, 'the sentinel must follow the post-condition');
-
-  // Staging only — production is never named anywhere in this run.
-  assert.doesNotMatch(sql, /avkighsiufeefyycbebf/);
-
-  // Registered in the verifier, or "applied" would be unprovable.
-  const verify = await read('scripts/verify-schema.mjs');
-  assert.match(verify, /file: 'phase66_messaging_locked_until_confirmed\.sql'/);
-  assert.match(verify, /checkRpc\('messaging_lock_enabled', \{\}\)/);
-  assert.match(verify, /checkRpc\('messaging_unlocked', \{/);
+  // SELECT is not gated by the lock, so no historical row disappears for
+  // either party: the read policy never consults messaging_unlocked().
+  const sql = await baseline();
+  const start = sql.indexOf('CREATE POLICY "messages_select_party" ON "public"."messages" FOR SELECT');
+  assert.ok(start > 0, 'the baseline must create messages_select_party');
+  assert.doesNotMatch(sql.slice(start, sql.indexOf(';\n', start)), /messaging_unlocked/);
+  const lean = await read('supabase/migrations/20261108000000_lean_v1.sql');
+  assert.doesNotMatch(lean, /policy "?messages_select_party"?/i, 'lean_v1 must not rewrite the read policy');
 });

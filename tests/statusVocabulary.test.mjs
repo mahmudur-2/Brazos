@@ -76,42 +76,22 @@ function parseRawStatusInputs() {
   return sortedSet(raws);
 }
 
-/** Every job_status value the migrations record, by reference kind. */
+/** Every job_status value the live migrations declare: the baseline's enum plus any later ADD VALUE. */
 function parseMigrationEnum() {
-  const files = readdirSync(join(root, 'supabase', 'archive', 'phases')).filter((f) => f.endsWith('.sql'));
-  assert.ok(files.length > 50, 'the migration directory is populated');
+  const files = readdirSync(join(root, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql'));
+  assert.ok(files.length > 0, 'the migration directory is populated');
 
-  const patterns = {
-    // phase45: alter type public.job_status add value if not exists 'draft'
-    alterType: /alter\s+type\s+public\.job_status\s+add\s+value\s+if\s+not\s+exists\s+'([a-z_]+)'/gi,
-    // seeds, accept_offer, delete gates: 'open'::job_status, 'assigned'::public.job_status, …
-    casts: /'([a-z_]+)'\s*::\s*(?:public\.)?job_status\b/g,
-    // ban_user (phase13) and delete_my_account (phase67/75) write cancelled
-    // directly; [^;] keeps the window inside one statement.
-    jobsWrites: /update\s+public\.jobs\b[^;]{0,400}?set\s+status\s*=\s*'([a-z_]+)'/gi,
-    // transition_job_status's whole graph, every re-issue of it:
-    // (v_job.status = 'assigned' and p_status = 'in_progress') or …
-    transitions: /v_job\.status\s*=\s*'([a-z_]+)'\s*and\s*p_status\s*=\s*'([a-z_]+)'/g,
-  };
-
-  const byPattern = { alterType: new Set(), casts: new Set(), jobsWrites: new Set(), transitions: new Set() };
+  const values = [];
   for (const file of files) {
-    const sql = read(join('supabase', 'archive', 'phases', file));
-    for (const [name, pattern] of Object.entries(patterns)) {
-      for (const m of sql.matchAll(pattern)) {
-        byPattern[name].add(m[1]);
-        if (m[2]) byPattern[name].add(m[2]);
-      }
+    const sql = read(join('supabase', 'migrations', file));
+    const declared = sql.match(/CREATE TYPE "public"\."job_status" AS ENUM \(([^)]*)\);/);
+    if (declared) values.push(...[...declared[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]));
+    for (const m of sql.matchAll(/alter\s+type\s+"?public"?\."?job_status"?\s+add\s+value\s+(?:if\s+not\s+exists\s+)?'([a-z_]+)'/gi)) {
+      values.push(m[1]);
     }
   }
-
-  for (const [name, values] of Object.entries(byPattern)) {
-    assert.ok(values.size > 0, `the ${name} pattern still matches the migrations`);
-  }
-  assert.ok(byPattern.alterType.has('draft'), 'phase45 adds draft via ALTER TYPE');
-  assert.ok(byPattern.jobsWrites.has('cancelled'), 'the raw cancel writes are found');
-
-  return sortedSet([...byPattern.alterType, ...byPattern.casts, ...byPattern.jobsWrites, ...byPattern.transitions]);
+  assert.ok(values.length > 0, 'the job_status enum is found in the migrations');
+  return sortedSet(values);
 }
 
 const rawInputs = parseRawStatusInputs();

@@ -432,7 +432,6 @@ test("the fail-open log line is extinct in source", () => {
     'modes',
     'navigation',
     'ui',
-    'dev-tools',
     'tests',
   ]) {
     walk(dir);

@@ -150,9 +150,11 @@ test('§4.3 · a tombstoned profile carries no Hire, and the label is phase67\'s
 
   assert.equal(DELETED_USER_LABEL, 'Deleted user');
   // Pin the label against the migration that writes it — the client constant
-  // and the tombstone UPDATE must never drift apart.
-  const phase67 = await read('supabase/archive/phases/phase67_account_deletion.sql');
-  assert.match(phase67, /set full_name\s+= 'Deleted user',/);
+  // and the tombstone UPDATE must never drift apart. delete_my_account()'s
+  // newest definition is lean_v1's.
+  const lean = await read('supabase/migrations/20261108000000_lean_v1.sql');
+  const deletion = lean.slice(lean.indexOf('create or replace function public.delete_my_account()'));
+  assert.match(deletion, /set full_name\s+= 'Deleted user',/);
 
   assert.equal(canHire('Deleted user'), false);
   assert.equal(isTombstonedName('Deleted user'), true);
@@ -379,9 +381,13 @@ test('§6.1 · the 500 cap is mirrored: chips stand down before a send could exc
     await offerMessageModule;
 
   assert.equal(OFFER_MESSAGE_MAX, 500);
-  // Pin the server's own literal — create_offer's latest revision.
-  const phase61 = await read('supabase/archive/phases/phase61_marketplace_thread_identity.sql');
-  assert.match(phase61, /if length\(coalesce\(p_message, ''\)\) > 500 then/);
+  // Pin the server's own literal — create_offer's latest revision (the baseline's).
+  const baseline = await read('supabase/migrations/20260901000000_baseline.sql');
+  const createOffer = baseline.slice(
+    baseline.indexOf('CREATE OR REPLACE FUNCTION "public"."create_offer"('),
+    baseline.indexOf('ALTER FUNCTION "public"."create_offer"(')
+  );
+  assert.match(createOffer, /if length\(coalesce\(p_message, ''\)\) > 500 then/);
 
   const longest = longestAvailabilityLineLength(['Wed, Aug 26']);
   assert.ok(longest >= 'Can start Wed, Aug 26 · about 1-2h'.length);

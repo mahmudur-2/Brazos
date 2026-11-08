@@ -662,7 +662,7 @@ test('[static] the real provider runs on real timers', () => {
 });
 
 test('[static] nothing outside lib/voiceSearch/index.ts touches expo-speech-recognition', () => {
-  const dirs = ['lib', 'screens', 'components', 'hooks', 'ui', 'navigation', 'modes', 'dev-tools'];
+  const dirs = ['lib', 'screens', 'components', 'hooks', 'ui', 'navigation', 'modes'];
   const files = ['App.tsx', 'index.ts'];
   for (const dir of dirs) {
     for (const entry of readdirSync(join(root, dir), { withFileTypes: true, recursive: true })) {

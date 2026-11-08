@@ -73,7 +73,7 @@ test('[static] lib/haptics exposes three no-ops, and the vendor is one caught re
 // asserts the tree is clean, so a walk that found nothing fails loudly rather
 // than passing quietly.
 // ---------------------------------------------------------------------------
-const SCAN_DIRS = ['components', 'dev-tools', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui'];
+const SCAN_DIRS = ['components', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui'];
 const ROOT_FILES = ['App.tsx', 'index.ts'];
 const BOUNDARY = 'lib/haptics.ts';
 

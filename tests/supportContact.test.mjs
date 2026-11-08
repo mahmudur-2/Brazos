@@ -119,8 +119,7 @@ test('a1 · the Profile hub carries Contact support as a row that opens the mail
 });
 
 /** Every tree that holds app code; the frozen web surface is never product
- *  code, and dev-tools/ is excluded wherever it sits — the walk
- *  tests/legacyAggregateFence.test.mjs uses. */
+ *  code — the walk tests/legacyAggregateFence.test.mjs uses. */
 const APP_TREES = ['lib', 'screens', 'components', 'hooks'];
 
 function appSources(dir) {
@@ -128,7 +127,6 @@ function appSources(dir) {
   for (const entry of readdirSync(join(root, dir))) {
     const rel = `${dir}/${entry}`;
     if (statSync(join(root, rel)).isDirectory()) {
-      if (entry === 'dev-tools') continue;
       out.push(...appSources(rel));
       continue;
     }

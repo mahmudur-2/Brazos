@@ -55,7 +55,7 @@ const BOUNDARY = 'lib/motion120/vendor.ts';
 const FAST_PATH = /\.motion120\.tsx?$/;
 
 function appSources() {
-  const dirs = ['lib', 'screens', 'components', 'hooks', 'ui', 'navigation', 'modes', 'dev-tools'];
+  const dirs = ['lib', 'screens', 'components', 'hooks', 'ui', 'navigation', 'modes'];
   const files = ['App.tsx', 'index.ts'];
   for (const dir of dirs) {
     for (const entry of readdirSync(join(root, dir), { withFileTypes: true, recursive: true })) {

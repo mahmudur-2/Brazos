@@ -11,7 +11,7 @@ const stripComments = (source) =>
 const flatten = (source) => stripComments(source).replace(/\s+/g, ' ');
 
 const BOUNDARY = 'components/RemoteImage.tsx';
-const SCAN_DIRS = ['components', 'dev-tools', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui'];
+const SCAN_DIRS = ['components', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui'];
 const ROOT_FILES = ['App.tsx', 'index.ts'];
 
 /**

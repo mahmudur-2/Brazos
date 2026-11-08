@@ -24,12 +24,11 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
-/** Comments are prose. A fence a comment can satisfy is not a fence — the
- *  same helper tests/shotHarness.test.mjs uses. */
+/** Comments are prose. A fence a comment can satisfy is not a fence. */
 const codeOnly = (source) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
-/** Every tree that holds app code. dev-tools/ is excluded wherever it sits. */
+/** Every tree that holds app code. */
 const APP_TREES = ['lib', 'screens', 'components', 'hooks', 'navigation', 'modes'];
 
 function appSources(dir) {
@@ -38,7 +37,6 @@ function appSources(dir) {
     const rel = `${dir}/${entry}`;
     const abs = join(root, rel);
     if (statSync(abs).isDirectory()) {
-      if (entry === 'dev-tools') continue;
       out.push(...appSources(rel));
       continue;
     }
@@ -66,7 +64,6 @@ test('no app code reads profiles.rating_avg or profiles.rating_count', () => {
     assert.ok(files.includes(must), `${must} must be in the scan`);
   }
   for (const file of files) {
-    assert.ok(!file.includes('dev-tools/'), `${file} is under dev-tools and must not be scanned`);
     assert.ok(!/\.web\.tsx?$/.test(file), `${file} is the frozen web surface and must not be scanned`);
   }
 

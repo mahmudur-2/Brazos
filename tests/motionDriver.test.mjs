@@ -11,7 +11,7 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 const MOTION = 'lib/motion.ts';
 
 // Every directory that holds app code.
-const SCAN_DIRS = ['components', 'dev-tools', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui'];
+const SCAN_DIRS = ['components', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui'];
 const ROOT_FILES = ['App.tsx', 'index.ts'];
 
 function* walk(dir) {

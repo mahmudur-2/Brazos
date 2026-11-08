@@ -187,17 +187,21 @@ const stripComments = (source) =>
 /** The two schema facts the Hourly decision rests on, read from the SQL. */
 const readSchema = async () => {
   const { readdir } = await import('node:fs/promises');
-  const names = (await readdir(join(root, 'supabase', 'archive', 'phases'))).filter((n) => n.endsWith('.sql'));
-  const all = (await Promise.all(names.map((n) => read(`supabase/archive/phases/${n}`)))).join('\n');
+  const names = (await readdir(join(root, 'supabase', 'migrations'))).filter((n) => n.endsWith('.sql'));
+  const all = (await Promise.all(names.map((n) => read(`supabase/migrations/${n}`)))).join('\n');
+  // The baseline's CREATE TABLE block for one table (pg_dump form).
+  const table = (name) => {
+    const start = all.indexOf(`CREATE TABLE IF NOT EXISTS "public"."${name}" (`);
+    assert.ok(start > 0, `the baseline must create ${name}`);
+    return all.slice(start, all.indexOf('\n);', start));
+  };
   return {
-    phase53: await read('supabase/archive/phases/phase53_worker_self_service.sql'),
-    // EVERY column the jobs table has or gains, gathered from every migration
-    // rather than from the one phase file that happens to be remembered — the
-    // whole point is to notice a column added somewhere else.
-    jobColumns: all
-      .split('\n')
-      .filter((line) => /alter table (public\.)?jobs\b.*add column/i.test(line))
-      .join('\n'),
+    workerServices: table('worker_services'),
+    // EVERY column the jobs table has or gains: the baseline's table plus every
+    // later `alter table jobs ... add column` statement (one or many lines)
+    // rather than the one file that happens to be remembered — the whole
+    // point is to notice a column added somewhere else.
+    jobColumns: [table('jobs'), ...(all.match(/alter table (public\.)?jobs\b[^;]*?add column[^;]*;/gi) ?? [])].join('\n'),
   };
 };
 
@@ -294,8 +298,8 @@ test('[static] the map chip row is Today alone — and the three absences are de
   assert.doesNotMatch(map, /label="Hourly"/, 'no hourly chip until the jobs table can answer it');
   const schema = await readSchema();
   assert.match(
-    schema.phase53,
-    /price_unit text not null default 'flat' check \(price_unit in \('flat', 'hourly'\)\)/,
+    schema.workerServices,
+    /"price_unit" "text" DEFAULT 'flat'::"text" NOT NULL,[\s\S]*"worker_services_price_unit_check" CHECK \(\("price_unit" = ANY \(ARRAY\['flat'::"text", 'hourly'::"text"\]\)\)\)/,
     'the hourly vocabulary must still be the one on worker_services'
   );
   // ANTI-VACUITY, and it carries the whole argument: a column scan that found

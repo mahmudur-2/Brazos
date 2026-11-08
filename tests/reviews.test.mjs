@@ -9,8 +9,8 @@ import { dirname, join } from 'node:path';
  *
  * What must stay true:
  *   1. create_review() stays the only reachable write path (phase29's
- *      revoke), and phase54's defense-in-depth policy states the full rule
- *      (party of a COMPLETED job, the OTHER party as reviewee).
+ *      revoke), and it states the full rule (party of a COMPLETED job, the
+ *      OTHER party as reviewee).
  *   2. The reliability signal is counted, never estimated, and cancelled
  *      renders only when non-zero — no scary "0 cancelled" on every poster.
  *   3. §9 ordering is untouched: the customer review still sits behind the
@@ -21,13 +21,21 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFile(join(root, rel), 'utf8');
 
 test('phase54 states the full review rule as defense in depth', async () => {
-  const sql = await read('supabase/archive/phases/phase54_review_integrity.sql');
-  assert.match(sql, /j\.status = 'completed'/);
-  assert.match(sql, /j\.client_id = auth\.uid\(\) and j\.assigned_worker_id = reviewee_id/);
-  assert.match(sql, /j\.assigned_worker_id = auth\.uid\(\) and j\.client_id = reviewee_id/);
+  // phase54's INSERT policy was inert (no grant lets authenticated insert) and
+  // went in lean D6; create_review() (R8a's, the newest) states the rule.
+  const sql = await read('supabase/migrations/20260925000100_r8a_reputation.sql');
+  const start = sql.indexOf('create function public.create_review(');
+  assert.ok(start > 0, 'R8a must define create_review()');
+  const createReview = sql.slice(start, sql.indexOf('\n$$;', start));
+  assert.match(createReview, /if not found or v_job\.status <> 'completed' then/);
+  assert.match(createReview, /\(v_job\.client_id = v_user and p_reviewee_id = v_job\.assigned_worker_id\)/);
+  assert.match(createReview, /or \(v_job\.assigned_worker_id = v_user and p_reviewee_id = v_job\.client_id\)/);
   // It must NOT re-grant direct INSERT — the phase29 revoke is the door.
-  assert.ok(!/grant insert on public\.reviews/.test(sql), 'no INSERT re-grant');
-  assert.match(sql, /grant execute on function public\.review_integrity_enabled\(\) to authenticated/);
+  const baseline = await read('supabase/migrations/20260901000000_baseline.sql');
+  const tableGrant = baseline.match(/^GRANT ([A-Z,]+) ON TABLE "public"\."reviews" TO "authenticated";$/m)?.[1];
+  assert.ok(tableGrant, 'the reviews grant must be findable');
+  assert.ok(!tableGrant.split(',').includes('INSERT'), 'no INSERT grant');
+  assert.ok(!/grant insert on public\.reviews/i.test(sql), 'no INSERT re-grant');
 });
 
 test('the reliability signal is counted and honest', async () => {

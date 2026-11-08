@@ -31,21 +31,28 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFile(join(root, rel), 'utf8');
 
+/** The live trigger and its function: the baseline's (pg_dump form). */
+const threadAutocreate = async () => {
+  const baseline = await read('supabase/migrations/20260901000000_baseline.sql');
+  const start = baseline.indexOf('CREATE OR REPLACE FUNCTION "public"."ensure_thread_for_offer"()');
+  const end = baseline.indexOf('ALTER FUNCTION "public"."ensure_thread_for_offer"()', start);
+  assert.ok(start > 0 && end > start, 'the baseline must define ensure_thread_for_offer()');
+  return { baseline, fn: baseline.slice(start, end) };
+};
+
 test('phase52: trigger-backed thread creation, sealed and non-fatal', async () => {
-  const sql = await read('supabase/archive/phases/phase52_offer_scoped_chat.sql');
-  assert.match(sql, /create trigger job_offers_thread_autocreate\s+after insert on public\.job_offers/);
-  assert.match(sql, /drop trigger if exists job_offers_thread_autocreate/);
+  const { baseline, fn } = await threadAutocreate();
+  assert.match(
+    baseline,
+    /CREATE OR REPLACE TRIGGER "job_offers_thread_autocreate" AFTER INSERT ON "public"\."job_offers" FOR EACH ROW EXECUTE FUNCTION "public"\."ensure_thread_for_offer"\(\);/
+  );
   // The trigger body must swallow its own failure — an offer insert can
   // never be lost to thread plumbing.
-  assert.match(sql, /exception when others then[\s\S]*raise warning/);
+  assert.match(fn, /exception when others then[\s\S]*raise warning/);
   // Internal plumbing: no client EXECUTE anywhere on it.
-  assert.match(sql, /revoke all on function public\.ensure_thread_for_offer\(\) from public, anon, authenticated/);
-  // Backfill for pairs whose offers predate the trigger.
-  assert.match(sql, /status = 'pending'/);
-  // Sentinel carries the group (a trigger has no PostgREST shape).
-  assert.match(sql, /grant execute on function public\.offer_scoped_chat_enabled\(\) to authenticated/);
-  // And the job-thread policies are NOT touched here.
-  assert.ok(!/create policy|drop policy/.test(sql), 'phase52 must not rewrite message policies');
+  const acl = baseline.split('\n').filter((l) => l.includes(' ON FUNCTION "public"."ensure_thread_for_offer"()'));
+  assert.ok(acl.includes('REVOKE ALL ON FUNCTION "public"."ensure_thread_for_offer"() FROM PUBLIC;'));
+  assert.ok(!acl.some((l) => l.startsWith('GRANT ')), 'no role is granted EXECUTE on the trigger function');
 });
 
 // RETIRED 2026-08-23 — 'quick replies are mode-specific through ModeContext'.
@@ -95,8 +102,8 @@ test('phase66 supersedes the pre-hire chat ENTRIES, not the thread itself', asyn
   // first offer, so the negotiation cards still have somewhere to live and the
   // conversation is already there the moment the job is confirmed. What went
   // away is the free-form ENTRY POINTS before that moment.
-  const phase52 = await read('supabase/archive/phases/phase52_offer_scoped_chat.sql');
-  assert.match(phase52, /create trigger job_offers_thread_autocreate/);
+  const { baseline } = await threadAutocreate();
+  assert.match(baseline, /CREATE OR REPLACE TRIGGER "job_offers_thread_autocreate"/);
 
   const bidDetail = await read('screens/BidDetailScreen.tsx');
   const jobDetail = await read('screens/JobDetailScreen.tsx');

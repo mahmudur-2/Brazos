@@ -47,24 +47,29 @@ test('the client constants mirror the database ceilings, operator included', asy
   assert.ok(Number.isInteger(MONEY_CEILING_CENTS));
   assert.ok(Number.isInteger(TIP_CEILING_CENTS));
 
-  const phase75 = await read('supabase/archive/phases/phase75_security_hardening.sql');
+  // phase75's ceilings, as the live schema (the baseline, pg_dump form) holds them.
+  const baseline = await read('supabase/migrations/20260901000000_baseline.sql');
+  const jobsCeiling = baseline.match(/CONSTRAINT "jobs_money_ceiling" CHECK [^\n]*/)?.[0] ?? '';
   // jobs: all three budget figures, inclusive.
-  assert.match(phase75, /budget_cents\s+> 0 and budget_cents\s+<= 10000000/);
-  assert.match(phase75, /budget_min_cents\s+> 0 and budget_min_cents\s+<= 10000000/);
-  assert.match(phase75, /budget_max_cents\s+> 0 and budget_max_cents\s+<= 10000000/);
+  for (const column of ['budget_cents', 'budget_min_cents', 'budget_max_cents']) {
+    assert.ok(
+      jobsCeiling.includes(`(("${column}" > 0) AND ("${column}" <= 10000000))`),
+      `jobs.${column} carries the inclusive ceiling`
+    );
+  }
   // job_offers and payments: same shape, inclusive.
-  assert.equal(
-    (phase75.match(/check \(amount_cents > 0 and amount_cents <= 10000000\)/g) ?? []).length,
-    2,
-    'job_offers and payments each carry the inclusive amount ceiling'
-  );
+  for (const table of ['job_offers', 'payments']) {
+    assert.ok(
+      baseline.includes(`CONSTRAINT "${table}_money_ceiling" CHECK ((("amount_cents" > 0) AND ("amount_cents" <= 10000000)))`),
+      `${table} carries the inclusive amount ceiling`
+    );
+  }
 
-  const phase51 = await read('supabase/archive/phases/phase51_active_work_lifecycle.sql');
-  // The tip cap REJECTS `> 100000`, so 100000 itself is accepted.
-  assert.match(
-    phase51,
-    /p_amount_cents is null or p_amount_cents <= 0 or p_amount_cents > 100000/
-  );
+  // The tip cap: the fee schedule's $1,000, and the trigger REJECTS only above
+  // the limit, so 100000 itself is accepted.
+  const stripe = await read('supabase/migrations/20260905000000_stripe_foundation.sql');
+  assert.match(stripe, /tip_max_bps, tip_max_cents\)\s+select [^\n]*, 100000\n/);
+  assert.match(stripe, /if new\.amount_cents > v_limit then/);
 });
 
 test('exactly at the ceiling is accepted; one cent above is refused', async () => {

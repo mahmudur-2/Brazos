@@ -158,7 +158,7 @@ test('B5 · no developer vocabulary in any rendered string', () => {
     'lib/adapters/payments.ts',
     'lib/offerCopy.ts',
     'lib/payments/stripe.ts',
-  ].filter((rel) => !rel.startsWith('components/DesignStudio') && !rel.includes('dev-tools'));
+  ].filter((rel) => !rel.startsWith('components/DesignStudio'));
   const offenders = [];
   for (const rel of files) {
     for (const text of renderedStrings(read(rel))) {

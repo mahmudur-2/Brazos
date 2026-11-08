@@ -10,8 +10,8 @@ import { dirname, join } from 'node:path';
  * What must stay true:
  *   1. phase53 keeps the security posture: explicit grants on everything new
  *      (the phase32 lesson), update_my_profile's allowlist widened by exactly
- *      the two availability keys, portfolio SELECT narrowed to
- *      published-or-owner, saved_workers private to the saver.
+ *      the two availability keys, services SELECT narrowed to
+ *      published-or-owner.
  *   2. Prices are honest: a NULL price renders "Ask for a quote", never $0.
  *   3. The avatar path stays failure-safe: an upload error keeps the
  *      previous photo and says so.
@@ -21,31 +21,41 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFile(join(root, rel), 'utf8');
 
+/** The live schema: the baseline (pg_dump form); no later migration redefines what is read here. */
+const baseline = () => read('supabase/migrations/20260901000000_baseline.sql');
+
 test('phase53 posture: grants, allowlist, draft policies', async () => {
-  const sql = await read('supabase/archive/phases/phase53_worker_self_service.sql');
-  // Explicit narrow grants on both new tables.
-  assert.match(sql, /grant select, insert, update, delete on public\.worker_services to authenticated/);
-  assert.match(sql, /grant select, insert, delete on public\.saved_workers to authenticated/);
-  assert.match(sql, /revoke all on public\.worker_services from public, anon/);
-  assert.match(sql, /revoke all on public\.saved_workers from public, anon/);
+  // (saved_workers and the portfolio went in lean D5.)
+  const sql = await baseline();
+  const updateMyProfile = sql.slice(
+    sql.indexOf('CREATE OR REPLACE FUNCTION "public"."update_my_profile"('),
+    sql.indexOf('ALTER FUNCTION "public"."update_my_profile"(')
+  );
   // The two — and only two — new profile keys.
-  assert.match(sql, /'accepting_work', 'availability_note'/);
-  assert.ok(!/'rating_avg'|'verification_status'|'banned'/.test(sql.slice(sql.indexOf('k.key not in'))), 'no protected key joins the allowlist');
-  // Draft visibility: published-or-owner on BOTH portfolio and services.
-  assert.match(sql, /published = true or worker_id = auth\.uid\(\)/);
+  assert.match(updateMyProfile, /'accepting_work', 'availability_note'/);
+  assert.ok(updateMyProfile.indexOf('k.key not in') > 0, 'the allowlist must be findable');
+  assert.ok(!/'rating_avg'|'verification_status'|'banned'/.test(updateMyProfile.slice(updateMyProfile.indexOf('k.key not in'))), 'no protected key joins the allowlist');
+  // Draft visibility: published-or-owner on services.
+  assert.match(
+    sql,
+    /CREATE POLICY "services_select_visible" ON "public"\."worker_services" FOR SELECT TO "authenticated" USING \(\(\("published" = true\) OR \("worker_id" = "auth"\."uid"\(\)\)\)\);/
+  );
   // The availability columns are column-granted, not table-granted.
-  assert.match(sql, /grant select \(accepting_work, availability_note\) on public\.profiles to authenticated/);
-  assert.ok(!/grant select on public\.profiles to authenticated/.test(sql), 'never a whole-table profiles grant');
+  for (const column of ['accepting_work', 'availability_note']) {
+    assert.ok(sql.includes(`GRANT SELECT("${column}") ON TABLE "public"."profiles" TO "authenticated";`), `${column} is column-granted`);
+  }
+  const profilesTable = sql.match(/^GRANT ([A-Z,]+) ON TABLE "public"\."profiles" TO "authenticated";$/m)?.[1];
+  assert.ok(profilesTable, 'the profiles table grant must be findable');
+  assert.ok(!profilesTable.split(',').includes('SELECT'), 'never a whole-table profiles grant');
   // Function grants re-stated (phase32 lesson).
-  assert.match(sql, /grant execute on function public\.update_my_profile\(jsonb\) to authenticated/);
-  assert.match(sql, /grant execute on function public\.worker_self_service_enabled\(\) to authenticated/);
+  assert.ok(sql.includes('GRANT ALL ON FUNCTION "public"."update_my_profile"("p_patch" "jsonb") TO "authenticated";'));
 });
 
 test('a NULL price is "Ask for a quote", never zero dollars', async () => {
   const services = await read('lib/services.ts');
   assert.match(services, /if \(service\.price_cents == null\) return 'Ask for a quote'/);
-  const sql = await read('supabase/archive/phases/phase53_worker_self_service.sql');
-  assert.match(sql, /price_cents is null or price_cents > 0/);
+  const sql = await baseline();
+  assert.ok(sql.includes('CONSTRAINT "worker_services_price_cents_check" CHECK ((("price_cents" IS NULL) OR ("price_cents" > 0)))'));
 });
 
 test('services carries no currency formatting of its own — formatBudget is the one formatter (F-011)', async () => {

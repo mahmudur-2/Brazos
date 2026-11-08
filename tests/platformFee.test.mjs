@@ -100,32 +100,6 @@ test('quoteJobPrice validates every figure the screens show, and never invents o
   assert.equal((await asArray.quoteJobPrice(4000)).data.worker_receives_cents, 3800);
 });
 
-test('sandbox inserts write a zero fee — the figure Earnings sums for sandbox rows', async () => {
-  // The sandbox RPCs name platform_fee_cents in their column list and pass a
-  // literal 0; the card path's fee is written by begin_job_payment from
-  // quote_job_price() and is read off the row, so nothing here has to agree
-  // with a client constant any more — but a sandbox row that quietly grew a
-  // fee would misstate Earnings for the beta.
-  let inserts = 0;
-  for (const file of dir('supabase/archive/phases').filter((f) => f.endsWith('.sql'))) {
-    const sql = await read(`supabase/archive/phases/${file}`);
-    for (const match of sql.matchAll(
-      /insert into public\.payments \(([\s\S]*?)\)\s*values\s*\(([\s\S]*?)\);/g
-    )) {
-      const [, columns, values] = match;
-      if (!/platform_fee_cents/.test(columns)) continue;
-      const index = columns
-        .split(',')
-        .map((c) => c.trim())
-        .indexOf('platform_fee_cents');
-      const written = values.split(',')[index]?.trim();
-      assert.equal(written, '0', `supabase/archive/phases/${file} writes platform_fee_cents = ${written} on a sandbox row`);
-      inserts++;
-    }
-  }
-  assert.ok(inserts > 0, 'the sandbox inserts were found');
-});
-
 test('no screen carries its own fee rate or fee arithmetic', async () => {
   const offenders = [];
   for (const file of dir('screens').filter((f) => f.endsWith('.tsx'))) {

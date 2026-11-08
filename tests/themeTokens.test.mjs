@@ -342,7 +342,7 @@ test('one-serif fence: the hero role alone is Georgia, and nothing else is a ser
   const offenders = [];
   const heroSites = new Map();
   const sources = await filesUnder([
-    'components', 'dev-tools', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui',
+    'components', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui',
   ]);
   for (const path of [...sources, 'App.tsx']) {
     const source = stripComments(await read(path));

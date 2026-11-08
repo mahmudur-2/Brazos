@@ -234,13 +234,3 @@ test('a6 · the two reads carry the columns the sentences need, and the copy liv
   assert.doesNotMatch(copy, /\d+\s*(minutes|hours|days)\b/);
   assert.doesNotMatch(copy, /instant/i);
 });
-
-test('phase55 keeps the sandbox posture', async () => {
-  const sql = await read('supabase/archive/phases/phase55_sandbox_cash_out.sql');
-  assert.match(sql, /payee_id = v_actor/);
-  assert.match(sql, /status = 'released'/);
-  assert.match(sql, /grant execute on function public\.sandbox_cash_out\(\) to authenticated/);
-  assert.match(sql, /revoke all on function public\.sandbox_cash_out\(\) from public, anon/);
-  // It must never touch held money.
-  assert.ok(!/'held'/.test(sql), 'cash-out must not reference held rows');
-});

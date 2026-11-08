@@ -68,11 +68,15 @@ const OUTBOX = [
  * notify_on_job_request, which picks one of four). It is resolved from the
  * assignments inside that same function body — file-wide would be wrong,
  * because other migrations reuse `v_type` for an unrelated offer_type.
+ *
+ * The scan reads the baseline: the phase history, consolidated (pg_dump keeps
+ * every function body verbatim). The migrations after it are not reconciled
+ * here.
  */
 async function scanEmitted() {
   const pairs = new Set();
-  for (const file of dir('supabase/archive/phases').filter((f) => f.endsWith('.sql'))) {
-    const sql = await read(`supabase/archive/phases/${file}`);
+  for (const file of ['20260901000000_baseline.sql']) {
+    const sql = await read(`supabase/migrations/${file}`);
     const calls = /enqueue_notification\(\s*[^,()]+,\s*[^,]+?,\s*'([a-z_]+)',\s*(?:'([a-z_]+)'|(v_type))/g;
     for (const m of sql.matchAll(calls)) {
       const [category, literalType, variableType] = [m[1], m[2], m[3]];
@@ -81,7 +85,7 @@ async function scanEmitted() {
         continue;
       }
       // Resolve the variable within its own function body.
-      const fnStart = sql.lastIndexOf('create or replace function ', m.index);
+      const fnStart = sql.lastIndexOf('CREATE OR REPLACE FUNCTION ', m.index);
       assert.ok(fnStart >= 0, `${file}: ${variableType} used outside a function body`);
       const body = sql.slice(fnStart, m.index);
       const assigned = [...body.matchAll(/v_type\s*:=\s*'([a-z_]+)'/g)].map((a) => a[1]);
@@ -95,36 +99,58 @@ async function scanEmitted() {
   return pairs;
 }
 
+/** should_notify()'s newest definition (lean_v1's), to the end of its body. */
+async function liveShouldNotify() {
+  const lean = await read('supabase/migrations/20261108000000_lean_v1.sql');
+  const start = lean.indexOf('create or replace function public.should_notify(');
+  assert.ok(start > 0, 'lean_v1 must define should_notify()');
+  return lean.slice(start, lean.indexOf('\n$$;', start));
+}
+
 test('one event log — no parallel notifications table', async () => {
-  const sql = await read('supabase/archive/phases/phase56_notification_feed.sql');
-  assert.ok(!/create table/.test(sql), 'phase56 must not create a new table');
-  assert.match(sql, /alter table public\.notification_outbox/);
+  // Across the whole live schema, the only notification tables are the outbox
+  // and the preferences.
+  const created = new Set();
+  for (const file of dir('supabase/migrations').filter((f) => f.endsWith('.sql'))) {
+    const sql = await read(`supabase/migrations/${file}`);
+    for (const m of sql.matchAll(/create table (?:if not exists )?"?public"?\."?(\w*notif\w*)"?/gi)) created.add(m[1]);
+  }
+  assert.deepEqual([...created].sort(), ['notification_outbox', 'notification_prefs']);
   const lib = await read('lib/notifications.ts');
   assert.match(lib, /from\('notification_outbox'\)/);
 });
 
 test('the recipient writes read_at and nothing else', async () => {
-  const sql = await read('supabase/archive/phases/phase56_notification_feed.sql');
-  assert.match(sql, /revoke insert, update, delete, truncate, references, trigger\s+on public\.notification_outbox from authenticated/);
-  assert.match(sql, /grant update \(read_at\) on public\.notification_outbox to authenticated/);
-  assert.match(sql, /recipient_id = auth\.uid\(\)/);
+  const sql = await read('supabase/migrations/20260901000000_baseline.sql');
+  assert.ok(sql.includes('GRANT SELECT,MAINTAIN ON TABLE "public"."notification_outbox" TO "authenticated";'), 'table-wide: read only');
+  assert.ok(sql.includes('GRANT UPDATE("read_at") ON TABLE "public"."notification_outbox" TO "authenticated";'));
+  assert.match(
+    sql,
+    /CREATE POLICY "outbox_update_recipient" ON "public"\."notification_outbox" FOR UPDATE TO "authenticated" USING \(\("recipient_id" = "auth"\."uid"\(\)\)\)/
+  );
 });
 
 test('should_notify keeps every social gate, loses only the token gate', async () => {
-  const sql = await read('supabase/archive/phases/phase56_notification_feed.sql');
-  const fn = sql.slice(sql.indexOf('create or replace function public.should_notify'));
-  for (const gate of ['is_blocked_between', 'mutes', 'banned', 'notification_prefs', 'nearby_jobs']) {
+  const fn = await liveShouldNotify();
+  // is_profile_active is the ban gate (it reads profiles.banned); the mutes
+  // gate went with the mutes table in lean D6.
+  for (const gate of ['is_blocked_between', 'is_profile_active', 'notification_prefs', 'nearby_jobs']) {
     assert.ok(fn.includes(gate), `should_notify must keep the ${gate} gate`);
   }
   assert.ok(!fn.includes('push_tokens'), 'the push-token gate must be gone');
 });
 
 test('the two Phase-6 events are wired and deduped', async () => {
-  const sql = await read('supabase/archive/phases/phase56_notification_feed.sql');
-  assert.match(sql, /payments_notify_release\s+after update on public\.payments/);
-  assert.match(sql, /job_disputes_notify\s+after insert on public\.job_disputes/);
-  assert.match(sql, /'payment_released:' \|\| new\.id::text/);
-  assert.match(sql, /'dispute_opened:' \|\| new\.id::text/);
+  const baseline = await read('supabase/migrations/20260901000000_baseline.sql');
+  assert.match(baseline, /CREATE OR REPLACE TRIGGER "payments_notify_release" AFTER UPDATE ON "public"\."payments"/);
+  assert.match(baseline, /CREATE OR REPLACE TRIGGER "job_disputes_notify" AFTER INSERT ON "public"\."job_disputes"/);
+  // Each body's newest definition carries its dedupe key.
+  const lean = await read('supabase/migrations/20261108000000_lean_v1.sql');
+  const release = lean.slice(lean.indexOf('create or replace function public.notify_on_payment_release()'));
+  assert.match(release.slice(0, release.indexOf('\n$$;')), /'payment_released:' \|\| new\.id::text/);
+  const stripe = await read('supabase/migrations/20260905000000_stripe_foundation.sql');
+  const dispute = stripe.slice(stripe.indexOf('create or replace function public.notify_on_dispute()'));
+  assert.match(dispute.slice(0, dispute.indexOf('$$;')), /'dispute_opened:' \|\| new\.id::text/);
 });
 
 test('the outbox inventory and the migrations agree in BOTH directions', async () => {
@@ -142,16 +168,14 @@ test('the outbox inventory and the migrations agree in BOTH directions', async (
 });
 
 test('every emitted category is gated by the notification_prefs column it claims', async () => {
-  const phase20 = await read('supabase/archive/phases/phase20_push_notifications.sql');
+  const baseline = await read('supabase/migrations/20260901000000_baseline.sql');
 
-  // The columns the table actually has.
-  const table = phase20.slice(
-    phase20.indexOf('create table if not exists public.notification_prefs'),
-    phase20.indexOf('alter table public.notification_prefs enable row level security')
-  );
-  assert.ok(table.length > 0, 'the notification_prefs DDL must be findable');
+  // The columns the table actually has (the baseline's DDL, pg_dump form).
+  const start = baseline.indexOf('CREATE TABLE IF NOT EXISTS "public"."notification_prefs" (');
+  const table = baseline.slice(start, baseline.indexOf('\n);', start));
+  assert.ok(start > 0 && table.length > 0, 'the notification_prefs DDL must be findable');
   const columns = new Set(
-    [...table.matchAll(/^\s{2}(\w+) boolean not null/gm)].map((m) => m[1])
+    [...table.matchAll(/^\s{4}"(\w+)" boolean DEFAULT (?:true|false) NOT NULL,$/gm)].map((m) => m[1])
   );
   assert.deepEqual(
     [...columns].sort(),
@@ -159,16 +183,13 @@ test('every emitted category is gated by the notification_prefs column it claims
     'notification_prefs has exactly five category switches'
   );
 
-  // The arms should_notify() actually branches on. phase56 and phase68 both
-  // re-issue the function; the newest definition in the repo is the contract.
-  const feed = await read('supabase/archive/phases/phase56_notification_feed.sql');
-  const deleted = await read('supabase/archive/phases/phase68_deleted_at_authorization.sql');
-  const live = deleted.slice(deleted.indexOf('create or replace function public.should_notify'));
+  // The arms should_notify() actually branches on: its newest definition is the contract.
+  const live = await liveShouldNotify();
   const gated = new Set([...live.matchAll(/when '([a-z_]+)'\s+then v_prefs\./g)].map((m) => m[1]));
   assert.ok(gated.size > 0, 'should_notify must carry a per-category case');
   assert.ok(
-    feed.includes('notification_prefs'),
-    'phase56 must keep the preference gate it inherited'
+    live.includes('notification_prefs'),
+    'should_notify must keep the preference gate it inherited'
   );
 
   for (const [category, type, , prefsColumn] of OUTBOX) {

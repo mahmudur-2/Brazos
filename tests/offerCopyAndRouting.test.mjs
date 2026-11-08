@@ -58,8 +58,8 @@ test('every notification payload the triggers emit resolves to a destination', a
   // not handle is a dead tap by construction, so the inventory is read from
   // the migrations rather than restated here.
   const emitted = new Set();
-  for (const file of dir('supabase/archive/phases').filter((f) => f.endsWith('.sql'))) {
-    const sql = await read(`supabase/archive/phases/${file}`);
+  for (const file of dir('supabase/migrations').filter((f) => f.endsWith('.sql'))) {
+    const sql = await read(`supabase/migrations/${file}`);
     for (const m of sql.matchAll(/'screen',\s*'([A-Za-z]+)'/g)) emitted.add(m[1]);
   }
   // A scan that found nothing would pass every loop below for the wrong reason.
@@ -143,17 +143,16 @@ test('the My Jobs hub names an incoming counter by first name', async () => {
 });
 
 test('phase62 rewrites only the notification copy, keeping phase59’s guards', async () => {
-  const sql = await read('supabase/archive/phases/phase62_counter_notification_copy.sql');
+  // notify_on_offer_counter()'s newest definition (A17: the amount through money_label()).
+  const sql = await read('supabase/migrations/20261003000400_money_label_counter.sql');
 
-  assert.match(sql, /^begin;/m);
-  assert.match(sql, /^commit;/m);
   assert.match(sql, /create or replace function public\.notify_on_offer_counter\(\)/);
 
   // First name only, via split_part, with notify_display_name's own fallback
   // preserved for a one-word or missing name.
   assert.match(sql, /split_part\(btrim\(v_author_name\), ' ', 1\)/);
-  assert.match(sql, /v_author_first \|\| ' sent you a Counteroffer for \$'/);
-  assert.doesNotMatch(sql, /\|\| ' countered \$'/);
+  assert.match(sql, /v_author_first \|\| ' sent you a Counteroffer for '/);
+  assert.doesNotMatch(sql, /\|\| ' countered /);
 
   // Everything else phase59 established is still there.
   assert.match(sql, /new\.parent_offer_id is null/);
@@ -166,7 +165,7 @@ test('phase62 rewrites only the notification copy, keeping phase59’s guards', 
     /revoke all on function public\.notify_on_offer_counter\(\) from public, anon, authenticated;/
   );
   // The amount must survive the rewrite — money copy has to stay true.
-  assert.match(sql, /to_char\(round\(new\.amount_cents \/ 100\.0, 2\), 'FM999999990\.00'\)/);
+  assert.match(sql, /\|\| public\.money_label\(new\.amount_cents\)/);
 });
 
 // ---------------------------------------------------------------------------

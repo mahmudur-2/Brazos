@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
@@ -364,10 +365,18 @@ test('the counter cap is still 10 per side, per chain', async () => {
   // The other side's allowance is independent and untouched.
   assert.equal(countersRemaining(chain, CUSTOMER), 10);
 
-  // Server-side cap unchanged: phase63 is still the newest counter_offer().
-  const sql = await read('supabase/archive/phases/phase63_counteroffer_cap_ten_per_side.sql');
-  assert.match(sql, /create or replace function public\.counter_offer\(/);
-  assert.match(sql, /10/);
+  // Server-side cap unchanged: the baseline's (phase63's) counter_offer() is
+  // still the newest one.
+  const baseline = await read('supabase/migrations/20260901000000_baseline.sql');
+  const sql = baseline.slice(
+    baseline.indexOf('CREATE OR REPLACE FUNCTION "public"."counter_offer"('),
+    baseline.indexOf('ALTER FUNCTION "public"."counter_offer"(')
+  );
+  assert.match(sql, /v_max_per_side constant integer := 10;/);
+  for (const file of readdirSync(new URL('../supabase/migrations', import.meta.url))) {
+    if (!file.endsWith('.sql') || file.startsWith('20260901000000_')) continue;
+    assert.doesNotMatch(await read(`supabase/migrations/${file}`), /function public\.counter_offer\(/i, `${file} redefines counter_offer()`);
+  }
 });
 
 // ---------------------------------------------------------------------------

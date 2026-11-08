@@ -8,8 +8,30 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
 const existsSync = (path) => fsExistsSync(join(root, path));
 
-const migration = read('supabase/archive/phases/phase29_security_hardening.sql');
-const executeGrants = read('supabase/archive/phases/phase32_function_execute_privileges.sql');
+// The live schema: the baseline (pg_dump form) and the migrations after it. The
+// newest migration that defines an object is its live definition.
+const migrationFiles = readdirSync(join(root, 'supabase/migrations')).filter((f) => f.endsWith('.sql')).sort();
+const allMigrations = migrationFiles.map((f) => read(`supabase/migrations/${f}`)).join('\n');
+const baseline = read('supabase/migrations/20260901000000_baseline.sql');
+/** One function's dump block in the baseline. */
+const fnBlock = (name) => {
+  const start = baseline.indexOf(`CREATE OR REPLACE FUNCTION "public"."${name}"(`);
+  const end = baseline.indexOf(`ALTER FUNCTION "public"."${name}"(`, start);
+  assert.ok(start > 0 && end > start, `the baseline must define ${name}()`);
+  return baseline.slice(start, end);
+};
+/** One policy's dump statement in the baseline. */
+const policy = (name) => {
+  const start = baseline.indexOf(`CREATE POLICY "${name}"`);
+  assert.ok(start > 0, `the baseline must create policy ${name}`);
+  return baseline.slice(start, baseline.indexOf(';\n', start));
+};
+/** The table-level privileges the baseline grants one role on one table. */
+const tableGrant = (table, role) => {
+  const line = baseline.match(new RegExp(`^GRANT ([A-Z,]+) ON TABLE "public"\\."${table}" TO "${role}";$`, 'm'));
+  assert.ok(line, `the baseline must grant ${role} something on ${table}`);
+  return line[1].split(',');
+};
 const profiles = read('lib/profiles.ts');
 const jobs = read('lib/jobs.ts');
 const offers = read('lib/offers.ts');
@@ -20,25 +42,28 @@ const home = read('screens/HomeScreen.tsx');
 const jobDetail = read('screens/JobDetailScreen.tsx');
 
 test('protected profile fields are outside direct authenticated writes and reads', () => {
+  // phase29's revoke, as the baseline holds it: no table-wide read or write.
+  const profileTable = tableGrant('profiles', 'authenticated');
+  for (const verb of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) {
+    assert.ok(!profileTable.includes(verb), `authenticated must not ${verb} profiles table-wide`);
+  }
+  const updateMyProfile = fnBlock('update_my_profile');
+  assert.match(updateMyProfile, /^CREATE OR REPLACE FUNCTION "public"\."update_my_profile"\("p_patch" "jsonb"\)/);
+  // phase29's six keys plus phase53's two availability keys, and nothing else.
   assert.match(
-    migration,
-    /revoke select, insert, update, delete on public\.profiles from authenticated;/i
-  );
-  assert.match(migration, /create or replace function public\.update_my_profile\(p_patch jsonb\)/i);
-  assert.match(
-    migration,
-    /where k\.key not in \(\s*'full_name', 'phone', 'avatar_url', 'bio', 'language', 'categories'\s*\)/i
+    updateMyProfile,
+    /where k\.key not in \(\s*'full_name', 'phone', 'avatar_url', 'bio', 'language', 'categories',\s*'accepting_work', 'availability_note'\s*\)/i
   );
 
-  const publicGrant = migration.match(
-    /grant select \(([\s\S]*?)\) on public\.profiles to authenticated;/i
-  )?.[1];
-  assert.ok(publicGrant, 'public profile column grant must exist');
+  const publicGrant = [
+    ...baseline.matchAll(/^GRANT SELECT\("(\w+)"\) ON TABLE "public"\."profiles" TO "authenticated";$/gm),
+  ].map((m) => m[1]);
+  assert.ok(publicGrant.length > 0, 'public profile column grant must exist');
   for (const privateColumn of ['phone', 'is_admin', 'banned']) {
-    assert.doesNotMatch(publicGrant, new RegExp(`\\b${privateColumn}\\b`, 'i'));
+    assert.ok(!publicGrant.includes(privateColumn), `${privateColumn} must not be column-granted`);
   }
   for (const publicColumn of ['id', 'full_name', 'avatar_url', 'verification_status']) {
-    assert.match(publicGrant, new RegExp(`\\b${publicColumn}\\b`, 'i'));
+    assert.ok(publicGrant.includes(publicColumn), `${publicColumn} must be column-granted`);
   }
 
   assert.doesNotMatch(profiles, /\.select\(['"]\*['"]\)/);
@@ -47,25 +72,31 @@ test('protected profile fields are outside direct authenticated writes and reads
 });
 
 test('job, bid, and review protected writes use server-validated RPCs', () => {
-  assert.match(migration, /revoke insert, update on public\.jobs from authenticated;/i);
-  assert.match(migration, /revoke insert, update on public\.bids from authenticated;/i);
-  assert.match(migration, /revoke insert, update, delete on public\.reviews from authenticated;/i);
-  assert.match(
-    migration,
-    /create policy "jobs_delete_own"[\s\S]*?client_id = auth\.uid\(\)[\s\S]*?status = 'open'[\s\S]*?not exists/i
-  );
-  assert.match(migration, /create or replace function public\.create_job\(/i);
-  assert.match(migration, /create or replace function public\.update_job_details\(/i);
-  assert.match(migration, /create or replace function public\.create_bid\(/i);
-  assert.match(migration, /create or replace function public\.accept_bid\(/i);
-  assert.match(migration, /create or replace function public\.transition_job_status\(/i);
-  assert.match(migration, /create or replace function public\.create_review\(/i);
-  assert.match(migration, /where id = p_job_id for update;/i);
-  assert.match(migration, /where id = p_bid_id and job_id = p_job_id\s+for update;/i);
-  assert.match(
-    migration,
-    /if not public\.is_profile_active\(v_bid\.worker_id\)[\s\S]*?Worker is not available/i
-  );
+  // phase29's revokes, as the baseline holds them.
+  for (const [table, verbs] of [
+    ['jobs', ['INSERT', 'UPDATE']],
+    ['bids', ['INSERT', 'UPDATE']],
+    ['reviews', ['INSERT', 'UPDATE', 'DELETE']],
+  ]) {
+    const granted = tableGrant(table, 'authenticated');
+    for (const verb of verbs) assert.ok(!granted.includes(verb), `authenticated must not ${verb} ${table}`);
+  }
+  // The owner's delete: open and unengaged, decided by a definer helper
+  // (phase60 moved the predicate out of the policy to end its recursion).
+  assert.match(policy('jobs_delete_own'), /FOR DELETE TO "authenticated" USING \("public"\."can_delete_own_job"\("id"\)\)/);
+  const canDelete = fnBlock('can_delete_own_job');
+  assert.match(canDelete, /if v_client_id is distinct from auth\.uid\(\) then\s+return false;/);
+  assert.match(canDelete, /if v_status is distinct from 'open'::public\.job_status then\s+return false;/);
+  assert.match(canDelete, /if exists \(select 1 from public\.job_offers o where o\.job_id = p_job_id\) then\s+return false;/);
+  for (const fn of ['create_job', 'update_job_details', 'transition_job_status', 'create_review']) {
+    assert.match(allMigrations, new RegExp(`create (or replace )?function "?public"?\\."?${fn}"?\\(`, 'i'), `${fn}() must exist`);
+  }
+  // accept_offer() (the only assignment path) locks the job and the offer, and
+  // refuses an inactive worker.
+  const acceptOffer = fnBlock('accept_offer');
+  assert.match(acceptOffer, /from public\.jobs where id = v_job\.id for update;/);
+  assert.match(acceptOffer, /from public\.job_offers where id = p_offer_id for update;/);
+  assert.match(acceptOffer, /if not public\.is_profile_active\(v_offer\.worker_id\)[\s\S]*?Worker is not available/);
 
   assert.match(jobs, /\.rpc\('create_job'/);
   assert.match(jobs, /\.rpc\('update_job_details'/);
@@ -98,11 +129,11 @@ test('job, bid, and review protected writes use server-validated RPCs', () => {
 // These assertions are what stop a future edit from reintroducing a second
 // writer, which is the exact shape of the original bug.
 test('the bids compatibility mirror is a trigger-driven projection only', async () => {
-  const phase47 = read('supabase/archive/phases/phase47_bids_projection_trigger.sql');
+  const phase47 = fnBlock('project_offer_chain_to_bids');
 
   // One projection, driven by the source of truth.
-  assert.match(phase47, /create trigger job_offers_mirror_bids\s+after insert or update on public\.job_offers/i);
-  assert.match(phase47, /create or replace function public\.project_offer_chain_to_bids\(/i);
+  assert.match(baseline, /CREATE OR REPLACE TRIGGER "job_offers_mirror_bids" AFTER INSERT OR UPDATE ON "public"\."job_offers"/);
+  assert.match(phase47, /^CREATE OR REPLACE FUNCTION "public"\."project_offer_chain_to_bids"\(/);
 
   // Marketplace bids only — direct offers never wrote to bids and must not start.
   assert.match(phase47, /offer_type <> 'marketplace_bid'/);
@@ -127,13 +158,13 @@ test('the bids compatibility mirror is a trigger-driven projection only', async 
   assert.doesNotMatch(phase47, /on conflict \(id\) do update/i);
   // The delete must never reach a row a job still names as its accepted bid.
   assert.match(phase47, /not exists \(select 1 from public\.jobs j where j\.accepted_bid_id = b\.id\)/i);
-  // And the migration must verify, not assume, that nothing cascades off bids.
-  assert.match(phase47, /confdeltype = 'c'/);
 
-  // The shims must no longer write bids themselves.
-  const shims = phase47.slice(phase47.indexOf('4. create_bid()'));
-  assert.doesNotMatch(shims, /insert into public\.bids/i);
-  assert.doesNotMatch(shims, /update public\.bids/i);
+  // Nothing else writes bids: the projection holds the only insert, update and
+  // delete on the table in the whole live schema.
+  for (const write of [/insert into public\.bids\b/gi, /update public\.bids\b/gi, /delete from public\.bids\b/gi]) {
+    assert.equal((allMigrations.match(write) ?? []).length, 1, `${write} must appear once, in the projection`);
+    assert.equal((phase47.match(write) ?? []).length, 1, `${write} must be the projection's`);
+  }
 });
 
 test('offer acceptance has no client-side fallback write path', async () => {
@@ -157,12 +188,17 @@ test('no client-side jobs.status writer exists anywhere', () => {
   assert.doesNotMatch(jobs, /transitionJobStatusWithoutRpc/);
   assert.match(jobs, /\.rpc\('transition_job_status'/);
 
-  // The RPC the app depends on still exists and is still transactional.
-  const phase31 = read('supabase/archive/phases/phase31_transition_job_status_rpc.sql');
-  assert.match(phase31, /create or replace function public\.transition_job_status\(/i);
-  assert.match(phase31, /where id = p_job_id\s+for update;/i);
-  assert.match(phase31, /v_job\.assigned_worker_id <> v_user/i);
-  assert.match(phase31, /notify pgrst, 'reload schema'/i);
+  // The RPC the app depends on still exists and is still transactional: its
+  // newest definition (job completions) locks the row and checks the caller.
+  const completions = read('supabase/migrations/20260925000000_job_completions.sql');
+  const transition = completions.slice(completions.indexOf('create or replace function public.transition_job_status('));
+  assert.match(transition, /^create or replace function public\.transition_job_status\(/);
+  assert.match(transition, /where id = p_job_id\s+for update;/i);
+  assert.match(transition, /v_job\.assigned_worker_id is distinct from v_user/i);
+  const later = migrationFiles.filter((f) => f > '20260925000000_job_completions.sql');
+  for (const f of later) {
+    assert.doesNotMatch(read(`supabase/migrations/${f}`), /function public\.transition_job_status\(/i, `${f} redefines it`);
+  }
 
   // Sweep: no file under lib/, hooks/, screens/ or components/ chains an
   // update off the jobs table at all — status or any other column; RPCs are
@@ -185,19 +221,16 @@ test('no client-side jobs.status writer exists anywhere', () => {
 });
 
 test('chat media is private, membership-scoped, and stored by caller-owned path', () => {
+  // Buckets are storage data, not schema: the local stack's seed creates the
+  // chat bucket private (staging's was created the same way by hand).
+  assert.match(read('supabase/seed.sql'), /\('chat-photos',\s+'chat-photos',\s+false\)/);
   assert.match(
-    migration,
-    /set public = false\s+where id in \('chat-photos', 'chat-audio'\);/i
-  );
-  assert.match(migration, /create policy "chat_photos_read_party"/i);
-  assert.match(migration, /create policy "chat_audio_read_party"/i);
-  assert.match(
-    migration,
-    /\(storage\.foldername\(name\)\)\[2\] = auth\.uid\(\)::text/i
+    policy('chat_photos_insert_party'),
+    /\(\("storage"\."foldername"\("name"\)\)\[2\] = \("auth"\."uid"\(\)\)::"text"\)/
   );
   assert.match(
-    migration,
-    /\(j\.client_id = auth\.uid\(\) or j\.assigned_worker_id = auth\.uid\(\)\)/i
+    policy('chat_photos_read_party'),
+    /\(\("j"\."client_id" = "auth"\."uid"\(\)\) OR \("j"\."assigned_worker_id" = "auth"\."uid"\(\)\)\)/
   );
   assert.match(storage, /`\$\{jobId\}\/\$\{userId\}\/\$\{Date\.now\(\)\}/);
   assert.match(storage, /createSignedUrl\(path, CHAT_SIGNED_URL_TTL_SECONDS\)/);
@@ -205,15 +238,13 @@ test('chat media is private, membership-scoped, and stored by caller-owned path'
 });
 
 test('avatar and job-photo writes are path-owned', () => {
-  assert.match(migration, /create policy "avatars_insert"/i);
   assert.match(
-    migration,
-    /bucket_id = 'avatars'[\s\S]*?\(storage\.foldername\(name\)\)\[1\] = auth\.uid\(\)::text/i
+    policy('avatars_insert'),
+    /"bucket_id" = 'avatars'::"text"\) AND \(\("storage"\."foldername"\("name"\)\)\[1\] = \("auth"\."uid"\(\)\)::"text"\)/
   );
-  assert.match(migration, /create policy "job_photos_insert"/i);
   assert.match(
-    migration,
-    /\(storage\.foldername\(name\)\)\[1\] = 'postings'[\s\S]*?\(storage\.foldername\(name\)\)\[2\] = auth\.uid\(\)::text/i
+    policy('job_photos_insert'),
+    /\(\("storage"\."foldername"\("name"\)\)\[1\] = 'postings'::"text"\) AND \(\("storage"\."foldername"\("name"\)\)\[2\] = \("auth"\."uid"\(\)\)::"text"\)/
   );
 });
 
@@ -226,70 +257,43 @@ test('the push hook registers its three native listener effects', () => {
 });
 
 test('function EXECUTE is revoked from anon and regranted to intended roles only', () => {
-  // Four app RPCs: authenticated + service_role.
-  const authenticatedFunctions = [
-    'public\\.is_active_user\\(\\)',
-    'public\\.create_review\\(uuid, uuid, integer, text\\)',
-    'public\\.accept_bid\\(uuid, uuid\\)',
-    'public\\.transition_job_status\\(uuid, text, jsonb\\)',
-  ];
-  for (const signature of authenticatedFunctions) {
-    assert.match(
-      executeGrants,
-      new RegExp(
-        `revoke execute on function ${signature}\\s*from public, anon, authenticated, service_role;`,
-        'i'
-      ),
-      `${signature} must be revoked from anon`
-    );
-    assert.match(
-      executeGrants,
-      new RegExp(
-        `grant execute on function ${signature}\\s*to authenticated, service_role;`,
-        'i'
-      ),
-      `${signature} must be regranted to authenticated and service_role`
-    );
+  // App RPCs, in the baseline's ACL form: PUBLIC revoked, the intended roles
+  // granted, anon never. (accept_bid went with the deprecated shims in lean D6.)
+  const acl = (signature) => baseline.split('\n').filter((line) => line.includes(` ON FUNCTION "public"."${signature}`));
+  for (const [signature, roles] of [
+    ['is_active_user"()', ['authenticated', 'service_role']],
+    ['transition_job_status"("p_job_id" "uuid", "p_status" "text", "p_completion_photos" "jsonb", "p_completion_videos" "jsonb")', ['authenticated']],
+  ]) {
+    const lines = acl(signature);
+    assert.ok(lines.some((l) => l.startsWith('REVOKE ALL ') && l.endsWith(' FROM PUBLIC;')), `${signature} must be revoked from PUBLIC`);
+    for (const role of roles) {
+      assert.ok(lines.some((l) => l.startsWith('GRANT ALL ') && l.endsWith(` TO "${role}";`)), `${signature} must be granted to ${role}`);
+    }
+    assert.ok(!lines.some((l) => l.endsWith(' TO "anon";')), `${signature} must never be granted to anon`);
   }
+  // create_review's newest signature (R8a) restates its own ACL.
+  const reputation = read('supabase/migrations/20260925000100_r8a_reputation.sql');
+  assert.match(reputation, /revoke all on function public\.create_review\(uuid, uuid, integer, text, jsonb, boolean\) from public, anon;/);
+  assert.match(reputation, /grant execute on function public\.create_review\(uuid, uuid, integer, text, jsonb, boolean\) to authenticated;/);
 
-  // The outbox drainer mutates notification_outbox.attempts: service_role only.
-  const drainer = 'public\\.claim_notification_batch\\(integer\\)';
-  assert.match(
-    executeGrants,
-    new RegExp(
-      `revoke execute on function ${drainer}\\s*from public, anon, authenticated, service_role;`,
-      'i'
-    )
-  );
-  assert.match(
-    executeGrants,
-    new RegExp(`grant execute on function ${drainer}\\s*to service_role;`, 'i')
-  );
+  // The outbox drainer mutates notification_outbox.attempts: service_role only,
+  // restated by its newest definition (quiet hours).
+  const quiet = read('supabase/migrations/20260930000800_quiet_hours.sql');
+  assert.match(quiet, /revoke all on function public\.claim_notification_batch\(integer\) from public, anon, authenticated;/);
+  assert.match(quiet, /grant execute on function public\.claim_notification_batch\(integer\) to service_role;/);
+  const drainer = acl('claim_notification_batch"("p_limit" integer)');
+  assert.ok(drainer.some((l) => l.endsWith(' TO "service_role";')));
+  assert.ok(!drainer.some((l) => /TO "(anon|authenticated)";$/.test(l)), 'claim_notification_batch must never be granted to authenticated');
   assert.doesNotMatch(
-    executeGrants,
-    new RegExp(`grant execute on function ${drainer}\\s*to[^;]*authenticated`, 'i'),
+    allMigrations,
+    /grant execute on function public\.claim_notification_batch\([^;]*to[^;]*authenticated/i,
     'claim_notification_batch must never be granted to authenticated'
   );
 
-  // Deny-by-default for future functions, so the anon drift cannot recur.
-  for (const role of ['public', 'anon', 'authenticated', 'service_role']) {
-    assert.match(
-      executeGrants,
-      new RegExp(
-        `alter default privileges for role postgres in schema public\\s*revoke execute on functions from ${role};`,
-        'i'
-      ),
-      `default privileges must revoke execute from ${role}`
-    );
-  }
-
-  // Privileges only — this migration must not redefine or drop anything.
-  // Comments are stripped first: the header explains the root cause in prose
-  // and legitimately mentions the DDL this file must not actually contain.
-  const statements = executeGrants.replace(/--[^\n]*/g, '');
-  assert.doesNotMatch(statements, /create or replace function/i);
-  assert.doesNotMatch(statements, /drop function/i);
-  assert.doesNotMatch(statements, /alter function/i);
+  // Deny-by-default for future functions, so the anon drift cannot recur: the
+  // public schema's function defaults grant the owner only.
+  assert.match(baseline, /^ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "postgres";$/m);
+  assert.doesNotMatch(baseline, /^ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT [^;]* ON FUNCTIONS TO (PUBLIC|"anon"|"authenticated"|"service_role");$/m);
 });
 
 test('job videos reuse the owned posting path and never autoplay', () => {
@@ -354,81 +358,60 @@ test('unsupported identity and proximity claims are absent', () => {
 });
 
 test('direct job offers stay private and server-authorised', () => {
-  const phase36 = read('supabase/archive/phases/phase36_direct_offer_threads.sql');
+  const lean = read('supabase/migrations/20261108000000_lean_v1.sql');
   const workerProfile = read('screens/WorkerProfileScreen.tsx');
 
-  // The defect the phase exists to fix: eligibility used to require a shared
-  // completed job, which is what made one profile offer "Send an offer" and
-  // another a "Post a job" consolation.
+  // The defect phase36 fixed: eligibility used to require a shared completed
+  // job, which is what made one profile offer "Send an offer" and another a
+  // "Post a job" consolation. (The job_requests path itself went in lean D6.)
   assert.doesNotMatch(
-    phase36,
+    allMigrations,
     /You can only send a request to a worker who has completed a job for you/i
   );
   assert.doesNotMatch(workerProfile, /Direct offers open up once/i);
   assert.doesNotMatch(workerProfile, /title="Post a job"/i);
 
-  // A private offer must never become a public job row before it is accepted,
-  // and on accept must be created already assigned so it cannot reach the
-  // open-job feed, job_hotspots() or jobs_in_cell().
-  assert.match(phase36, /'assigned', v_req\.worker_id/i);
-  assert.doesNotMatch(phase36, /values \([^)]*'open'[^)]*\)\s*returning id into v_job_id/i);
-
-  // Every write still goes through SECURITY DEFINER functions with a fixed
-  // search_path, revoked from anon and granted only to authenticated.
-  assert.match(phase36, /security definer\s+set search_path = public, pg_temp/i);
-  assert.match(
-    phase36,
-    /revoke all on function public\.create_job_request\([\s\S]*?\) from public, anon;/i
-  );
-  assert.match(
-    phase36,
-    /grant execute on function public\.create_job_request\([\s\S]*?\) to authenticated;/i
-  );
-  assert.match(
-    phase36,
-    /revoke all on function public\.respond_job_request\(uuid, text, integer\) from public, anon;/i
-  );
   // Thread creation is not a client capability — it only happens as part of
   // sending an offer.
-  assert.match(
-    phase36,
-    /revoke all on function public\.ensure_direct_thread\(uuid, uuid\) from public, anon, authenticated;/i
-  );
-
-  // A retried accept returns the job it already created rather than making a
-  // second one.
-  assert.match(phase36, /v_req\.status = 'accepted'[\s\S]*?return v_req\.created_job_id;/i);
+  const threadAcl = baseline.split('\n').filter((l) => l.includes(' ON FUNCTION "public"."ensure_direct_thread"('));
+  assert.ok(threadAcl.some((l) => l.startsWith('REVOKE ALL ') && l.endsWith(' FROM PUBLIC;')));
+  assert.ok(!threadAcl.some((l) => l.startsWith('GRANT ')), 'ensure_direct_thread is granted to no client role');
 
   // Reading a direct thread's messages requires being one of its two
-  // participants, and sending additionally requires the pair not be blocked.
+  // participants, and sending (lean_v1's restated policy) additionally
+  // requires the pair not be blocked.
   assert.match(
-    phase36,
+    policy('messages_select_party'),
+    /FROM "public"\."direct_threads" "t"[\s\S]*?\(\("t"\."user_a" = "auth"\."uid"\(\)\) OR \("t"\."user_b" = "auth"\."uid"\(\)\)\)/
+  );
+  const insertPolicy = lean.slice(lean.indexOf('alter policy messages_insert_party on public.messages'));
+  assert.match(
+    insertPolicy,
     /from public\.direct_threads t[\s\S]*?\(t\.user_a = auth\.uid\(\) or t\.user_b = auth\.uid\(\)\)/i
   );
-  assert.match(phase36, /not public\.is_blocked_between\(t\.user_a, t\.user_b\)/i);
+  assert.match(insertPolicy, /not public\.is_blocked_between\(t\.user_a, t\.user_b\)/i);
 
   // The inbox view must keep running as the caller, so it can never widen
-  // what a user can read.
-  assert.match(phase36, /create view public\.conversations\s+with \(security_invoker = true\)/i);
+  // what a user can read (lean_v1 re-created it).
+  assert.match(lean, /create view public\.conversations with \(security_invoker = true\)/i);
 });
 
 test('profile reviews are readable without widening the reviews policy', () => {
-  const phase37 = read('supabase/archive/phases/phase37_profile_reviews_and_photos.sql');
-  const phase6 = read('supabase/archive/phases/phase6_reviews_and_storage.sql');
+  // R8a holds the newest reviews_select_party, create_review and both readers.
+  const phase37 = read('supabase/migrations/20260925000100_r8a_reputation.sql');
 
   // The party-scoped SELECT policy is the reason a reader needs a function at
-  // all; phase37 must not relax it.
+  // all; R8a narrowed it further (the reviewee reads only once revealed).
   assert.match(
-    phase6,
-    /create policy "reviews_select_party"[\s\S]*?reviewer_id = auth\.uid\(\) or reviewee_id = auth\.uid\(\)/i
+    phase37,
+    /create policy "reviews_select_party" on public\.reviews[\s\S]*?reviewer_id = auth\.uid\(\)\s+or \(\s+reviewee_id = auth\.uid\(\)/i
   );
-  assert.doesNotMatch(phase37, /create policy "reviews_select/i);
-  assert.doesNotMatch(phase37, /grant select on public\.reviews/i);
+  assert.doesNotMatch(allMigrations, /grant select on public\.reviews/i);
 
   // Both readers are security definer with a fixed search_path, require a
   // signed-in caller, and are granted only to authenticated.
   for (const fn of ['profile_reviews', 'profile_review_summary']) {
-    const decl = 'create or replace function public\\.' + fn + '\\(';
+    const decl = 'create function public\\.' + fn + '\\(';
     assert.match(
       phase37,
       new RegExp(
@@ -458,16 +441,16 @@ test('profile reviews are readable without widening the reviews policy', () => {
   assert.match(phase37, /jsonb_array_length\(v_photos\) > 5/i);
   assert.match(
     phase37,
-    /revoke all on function public\.create_review\(uuid, uuid, integer, text, jsonb\)\s+from public, anon;/i
+    /revoke all on function public\.create_review\(uuid, uuid, integer, text, jsonb, boolean\)\s+from public, anon;/i
   );
 
   // Review photos get their own owner-scoped storage prefix rather than
   // loosening either existing job-photos branch.
   assert.match(
-    phase37,
-    /create policy "job_photos_insert_review"[\s\S]*?\(storage\.foldername\(name\)\)\[1\] = 'reviews'[\s\S]*?\(storage\.foldername\(name\)\)\[2\] = auth\.uid\(\)::text/i
+    policy('job_photos_insert_review'),
+    /\(\("storage"\."foldername"\("name"\)\)\[1\] = 'reviews'::"text"\) AND \(\("storage"\."foldername"\("name"\)\)\[2\] = \("auth"\."uid"\(\)\)::"text"\)/
   );
-  assert.doesNotMatch(phase37, /drop policy if exists "job_photos_insert" on/i);
+  assert.doesNotMatch(allMigrations, /drop policy if exists "?job_photos_insert"? on/i);
 });
 
 // ---------------------------------------------------------------------------

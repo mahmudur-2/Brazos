@@ -301,7 +301,7 @@ test('every in-stack navigate target is registered in each stack its screen is m
 
   for (const [component, stacks] of mountedIn) {
     const file = `${component}.tsx`;
-    if (!screenFiles.has(file)) continue; // dev-tools catalog etc.
+    if (!screenFiles.has(file)) continue; // not under screens/
 
     const source = stripComments(await read(`screens/${file}`));
     const targets = inStackTargets(source);

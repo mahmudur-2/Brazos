@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+const dir = (path) => readdirSync(new URL(`../${path}`, import.meta.url));
 
 const stripComments = (source) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
@@ -55,12 +57,18 @@ const offersModule = (async () => {
 // independently, nothing bleeds across chains, and the bid or direct offer
 // that OPENS a chain is not counted.
 
-test('phase63 caps at 10, per side, per chain', async () => {
-  const sql = await read('supabase/archive/phases/phase63_counteroffer_cap_ten_per_side.sql');
+/** counter_offer()'s live definition: the baseline's, the only migration that defines it. */
+const counterOfferSql = async () => {
+  const baseline = await read('supabase/migrations/20260901000000_baseline.sql');
+  const start = baseline.indexOf('CREATE OR REPLACE FUNCTION "public"."counter_offer"(');
+  const end = baseline.indexOf('ALTER FUNCTION "public"."counter_offer"(', start);
+  assert.ok(start > 0 && end > start, 'the baseline must define counter_offer()');
+  return baseline.slice(start, end);
+};
 
-  assert.match(sql, /^begin;/m);
-  assert.match(sql, /^commit;/m);
-  assert.match(sql, /create or replace function public\.counter_offer\(/);
+test('phase63 caps at 10, per side, per chain', async () => {
+  const sql = await counterOfferSql();
+
   assert.match(sql, /v_max_per_side constant integer := 10;/);
   assert.match(sql, /if v_used >= v_max_per_side then/);
   // The old literal must not survive in the EXECUTABLE body (the header quotes
@@ -84,7 +92,7 @@ test('phase63 caps at 10, per side, per chain', async () => {
 });
 
 test('phase63 counts under the job row lock, not as a read-then-write', async () => {
-  const sql = await read('supabase/archive/phases/phase63_counteroffer_cap_ten_per_side.sql');
+  const sql = await counterOfferSql();
 
   const lockAt = sql.indexOf('perform 1 from public.jobs where id = v_job_id for update;');
   const parentLockAt = sql.indexOf('for update;\n  if not found');
@@ -101,12 +109,15 @@ test('phase63 counts under the job row lock, not as a read-then-write', async ()
 });
 
 test('phase63 restates the grant phase32 revoked', async () => {
-  const sql = await read('supabase/archive/phases/phase63_counteroffer_cap_ten_per_side.sql');
-  assert.match(sql, /revoke all on function public\.counter_offer\(uuid, integer\) from public, anon;/);
-  assert.match(sql, /grant execute on function public\.counter_offer\(uuid, integer\) to authenticated;/);
-  // No signature change — a drop would break the PostgREST contract
-  // verify-schema.mjs pins.
-  assert.doesNotMatch(sql, /drop function[^\n]*counter_offer/);
+  const baseline = await read('supabase/migrations/20260901000000_baseline.sql');
+  const signature = '"public"."counter_offer"("p_offer_id" "uuid", "p_amount_cents" integer)';
+  assert.ok(baseline.includes(`REVOKE ALL ON FUNCTION ${signature} FROM PUBLIC;`));
+  assert.ok(baseline.includes(`GRANT ALL ON FUNCTION ${signature} TO "authenticated";`));
+  assert.ok(!baseline.includes(`ON FUNCTION ${signature} TO "anon";`), 'anon never executes counter_offer');
+  // No signature change — a drop would break the PostgREST contract the app calls.
+  for (const file of dir('supabase/migrations').filter((f) => f.endsWith('.sql'))) {
+    assert.doesNotMatch(await read(`supabase/migrations/${file}`), /drop function[^\n]*counter_offer/i, file);
+  }
 });
 
 // ---------------------------------------------------------------------------

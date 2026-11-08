@@ -37,7 +37,7 @@ const routes = read('lib/navigation.ts');
 const app = read('App.tsx');
 const home = read('screens/HomeScreen.tsx');
 const bottomNav = read('ui/primitives/BottomNav.tsx');
-const migration = read('supabase/archive/phases/phase42_active_mode.sql');
+const migration = read('supabase/migrations/20260901000000_baseline.sql');
 
 // ---------------------------------------------------------------------------
 // An invalid mode can never exist
@@ -578,22 +578,23 @@ test('the other-perspective preview is dev-only', () => {
 // ---------------------------------------------------------------------------
 
 test('phase42 is idempotent, constrained, and granted', () => {
-  assert.match(migration, /add column if not exists active_mode text not null default 'customer'/);
-  assert.match(migration, /check \(active_mode in \('customer', 'worker'\)\)/);
-  assert.match(migration, /from pg_constraint/, 'the constraint add must be guarded to re-run');
+  // The live schema (the baseline, pg_dump form): phase42's column and check.
+  assert.match(migration, /"active_mode" "text" DEFAULT 'customer'::"text" NOT NULL,/);
+  assert.match(
+    migration,
+    /CONSTRAINT "profiles_active_mode_check" CHECK \(\("active_mode" = ANY \(ARRAY\['customer'::"text", 'worker'::"text"\]\)\)\)/
+  );
   // The phase32 lesson: a function without an explicit grant is unreachable.
-  assert.match(migration, /grant execute on function public\.get_my_active_mode\(\) to authenticated;/);
-  assert.match(migration, /grant execute on function public\.set_active_mode\(text\) to authenticated;/);
+  assert.ok(migration.includes('GRANT ALL ON FUNCTION "public"."get_my_active_mode"() TO "authenticated";'));
+  assert.ok(migration.includes('GRANT ALL ON FUNCTION "public"."set_active_mode"("p_mode" "text") TO "authenticated";'));
+  // The column is never client-readable or -writable directly; the RPCs are the door.
+  assert.doesNotMatch(migration, /\("active_mode"\) ON TABLE "public"\."profiles" TO "authenticated"/);
   // Server-side validation, not just a constraint.
-  assert.match(migration, /if p_mode is null or p_mode not in \('customer', 'worker'\) then/);
-});
-
-test('phase42 is covered by verify-schema', () => {
-  const verify = read('scripts/verify-schema.mjs');
-  assert.match(verify, /phase42_active_mode\.sql/);
-  assert.match(verify, /checkRpc\('get_my_active_mode', \{\}\)/);
-  assert.match(verify, /checkRpc\('set_active_mode', \{ p_mode: 'customer' \}\)/);
-  assert.match(verify, /checkColumnRevoked\('profiles', 'active_mode'\)/);
+  const setMode = migration.slice(
+    migration.indexOf('CREATE OR REPLACE FUNCTION "public"."set_active_mode"('),
+    migration.indexOf('ALTER FUNCTION "public"."set_active_mode"(')
+  );
+  assert.match(setMode, /if p_mode is null or p_mode not in \('customer', 'worker'\) then/);
 });
 
 test('the client never writes active_mode except through the RPC', () => {

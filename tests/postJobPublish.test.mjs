@@ -897,30 +897,35 @@ test('D22 · the notify line is on the screen because the schema actually backs 
   const live = flatten(read('components/JobLivePage.tsx'));
   assert.match(live, /We’ll let you know when the first bid arrives\./);
 
+  // The live schema: the baseline (pg_dump form) and notify_on_bid()'s newest
+  // definition (hire from push).
+  const baseline = read('supabase/migrations/20260901000000_baseline.sql');
+  const prefsStart = baseline.indexOf('CREATE TABLE IF NOT EXISTS "public"."notification_prefs" (');
+  const prefs = baseline.slice(prefsStart, baseline.indexOf('\n);', prefsStart));
+
   // LINK 1 — the preference defaults to on, so a fresh account receives it.
-  const phase20 = read('supabase/archive/phases/phase20_push_notifications.sql');
-  assert.match(
-    phase20,
-    /\n {2}bids boolean not null default true,/,
-    'notification_prefs.bids must default to true'
-  );
+  assert.ok(prefsStart > 0, 'the notification_prefs DDL must be findable');
+  assert.match(prefs, /\n {4}"bids" boolean DEFAULT true NOT NULL,/, 'notification_prefs.bids must default to true');
 
   // LINK 2 — a bid enqueues 'bid_received' to the JOB'S OWNER, on the 'bids'
   // channel, from a trigger that really is installed.
+  const hireFromPush = read('supabase/migrations/20260930001200_hire_from_push.sql');
+  const notifyOnBid = hireFromPush.slice(hireFromPush.indexOf('create or replace function public.notify_on_bid()'));
   assert.match(
-    flatten(phase20),
-    /perform public\.enqueue_notification\( v_job\.client_id, new\.worker_id, 'bids', 'bid_received',/
+    flatten(notifyOnBid),
+    /^create or replace function public\.notify_on_bid\(\)[\s\S]*?perform public\.enqueue_notification\( v_job\.client_id, new\.worker_id, 'bids', 'bid_received',/
   );
   assert.match(
-    flatten(phase20),
-    /create trigger bids_notify after insert on public\.bids for each row execute function public\.notify_on_bid\(\);/
+    baseline,
+    /CREATE OR REPLACE TRIGGER "bids_notify" AFTER INSERT ON "public"\."bids" FOR EACH ROW EXECUTE FUNCTION "public"\."notify_on_bid"\(\);/
   );
 
   // LINK 3 — `bids` is written for every marketplace offer chain, so that
   // trigger fires on the real write path (job_offers), not a dead legacy one.
-  const phase47 = flatten(read('supabase/archive/phases/phase47_bids_projection_trigger.sql'));
+  const projectionStart = baseline.indexOf('CREATE OR REPLACE FUNCTION "public"."project_offer_chain_to_bids"(');
+  const phase47 = flatten(baseline.slice(projectionStart, baseline.indexOf('ALTER FUNCTION "public"."project_offer_chain_to_bids"(', projectionStart)));
   assert.match(phase47, /insert into public\.bids \(id, job_id, worker_id, amount_cents, message, status, created_at\)/);
-  assert.match(phase47, /create trigger job_offers_mirror_bids/);
+  assert.match(baseline, /CREATE OR REPLACE TRIGGER "job_offers_mirror_bids" AFTER INSERT OR UPDATE ON "public"\."job_offers"/);
 
   // The three links above all predate this card — it was written BECAUSE they
   // were verified, not alongside a new migration to make them true.

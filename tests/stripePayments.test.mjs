@@ -217,7 +217,7 @@ test('D5 · a dismissed sheet is not an error; anything else fails with the prov
 // 6. The boundary is a boundary tree-wide (D2) — the haptics fence shape
 // ---------------------------------------------------------------------------
 
-const SCAN_DIRS = ['components', 'dev-tools', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui'];
+const SCAN_DIRS = ['components', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui'];
 const ROOT_FILES = ['App.tsx', 'index.ts'];
 const BOUNDARY = 'lib/payments/stripe.ts';
 const PACKAGE = '@stripe/stripe-react-native';

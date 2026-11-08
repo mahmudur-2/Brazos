@@ -226,10 +226,16 @@ test('the hub’s pending-offer card reads a counter awaiting the user as requir
 // ---------------------------------------------------------------------------
 
 test('phase59 is idempotent, marketplace-scoped, and grants what it creates', async () => {
-  const sql = await read('supabase/archive/phases/phase59_staging_counter_notification.sql');
+  // notify_on_offer_counter()'s newest definition (A17, money_label) and the
+  // baseline's trigger that fires it.
+  const sql = await read('supabase/migrations/20261003000400_money_label_counter.sql');
+  const baseline = await read('supabase/migrations/20260901000000_baseline.sql');
 
   assert.match(sql, /create or replace function public\.notify_on_offer_counter\(\)/);
-  assert.match(sql, /drop trigger if exists job_offers_notify_counter on public\.job_offers;/);
+  assert.match(
+    baseline,
+    /CREATE OR REPLACE TRIGGER "job_offers_notify_counter" AFTER INSERT ON "public"\."job_offers" FOR EACH ROW EXECUTE FUNCTION "public"\."notify_on_offer_counter"\(\);/
+  );
   // Counters only, marketplace only — direct-offer counters already notify
   // through their thread message.
   assert.match(sql, /new\.parent_offer_id is null/);
@@ -239,19 +245,9 @@ test('phase59 is idempotent, marketplace-scoped, and grants what it creates', as
   assert.match(sql, /public\.enqueue_notification\(/);
   assert.match(sql, /'offer_countered:' \|\| new\.id::text/);
   assert.doesNotMatch(sql, /'bid_received'/);
-  // The trigger function is sealed; the sentinel is granted (phase32 lesson).
+  // The trigger function is sealed from every client role.
   assert.match(
     sql,
     /revoke all on function public\.notify_on_offer_counter\(\) from public, anon, authenticated;/
   );
-  assert.match(
-    sql,
-    /grant execute on function public\.counter_notification_enabled\(\) to authenticated;/
-  );
-
-  // And verify-schema knows the sentinel, so only a green verify counts as
-  // applied.
-  const verify = await read('scripts/verify-schema.mjs');
-  assert.match(verify, /phase59_staging_counter_notification\.sql/);
-  assert.match(verify, /counter_notification_enabled/);
 });
