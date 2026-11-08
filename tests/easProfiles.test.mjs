@@ -47,6 +47,16 @@ test('G0 · release:testflight builds the testflight profile, never production',
   assert.match(scripts['release:production'], /--profile production --auto-submit$/);
 });
 
+// 2026-11-08: the first TestFlight upload landed on the dev-only App Store Connect record
+// ("BRAZOS Dev", app.brazos.mobile.dev) because no record was pinned; Apple refused it (ITMS-90055).
+// Both store profiles name the app.brazos.mobile record ("Brazos MVP", Apple ID 6832193439).
+test('store submits pin the app.brazos.mobile App Store Connect record', () => {
+  const submit = JSON.parse(text).submit;
+  for (const name of ['production', 'testflight']) {
+    assert.equal(submit[name]?.ios?.ascAppId, '6832193439', `${name} must submit to Brazos MVP`);
+  }
+});
+
 test('B4 · every profile pins both modes, with exactly these values', () => {
   for (const [name, modes] of Object.entries(EXPECTED)) {
     for (const [key, value] of Object.entries(modes)) {
