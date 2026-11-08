@@ -20,14 +20,26 @@ const code = workflow
   .map((line) => line.replace(/\s+#.*$/, ''))
   .join('\n');
 
-test('e2e iOS runs on dispatch and on pushes to mainexpo that touch the flows', () => {
+test('e2e iOS runs on manual dispatch only', () => {
   assert.match(code, /^on:\n  workflow_dispatch:\n    inputs:\n      build_id:/m);
+  // D-v3-10: macOS minutes are metered, so no push trigger of any kind.
+  const on = code.match(/^on:\n([\s\S]*?)^permissions:/m);
+  assert.ok(on, 'no on: block before permissions:');
+  assert.doesNotMatch(on[1], /^  push:/m);
+  assert.doesNotMatch(code, /^\s*(push|pull_request|pull_request_target|schedule|workflow_run):/m);
+  assert.match(code, /runs-on: macos-15$/m);
+});
+
+test('e2e iOS installs Maestro from the pinned GitHub release, with retries', () => {
   assert.match(
     code,
-    /^  push:\n    branches: \[mainexpo\]\n    paths:\n      - '\.maestro\/\*\*'\n      - '\.github\/workflows\/e2e-ios\.yml'\n(?!      -)/m
+    /curl [^\n]*--retry[^\n]*https:\/\/github\.com\/mobile-dev-inc\/maestro\/releases\/download\/cli-\$\{MAESTRO_VERSION\}\/maestro\.zip/
   );
-  assert.doesNotMatch(code, /^\s*(pull_request|pull_request_target|schedule|workflow_run):/m);
-  assert.match(code, /runs-on: macos-15$/m);
+  assert.doesNotMatch(workflow, /get\.maestro\.mobile\.dev/);
+});
+
+test('e2e iOS passes the run id to the flows', () => {
+  assert.match(code, /^\s+MAESTRO_RUN_ID: \$\{\{ github\.run_id \}\}$/m);
 });
 
 test('e2e iOS pins every action to a full SHA with a version comment', () => {

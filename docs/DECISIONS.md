@@ -31,7 +31,7 @@ and `tests/` are their record. Full history of every ruling up to 2026-11-07 is 
 | D-v3-7 | v3 | A cancelled job is terminal; a no-show claim moves no money until resolved; resolution is service-role only. |
 | D-v3-8 | v3 | Applied migrations are never rewritten; new evidence gets a new corrective migration. |
 | D-v3-9 | v3 | Edge-function house style: plain `fetch`, no client library, no import map, no shared module; the one exception is `stripe-webhook`'s `./verify.mjs`, which a Node test runs. No edge function computes an amount. |
-| D-v3-10 | v3 | The iPhone end-to-end workflow (`.github/workflows/e2e-ios.yml`, Phase F) runs on manual dispatch (optionally a tag push), never on a branch push: a metered macOS build per commit is the one unbounded meter. |
+| D-v3-10 | v3 | The iPhone end-to-end workflow (`.github/workflows/e2e-ios.yml`) runs on manual dispatch (optionally a tag push), never on a branch push: a metered macOS build per commit is the one unbounded meter. |
 | D-v3-11 | v3 | The client is typed: `lib/supabase.ts` is `createClient<Database>` over `types/database.ts`, regenerated with `npm run db:types` in the same commit as any migration that changes a table, view, enum or function signature. SQL that filters on status allow-lists what it accepts. (This corrects the old row, which said the client stayed untyped.) |
 | D-v3-14 | v3 | At least one completion photo is required to mark a job complete, unless the owner says otherwise. |
 | D-v3-15 | v3 | `payout.paid` is deliberately unhandled; the ledger stops at `released`; `paid_out` stays in the enum. |

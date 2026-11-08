@@ -56,7 +56,7 @@ staging accounts (a customer and a worker, both Supabase test phone numbers; the
 Connect-onboarded once, in Stripe test mode, by the owner, and the flows never open payout setup).
 
 - Where: GitHub's macOS runner, through `.github/workflows/e2e-ios.yml`. It runs on manual dispatch
-  (optional `build_id` input) and on a push to `mainexpo` that touches `.maestro/` or the workflow.
+  only (Actions → e2e iOS → Run workflow, optional `build_id`).
   It finds the latest FINISHED `e2e-test` EAS simulator build (or the `build_id`), installs it on an
   iPhone simulator, runs Maestro 2.12.1 over `.maestro/`, and uploads a junit file, debug output
   and a screen recording as artifacts. Secrets: `MAESTRO_E2E_PHONE`, `MAESTRO_E2E_OTP`,
