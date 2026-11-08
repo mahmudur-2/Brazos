@@ -304,7 +304,7 @@ export const PriceDropdown = forwardRef<
             onPress={() => openList()}
             style={({ pressed }) => [styles.box, well, pressed && styles.boxPressed]}
             accessibilityRole="button"
-            // The E2E money walk opens the amount by this label (.maestro/money-walk.yml).
+            // The E2E flow opens the amount by this label (.maestro/02-customer-post-job.yml).
             accessibilityLabel="Edit budget"
             accessibilityHint={
               validCents != null

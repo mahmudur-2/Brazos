@@ -49,13 +49,19 @@ Never run these commands, or any SQL, against a remote project: `--linked`, `--d
 
 ## 3. Maestro iPhone flows
 
-Flows live in `.maestro/` (`sign-in.yml`, `money-walk.yml`, `screens-walk.yml`; Phase F adds one per
-screen group). They drive a real build of the app in the iOS Simulator against the staging
-project, with two staging accounts (a customer and a worker; the worker is Connect-onboarded once,
-in Stripe test mode, by the owner, and the flows never open payout setup).
+Flows live in `.maestro/`: `01-auth.yml` … `10-account-delete.yml`, `subflows/` and `config.yaml`
+(runs 01 to 10 in order). `.maestro/README.md` says what each flow proves and what is not covered.
+They drive a real build of the app in the iOS Simulator against the staging project, with two
+staging accounts (a customer and a worker, both Supabase test phone numbers; the worker is
+Connect-onboarded once, in Stripe test mode, by the owner, and the flows never open payout setup).
 
-- Where: GitHub's macOS runner, through `.github/workflows/e2e-ios.yml` (added in Phase F). It runs
-  on manual dispatch, not on every push.
+- Where: GitHub's macOS runner, through `.github/workflows/e2e-ios.yml`. It runs on manual dispatch
+  (optional `build_id` input) and on a push to `mainexpo` that touches `.maestro/` or the workflow.
+  It finds the latest FINISHED `e2e-test` EAS simulator build (or the `build_id`), installs it on an
+  iPhone simulator, runs Maestro 2.12.1 over `.maestro/`, and uploads a junit file, debug output
+  and a screen recording as artifacts. Secrets: `MAESTRO_E2E_PHONE`, `MAESTRO_E2E_OTP`,
+  `MAESTRO_E2E_PHONE_2`, `MAESTRO_E2E_OTP_2` (two Supabase test phone numbers with fixed codes; no
+  SMS is sent).
 - The app: the `e2e-test` EAS profile in `eas.json` builds a simulator app (`ios.simulator: true`,
   `withoutCredentials`, staging environment).
 - Local run: needs a Mac with Xcode and Maestro installed; `maestro test .maestro/<flow>.yml`
@@ -63,18 +69,22 @@ in Stripe test mode, by the owner, and the flows never open payout setup).
 - Writing flows: dismiss the keyboard after every typed field (`hideKeyboard` after single-line
   fields, a static-label tap after multiline ones); a silent wait asserts the screen's own error
   text and fails in 30 seconds.
-- Each money-walk run leaves a job titled `E2E <timestamp>` on staging (no cleanup by decision).
+- Each run leaves jobs titled `E2E lean` on staging (`E2E <MAESTRO_RUN_ID>` when that variable is
+  set); the flows pick the newest card. No cleanup, by decision.
 
 ## 4. TestFlight (the owner's steps)
 
-A chat never runs a production step; these are parked steps for the owner.
+A chat never runs a production step; these are parked steps for the owner. The upload to App Store
+Connect is also an owner step.
 
 1. `npm run verify` is green on `mainexpo`.
-2. `npx eas-cli@latest build --profile production --platform ios` (or `npm run release:testflight`,
-   which adds `--auto-submit`). The `production` profile has `autoIncrement` and the `production`
-   EAS environment, which must hold `EXPO_PUBLIC_PAYMENTS_MODE=stripe`, the Stripe publishable
-   test key, `EXPO_PUBLIC_PHONE_AUTH_MODE=supabase`, the Sentry DSN, and the Supabase URL and key.
-3. `npx eas-cli@latest submit --platform ios` if it was not auto-submitted.
+2. `npm run release:testflight` (= `npx eas-cli@latest build --platform ios --profile testflight`,
+   no auto-submit). The `testflight` profile has store distribution, `autoIncrement` and the
+   `preview` EAS environment (staging Supabase), which must hold
+   `EXPO_PUBLIC_PAYMENTS_MODE=stripe`, the Stripe publishable test key,
+   `EXPO_PUBLIC_PHONE_AUTH_MODE=supabase`, the Sentry DSN, and the Supabase URL and key.
+   `release:production` is the old production line and is not used for v1.
+3. `npx eas-cli@latest submit --platform ios --profile testflight --latest`, run by the owner.
 4. In App Store Connect, add the build to the internal testers group. Apple's two-factor sign-in is
    the owner's.
 5. Install from TestFlight on a phone and walk the loop (section 5 below) before inviting anyone.

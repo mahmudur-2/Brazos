@@ -789,8 +789,8 @@ export function HomeScreen() {
                 the same litFill recipe, the same label, the same startJobDraft.
                 Full width inside the card under the field, at the card's gap.
                 It is the screen's ONE conversion control (decision 3), and the
-                E2E money walk taps it on Home without scrolling (.maestro/
-                sign-in.yml HOME_MARK, money-walk.yml Act 1) — it sits higher on
+                E2E flows tap it on Home without scrolling (.maestro/
+                02-customer-post-job.yml, side job) — it sits higher on
                 the screen than it did in the promo card. */}
             <Pressable
               onPress={() => startJobDraft()}
@@ -866,9 +866,9 @@ export function HomeScreen() {
           {/* a2 — WHAT NEEDS THE CUSTOMER'S MOVE, the first job section
               (docs/DECISIONS.md 2026-09-05 entry (4), and the 2026-09-18
               entry that puts the tile row between it and the card).
-              THE POSITION IS NOT A TASTE CHOICE: the E2E money walk finds
-              "Post a job" on Home WITHOUT scrolling (.maestro/sign-in.yml's
-              HOME_MARK, then money-walk.yml's tap), Maestro taps nothing laid
+              THE POSITION IS NOT A TASTE CHOICE: the E2E flows find
+              "Post a job" on Home WITHOUT scrolling (.maestro/
+              02-customer-post-job.yml asserts, then taps it), Maestro taps nothing laid
               out below the 852pt fold, and the E2E customer fixture owns
               staging jobs that need attention — so a block ABOVE the card
               would push the pill off-screen and break the walk without a flow
