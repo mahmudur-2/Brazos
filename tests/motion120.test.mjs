@@ -978,16 +978,6 @@ const SIBLINGS = [
     needs: 'keyboard',
   },
   {
-    // RUN P1 — the published-job mark's entrance. The only sibling here that
-    // needs worklets ALONE: there is no gesture in it, just a one-second
-    // entrance, so a recogniser would buy it nothing.
-    name: 'SuccessMark',
-    fallback: 'components/SuccessMark.tsx',
-    fast: 'components/SuccessMark.motion120.tsx',
-    shared: 'components/SuccessMark.shared.tsx',
-    needs: 'reanimated',
-  },
-  {
     // 2026-09-21 — the Customer <-> Worker mode switch: the glass wipe
     // carrying the capsule. Worklets alone, like the mark: there is no
     // gesture, only a timed sweep and a drop, and the fallback runs the same
@@ -2291,7 +2281,6 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       // piece, and the segmented control's thumb sprung by translateX.
       'components/Selection.motion120.tsx',
       'components/SheetCard.motion120.tsx',
-      'components/SuccessMark.motion120.tsx',
       'components/SwipeableRow.motion120.tsx',
       // 2026-09-30 (the build run, idea 23) — the chosen category tile's check slot: one shared
       // value, 0 → 1, the slot's width and the box's opacity computed from it on the UI thread.

@@ -42,7 +42,6 @@ import { usePostJobDraft } from '../hooks/usePostJobDraft';
 import type { MyJobsStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes';
 import { goBackOrHome } from '../lib/navigationRef';
-import { useDialNumber } from '../lib/designOverrides';
 import {
   EYEBROW_TYPE,
   radius,
@@ -95,9 +94,9 @@ function FilterTabs({
   // the bar is the shared Lux segment (components/SegmentedControl.tsx) — the
   // mint-filled pill in the glass track — at its 48pt, pill-cornered; the two
   // dials still reach it.
-  const tabsHeight = useDialNumber('myJobs.tabs.height') ?? 52;
+  const tabsHeight = 52;
   // 26 is half the 52pt track: the pill. A dial in 0..40 cannot say "pill".
-  const tabsRadius = useDialNumber('myJobs.tabs.radius') ?? 26;
+  const tabsRadius = 26;
   return (
     <SegmentedControl
       options={FILTERS}
@@ -142,8 +141,8 @@ export function MyJobsHubScreen() {
   const styles = stylesFor(colors);
   // RUN T2 (C4) — this screen's own three, on the `theme.*` scale because this
   // file imports spacing/radius from lib/theme.
-  const contentGap = useDialNumber('myJobs.content.gap') ?? spacing.xl;
-  const emptyPaddingY = useDialNumber('myJobs.empty.paddingY') ?? spacing.xxl;
+  const contentGap = spacing.xl;
+  const emptyPaddingY = spacing.xxl;
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { user } = useAuth();
   // Perspective comes from ModeContext — never a hand-passed prop (CLAUDE.md).

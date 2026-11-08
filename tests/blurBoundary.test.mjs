@@ -123,9 +123,7 @@ test('[static] lib/blur is the only file in the tree that names expo-blur', () =
   // THE SHARED BACKDROPS MOTION1 C3 NAMED, plus RUN G1's Surface primitive —
   // the one wearer of the glass materials, and since C4 how the nav bar's
   // blur arrives too (BottomNav renders Surface, never the blur layer
-  // directly). Edit Budget is deliberately absent: it is its own dialog
-  // surface rather than one of the shared backdrops, and the operator's
-  // decision is that it stays opaque dim.
+  // directly).
   assert.deepEqual(
     callers.sort(),
     // 2026-09-30 (the build run, the smoothness pass): the three frosted dialogs present through
@@ -139,11 +137,6 @@ test('[static] lib/blur is the only file in the tree that names expo-blur', () =
     ],
     'the blur is the shared backdrops and the Surface primitive — nothing else'
   );
-  assert.doesNotMatch(
-    stripComments(read('components/EditBudgetDialog.tsx')),
-    /BlurLayer/,
-    'Edit Budget stays opaque dim by operator decision'
-  );
 });
 
 // ---------------------------------------------------------------------------
@@ -154,9 +147,9 @@ test('[static] lib/blur is the only file in the tree that names expo-blur', () =
 //   (b) BlurView — the vendor's component NAME — appears nowhere but the
 //       boundary, so no file can even hold the handle a direct import would
 //       give it. Consumers render <BlurLayer /> or wear a <Surface material>.
-//   (c) the materials table is consumed only through Surface: the one
-//       production import of `materials` is lib/designOverrides.ts (the live
-//       resolver Surface reads), lib/theme.ts does not re-surface it, and
+//   (c) the materials table is consumed only through Surface: the production
+//       imports of `materials` are Surface itself and the Filters sheet's one
+//       read of the pane rim, lib/theme.ts does not re-surface it, and
 //       the glass scrim ink #071B15 is spelled exactly once, in ui/tokens.ts
 //       — a second spelling anywhere is a surface inventing its own glass.
 //
@@ -186,7 +179,8 @@ test('[static] the glass is worn only through Surface (G1 C7)', () => {
     const code = stripComments(read(file));
     if (file !== 'ui/tokens.ts' && /#071B15/i.test(code)) scrimOffenders.push(file);
     if (
-      file !== 'lib/designOverrides.ts' &&
+      file !== 'ui/primitives/Surface.tsx' &&
+      file !== 'components/JobFilterSheet.tsx' &&
       /import \{[^}]*\bmaterials\b[^}]*\} from '[^']*tokens'/.test(code)
     ) {
       importOffenders.push(file);
@@ -199,7 +193,7 @@ test('[static] the glass is worn only through Surface (G1 C7)', () => {
   assert.deepEqual(
     importOffenders,
     [],
-    'the materials table is read only through lib/designOverrides.ts'
+    'the materials table is read only by Surface and the Filters sheet pane rim'
   );
   assert.doesNotMatch(
     stripComments(read('lib/theme.ts')),

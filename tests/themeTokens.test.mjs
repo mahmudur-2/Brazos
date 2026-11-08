@@ -84,13 +84,13 @@ const themeModule = (async () => {
       // destructure here has to name everything that import names, or the
       // executed module throws a ReferenceError at first use rather than
       // failing an assertion — so the stub is widened, never the assertions.
-      // RUN T1 (C2) added `metricGeneration` (themedStyles keys on it) and
-      // `metricGroup` (this file's own two scales are live too).
+      // RUN T1 (C2) added `metricGeneration` (themedStyles keyed on it); D1
+      // (lean) removed it with the design studio.
       // 2026-09-18 added `light as emeraldLight`: the task card's three roles
       // are defined once in ui/tokens.ts and lib/theme.ts takes BOTH palettes'
       // values by reference, the light side included.
       // Fix run E3 added `controls`: touchSlop() reads the 44pt floor from it.
-      'const { brand, controls, dark: emeraldDark, light: emeraldLight, constantAccents, metricGeneration, radius, shadows: tokenShadows, spacing, type: tokenType, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
+      'const { brand, controls, dark: emeraldDark, light: emeraldLight, constantAccents, radius, shadows: tokenShadows, spacing, type: tokenType, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
     )
     .replace(/export \{[^}]*\} from '\.\.\/ui\/tokens';\n/g, '')
     .replace(/export \{[^}]*\} from '\.\.\/hooks\/useThemeColors';\n/g, '');
@@ -938,81 +938,9 @@ test('E3 touchSlop: any drawn size reaches the 44pt floor on each axis it is giv
 });
 
 // ---------------------------------------------------------------------------
-// RUN G1 (C2) — the live override layer resolves to the static tokens when
-// no dial is set. Identity, not merely equality: unchanged inputs must come
-// back as the SAME objects, so palette-keyed style caches keep working and a
-// fresh app is byte-identical in behaviour.
-// ---------------------------------------------------------------------------
-
-/** lib/designOverrides.ts, executed with react stubbed and ui/tokens fed
- *  from the module already executed above. */
-const designOverridesModule = (async () => {
-  const tokens = await tokensModule;
-  globalThis.__DESIGN_TOKENS__ = tokens;
-  const js = stripTypeScriptTypes(await read('lib/designOverrides.ts'), { mode: 'strip' });
-  const stubbed = js
-    .replace(
-      /import \{[^}]*\} from 'react';/,
-      'const useSyncExternalStore = () => { throw new Error("hooks are not under test"); }; const useMemo = (factory) => factory();',
-    )
-    .replace(
-      /import \{[^}]*\} from '\.\.\/ui\/tokens';/,
-      // T1 (C1): the store installs its live-metric reader into ui/tokens.ts's
-      // slot at load, so the executed module needs that binding too.
-      'const { materials, setMetricSource } = globalThis.__DESIGN_TOKENS__;',
-    );
-  assert.doesNotMatch(
-    stubbed,
-    /from '(?:react|\.[^']*)'/,
-    'every import lib/designOverrides.ts carries must be stubbed or dropped',
-  );
-  return import(toDataUrl(stubbed));
-})();
-
-test('G1 overrides: a fresh app resolves byte-identically — no override, no change', async () => {
-  const { materials } = await tokensModule;
-  const { colors, darkColors } = await themeModule;
-  const o = await designOverridesModule;
-
-  assert.deepEqual(o.getDesignOverrides(), { materials: {} }, 'the store must start empty');
-  assert.equal(o.resolveMaterials(o.EMPTY_DESIGN_OVERRIDES), materials, 'materials must come back by identity');
-  assert.deepEqual(o.resolveMaterials(o.EMPTY_DESIGN_OVERRIDES), materials);
-  assert.equal(o.applyPaletteOverrides(darkColors, o.EMPTY_DESIGN_OVERRIDES, true), darkColors);
-  assert.equal(o.applyPaletteOverrides(colors, o.EMPTY_DESIGN_OVERRIDES, false), colors);
-});
-
-test('G1 overrides: a dial moves only its own value, and reset restores the static truth', async () => {
-  const { materials } = await tokensModule;
-  const { darkColors } = await themeModule;
-  const o = await designOverridesModule;
-  try {
-    o.patchMaterialOverride('chrome', { blur: 44, scrimAlpha: 0.61 });
-    o.patchDesignOverrides({ gold: '#DCAB60', cardFill: '#182725', navBottomPad: 12 });
-
-    const resolved = o.resolveMaterials(o.getDesignOverrides());
-    assert.equal(resolved.chrome.blur, 44);
-    assert.equal(resolved.chrome.scrimAlpha, 0.61);
-    assert.equal(resolved.chrome.borderAlpha, materials.chrome.borderAlpha, 'an unset dial keeps the static value');
-    assert.equal(resolved.sheet, materials.sheet, 'an untouched material keeps its identity');
-    assert.equal(resolved.menu, materials.menu);
-
-    const dark = o.applyPaletteOverrides(darkColors, o.getDesignOverrides(), true);
-    assert.equal(dark.gold, '#DCAB60');
-    assert.equal(dark.surface, '#182725');
-    assert.equal(dark.background, darkColors.background, 'only the dialled roles move');
-    // cardFill is by definition the DARK card surface; light never reads it.
-    const light = o.applyPaletteOverrides(darkColors, o.getDesignOverrides(), false);
-    assert.equal(light.surface, darkColors.surface);
-    assert.equal(light.gold, '#DCAB60');
-  } finally {
-    o.resetDesignOverrides();
-  }
-  assert.equal(o.resolveMaterials(o.getDesignOverrides()), materials, 'reset must restore identity');
-  assert.equal(o.applyPaletteOverrides(darkColors, o.getDesignOverrides(), true), darkColors);
-});
-
-// ---------------------------------------------------------------------------
-// RUN T1 (C2) — the live token reads and the generation-keyed style caches
+// RUN T1 (C2) — the token reads and the palette-keyed style caches. D1 (lean):
+// the design studio's override layer (lib/designOverrides.ts) is deleted, so
+// its G1 fences and the override halves of these went with it.
 // ---------------------------------------------------------------------------
 
 /** Every metric key that is LIVE, read from the executed token surfaces so
@@ -1035,10 +963,9 @@ const liveMetricKeys = (async () => {
   };
 })();
 
-test('T1 tokens: a live metric resolves at READ time, and the fixed members are still fixed', async () => {
+test('T1 tokens: every group answers with its table, and the fixed members are fixed', async () => {
   const tokens = await tokensModule;
   const theme = await themeModule;
-  const o = await designOverridesModule;
 
   // Untouched, every group answers with the table it is built from.
   for (const [key, value] of Object.entries(tokens.SPACING_DEFAULTS)) {
@@ -1061,45 +988,21 @@ test('T1 tokens: a live metric resolves at READ time, and the fixed members are 
   }
 
   // ONE SPACING SCALE (fix run D8): ui/tokens' `spacing` and lib/theme's are
-  // the SAME live group, so `xl` is 24 from either import and a dial on one
-  // is a dial on both.
+  // the SAME group, so `xl` is 24 from either import.
   assert.equal(tokens.spacing, theme.spacing, 'lib/theme re-exports the one spacing group');
   assert.equal(tokens.spacing.xl, 24);
   assert.equal(tokens.SPACING_DEFAULTS, tokens.THEME_SPACING_DEFAULTS, 'the §I name is the same table');
 
-  try {
-    o.setMetricOverride('theme.spacing.lg', 30);
-    o.setMetricOverride('theme.radius.md', 4);
-    o.setMetricOverride('controls.buttonHeight', 52);
-    o.setMetricOverride('layout.cardGap', 18);
-    assert.equal(tokens.spacing.lg, 30, 'the getter resolves at read time, not at import');
-    assert.equal(theme.radius.md, 4);
-    assert.equal(tokens.controls.buttonHeight, 52);
-    assert.equal(tokens.layout.cardGap, 18);
-    assert.equal(tokens.spacing.md, 12, 'an untouched key keeps its shipped value');
-    assert.equal(theme.spacing.lg, 30, 'and lib/theme reads the same group');
-
-    // FIXED MEMBERS ARE NOT DIALS. A capsule is a shape and the touch floor is
-    // non-negotiable, so neither answers to the bag at all.
-    o.setMetricOverride('radius.pill', 12);
-    o.setMetricOverride('controls.minTouchTarget', 10);
-    o.setMetricOverride('theme.radius.pill', 12);
-    o.setMetricOverride('layout.maxContentWidth', 100);
-    assert.equal(tokens.radius.pill, 999, 'pill is a shape, not a size');
-    assert.equal(theme.radius.pill, 999);
-    assert.equal(tokens.controls.minTouchTarget, 44, 'the touch floor cannot be dialled');
-    assert.equal(tokens.layout.maxContentWidth, 420, 'derived nav/layout geometry is not a dial');
-  } finally {
-    o.resetDesignOverrides();
-  }
-  assert.equal(tokens.spacing.lg, 16, 'reset returns every getter to its shipped default');
-  assert.equal(theme.radius.md, 12);
+  // FIXED MEMBERS. A capsule is a shape and the touch floor is non-negotiable.
+  assert.equal(tokens.radius.pill, 999, 'pill is a shape, not a size');
+  assert.equal(theme.radius.pill, 999);
+  assert.equal(tokens.controls.minTouchTarget, 44, 'the touch floor is 44');
+  assert.equal(tokens.layout.maxContentWidth, 420, 'derived nav/layout geometry is fixed');
 });
 
-test('T1 cache: a stylesheet is the SAME OBJECT until a metric moves, and a fresh one after', async () => {
+test('T1 cache: a stylesheet is the SAME OBJECT for a palette, and cached per palette', async () => {
   const tokens = await tokensModule;
   const theme = await themeModule;
-  const o = await designOverridesModule;
 
   const palette = { surface: '#0A1813' };
   let builds = 0;
@@ -1112,33 +1015,6 @@ test('T1 cache: a stylesheet is the SAME OBJECT until a metric moves, and a fres
   assert.equal(stylesFor(palette), first, 'identity, not deep equality — the pre-T1 contract');
   assert.equal(builds, 1, 'and the factory ran exactly once');
   assert.equal(first.card.padding, 16, 'carrying the shipped default');
-
-  try {
-    o.setMetricOverride('theme.spacing.lg', 28);
-    const moved = stylesFor(palette);
-    assert.notEqual(moved, first, 'a metric write must produce a fresh stylesheet');
-    assert.equal(moved.card.padding, 28, 'carrying the new number');
-    assert.equal(moved.card.backgroundColor, '#0A1813', 'and the same colour');
-    assert.equal(builds, 2, 'exactly one rebuild');
-    assert.equal(stylesFor(palette), moved, 'which is then cached again');
-    assert.equal(builds, 2);
-  } finally {
-    o.resetDesignOverrides();
-  }
-  assert.equal(stylesFor(palette).card.padding, 16, 'reset returns the shipped default');
-
-  // A NON-metric dial must throw away nothing — this is what keeps a colour or
-  // blur dial from rebuilding all 102 cached sheets.
-  const settled = stylesFor(palette);
-  const settledBuilds = builds;
-  try {
-    o.patchDesignOverrides({ glowAlpha: 0.4 });
-    o.patchMaterialOverride('sheet', { blur: 30 });
-    assert.equal(stylesFor(palette), settled, 'a non-metric dial keeps every cached sheet');
-    assert.equal(builds, settledBuilds);
-  } finally {
-    o.resetDesignOverrides();
-  }
 
   // A second palette is still cached per palette, exactly as before.
   const other = { surface: '#FFFFFF' };
@@ -1289,7 +1165,6 @@ const MIGRATED_FILES = [
   'screens/WorkerHomeScreen.tsx',
   'screens/WorkerJobScreen.tsx',
   'screens/WorkerProfileScreen.tsx',
-  'ui/primitives/MediaGrid.tsx',
   'ui/primitives/Sheet.tsx',
 ];
 

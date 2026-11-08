@@ -194,12 +194,11 @@ test('A7 (2026-10-03) — the worker reads one vocabulary for one job: the budge
   // $69.37", and the job screen "You receive $64.75" — three labels, and the first read a budget
   // as pay. The budget is named as the budget everywhere a worker sees it; the only after-fee
   // figure is "You get", read from the quote or the ledger row, never derived.
-  for (const file of ['components/WorkerJobCard.tsx', 'ui/primitives/JobCard.tsx', 'screens/JobDetailScreen.tsx', 'screens/WorkerJobScreen.tsx', 'lib/payments.ts', 'components/HubCard.tsx', 'screens/MyJobsHubScreen.tsx']) {
+  for (const file of ['components/WorkerJobCard.tsx', 'screens/JobDetailScreen.tsx', 'screens/WorkerJobScreen.tsx', 'lib/payments.ts', 'components/HubCard.tsx', 'screens/MyJobsHubScreen.tsx']) {
     const src = stripComments(await read(file));
     assert.doesNotMatch(src, /EST\. PAY\b|Est\. payout|You receive\b/, `${file} keeps the one vocabulary`);
   }
   assert.match(stripComments(await read('components/WorkerJobCard.tsx')), />BUDGET</);
-  assert.match(stripComments(await read('ui/primitives/JobCard.tsx')), /isWorker \? 'BUDGET' : 'EST\. PRICE'/);
   assert.match(stripComments(await read('screens/JobDetailScreen.tsx')), /\? 'You get, after the fee'\s*: 'You get'\}/);
   assert.match(stripComments(await read('screens/WorkerJobScreen.tsx')), />You get</);
   assert.match(stripComments(await read('lib/payments.ts')), /return `You get \$\{formatBudget\(cents\)\} after the fee`;/);

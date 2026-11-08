@@ -283,7 +283,6 @@ test('emerald fence: the money primitive keeps its colour rule', () => {
   // above without touching this file.
   const MONEY_SURFACES = [
     'ui/primitives/MoneyText.tsx',
-    'ui/primitives/JobCard.tsx',
     'components/WorkerJobCard.tsx',
     'components/BrowseJobCard.tsx',
     'components/MarketJobPreview.tsx',
@@ -558,8 +557,8 @@ test('home(2) fence: the task card holds the title, the field and the pill, and 
   // 2026-09-27 (the Lux remake, ruling 13): the refresh's "Browse workers ›"
   // line under the pill is GONE — the Discover tab is the way to a person.
   assert.ok(!inside.includes('Browse workers'), 'no Browse workers line under the pill');
-  const dial = "useDialNumber('home.promoCard.radius') ?? 22";
-  assert.ok(home.includes(dial), 'the card’s corner is the dial the promo card wore, at 22');
+  const corner = 'const taskCardRadius = 22;';
+  assert.ok(home.includes(corner), 'the card’s corner is the 22 the promo card wore');
 
   // THE CARD'S GEOMETRY is the mockup's (docs/mockups/html/home-redesign.html
   // `.card`: padding 17, gap 14) and its COLOURS are the three palette roles,
@@ -831,7 +830,7 @@ test('home(4) fence: the atmosphere sits behind both homes and never scrolls', (
 test('home(24) fence: four whole service tiles fill the row and nothing peeks', () => {
   const flat = flatten(read('screens/HomeScreen.tsx'));
   const rowSource = flatten(read('components/ServiceTileRow.tsx'));
-  const padding = Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
+  const padding = Number(/screenPadding: (\d+)/.exec(read('screens/HomeScreen.tsx'))[1]);
 
   // The tile is the row's width less three gaps, over four — arithmetic in
   // the component, applied at render from the measured row, never a constant.
@@ -892,7 +891,7 @@ test('home(24) fence: four whole service tiles fill the row and nothing peeks', 
   // `sectionGap` alone — the reference's ONE rhythm of 24 between the blocks
   // (docs/mockups/html/home-redesign.html; DECISIONS 2026-09-20 sitting 3, (8)).
   assert.match(flat, /intro: \{ position: 'relative', minHeight: 160 \}/);
-  const sectionGap = Number(/sectionGap: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
+  const sectionGap = Number(/sectionGap: (\d+)/.exec(read('screens/HomeScreen.tsx'))[1]);
   assert.equal(sectionGap, 24, 'sub-copy to card is the reference’s 24: sectionGap alone');
   // …and the greeting to the headline is the same 24: introCopy's 8 plus the
   // headline's own 16.
@@ -920,8 +919,8 @@ test('home(24) fence: four whole service tiles fill the row and nothing peeks', 
 // THE TERMS, and where each is read from: the 1pt border twice (the
 // stylesheet), the mockup's 17pt padding twice and its 14pt row gap twice
 // (the stylesheet), the title's 24pt line box (the stylesheet), the field's
-// 44 and the pill's 48 (lib/homeDesignStudio.tsx — the studio's values, which
-// the screen reads live). 2 + 34 + 24 + 14 + 44 + 14 + 48 = 180.
+// 44 and the pill's 48 (the `design` constant in screens/HomeScreen.tsx, the
+// retired studio's values). 2 + 34 + 24 + 14 + 44 + 14 + 48 = 180.
 // docs/mockups/html/home-redesign.html says "task card — height 174" for a
 // 44pt CTA with the border outside the count; the app's pill is 48 by the
 // studio's standing value (CLAUDE.md's floor is 44, the operator's is 48), and
@@ -938,7 +937,7 @@ test('home(24) fence: four whole service tiles fill the row and nothing peeks', 
 // ---------------------------------------------------------------------------
 test('home(25) fence: the task card’s height is the mockup’s, term by term', () => {
   const flat = flatten(read('screens/HomeScreen.tsx'));
-  const studio = read('lib/homeDesignStudio.tsx');
+  const studio = read('screens/HomeScreen.tsx');
 
   const cardStyle = /taskCard: \{([^}]*)\}/.exec(flat)?.[1] ?? '';
   const padding = Number(/padding: (\d+),/.exec(cardStyle)?.[1]);
@@ -987,7 +986,7 @@ test('home(25) fence: the task card’s height is the mockup’s, term by term',
 // ---------------------------------------------------------------------------
 test('home(26) fence: the first job section lands on master 44’s own gap below the card', () => {
   const flat = flatten(read('screens/HomeScreen.tsx'));
-  const sectionGap = Number(/sectionGap: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
+  const sectionGap = Number(/sectionGap: (\d+)/.exec(read('screens/HomeScreen.tsx'))[1]);
   // Parity 2026-08-22: the corrective margin is part of the section's one
   // shared style — the dark-only override is retired.
   //
@@ -1290,7 +1289,7 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
   );
   assert.doesNotMatch(flat, /isDark && \{ maxWidth: headlineColumn/);
   const leading = constantOf(home, 'HEADLINE_LEADING');
-  const heroSize = Number(/heroFontSize: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
+  const heroSize = Number(/heroFontSize: (\d+)/.exec(read('screens/HomeScreen.tsx'))[1]);
   assert.ok(
     Math.abs(leading * heroSize - 40.5) < 1.2,
     `the headline's leading must resolve to the approved 40.5pt pitch, not ${(leading * heroSize).toFixed(1)}`
@@ -1318,9 +1317,9 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
   // (home(16) recorded 281.6pt at 39pt for a different string, "Take a task
   // off"; that number is void — the string it measured is not the one that
   // sets the widest line.)
-  const hero = Number(/heroFontSize: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))?.[1]);
+  const hero = Number(/heroFontSize: (\d+)/.exec(read('screens/HomeScreen.tsx'))?.[1]);
   assert.ok(hero > 0, 'the hero size must stay a plain number in the design settings');
-  const padding = Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
+  const padding = Number(/screenPadding: (\d+)/.exec(read('screens/HomeScreen.tsx'))[1]);
   const artBox = /const HERO_ART_DARK = \{ width: (\d+), height: \d+, right: (-?\d+), top: \d+ \}/.exec(home);
   assert.ok(artBox, 'the dark hero must keep a plain, readable box');
   const artWidth = Number(artBox[1]);
@@ -1440,7 +1439,7 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
   // 393 - padding - right. home(14)'s `right: 0` stopped the BOX at the padded
   // column's edge, 20pt short of the screen and 43pt short of where the master
   // puts it.
-  const padding = Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
+  const padding = Number(/screenPadding: (\d+)/.exec(read('screens/HomeScreen.tsx'))[1]);
   const overhang = -right - padding;
   // 2026-09-29 (LUX-LIST-2 #5): a cut-out has NOTHING to bleed — its edges are
   // empty by definition, as this fence's own header says — so the approved box
@@ -1880,10 +1879,10 @@ test('map(1) fence: the map is the ground and the chrome floats on it, on the pa
   assert.doesNotMatch(flat, /searchPill: \{[^}]*backgroundColor/, 'the pill takes its ground from the material');
   assert.doesNotMatch(flat, /headerWrap|footerBar|withAlpha\(colors\.background/, 'the slabs stay retired');
   // The sheet is the shared PeekSheet, which wears the same material; this
-  // screen hands it the design's corner, padding and inset through dials.
+  // screen hands it the design's corner, padding and inset through named constants.
   assert.match(flat, /<PeekSheet/);
-  assert.match(flat, /useDialNumber\('map\.sheet\.radius'\) \?\? MAP_SHEET_RADIUS/);
-  assert.match(flat, /useDialNumber\('map\.searchPill\.radius'\) \?\? MAP_SEARCH_RADIUS/);
+  assert.match(flat, /const sheetRadius = MAP_SHEET_RADIUS;/);
+  assert.match(flat, /const searchRadius = MAP_SEARCH_RADIUS;/);
   const sheet = flatten(read('components/PeekSheet.shared.tsx'));
   assert.match(sheet, /<Surface material="pane" radius=\{radius\} corners="all"/);
   // The chrome layer itself paints nothing: every pixel is the map or a pane.

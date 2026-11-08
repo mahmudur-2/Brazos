@@ -81,7 +81,6 @@ const INTENT_ALLOWLIST = [
   // conversion.
   'components/HotspotMap.native.tsx',
   'hooks/useLiveLocation.ts',
-  'hooks/useSetupPermissions.ts',
   'screens/ChatScreen.tsx',
   'screens/ProfileScreen.tsx',
   // R7D · the two abandonment pairs. Both mount once per session of the thing

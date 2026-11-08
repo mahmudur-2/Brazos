@@ -47,8 +47,6 @@ import { openOwnJob } from '../lib/ownJobCard';
 import { ALL_SERVICES } from '../lib/skillCategories';
 import { formatTimeAgo, greetingFor } from '../lib/time';
 import type { CustomerHomeStackNavigation } from '../lib/navigation';
-import { useHomeDesignSettings } from '../lib/homeDesignStudio';
-import { useDialNumber } from '../lib/designOverrides';
 import { useShellGround } from '../lib/shellGround';
 import { EntranceView } from '../components/EntranceView';
 import {
@@ -358,12 +356,23 @@ function counterpartyLine(job: Job, names: Record<string, string | null>): strin
   return 'Awaiting bids';
 }
 
+/** Customer Home's own geometry: the values the retired home design studio
+ *  shipped as its defaults. */
+const design = {
+  heroFontSize: 33,
+  screenPadding: 20,
+  sectionGap: 24,
+  searchHeight: 54,
+  searchRadius: 27,
+  ctaHeight: 48,
+  ctaRadius: 24,
+} as const;
+
 /** Customer Home to golden master 44 (Prestige 1a), retaining the existing
  *  data and routes; light keeps the approved Heritage composition. */
 export function HomeScreen() {
   const { profile } = useProfile();
   const navigation = useNavigation<CustomerHomeStackNavigation>();
-  const design = useHomeDesignSettings();
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { width: screenWidth } = useWindowDimensions();
@@ -377,7 +386,7 @@ export function HomeScreen() {
   // purpose: a stored studio override is keyed on it, and
   // tests/screenDials.test.mjs pins this exact read. The mockup's card is 22
   // (radius.xxl), the same corner the promo card had.
-  const taskCardRadius = useDialNumber('home.promoCard.radius') ?? 22;
+  const taskCardRadius = 22;
   // 2026-09-18: the "Switch to Worker" pill and its `home.modeSwitch.paddingX`
   // dial left this screen — the customer's mode switch is the [+] create
   // sheet's bottom row now (components/CreateSheet.tsx, mounted by
@@ -758,7 +767,7 @@ export function HomeScreen() {
             {/* The shared SearchBar (Prestige 1a), the SAME instance this
                 screen has always had — value, onChangeText, submitSearch, the
                 sentence posture — now inside the card at the card's own
-                56/20 (lib/homeDesignStudio.tsx). The mic is the REAL voice
+                54/27 (`design` above). The mic is the REAL voice
                 search, rendered by SearchBar itself only when the on-device
                 boundary is available; nothing about voice changes. 2026-09-21:
                 ONE trailing control — the mic while the field is empty, the

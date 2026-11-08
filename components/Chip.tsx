@@ -14,17 +14,13 @@ import { PressScale } from './PressScale';
 import { SelectionText, SelectionTint } from './Selection';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
-  glow,
   radius,
   selectedInDark,
   spacing,
   themedStyles,
   useThemeColors,
-  withAlpha,
   type ColorPalette,
 } from '../lib/theme';
-import { useDesignDial, useOverrideNumber, useOverrideValue } from '../lib/designOverrides';
-import { SURFACE_GLOW_ALPHA } from '../ui/primitives/Surface';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -187,36 +183,10 @@ export function Chip({
       </View>
     );
 
-  // RUN S2 (C8) — the chip geometry dials; colours stay each variant's own.
-  const padXDial = useOverrideNumber('chip.paddingX');
-  const padYDial = useOverrideNumber('chip.paddingY');
-  const radiusDial = useOverrideNumber('chip.radius');
-  const gapDial = useOverrideNumber('chip.gap');
-  const borderWidthDial = useOverrideNumber('chip.borderWidth');
-  const minHeightDial = useOverrideNumber('chip.minHeight');
-  // C10 — glow-on-selection: OFF by default; when the studio turns it on,
-  // the CHOSEN chip lights (dark theme), the rest stay dark, and the global
-  // glow dial sets the intensity.
-  const chipGlowOn = useOverrideValue('glow.chipSelection') === true;
-  const glowAlphaDial = useDesignDial('glowAlpha');
-  const selectionGlow =
-    chipGlowOn && goldSelected
-      ? glow.halo(withAlpha(chosen.line, glowAlphaDial ?? SURFACE_GLOW_ALPHA))
-      : null;
-  const chipDial = {
-    ...(padXDial != null ? { paddingHorizontal: padXDial } : null),
-    ...(padYDial != null ? { paddingVertical: padYDial } : null),
-    ...(radiusDial != null ? { borderRadius: radiusDial } : null),
-    ...(gapDial != null ? { gap: gapDial } : null),
-    ...(borderWidthDial != null ? { borderWidth: borderWidthDial } : null),
-    ...(minHeightDial != null && onPress ? { minHeight: minHeightDial } : null),
-  };
-
   const shapeAt = (on: boolean) => [
     styles.chip,
     onPress && styles.chipInteractive,
     small && styles.chipSmall,
-    chipDial,
     // Dark service chips wear the masters' sage fill; light keeps the white
     // pill unchanged (no style, so the base chip shows through).
     variant === 'service' && isDark && styles.chipServiceDark,
@@ -240,7 +210,6 @@ export function Chip({
       backgroundColor: isFilter || variant === 'soft' ? colors.mint : colors.surface,
       borderColor: chosen.line,
     },
-    on && selectionGlow,
     style,
   ];
   const shape = shapeAt(selected);

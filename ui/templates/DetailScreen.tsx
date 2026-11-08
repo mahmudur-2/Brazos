@@ -6,7 +6,6 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { usePinnedFooterPadding, useScrollClearance } from '../primitives';
 import { layout, radius, spacing, type EmeraldPalette } from '../tokens';
 import { EYEBROW_TYPE, screenGround, themedStyles, useThemeColors } from '../../lib/theme';
-import { useOverrideNumber } from '../../lib/designOverrides';
 import { ScreenStateView, isReady, type ScreenState } from './ScreenStates';
 import { EntranceView } from '../../components/EntranceView';
 import { entranceSlot, useEntered } from '../../hooks/useEntrance';
@@ -73,15 +72,6 @@ export function DetailScreen({
   // FIX-RUN F12: the sections arrive once, on the first render that draws them.
   const sectionsEntered = useEntered(isReady(state) && sections.length > 0);
   const footerPad = usePinnedFooterPadding();
-  // RUN S2 (C9) — the layout dials, live across every template screen.
-  const pagePadDial = useOverrideNumber('layout.pagePadding');
-  const topPadDial = useOverrideNumber('layout.contentTopPad');
-  const sectionGapDial = useOverrideNumber('layout.detailSectionGap');
-  const layoutDial = {
-    ...(pagePadDial != null ? { paddingHorizontal: pagePadDial } : null),
-    ...(topPadDial != null ? { paddingTop: topPadDial } : null),
-    ...(sectionGapDial != null ? { gap: sectionGapDial } : null),
-  };
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
       <ScreenHeader title={title} subtitle={subtitle} onBack={onBack} backLabel={backLabel} right={headerRight} />
@@ -94,7 +84,6 @@ export function DetailScreen({
             style={styles.flex}
             contentContainerStyle={[
               styles.content,
-              layoutDial,
               // With an action bar, that bar handles bottom clearance; without
               // one, the scroller has to clear the floating nav itself.
               !actionBar && insideTabs && { paddingBottom: navClearance },

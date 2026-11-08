@@ -26,8 +26,8 @@ import { CategoryGlyph } from '../components/CategoryGlyph';
 import { Skeleton } from '../components/Skeleton';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
 import { useAuth } from '../hooks/useAuth';
-import { useBidCounts } from '../hooks/useBidCounts';
 import { useMyJobsHub } from '../hooks/useMyJobsHub';
+import { useOfferCounts } from '../hooks/useOfferCounts';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import { useWorkerSkills } from '../hooks/useWorkerSkills';
@@ -69,7 +69,6 @@ import {
   textLine,
   touchSlop,
 } from '../lib/theme';
-import { useDialNumber } from '../lib/designOverrides';
 import { Divider, SearchBar, Toggle, useScrollClearance } from '../ui/primitives';
 import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 
@@ -118,10 +117,10 @@ export function WorkerHomeScreen() {
   // `spacing`/`radius` from lib/theme — ui/tokens' bare `radius.lg` is 17, not
   // 16, and pointing a child at it would move the card the moment the operator
   // turned the parent.
-  const summaryCardRadius = useDialNumber('workerHome.summaryCard.radius') ?? radius.lg;
-  const summaryCardGap = useDialNumber('workerHome.summaryCard.gap') ?? 14;
-  const contentPaddingX = useDialNumber('workerHome.content.paddingX') ?? spacing.lg;
-  const contentGap = useDialNumber('workerHome.content.gap') ?? spacing.lg;
+  const summaryCardRadius = radius.lg;
+  const summaryCardGap = 14;
+  const contentPaddingX = spacing.lg;
+  const contentGap = spacing.lg;
   // RUN GROUND1 (C3): the nav pill is out of layout flow on this route, so this
   // scene is the whole screen and the atmosphere behind it reaches the bottom
   // edge instead of stopping at a band above the bar. The pill's footprint is
@@ -275,7 +274,7 @@ export function WorkerHomeScreen() {
   // FIX-RUN F12: the first batch of rows cascades in, once (hooks/useEntrance.ts useEntered).
   const jobsEntered = useEntered(previewJobs.length > 0);
 
-  const bidCounts = useBidCounts(useMemo(() => previewJobs.map((j) => j.id), [previewJobs]));
+  const bidCounts = useOfferCounts(useMemo(() => previewJobs.map((j) => j.id), [previewJobs]));
 
   // Same silent pattern as the locked browse screen: the permission state is
   // CHECKED on mount (never prompted for — getForegroundPermissionsAsync shows

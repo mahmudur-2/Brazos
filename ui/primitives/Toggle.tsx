@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet } from 'react-native';
 import { glow, metricStyles, radius, useThemeColors, withAlpha } from '../../lib/theme';
-import { useOverrideNumber } from '../../lib/designOverrides';
 import { USE_NATIVE_DRIVER } from '../../lib/motion';
 import { usePressFeedback } from '../../hooks/usePressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -77,9 +76,9 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
 
   // RUN S2 (C8) — the drawn geometry dials; TRAVEL derives from them so the
   // knob still lands exactly inside the rim at any size. Colours stay D5's.
-  const trackWidth = useOverrideNumber('toggle.trackWidth') ?? TRACK_WIDTH;
-  const trackHeight = useOverrideNumber('toggle.trackHeight') ?? TRACK_HEIGHT;
-  const knobSize = useOverrideNumber('toggle.knobSize') ?? KNOB;
+  const trackWidth = TRACK_WIDTH;
+  const trackHeight = TRACK_HEIGHT;
+  const knobSize = KNOB;
   const TRAVEL = trackWidth - knobSize - INSET * 2;
 
   // Fix run D6: the knob SPRINGS to its side (the press spring's 320 / 26, a

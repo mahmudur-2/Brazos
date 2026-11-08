@@ -94,7 +94,6 @@ import {
 } from '../lib/storage';
 import type { PostJobRouteParamList } from '../lib/navigation';
 import { goBackOrHome, navigateAcrossTabs, originLabel } from '../lib/navigationRef';
-import { useDialNumber } from '../lib/designOverrides';
 import {
   EYEBROW_TYPE,
   emeraldColorsFor,
@@ -281,12 +280,12 @@ export function PostJobScreen() {
   // `spacing.xl` (also 20) is the paragraph above: this file reads the theme
   // scale, and a parent off the Emerald one would sit right until it moved.
   // `reviewCardRadius` is the one that still inherits.
-  const contentPaddingX = useDialNumber('postJob.content.paddingX') ?? 20;
-  const contentGap = useDialNumber('postJob.content.gap') ?? 21;
-  const progressHeight = useDialNumber('postJob.progress.height') ?? 6;
-  const stepFieldsGap = useDialNumber('postJob.stepFields.gap') ?? 20;
-  const descriptionHeight = useDialNumber('postJob.description.height') ?? 120;
-  const reviewCardRadius = useDialNumber('postJob.reviewCard.radius') ?? radius.xl;
+  const contentPaddingX = 20;
+  const contentGap = 21;
+  const progressHeight = 6;
+  const stepFieldsGap = 20;
+  const descriptionHeight = 120;
+  const reviewCardRadius = radius.xl;
   // 2026-09-30: the tab bar floats over this screen. Steps 1-3 have no footer (the Lux remake,
   // ruling 13), so their scroller ends above the pill; the last step's bar (PostJobBar) lifts its
   // own buttons over it and the scroller ends on the bar, as before.

@@ -53,7 +53,6 @@ const setup = read('screens/SetupScreen.tsx');
 const flow = read('screens/OnboardingFlow.tsx');
 const routes = read('lib/navigation.ts');
 const status = read('hooks/useSetupStatus.ts');
-const perms = read('hooks/useSetupPermissions.ts');
 const storage = read('lib/setupStorage.ts');
 const row = read('components/SetupRow.tsx');
 const choice = read('components/SetupChoiceCard.tsx');
@@ -295,78 +294,25 @@ test('the write is idempotent and reports its own failure', () => {
 // Permissions
 // ---------------------------------------------------------------------------
 
-test('permissions are read on mount and only ever requested on tap', () => {
-  // iOS spends its one prompt per install; mounting a screen must not burn it.
-  assert.match(perms, /Location\.getForegroundPermissionsAsync\(\)/);
-  assert.match(perms, /Notifications\.getPermissionsAsync\(\)/);
+// D1 (lean): hooks/useSetupPermissions.ts had no caller and is deleted, with the fences
+// that pinned it. What stays is the half that is about Setup: it draws no permission row.
 
-  const mountEffect = perms.slice(perms.indexOf('useEffect(() => {'), perms.indexOf('const actOnLocation'));
-  assert.doesNotMatch(mountEffect, /requestForegroundPermissionsAsync|requestPermissionsAsync/);
-  assert.doesNotMatch(mountEffect, /openAppSettings/, 'mounting must not navigate away either');
-});
-
-test('a permission request cannot be started twice', () => {
-  // A ref, not state: the state update has not landed when a second tap
-  // arrives on the same frame.
-  assert.match(perms, /if \(inFlight\.current\.location\) return;/);
-  assert.match(perms, /if \(inFlight\.current\.notifications \|\| Platform\.OS === 'web'\) return;/);
-  assert.match(perms, /inFlight\.current\.location = false;/);
-  assert.match(perms, /inFlight\.current\.notifications = false;/);
-});
-
-test('the four permission states are distinguished, and blocked is one of them', () => {
-  // Denied can be asked again; blocked cannot, and a switch that silently
-  // does nothing is the worst outcome of the three.
-  assert.match(perms, /return canAskAgain \? 'denied' : 'blocked';/);
-  // n5 (2026-09-04): Setup renders no permission row any more, so the
-  // distinction is pinned on the hook that still draws it — the union names
-  // blocked and unavailable, and a throw becomes 'unavailable', not a crash.
-  assert.match(perms, /\| 'blocked'/);
-  assert.match(perms, /\| 'unavailable';/);
-  assert.match(perms, /setLocation\('unavailable'\)/);
-  assert.match(perms, /setNotifications\('unavailable'\)/);
+test('Setup draws no permission state copy', () => {
   assert.doesNotMatch(setup, /state === 'blocked'|Turn this on in device Settings|Not available on this device/);
 });
 
-test('a permission row is never a dead control', () => {
-  // The regression: once a permission was denied for good, the switch was
-  // disabled and the row did nothing — a control that cannot be operated and
-  // does not say where the real one is.
-  assert.match(perms, /if \(needsSettings\(location\)\) \{\s*\n\s*void openAppSettings\(\);/);
-  assert.match(perms, /if \(needsSettings\(notifications\)\) \{\s*\n\s*void openAppSettings\(\);/);
-  // Granted counts too: the app cannot revoke what it holds, so Settings is
-  // the only place that answer can change.
-  assert.match(perms, /return state === 'granted' \|\| state === 'blocked';/);
-  assert.match(perms, /Linking\.openSettings\(\)/);
-
+test('Setup draws no permission row', () => {
   // n5 (2026-09-04): the rows left Setup — permissions are asked at first
   // need — so the row half of this fence is that Setup draws none: no
-  // PermissionSetupRow, no hook, no hand-rolled switch. The hook keeps one
-  // action per row (`act`), which is what a row that returns would wire.
-  assert.match(perms, /act: actOnLocation,/);
-  assert.match(perms, /act: actOnNotifications,/);
+  // PermissionSetupRow, no hook, no hand-rolled switch.
   // Usage forms, not the name in prose: the header comment says where the
   // hook went, and that sentence must not be what fails this.
   assert.doesNotMatch(setup, /<PermissionSetupRow|useSetupPermissions\(|hooks\/useSetupPermissions'|<Switch\b/);
 });
 
-test('the row says which of the two things a tap will do', () => {
-  // n5 (2026-09-04): the permission rows left Setup, so the "which of the
-  // two" answer is pinned on the hook: `opensSettings` is true exactly when
-  // `act` leaves for Settings rather than prompting, for both permissions.
-  assert.match(perms, /opensSettings: boolean;/);
-  assert.match(perms, /opensSettings: needsSettings\(location\),/);
-  assert.match(perms, /opensSettings: needsSettings\(notifications\),/);
-  // And Setup carries neither the row copy nor an appended hint.
+test('Setup carries neither the permission row copy nor an appended hint', () => {
   assert.doesNotMatch(setup, /settingsHint|Opens your device settings|Asks for \$\{title/);
   assert.doesNotMatch(setup, /\$\{subtitle\} ·/, 'no appended hint');
-});
-
-test('an unsupported environment fails safely rather than crashing', () => {
-  assert.match(perms, /if \(Platform\.OS === 'web'\) \{[\s\S]*?setNotifications\('unavailable'\);/);
-  // Every read and request is wrapped; a throw becomes a state, not a crash.
-  assert.ok((perms.match(/catch \{/g) ?? []).length >= 4);
-  assert.match(perms, /if \(active && mounted\.current\)/);
 });
 
 test('permissions never block finishing setup', () => {
@@ -538,7 +484,6 @@ test('completion is announced, not only animated', () => {
 
 test('no animation writes state after the screen is gone', () => {
   assert.match(setup, /mounted\.current = false;/);
-  assert.match(perms, /mounted\.current = false;/);
   // App.tsx's requestAnimationFrame landing jump is gone with the mechanism it
   // served (see "the landing choice resolves a mode"); the equivalent guard is
   // now the resolution effect's own `active` flag.
@@ -555,7 +500,6 @@ const surface = [
   'components/SetupRow.tsx',
   'components/SetupChoiceCard.tsx',
   'hooks/useSetupStatus.ts',
-  'hooks/useSetupPermissions.ts',
   'lib/setupState.ts',
   'lib/setupStorage.ts',
   'lib/setupLanding.ts',

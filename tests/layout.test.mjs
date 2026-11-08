@@ -264,7 +264,6 @@ test('every tab-contained scroll surface clears the floating pill', async () => 
     'screens/LegalDocumentScreen.tsx',
     'screens/ProfileReviewsScreen.tsx',
     'screens/WorkerProfileScreen.tsx',
-    'screens/AppearanceScreen.tsx',
     'screens/AdminReportsScreen.tsx',
     'screens/CellJobsScreen.tsx',
     'screens/WorkerResultsScreen.tsx',

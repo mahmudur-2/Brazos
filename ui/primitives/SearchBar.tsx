@@ -23,8 +23,7 @@ import {
   type EmeraldPalette,
   type as typeScale,
 } from '../tokens';
-import { glow, themedStyles, touchSlop, useThemeColors } from '../../lib/theme';
-import { useOverrideNumber, useOverrideString } from '../../lib/designOverrides';
+import { themedStyles, touchSlop, useThemeColors } from '../../lib/theme';
 import { voiceSearch, type VoiceSession } from '../../lib/voiceSearch';
 import { askOpenSettings } from '../../lib/permissionPrompt';
 import { usePressFeedback } from '../../hooks/usePressFeedback';
@@ -141,65 +140,22 @@ export function SearchBar({
   // every degraded case leaves the mic unrendered rather than disabled.
   const [voiceReady, setVoiceReady] = useState(false);
   const [listening, setListening] = useState(false);
-  // RUN S2 (C8) — focus is tracked only so the focus-border/glow dials have
-  // a state to attach to; with both at their defaults nothing changes.
+  // Focus drives the typing glow (the FocusRing below).
   const [inputFocused, setInputFocused] = useState(false);
 
-  // The search-field dials, each defaulting to today's shipped value.
-  const heightDial = useOverrideNumber('search.height');
-  const radiusDial = useOverrideNumber('search.radius');
-  const padXDial = useOverrideNumber('search.paddingX');
-  const gapDial = useOverrideNumber('search.gap');
-  const fillDial = useOverrideString('search.fill');
-  const borderDial = useOverrideString('search.border');
-  const borderAlphaDial = useOverrideNumber('search.borderAlpha');
-  const focusBorderDial = useOverrideString('search.focusBorder');
-  const focusGlowDial = useOverrideNumber('search.focusGlow');
-  const placeholderColorDial = useOverrideString('search.placeholderColor');
-  const placeholderAlphaDial = useOverrideNumber('search.placeholderAlpha');
-  const iconSizeDial = useOverrideNumber('search.iconSize');
-  const iconOffsetX = useOverrideNumber('search.iconOffsetX') ?? 0;
-  const iconOffsetY = useOverrideNumber('search.iconOffsetY') ?? 0;
-  const fieldDial = {
-    ...(heightDial != null ? { minHeight: heightDial } : null),
-    ...(radiusDial != null ? { borderRadius: radiusDial } : null),
-    ...(padXDial != null ? { paddingHorizontal: padXDial } : null),
-    ...(gapDial != null ? { gap: gapDial } : null),
-    ...(fillDial != null ? { backgroundColor: fillDial } : null),
-    ...(borderDial != null || borderAlphaDial != null
-      ? { borderColor: withAlpha(borderDial ?? colors.line, borderAlphaDial ?? 1) }
-      : null),
-  };
-  const focusDial = inputFocused
-    ? {
-        ...(focusBorderDial != null ? { borderColor: focusBorderDial } : null),
-        ...(focusGlowDial != null && focusGlowDial > 0
-          ? glow.halo(withAlpha(colors.emerald, focusGlowDial))
-          : null),
-      }
-    : null;
   const ink = emphasis === 'ink';
   // The ink emphasis (the map's pill) draws its glyphs one point larger
   // since the pill grew to 62 (2026-09-20, sitting 2, (6)): 25 and 23.
   // 2026-09-28 (LUX-LIST-64 #15): every search field but the map's pill is the
   // Lux Home field — 22pt mint glyphs, 16pt text, 54 tall, 18 in, 12 between.
-  const iconGlyphSize = iconSizeDial ?? (ink ? 25 : 22);
+  const iconGlyphSize = ink ? 25 : 22;
   // 2026-09-27 (the operator's review, the Lux `.field svg{color:var(--acc)}`):
   // the magnifier is the mint in both themes; only the map's ink pill differs.
   const leadingInk = ink ? withAlpha(colors.ink, 0.92) : colors.emerald;
   // The Lux well under the field in dark (ui/tokens.ts `wells.field`); the
   // map's ink pill and light keep their own fill.
   const well = isDark && !ink ? styles.fieldDark : null;
-  const iconDialStyle =
-    iconOffsetX || iconOffsetY
-      ? { transform: [{ translateX: iconOffsetX }, { translateY: iconOffsetY }] }
-      : undefined;
-  const placeholderInk =
-    placeholderColorDial != null || placeholderAlphaDial != null
-      ? withAlpha(placeholderColorDial ?? colors.muted, placeholderAlphaDial ?? 1)
-      : ink
-        ? withAlpha(colors.ink, 0.94)
-        : colors.muted;
+  const placeholderInk = ink ? withAlpha(colors.ink, 0.94) : colors.muted;
   // The live session's provisional phrase — never query state. It paints the
   // field while listening and is cleared the moment the session ends, so the
   // field reverts to the parent-controlled value with nothing committed.
@@ -279,7 +235,7 @@ export function SearchBar({
         onPress={onPress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
-        style={({ pressed }) => [styles.field, !ink && styles.fieldLux, well, fieldDial, pressed && styles.pressed, style]}
+        style={({ pressed }) => [styles.field, !ink && styles.fieldLux, well, pressed && styles.pressed, style]}
         accessibilityRole="search"
         accessibilityLabel={accessibilityLabel ?? placeholder}
       >
@@ -291,7 +247,6 @@ export function SearchBar({
             name="search"
             size={iconGlyphSize}
             color={leadingInk}
-            style={iconDialStyle}
           />
         )}
         {/* Plain Text, not a disabled TextInput: a disabled input stays
@@ -309,13 +264,12 @@ export function SearchBar({
   }
 
   return (
-    <View style={[styles.field, !ink && styles.fieldLux, well, fieldDial, focusDial, style]}>
+    <View style={[styles.field, !ink && styles.fieldLux, well, style]}>
       {disableLeadingIcon ? null : (
         <Ionicons
           name="search"
           size={iconGlyphSize}
           color={leadingInk}
-          style={iconDialStyle}
         />
       )}
       <TextInput

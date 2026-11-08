@@ -56,22 +56,6 @@ import { initSentry, wrapApp } from './lib/observability/sentry';
  */
 initSentry();
 
-const SHOW_HOME_DESIGN_STUDIO =
-  __DEV__ &&
-  Platform.OS === 'web' &&
-  typeof window !== 'undefined' &&
-  new URLSearchParams(window.location.search).get('studio') === 'home';
-
-/**
- * LOADED LAZILY (F2): the Home studio is a development-web tool, so it is
- * required only when SHOW_HOME_DESIGN_STUDIO holds, never evaluated at boot.
- */
-const PassThrough = ({ children }: PropsWithChildren) => <>{children}</>;
-const HomeDesignStudio = SHOW_HOME_DESIGN_STUDIO
-  ? (require('./dev-tools/HomeDesignStudio') as typeof import('./dev-tools/HomeDesignStudio'))
-      .HomeDesignStudio
-  : PassThrough;
-
 /**
  * The authenticated app.
  *
@@ -222,14 +206,6 @@ function RootNavigator() {
   // current one. That is a blocking re-prompt, not onboarding.
   if (legal.state === 'needs_acceptance') {
     return <LegalGateScreen onAccepted={legal.markAccepted} />;
-  }
-
-  if (SHOW_HOME_DESIGN_STUDIO) {
-    return (
-      <HomeDesignStudio>
-        <MainTabs />
-      </HomeDesignStudio>
-    );
   }
 
   return <MainTabs />;

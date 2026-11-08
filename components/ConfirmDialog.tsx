@@ -10,9 +10,7 @@ import {
   withAlpha,
   type ColorPalette,
   scrimInDark,
-  SCRIM_DARK_ALPHA,
 } from '../lib/theme';
-import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 import { PopModal } from './PopModal';
 import { Surface } from '../ui/primitives/Surface';
 
@@ -59,22 +57,6 @@ export function ConfirmDialog({
   useModalPresence(visible);
   const palette = paletteProp ?? colors;
   const styles = stylesFor(colors);
-  // RUN S2 (C7) — the shared sheet-family backdrop dials. The card RADIUS
-  // stays the pinned radius.xl: tests/postJobPublish.test.mjs D15 holds this
-  // card and the budget editor to one xl radius, and that fence is not this
-  // run's to move — the dialog-radius dial drives ActionSheet instead.
-  const backdropColorDial = useOverrideString('sheet.backdropColor');
-  const backdropAlphaDial = useOverrideNumber('sheet.backdropAlpha');
-  const sheetShadowDial = useOverrideNumber('sheet.shadowOpacity');
-  const backdropDial =
-    backdropColorDial != null || backdropAlphaDial != null
-      ? {
-          backgroundColor: withAlpha(
-            backdropColorDial ?? (isDark ? colors.background : colors.text),
-            backdropAlphaDial ?? (isDark ? SCRIM_DARK_ALPHA : 0.35),
-          ),
-        }
-      : null;
   return (
     // 2026-09-30 (the smoothness pass): PopModal — the dim and its frost at once, the card moving
     // in at full opacity, never a fade of the blur (components/PopModal.shared.tsx).
@@ -88,14 +70,14 @@ export function ConfirmDialog({
       onRequestClose={() => {
         if (!loading) onCancel();
       }}
-      backdropStyle={[styles.backdrop, isDark && styles.backdropDark, backdropDial]}
+      backdropStyle={[styles.backdrop, isDark && styles.backdropDark]}
     >
         <View style={styles.centerWrap}>
           {/* G1 (C5): the card wears the sheet material — geometry (xl
               radius, hairline weight) is unchanged via the props, and the
               backdrop above is byte-identical. A caller-supplied palette
               still colours the copy and the buttons. */}
-          <Surface material="menu" corners="all" radius={radius.xl} style={[styles.sheet, sheetShadowDial != null && { shadowOpacity: sheetShadowDial }]}>
+          <Surface material="menu" corners="all" radius={radius.xl} style={styles.sheet}>
             <Text style={[styles.title, { color: palette.text }]}>{title}</Text>
             {message ? (
               <Text style={[styles.message, { color: palette.textMuted }]}>{message}</Text>

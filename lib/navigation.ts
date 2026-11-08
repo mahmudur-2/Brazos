@@ -451,8 +451,6 @@ export type ProfileStackParamList = {
   AccountSafety: undefined;
   AdminReports: undefined;
   NotificationSettings: undefined;
-  /** Profile → Appearance (4D-4): the Light/Dark/System theme setting. */
-  Appearance: undefined;
   /** Screens 64+66 (Phase 9): the worker's services & pricing manager with
    *  the availability toggle and the honest verification state. */
   ServicesPricing: undefined;
@@ -501,14 +499,6 @@ export type ProfileStackParamList = {
   /** Phase 67 — in-app account deletion (App Store Guideline 5.1.1(v)).
    *  Reached only from the Profile tab's destructive row, below Log out. */
   DeleteAccount: undefined;
-  /**
-   * The dev-only design-system catalog (BRAZOS_MASTER_PLAN.md §I). The route is
-   * only REGISTERED under `__DEV__` in App.tsx and its entry point in
-   * ProfileScreen is gated the same way, so a production build has no path to
-   * it at all. It stays in the param list because the type has to exist for
-   * the dev-only navigate() call to typecheck; declaring a type ships nothing.
-   */
-  ComponentCatalog: undefined;
 };
 
 export type ProfileStackNavigation = NativeStackNavigationProp<ProfileStackParamList>;

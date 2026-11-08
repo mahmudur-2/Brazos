@@ -8,7 +8,6 @@
 
 export { ModeProvider, useMode, useModeSwitch } from './ModeProvider';
 export type { ModeContextValue, SwitchModeOptions } from './ModeProvider';
-export { ModeGuard, useModeGuard } from './ModeGuard';
 export { ModePreview, useModePerspective } from './perspective';
 export {
   APP_MODES,

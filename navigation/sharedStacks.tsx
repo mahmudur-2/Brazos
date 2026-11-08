@@ -25,7 +25,6 @@ import { MapScreen } from '../screens/MapScreen';
 import { HiddenChatsScreen } from '../screens/HiddenChatsScreen';
 import { MessagesInboxScreen } from '../screens/MessagesInboxScreen';
 import { MyJobsHubScreen } from '../screens/MyJobsHubScreen';
-import { AppearanceScreen } from '../screens/AppearanceScreen';
 import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { PostJobScreen } from '../screens/PostJobScreen';
@@ -42,16 +41,6 @@ import { TrackWorkerScreen } from '../screens/TrackWorkerScreen';
 import { WorkChecklistScreen } from '../screens/WorkChecklistScreen';
 import { WorkerJobScreen } from '../screens/WorkerJobScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
-
-/**
- * LOADED LAZILY (F2): the catalog is a __DEV__-only route, so its module is
- * required on first render, never evaluated at boot.
- */
-function ComponentCatalog() {
-  const { ComponentCatalog: Catalog } =
-    require('../dev-tools/ComponentCatalog') as typeof import('../dev-tools/ComponentCatalog');
-  return <Catalog />;
-}
 
 /**
  * The four tabs that are the SAME in both modes (BRAZOS_MASTER_PLAN.md §F,
@@ -162,7 +151,6 @@ export function ProfileStackNavigator() {
         name="NotificationSettings"
         component={NotificationSettingsScreen}
       />
-      <ProfileStack.Screen name="Appearance" component={AppearanceScreen} />
       <ProfileStack.Screen name="LegalDocument" component={LegalDocumentScreen} />
       <ProfileStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
       {/* Phase 9 — worker self-service + the customer people surface. */}
@@ -181,13 +169,6 @@ export function ProfileStackNavigator() {
           Profile is the shared account surface: deletion has to be reachable
           in BOTH modes, and this stack is mounted by both trees. */}
       <ProfileStack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
-      {/* The design-system catalog (BRAZOS_MASTER_PLAN.md §I). Registered only
-          under __DEV__, so a production bundle has no route to it at all —
-          hidden by absence rather than by a hidden entry point. Its row in
-          ProfileScreen is gated on the same flag. */}
-      {__DEV__ ? (
-        <ProfileStack.Screen name="ComponentCatalog" component={ComponentCatalog} />
-      ) : null}
     </ProfileStack.Navigator>
   );
 }

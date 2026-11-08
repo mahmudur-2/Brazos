@@ -424,79 +424,18 @@ export const dark = {
 
 export { withAlpha } from './colorAlpha';
 
-// ---------------------------------------------------------------------------
-// The live-metric bridge (RUN T1, C1)
-// ---------------------------------------------------------------------------
-
 /**
- * RUN T1 — WHY THE METRIC SOURCE IS INSTALLED RATHER THAN IMPORTED.
- *
- * `spacing`, `radius`, `controls` and three of `layout`'s keys resolve their
- * value through this slot on every read (C2), which is how a studio dial
- * reaches all 102 `themedStyles` consumers without one of them being edited.
- * The obvious spelling — importing `liveMetric` from lib/designOverrides.ts —
- * is a module CYCLE: that file already imports `materials` from here at module
- * scope, so whichever of the two the bundler evaluates first would read the
- * other's `const` inside its temporal dead zone. This file therefore imports
- * nothing new; lib/designOverrides.ts installs ITS `liveMetric` into the slot
- * at load, and until it does every getter answers with its shipped default —
- * which is exactly what "no override set" has to mean.
- */
-export type MetricSource = {
-  /** One metric's override, keyed `<group>.<key>`; undefined at its default. */
-  read: (key: string) => number | undefined;
-  /** Monotonic, bumped on every metric write — what the style caches key on. */
-  generation: () => number;
-};
-
-let metricSource: MetricSource | null = null;
-
-/** Install the live override store. lib/designOverrides.ts is the one caller;
- *  `null` uninstalls it, which is what an executed fence does between cases. */
-export function setMetricSource(source: MetricSource | null): void {
-  metricSource = source;
-}
-
-/** What a live token getter resolves to, or undefined when untouched. This is
- *  lib/designOverrides.ts's `liveMetric` once that module has loaded. */
-export function liveMetric(key: string): number | undefined {
-  return metricSource ? metricSource.read(key) : undefined;
-}
-
-/** 0 until the first metric is written — the identity generation. */
-export function metricGeneration(): number {
-  return metricSource ? metricSource.generation() : 0;
-}
-
-/**
- * A token group whose named metrics are LIVE: every property is a getter that
- * resolves through the slot above on each read and falls back to the shipped
- * literal beside it. That is the whole reach mechanism — a consumer keeps
- * writing `spacing.lg` and `radius.pill` and is never edited, because the
- * READ moved rather than the call site.
- *
- * `fixed` members are plain values, not getters, and carry no dial: a group
- * member that is a SHAPE (`radius.pill`) or a FLOOR (`controls.minTouchTarget`)
- * is not a size someone should be able to turn, and `layout`'s remaining keys
- * are derived nav geometry rather than design quantities. Their literal types
- * survive, which is why `radius.pill` is still `999` and not `number`.
+ * A token group: the shipped size table plus its `fixed` members. The sizes
+ * read as `number` (not their literal) so a caller can do arithmetic on them;
+ * `fixed` members are a SHAPE (`radius.pill`) or a FLOOR
+ * (`controls.minTouchTarget`), and their literal types survive, which is why
+ * `radius.pill` is still `999` and not `number`.
  */
 export function metricGroup<L extends Record<string, number>, F extends Record<string, number>>(
-  group: string,
   live: L,
   fixed: F,
 ): Readonly<Record<keyof L, number>> & Readonly<F> {
-  const out: Record<string, number> = {};
-  for (const key of Object.keys(live)) {
-    Object.defineProperty(out, key, {
-      enumerable: true,
-      get: () => liveMetric(`${group}.${key}`) ?? live[key],
-    });
-  }
-  for (const key of Object.keys(fixed)) {
-    Object.defineProperty(out, key, { enumerable: true, value: fixed[key] });
-  }
-  return out as Readonly<Record<keyof L, number>> & Readonly<F>;
+  return { ...live, ...fixed };
 }
 
 // ---------------------------------------------------------------------------
@@ -530,7 +469,7 @@ export const THEME_SPACING_DEFAULTS = {
 export const SPACING_DEFAULTS = THEME_SPACING_DEFAULTS;
 
 /** THE one live spacing group. lib/theme.ts re-exports this binding. */
-export const spacing = metricGroup('theme.spacing', THEME_SPACING_DEFAULTS, {});
+export const spacing = metricGroup(THEME_SPACING_DEFAULTS, {});
 
 export const THEME_RADIUS_DEFAULTS = {
   sm: 8,
@@ -579,7 +518,7 @@ export const LAYOUT_METRIC_DEFAULTS = {
   cardGap: 10,
 } as const;
 
-export const layout = metricGroup('layout', LAYOUT_METRIC_DEFAULTS, {
+export const layout = metricGroup(LAYOUT_METRIC_DEFAULTS, {
   /** The bar's CONTENT height — the device's bottom inset rides inside the
    *  bar as padding on top of this (PJ1 C9). ui/primitives/BottomNav.tsx's
    *  TAB_BAR_CONTENT_HEIGHT is this value. The name keeps its history; the
@@ -661,7 +600,7 @@ export const DIVIDER_DEFAULTS = {
 } as const;
 
 /** THE one live corner group (fix run D8). lib/theme.ts re-exports this binding, as `radius` and as `emeraldRadius`. */
-export const radius = metricGroup('theme.radius', THEME_RADIUS_DEFAULTS, {
+export const radius = metricGroup(THEME_RADIUS_DEFAULTS, {
   /** Not a size and therefore not a dial: 999 is how a rounded rectangle is
    *  spelled as a CAPSULE in React Native. Turning it down would not make a
    *  smaller pill, it would make a rounded rectangle — a different shape. */
@@ -1578,7 +1517,7 @@ export const CONTROL_DEFAULTS = {
   iconButton: 44,
 } as const;
 
-export const controls = metricGroup('controls', CONTROL_DEFAULTS, {
+export const controls = metricGroup(CONTROL_DEFAULTS, {
   /** The minimum any tappable thing may be. CLAUDE.md, non-negotiable — so it
    *  is a plain value with no dial, and the four heights above are floored at
    *  it by their own schema ranges rather than by hoping nobody turns this. */

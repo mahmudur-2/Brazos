@@ -186,38 +186,19 @@ test('[static] no file under screens/ imports ui/tokens.ts directly', async () =
 // The Appearance setting — wired end to end (commit 2)
 // ---------------------------------------------------------------------------
 
-test('[static] Profile → Appearance is typed, registered, and applies through setPreference', async () => {
-  const [routes, stacks, hub, accountSafety, screen] = await Promise.all([
-    read('lib/navigation.ts'),
-    read('navigation/sharedStacks.tsx'),
+test('[static] Profile → Appearance applies through setPreference, in the hub row', async () => {
+  const [hub, accountSafety] = await Promise.all([
     read('screens/ProfileScreen.tsx'),
     read('screens/AccountSafetyScreen.tsx'),
-    read('screens/AppearanceScreen.tsx'),
   ]);
 
-  // Typed on the Profile stack, registered once. 2026-09-29 (LUX-LIST-2 #7):
-  // the choice itself is made IN the hub's Appearance row — Light / Dark /
-  // Auto through the same setPreference — and the screen, which also holds
-  // the design studio's switch, is reached from the hub where the studio's
-  // gate allows it. Account & safety no longer carries the row.
-  assert.match(routes, /Appearance: undefined;/);
-  assert.match(stacks, /<ProfileStack\.Screen name="Appearance" component=\{AppearanceScreen\} \/>/);
+  // 2026-09-29 (LUX-LIST-2 #7): the choice itself is made IN the hub's
+  // Appearance row — Light / Dark / Auto through the same setPreference.
+  // Account & safety no longer carries the row. D1 (lean): the separate
+  // Appearance screen, which held the design studio's switch, is deleted with
+  // its route.
   assert.match(hub, /onPress=\{\(\) => setPreference\(option\.value\)\}/);
-  assert.match(hub, /navigation\.navigate\('Appearance'\)/);
   assert.doesNotMatch(accountSafety, /navigation\.navigate\('Appearance'\)/);
-
-  // The screen offers exactly the three preferences by their labels and
-  // indicates the current one; a tap goes through the provider's one
-  // mutation path (setPreference persists + repaints + syncs native).
-  assert.match(screen, /THEME_PREFERENCES\.map/);
-  for (const label of ["system: 'System'", "light: 'Light'", "dark: 'Dark'"]) {
-    assert.ok(screen.includes(label), `option label missing: ${label}`);
-  }
-  assert.match(screen, /const selected = option === preference;/);
-  assert.match(screen, /setPreference\(option\)/);
-  // Styled from the resolved palette, not the static light snapshot.
-  assert.match(screen, /useThemeColors/);
-  assert.match(screen, /themedStyles/);
 });
 
 // ---------------------------------------------------------------------------

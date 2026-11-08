@@ -12,7 +12,6 @@ import {
   withAlpha,
   type ColorPalette,
 } from '../lib/theme';
-import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 import { backLandsOnHome } from '../lib/navigationRef';
 
 type ScreenHeaderProps = {
@@ -117,30 +116,6 @@ export function ScreenHeader({
     setEdgeWidth((prev) => (prev[side] === width ? prev : { ...prev, [side]: width }));
   };
 
-  // RUN S2 (C9) — the chrome dials. The header paints no surface of its own
-  // today (the screen's ground shows through), so the border dial ADDS a
-  // hairline when turned; every other default is the shipped value.
-  const padXDial = useOverrideNumber('header.padX');
-  const padYDial = useOverrideNumber('header.padY');
-  const minHeightDial = useOverrideNumber('header.minHeight');
-  const alignDial = useOverrideString('header.titleAlign');
-  const backSizeDial = useOverrideNumber('header.backSize');
-  const backOffsetDial = useOverrideNumber('header.backOffsetX');
-  const borderWidthDial = useOverrideNumber('header.borderBottomWidth');
-  const borderColorDial = useOverrideString('header.borderColor');
-  const borderAlphaDial = useOverrideNumber('header.borderAlpha');
-  const containerDial = {
-    ...(padXDial != null ? { paddingHorizontal: padXDial } : null),
-    ...(padYDial != null ? { paddingVertical: padYDial } : null),
-    ...(minHeightDial != null && minHeightDial > 0 ? { minHeight: minHeightDial } : null),
-    ...(borderWidthDial != null && borderWidthDial > 0
-      ? {
-          borderBottomWidth: borderWidthDial,
-          borderBottomColor: withAlpha(borderColorDial ?? palette.border, borderAlphaDial ?? 1),
-        }
-      : null),
-  };
-
   // 2026-09-28 (LUX-LIST-64 #22) — THE ROUND HEADER BUTTON: one disc for Back
   // and for a flow's forward step, the chevron optically centred in it. Dark
   // wears the glass card's ink inside the card rim (ui/tokens.ts `discs`);
@@ -201,14 +176,14 @@ export function ScreenHeader({
     <PressScale
       onPress={onBack}
       hitSlop={10}
-      style={[styles.link, backOffsetDial != null && { marginLeft: backOffsetDial }]}
+      style={styles.link}
       accessibilityRole="button"
       accessibilityLabel={backLabel ? `Back to ${backLabel}` : 'Back'}
     >
       <View style={[styles.disc, discStyle]}>
         <Ionicons
           name="chevron-back"
-          size={backSizeDial ?? 20}
+          size={20}
           color={backColor}
           style={styles.chevronBack}
         />
@@ -253,7 +228,7 @@ export function ScreenHeader({
   // A conversation's identity row: the face and the name beside Back.
   if (leading) {
     return (
-      <View style={[styles.container, styles.containerRow, containerDial]}>
+      <View style={[styles.container, styles.containerRow]}>
         {backControl}
         {leading}
         {onPressTitle ? (
@@ -269,9 +244,9 @@ export function ScreenHeader({
   }
 
   // A tab root: one big title on the left; Back (when pushed) on its own row above.
-  if (largeTitle && alignDial !== 'center') {
+  if (largeTitle) {
     return (
-      <View style={[styles.container, styles.containerLarge, containerDial]}>
+      <View style={[styles.container, styles.containerLarge]}>
         {backControl ? <View style={styles.largeBackRow}>{backControl}</View> : null}
         <View style={styles.containerRow}>
           <View style={styles.titles}>{titles}</View>
@@ -287,7 +262,6 @@ export function ScreenHeader({
     edgeWidth.left || edgeWidth.right ? Math.max(edgeWidth.left, edgeWidth.right) + spacing.sm : null;
   const leftInset = measured ?? centeredTitleInset();
   const rightInset = measured ?? centeredTitleInset();
-  const centred = alignDial === 'left' ? false : true;
   const titleBlock = onPressTitle ? (
     <Pressable onPress={onPressTitle} style={styles.titlePress}>
       {titles}
@@ -296,15 +270,13 @@ export function ScreenHeader({
     titles
   );
   return (
-    <View style={[styles.container, styles.containerRow, styles.containerCentered, containerDial]}>
+    <View style={[styles.container, styles.containerRow, styles.containerCentered]}>
       {/* First, so both edge slots paint above it — a long title truncates
           into its inset instead of covering a link. */}
       <View
         style={[
           styles.centerTitles,
-          centred
-            ? { left: spacing.lg + leftInset, right: spacing.lg + rightInset, alignItems: 'center' }
-            : { left: spacing.lg + edgeWidth.left + spacing.sm, right: spacing.lg + rightInset, alignItems: 'flex-start' },
+          { left: spacing.lg + leftInset, right: spacing.lg + rightInset, alignItems: 'center' },
         ]}
         pointerEvents={onPressTitle ? 'box-none' : 'none'}
       >

@@ -30,14 +30,12 @@ const {
 } = await import(toDataUrl(stripTypeScriptTypes(read('modes/types.ts'), { mode: 'strip' })));
 
 const provider = read('modes/ModeProvider.tsx');
-const guard = read('modes/ModeGuard.tsx');
 const shell = read('navigation/ModeShell.tsx');
 const customerRoot = read('navigation/CustomerRoot.tsx');
 const workerRoot = read('navigation/WorkerRoot.tsx');
 const routes = read('lib/navigation.ts');
 const app = read('App.tsx');
 const home = read('screens/HomeScreen.tsx');
-const jobCard = read('ui/primitives/JobCard.tsx');
 const bottomNav = read('ui/primitives/BottomNav.tsx');
 const migration = read('supabase/archive/phases/phase42_active_mode.sql');
 
@@ -573,46 +571,9 @@ test('there is exactly one bottom nav implementation', () => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// The dev guard
-// ---------------------------------------------------------------------------
-
-test('the mode guard logs and never blanks or redirects', () => {
-  assert.match(guard, /if \(!__DEV__\) return;/);
-  assert.match(guard, /console\.error\(/);
-  // Rendering null on a mismatch would turn a wiring mistake into an invisible
-  // page, and a redirect could loop. It does neither.
-  assert.doesNotMatch(guard, /navigate\(|return null;/);
-  // Nothing is asserted while the mode is still resolving.
-  assert.match(guard, /if \(!ready\) return;/);
-});
-
-// ---------------------------------------------------------------------------
-// JobCard's perspective is not a prop
-// ---------------------------------------------------------------------------
-
-test('JobCard reads its perspective from ModeContext and offers no override', () => {
-  assert.match(jobCard, /const perspective = useModePerspective\(\)/);
-  assert.doesNotMatch(
-    jobCard,
-    /^\s*(mode|perspective|isWorker|isCustomer)\??:/m,
-    'JobCard must not accept its perspective as a prop'
-  );
-  // Both labels exist, and each is bound to the perspective, not to a caller.
-  // A7 (2026-10-03): the worker's label is BUDGET — the figure is the customer's stated budget.
-  assert.match(jobCard, /isWorker \? 'BUDGET' : 'EST\. PRICE'/);
-  // Worker-only affordances are gated on the perspective, not on the prop
-  // being supplied.
-  assert.match(jobCard, /const showBreakTheIce = isWorker &&/);
-  assert.match(jobCard, /\{isWorker && onBid && !isOwn \?/);
-  assert.match(jobCard, /isWorker && distanceMiles != null/);
-});
-
-test('the catalog is the only caller allowed to preview the other perspective', () => {
+test('the other-perspective preview is dev-only', () => {
   const preview = read('modes/perspective.tsx');
   assert.match(preview, /if \(!__DEV__\) return <>\{children\}<\/>;/);
-  assert.match(read('dev-tools/ComponentCatalog.tsx'), /<ModePreview mode="worker">/);
-  assert.match(read('dev-tools/ComponentCatalog.tsx'), /<ModePreview mode="customer">/);
 });
 
 // ---------------------------------------------------------------------------

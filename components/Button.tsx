@@ -8,7 +8,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { fonts, metricStyles, radius, shadows, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
-import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 import { PressScale } from './PressScale';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -85,27 +84,6 @@ export function Button({
   const isDestructive = variant === 'destructive';
   const sizeStyle = SIZES[size];
 
-  // RUN S2 (C8) — each variant's own dials, plus the shared press/disabled
-  // set. Every default below is the expression this button has always used;
-  // a dial replaces exactly its own value and nothing else.
-  const heightDial = useOverrideNumber(`button.${variant}.height`);
-  const padXDial = useOverrideNumber(`button.${variant}.padX`);
-  const radiusDial = useOverrideNumber(`button.${variant}.radius`);
-  const fillDial = useOverrideString(`button.${variant}.fill`);
-  const fillAlphaDial = useOverrideNumber(`button.${variant}.fillAlpha`);
-  const borderDial = useOverrideString(`button.${variant}.border`);
-  const borderAlphaDial = useOverrideNumber(`button.${variant}.borderAlpha`);
-  const textDial = useOverrideString(`button.${variant}.text`);
-  const iconGapDial = useOverrideNumber('button.iconGap');
-  const pressedOpacityDial = useOverrideNumber('button.pressedOpacity');
-  const pressedScaleDial = useOverrideNumber('button.pressedScale');
-  const disabledOpacityDial = useOverrideNumber('button.disabledOpacity');
-  // C10 — a hero-only drop shadow, OFF (opacity 0) until dialled.
-  const heroShadowOpacity = useOverrideNumber('button.primary.shadowOpacity');
-  const heroShadowRadius = useOverrideNumber('button.primary.shadowRadius');
-  const heroShadowY = useOverrideNumber('button.primary.shadowOffsetY');
-  const heroShadowColor = useOverrideString('button.primary.shadowColor');
-
   // dangerBg is a pale tint of danger in the light palette and a dark one in
   // the dark palette, so `danger` text stays legible on it either way — the
   // same pairing the status badges already rely on.
@@ -159,42 +137,10 @@ export function Button({
       ? palette.emerald
       : palette.primary
     : palette.onPrimary;
-  const finalTextColor = !isDisabled && textDial != null ? textDial : textColor;
-
-  // The dial overlay — applied AFTER fillStyle so a set dial wins, and empty
-  // (so byte-inert) while nothing is set. Disabled keeps decision 3's flat
-  // treatment: only the opacity dial may dim it.
-  const baseFillColor =
-    'backgroundColor' in fillStyle && typeof fillStyle.backgroundColor === 'string'
-      ? fillStyle.backgroundColor
-      : undefined;
-  const dialStyle = isDisabled
-    ? disabledOpacityDial != null
-      ? { opacity: disabledOpacityDial }
-      : null
-    : {
-        ...(radiusDial != null ? { borderRadius: radiusDial } : null),
-        ...(fillDial != null || (fillAlphaDial != null && baseFillColor && baseFillColor !== 'transparent')
-          ? {
-              backgroundColor: withAlpha(
-                fillDial ?? (baseFillColor as string),
-                fillAlphaDial ?? 1,
-              ),
-            }
-          : null),
-        ...((borderDial != null || borderAlphaDial != null) && (isSecondary || isDestructive)
-          ? {
-              borderColor: withAlpha(
-                borderDial ??
-                  (isDestructive ? palette.danger : isDark ? palette.emerald : palette.border),
-                borderAlphaDial ?? (isSecondary && isDark ? 0.35 : 1),
-              ),
-            }
-          : null),
-      };
+  const finalTextColor = textColor;
 
   // FIX-RUN F12: the shared press — it sinks on a spring (the 120 Hz path where the binary has
-  // worklets) and the pressed opacity dial still dims it.
+  // worklets).
   return (
     <PressScale
       onPress={onPress}
@@ -205,33 +151,14 @@ export function Button({
           // 2026-09-26 (the refresh, audit M-36): a floor, not a ceiling, so
           // the label grows with Dynamic Type instead of clipping. A one-line
           // label still sits at exactly this height.
-          minHeight: heightDial ?? sizeStyle.height,
-          paddingHorizontal: padXDial ?? sizeStyle.paddingHorizontal,
+          minHeight: sizeStyle.height,
+          paddingHorizontal: sizeStyle.paddingHorizontal,
         },
         fillStyle,
-        dialStyle,
-        variant === 'primary' && !isDisabled && heroShadowOpacity != null && heroShadowOpacity > 0
-          ? {
-              shadowColor: heroShadowColor ?? palette.black,
-              shadowOpacity: heroShadowOpacity,
-              shadowRadius: heroShadowRadius ?? 12,
-              shadowOffset: { width: 0, height: heroShadowY ?? 4 },
-              elevation: Math.round((heroShadowRadius ?? 12) / 2),
-            }
-          : // 2026-09-27 (the operator's review): the Lux `.cta` glow under
-            // every primary button in dark (ui/tokens.ts `shadows.ctaDark`),
-            // unless the studio's hero-shadow dials are set, which win as before.
-            variant === 'primary' && !isDisabled && isDark && heroShadowOpacity == null
-            ? shadows.ctaDark
-            : null,
-        state.pressed &&
-          !isDisabled &&
-          (pressedOpacityDial != null || pressedScaleDial != null
-            ? {
-                opacity: pressedOpacityDial ?? 0.85,
-                transform: [{ scale: pressedScaleDial ?? 1 }],
-              }
-            : styles.pressed),
+        // 2026-09-27 (the operator's review): the Lux `.cta` glow under
+        // every primary button in dark (ui/tokens.ts `shadows.ctaDark`).
+        variant === 'primary' && !isDisabled && isDark ? shadows.ctaDark : null,
+        state.pressed && !isDisabled && styles.pressed,
         typeof style === 'function' ? style(state) : style,
       ]}
       // E2E5: on iOS this Pressable is one element whose folded label is the
@@ -244,7 +171,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={finalTextColor} />
       ) : icon ? (
-        <View style={[styles.row, iconGapDial != null && { gap: iconGapDial }]}>
+        <View style={styles.row}>
           {/* Sized from the title rather than a fixed number so it stays
               matched to the text at every ButtonSize. The row centres on one
               axis, so the glyph and the label share a baseline whichever side

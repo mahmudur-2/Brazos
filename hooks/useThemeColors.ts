@@ -1,10 +1,5 @@
 import { createContext, useContext, useMemo } from 'react';
 import { useTheme, type ThemeColors } from '../lib/ThemeContext';
-import {
-  applyPaletteOverrides,
-  useMetricsGeneration,
-  usePaletteOverrides,
-} from '../lib/designOverrides';
 import { mapEmerald, mapPalette } from '../lib/theme';
 
 /**
@@ -32,35 +27,18 @@ export const PalettePinContext = createContext<PalettePin | null>(null);
  * `palette` and `isDark` are what components style from; `preference` and
  * `setPreference` exist for the Appearance setting screen. lib/theme.ts
  * re-exports this hook so screens can take it from their standard import.
- *
- * RUN G1 (C2) — THIS IS THE TOKEN READ POINT, so the live design overrides
- * merge here: the studio's `gold` and `cardFill` dials fold into BOTH
- * resolved palettes before any consumer sees them. With no override set the
- * merge is an identity — the provider's own object comes back, so a fresh
- * app is byte-identical in behaviour and every palette-keyed style cache
- * works exactly as before.
  */
 export function useThemeColors(): ThemeColors {
   const theme = useTheme();
-  // RUN S2 (C1): the PALETTE SLICE, not the whole override set — a blur or
-  // menu dial keeps this slice's identity, so it repaints nothing here.
-  const overrides = usePaletteOverrides();
-  // RUN T1 (C2/D5) — AND THE METRIC GENERATION, which is how a spacing or
-  // radius dial reaches 102 files nobody edited. Every themed component calls
-  // this hook, so subscribing here re-renders all of them on a metric write;
-  // their `stylesFor(palette)` then sees the new generation and rebuilds. The
-  // palette object itself is untouched by a metric, so a theme change and a
-  // metric change stay two independent reasons to repaint.
-  const generation = useMetricsGeneration();
   const pin = useContext(PalettePinContext);
   return useMemo(() => {
-    let palette = applyPaletteOverrides(theme.palette, overrides, theme.isDark, 'app');
-    let emerald = applyPaletteOverrides(theme.emerald, overrides, theme.isDark, 'emerald');
+    let palette = theme.palette;
+    let emerald = theme.emerald;
     if (pin === 'map' && theme.isDark) {
       palette = mapPalette(palette, theme.isDark);
       emerald = mapEmerald(emerald, theme.isDark);
     }
     if (palette === theme.palette && emerald === theme.emerald) return theme;
     return { ...theme, palette, emerald };
-  }, [theme, overrides, generation, pin]);
+  }, [theme, pin]);
 }

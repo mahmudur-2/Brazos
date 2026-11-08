@@ -12,8 +12,7 @@ import {
   type EmeraldPalette,
   type MaterialName,
 } from '../tokens';
-import { SCRIM_DARK_ALPHA, scrimInDark, themedStyles, useThemeColors, type PaneFill, type PaneRim } from '../../lib/theme';
-import { useOverrideNumber, useOverrideString } from '../../lib/designOverrides';
+import { scrimInDark, themedStyles, useThemeColors, type PaneFill, type PaneRim } from '../../lib/theme';
 import { BlurLayer } from '../../lib/blur';
 import { Surface } from './Surface';
 import { SheetHeader, type SheetDismissWord } from './SheetHeader';
@@ -109,48 +108,9 @@ export function Sheet({
   const styles = stylesFor(colors);
   const insets = useSafeAreaInsets();
 
-  // RUN S2 (C7) — the sheet dials, each defaulting to today's shipped value.
-  // The card's fill, blur and hairline are the sheet MATERIAL's dials (Blur &
-  // Material); what lives here is the geometry and the backdrop scrim.
-  const topRadiusDial = useOverrideNumber('sheet.topRadius');
-  const topRadius = topRadiusProp ?? topRadiusDial ?? radius.xl;
+  const topRadius = topRadiusProp ?? radius.xl;
   const headerHairline = hairline != null ? { borderBottomColor: hairline } : null;
   const footerHairline = hairline != null ? { borderTopColor: hairline } : null;
-  const maxHeightPct = useOverrideNumber('sheet.maxHeightPct');
-  const headerPad = useOverrideNumber('sheet.headerPad');
-  const contentPad = useOverrideNumber('sheet.contentPad');
-  const footerPad = useOverrideNumber('sheet.footerPad') ?? spacing.lg;
-  const sectionGap = useOverrideNumber('sheet.sectionGap');
-  const handleWidth = useOverrideNumber('sheet.handleWidth');
-  const handleHeight = useOverrideNumber('sheet.handleHeight');
-  const handleColor = useOverrideString('sheet.handleColor');
-  const handleAlpha = useOverrideNumber('sheet.handleAlpha');
-  const handleAbove = useOverrideNumber('sheet.handleSpaceAbove');
-  const handleBelow = useOverrideNumber('sheet.handleSpaceBelow');
-  const backdropColorDial = useOverrideString('sheet.backdropColor');
-  const backdropAlphaDial = useOverrideNumber('sheet.backdropAlpha');
-  const backdropDial =
-    backdropColorDial != null || backdropAlphaDial != null
-      ? {
-          backgroundColor: withAlpha(
-            backdropColorDial ?? (isDark ? colors.bg : colors.ink),
-            backdropAlphaDial ?? (isDark ? SCRIM_DARK_ALPHA : 0.45),
-          ),
-        }
-      : null;
-  const handleDial =
-    handleWidth != null ||
-    handleHeight != null ||
-    handleColor != null ||
-    handleAlpha != null ||
-    handleBelow != null
-      ? {
-          width: handleWidth ?? 40,
-          height: handleHeight ?? 4,
-          backgroundColor: withAlpha(handleColor ?? colors.line, handleAlpha ?? 1),
-          marginBottom: handleBelow ?? spacing.sm,
-        }
-      : null;
 
   return (
     <Modal
@@ -166,7 +126,7 @@ export function Sheet({
         {/* 2026-09-29 (LUX-LIST-2 #3): the dim covers the screen at once; only the card moves (hooks/useSheetPresence). */}
         {presence.dimVisible ? (
         <Pressable
-          style={[styles.backdrop, isDark && styles.backdropDark, backdropDial]}
+          style={[styles.backdrop, isDark && styles.backdropDark]}
           onPress={dismissOnBackdropPress ? onCancel ?? onClose : undefined}
           // The backdrop is a dismiss affordance, not content — it should not
           // be announced as a button when it does nothing.
@@ -186,10 +146,7 @@ export function Sheet({
         <SheetCard
           visible={visible}
           onClosed={presence.onClosed}
-          style={[
-            styles.cardFrame,
-            maxHeightPct != null ? { maxHeight: `${maxHeightPct}%` as `${number}%` } : null,
-          ]}
+          style={styles.cardFrame}
         >
         {/* G1 (C5): the docked card wears the sheet material — the top
             corners keep their xl radius via the props; in light this adds
@@ -204,16 +161,12 @@ export function Sheet({
           fill={fill}
           style={[
             styles.sheet,
-            // Written as base + delta so the D8 fence's pinned expression
-            // (inset + spacing.lg) survives verbatim; the dial replaces the
-            // spacing.lg portion and the default delta is zero.
             // 2026-09-21: a FOOTER brings its own air — with one, the sheet keeps
             // only the safe inset below it, so the button sits centred between
             // the footer's divider and the home indicator (22 above it, 21 to
             // the bar's top; DECISIONS 2026-09-20 sitting 3, (7)). Without one,
             // the padding is what it has always been.
-            { paddingBottom: insets.bottom + (footer ? 0 : spacing.lg) + (footerPad - spacing.lg) },
-            handleAbove != null ? { paddingTop: handleAbove } : null,
+            { paddingBottom: insets.bottom + (footer ? 0 : spacing.lg) },
           ]}
         >
           {/* #64 (M-31) — the one sheet header: the handle, the title, and the
@@ -225,16 +178,11 @@ export function Sheet({
             dismissWord={dismissWord}
             onDismiss={onClose}
             onCancel={onCancel}
-            handleStyle={handleDial}
-            rowStyle={[headerHairline, headerPad != null ? { paddingHorizontal: headerPad } : null]}
+            rowStyle={headerHairline}
           />
           <ScrollView
             style={styles.scroll}
-            contentContainerStyle={[
-              styles.scrollContent,
-              contentPad != null ? { padding: contentPad } : null,
-              sectionGap != null ? { gap: sectionGap } : null,
-            ]}
+            contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
             {children}

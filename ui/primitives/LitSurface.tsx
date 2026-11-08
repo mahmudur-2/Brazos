@@ -1,6 +1,5 @@
 import { Animated, Platform, type ViewProps, type ViewStyle } from 'react-native';
 import { withAlpha } from '../tokens';
-import { useOverrideNumber } from '../../lib/designOverrides';
 
 /**
  * lit(2) — A SURFACE THAT IS LIT INSTEAD OF FILLED.
@@ -188,7 +187,7 @@ export type LitSurfaceProps = ViewProps &
 export function LitSurface({
   surface,
   lift,
-  liftAlpha: liftAlphaProp,
+  liftAlpha,
   highlight,
   highlightAlpha,
   flat,
@@ -198,12 +197,6 @@ export function LitSurface({
   children,
   ...rest
 }: LitSurfaceProps) {
-  // RUN S2 (C8) — the studio's lift-wash dial SCALES every caller's own
-  // calibration rather than replacing it (each surface ships its own alpha,
-  // so a single replacement value would have no honest default). 1 = today.
-  const liftScale = useOverrideNumber('card.liftScale');
-  const liftAlpha =
-    liftScale != null ? Math.min(1, Math.max(0, liftAlphaProp * liftScale)) : liftAlphaProp;
   const fill = litFill({ surface, lift, liftAlpha, highlight, highlightAlpha, flat });
   return (
     <Animated.View

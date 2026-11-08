@@ -95,18 +95,6 @@ export function AccountSafetyScreen() {
           </Pressable>
         ) : null}
 
-        {__DEV__ ? (
-          <Pressable
-            style={({ pressed }) => [styles.devRow, pressed && styles.rowPressed]}
-            onPress={() => navigation.navigate('ComponentCatalog')}
-            accessibilityRole="button"
-            accessibilityLabel="Component catalog"
-          >
-            <Ionicons name="color-palette-outline" size={18} color={colors.textMuted} />
-            <Text style={styles.devLabel}>Component catalog (dev)</Text>
-          </Pressable>
-        ) : null}
-
         {/* App Store Guideline 5.1.1(v). Master 41 draws this as the set's
             strongest outlined control; the screen it opens is where the
             warning, the real blocker list and the confirmation live. */}
@@ -194,17 +182,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 15,
     fontWeight: '700',
     color: colors.warning,
-  },
-  devRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-  },
-  devLabel: {
-    fontSize: 14,
-    color: colors.textMuted,
   },
   // Master 41's strongest outlined control — the danger hue, as line-work.
   deleteRow: {

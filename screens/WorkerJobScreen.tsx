@@ -98,7 +98,6 @@ import {
   uploadJobPhoto,
 } from '../lib/storage';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { useDialNumber } from '../lib/designOverrides';
 import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 
 /** The stepper's crossfade into a done stage (2026-09-27, the Lux remake, ruling 14). */
@@ -150,10 +149,10 @@ export function WorkerJobScreen() {
   // spacing/radius from. `photoHeight` reaches BOTH photo boxes — the one the
   // worker just picked and the ones already sent — because they are the same
   // proof at two moments and drew the same 180.
-  const contentPadding = useDialNumber('workerJob.content.padding') ?? spacing.lg;
-  const contentGap = useDialNumber('workerJob.content.gap') ?? spacing.lg;
-  const iconCircleSize = useDialNumber('workerJob.iconCircle.size') ?? 44;
-  const photoHeight = useDialNumber('workerJob.photo.height') ?? 180;
+  const contentPadding = spacing.lg;
+  const contentGap = spacing.lg;
+  const iconCircleSize = 44;
+  const photoHeight = 180;
   // emerald(3): the floating pill's real footprint.
   const navClearance = useScrollClearance();
   const footerPad = usePinnedFooterPadding();

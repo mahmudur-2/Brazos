@@ -100,12 +100,9 @@ export { StatusPill } from './StatusPill';
 export type { JobStatus, OfferStatus, PaymentStatus } from './StatusPill';
 export { MoneyText } from './MoneyText';
 export { EmptyState } from './EmptyState';
-export { ListRow } from './ListRow';
 export { SearchBar } from './SearchBar';
 export { Sheet } from './Sheet';
 export { StepHeader } from './StepHeader';
-export { MediaGrid } from './MediaGrid';
-export type { MediaItem } from './MediaGrid';
 
 // --- Built in Phase 4 (the one Phase 1 deferred on the post-a-job wizard) --
 
@@ -137,11 +134,6 @@ export {
   WORKER_BAR_TABS,
   type BottomNavTabKey,
 } from './BottomNav';
-
-/** §I "JobCard (mode-aware)". Perspective comes from ModeContext; there is no
- *  prop for it, by design. */
-export { JobCard } from './JobCard';
-export type { JobCardProps } from './JobCard';
 
 // --- DEFERRED, with the phase each is genuinely blocked on ----------------
 //

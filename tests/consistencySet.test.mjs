@@ -71,7 +71,6 @@ test('[static] M-31 — one confirm engine: confirmAsync draws the host, the sys
     'components/CountryPicker.tsx',
     'components/CreateSheet.tsx',
     'components/DistanceChips.tsx',
-    'components/EditBudgetDialog.tsx',
     'components/GlassDropdown.tsx',
     'components/MediaViewer.tsx',
     'components/PhotoViewer.tsx',
@@ -98,7 +97,6 @@ test('[static] M-31 — one dialog order: Cancel on the left, the action on the 
   };
   order('components/ConfirmDialog.tsx', 'title={cancelText}', 'title={confirmText}');
   order('components/AmountPrompt.tsx', 'title="Cancel"', 'title={confirmText}');
-  order('components/EditBudgetDialog.tsx', 'title="Cancel"', 'title="Save"');
   const confirm = stripComments(read('components/ConfirmDialog.tsx'));
   assert.match(confirm, /actions: \{\s*flexDirection: 'row',/);
   assert.match(confirm, /action: \{\s*flex: 1,\s*\}/, 'the action takes the rest of the row');

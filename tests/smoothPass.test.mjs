@@ -262,7 +262,6 @@ test('[static] F12: a mark arrives on a spring, and a tapped star swells', () =>
   assert.match(fast, /progress\.value = withSpring\(on \? 1 : 0, MARK_SPRING\);/);
   assert.match(fast, /withSequence\(withSpring\(POP_PEAK, POP_UP_SPRING\), withSpring\(1, POP_DOWN_SPRING\)\)/);
   const SITES = {
-    'screens/AppearanceScreen.tsx': /<SelectMark\s+on=\{selected\}/,
     'screens/LegalGateScreen.tsx': /<SelectMark\s+on=\{agreed\}[\s\S]*?off=\{<Ionicons name="square-outline"/,
     'components/CategoryAccordion.tsx': /<SelectMark\s+on=\{isSelected\}[\s\S]*?off=\{<Ionicons name="square-outline"/,
     'screens/ApproveOrDisputeScreen.tsx': /<SelectMark\s+on=\{reason === r\}/,

@@ -69,16 +69,10 @@ test('PostJobScreen media goes through the one canonical MediaUploader', async (
 });
 
 test('MediaUploader is exported from the primitives barrel, no longer deferred', async () => {
-  const [index, catalog] = await Promise.all([
-    read('ui/primitives/index.ts'),
-    read('dev-tools/ComponentCatalog.tsx'),
-  ]);
+  const index = await read('ui/primitives/index.ts');
 
   assert.match(index, /export \{ MediaUploader \} from '\.\/MediaUploader';/);
   // The Phase 1 DEFERRED block's MediaUploader entry is gone now that it's
   // built — its bullet point must not still claim otherwise.
   assert.doesNotMatch(index, /MediaUploader\s+Phase 4, which lists it explicitly/);
-
-  assert.match(catalog, /MediaUploader,/);
-  assert.match(catalog, /<Section title="MediaUploader">/);
 });

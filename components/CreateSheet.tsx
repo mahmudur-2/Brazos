@@ -10,7 +10,6 @@ import { DropdownBody, DropdownChevron } from './DropdownReveal';
 import { splitNextAction } from './HubCard';
 import {
   EYEBROW_TYPE,
-  SCRIM_DARK_ALPHA,
   emeraldRadius,
   radius,
   scrimInDark,
@@ -20,7 +19,6 @@ import {
   withAlpha,
   type ColorPalette,
 } from '../lib/theme';
-import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 import { Surface } from '../ui/primitives/Surface';
 import { SheetHeader } from '../ui/primitives/SheetHeader';
 import { ConfirmHost } from './ConfirmHost';
@@ -131,20 +129,6 @@ export function CreateSheet({
   // The mockup's chevrons: the cream at 35% on the dark glass, the nav's
   // inactive grey in light — colour only, per theme.
   const chevron = isDark ? withAlpha(colors.text, 0.35) : colors.navInactive;
-  // The sheet family's shared backdrop dials (RUN S2 C7), as ActionSheet and
-  // ui/primitives/Sheet.tsx read them. The pane itself is the clear
-  // material's, dialled under Blur & Material.
-  const backdropColorDial = useOverrideString('sheet.backdropColor');
-  const backdropAlphaDial = useOverrideNumber('sheet.backdropAlpha');
-  const backdropDial =
-    backdropColorDial != null || backdropAlphaDial != null
-      ? {
-          backgroundColor: withAlpha(
-            backdropColorDial ?? (isDark ? colors.background : colors.text),
-            backdropAlphaDial ?? (isDark ? SCRIM_DARK_ALPHA : 0.35),
-          ),
-        }
-      : null;
 
   return (
     <Modal
@@ -158,7 +142,7 @@ export function CreateSheet({
         {/* 2026-09-29 (LUX-LIST-2 #3): the dim covers the screen at once; only the card moves (hooks/useSheetPresence). */}
         {presence.dimVisible ? (
           <Pressable
-            style={[styles.backdrop, isDark && styles.backdropDark, backdropDial]}
+            style={[styles.backdrop, isDark && styles.backdropDark]}
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Close"

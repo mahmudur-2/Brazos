@@ -9,7 +9,6 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { useOverrideNumber, useOverrideValue } from '../lib/designOverrides';
 import { Surface } from '../ui/primitives/Surface';
 
 /**
@@ -74,25 +73,7 @@ export function panelTravelFor(direction: 'up' | 'down'): number {
 
 export function useDropMenuStyles() {
   const { palette: colors } = useThemeColors();
-  const base = stylesFor(colors);
-  // RUN S2 (C7) — the menu-panel dials. The dial values fold into the panel
-  // entry as a nested style array, so BOTH drivers (this file's consumers)
-  // pick them up without either being edited.
-  const minWidth = useOverrideNumber('menu.minWidth');
-  const panelRadius = useOverrideNumber('menu.radius');
-  const paddingY = useOverrideNumber('menu.paddingY');
-  const dial =
-    minWidth != null || panelRadius != null || paddingY != null
-      ? {
-          ...(minWidth != null ? { minWidth } : null),
-          ...(panelRadius != null ? { borderRadius: panelRadius } : null),
-          ...(paddingY != null ? { paddingVertical: paddingY } : null),
-        }
-      : null;
-  return {
-    colors,
-    styles: dial ? { ...base, panel: [base.panel, dial] as const } : base,
-  };
+  return { colors, styles: stylesFor(colors) };
 }
 
 /**
@@ -134,16 +115,10 @@ export function DropMenuItems({
   const { colors, styles } = useDropMenuStyles();
   // RUN S2 (C7) — the menu WEARS THE MENU MATERIAL: the Surface underlay is
   // the panel's fill, blur and hairline (the panel style itself paints
-  // nothing any more), so the studio's menu-material dials drive a real
-  // surface. Both drivers render these rows, so both paths wear it.
-  const menuRadius = useOverrideNumber('menu.radius');
-  const itemHeight = useOverrideNumber('menu.itemHeight');
-  const itemPaddingX = useOverrideNumber('menu.itemPaddingX');
-  const itemSpacing = useOverrideNumber('menu.itemSpacing') ?? 0;
-  const separators = useOverrideValue('menu.separators') !== false;
+  // nothing any more). Both drivers render these rows, so both paths wear it.
   return (
     <>
-      <Surface material="menu" radius={menuRadius} style={[StyleSheet.absoluteFill, styles.panelMaterial]} />
+      <Surface material="menu" style={[StyleSheet.absoluteFill, styles.panelMaterial]} />
       {items.map((item, index) => (
         <Pressable
           key={item.key}
@@ -154,10 +129,7 @@ export function DropMenuItems({
           disabled={item.disabled}
           style={({ pressed }) => [
             styles.item,
-            itemHeight != null && { minHeight: itemHeight },
-            itemPaddingX != null && { paddingHorizontal: itemPaddingX },
-            index > 0 && separators && styles.itemDivided,
-            index > 0 && itemSpacing > 0 && { marginTop: itemSpacing },
+            index > 0 && styles.itemDivided,
             pressed && styles.itemPressed,
             item.disabled && styles.itemDisabled,
           ]}

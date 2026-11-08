@@ -13,8 +13,6 @@ import {
   withAlpha,
   type ColorPalette,
 } from '../lib/theme';
-import { SCRIM_DARK_ALPHA } from '../lib/theme';
-import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 import { PopModal } from './PopModal';
 import { SheetHeader } from '../ui/primitives/SheetHeader';
 import { Surface } from '../ui/primitives/Surface';
@@ -67,21 +65,7 @@ export function ActionSheet({
   const styles = stylesFor(colors);
   // ui/primitives/Sheet.tsx has always done this; this one never did.
   const insets = useSafeAreaInsets();
-  // RUN S2 (C7) — the shared sheet-family dials: backdrop scrim and the
-  // dialog-card radius. Fill, blur and hairline are the sheet MATERIAL's.
-  const dialogRadius = useOverrideNumber('sheet.dialogRadius') ?? radius.xl;
-  const sheetShadowDial = useOverrideNumber('sheet.shadowOpacity');
-  const backdropColorDial = useOverrideString('sheet.backdropColor');
-  const backdropAlphaDial = useOverrideNumber('sheet.backdropAlpha');
-  const backdropDial =
-    backdropColorDial != null || backdropAlphaDial != null
-      ? {
-          backgroundColor: withAlpha(
-            backdropColorDial ?? (isDark ? colors.background : colors.text),
-            backdropAlphaDial ?? (isDark ? SCRIM_DARK_ALPHA : 0.35),
-          ),
-        }
-      : null;
+  const dialogRadius = radius.xl;
   return (
     // 2026-09-30 (the smoothness pass): PopModal — the dim and its frost at once, the sheet rising
     // in at full opacity (components/PopModal.shared.tsx). A tap on the backdrop still closes; the
@@ -94,7 +78,6 @@ export function ActionSheet({
       backdropStyle={[
         styles.backdrop,
         isDark && styles.backdropDark,
-        backdropDial,
         { paddingBottom: insets.bottom + spacing.lg },
       ]}
     >
@@ -104,7 +87,7 @@ export function ActionSheet({
             via the radius prop. The backdrop above and every open/close
             mechanic are byte-identical. */}
         <Pressable accessible={false} onPress={() => {}}>
-          <Surface material="menu" corners="all" radius={dialogRadius} style={[styles.sheet, sheetShadowDial != null && { shadowOpacity: sheetShadowDial }]}>
+          <Surface material="menu" corners="all" radius={dialogRadius} style={styles.sheet}>
           {/* 2026-09-28 (LUX-LIST-64 #64, audit M-31) — the one sheet header:
               the handle, the title (and its line), and "Close" on the right —
               choosing a row is the action, closing only dismisses. The

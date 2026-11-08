@@ -82,7 +82,6 @@ import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
 import { useShellGround } from '../lib/shellGround';
 import type { JobDetailRouteParamList } from '../lib/navigation';
-import { useDialNumber } from '../lib/designOverrides';
 import { quoteJobPrice, type JobPriceQuote } from '../lib/payments';
 import {
   EYEBROW_TYPE,
@@ -121,10 +120,10 @@ export function JobDetailScreen() {
   // the value this file drew before the dial existed, spelled here and nowhere
   // else; the three token-backed ones take the `theme.*` scale this file
   // imports spacing/radius from.
-  const detailPaddingX = useDialNumber('jobDetail.detailSurface.paddingX') ?? spacing.xl;
-  const detailPaddingY = useDialNumber('jobDetail.detailSurface.paddingY') ?? spacing.lg;
-  const detailGap = useDialNumber('jobDetail.detailContent.gap') ?? spacing.lg;
-  const iconCircleSize = useDialNumber('jobDetail.iconCircle.size') ?? 54;
+  const detailPaddingX = spacing.xl;
+  const detailPaddingY = spacing.lg;
+  const detailGap = spacing.lg;
+  const iconCircleSize = 54;
   // RUN H3 (C3): the same declaration customer Home makes, and for the same
   // reason — this screen's page ground is `homeBackground`, so without it the
   // mode shell paints `background` in the floating pill's margins and a band

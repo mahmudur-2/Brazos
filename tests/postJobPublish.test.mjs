@@ -353,7 +353,7 @@ test('D2 · the header new props are optional and leave every other caller untou
   // 2026-09-28 (LUX-LIST-64 #22, #27): ONE TITLE SYSTEM — every titled header
   // centres its title at 17 (the tab roots take the big left title by asking),
   // so a caller that passes nothing now gets the centred title.
-  assert.match(code, /const centred = alignDial === 'left' \? false : true;/, 'a caller that passes nothing gets the centred title');
+  assert.match(code, /\{ left: spacing\.lg \+ leftInset, right: spacing\.lg \+ rightInset, alignItems: 'center' \}/, 'a caller that passes nothing gets the centred title');
 
   // The default branch is the arrangement the chat header depends on:
   // leading between the back control and the title block.
@@ -728,135 +728,39 @@ test('D13/D14 · the price is ONE field that opens its list — no pencil, no di
   assert.match(field, /<FieldLabel palette=\{palette\} tone=\{labelTone\}>\s*\{label\}\s*<\/FieldLabel>/);
 });
 
-test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses over-ceiling in writing', () => {
-  const dialog = read('components/EditBudgetDialog.tsx');
-  const flat = flatten(dialog);
+test('D15 · ConfirmDialog keeps its structure, and the price field refuses over-ceiling in writing', () => {
+  // D1 (lean): the budget editor (components/EditBudgetDialog.tsx) is deleted; its own
+  // assertions went with it. What stays is ConfirmDialog's half and the price field's.
   const confirm = flatten(read('components/ConfirmDialog.tsx'));
 
   // ConfirmDialog's structure: the same Modal, scrim, centred wrap.
   for (const shared of [
-    // 2026-09-30 (the smoothness pass): both present through PopModal — an instant dim, the card
+    // 2026-09-30 (the smoothness pass): it presents through PopModal — an instant dim, the card
     // moving in at full opacity (components/PopModal.shared.tsx).
     /<PopModal visible=\{visible\}/,
     /backdrop: \{ flex: 1,/,
     /centerWrap: \{ flex: 1, justifyContent: 'center', paddingHorizontal: spacing\.lg, \}/,
   ]) {
-    assert.match(flat, shared, 'the dialog must keep ConfirmDialog\'s structure');
-    assert.match(confirm, shared, 'and that structure must still be what ConfirmDialog has');
+    assert.match(confirm, shared, 'that structure must still be what ConfirmDialog has');
   }
-  // The xl radius survives on both — the budget editor on its own panel, and
-  // ConfirmDialog through the sheet material's radius prop (G1 C5).
-  assert.match(flat, /borderRadius: radius\.xl,/, 'the budget editor keeps the xl radius');
+  // The xl radius survives: ConfirmDialog through the sheet material's radius prop (G1 C5).
   assert.match(
     confirm,
     /<Surface material="menu" corners="all" radius=\{radius\.xl\}/ /* 2026-09-29 (LUX-LIST-2 #9): the dialogs wear the pop-ups' dense frost */,
     "ConfirmDialog's card wears the sheet material at the same xl radius (G1 C5)"
   );
 
-  // …and the budget editor keeps an EMERALD, TRANSLUCENT panel of its own,
-  // outside the material system by operator decision.
-  assert.match(flat, /backgroundColor: withAlpha\(colors\.forest, 0\.92\)/);
-  assert.match(flat, /borderColor: withAlpha\(colors\.emerald, 0\.55\)/);
-
-  // THE SCRIM IS DEEPENED THROUGH THE SHARED HELPER, never a new number.
-  assert.match(flat, /backgroundColor: scrimInDark\(colors\.ink\)/);
-  assert.match(flat, /backdropDark: \{ backgroundColor: scrimInDark\(colors\.background\) \}/);
   assert.match(
     read('lib/theme.ts'),
     /export const SCRIM_DARK_ALPHA = 0\.55;/,
     'the alpha stays the one value lib/theme pins'
   );
 
-  // L1 — NO LIBRARY, AND NO FILL DRAWN HERE.
-  //
-  // This was a ban on the words. RUN PUBLISH1 (C2) put the sheet on
-  // ui/primitives/LitSurface.tsx — the same wash Home's promo card wears,
-  // which is a `backgroundImage` STRING on one node and adds no dependency at
-  // all. What L1 protects is unchanged and is asserted directly now: no
-  // gradient, blur or SVG LIBRARY is imported, and this dialog writes no fill
-  // expression of its own — the wash arrives entirely from the shared
-  // primitive, whose own fence (tests/litSurface.test.mjs) owns its colours.
-  for (const banned of ['BlurView', 'linear-gradient', 'LinearGradient', 'Svg']) {
-    assert.ok(!flat.includes(banned), `${banned} must not appear — this dialog draws no fill`);
-  }
-  assert.doesNotMatch(
-    dialog,
-    /^import .*(gradient|blur|svg)/im,
-    'no gradient, blur or SVG library may be imported here'
-  );
-  assert.match(
-    flat,
-    /import \{ LitSurface \} from '\.\.\/ui\/primitives';/,
-    'the wash comes from the shared primitive, not from an expression written here'
-  );
-
-  // The contents, verbatim. RUN a4 (2026-09-05): the title and the message are
-  // now the MODE's, so the two open-bids strings live in lib/pricingMode.ts —
-  // pinned there, byte for byte — and what this dialog is pinned on is that it
-  // renders that module's answer for the mode being edited, never its own copy.
+  // The two open-bids strings live in lib/pricingMode.ts — pinned there, byte for byte.
   const modes = read('lib/pricingMode.ts');
   assert.match(modes, /title: 'Edit Budget',/);
   assert.match(modes, /message: 'Set the maximum amount workers can bid up to\.',/);
-  assert.match(flat, /const copy = budgetEditorCopy\(mode\);/);
-  assert.match(flat, /<Text style=\{\[styles\.title, \{ color: palette\.onForest \}\]\}>\{copy\.title\}<\/Text>/);
-  assert.match(flat, /\{copy\.message\}<\/Text>/);
-  assert.match(flat, /accessibilityLabel=\{copy\.fieldLabel\}/);
-  assert.match(flat, /keyboardType="numeric"/);
-  assert.match(flat, /returnKeyType="done"/);
-  assert.match(flat, /onSubmitEditing=\{handleSave\}/, 'the Done key IS Save, not a second outcome');
-  assert.match(
-    flat,
-    /<Button title="Save" palette=\{palette\} onPress=\{handleSave\} style=\{styles\.action\} \/>/
-  );
-  assert.match(flat, /<Button title="Cancel" variant="secondary"/);
-  // RUN PUBLISH1 (C2): SIDE BY SIDE on one row, each half of it. Two
-  // full-width buttons stacked read as a list of choices; this is one decision
-  // with a default.
-  assert.match(flat, /actions: \{ flexDirection: 'row', gap: spacing\.md,/);
-  assert.match(flat, /action: \{ flex: 1, \}/);
-  // AND THE LABEL ABOVE THE FIELD IS GONE, not moved: the message says it in a
-  // sentence and the prefix says it in a glyph.
-  assert.ok(!flat.includes('Maximum ($)'), 'the "Maximum ($)" caption stays deleted');
-  assert.match(flat, /<Text style=\{styles\.amountPrefix\}>\$<\/Text>/, 'the "$" prefix is the label');
-
-  // THE CEILING, COMPOSED FROM THE SHARED RULES and refusing before any RPC.
-  assert.match(flat, /import \{ validateOfferAmount \} from '\.\/OfferComposer';/);
-  assert.match(flat, /import \{ moneyCeilingError \} from '\.\.\/lib\/validation';/);
-  // RUN a4 (2026-09-05): empty is still legal and still means no maximum — the
-  // mode now decides whether this mode HAS one, and a posted price does not.
-  assert.match(
-    flat,
-    /if \(!text\.trim\(\)\) return budgetEditorCopy\(mode\)\.allowEmpty \? null : 'Enter an amount\.';/,
-    'empty is legal and means no maximum, where the mode allows a maximum'
-  );
-  assert.match(read('lib/pricingMode.ts'), /allowEmpty: true,/, 'and open bids is that mode');
-  assert.match(flat, /return moneyCeilingError\(dollarsToCents\(text\)\);/);
-  assert.match(flat, /if \(found\) \{ setProblem\(found\); return; \}/, 'a refusal blocks the save');
-  // RUN PUBLISH1 (C2) drew the field here instead of through TextField, so the
-  // refusal is rendered rather than handed to a component's `error` prop. The
-  // guarantee is unchanged and is now checked on both halves: the message is
-  // written under the field, and the field itself shows it is refused.
-  assert.match(
-    flat,
-    /\{problem \? <Text style=\{styles\.amountError\}>\{problem\}<\/Text> : null\}/,
-    'the refusal is stated in writing under the field'
-  );
-  assert.match(
-    flat,
-    /style=\{\[styles\.amountRow, problem \? styles\.amountRowError : null\]\}/,
-    'and the field itself carries the refusal'
-  );
-  assert.match(flat, /amountRowError: \{ borderColor: colors\.danger, \}/);
-  // No RPC of any kind lives in this dialog — it hands text back and closes.
-  assert.ok(!flat.includes('supabase'), 'the dialog contacts nothing');
-  assert.ok(!flat.includes('createJob'), 'the dialog writes nothing');
-
-  // Cancel discards: the next open re-seeds from the live value. (M-7: the
-  // mode is the review step's now, so there is no draft mode to re-seed.)
-  assert.match(
-    flat,
-    /useEffect\(\(\) => \{ if \(!visible\) return; setDraft\(value\); setProblem\(null\); \}/
-  );
+  assert.match(modes, /allowEmpty: true,/, 'and open bids is the mode that allows an empty amount');
 
   // 2026-09-28 (LUX-LIST-64 #36): the screen no longer mounts the dialog — the
   // price list's own entry is the way to type an amount — and that entry
@@ -1023,8 +927,9 @@ test('D22 · the notify line is on the screen because the schema actually backs 
 });
 
 test('D23 · the mark is a bigger check on a filled disc, ringed, haloed and sparkled', () => {
+  // D1 (lean): the mark's two renderers (components/SuccessMark.tsx and its .motion120
+  // sibling) are deleted; the artwork module they shared stays, and so do its fences.
   const shared = read('components/SuccessMark.shared.tsx');
-  const still = read('components/SuccessMark.tsx');
   const flatShared = flatten(shared);
 
   // BIGGER THAN WHAT IT REPLACED. The template's glyph is a 44pt icon in an
@@ -1040,12 +945,10 @@ test('D23 · the mark is a bigger check on a filled disc, ringed, haloed and spa
 
   // A FILLED disc, in the one solid conversion fill, with the check on it.
   // 2026-09-27 (the Lux remake, ruling 14): the check is TWO STROKES of the
-  // disc's ink that draw themselves — the still draws both legs full
-  // (legTransform at 1), inside the MARK_CHECK box.
+  // disc's ink that draw themselves, inside the MARK_CHECK box.
   assert.match(flatShared, /disc: \{[^}]*backgroundColor: colors\.forest,/);
   assert.match(flatShared, /export const CHECK_LEGS = \[ \{ key: 'short',[^\]]*\{ key: 'long',/);
   assert.match(flatShared, /stroke: \{ position: 'absolute', borderRadius: CHECK_STROKE \/ 2, backgroundColor: colors\.onForest, \}/);
-  assert.match(flatten(still), /\{CHECK_LEGS\.map\(\(leg\) => \( <View key=\{leg\.key\} style=\{\[styles\.stroke, legBox\(leg\), \{ transform: legTransform\(leg, 1\) \}\]\} \/> \)\)\}/);
 
   // CONCENTRIC RING BORDERS behind it — borders, not fills, and two of them
   // stepping outward.
@@ -1070,13 +973,10 @@ test('D23 · the mark is a bigger check on a filled disc, ringed, haloed and spa
     (flatShared.match(/\{ key: '/g) ?? []).length >= 3,
     'a few sparkles, not one'
   );
-  assert.match(flatten(still), /<Ionicons key=\{sparkle\.key\} name="sparkles"/);
 
-  // L1 — FLAT FILLS ONLY. No gradient, blur or SVG anywhere in the trio.
+  // L1 — FLAT FILLS ONLY. No gradient, blur or SVG in the artwork module.
   for (const path of [
     'components/SuccessMark.shared.tsx',
-    'components/SuccessMark.tsx',
-    'components/SuccessMark.motion120.tsx',
   ]) {
     const source = stripComments(read(path));
     for (const banned of ['Gradient', 'BlurView', 'react-native-svg', '<Svg']) {
@@ -1097,87 +997,15 @@ test('D23 · the mark is a bigger check on a filled disc, ringed, haloed and spa
   }
 });
 
-test('D24 · the entrance runs once, for about a second, and then holds', () => {
-  const fast = stripComments(read('components/SuccessMark.motion120.tsx'));
+test('D24 · the mark\'s entrance length is about a second', () => {
   const flat = flatten(read('components/SuccessMark.shared.tsx'));
-
-  // ONE animation. Not one per piece — one shared progress every piece reads,
-  // which is what makes "once" structural rather than a promise.
-  assert.equal(
-    (fast.match(/withTiming\(/g) ?? []).length,
-    1,
-    'there is exactly one animation on this surface'
-  );
-  assert.match(fast, /progress\.value = withTiming\(1, \{ duration: MARK_ENTRANCE_MS \}\);/);
 
   // Roughly a second.
   const ms = Number(/export const MARK_ENTRANCE_MS = (\d+);/.exec(flat)?.[1]);
   assert.ok(ms >= 700 && ms <= 1300, `the entrance is about a second, saw ${ms}ms`);
-
-  // NOTHING THAT KEEPS RUNNING.
-  for (const banned of ['withRepeat', 'withSequence', 'withDecay', 'withSpring', 'setInterval', 'reverse', 'Infinity', '-1']) {
-    assert.ok(!fast.includes(banned), `${banned} would keep the mark moving — it must not appear`);
-  }
-  // It is kicked once, on mount, and never re-kicked by a changing dependency.
-  assert.match(fast, /\}, \[progress\]\);/, 'the effect depends only on the stable shared value');
-
-  // IT ENDS ON THE STILL FRAME. Every interpolation clamps, so at progress 1
-  // nothing has run past the value the still artwork draws.
-  const interpolations = [...fast.matchAll(/interpolate\([^;]*?\)/g)];
-  assert.ok(interpolations.length >= 4, 'the pieces really are functions of the progress');
-  for (const [expression] of interpolations) {
-    assert.match(expression, /'clamp'/, `an interpolation may not extrapolate: ${expression}`);
-  }
 });
 
-test('D25/D26 · the boundary holds, and reduced motion gets the still artwork', () => {
-  const fallback = read('components/SuccessMark.tsx');
-  const flatFallback = flatten(fallback);
-  const fast = read('components/SuccessMark.motion120.tsx');
-
-  // D25 — the chooser, on the capability it actually needs, with a literal
-  // require. (motion120.test.mjs holds the tree-wide exclusivity scan; this
-  // pins THIS sibling's half of it.)
-  assert.match(flatFallback, /resolveMotion120<ComponentType<SuccessMarkProps>>\( motionCapability, 'reanimated',/);
-  assert.match(flatFallback, /require\('\.\/SuccessMark\.motion120'\)/);
-  assert.ok(
-    !stripComments(fallback).includes("from 'react-native-reanimated'"),
-    'the fallback must never import the vendor — that is the crash the boundary exists for'
-  );
-  assert.match(fast, /from 'react-native-reanimated'/);
-  // Both take the artwork from the shared module, so the two cannot drift.
-  for (const [label, source] of [['fallback', fallback], ['fast', fast]]) {
-    assert.ok(
-      source.includes("from './SuccessMark.shared'"),
-      `the ${label} must draw the shared artwork`
-    );
-  }
-
-  // D26 — REDUCED MOTION NEVER GETS A DEGRADED ANIMATION, it gets the same
-  // artwork standing still. And `null` — the hook's "not read yet" — does not
-  // animate either, which is that hook's own stated contract. 2026-09-27 (the
-  // Lux remake, ruling 14): a binary WITHOUT worklets no longer gets the still
-  // — it gets the same entrance on core Animated's native driver, which is the
-  // motion boundary's own rule for that case; reduced motion is decided first.
-  assert.match(
-    flatFallback,
-    /const reducedMotion = useReducedMotion\(\); if \(reducedMotion !== false\) return <SuccessMarkStill \{\.\.\.props\} \/>; if \(!canWorklet\(\)\) return <SuccessMarkAnimated \{\.\.\.props\} \/>;/,
-    'only an explicit false may animate'
-  );
-  assert.match(flatFallback, /Animated\.timing\(progress, \{ toValue: 1, duration: MARK_ENTRANCE_MS, useNativeDriver: USE_NATIVE_DRIVER, \}\)\.start\(\);/);
-  assert.equal((stripComments(fallback).match(/Animated\.timing\(/g) ?? []).length, 1, 'one animation on the fallback too');
-  assert.doesNotMatch(stripComments(fallback), /extrapolate: '(extend|identity)'/, 'the fallback clamps like the fast path');
-  assert.match(
-    read('hooks/useReducedMotion.ts'),
-    /export function useReducedMotion\(\): boolean \| null \{/,
-    'the hook really can answer null, which is why the check is !== false'
-  );
-
-  // The still path is the FULL artwork — every ring and every sparkle — not a
-  // reduced one.
-  assert.match(flatFallback, /\{MARK_RINGS\.map\(\(size, index\) =>/);
-  assert.match(flatFallback, /\{MARK_SPARKLES\.map\(\(sparkle\) =>/);
-
+test('D26 · the live page draws the shared check, and a caller mark replaces the template glyph', () => {
   // 2026-09-28 (LUX-LIST-64 #42): the publish surface is the live page, whose
   // tick tile draws the SAME check — the mark's two legs, from the shared
   // module, through components/DrawnCheck.tsx — and says the same words. The
@@ -1189,8 +1017,7 @@ test('D25/D26 · the boundary holds, and reduced motion gets the still artwork',
   // RUN MOTION1 (C2) staggered the template's own pieces, so the default glyph
   // is an Animated.View carrying an entrance style. The guarantee this line
   // makes is the `??`, and it is unchanged: a caller-supplied mark REPLACES the
-  // glyph, and only the glyph the template draws itself is animated here — the
-  // mark brings its own entrance through the motion120 boundary above.
+  // glyph, and only the glyph the template draws itself is animated here.
   assert.match(
     flatten(read('ui/templates/SuccessScreen.tsx')),
     // 2026-09-30 (the smoothness pass): the template's own glyph enters through EntranceView.
@@ -1226,11 +1053,8 @@ const TOUCHED = [
   'components/PriceDropdown.tsx',
   'components/SealTransition.tsx',
   'components/UndoToast.tsx',
-  'components/EditBudgetDialog.tsx',
   'components/ScreenHeader.tsx',
-  'components/SuccessMark.motion120.tsx',
   'components/SuccessMark.shared.tsx',
-  'components/SuccessMark.tsx',
   'components/TextField.tsx',
   'screens/PostJobScreen.tsx',
   'ui/primitives/MediaUploader.tsx',
@@ -1264,7 +1088,6 @@ test('gate · nothing this run added reaches for a package the app does not have
   }
   // ANTI-VACUITY: the sweep really did find the imports it is checking.
   assert.ok(seen.has('expo-video'), 'the clip poster\'s package must be among the imports checked');
-  assert.ok(seen.has('react-native-reanimated'), 'the fast path\'s vendor must be too');
 });
 
 test('gate · none of it contacts a database, and production is named nowhere', () => {

@@ -45,7 +45,6 @@ import { userMessage } from '../lib/errorMessage';
 import { useMode } from '../modes';
 import type { MapStackNavigation } from '../lib/navigation';
 import { navigateAcrossTabs } from '../lib/navigationRef';
-import { useDialNumber } from '../lib/designOverrides';
 import {
   fonts,
   paneEdges,
@@ -289,10 +288,10 @@ export function MapScreen() {
   // The design's numbers, each dialled: the search pill's corner, and the
   // jobs sheet's corner, side padding and inset. Fallbacks are what this file
   // draws, spelled once above or on the theme scale.
-  const searchRadius = useDialNumber('map.searchPill.radius') ?? MAP_SEARCH_RADIUS;
-  const sheetRadius = useDialNumber('map.sheet.radius') ?? MAP_SHEET_RADIUS;
-  const sheetPaddingX = useDialNumber('map.sheet.paddingX') ?? spacing.xl;
-  const sheetInset = useDialNumber('map.sheet.inset') ?? spacing.lg;
+  const searchRadius = MAP_SEARCH_RADIUS;
+  const sheetRadius = MAP_SHEET_RADIUS;
+  const sheetPaddingX = spacing.xl;
+  const sheetInset = spacing.lg;
   const navigation = useNavigation<MapStackNavigation>();
   const { cells, loading, error, refresh } = useHotspots();
   const { mode } = useMode();

@@ -73,7 +73,6 @@ import {
   unmuteUser,
 } from '../lib/moderation';
 import type { MessagesStackNavigation } from '../lib/navigation';
-import { useDialNumber } from '../lib/designOverrides';
 import {
   ARCHIVE,
   CLEAR_CHAT,
@@ -208,14 +207,14 @@ export function MessagesInboxScreen() {
   // RUN N3 (2026-09-08): the pill is 36 (was 34) and the row gap is 10 (was
   // `spacing.sm`, 8). The gap stopped inheriting because 10 is not on the
   // theme scale and an inheriting dial has to ship at its parent's value.
-  const filterPillHeight = useDialNumber('messages.filterPill.height') ?? FILTER_PILL_HEIGHT;
+  const filterPillHeight = FILTER_PILL_HEIGHT;
   // 2026-09-28 (LUX-LIST-64 #54, #55): the pills 8 apart, the reference's; the
   // rows carry no gap of their own — a hairline parts them — so its dial went.
-  const filterRowGap = useDialNumber('messages.filterRow.gap') ?? spacing.sm;
+  const filterRowGap = spacing.sm;
   // E3 review: the scroller's room for the pills' slop (lib/theme.ts slopRoom) — it follows the
   // dial exactly as the slop itself does.
   const pillRoom = slopRoom(filterPillHeight);
-  const listPaddingX = useDialNumber('messages.list.paddingX') ?? spacing.lg;
+  const listPaddingX = spacing.lg;
   const navigation = useNavigation<MessagesStackNavigation>();
   const { user } = useAuth();
   const {

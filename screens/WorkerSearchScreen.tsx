@@ -52,7 +52,6 @@ import type {
   CustomerHomeStackNavigation,
   WorkerSearchRouteParamList,
 } from '../lib/navigation';
-import { useDialNumber } from '../lib/designOverrides';
 import {
   litCardStyle, EYEBROW_TYPE,
   emeraldColorsFor,
@@ -95,10 +94,10 @@ export function WorkerSearchScreen() {
   // the value this file drew before it existed, spelled here and nowhere else;
   // the two token-backed ones take the `theme.*` scale this file imports
   // spacing/radius from.
-  const serviceTileWidth = useDialNumber('workerSearch.serviceTile.width') ?? 108;
-  const serviceTileHeight = useDialNumber('workerSearch.serviceTile.height') ?? 96;
-  const serviceTileRadius = useDialNumber('workerSearch.serviceTile.radius') ?? radius.lg;
-  const chipRowGap = useDialNumber('workerSearch.chipRow.gap') ?? spacing.sm;
+  const serviceTileWidth = 108;
+  const serviceTileHeight = 96;
+  const serviceTileRadius = radius.lg;
+  const chipRowGap = spacing.sm;
   // emerald(3): the floating pill's real footprint. This is the Discover tab's
   // root since emerald(1), so it is now a first-screen surface.
   const navClearance = useScrollClearance();

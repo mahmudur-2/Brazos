@@ -1,6 +1,5 @@
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useThemeColors } from '../../lib/theme';
-import { useDialNumber, useDialString } from '../../lib/designOverrides';
 import { DIVIDER_DEFAULTS } from '../tokens';
 
 /**
@@ -50,15 +49,12 @@ export type DividerProps = {
 
 export function Divider({ orientation = 'horizontal', inset, color, thickness: fixedThickness, style }: DividerProps) {
   const { palette } = useThemeColors();
-  const thicknessDial = useDialNumber('divider.thickness');
-  const insetDial = useDialNumber('divider.inset');
-  const colorDial = useDialString('divider.color');
 
   // 0 is not a thickness, it is "the platform hairline" — see DIVIDER_DEFAULTS.
-  const dialled = thicknessDial ?? DIVIDER_DEFAULTS.thickness;
+  const dialled: number = DIVIDER_DEFAULTS.thickness;
   const thickness = fixedThickness ?? (dialled > 0 ? dialled : StyleSheet.hairlineWidth);
-  const indent = inset ?? insetDial ?? DIVIDER_DEFAULTS.inset;
-  const line = color ?? colorDial ?? palette.border;
+  const indent = inset ?? DIVIDER_DEFAULTS.inset;
+  const line = color ?? palette.border;
 
   return (
     <View

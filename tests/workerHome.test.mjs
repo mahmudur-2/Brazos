@@ -426,11 +426,11 @@ test('4D-6 card geometry: padding 14, 14pt row gap, 1pt divider at 14pt margins,
     // 2026-09-27 (the Lux remake): the rim is `colors.border`, not gold.
     /summaryCard: \{\s*padding: layout\.cardPadding,\s*borderWidth: 1,\s*borderColor: colors\.border,\s*backgroundColor: colors\.surface,/
   );
-  // RUN T2 (C2): the row gap and the corner are now the operator's, so they
-  // are spelled at the wearer instead of in the stylesheet — ONCE, as the
-  // fallback. Both numbers are still pinned here; only their address moved.
-  assert.match(code, /useDialNumber\('workerHome\.summaryCard\.gap'\) \?\? 14/);
-  assert.match(code, /useDialNumber\('workerHome\.summaryCard\.radius'\) \?\? radius\.lg/);
+  // RUN T2 (C2): the row gap and the corner are spelled at the wearer instead
+  // of in the stylesheet — ONCE. Both numbers are still pinned here; only
+  // their address moved.
+  assert.match(code, /const summaryCardGap = 14;/);
+  assert.match(code, /const summaryCardRadius = radius\.lg;/);
   // Fix run D12: the 1 pt vertical rule is the Divider now (its width, its stretch, the border
   // role); the style keeps only its 14 of air either side.
   assert.match(code, /<Divider orientation="vertical" thickness=\{1\} style=\{styles\.summaryDivider\} \/>/);

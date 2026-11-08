@@ -1,7 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
 import { metricStyles, useThemeColors, withAlpha } from '../../lib/theme';
-import { useOverrideNumber } from '../../lib/designOverrides';
 import { JOB_LIFECYCLE_LABELS } from '../../lib/jobLifecycle';
 import { PAYMENT_STATE_WORDS } from '../../lib/moneyCopy';
 
@@ -159,23 +158,11 @@ export function StatusPill(props: StatusPillProps) {
 
   const palette = tonesFor(colors)[tone];
 
-  // RUN S2 (C8) — the status pill's geometry dials; tones stay enum-driven.
-  const padXDial = useOverrideNumber('pill.paddingX');
-  const padYDial = useOverrideNumber('pill.paddingY');
-  const radiusDial = useOverrideNumber('pill.radius');
-  const borderWidthDial = useOverrideNumber('pill.borderWidth');
-  const pillDial = {
-    ...(padXDial != null ? { paddingHorizontal: padXDial } : null),
-    ...(padYDial != null ? { paddingVertical: padYDial } : null),
-    ...(radiusDial != null ? { borderRadius: radiusDial } : null),
-    ...(borderWidthDial != null ? { borderWidth: borderWidthDial } : null),
-  };
-
   return (
     <View
       // 2026-09-29 (LUX-LIST-2 #6): a status pill has no outline — dark fills with its own ink at .14
       // (the Lux `.chip`), light keeps its filled tint; the rim stays transparent so the size holds.
-      style={[styles.pill, { backgroundColor: isDark ? withAlpha(palette.fg, 0.14) : palette.bg, borderColor: 'transparent' }, pillDial]}
+      style={[styles.pill, { backgroundColor: isDark ? withAlpha(palette.fg, 0.14) : palette.bg, borderColor: 'transparent' }]}
       // The pill is the status, so it announces itself as text rather than
       // leaving a screen reader to infer meaning from a coloured shape.
       accessibilityRole="text"

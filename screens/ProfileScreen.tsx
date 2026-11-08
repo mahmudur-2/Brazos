@@ -39,7 +39,6 @@ import { paymentsMode } from '../lib/adapters/payments';
 import { SUPPORT_EMAIL, supportMailtoUrl } from '../lib/appLinks';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { askOpenSettings } from '../lib/permissionPrompt';
-import { designStudioAvailable } from '../lib/designStudioGate';
 import { goBackOrHome } from '../lib/navigationRef';
 import { userMessage } from '../lib/errorMessage';
 import { permissionOutcome, trackIntent } from '../lib/observability/analytics';
@@ -61,7 +60,6 @@ import type {
   ProfileStackNavigation,
   ProfileStackParamList,
 } from '../lib/navigation';
-import { useDialNumber } from '../lib/designOverrides';
 import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 import { formatMonthYear } from '../lib/time';
 import {
@@ -266,11 +264,11 @@ export function ProfileScreen() {
   // 2026-09-29 (LUX-LIST-2 #7): the glyph is a plain 22pt icon now (no tile),
   // and the hub card rounds at 22 like every #6 card — so both dials ship
   // at 22, and the card's no longer inherits theme.radius.xl (24).
-  const settingsRowHeight = useDialNumber('profile.settingsRow.height') ?? 64;
-  const settingsGlyphSize = useDialNumber('profile.settingsGlyph.size') ?? 22;
-  const hubCardRadius = useDialNumber('profile.hubCard.radius') ?? 22;
-  const hubCardPadding = useDialNumber('profile.hubCard.padding') ?? spacing.lg;
-  const contentGap = useDialNumber('profile.content.gap') ?? spacing.lg;
+  const settingsRowHeight = 64;
+  const settingsGlyphSize = 22;
+  const hubCardRadius = 22;
+  const hubCardPadding = spacing.lg;
+  const contentGap = spacing.lg;
   const navigation = useNavigation<ProfileStackNavigation>();
   const { params } = useRoute<RouteProp<ProfileStackParamList, 'ProfileMain'>>();
   const { user, logout } = useAuth();
@@ -1158,27 +1156,6 @@ export function ProfileScreen() {
                       })}
                     </View>
                   </View>
-
-                  {/* The dial panel's switch lives on the Appearance screen; it
-                      is reachable only where lib/designStudioGate.ts lets the
-                      studio exist (internal builds), and never drawn anywhere
-                      else. */}
-                  {designStudioAvailable ? (
-                    <PressScale
-                      haptic={false}
-                      style={({ pressed }) => [styles.row, { minHeight: settingsRowHeight }, styles.rowDivider, pressed && styles.rowPressed]}
-                      onPress={() => navigation.navigate('Appearance')}
-                      accessibilityRole="button"
-                      accessibilityLabel="Design studio"
-                    >
-                      <Ionicons name="options-outline" size={settingsGlyphSize} color={iconColour} />
-                      <View style={styles.rowCopy}>
-                        <Text style={styles.rowTitle} numberOfLines={1}>Design studio</Text>
-                        <Text style={styles.rowSub} numberOfLines={1}>Internal builds only.</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-                    </PressScale>
-                  ) : null}
 
                   {/* Legal opens in place to its two documents. */}
                   <PressScale

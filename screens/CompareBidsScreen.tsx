@@ -21,7 +21,6 @@ import { effectiveOfferStatus, type OfferWithWorker } from '../lib/offers';
 import { formatBudget } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { useDialNumber } from '../lib/designOverrides';
 import {
   EYEBROW_TYPE,
   litCardStyle, fonts,
@@ -62,8 +61,8 @@ export function CompareBidsScreen() {
   const styles = stylesFor(colors);
   // RUN T2 (C9) — the two this screen's own body owns. The bid rows have their
   // own three, read in CompareRow below.
-  const listGap = useDialNumber('compareBids.list.gap') ?? spacing.md;
-  const protectsGlyphSize = useDialNumber('compareBids.protectsGlyph.size') ?? 34;
+  const listGap = spacing.md;
+  const protectsGlyphSize = 34;
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'CompareBids'>>();
   const job = params.job;
@@ -233,9 +232,9 @@ function CompareRow({
   const styles = stylesFor(colors);
   // RUN T2 (C9) — the bid row's own three, on the `theme.*` scale this file
   // imports spacing/radius from.
-  const rowPadding = useDialNumber('compareBids.row.padding') ?? spacing.lg;
-  const rowRadius = useDialNumber('compareBids.row.radius') ?? radius.xl;
-  const highestBorderWidth = useDialNumber('compareBids.rowHighest.borderWidth') ?? 2;
+  const rowPadding = spacing.lg;
+  const rowRadius = radius.xl;
+  const highestBorderWidth = 2;
   const worker = bid.worker;
   // Positive-only, as this row always was: the rating line needs at least one
   // REVEALED review. It prints "New" in the number's place while the

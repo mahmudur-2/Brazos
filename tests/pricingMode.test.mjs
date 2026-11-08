@@ -157,14 +157,13 @@ test('a4 · the draft round-trips the mode', () => {
   assert.match(draft, /JSON\.stringify\(draft\)/);
 });
 
-test('M-7 · the review step asks the posting question; the dialog edits the amount for that mode', () => {
+test('M-7 · the review step asks the posting question', () => {
   // 2026-09-26 (the refresh, audit M-7): the question moved out of the budget
   // editor, two layers down, onto the review step above the amount.
   // 2026-09-28 (LUX-LIST-64 #36, #37): the question and its amount are ONE
   // component on the step — components/PriceDropdown.tsx — the EXISTING switch
   // (now with its two glyphs) directly above the field it decides.
   const drop = flatten(read('components/PriceDropdown.tsx'));
-  const dialog = flatten(read('components/EditBudgetDialog.tsx'));
   assert.match(drop, /import \{ SegmentedControl \} from '\.\/SegmentedControl';/);
   assert.match(
     drop,
@@ -179,30 +178,6 @@ test('M-7 · the review step asks the posting question; the dialog edits the amo
   // The line under the amount follows the mode — and a set price that is still
   // missing says so; with one, the module's own sentence.
   assert.match(drop, /\? copy\.message : 'Pick a price to publish\.'/);
-
-  // The dialog no longer asks it, and never changes the mode it is handed.
-  assert.ok(!dialog.includes('SegmentedControl'), 'one place asks the question');
-  assert.ok(!dialog.includes('PRICING_MODE_OPTIONS'));
-  assert.ok(!dialog.includes('draftMode'), 'the dialog holds no mode of its own');
-  // Every string comes from the shared module; the dialog writes none of them.
-  assert.match(dialog, /const copy = budgetEditorCopy\(mode\);/);
-  assert.ok(
-    !dialog.includes('Set the maximum amount workers can bid up to'),
-    'the copy lives in lib/pricingMode.ts, not restated here'
-  );
-  // Save hands back the amount with the mode it was typed for; Cancel
-  // discards the amount.
-  assert.match(dialog, /onSave\(draft\.trim\(\), mode\);/);
-  assert.match(dialog, /setDraft\(value\); setProblem\(null\);/);
-  // A posted price cannot be blank, and it says so in validateOfferAmount's
-  // own sentence rather than a second one for the same fact.
-  assert.match(
-    dialog,
-    /if \(!text\.trim\(\)\) return budgetEditorCopy\(mode\)\.allowEmpty \? null : 'Enter an amount\.';/
-  );
-  // Still contacts nothing and still writes nothing.
-  assert.ok(!dialog.includes('supabase'), 'the dialog contacts nothing');
-  assert.ok(!dialog.includes('createJob'), 'the dialog writes nothing');
 });
 
 test('a4 · the wizard sends the mode and writes one figure to the right column', () => {

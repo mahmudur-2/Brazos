@@ -5,7 +5,6 @@ import {
   dark as emeraldDark,
   light as emeraldLight,
   constantAccents,
-  metricGeneration,
   shadows as tokenShadows,
   litCard as tokenLitCard,
   radius,
@@ -1028,28 +1027,12 @@ export function typographyFor(palette: ColorPalette): Record<keyof typeof typogr
  * Nothing runs at import time; the factory runs once per palette (WeakMap
  * keyed on the palette object) and the result is shared by every instance,
  * so this costs what the module-scope StyleSheet it replaces cost.
- *
- * RUN T1 (C2) — GENERATION FIRST, PALETTE SECOND. The palette was the only
- * key, which is precisely why colour was live and every METRIC a factory read
- * was frozen at whatever the constant held: `spacing.lg` moving could not
- * invalidate a cache keyed on an object that had not changed. The cache now
- * keys on the metric generation first, so a spacing or radius dial rebuilds
- * the sheet while an untouched generation still returns the SAME OBJECT it
- * returned before this run — identity, not deep equality, and 102 consumers
- * that were not edited to get it. The signature and the `stylesFor(palette)`
- * call shape are deliberately unchanged.
  */
 export function themedStyles<P extends object, T>(
   factory: (colors: P) => T,
 ): (palette: P) => T {
-  let generation = metricGeneration();
-  let cache = new WeakMap<P, T>();
+  const cache = new WeakMap<P, T>();
   return (palette) => {
-    const current = metricGeneration();
-    if (current !== generation) {
-      generation = current;
-      cache = new WeakMap<P, T>();
-    }
     const cached = cache.get(palette);
     if (cached) return cached;
     const built = factory(palette);
@@ -1059,16 +1042,8 @@ export function themedStyles<P extends object, T>(
 }
 
 /**
- * RUN T1 (C3/D6) — THE SAME CACHING FOR A SHEET THAT CARRIES NO COLOUR.
- *
- * Twenty-three sheets across ui/primitives/, ui/templates/ and components/
- * are built at module scope with `StyleSheet.create` because they never
- * needed a palette — and that is exactly what puts their metrics out of
- * reach: the sheet is created once, at import, from whatever `spacing` and
- * `radius` held then, and `themedStyles` cannot help because there is no
- * palette to key on. Wrapping the factory in this defers it to first use and
- * keys the one cached result on the metric generation, so those sheets follow
- * a dial for the same reason the themed ones do.
+ * A sheet that carries no colour, built once on first use rather than at
+ * import:
  *
  *   const stylesFor = metricStyles(() => StyleSheet.create({ … }));
  *   // in the component:
@@ -1078,14 +1053,9 @@ export function themedStyles<P extends object, T>(
  * one takes no palette, so it cannot repaint on a theme change.
  */
 export function metricStyles<T>(factory: () => T): () => T {
-  let generation = metricGeneration();
   let cached: T | undefined;
   return () => {
-    const current = metricGeneration();
-    if (cached === undefined || current !== generation) {
-      generation = current;
-      cached = factory();
-    }
+    if (cached === undefined) cached = factory();
     return cached;
   };
 }

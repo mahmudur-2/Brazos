@@ -6,22 +6,8 @@ import { PinnedFootProvider } from '../ui/primitives/BottomNav';
 import { screenGround, useThemeColors } from '../lib/theme';
 import { ModeTreeLayoutSignal } from '../components/ModeTransitionOverlay';
 import { useReportLaunchReady } from '../lib/launchContext';
-import { designStudioAvailable } from '../lib/designStudioGate';
 import { CustomerRoot } from './CustomerRoot';
 import { WorkerRoot } from './WorkerRoot';
-
-/**
- * LOADED LAZILY (F2). The panel and the schema it reads are about 5,000 lines
- * that only an internal or development build can ever show, so the module is
- * required behind the same gate that mounts it: a preview or production build
- * never evaluates it at boot. The gate is a module-scope constant, so this
- * resolves once.
- */
-const NullPanel = () => null;
-const DesignStudioPanel = designStudioAvailable
-  ? (require('../components/DesignStudioPanel') as typeof import('../components/DesignStudioPanel'))
-      .DesignStudioPanel
-  : NullPanel;
 
 /**
  * The root mode switch (BRAZOS_MASTER_PLAN.md §F, enforcement mechanism 2).
@@ -148,8 +134,6 @@ export function ModeShell() {
         <ModeTreeLayoutSignal key={treeMode} />
       </ShellGroundView>
       </PinnedFootProvider>
-      {/* FENCE: DESIGN STUDIO (RUN S2 C1) — PERMANENT and CHANNEL-GATED: the panel mounts only where lib/designStudioGate.ts says the studio may exist (Metro __DEV__, or update channel internal/development; FAIL CLOSED on preview, production and unknown). tests/designStudio.test.mjs pins this gate — no future run may loosen it. Renders null until toggled on the Appearance screen. */}
-      {designStudioAvailable ? <DesignStudioPanel /> : null}
     </>
   );
 }

@@ -104,7 +104,6 @@ import {
   JOB_CATEGORY_LABELS,
 } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { useDialNumber } from '../lib/designOverrides';
 import {
   EYEBROW_TYPE,
   emeraldColorsFor,
@@ -131,11 +130,11 @@ export function ClientJobDetailScreen() {
   // the value this file drew before the dial existed, spelled here and nowhere
   // else; the four token-backed ones take the `theme.*` scale this file
   // imports spacing/radius from.
-  const jobHeroPadding = useDialNumber('clientJobDetail.jobHero.padding') ?? spacing.xl;
-  const jobHeroRadius = useDialNumber('clientJobDetail.jobHero.radius') ?? radius.xl;
-  const contentPaddingX = useDialNumber('clientJobDetail.content.paddingX') ?? spacing.lg;
-  const contentGap = useDialNumber('clientJobDetail.content.gap') ?? spacing.lg;
-  const iconCircleSize = useDialNumber('clientJobDetail.iconCircle.size') ?? 36;
+  const jobHeroPadding = spacing.xl;
+  const jobHeroRadius = radius.xl;
+  const contentPaddingX = spacing.lg;
+  const contentGap = spacing.lg;
+  const iconCircleSize = 36;
   // emerald(3): the floating pill's real footprint. This is the "Job & bids"
   // surface the device pass caught scrolling under it.
   const navClearance = useScrollClearance();

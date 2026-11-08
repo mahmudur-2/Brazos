@@ -14,7 +14,7 @@ import {
   type PickerOption,
   type PopoverAnchor,
 } from './PickerPopover';
-import { useMaterials } from '../lib/designOverrides';
+import { materials } from '../ui/tokens';
 import type { WorkerSkillsState } from '../lib/workerSkills';
 import { Sheet } from '../ui/primitives/Sheet';
 import {
@@ -187,7 +187,7 @@ export function JobFilterSheet({
 }: JobFilterSheetProps) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
-  const paneRim = useMaterials().pane.borderColor;
+  const paneRim = materials.pane.borderColor;
   const [draft, setDraft] = useState<JobFilterModel>(value);
   const [draftDistance, setDraftDistance] = useState<DistanceFilterMiles | null>(distance?.value ?? null);
   const [popover, setPopover] = useState<{ kind: PopoverKind; anchor: PopoverAnchor } | null>(null);

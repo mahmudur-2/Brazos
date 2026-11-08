@@ -7,8 +7,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { glow, withAlpha, PANE_HALO_RING, type MaterialName, type PaneFill, type PaneHalo, type PaneRim } from '../tokens';
-import { useDesignOverrides, useMaterials } from '../../lib/designOverrides';
+import { glow, materials, withAlpha, PANE_HALO_RING, type MaterialName, type PaneFill, type PaneHalo, type PaneRim } from '../tokens';
 import { metricStyles, useThemeColors } from '../../lib/theme';
 import { BlurLayer, canBlur } from '../../lib/blur';
 import { backgroundImageStyle } from './LitSurface';
@@ -20,8 +19,7 @@ import { backgroundImageStyle } from './LitSurface';
  * three materials in ui/tokens.ts (`materials`): chrome (the nav bar), sheet
  * (docked and floating dialog cards), menu (anchored popovers). The material
  * is DATA — blur strength, scrim mix, hairline mix — so a surface can never
- * invent its own glass, and the design studio (lib/designOverrides.ts, C2/C3)
- * can tune every wearer at once.
+ * invent its own glass.
  *
  * FOUR LAYERS, IN ORDER: (1) the scrim fill — this view's own background, so
  * it is always under everything else; (2) blur, through lib/blur.tsx's
@@ -158,10 +156,7 @@ export function Surface({
   const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
   const reduceTransparency = useReduceTransparency();
-  // The static table with the studio's live dials folded in (C2) — an
-  // identity read while no dial is set.
-  const overrides = useDesignOverrides();
-  const spec = useMaterials()[material];
+  const spec = materials[material];
 
   const cornerRadius = radius ?? spec.radius ?? 0;
   const topOnly = (corners ?? (spec.radiusTopOnly ? 'top' : 'all')) === 'top';
@@ -202,7 +197,7 @@ export function Surface({
   const sheen = isDark && !flat && !gradient && spec.sheen ? spec.sheen : null;
   const sheenColor = sheen?.color ?? colors.white;
 
-  const haloColor = glowColor && isDark ? withAlpha(glowColor, overrides.glowAlpha ?? SURFACE_GLOW_ALPHA) : null;
+  const haloColor = glowColor && isDark ? withAlpha(glowColor, SURFACE_GLOW_ALPHA) : null;
   // Native keeps the halo on the legacy shadow props; on web it joins the one boxShadow below.
   const halo = haloColor && Platform.OS !== 'web' ? glow.halo(haloColor) : null;
   // 2026-09-27 (the Lux remake) — the flat card's drop shadow, from the
