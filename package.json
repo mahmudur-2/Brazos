@@ -60,7 +60,8 @@
     "db:types": "npx supabase gen types --local --lang typescript --schema public > types/database.ts",
     "db:test": "npx supabase test db --local supabase/tests",
     "fingerprint": "npx expo-updates fingerprint:generate",
-    "release:testflight": "npx eas-cli@latest build --platform ios --profile production --auto-submit",
+    "release:testflight": "npx eas-cli@latest build --platform ios --profile testflight --auto-submit",
+    "release:production": "npx eas-cli@latest build --platform ios --profile production --auto-submit",
     "update:preview": "npx eas-cli@latest update --channel preview --environment preview"
   },
   "private": true,

@@ -208,10 +208,12 @@ test('TestFlight and EAS Update configuration remains present', () => {
 
   assert.ok(resolved.extra.eas.projectId);
   assert.ok(resolved.updates.url);
-  // TestFlight is a distribution of a production build, not a build kind of
-  // its own, so `production` is the profile `--auto-submit` targets and the
-  // one that must declare a channel and auto-increment the build number.
-  assert.equal(eas.build.production.channel, 'production');
-  assert.equal(eas.build.production.autoIncrement, true);
-  assert.deepEqual(Object.keys(eas.submit), ['production']);
+  // `testflight` (staging, Stripe test key) is what `release:testflight`
+  // auto-submits; `production` is kept for real money later. Both are store
+  // builds that declare a channel and auto-increment the build number.
+  for (const name of ['production', 'testflight']) {
+    assert.equal(eas.build[name].channel, name);
+    assert.equal(eas.build[name].autoIncrement, true);
+  }
+  assert.deepEqual(Object.keys(eas.submit).sort(), ['production', 'testflight']);
 });

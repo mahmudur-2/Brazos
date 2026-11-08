@@ -54,32 +54,22 @@ import {
 } from './supabase-ref.mjs';
 
 /**
- * The one Supabase project each EAS BUILD PROFILE may build against. Only
- * `production` reaches the production project; development, preview and
- * e2e-test stay on staging. A profile absent from this map is refused
- * outright, and tests/buildGate.test.mjs asserts in BOTH directions that this
- * map and eas.json's `build` block hold exactly the same keys — a profile that
- * exists in one and not the other is how an unpinned build gets made.
- *
- * `share` and `testflight` were deleted in R1. TestFlight is not a build kind;
- * it is a distribution of a production build, so `production` is what
- * `--auto-submit` targets and what EXPECTED_REF pins to PRODUCTION_REF.
- *
- * "preview" STILL MEANS TWO DIFFERENT THINGS, AND THE COLLISION IS NOW REAL.
- * Keys here are EAS_BUILD_PROFILE — eas.json's `build` block. Separately, EAS
- * *environments* are their own namespace, and the environment named `preview`
- * holds PRODUCTION credentials. Until R1 that was merely confusing, because no
- * preview BUILD profile existed. It now does, and it is pinned to STAGING —
- * so it deliberately selects the `development` ENVIRONMENT, not the one that
- * shares its name. Setting `"environment": "preview"` on the preview profile
- * would inject production credentials into a staging build; this gate would
- * catch it and fail the build, which is the point, but the fix is to leave the
- * environment alone rather than to "correct" it to the matching name.
+ * The one Supabase project each EAS BUILD PROFILE (EAS_BUILD_PROFILE) may build
+ * against; a profile absent here is refused, and tests/buildGate.test.mjs keeps
+ * this map and eas.json's `build` keys identical. development, preview,
+ * e2e-test and testflight build against STAGING; only `production` reaches the
+ * production project, and it stays unused until real money.
+ * `testflight` is the store-distributed STAGING build for the TestFlight cohort
+ * (D-20260905-1): bundle id app.brazos.mobile, Stripe test key. Its EAS
+ * ENVIRONMENT is `preview`, which holds staging values (verified 2026-11-08);
+ * the `production` environment holds production values — never point
+ * testflight at it to "match" the bundle id.
  */
 export const EXPECTED_REF = Object.freeze({
   development: STAGING_REF,
   preview: STAGING_REF,
   'e2e-test': STAGING_REF,
+  testflight: STAGING_REF,
   production: PRODUCTION_REF,
 });
 

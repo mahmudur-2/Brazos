@@ -38,6 +38,18 @@
         "EXPO_PUBLIC_PAYMENTS_MODE": "stripe"
       }
     },
+    "testflight": {
+      "distribution": "store",
+      "channel": "testflight",
+      "environment": "preview",
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_APP_VARIANT": "production",
+        "EXPO_PUBLIC_PHONE_AUTH_MODE": "supabase",
+        "EXPO_PUBLIC_PAYMENTS_MODE": "stripe"
+      }
+    },
     "e2e-test": {
       "distribution": "internal",
       "environment": "preview",
@@ -54,6 +66,7 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "testflight": {}
   }
 }

@@ -106,12 +106,17 @@ test('development profile with production env fails closed', () => {
   assertFailure(result, `resolves to ${PRODUCTION}, expected ${STAGING}`);
 });
 
-// The `testflight` profile was deleted in R1: TestFlight is a distribution of
-// a production build, not a build kind of its own, so `production` is the
-// profile that must refuse staging credentials.
+// `production` is the future real-money profile and must refuse staging
+// credentials; `testflight` is the staging store build (D-20260905-1) and must
+// refuse production ones.
 test('production profile with staging env fails closed', () => {
   const result = runGate({ EAS_BUILD_PROFILE: 'production', ...stagingEnv() });
   assertFailure(result, `resolves to ${STAGING}, expected ${PRODUCTION}`);
+});
+
+test('testflight profile with production env fails closed', () => {
+  const result = runGate({ EAS_BUILD_PROFILE: 'testflight', ...productionEnv() });
+  assertFailure(result, `resolves to ${PRODUCTION}, expected ${STAGING}`);
 });
 
 test('missing EXPO_PUBLIC_SUPABASE_URL fails closed', () => {
@@ -218,13 +223,14 @@ test('a key in neither format fails closed — sb_secret_ never ships in a clien
   }
 });
 
-test('every profile in the expected-ref map is one of the four known profiles', () => {
+test('every profile in the expected-ref map is one of the five known profiles', () => {
   assert.deepEqual(
     Object.keys(EXPECTED_REF).sort(),
-    ['development', 'e2e-test', 'preview', 'production']
+    ['development', 'e2e-test', 'preview', 'production', 'testflight']
   );
   assert.equal(EXPECTED_REF.preview, STAGING);
   assert.equal(EXPECTED_REF['e2e-test'], STAGING);
+  assert.equal(EXPECTED_REF.testflight, STAGING);
   assert.equal(EXPECTED_REF.production, PRODUCTION);
   // Only ONE profile may reach the production project. Counted rather than
   // listed, so adding a profile pinned to production has to be deliberate.
@@ -363,6 +369,7 @@ test('the preview profile is a standalone staging build on its own channel', () 
     'e2e-test',
     'preview',
     'production',
+    'testflight',
   ]);
   assert.equal(eas.build.development.developmentClient, true);
   assert.equal(eas.build.development.distribution, 'internal');
@@ -375,7 +382,7 @@ test('the preview profile is a standalone staging build on its own channel', () 
     assert.equal(profile.android, undefined, `${name} still carries an android block`);
   }
   assert.equal(eas.cli.appVersionSource, 'remote');
-  assert.deepEqual(Object.keys(eas.submit), ['production']);
+  assert.deepEqual(Object.keys(eas.submit).sort(), ['production', 'testflight']);
 });
 
 // INVARIANT 5, REHOMED AND STRENGTHENED. The old suite proved eas.json and the
@@ -396,5 +403,5 @@ test('eas.json and the build gate know exactly the same set of profiles', () => 
     `eas.json declares [${declared}] and the gate pins [${pinned}] — every build profile must be pinned to exactly one project, and the gate must pin nothing that cannot be built`
   );
   // Non-vacuity: two empty sets are also identical.
-  assert.ok(declared.length >= 4, `only ${declared.length} profiles — check the read`);
+  assert.ok(declared.length >= 5, `only ${declared.length} profiles — check the read`);
 });
