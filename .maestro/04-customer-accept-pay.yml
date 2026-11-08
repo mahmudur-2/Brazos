@@ -157,10 +157,16 @@ appId: app.brazos.mobile.preview
 - inputText: "123"
 - tapOn: "ZIP"
 - inputText: "10001"
-- scrollUntilVisible:
-    element:
-      text: 'Pay \$.*'
-    direction: DOWN
+# Run 9: the number pad covered the Pay button and the tap on it landed on a key. The sheet's keyboard
+# toolbar ends with a Done check; close the keyboard first, then the button is on screen.
+- runFlow:
+    when:
+      visible: "Done"
+    commands:
+      - tapOn: "Done"
+- hideKeyboard
+- extendedWaitUntil:
+    visible: 'Pay \$.*'
     timeout: 10000
 - tapOn: 'Pay \$.*'
 # Checkout polls the ledger for `held` and offers "Check again" past its window (screens/CheckoutScreen.tsx).
