@@ -261,7 +261,7 @@ test('a4 · the money walk’s selectors are the ones the app renders, in the de
   const walk = read('.maestro/02-customer-post-job.yml');
   assert.match(
     walk,
-    /- tapOn: "Edit budget"\n- tapOn: '\\\$50'\n- assertVisible: "Workers can bid up to this amount\."\n- tapOn: "Publish"/
+    /- tapOn: "Edit budget"\n- tapOn: '\\\$50'\n- assertVisible: "Workers can bid up to this amount\."\n- runFlow: subflows\/publish-job\.yml/
   );
 });
 

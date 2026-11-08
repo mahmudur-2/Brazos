@@ -159,15 +159,7 @@ appId: app.brazos.mobile.preview
 - tapOn: "Repeat this job"
 - tapOn: "Off"
 - takeScreenshot: 02-main-review
-- tapOn: "Publish"
-- extendedWaitUntil:
-    visible: 'Your job is live\.|Get notified\?|Could not post job|Saved, but without a map pin'
-    timeout: 60000
-- assertNotVisible: "Could not post job|Saved, but without a map pin"
-- runFlow: subflows/dismiss-permission-prompts.yml
-- extendedWaitUntil:
-    visible: 'Your job is live\.'
-    timeout: 30000
+- runFlow: subflows/publish-job.yml
 - takeScreenshot: 02-main-live
 - tapOn: "Back to Home"
 
@@ -240,15 +232,7 @@ appId: app.brazos.mobile.preview
 - tapOn: "Edit budget"
 - tapOn: '\$50'
 - assertVisible: "Workers can bid up to this amount."
-- tapOn: "Publish"
-- extendedWaitUntil:
-    visible: 'Your job is live\.|Get notified\?|Could not post job|Saved, but without a map pin'
-    timeout: 60000
-- assertNotVisible: "Could not post job|Saved, but without a map pin"
-- runFlow: subflows/dismiss-permission-prompts.yml
-- extendedWaitUntil:
-    visible: 'Your job is live\.'
-    timeout: 30000
+- runFlow: subflows/publish-job.yml
 - takeScreenshot: 02-side-live
 # Edit job (offered while the job is open with no bids, hooks/useJobOwnerActions.ts).
 - tapOn: "View job and bids"

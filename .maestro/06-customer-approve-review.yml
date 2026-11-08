@@ -194,15 +194,7 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 - assertVisible: "Copied from .*"
 - takeScreenshot: 06-reuse-review
-- tapOn: "Publish"
-- extendedWaitUntil:
-    visible: 'Your job is live\.|Get notified\?|Could not post job|Saved, but without a map pin'
-    timeout: 60000
-- assertNotVisible: "Could not post job|Saved, but without a map pin"
-- runFlow: subflows/dismiss-permission-prompts.yml
-- extendedWaitUntil:
-    visible: 'Your job is live\.'
-    timeout: 30000
+- runFlow: subflows/publish-job.yml
 - tapOn: "View job and bids"
 - extendedWaitUntil:
     visible: "Job & Bids|Job Details"

@@ -1,0 +1,25 @@
+appId: app.brazos.mobile.preview
+# Shared: Publish from the wizard's review step, then the live page.
+# On a GitHub Mac the publish is the first request after minutes of typing, and the runner drops idle
+# connections silently; iOS gives up after 60 s with "Could not post job" (e2e runs 4 and 5 hung here).
+# One retry covers it. A phone's network does not behave this way.
+---
+- tapOn: "Publish"
+- extendedWaitUntil:
+    visible: 'Your job is live\.|Get notified\?|Could not post job|Saved, but without a map pin'
+    timeout: 90000
+- runFlow:
+    when:
+      visible: "Could not post job"
+    commands:
+      - takeScreenshot: publish-retry
+      - tapOn: "OK"
+      - tapOn: "Publish"
+      - extendedWaitUntil:
+          visible: 'Your job is live\.|Get notified\?|Could not post job|Saved, but without a map pin'
+          timeout: 90000
+- assertNotVisible: "Could not post job|Saved, but without a map pin"
+- runFlow: dismiss-permission-prompts.yml
+- extendedWaitUntil:
+    visible: 'Your job is live\.'
+    timeout: 30000
