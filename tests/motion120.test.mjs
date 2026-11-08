@@ -792,13 +792,14 @@ test('[static] every feature flag carries the dependency it waits on, and only t
   // flipped is still where a later reader looks to find out why it could be.
   const source = read('lib/featureFlags.ts');
   const flags = [...source.matchAll(/export const (\w+) = (false|true) as boolean;/g)];
-  assert.equal(flags.length, 12, `the roster is twelve flags (saw ${flags.length})`);
+  // Lean D3a removed DELIVERED_TICKS, DOCUMENTS, READ_TICKS and TRANSLATION
+  // together with the features they gated.
+  assert.equal(flags.length, 8, `the roster is eight flags (saw ${flags.length})`);
   assert.deepEqual(
     flags.map((f) => f[1]).sort(),
     [
-      'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'DELIVERED_TICKS', 'DOCUMENTS',
-      'HIDDEN_CHATS', 'LIVE_LOCATION', 'MARK_UNREAD', 'PRICE_GUIDANCE', 'READ_TICKS',
-      'TIMED_BLOCK', 'TRANSLATION',
+      'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'HIDDEN_CHATS', 'LIVE_LOCATION',
+      'MARK_UNREAD', 'PRICE_GUIDANCE', 'TIMED_BLOCK',
     ],
     'the flag roster changed — say so in HANDOFF.md as well as here'
   );
@@ -808,11 +809,10 @@ test('[static] every feature flag carries the dependency it waits on, and only t
   // nothing to wait on is a flag nobody can ever safely flip.
   assert.doesNotMatch(source, /export const MUTE\b/);
   assert.match(source, /NOT A FLAG — MUTE WAS RETIRED/);
-  // WHICH FLAGS ARE LIVE, named rather than counted. Seven flipped on
-  // 2026-08-24 — exactly the ones supabase/archive/phases/phase77_conversation_features.sql
-  // supplied a dependency for, wired by RUN W1 on BOTH thread kinds. DOCUMENTS
-  // and LIVE_LOCATION joined them on 2026-08-25 (RUN W2), the other two
-  // features phase77 declared.
+  // WHICH FLAGS ARE LIVE, named rather than counted. Six of these flipped on
+  // 2026-08-24 — the ones supabase/archive/phases/phase77_conversation_features.sql
+  // supplied a dependency for, wired by RUN W1 on BOTH thread kinds.
+  // LIVE_LOCATION joined them on 2026-08-25 (RUN W2).
   //
   // LIVE_LOCATION IS THE ONE WORTH READING TWICE. Its recorded dependency was
   // two things: a location-sharing table, which phase77 supplied, AND
@@ -823,21 +823,16 @@ test('[static] every feature flag carries the dependency it waits on, and only t
   // next run to "finish" the job by asking for the permission this one
   // declined.
   //
-  // The two that remain each still have something real to wait on — an
-  // edge-function deploy for TRANSLATION, and for DELIVERED_TICKS a
-  // per-recipient delivery signal that does not exist in any schema here and
-  // is refused rather than pending.
-  //
   // Pinning the ROSTER rather than asserting "all false" is what keeps this
   // fence useful now that flipping is a thing that happens: a flag going live
   // without its dependency turns this red exactly as a premature flip used to.
   const LIVE = [
-    'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'DOCUMENTS', 'HIDDEN_CHATS',
-    'LIVE_LOCATION', 'MARK_UNREAD', 'READ_TICKS', 'TIMED_BLOCK',
+    'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'HIDDEN_CHATS',
+    'LIVE_LOCATION', 'MARK_UNREAD', 'TIMED_BLOCK',
   ];
   // PRICE_GUIDANCE (Tier A, 2026-08-30) is dark by the copy sweep's rule: the
   // seeded range table has no attributed source, so the guidance waits on one.
-  const DARK = ['DELIVERED_TICKS', 'PRICE_GUIDANCE', 'TRANSLATION'];
+  const DARK = ['PRICE_GUIDANCE'];
   assert.deepEqual(
     [...LIVE, ...DARK].sort(),
     flags.map((f) => f[1]).sort(),
@@ -874,10 +869,8 @@ test('[static] every feature flag either gates something or says plainly that it
   // with the wiring, which is exactly what this fence demands in that
   // direction.
   //
-  // DELIVERED_TICKS is the one that remains, and it is the strictly harder
-  // half: nothing in the schema distinguishes "the insert succeeded" from "the
-  // other device has it", so there is no honest source to wire it to and it
-  // stays false permanently rather than being faked from an insert.
+  // Lean D3a then deleted READ_TICKS and DELIVERED_TICKS together with the
+  // ticks, so every flag left in the table gates something.
   //
   // This fence keeps that honest in BOTH directions: a flag with a guard site
   // is fine, a flag without one must SAY it has none, and the day the wiring
@@ -929,12 +922,9 @@ test('[static] every feature flag either gates something or says plainly that it
 
   // The sweep must be measuring both halves; an empty `sources` would make
   // every flag look unguarded and still pass the loop above.
-  assert.ok(gated >= 10, `most flags do gate something (saw ${gated})`);
-  assert.equal(
-    declared,
-    1,
-    `DELIVERED_TICKS is the only flag left with nothing to gate (saw ${declared})`
-  );
+  assert.ok(flags.length > 0, 'the flag sweep must find the roster');
+  assert.equal(gated, flags.length, `every flag gates something (saw ${gated} of ${flags.length})`);
+  assert.equal(declared, 0, `no flag is left with nothing to gate (saw ${declared})`);
 });
 
 // ===========================================================================

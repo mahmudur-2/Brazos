@@ -113,7 +113,7 @@ anything the Customer would not want shared.
 
 ### Messages and job activity
 
-Messages you send, including text, photos, documents, and voice messages;
+Messages you send, including text and photos;
 bids; hire requests and counter-offers; reviews and ratings you give and
 receive; and the status history of your jobs.
 

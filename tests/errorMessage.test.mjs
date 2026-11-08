@@ -182,12 +182,11 @@ test('B7 · both email screens show authMessage, and the sign-up dialog names wh
 });
 
 test('[static] B7 review · a device or server reason never reaches a share alert or the push notice', async () => {
-  // lib/ sits outside the raw-message sweep above, so its two share helpers are fenced here:
+  // lib/ sits outside the raw-message sweep above, so its photo share helper is fenced here:
   // the native error goes to Sentry, the alert reads a fixed line.
   const sharing = await read('lib/sharing.ts');
   assert.doesNotMatch(sharing, /message:\s*err instanceof Error \? err\.message/);
   assert.match(sharing, /message: 'Could not share this photo\. Try again\.',/);
-  assert.match(sharing, /message: 'Could not open this document\. Try again\.',/);
   // registerPushToken()'s 'error' result carries "Could not get a push token: …" or the RPC's own
   // text; Notification settings shows a plain line and a retry, never that message.
   const settings = await read('screens/NotificationSettingsScreen.tsx');

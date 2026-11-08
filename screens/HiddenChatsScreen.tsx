@@ -68,7 +68,6 @@ export function HiddenChatsScreen() {
     readMap,
     stateByKey,
     profiles,
-    lastMessageReactions,
     moderation,
     loading,
     error,
@@ -105,7 +104,6 @@ export function HiddenChatsScreen() {
             !best || thread.last_message_at > best.last_message_at ? thread : best,
           null
         );
-        const reactions = latest ? lastMessageReactions[latest.last_message_id] ?? [] : [];
         const isMuted = moderation.muted.has(otherId);
         const other = profiles[otherId];
 
@@ -117,9 +115,7 @@ export function HiddenChatsScreen() {
           targets: person.threads.map(conversationTarget),
           name: other?.full_name ?? 'Someone',
           avatarUrl: other?.avatar_url ?? null,
-          preview: latest
-            ? conversationPreviewText(latest, reactions.map((r) => r.emoji))
-            : '…',
+          preview: latest ? conversationPreviewText(latest) : '…',
           lastMessageAt: (latest ?? person.latest).last_message_at,
           unread: !isMuted && liveThreads.some((t) => threadUnread(t, user.id, readMap)),
           muted: isMuted,
@@ -134,7 +130,6 @@ export function HiddenChatsScreen() {
     profiles,
     readMap,
     stateByKey,
-    lastMessageReactions,
     moderation,
     user,
   ]);

@@ -65,7 +65,6 @@ test('B11 · every permission request has a way to Settings on denial', () => {
     for (const shape of camera) assert.match(src, shape, `${path}: the camera denial offers Settings`);
     assert.doesNotMatch(src, /'Camera access needed'/);
   }
-  assert.match(read('hooks/useVoiceRecorder.ts'), /if \(!permission\.granted\) \{[\s\S]{0,120}void askOpenSettings\('microphone'\);/);
   assert.match(read('hooks/useLiveLocation.ts'), /if \(permission\.status !== 'granted'\) \{[\s\S]{0,120}await askOpenSettings\(\s*'location',/);
 
   // Speech: the provider reports the refusal; both mics offer Settings.

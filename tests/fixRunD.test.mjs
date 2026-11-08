@@ -157,10 +157,3 @@ test('[static] D12: a rule drawn as a view of its own is the Divider; nothing ha
     assert.ok(seen.has(where), `${where} is allowed but no longer drawn — drop it from the list`);
   }
 });
-
-test('[static] D12: the reaction picker is the frosted PopModal, a backdrop tap still closing it', () => {
-  const picker = strip(read('components/ReactionPicker.tsx'));
-  assert.match(picker, /<PopModal\s+visible=\{visible\}\s+onRequestClose=\{onClose\}\s+onBackdropPress=\{onClose\}/);
-  assert.doesNotMatch(picker, /<Modal\b/);
-  assert.match(picker, /<Pressable style=\{styles\.sheet\} onPress=\{\(\) => \{\}\}>/, 'the card absorbs its own taps');
-});

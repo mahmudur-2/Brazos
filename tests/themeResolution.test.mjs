@@ -1158,7 +1158,9 @@ test('[static] T1 (D6): every eligible sheet is lazy, and the exclusions are nam
   // 2026-10-03 (fix run F23): 24 -> 22 — components/BrazosMonogram.tsx and
   // components/PulseDot.tsx, both lazy and both imported by nothing, were
   // removed. Nothing went eager.
-  assert.equal(lazy.length, 22, 'the D6 conversion set is 22 files');
+  // Lean D3a: 22 -> 21 — components/VoiceNote.tsx was deleted with voice
+  // messages. Nothing went eager.
+  assert.equal(lazy.length, 21, 'the D6 conversion set is 21 files');
   for (const path of lazy) {
     const source = await read(path);
     assert.match(source, /^\s*const styles = stylesFor\(\);$/m, `${path} must read its sheet inside the component`);

@@ -16,7 +16,6 @@ const flatten = (source) => stripComments(source).replace(/\s+/g, ' ');
 // lib/conversationVisibility.ts, which imports nothing: the arithmetic is RUN
 // below, and only the client calls are read as source.
 const visibility = await import('../lib/conversationVisibility.ts');
-const ticks = await import('../lib/messageTicks.ts');
 const inbox = await import('../lib/inboxFilters.ts');
 const conversations = visibility;
 const states = visibility;
@@ -465,87 +464,6 @@ test('[static] the hidden-chats entry is a foot row, gated on the device being a
   );
 });
 
-// ---------------------------------------------------------------------------
-// D9 / D10 — the gold tick.
-// ---------------------------------------------------------------------------
-
-test('[executed] readAt resolves for BOTH thread kinds from the counterparty watermark', () => {
-  const positions = {
-    byJobId: { 'job-1': '2026-08-24T12:00:00.000Z' },
-    byDirectThreadId: { 'thread-1': '2026-08-24T09:00:00.000Z' },
-  };
-
-  const jobMessage = {
-    job_id: 'job-1',
-    direct_thread_id: null,
-    created_at: '2026-08-24T11:00:00.000Z',
-  };
-  const directMessage = {
-    job_id: null,
-    direct_thread_id: 'thread-1',
-    created_at: '2026-08-24T08:00:00.000Z',
-  };
-
-  assert.equal(ticks.deliveryFor(jobMessage, positions).readAt, positions.byJobId['job-1']);
-  assert.equal(
-    ticks.deliveryFor(directMessage, positions).readAt,
-    positions.byDirectThreadId['thread-1']
-  );
-  assert.equal(ticks.tickStateFor(ticks.deliveryFor(jobMessage, positions)), 'read');
-  assert.equal(ticks.tickStateFor(ticks.deliveryFor(directMessage, positions)), 'read');
-
-  // A message NEWER than their watermark is not read, on either kind.
-  const laterJob = { ...jobMessage, created_at: '2026-08-24T13:00:00.000Z' };
-  const laterDirect = { ...directMessage, created_at: '2026-08-24T10:00:00.000Z' };
-  assert.equal(ticks.deliveryFor(laterJob, positions).readAt, null);
-  assert.equal(ticks.deliveryFor(laterDirect, positions).readAt, null);
-  assert.equal(ticks.tickStateFor(ticks.deliveryFor(laterJob, positions)), 'sent');
-  assert.equal(ticks.tickStateFor(ticks.deliveryFor(laterDirect, positions)), 'sent');
-
-  // No watermark at all reads as "not read", never as read.
-  const empty = { byJobId: {}, byDirectThreadId: {} };
-  assert.equal(ticks.deliveryFor(jobMessage, empty).readAt, null);
-  assert.equal(ticks.deliveryFor(directMessage, empty).readAt, null);
-});
-
-test('[static] the chat assembles readAt from BOTH sources, and only behind the flag', () => {
-  const chat = stripComments(read(CHAT));
-
-  // The two sources, one per thread kind. Missing either is the half-wiring
-  // that kept this flag dark.
-  assert.match(chat, /fetchCounterpartyReadStates\(counterpartyId, jobTargetIds\)/);
-  assert.match(chat, /directTargetIds\.map\(\(id\) => fetchDirectThread\(id\)\)/);
-  // Whichever read column is THEIRS — taking the wrong one would show a user
-  // their own read position back as the counterparty's tick.
-  assert.match(
-    chat,
-    /data\.user_a === counterpartyId \? data\.user_a_read_at : data\.user_b_read_at/
-  );
-
-  // THE GUARD. With the flag off nothing is read, nothing is subscribed, and
-  // no delivery is assembled — the bubble falls back to one tick.
-  assert.match(chat, /if \(!READ_TICKS\) return;/);
-  assert.match(
-    chat,
-    /delivery=\{\s*READ_TICKS && item\.sender_id === user\?\.id\s*\? deliveryFor\(item, readPositions\)\s*: undefined\s*\}/
-  );
-  const bubble = stripComments(read('components/ChatBubble.tsx'));
-  assert.match(bubble, /tickStateFor\(delivery \?\? \{\}\)/);
-  assert.match(bubble, /isOwn && !isUnsent \? <MessageTicks/);
-
-  // ONE subscription serving both kinds — which is why phase77 chose a policy
-  // over a definer RPC: an RPC cannot ride realtime, so job ticks would poll
-  // and lag their direct siblings in the same folded conversation.
-  assert.match(chat, /table: 'message_reads' \}/);
-  assert.match(chat, /table: 'direct_threads' \}/);
-  assert.match(chat, /\.channel\(`chat:ticks:\$\{instanceId\}:\$\{runRef\.current\+\+\}`\)/);
-  assert.match(chat, /supabase\.removeChannel\(channel\)/);
-
-  // And the migration really did publish message_reads, or the subscription is
-  // a socket that never fires.
-  assert.match(read(MIGRATION), /alter publication supabase_realtime add table public\.message_reads;/);
-});
-
 test('[static] the chat timeline is the CLEARED timeline, and the send target is not', () => {
   const chat = stripComments(read(CHAT));
 
@@ -569,10 +487,10 @@ test('[static] each live flag gates a real affordance, in a real file', () => {
   // does nothing is worse than an unflipped one, so each flag is followed from
   // its constant to the file that imports it to the call that runs.
   //
-  // Seven on 2026-08-24 (RUN W1), an eighth on 2026-08-25 when DOCUMENTS
-  // shipped — and DOCUMENTS is the first entry here whose guard site is the
-  // COMPOSER rather than the inbox or the chat screen, because the row it
-  // gates lives in the [ + ] menu.
+  // Six on 2026-08-24 (RUN W1) and LIVE_LOCATION on 2026-08-25, whose guard
+  // site is the COMPOSER rather than the inbox, because the row it gates lives
+  // in the [ + ] menu. (Lean D3a removed READ_TICKS and DOCUMENTS with their
+  // features.)
   const flags = read('lib/featureFlags.ts');
   const screen = stripComments(read(INBOX));
   const chat = stripComments(read(CHAT));
@@ -585,8 +503,6 @@ test('[static] each live flag gates a real affordance, in a real file', () => {
     HIDDEN_CHATS: [screen, /LocalAuthentication\.authenticateAsync\(/],
     ARCHIVE: [screen, /archived: !target\.archived/],
     DELETE_CHAT: [screen, /\{ delete: true \}/],
-    READ_TICKS: [chat, /deliveryFor\(item, readPositions\)/],
-    DOCUMENTS: [composer, /onPress: onPickDocument,/],
     LIVE_LOCATION: [composer, /onPress: onShareLiveLocation,/],
   };
 
@@ -602,17 +518,8 @@ test('[static] each live flag gates a real affordance, in a real file', () => {
 
   // The handler behind each row has to reach something too, or the flag would
   // gate a prop nobody passes — the dead-row failure one level up.
-  assert.match(chat, /onPickDocument=\{pickDocument\}/);
-  assert.match(chat, /DocumentPicker\.getDocumentAsync\(/);
   assert.match(chat, /onShareLiveLocation=\{/);
   assert.match(chat, /liveLocation\.start\(durationMs\)/);
-
-  // And the two that stay dark stay dark. DELIVERED_TICKS especially: there is
-  // no honest delivery signal in any schema here, so it is not "not done yet",
-  // it is refused.
-  for (const name of ['DELIVERED_TICKS', 'TRANSLATION']) {
-    assert.match(flags, new RegExp(`export const ${name} = false as boolean;`));
-  }
 });
 
 test('[static] the money vocabulary is untouched by this run', () => {
@@ -624,28 +531,10 @@ test('[static] the money vocabulary is untouched by this run', () => {
     'lib/conversationVisibility.ts',
     'lib/conversations.ts',
     'lib/inboxFilters.ts',
-    'lib/messageTicks.ts',
     INBOX,
     CHAT,
     HIDDEN,
   ]) {
     assert.equal(/escrow/i.test(read(file)), false, `${file} must not say escrow`);
   }
-});
-
-test('[executed] DELIVERED_TICKS is never produced from an insert', () => {
-  // The flag stays false permanently: nothing in the schema distinguishes
-  // "the insert succeeded" from "their device has it", and a tick that means
-  // the first while looking like the second is a lie. The assembly must not
-  // manufacture a deliveredAt.
-  const positions = { byJobId: { 'job-1': null }, byDirectThreadId: {} };
-  const delivery = ticks.deliveryFor(
-    { job_id: 'job-1', direct_thread_id: null, created_at: '2026-08-24T00:00:00.000Z' },
-    positions
-  );
-  assert.equal(delivery.deliveredAt, undefined);
-  assert.equal(ticks.tickStateFor(delivery), 'sent');
-
-  const chat = stripComments(read(CHAT));
-  assert.equal(/deliveredAt/.test(chat), false, 'ChatScreen must not invent a delivery signal');
 });

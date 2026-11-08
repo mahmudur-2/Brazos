@@ -414,7 +414,6 @@ test('[static] every modal scrim in dark is the one shared strength', () => {
     'components/AmountPrompt.tsx',
     'components/CreateSheet.tsx',
     'components/ConfirmDialog.tsx',
-    'components/ReactionPicker.tsx',
     'components/ReportDialog.tsx',
     'components/ServicePickerSheet.tsx',
     'ui/primitives/Sheet.tsx',

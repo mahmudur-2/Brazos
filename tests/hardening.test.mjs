@@ -201,7 +201,7 @@ test('chat media is private, membership-scoped, and stored by caller-owned path'
   );
   assert.match(storage, /`\$\{jobId\}\/\$\{userId\}\/\$\{Date\.now\(\)\}/);
   assert.match(storage, /createSignedUrl\(path, CHAT_SIGNED_URL_TTL_SECONDS\)/);
-  assert.match(storage, /storageReference\(CHAT_AUDIO_BUCKET, path\)/);
+  assert.match(storage, /if \(privateReference\) \{\s*return \{ url: storageReference\(bucket, path\), error: null \};/);
 });
 
 test('avatar and job-photo writes are path-owned', () => {
@@ -495,8 +495,8 @@ test('every realtime channel topic is unique per mount', () => {
 
   // No fixed-topic subscription remains. hooks/useReactions.ts was the last
   // one (keyed per job, so a fast remount on the SAME job collided — opening
-  // a job's chat twice crashed the app, FIX-RUN A3, 2026-10-03); its suffix
-  // is asserted below. The list stays, empty, so a new fixed topic cannot be
+  // a job's chat twice crashed the app, FIX-RUN A3, 2026-10-03); lean D3a
+  // deleted it with reactions. The list stays, empty, so a new fixed topic cannot be
   // excused by adding itself here without a reviewer seeing it.
   const KNOWN_FIXED_TOPIC = [];
 
@@ -533,12 +533,6 @@ test('every realtime channel topic is unique per mount', () => {
   // The sweep must actually be finding call sites; a rename that emptied it
   // would otherwise pass silently.
   assert.ok(checked >= 7, `the channel sweep must stay wired (saw ${checked} call sites)`);
-
-  // The reactions hook specifically (A3): the per-job key stays, so the
-  // filter still scopes the subscription, and the per-mount suffix follows.
-  const reactions = read('hooks/useReactions.ts');
-  assert.match(reactions, /\.channel\(`reactions:job:\$\{jobId\}:\$\{instanceId\}:\$\{runRef\.current\+\+\}`\)/);
-  assert.doesNotMatch(reactions, /\.channel\(`reactions:job:\$\{jobId\}`\)/, 'the fixed per-job topic must not come back');
 
   // And the inbox specifically, since it is the one this run moved: unique
   // topic, debounced refresh, and a teardown that cancels the pending timer

@@ -8,25 +8,23 @@
  * is worse than no row — it teaches a user the feature exists and then breaks
  * their trust the first time they use it.
  *
- * NINE OF THESE ARE LIVE, and phase77 is why all nine could be.
+ * SEVEN OF THESE ARE LIVE, and phase77 is why all seven could be.
  *
  *   2026-08-24, RUN W1   supabase/phase77_conversation_features.sql landed on
  *                        staging and W1 wired what it declared: TIMED_BLOCK,
- *                        MARK_UNREAD, CLEAR_CHAT, HIDDEN_CHATS, ARCHIVE,
- *                        DELETE_CHAT and READ_TICKS.
- *   2026-08-25, RUN W2   the two features of that same migration W1 left:
- *                        DOCUMENTS and LIVE_LOCATION.
+ *                        MARK_UNREAD, CLEAR_CHAT, HIDDEN_CHATS, ARCHIVE and
+ *                        DELETE_CHAT.
+ *   2026-08-25, RUN W2   LIVE_LOCATION, from that same migration.
+ *
+ * (Lean D3a removed DOCUMENTS, READ_TICKS, DELIVERED_TICKS and TRANSLATION
+ * together with the features they gated: v1 messaging is text and photo.)
  *
  * Each one's block below records what it waited on and what closed it, because
  * a flag that has been flipped is still the place a later reader looks to find
  * out why it could be — and in LIVE_LOCATION's case, why half of its recorded
  * dependency was REFUSED rather than met.
  *
- * TWO REMAIN DARK, and they are dark for different reasons. TRANSLATION waits
- * on a deploy and a key, which is an ordinary pending dependency. DELIVERED_
- * TICKS waits on a per-recipient delivery signal that exists in no schema
- * here, and it is a REFUSAL: an insert returning a row is not delivery, and a
- * tick that means the first while looking like the second is a lie.
+ * ONE REMAINS DARK: PRICE_GUIDANCE, which waits on an attributed source.
  *
  * WHAT A FLAG WAITS ON is written beside it, in the same vocabulary the schema
  * run uses: a table, a column, a policy, a deploy, or a key. Flipping one is a
@@ -83,51 +81,13 @@
  * CLOCK, never by waiting; the subscription exists only to make a moving pin
  * move. Waiting for an event leaves a stale pin on screen indefinitely.
  *
- * THE GUARD SITE is screens/ChatScreen.tsx and it guards the ASSEMBLY, the
- * READ_TICKS arrangement: with this false nothing is read, nothing is
- * subscribed, no watcher can start and the two cards have no share to render.
- * Like [[DOCUMENTS]], the composer row is gated by this flag and its handler
- * and NOT by `allowAttachments` — all three RPCs take a job id or a direct
- * thread id, so a share works on both thread kinds.
+ * THE GUARD SITE is screens/ChatScreen.tsx and it guards the ASSEMBLY: with
+ * this false nothing is read, nothing is subscribed, no watcher can start and
+ * the two cards have no share to render. The composer row is gated by this
+ * flag and its handler and NOT by `allowAttachments` — all three RPCs take a
+ * job id or a direct thread id, so a share works on both thread kinds.
  */
 export const LIVE_LOCATION = true as boolean;
-
-/**
- * Attaching a document (PDF, docx, spreadsheet) to a message.
- *
- * WAITS ON: nothing since 2026-08-25. It waited on expo-document-picker being
- * installed and on a storage bucket plus the message columns that name it —
- * photos and video had both, documents had neither. The picker is in
- * package.json and native in the current build; phase77 added the
- * `chat-documents` bucket at the LIVE private posture (party-scoped read,
- * own-folder insert, both gates) and the three columns the bubble draws from,
- * `document_url`, `document_name` and `document_size_bytes`.
- *
- * THE BUBBLE NEVER DOWNLOADS THE FILE TO DRAW ITSELF. That is what the second
- * and third columns are for: the name, a human byte size and an
- * extension-appropriate glyph all come off the row, so opening a thread costs
- * no attachment traffic and tapping one costs exactly one. The URL is a
- * private `storage://chat-documents/…` reference exchanged for a short-lived
- * signed URL at display time, the phase29 posture the photo and voice paths
- * already follow.
- *
- * IT IS THE FIRST ATTACHMENT KIND THAT WORKS ON BOTH THREAD KINDS, and that
- * is the one thing to know before touching the composer. Camera, Photos and
- * Voice Message are gated by `allowAttachments` because chat-photos and
- * chat-audio authorise on a JOB, so a pair thread has no path to key an
- * upload on. chat_documents_read_party and chat_documents_insert_party each
- * carry a second branch on `direct_threads`, so this row is gated by THIS FLAG
- * AND ITS HANDLER and by nothing else. The chat-photos / chat-audio gap is
- * pre-existing, reported by phase77, and deliberately parked — closing it is a
- * policy change, not a client one.
- *
- * ONE HONEST RESIDUE, recorded because a later reader will find it: phase70's
- * unsend_message() wipes content, image_url, audio_url and audio_duration_ms,
- * and predates these three columns, so an unsent document row keeps its name
- * and its object. Nothing DISPLAYS them — every surface checks `unsent_at`
- * first — but the wipe is not yet complete, and completing it is a migration.
- */
-export const DOCUMENTS = true as boolean;
 
 // NOT A FLAG — MUTE WAS RETIRED FROM THIS TABLE ON 2026-08-23, before it ever
 // gated anything, because it had no unmet dependency to record and this table
@@ -254,88 +214,6 @@ export const DELETE_CHAT = true as boolean;
  * "manually marked unread" bit the schema does not have.
  */
 export const MARK_UNREAD = true as boolean;
-
-/**
- * The GOLD (read) ticks on an own message.
- *
- * WAITS ON: nothing. phase77 supplied the missing half and W1 built the
- * wiring; this flag is now an ordinary switch over a complete feature.
- *
- * WHAT WAS MISSING, and what closed it:
- *
- *   direct threads  ALREADY READABLE, and always were. `direct_threads`
- *                   carries both parties' read columns on the row, and
- *                   direct_threads_select_party
- *                   (supabase/phase36_direct_offer_threads.sql) lets either
- *                   participant SELECT that whole row.
- *   job threads     NOT READABLE until phase77. message_reads_select_own
- *                   (supabase/phase9_messages_inbox.sql) is
- *                   `using (user_id = auth.uid())`, so a user could read only
- *                   their OWN row. `message_reads_select_party`
- *                   (supabase/phase77_conversation_features.sql) adds exactly
- *                   one row to that: the OTHER party's, on a job the caller is
- *                   already in. Chosen over a definer RPC because a policy
- *                   keeps ONE tick pipeline for both thread kinds — an RPC
- *                   cannot ride realtime, so job ticks would poll and lag
- *                   their direct siblings inside the same conversation.
- *
- * WHY BOTH HALVES HAD TO LAND TOGETHER. One conversation folds a pair's job
- * threads AND their direct thread into a single timeline (see `targets` in
- * screens/ChatScreen.tsx), so wiring only the readable half would have made
- * the SAME conversation show gold on some bubbles and never on others — an
- * absent tick meaning "not read yet" on one message and "unknowable here" on
- * the next. That is why it shipped dark rather than half.
- *
- * THE GUARD SITE is screens/ChatScreen.tsx, and it guards the ASSEMBLY: with
- * this false, no read position is fetched, no subscription is opened, and
- * `delivery` is never passed — so ChatBubble falls back to
- * `tickStateFor({})`, one tick, exactly what an unflipped build has always
- * drawn. lib/messageTicks.ts holds the derivation; components/MessageTicks.tsx
- * draws all three states and is unit-tested for each.
- */
-export const READ_TICKS = true as boolean;
-
-/**
- * The second (delivered) tick on an own message.
- *
- * WAITS ON: real delivery plumbing — a per-recipient delivered_at, written
- * when a device actually receives the row. Nothing in the current schema
- * distinguishes "the insert succeeded" from "the other device has it", and a
- * tick that means the former while looking like the latter is a lie. The tick
- * ELEMENT renders all three states and is unit-tested for all three; only the
- * live wiring waits. It is now the ONLY flag in this table with nothing to
- * gate — [[READ_TICKS]] went live on 2026-08-24 — and it is the strictly
- * harder half of it: read state existed in the schema for one thread kind and
- * phase77 supplied the other, while delivery exists for neither.
- *
- * IT STAYS FALSE UNTIL THAT COLUMN EXISTS, and RUN W1 recorded the temptation
- * it must not yield to: the insert returning a row is NOT delivery. Wiring
- * `deliveredAt` to a successful insert would draw two ticks for a message that
- * has reached the server and nothing else, which is the lie this flag exists
- * to refuse.
- *
- * NO GUARD SITE TODAY: flipping this constant changes nothing, because nothing
- * imports it. It is named only in the prose of components/MessageTicks.tsx and
- * lib/messageTicks.ts, and deliveryFor() deliberately never sets the field.
- *
- * WHAT MUST BE BUILT: a per-recipient `delivered_at` — a column, and the
- * client write that sets it when a device actually receives the row. The
- * assembly it would feed already exists: deliveryFor() in lib/messageTicks.ts
- * builds the MessageDelivery ChatScreen passes to ChatBubble, so this flag
- * only ever has to add its field to that one function and its own guard beside
- * READ_TICKS at the call site.
- */
-export const DELIVERED_TICKS = false as boolean;
-
-/**
- * In-chat translation of a message or a whole conversation.
- *
- * WAITS ON: the `translate` edge function being reviewed and DEPLOYED, and
- * AZURE_TRANSLATOR_KEY + AZURE_TRANSLATOR_REGION set in its environment. The
- * function is drafted in supabase/functions/translate/ and is explicitly not
- * deployed; the sheet renders from fixtures today.
- */
-export const TRANSLATION = false as boolean;
 
 /**
  * Tier A (C6): the static "Suggested starting range" guidance on the

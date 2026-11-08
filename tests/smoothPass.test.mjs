@@ -32,8 +32,6 @@ function appSources() {
 test('[static] F16: every endless loop stops when its screen is covered or the app is in the background', () => {
   // Bound to something else, each with its reason.
   const BOUND_ELSEWHERE = {
-    // Runs only while a recording is live; the recorder stops on blur and on background.
-    'components/AudioMeterBars.tsx': /const indeterminate = levels === null;/,
     // Runs only while dictating; dictation already stops on blur (useIsFocused) and on AppState.
     'components/DictationMic.tsx': /useIsFocused[\s\S]*AppState\.addEventListener/,
     // One module loop for every placeholder in the app: it pauses on the app's state, not a screen's.
@@ -62,7 +60,7 @@ test('[static] F16: every endless loop stops when its screen is covered or the a
 });
 
 test('[static] F11: the add-media menu is the anchored glass dropdown, and no frosted pop-up fades as a Modal', () => {
-  for (const path of ['components/JobSummaryCard.tsx', 'components/ReportDialog.tsx', 'components/ReactionPicker.tsx']) {
+  for (const path of ['components/JobSummaryCard.tsx', 'components/ReportDialog.tsx']) {
     assert.doesNotMatch(strip(read(path)), /animationType="fade"/, `${path} must not fade a Modal (the blur stutters)`);
   }
   const card = strip(read('components/JobSummaryCard.tsx'));

@@ -15,19 +15,15 @@ const flatten = (source) => stripComments(source).replace(/\s+/g, ' ');
 //
 // Four naked controls (camera, photo library, record-mic, filled send disc)
 // plus a fixed-height quick-reply row above them became three zones: the
-// [ + ] drop-up, the field, and ONE control that morphs between a dictation
-// mic and the send arrow.
+// [ + ] drop-up, the field, and the send arrow.
 //
 // The properties below are the ones a later run could plausibly undo while
 // believing it was fixing something, so each is pinned with the reason:
 //
-//   1. THE TWO MICS ARE DIFFERENT MICS. Right = dictation (speech into the
-//      field, through lib/voiceSearch, sends nothing). [ + ] > Voice Message
-//      = an audio clip that becomes a bubble. They were ONE glyph doing the
-//      second job, and a user reaching for the first got an audio file.
-//   2. NEVER A DEAD CONTROL, in both directions — the mic waits on the
-//      boundary AFFIRMING recognition, and the [ + ] renders only if its menu
-//      would have an entry.
+//   1. NO MIC IN THE ROW (lean D3a). Dictation is the iOS keyboard's own key,
+//      and voice messages are not in v1.
+//   2. NEVER A DEAD CONTROL — the [ + ] renders only if its menu would have an
+//      entry.
 //   3. THE ATTACHMENT GATE SURVIVED THE REDESIGN. A direct thread has no job
 //      id to key storage on, so its media entries stay hidden.
 //   4. A FLAGGED ENTRY NEEDS ITS HANDLER TOO, so flipping a flag without
@@ -39,15 +35,10 @@ const COMPOSER = 'components/ChatComposer.tsx';
 const DROPMENU = 'components/DropMenu.tsx';
 const DROPMENU_SHARED = 'components/DropMenu.shared.tsx';
 const DROPMENU_FAST = 'components/DropMenu.motion120.tsx';
-const METER = 'components/AudioMeterBars.tsx';
-const RECORDER = 'hooks/useVoiceRecorder.ts';
 const CHAT = 'screens/ChatScreen.tsx';
 
-const meter = await import('../lib/audioMeter.ts');
-const ticks = await import('../lib/messageTicks.ts');
 const inbox = await import('../lib/inboxFilters.ts');
 const menus = await import('../lib/chatMenus.ts');
-const translate = await import('../lib/translateRules.ts');
 
 test('[static] the composer is three zones, and every glyph is bare', () => {
   const flat = flatten(read(COMPOSER));
@@ -62,7 +53,7 @@ test('[static] the composer is three zones, and every glyph is bare', () => {
   // wrapper that takes its place in the row — the WRAPPER flexes now.
   assert.match(flat, /inputWrap: \{ flex: 1,/);
   assert.match(flat, /wrapStyle=\{styles\.inputWrap\}/);
-  // ZONE 3 — one fixed box holding two layers, so the row's width cannot
+  // ZONE 3 — one fixed box holding the send layer, so the row's width cannot
   // change as the text does.
   assert.match(flat, /morphSlot: \{ width: COMPOSER_CONTROL_SIZE, height: COMPOSER_CONTROL_SIZE,? \}/);
   assert.match(flat, /morphLayer: \{ \.\.\.StyleSheet\.absoluteFillObject,/);
@@ -82,95 +73,65 @@ test('[static] the composer is three zones, and every glyph is bare', () => {
   // THE MORPH runs on transform + opacity, which is what keeps it on the
   // native driver while someone is typing into the field beside it.
   assert.match(flat, /useNativeDriver: USE_NATIVE_DRIVER/);
-  assert.match(flat, /opacity: morph\.interpolate\(\{ inputRange: \[0, 1\], outputRange: \[1, 0\] \}\)/);
   assert.match(flat, /opacity: morph,/);
-  // Only the visible layer takes touches, or a fading-out mic eats the send.
-  assert.match(flat, /pointerEvents=\{showSend \? 'none' : 'auto'\}/);
+  // The arrow takes touches only while it is visible.
   assert.match(flat, /pointerEvents=\{showSend \? 'auto' : 'none'\}/);
 });
 
-test('[static] the right mic is DICTATION and the voice MESSAGE moved into the menu', () => {
+test('[static] no mic in the composer row: dictation is the keyboard key, voice messages are gone', () => {
   const source = stripComments(read(COMPOSER));
 
-  // Dictation goes through the same on-device boundary the search bars use.
-  assert.match(source, /import \{ voiceSearch, type VoiceSession \} from '\.\.\/lib\/voiceSearch'/);
-  assert.match(source, /voiceSearch\.beginSession\(\{/);
-  // The transcript's ONE egress is the draft's setter — the boundary's own
-  // contract, and it must not gain a second consumer here. F3: the composer
-  // owns the draft, so that setter is its own; the field types into the same one.
-  assert.match(source, /onTranscript: \(phrase\) => setText\(joinDictation\(baseTextRef\.current, phrase\)\)/);
+  // Lean D3a (ruling 2): the iOS keyboard has its own dictation key, and v1
+  // messaging is text and photo. The two Post-a-job mics are not this file.
+  assert.doesNotMatch(source, /voiceSearch|joinDictation|mic-outline|onMicTap|key: 'voice'/);
+  // F3: the composer owns the draft; the field types into its own setter.
   assert.match(source, /const \[text, setText\] = useState\(\(\) => draft\?\.current \?\? ''\);/);
   assert.match(source, /onChangeText=\{setText\}/);
-  assert.equal((source.match(/onTranscript:/g) ?? []).length, 1);
-  // A second tap stops and commits, and an unmount cancels without committing.
-  assert.match(source, /sessionRef\.current\.stop\(\);/);
-  assert.match(source, /return \(\) => sessionRef\.current\?\.cancel\(\);/);
-
-  // Dictation APPENDS. A search field replaces; someone half-way through a
-  // sentence means "and then this", not "instead".
-  assert.match(source, /function joinDictation\(base: string, phrase: string\): string \{/);
-
-  // The voice MESSAGE recorder is now a menu entry, and `onMicTap` — the prop
-  // that arms it — is reached from there and nowhere else in this row.
-  assert.match(source, /key: 'voice', label: 'Voice Message', icon: 'mic-outline', onPress: onMicTap/);
-  const micGlyphs = [...source.matchAll(/name=\{listening \? 'mic' : 'mic-outline'\}/g)];
-  assert.equal(micGlyphs.length, 1, 'exactly one mic glyph renders in the row, and it is the dictation one');
 });
 
-test('[static] no dead control: the mic waits on the boundary, the [ + ] on having an entry', () => {
+test('[static] no dead control: the send waits on text, the [ + ] on having an entry', () => {
   const source = stripComments(read(COMPOSER));
 
-  // False until the boundary AFFIRMS recognition on this binary; every
-  // degraded case leaves the mic unrendered rather than disabled.
-  assert.match(source, /const \[dictationReady, setDictationReady\] = useState\(false\);/);
-  assert.match(source, /setDictationReady\(availability\.status === 'available'\)/);
-  assert.match(source, /\{dictationReady && \(/, 'the mic layer must be conditional on readiness');
-  // With no dictation the send arrow still appears — with text, and only then.
-  assert.match(source, /const showSend = !listening && text\.trim\(\)\.length > 0;/);
-  assert.match(source, /const sendDisabled = !text\.trim\(\) \|\| sending \|\| busy \|\| isPreviewing;/);
+  // The send arrow appears with text, and only then.
+  assert.match(source, /const showSend = text\.trim\(\)\.length > 0;/);
+  assert.match(source, /const sendDisabled = !text\.trim\(\) \|\| sending;/);
 
-  // The [ + ] is absent, not empty, when the thread can take no attachment —
-  // and absent again while a take is running, where a greyed-out button beside
-  // a live recording would take space the waveform can use.
-  assert.match(source, /\{!isRecording && menuItems\.length > 0 && \(/);
+  // The [ + ] is absent, not empty, when the thread can take no attachment.
+  assert.match(source, /\{menuItems\.length > 0 && \(/);
 });
 
-test('[static] the attachment gate survived the redesign, and the flags need their handlers', () => {
+test('[static] the attachment gate survived the redesign, and the flag needs its handler', () => {
   const source = stripComments(read(COMPOSER));
 
   // A direct thread (no job) has no path to key an upload on, so its media
-  // entries are hidden rather than offered and then failing. Camera and the
-  // recorder are additionally native-only.
+  // entries are hidden rather than offered and then failing. Camera is
+  // additionally behind its own prop.
   assert.match(source, /if \(allowAttachments && showCameraAndMic\) \{\s*menuItems\.push\(\{ key: 'camera'/);
   assert.match(source, /if \(allowAttachments\) \{\s*menuItems\.push\(\{ key: 'photos'/);
-  assert.match(source, /if \(allowAttachments && showCameraAndMic\) \{\s*menuItems\.push\(\{\s*key: 'voice'/);
 
   // FLAG **AND** HANDLER. The flag alone is not enough: a flipped flag with
   // no wired action would be exactly the dead row featureFlags.ts exists to
-  // prevent. Both flags are TRUE since 2026-08-25 and this rule is what still
-  // makes them safe — it is a structural property of the menu, not a
-  // consequence of the flags being off.
+  // prevent. The flag is TRUE since 2026-08-25 and this rule is what still
+  // makes it safe — it is a structural property of the menu, not a
+  // consequence of the flag being off.
   assert.match(source, /if \(LIVE_LOCATION && onShareLiveLocation\) \{/);
-  assert.match(source, /if \(DOCUMENTS && onPickDocument\) \{/);
-  assert.match(source, /import \{ DOCUMENTS, LIVE_LOCATION \} from '\.\.\/lib\/featureFlags';/);
+  assert.match(source, /import \{ LIVE_LOCATION \} from '\.\.\/lib\/featureFlags';/);
 });
 
-test('[static] the attachment gate SPLIT: Document and Live location are not behind it', () => {
+test('[static] the attachment gate SPLIT: Live location is not behind it', () => {
   const source = stripComments(read(COMPOSER));
 
-  // THE GATE COVERS THREE ROWS, NOT FIVE — and this is the assertion that
+  // THE GATE COVERS TWO ROWS, NOT THREE — and this is the assertion that
   // stops a later edit from "tidying" the menu by putting every entry behind
-  // one condition. chat-photos and chat-audio authorise on a JOB, so those
-  // three go on a pair thread. phase77's chat_documents_* policies take a job
-  // id OR a direct thread id in folder one, and all three live-location RPCs
-  // take the same either-or pair, so those two work on BOTH thread kinds.
-  // Folding them into `allowAttachments` would hide two working features on
-  // every direct thread.
+  // one condition. chat-photos authorise on a JOB, so camera and photos go on
+  // a pair thread. All three live-location RPCs take a job id OR a direct
+  // thread id, so that row works on BOTH thread kinds. Folding it into
+  // `allowAttachments` would hide a working feature on every direct thread.
   const gated = [...source.matchAll(/if \(allowAttachments[^)]*\) \{/g)];
-  assert.equal(gated.length, 3, 'exactly three menu rows are gated on allowAttachments');
+  assert.equal(gated.length, 2, 'exactly two menu rows are gated on allowAttachments');
 
-  // Named, so the count above cannot be satisfied by the wrong three.
-  for (const key of ['camera', 'photos', 'voice']) {
+  // Named, so the count above cannot be satisfied by the wrong two.
+  for (const key of ['camera', 'photos']) {
     const at = source.indexOf(`key: '${key}'`);
     assert.ok(at > -1, `the ${key} row must exist`);
     const preceding = source.slice(0, at);
@@ -180,7 +141,7 @@ test('[static] the attachment gate SPLIT: Document and Live location are not beh
       `${key} must be gated on allowAttachments`,
     );
   }
-  for (const [key, flag] of [['document', 'DOCUMENTS'], ['location', 'LIVE_LOCATION']]) {
+  for (const [key, flag] of [['location', 'LIVE_LOCATION']]) {
     const at = source.indexOf(`key: '${key}'`);
     assert.ok(at > -1, `the ${key} row must exist`);
     const preceding = source.slice(0, at);
@@ -190,12 +151,12 @@ test('[static] the attachment gate SPLIT: Document and Live location are not beh
   }
 
   // And the prop's own contract says so, so the next reader is not left to
-  // infer the narrowing from the call sites. Read UNSTRIPPED: the contract is
-  // the docblock, which is exactly what stripComments() removes.
+  // infer it from the call sites. Read UNSTRIPPED: the contract is the
+  // docblock, which is exactly what stripComments() removes.
   assert.match(
     read(COMPOSER),
-    /Whether CAMERA, PHOTOS and VOICE MESSAGE are possible/,
-    'the prop must document that it is narrower than its name reads',
+    /Whether CAMERA and PHOTOS are possible/,
+    'the prop must document what it gates',
   );
 });
 
@@ -241,112 +202,6 @@ test('[static] the drop-up is the shared DropMenu, on the boundary timings', () 
   // Rows meet the touch floor by their DRAWN height — adjacent rows with
   // overlapping hitSlop would steal each other's taps.
   assert.match(shared, /minHeight: 46,/);
-});
-
-// ---------------------------------------------------------------------------
-// THE VOICE RECORDER — three phases, a REAL waveform, and no invented one.
-// ---------------------------------------------------------------------------
-
-test('[static] metering is asked for explicitly, because every preset has it off', () => {
-  const recorder = stripComments(read(RECORDER));
-  // expo-audio's own createRecordingOptions does `options.isMeteringEnabled ??
-  // false`, so RecordingPresets.HIGH_QUALITY alone reports no levels at all
-  // and the waveform would be permanently indeterminate.
-  assert.match(
-    recorder,
-    /useAudioRecorder\(\{ \.\.\.RecordingPresets\.HIGH_QUALITY, isMeteringEnabled: true \}\)/,
-    'the live waveform needs metering turned on by name'
-  );
-  // The window advances on the POLL, not on the level changing: a run of
-  // identical readings is exactly what silence is, and a component watching
-  // `metering` alone would freeze the waveform through it.
-  assert.match(recorder, /recorderState\.durationMillis, recorderState\.metering\]/);
-  // Each take starts from silence rather than inheriting the last one's shape.
-  assert.match(recorder, /resetMeter\(\);\s*setPhase\('recording'\)/);
-  // "No metering on this binary" is a latched fact, not a per-frame guess.
-  assert.match(recorder, /meterLevels: phase === 'recording' && meteringSeen \? meterLevels : null/);
-});
-
-test('[executed] the meter maps dBFS honestly, and NULL never collapses into silence', () => {
-  // The floor is what makes speech use the height: iOS reports down to -160,
-  // and mapping the full range pins every ordinary voice in the top sixth.
-  assert.equal(meter.METER_FLOOR_DB, -60);
-
-  // The two facts that must stay distinct.
-  assert.equal(meter.normalizeMeter(undefined), null, 'no reading is not silence');
-  assert.equal(meter.normalizeMeter(null), null);
-  assert.equal(meter.normalizeMeter(NaN), null, 'a NaN reading is no reading');
-  assert.equal(meter.normalizeMeter(-Infinity), null, 'and neither is an infinite one');
-  assert.equal(meter.normalizeMeter(-60), 0, 'the floor IS silence, and it is a real 0');
-  assert.equal(meter.normalizeMeter(-160), 0, 'below the floor clamps rather than going negative');
-
-  // The range in between, and both ends of it.
-  assert.equal(meter.normalizeMeter(0), 1);
-  assert.equal(meter.normalizeMeter(12), 1, 'a positive reading clamps rather than overflowing the bar');
-  assert.equal(meter.normalizeMeter(-30), 0.5);
-  assert.ok(Math.abs(meter.normalizeMeter(-15) - 0.75) < 1e-9);
-
-  // The window is fixed-width BY CONSTRUCTION, so no caller can grow it into
-  // an unbounded recording of the take.
-  const start = meter.emptyMeterWindow();
-  assert.equal(start.length, meter.METER_BAR_COUNT);
-  assert.ok(start.every((v) => v === 0));
-  let window = start;
-  for (const level of [0.2, 0.4, 0.9]) window = meter.advanceMeterWindow(window, level);
-  assert.equal(window.length, meter.METER_BAR_COUNT);
-  assert.deepEqual(window.slice(-3), [0.2, 0.4, 0.9], 'newest samples arrive at the RIGHT');
-  assert.deepEqual(start, meter.emptyMeterWindow(), 'and the previous window is not mutated');
-});
-
-test('[static] the waveform is never synthesised, and silence still draws', () => {
-  const bars = stripComments(read(METER));
-
-  // THE LINE THIS FENCE EXISTS FOR. A pseudo-random or sine-driven "waveform"
-  // over a mic nobody is measuring is a picture of nothing presented as a
-  // picture of your voice.
-  assert.doesNotMatch(bars, /Math\.random|Math\.sin|Math\.cos/, 'no invented amplitude, ever');
-
-  // No metering -> an INDETERMINATE pulse, visibly not a waveform.
-  assert.match(bars, /const indeterminate = levels === null;/);
-  assert.match(bars, /opacity: pulse\.interpolate\(\{ inputRange: \[0, 1\], outputRange: \[0\.35, 1\] \}\)/);
-  // ...and it is announced as something different, too.
-  assert.match(bars, /indeterminate \? 'Recording' : 'Recording, microphone level'/);
-
-  // Silence draws a floor: a flat line reads as "broken", not as "quiet".
-  assert.match(bars, /const BAR_MIN_SCALE = 0\.12;/);
-  assert.match(bars, /scaleY: Math\.max\(BAR_MIN_SCALE, Math\.min\(1, level\)\)/);
-  // SCALE, not height — ten updates a second must cost zero Yoga passes.
-  assert.doesNotMatch(bars, /height: [\d.]+ \+ /, 'bars are scaled, not re-laid-out');
-  assert.match(bars, /useNativeDriver: USE_NATIVE_DRIVER/);
-});
-
-test('[static] the three recorder phases each render their own controls', () => {
-  const flat = flatten(read(COMPOSER));
-
-  // RECORDING — one pill holding the live dot, the waveform and the elapsed
-  // time, with the stop OUTSIDE it, so the pill is a readout and the row keeps
-  // exactly one button.
-  assert.match(flat, /<View style=\{styles\.recordingPill\}> <View style=\{styles\.recordingDot\} \/> <AudioMeterBars levels=\{recorderLevels\} \/>/);
-  assert.match(flat, /<Text style=\{styles\.recordingTime\}>\{formatClipDuration\(recorderDurationMs\)\}<\/Text>/);
-  assert.match(flat, /accessibilityLabel="Stop recording"/);
-  // The pill is EMERALD, not danger: a take in progress is not an error. The
-  // one red thing in it is the universal live-dot.
-  const pill = /recordingPill: \{([^}]*)\}/.exec(flat);
-  assert.ok(pill, 'the recording pill must stay a plain style');
-  assert.match(pill[1], /borderColor: withAlpha\(colors\.emerald, 0\.45\)/);
-  assert.match(pill[1], /backgroundColor: withAlpha\(colors\.emerald, 0\.1\)/);
-  // Tabular figures, or the pill's width jitters once a second and the
-  // waveform appears to slide.
-  assert.match(flat, /recordingTime: \{[^}]*fontVariant: \['tabular-nums'\]/);
-
-  // PREVIEW — X to discard, the clip's own scrubber, arrow-up to send.
-  assert.match(flat, /accessibilityLabel="Discard recording" > <Ionicons name="close"/);
-  assert.match(flat, /<VoiceNote url=\{previewUri\} durationMs=\{recorderDurationMs\} isOwn=\{false\} \/>/);
-  assert.match(flat, /accessibilityLabel="Send voice message" > <Ionicons name="arrow-up"/);
-
-  // And the levels come from the recorder rather than from the composer, so
-  // there is one source for what the bars mean.
-  assert.match(stripComments(read('screens/ChatScreen.tsx')), /recorderLevels=\{recorder\.meterLevels\}/);
 });
 
 // ---------------------------------------------------------------------------
@@ -490,67 +345,6 @@ test('[static] the report sheet can block in the same breath, and says so when i
   assert.doesNotMatch(dialog, /alertAsync\(\s*'Report sent'/);
 });
 
-// ---------------------------------------------------------------------------
-// THE DELIVERY TICKS — all three states drawn and tested, ONE of them wired.
-//
-// The element has to be able to draw all three long before two of them can be
-// produced from live data, or the day the schema lands is the day the UI gets
-// written under time pressure. The flags carry the verdicts; these carry the
-// behaviour.
-// ---------------------------------------------------------------------------
-
-test('[executed] the tick state is the strongest the evidence supports, never stronger', () => {
-  // SENT is the floor and the only state today's schema can prove.
-  assert.equal(ticks.tickStateFor({}), 'sent');
-  assert.equal(ticks.tickStateFor({ deliveredAt: null, readAt: null }), 'sent');
-  assert.equal(ticks.tickStateFor({ deliveredAt: undefined, readAt: undefined }), 'sent');
-
-  assert.equal(ticks.tickStateFor({ deliveredAt: '2026-08-23T10:00:00Z' }), 'delivered');
-  assert.equal(
-    ticks.tickStateFor({ deliveredAt: '2026-08-23T10:00:00Z', readAt: '2026-08-23T10:01:00Z' }),
-    'read'
-  );
-  // READ IMPLIES DELIVERED: a message someone opened reached their device by
-  // definition, so a gap in delivery plumbing must not silently downgrade a
-  // fact we actually know.
-  assert.equal(ticks.tickStateFor({ readAt: '2026-08-23T10:01:00Z' }), 'read');
-  // The reverse is NOT assumed.
-  assert.notEqual(ticks.tickStateFor({ deliveredAt: '2026-08-23T10:00:00Z' }), 'read');
-});
-
-test('[executed] the read watermark covers what it covers, and a missing one covers nothing', () => {
-  const at = '2026-08-23T12:00:00Z';
-  assert.equal(ticks.coveredByReadWatermark('2026-08-23T11:59:59Z', at), true);
-  assert.equal(ticks.coveredByReadWatermark(at, at), true, 'the boundary is inclusive');
-  assert.equal(ticks.coveredByReadWatermark('2026-08-23T12:00:01Z', at), false);
-  // A missing watermark reads as NOT READ, never as read — the direction that
-  // matters, because the other way round claims someone saw something.
-  assert.equal(ticks.coveredByReadWatermark(at, null), false);
-  assert.equal(ticks.coveredByReadWatermark(at, undefined), false);
-  assert.equal(ticks.coveredByReadWatermark(at, ''), false);
-});
-
-test('[static] the element draws all three states, own bubbles only, from palette tokens', () => {
-  const el = stripComments(read('components/MessageTicks.tsx'));
-  const bubble = stripComments(read('components/ChatBubble.tsx'));
-
-  // One tick for sent, two for the other two, gold for read.
-  assert.match(el, /const read = state === 'read';/);
-  assert.match(el, /const double = state !== 'sent';/);
-  assert.match(el, /const color = read \? colors\.gold : withAlpha\(colors\.onPrimary, 0\.75\);/);
-  // Palette tokens, not white literals: `onPrimary` at the same 0.75 the
-  // timestamp beside it uses IS what "white" means on a filled own-bubble.
-  assert.doesNotMatch(el, /#[0-9a-fA-F]{3,8}|'white'/, 'no colour literals in a tick');
-  // All three states are announced, so the mark is not sighted-only.
-  assert.match(el, /read \? 'Read' : state === 'delivered' \? 'Delivered' : 'Sent'/);
-
-  // OWN MESSAGES ONLY, and unsent messages carry no tick at all — there is
-  // nothing left to have delivered.
-  assert.match(bubble, /\{isOwn && !isUnsent \? <MessageTicks state=\{tickStateFor\(delivery \?\? \{\}\)\} \/> : null\}/);
-  // Absent delivery info resolves to `sent`, which is every message today.
-  assert.match(bubble, /delivery\?: MessageDelivery;/);
-});
-
 test('[static] a quoted bubble widens to fit its quote; an unquoted bubble is untouched', () => {
   const bubble = stripComments(read('components/ChatBubble.tsx'));
 
@@ -627,7 +421,7 @@ test('[static+executed] the bubble cap resolves against the row, not against the
   assert.doesNotMatch(
     wrap[1],
     /(^|\s)(width|flex|flexBasis):/,
-    'bubbleWrap must stay width-less — it anchors the reaction badge and nothing more'
+    'bubbleWrap must stay width-less — it is the long-press target and nothing more'
   );
 
   // WHY THE PHOTO WAS THE VISIBLE CASUALTY, in numbers taken from the source
@@ -649,24 +443,17 @@ test('[static+executed] the bubble cap resolves against the row, not against the
   );
 });
 
-test('[static] the read-model verdicts are recorded where the next run will look', () => {
-  // The two flags this investigation produced must carry the EVIDENCE, not a
-  // shrug: the schema run read these to know what to build, and W1 flipped
-  // both once phase77 built it. The verdicts stay — a flag that HAS been
-  // flipped is still where a later reader looks to find out why it could be,
-  // and deleting the evidence would leave the flip unexplained.
+test('[static] the mark-unread verdict is recorded where the next run will look', () => {
+  // The flag must carry the EVIDENCE, not a shrug: the schema run read it to
+  // know what to build, and W1 flipped it once phase77 built it. The verdict
+  // stays — a flag that HAS been flipped is still where a later reader looks
+  // to find out why it could be. (READ_TICKS went with the ticks, lean D3a.)
   const flags = read('lib/featureFlags.ts');
-  assert.match(flags, /export const READ_TICKS = true as boolean;/);
   assert.match(flags, /export const MARK_UNREAD = true as boolean;/);
-  // Read: was readable on direct threads, not on job threads — both halves
-  // named with the migration that decides them.
-  assert.match(flags, /direct_threads_select_party/);
-  assert.match(flags, /message_reads_select_own/);
   // Mark-as-unread: was rewindable on job threads, not on direct threads.
   assert.match(flags, /message_reads_update_own/);
   assert.match(flags, /mark_direct_thread_read\(\), hard-codes `now\(\)`/);
-  // And each one names what CLOSED it, not just what blocked it.
-  assert.match(flags, /message_reads_select_party/);
+  // And it names what CLOSED it, not just what blocked it.
   assert.match(flags, /set_direct_thread_read_at\(\)/);
 });
 
@@ -819,7 +606,7 @@ test('[static] the composer row sits on the thread, not on a band of its own', (
   assert.match(
     row[1],
     /backgroundColor: 'transparent'/,
-    'the row must show the thread ground, so the recorder floats in both themes',
+    'the row must show the thread ground in both themes',
   );
   assert.doesNotMatch(
     row[1],
@@ -828,17 +615,12 @@ test('[static] the composer row sits on the thread, not on a band of its own', (
   );
 
   // Removing the band is only safe because everything IN the row draws its own
-  // edge. If either of these loses its outline the field stops being findable
-  // on a groundless row, so they are pinned here with the removal.
+  // edge. If the input loses its outline the field stops being findable on a
+  // groundless row, so it is pinned here with the removal.
   assert.match(
     /\n  input: \{([^}]*)\}/.exec(composer)[1],
     /borderWidth: 1,[^]*borderColor: colors\.border/,
     'the input must stay an outlined pill',
-  );
-  assert.match(
-    /recordingPill: \{([^}]*)\}/.exec(composer)[1],
-    /borderWidth: 1,\s*borderColor: withAlpha\(colors\.emerald/,
-    'the recording pill must stay an emerald hairline',
   );
 });
 
@@ -1100,178 +882,6 @@ test('[static] one action model, two entry mechanics, and no empty second sheet'
   assert.match(screen, /accessibilityHint=\{item\.isSelf \? undefined : rowActionHint\}/);
 });
 
-// ---------------------------------------------------------------------------
-// TRANSLATION — a complete UI in front of an UNDEPLOYED function.
-// ---------------------------------------------------------------------------
-
-test('[executed] the client refuses locally what the server would refuse remotely', () => {
-  // Nothing to send: refused without a round trip.
-  assert.deepEqual(translate.prepareBatch([]), { ok: false, reason: 'empty' });
-  assert.deepEqual(translate.prepareBatch(['   ', '']), { ok: false, reason: 'empty' });
-
-  // The cap is counted across the WHOLE batch. Capping per item would let a
-  // 200-message conversation through one item at a time — the same money
-  // spent and none of the bound.
-  const long = 'x'.repeat(translate.TRANSLATE_CHAR_CAP + 1);
-  assert.deepEqual(translate.prepareBatch([long]), { ok: false, reason: 'too-long' });
-  assert.deepEqual(
-    translate.prepareBatch(['y'.repeat(1200), 'z'.repeat(1200)]),
-    { ok: false, reason: 'too-long' }
-  );
-  assert.equal(translate.TRANSLATE_CHAR_CAP, 2000);
-
-  // A legal batch comes back trimmed, with the empties dropped and the order
-  // kept — the sheet pairs results to inputs by position.
-  assert.deepEqual(translate.prepareBatch(['  hola  ', '', 'que tal']), {
-    ok: true,
-    texts: ['hola', 'que tal'],
-  });
-});
-
-test('[executed] a half-built response is a failure, never a rendered undefined', () => {
-  // Shape-checked rather than cast: this is data crossing a network boundary.
-  for (const bad of [
-    null,
-    undefined,
-    {},
-    { items: null },
-    { items: [] },
-    { items: [{ source: 'a' }] },
-    { items: [{ translated: 'b' }] },
-    { items: [{ source: 1, translated: 'b' }] },
-    { items: [{ source: 'a', translated: 'b' }, { source: 'c' }] },
-  ]) {
-    assert.deepEqual(
-      translate.parseTranslateResponse(bad),
-      { ok: false, reason: 'failed' },
-      `${JSON.stringify(bad)} must not parse as a translation`
-    );
-  }
-
-  // A good one keeps both halves, so the sheet can show the original beside
-  // the translation.
-  assert.deepEqual(
-    translate.parseTranslateResponse({
-      detectedLanguage: 'es',
-      items: [{ source: 'hola', translated: 'hello' }],
-    }),
-    { ok: true, detectedLanguage: 'es', items: [{ source: 'hola', translated: 'hello' }] }
-  );
-  // A missing or empty detection is NULL, never a guess — the sheet then
-  // shows no language label at all rather than a confident wrong one.
-  assert.equal(
-    translate.parseTranslateResponse({ items: [{ source: 'a', translated: 'b' }] }).detectedLanguage,
-    null
-  );
-  assert.equal(
-    translate.parseTranslateResponse({ detectedLanguage: '', items: [{ source: 'a', translated: 'b' }] })
-      .detectedLanguage,
-    null
-  );
-});
-
-test('[executed] the device language is a bare subtag, and never throws', () => {
-  const language = translate.deviceLanguage();
-  assert.match(language, /^[a-z]{2,3}$/, 'the region is dropped on purpose');
-  // The fallback is a fallback, not a crash: a device that cannot answer is
-  // not a reason to fail a translation someone asked for.
-  assert.equal(typeof translate.deviceLanguage('pt'), 'string');
-});
-
-test('[executed] every failure has a message, and none of them is vendor text', () => {
-  for (const reason of ['unavailable', 'too-long', 'empty', 'failed']) {
-    const message = translate.translateFailureMessage(reason);
-    assert.ok(message.length > 0, `${reason} needs a message`);
-    // Closed set: nothing from Azure, the function, or the network can cross
-    // this boundary as prose, which is the lib/errorMessage contract.
-    assert.doesNotMatch(message, /azure|translator|http|status|token|key/i);
-  }
-});
-
-test('[static] the sheet renders from a result and owns none of the fetching', () => {
-  const sheet = stripComments(read('components/TranslationSheet.tsx'));
-
-  // PRESENTATION ONLY — which is how it is testable at all, given the
-  // function behind it cannot answer.
-  assert.doesNotMatch(sheet, /supabase|functions\.invoke|translateTexts/);
-  assert.match(sheet, /from '\.\.\/lib\/translateRules'/, 'the sheet reads the RULES, not the caller');
-  assert.match(sheet, /result: TranslateResult \| null;/);
-  assert.match(sheet, /\{result === null \? \(/, 'null is the loading state');
-  assert.match(sheet, /\) : result\.ok \? \(/);
-  assert.match(sheet, /translateFailureMessage\(result\.reason\)/);
-
-  // The DETECTED language, and only when the service detected one. There is
-  // no client-side language guessing anywhere in this path.
-  assert.match(sheet, /\{result\.detectedLanguage \? \(/);
-  assert.match(sheet, /Detected \{result\.detectedLanguage\.toUpperCase\(\)\}/);
-
-  // The original stays visible: a translation that replaces what someone
-  // actually wrote removes the ability to check it.
-  assert.match(sheet, /\{item\.original\}|\{item\.source\}/);
-
-  // COPY renders only when a handler exists — nothing in this project can
-  // write the clipboard yet, so today it does not render.
-  assert.match(sheet, /\{onCopy \? \(/);
-  assert.match(sheet, /onCopy\?: \(text: string\) => void;/);
-});
-
-test('[static] the translate entries are flagged, text-only, and batch the conversation', () => {
-  const chat = stripComments(read(CHAT));
-
-  // W1 gave READ_TICKS its guard site in this same screen and W2 gave
-  // LIVE_LOCATION one, so three flags now arrive on one import line.
-  // TRANSLATION is still imported here and still gates the entries below —
-  // which is the property; the other two ride along because this screen is
-  // where their assemblies are guarded.
-  assert.match(
-    chat,
-    /import \{ LIVE_LOCATION, READ_TICKS, TIMED_BLOCK, TRANSLATION \} from '\.\.\/lib\/featureFlags';/
-  );
-  // Behind the flag AND requiring content: there is nothing to translate in a
-  // photo or a voice note.
-  assert.match(chat, /\.\.\.\(TRANSLATION && menuTarget\.content/);
-  assert.match(chat, /label: 'Translate This Message'/);
-  assert.match(chat, /label: 'Translate Conversation'/);
-  // ONE request with N strings, not N requests — one rate-limit decision on
-  // the server rather than N.
-  assert.match(chat, /void runTranslation\(\s*messages/);
-  assert.match(chat, /\.filter\(\(m\) => !m\.unsent_at && !!m\.content\)/);
-  // The sheet's loading state is a real state, not a spinner bolted on.
-  assert.match(chat, /setTranslateResult\(null\);\s*setTranslateOpen\(true\);/);
-});
-
-test('[static] the edge function is a DRAFT and says so where nobody can miss it', () => {
-  const fn = read('supabase/functions/translate/index.ts');
-  const header = fn.slice(0, 2000);
-
-  assert.match(header, /D R A F T/);
-  assert.match(header, /N O T\s+D E P L O Y E D/);
-  assert.match(header, /S E C U R I T Y\s+R E V I E W\s+P E N D I N G/);
-
-  // THE BLOCKING ITEM is named as blocking, not buried.
-  assert.match(fn, /RATE LIMITING IS NOT IMPLEMENTED, and this is the blocking item/);
-  // The platform's JWT verification is the real gate, and the in-function
-  // check must not be mistaken for one.
-  assert.match(fn, /--no-verify-jwt/);
-  assert.match(fn, /it reads the header, it does not validate a signature/);
-  // Input is bounded three ways, and characters are counted in CODE POINTS so
-  // astral text cannot cost double what it counts.
-  assert.match(fn, /const CHAR_CAP = 2000;/);
-  assert.match(fn, /const MAX_ITEMS = 50;/);
-  assert.match(fn, /const MAX_ITEM_CHARS = 1000;/);
-  assert.match(fn, /return \[\.\.\.text\]\.length;/);
-  // No vendor text ever reaches the caller, and the body is not logged either.
-  assert.doesNotMatch(fn, /await upstream\.text\(\)/);
-  assert.match(fn, /console\.error\('\[translate\] upstream status', upstream\.status\)/);
-  // The secrets are read from the environment and never returned or named.
-  assert.match(fn, /Deno\.env\.get\('AZURE_TRANSLATOR_KEY'\)/);
-  assert.match(fn, /Deno\.env\.get\('AZURE_TRANSLATOR_REGION'\)/);
-
-  // tsconfig excludes supabase/functions, so a Deno file cannot break verify.
-  const tsconfig = JSON.parse(read('tsconfig.json'));
-  assert.ok(tsconfig.exclude.includes('supabase/functions'));
-});
-
 test('[static] the quick-reply row and its templates are gone from the whole tree', () => {
   assert.ok(
     !existsSync(join(root, 'components/QuickReplies.tsx')),
@@ -1300,176 +910,32 @@ test('[static] the quick-reply row and its templates are gone from the whole tre
   assert.deepEqual(offenders, [], 'the component and both template sets are retired together');
 });
 
-// ---------------------------------------------------------------------------
-// THE CLIPBOARD, THE TOMBSTONE, AND THE LATE TRANSLATION — 2026-08-23.
-// ---------------------------------------------------------------------------
-
-test('[executed] copying is guarded on both sides — no module, and no empty write', async () => {
-  const clip = await import('../lib/clipboard.ts');
-
-  // On THIS binary there is no ExpoClipboard native module, so the lazy
-  // require throws, `canCopy()` is false, and the caller renders no control.
-  // That is the state the test runs in and it is the honest one: a Copy button
-  // that cannot copy is worse than no Copy button, because the user believes
-  // the text is on their clipboard and pastes something else.
-  assert.equal(typeof clip.canCopy, 'function');
-  assert.equal(typeof clip.copyText, 'function');
-  assert.equal(clip.canCopy(), false, 'no native module here, so nothing may claim it can copy');
-
-  // Absent module: false rather than a throw. The whole point of the boundary
-  // is that a caller never has to catch.
-  assert.equal(await clip.copyText('hello'), false);
-  // Empty and whitespace-only never write. Putting an empty string on
-  // somebody's clipboard silently destroys whatever they had there, which is
-  // worse than doing nothing.
-  assert.equal(await clip.copyText(''), false);
-  assert.equal(await clip.copyText('   \n  '), false);
-});
-
-test('[static] the clipboard is loaded lazily and caught, like every other native', () => {
-  // expo-clipboard's entry does requireNativeModule('ExpoClipboard') at module
-  // scope, so a STATIC import anywhere on the startup path takes the app down
-  // on a binary without it — the operator's current dev build, since the
-  // package landed today and the build predates it. Same failure mode as
-  // reanimated, same arrangement.
-  const lib = stripComments(read('lib/clipboard.ts'));
-  assert.doesNotMatch(
-    lib,
-    /import[^\n]*from\s*'expo-clipboard'/,
-    'a static import of expo-clipboard crashes a binary without the native module'
-  );
-  assert.match(
-    lib,
-    /try \{[\s\S]{0,240}?require\('expo-clipboard'\)[\s\S]{0,240}?\} catch \{[\s\S]{0,60}?return null;/,
-    'the require must be lazy AND caught AND resolve to null'
-  );
-  // Resolved once: a native module cannot appear mid-session.
-  assert.match(lib, /const clipboard = load\(\);/);
-
-  // NOWHERE ELSE may load it.
-  const offenders = [];
-  for (const dir of ['components', 'screens', 'hooks', 'lib', 'ui', 'navigation', 'modes']) {
-    for (const entry of readdirSync(join(root, dir))) {
-      if (!/\.tsx?$/.test(entry)) continue;
-      const rel = `${dir}/${entry}`;
-      if (rel === 'lib/clipboard.ts') continue;
-      if (/(?:from\s*['"]|require\(['"])expo-clipboard/.test(read(rel))) offenders.push(rel);
-    }
-  }
-  assert.deepEqual(offenders, [], 'only lib/clipboard.ts may load expo-clipboard');
-});
-
-test('[static] Copy renders only where it works, and says so when it fails', () => {
-  const chat = stripComments(read('screens/ChatScreen.tsx'));
-  const sheet = stripComments(read('components/TranslationSheet.tsx'));
-
-  // The handler is passed ONLY when this build can write — the sheet already
-  // renders the control on the presence of a handler, which is the
-  // never-a-dead-control rule it was written with.
-  assert.match(chat, /import \{ canCopy, copyText \} from '\.\.\/lib\/clipboard';/);
-  assert.match(chat, /onCopy=\{canCopy\(\) \? handleCopyTranslation : undefined\}/);
-  assert.match(sheet, /\{onCopy \?/, 'the control renders on the handler, not unconditionally');
-
-  // And a refusal is reported rather than swallowed: silence would leave the
-  // user believing the translation is on their clipboard.
-  assert.match(chat, /if \(!\(await copyText\(text\)\)\) \{/);
-  assert.match(chat, /alertAsync\('Could not copy'/);
-});
-
-test('[static] Copy is IN the message long-press menu, not merely available to the screen', () => {
-  // THE DEFECT THIS PINS, observed on device on a binary that HAS
-  // expo-clipboard: long-pressing a message offered React and Reply and no
-  // Copy. Nothing was failing silently — `messageMenuItems` had never been
-  // given a Copy entry. The clipboard boundary landed wired to the translation
-  // sheet's button, and every assertion written for it pinned THAT control, so
-  // the suite stayed green while the menu stayed wrong.
-  //
-  // Which is the lesson worth keeping: "the helper exists and is guarded" is a
-  // different claim from "the user can reach it here". This test makes the
-  // second one, against the item list itself.
-  const chat = stripComments(read('screens/ChatScreen.tsx'));
-
-  const list = chat.match(/const messageMenuItems: ActionSheetItem\[\] = menuTarget([\s\S]*?)\n {4}: \[\];/);
-  assert.ok(list, 'the message menu must still be one derived list — find it before changing this fence');
-  const items = list[1];
-
-  // ANTI-VACUITY: the extraction must actually be holding the menu, or every
-  // assertion below is about an empty string.
-  for (const known of ["key: 'reply'", "label: 'Reply'", "key: 'unsend'"]) {
-    assert.ok(items.includes(known), `the extracted menu is not the real one — ${known} is missing`);
-  }
-
-  // THE ITEM, inside that list.
-  assert.match(items, /key: 'copy',/, 'long-press offers no Copy — the defect this test exists for');
-  assert.match(items, /label: 'Copy',/);
-
-  // GATED ON BOTH QUESTIONS, in the list rather than in the handler: an item
-  // rendered and then found unusable is the dead control the boundary's whole
-  // `canCopy()` rule exists to prevent, and a Copy on a voice note has nothing
-  // to write.
-  assert.match(
-    items,
-    /\.\.\.\(canCopy\(\) && menuTarget\.content/,
-    'Copy must be gated on a clipboard AND on there being text — never rendered unconditionally'
-  );
-
-  // It copies the message it was opened on, closes the menu first, and routes
-  // its failure through the SHARED reporter rather than a second copy of the
-  // same rule (P3-31).
-  assert.match(items, /void copyOrExplain\(text, 'message'\);/);
-  assert.match(
-    chat,
-    /async function copyOrExplain\(text: string, subject: 'translation' \| 'message'\)/,
-    'both copy affordances must share one implementation of "say so when it did not land"'
-  );
-  assert.match(chat, /await copyOrExplain\(text, 'translation'\);/);
-});
-
-test('[executed] a translation that arrives after the sheet closed is dropped', () => {
-  // AUDIT F5, as a sequence rather than a shape. `runTranslation` awaits the
-  // fetch, so the sheet can be closed — or a SECOND translation started on
-  // another message — while the first is in flight. Without a guard the stale
-  // answer lands in the sheet's state, and the user re-opens it later onto a
-  // translation of a message they have moved on from.
-  //
-  // The guard is a counter, so the rule can be run here directly: an answer is
-  // shown only if the run that produced it is still the current one.
-  let current = 0;
-  const shown = [];
-  const start = () => ++current;
-  const land = (runId, value) => {
-    if (runId !== current) return;
-    shown.push(value);
-  };
-
-  // Closed mid-flight — closing bumps the counter, so the answer is dropped.
-  const a = start();
-  current += 1; // closeTranslation()
-  land(a, 'stale');
-  assert.deepEqual(shown, [], 'an answer for a closed sheet must not land');
-
-  // Two requests racing: only the LATEST is shown, whichever returns first.
-  const b = start();
-  const c = start();
-  land(b, 'first request, late');
-  assert.deepEqual(shown, [], 'the superseded request must not overwrite the current one');
-  land(c, 'current');
-  assert.deepEqual(shown, ['current']);
-});
-
-test('[static] the translation sheet invalidates on close, and the tombstone has one spelling', () => {
-  const chat = stripComments(read('screens/ChatScreen.tsx'));
-
-  assert.match(chat, /const translateRunRef = useRef\(0\);/);
-  assert.match(chat, /const runId = \+\+translateRunRef\.current;/);
-  assert.match(chat, /if \(runId !== translateRunRef\.current\) return;/);
-  // Closing must BUMP the counter, or the guard would only cover the raced
-  // case and not the closed-mid-flight one the finding actually describes.
-  assert.match(chat, /function closeTranslation\(\) \{\s*translateRunRef\.current \+= 1;/);
-  assert.match(chat, /onClose=\{closeTranslation\}/);
-
+test('[static] the tombstone has one spelling', () => {
   // AUDIT F4 — one spelling of the tombstone, in one place. A second literal
   // is a second thing to get wrong the day the wording changes, and
   // isDeletedUser() compares against the constant.
   assert.match(read('lib/rebook.ts'), /export const DELETED_USER_LABEL = 'Deleted user';/);
 });
+
+test('[static] lean D3a: v1 chat is text and photo — the media extras stay deleted', () => {
+  for (const path of [
+    'components/AudioMeterBars.tsx', 'components/VoiceNote.tsx', 'components/MessageTicks.tsx',
+    'components/TranslationSheet.tsx', 'components/ReactionPicker.tsx',
+    'hooks/useVoiceRecorder.ts', 'hooks/useReactions.ts',
+    'lib/audioMeter.ts', 'lib/messageTicks.ts', 'lib/translate.ts', 'lib/translateRules.ts',
+    'lib/reactions.ts', 'lib/clipboard.ts', 'supabase/functions/translate',
+  ]) {
+    assert.ok(!existsSync(join(root, path)), `${path} must stay deleted`);
+  }
+  const pkg = JSON.parse(read('package.json'));
+  for (const dep of ['expo-audio', 'expo-clipboard', 'expo-document-picker']) {
+    assert.equal(pkg.dependencies[dep], undefined, `${dep} must not come back`);
+  }
+  // The message menu offers Reply and Unsend; no React, Copy or Translate.
+  const chat = stripComments(read(CHAT));
+  const menu = chat.match(/const messageMenuItems: ActionSheetItem\[\] = menuTarget([\s\S]*?)\n {4}: \[\];/);
+  assert.ok(menu, 'the message menu must still be one derived list');
+  assert.ok(menu[1].includes("key: 'reply'") && menu[1].includes("key: 'unsend'"), 'the extraction holds the real menu');
+  assert.doesNotMatch(menu[1], /key: '(react|copy|translate-message|translate-conversation)'/);
+});
+

@@ -44,12 +44,6 @@ const CONTRACTS = [
     selects: 1,
   },
   {
-    file: 'lib/reactions.ts',
-    constName: 'REACTION_COLUMNS',
-    typeName: 'Reaction',
-    selects: 3, // two fetches + the upsert's returning list
-  },
-  {
     file: 'lib/portfolio.ts',
     constName: 'PORTFOLIO_ITEM_COLUMNS',
     typeName: 'PortfolioItem',
@@ -88,7 +82,6 @@ test('no runtime select(\'*\') remains anywhere in lib/', async () => {
   // the class closed — a new '*' needs a written reason, not a default.
   const files = [
     'lib/conversations.ts',
-    'lib/reactions.ts',
     'lib/portfolio.ts',
     'lib/notificationPrefs.ts',
   ];

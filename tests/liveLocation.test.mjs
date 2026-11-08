@@ -537,7 +537,6 @@ test('[static] there is no map, and the substitution says every fact a map would
       `an unexpected map dependency appeared: ${name}`
     );
   }
-  assert.equal(pkg.dependencies['expo-document-picker'], '~14.0.8', 'the picker was already here');
   assert.equal(pkg.dependencies['expo-location'], '~19.0.8', 'expo-location was already here');
 });
 
@@ -566,17 +565,14 @@ test('[static] LIVE_LOCATION is flipped, and its docblock records the refusal', 
   // The delivery caveat that shapes the whole hook.
   assert.match(block, /DELIVERS NO EVENT/);
 
-  // The guard site guards the ASSEMBLY, the READ_TICKS arrangement.
+  // The guard site guards the ASSEMBLY.
   const chat = stripComments(await read('screens/ChatScreen.tsx'));
-  assert.match(chat, /import \{ LIVE_LOCATION, READ_TICKS, TIMED_BLOCK, TRANSLATION \} from '\.\.\/lib\/featureFlags';/);
+  assert.match(chat, /import \{ LIVE_LOCATION, TIMED_BLOCK \} from '\.\.\/lib\/featureFlags';/);
   assert.match(chat, /LIVE_LOCATION && !isSelfConversation/);
   // The hook does nothing at all when it is not enabled.
   const hook = stripComments(await read(HOOK));
   assert.match(hook, /if \(!enabled \|\| !current\) return;/, 'no subscription when dark');
   assert.match(hook, /if \(!enabled \|\| !current\) \{\s*setShares\(\[\]\);/, 'no read when dark');
-
-  // DELIVERED_TICKS is still not touched by this run.
-  assert.match(flags, /export const DELIVERED_TICKS = false as boolean;/);
 });
 
 test('[static] the layer takes a ChatTarget, so both thread kinds are one path', async () => {
@@ -650,9 +646,10 @@ test('gate · nothing this run added reaches for a package the app does not have
       );
     }
   }
-  // ANTI-VACUITY: the sweep really did find the two packages this run leaned
-  // on, so a green result means it checked something.
-  assert.ok(seen.has('expo-document-picker'), 'the picker must be among the imports checked');
+  // ANTI-VACUITY: the sweep really did find packages these files lean on, so a
+  // green result means it checked something. (Lean D3a removed the document
+  // picker; the photo picker stands in for it.)
+  assert.ok(seen.has('expo-image-picker'), 'the photo picker must be among the imports checked');
   assert.ok(seen.has('expo-location'), 'the location module must be too');
 });
 

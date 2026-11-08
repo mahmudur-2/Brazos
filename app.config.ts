@@ -121,7 +121,7 @@ export default (_context: ConfigContext): ExpoConfig => ({
         cameraPermission:
           'Brazos uses the camera to take photos of jobs, completed work, and your profile.',
         microphonePermission:
-          'Brazos uses your microphone only while you search or dictate by voice or record a voice message, and stops listening when you finish.',
+          'Brazos uses your microphone only while you search or dictate by voice, and stops listening when you finish.',
       },
     ],
     [
@@ -134,27 +134,20 @@ export default (_context: ConfigContext): ExpoConfig => ({
       },
     ],
     [
-      'expo-audio',
-      {
-        microphonePermission:
-          'Brazos uses your microphone only while you search or dictate by voice or record a voice message, and stops listening when you finish.',
-      },
-    ],
-    [
       'expo-notifications',
       {
         color: '#1F4D3A',
       },
     ],
-    // 2026-09-30 (the build run, idea 18): expo-image-picker, expo-audio and this plugin each write
-    // NSMicrophoneUsageDescription and one wins at prebuild, so all three carry the one complete
-    // sentence — search, dictation into Post a job and voice messages (FIX-RUN B12: nothing
-    // films a video, so the sentence no longer says it).
+    // 2026-09-30 (the build run, idea 18): expo-image-picker and this plugin each write
+    // NSMicrophoneUsageDescription and one wins at prebuild, so both carry the one complete
+    // sentence — search and dictation into Post a job (FIX-RUN B12: nothing films a video;
+    // lean D3a: no voice messages, so the sentence says neither).
     [
       'expo-speech-recognition',
       {
         microphonePermission:
-          'Brazos uses your microphone only while you search or dictate by voice or record a voice message, and stops listening when you finish.',
+          'Brazos uses your microphone only while you search or dictate by voice, and stops listening when you finish.',
         speechRecognitionPermission:
           'Speech is recognized on your device to turn what you say into a search, or into the words of a job you post. Nothing is sent to a server.',
       },

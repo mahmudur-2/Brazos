@@ -222,7 +222,6 @@ export function MessagesInboxScreen() {
     readMap,
     stateByKey,
     profiles,
-    lastMessageReactions,
     moderation,
     unseenByKey,
     loading,
@@ -422,13 +421,10 @@ export function MessagesInboxScreen() {
           !best || thread.last_message_at > best.last_message_at ? thread : best,
         null
       );
-      const reactions = latest ? lastMessageReactions[latest.last_message_id] ?? [] : [];
       // Everything cleared and nothing since falls through to the same ellipsis
       // an empty message already renders as — no new vocabulary, and no claim
       // about a message that is gone.
-      const preview = latest
-        ? conversationPreviewText(latest, reactions.map((r) => r.emoji))
-        : '…';
+      const preview = latest ? conversationPreviewText(latest) : '…';
 
       // Unread and the waiting-offer badge are both folded across the whole
       // conversation: with one row per person, anything unanswered in ANY of
@@ -524,7 +520,6 @@ export function MessagesInboxScreen() {
     profiles,
     readMap,
     stateByKey,
-    lastMessageReactions,
     moderation,
     user,
     pendingByThread,

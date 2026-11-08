@@ -143,11 +143,10 @@ test('every send path is the same rejected mutation', async () => {
   assert.doesNotMatch(send, /job_request_id/);
 
   const chat = stripComments(await read('screens/ChatScreen.tsx'));
-  // FOUR since 2026-08-25: sendDocument joined them when DOCUMENTS shipped.
-  // It writes a different bucket and is offered on a thread kind the other
-  // three are not, but it is the SAME insert underneath, so it meets the same
-  // policy and owes the same words on a refusal.
-  for (const handler of ['handleSendText', 'sendPhoto', 'handleSendVoice', 'sendDocument']) {
+  // TWO since lean D3a (text and photo): voice and documents went with their
+  // features. Both are the SAME insert underneath, so they meet the same
+  // policy and owe the same words on a refusal.
+  for (const handler of ['handleSendText', 'sendPhoto']) {
     assert.match(chat, new RegExp(`function ${handler}`), `${handler} must exist`);
   }
   assert.doesNotMatch(chat, /handleTemplate/, 'the quick-reply send is retired with its row');
@@ -155,8 +154,8 @@ test('every send path is the same rejected mutation', async () => {
   // stale screen gets the rule in words and never a raw database error.
   assert.equal(
     (chat.match(/await reportSendFailure\(/g) ?? []).length,
-    4,
-    'all four send paths must route failures through reportSendFailure()'
+    2,
+    'both send paths must route failures through reportSendFailure()'
   );
   assert.match(chat, /isMessagingLockedError\(error\)/);
   assert.match(chat, /MESSAGING_LOCKED_MESSAGE/);

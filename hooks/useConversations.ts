@@ -16,7 +16,6 @@ import {
 } from '../lib/conversationStates';
 import { fetchMyModerationLists } from '../lib/moderation';
 import { fetchProfilesByIds, type Profile } from '../lib/profiles';
-import { fetchReactionsForMessages, type Reaction } from '../lib/reactions';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
 
@@ -43,9 +42,8 @@ const EMPTY_MODERATION: ModerationLists = {
 
 /**
  * Loads the signed-in user's conversation inbox: one row per job with a
- * message, the other party's profile, whether it has unread activity, and
- * any reactions on each conversation's latest message. Stays live via
- * realtime so a new message or reaction anywhere bumps the list without a
+ * message, the other party's profile, and whether it has unread activity.
+ * Stays live via realtime so a new message anywhere bumps the list without a
  * manual refresh.
  */
 export function useConversations() {
@@ -59,9 +57,6 @@ export function useConversations() {
   // client joins them exactly the way it already joins message_reads.
   const [stateByKey, setStateByKey] = useState<Record<string, ConversationState>>({});
   const [profiles, setProfiles] = useState<Record<string, CounterpartyInfo>>({});
-  const [lastMessageReactions, setLastMessageReactions] = useState<
-    Record<string, Reaction[]>
-  >({});
   const [moderation, setModeration] = useState<ModerationLists>(EMPTY_MODERATION);
   // 2026-09-28 (LUX-LIST-64 #54) — the number beside the name: each unread
   // thread's unseen messages, COUNTED from the rows (countUnseen), keyed like
@@ -136,10 +131,9 @@ export function useConversations() {
       .map((c) => c.direct_thread_id as string);
 
     const otherIds = convRes.data.map((c) => resolveOtherId(c, user.id));
-    const [{ data: people }, { data: reactionRows }, moderationLists, unseenRes] =
+    const [{ data: people }, moderationLists, unseenRes] =
       await Promise.all([
         fetchProfilesByIds(otherIds),
-        fetchReactionsForMessages(convRes.data.map((c) => c.last_message_id)),
         fetchMyModerationLists(user.id),
         unseenThreads.length > 0
           ? fetchUnseenStamps(user.id, { jobIds: unseenJobIds, directIds: unseenDirectIds }, since)
@@ -156,12 +150,6 @@ export function useConversations() {
     for (const p of people) map[p.id] = p;
     setProfiles(map);
 
-    const reactionMap: Record<string, Reaction[]> = {};
-    for (const r of reactionRows) {
-      (reactionMap[r.message_id] ??= []).push(r);
-    }
-    setLastMessageReactions(reactionMap);
-
     setLoading(false);
   }, [user]);
 
@@ -175,8 +163,8 @@ export function useConversations() {
 
     // A BURST OF MESSAGES IS ONE INBOX READ. Every INSERT on `messages`
     // app-wide used to call refresh() directly, and refresh() re-queries the
-    // WHOLE inbox — conversations, read states, counterparty profiles and
-    // last-message reactions. Ten messages arriving together were ten of
+    // WHOLE inbox — conversations, read states and counterparty profiles.
+    // Ten messages arriving together were ten of
     // those. The trailing debounce collapses the burst into a single read,
     // and the inbox is a summary surface, so arriving a fraction of a second
     // later costs nothing a user can perceive.
@@ -185,18 +173,13 @@ export function useConversations() {
       debounceRef.current = setTimeout(refresh, REFRESH_DEBOUNCE_MS);
     };
 
-    // RLS scopes delivery to messages/reactions the user can read, so this
-    // only ever fires for the user's own jobs even without a per-job filter.
+    // RLS scopes delivery to messages the user can read, so this only ever
+    // fires for the user's own jobs even without a per-job filter.
     const channel = supabase
       .channel(`messages:inbox:${instanceId}:${runRef.current++}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
-        scheduleRefresh
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'message_reactions' },
         scheduleRefresh
       )
       .subscribe();
@@ -214,7 +197,6 @@ export function useConversations() {
     readMap,
     stateByKey,
     profiles,
-    lastMessageReactions,
     moderation,
     unseenByKey,
     loading,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -18,7 +18,6 @@ import {
   type RouteProp,
 } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { AmountPrompt } from '../components/AmountPrompt';
@@ -30,19 +29,14 @@ import { DropMenu, type DropMenuItem } from '../components/DropMenu';
 import { LiveLocationBar, LiveLocationCard } from '../components/LiveLocationCard';
 import { nextMenu, personSafetyItems, type ChatMenu } from '../lib/chatMenus';
 import { invalidateJobs } from '../lib/queryClient';
-import { canCopy, copyText } from '../lib/clipboard';
-import { TranslationSheet } from '../components/TranslationSheet';
 import { OfferCard } from '../components/OfferCard';
 import { PhotoViewer } from '../components/PhotoViewer';
 
-import { ReactionPicker } from '../components/ReactionPicker';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useConversationChat } from '../hooks/useConversationChat';
 import { KeyboardRisingColumn } from '../components/KeyboardRisingColumn';
 import { useJob } from '../hooks/useJob';
-import { useReactions } from '../hooks/useReactions';
-import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { canRehireWorker, fetchJobById, formatBudget, toOpenJob } from '../lib/jobs';
 import {
   COUNTER_OFFER_ACTION_LABEL,
@@ -57,7 +51,6 @@ import { askOpenSettings } from '../lib/permissionPrompt';
 import { isTombstonedName } from '../lib/rebook';
 import { userMessage } from '../lib/errorMessage';
 import {
-  fetchCounterpartyReadStates,
   fetchDirectThreadWith,
   fetchSharedJobs,
   markConversationRead,
@@ -76,10 +69,6 @@ import {
 } from '../lib/conversationStates';
 import type { ConversationState } from '../lib/conversationVisibility';
 import {
-  deliveryFor,
-  type CounterpartyReadPositions,
-} from '../lib/messageTicks';
-import {
   resolveConversation,
   type ActiveJobCandidate,
 } from '../lib/conversationResolver';
@@ -88,12 +77,10 @@ import {
   otherParticipant,
   type DirectThread,
 } from '../lib/directThreads';
-import { LIVE_LOCATION, READ_TICKS, TIMED_BLOCK, TRANSLATION } from '../lib/featureFlags';
+import { LIVE_LOCATION, TIMED_BLOCK } from '../lib/featureFlags';
 import { SHARE_DURATIONS } from '../lib/liveLocation';
 import { useLiveLocation } from '../hooks/useLiveLocation';
 import { chatTargetKey, type ChatTarget } from '../lib/messages';
-import { supabase } from '../lib/supabase';
-import { deviceLanguage, translateTexts, type TranslateResult } from '../lib/translate';
 import {
   blockUser,
   EMPTY_RELATION,
@@ -106,7 +93,7 @@ import {
 import { ReportDialog } from '../components/ReportDialog';
 import { permissionOutcome, trackIntent } from '../lib/observability/analytics';
 import { fetchSavedWorkerIds, saveWorker, unsaveWorker } from '../lib/savedWorkers';
-import { shareDocument, shareProfileLink } from '../lib/sharing';
+import { shareProfileLink } from '../lib/sharing';
 import { useMode } from '../modes';
 import {
   canUnsend,
@@ -130,8 +117,7 @@ import {
 } from '../lib/offers';
 import { useThreadOffers } from '../hooks/useJobOffers';
 import { fetchProfileById, type Profile } from '../lib/profiles';
-import { removeReaction, setReaction } from '../lib/reactions';
-import { uploadChatAudio, uploadChatDocument, uploadChatPhoto } from '../lib/storage';
+import { uploadChatPhoto } from '../lib/storage';
 import type { ChatRouteParamList } from '../lib/navigation';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette,
@@ -183,12 +169,7 @@ export function ChatScreen() {
   // unmounted it.
   const draftRef = useRef('');
   const [sending, setSending] = useState(false);
-  const [reactionTarget, setReactionTarget] = useState<string | null>(null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
-  // WHICH document is being fetched, not whether one is: the tapped bubble
-  // spins and the rest of the thread stays live. Null again on success,
-  // failure and cancellation alike — see openDocument.
-  const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   // Profile pictures open in the same viewer but without the share sheet, so
   // they're tracked separately from ordinary chat photos.
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -221,18 +202,10 @@ export function ChatScreen() {
       onBlur();
     };
   }, [closeMenus, navigation]);
-  // The translation sheet's own state. `null` while a request is in flight —
-  // the sheet reads that as "loading" and renders nothing else.
-  const [translateOpen, setTranslateOpen] = useState(false);
-  // Which translation request the sheet is currently showing. Bumped on every
-  // new request AND on close, so an answer that arrives late can tell that
-  // nobody is waiting for it any more (audit F5).
-  const translateRunRef = useRef(0);
-  const [translateResult, setTranslateResult] = useState<TranslateResult | null>(null);
   // Whether this customer has already saved this worker. `null` while the read
   // is in flight, so the menu row never claims either state before it knows.
   const [savedWorker, setSavedWorker] = useState<boolean | null>(null);
-  // Long-press target for the message menu (React / Reply).
+  // Long-press target for the message menu (Reply / Unsend).
   const [menuTarget, setMenuTarget] = useState<Message | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [counterTarget, setCounterTarget] = useState<OfferWithJob | null>(null);
@@ -367,99 +340,6 @@ export function ChatScreen() {
     [messages, stateByKey, threadKeyOf]
   );
 
-  /**
-   * THE GOLD TICK'S SOURCE — the counterparty's read position on every thread
-   * this conversation is made of (phase77, S-4).
-   *
-   *   job threads     their `message_reads` row, readable since phase77's
-   *                   message_reads_select_party.
-   *   direct threads  their read column on `direct_threads`, which
-   *                   direct_threads_select_party has always handed over.
-   *
-   * BOTH OR NEITHER. This conversation folds a pair's job threads AND their
-   * direct thread into one timeline, so wiring only the readable half would
-   * make the SAME conversation show gold on some bubbles and never on others —
-   * an absent tick meaning "not read yet" on one message and "unknowable here"
-   * on the next. That was exactly why READ_TICKS shipped dark.
-   */
-  const jobTargetIds = useMemo(
-    () => targets.map((t) => t.jobId).filter((id): id is string => !!id),
-    [targets]
-  );
-  const directTargetIds = useMemo(
-    () => targets.map((t) => t.directThreadId).filter((id): id is string => !!id),
-    [targets]
-  );
-  const [readPositions, setReadPositions] = useState<CounterpartyReadPositions>({
-    byJobId: {},
-    byDirectThreadId: {},
-  });
-
-  const refreshReadPositions = useCallback(async () => {
-    // THE GUARD SITE. With the flag off nothing is read, nothing is
-    // subscribed, and `delivery` is never assembled — an unflipped build shows
-    // exactly the single tick it shows today.
-    if (!READ_TICKS) return;
-    if (!user || !counterpartyId || counterpartyId === user.id) return;
-
-    const [jobReads, directRows] = await Promise.all([
-      fetchCounterpartyReadStates(counterpartyId, jobTargetIds),
-      Promise.all(directTargetIds.map((id) => fetchDirectThread(id))),
-    ]);
-
-    const byJobId: Record<string, string | null> = {};
-    for (const row of jobReads.data) byJobId[row.job_id] = row.last_read_at;
-
-    const byDirectThreadId: Record<string, string | null> = {};
-    for (const { data } of directRows) {
-      if (!data) continue;
-      // Whichever column is THEIRS. The row carries both, and taking the wrong
-      // one would show your own read position back to you as their tick.
-      byDirectThreadId[data.id] =
-        data.user_a === counterpartyId ? data.user_a_read_at : data.user_b_read_at;
-    }
-
-    setReadPositions({ byJobId, byDirectThreadId });
-  }, [user, counterpartyId, jobTargetIds, directTargetIds]);
-
-  useEffect(() => {
-    void refreshReadPositions();
-  }, [refreshReadPositions]);
-
-  // ONE SUBSCRIPTION FOR BOTH KINDS, which is the whole reason phase77 chose a
-  // policy over a definer RPC: an RPC cannot ride realtime, so job ticks would
-  // poll and lag their direct siblings inside the same folded conversation.
-  // Realtime respects RLS, so each table delivers only the rows these policies
-  // already let this user read.
-  //
-  // Topic uniqueness is the useOpenJobs mitigation: supabase.channel() dedupes
-  // by topic and removeChannel() tears down asynchronously, so every mount
-  // needs a string that has never existed before.
-  const instanceId = useId();
-  const runRef = useRef(0);
-  useEffect(() => {
-    if (!READ_TICKS) return;
-    if (!user || !counterpartyId || counterpartyId === user.id) return;
-
-    const channel = supabase
-      .channel(`chat:ticks:${instanceId}:${runRef.current++}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'message_reads' },
-        () => void refreshReadPositions()
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'direct_threads' },
-        () => void refreshReadPositions()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, counterpartyId, refreshReadPositions, instanceId]);
-
   // conversations.last_message_at IS the newest message in a job's thread, so
   // the canonical activity timestamp is read straight off the timeline that is
   // already loaded rather than fetched a second time.
@@ -518,14 +398,6 @@ export function ChatScreen() {
     [sendJobId, sendDirectThreadId]
   );
 
-  // Reactions are stored per job (message_reactions.job_id), so inside a merged
-  // conversation they stay scoped to one job thread: the one messages are being
-  // added to now. Messages from the pair thread or from a finished job render
-  // without reaction chips, and the React action is hidden on them.
-  const reactionsJobId = sendJobId ?? routeJobId;
-  const { byMessage: reactionsByMessage, refresh: refreshReactions } =
-    useReactions(reactionsJobId);
-
   // Mark the conversation read on entering and again on leaving, so a message
   // that arrives while the chat is open doesn't show as unread later. Every
   // thread of it, because the inbox folds their unread state into one row —
@@ -555,8 +427,8 @@ export function ChatScreen() {
    * INSERT policy (phase66), so this screen cannot offer a composer the server
    * would refuse, and cannot hide one it would allow. Before the pair are
    * hired the negotiation cards ARE the conversation; everything free-form —
-   * the text input, the send button, quick replies, camera, photo library and
-   * voice — is removed rather than shown and then failing.
+   * the text input, the send button, quick replies, camera and photo library
+   * — is removed rather than shown and then failing.
    */
   const [messagingUnlocked, setMessagingUnlocked] = useState<boolean | null>(null);
   const refreshMessagingLock = useCallback(async () => {
@@ -589,62 +461,6 @@ export function ChatScreen() {
     refresh: refreshRequests,
   } = useThreadOffers(messages);
 
-  const recorder = useVoiceRecorder();
-
-  function handleMicTap() {
-    if (sending) return;
-    recorder.tapMic();
-  }
-
-  async function handleStopRecording() {
-    await recorder.stopRecording();
-    if (recorder.error) {
-      await alertAsync('Recording failed', recorder.error);
-      recorder.clearError();
-    }
-  }
-
-  async function handleSendVoice() {
-    const clip = recorder.previewClip;
-    // Chat media is stored under `{jobId}/{userId}/…` and its storage policies
-    // authorise on that job — the pair thread has no job id to key a path on,
-    // so attachments follow the RESOLVED send target rather than the route: if
-    // this message would land in the pair thread, there is nowhere to put a
-    // file. The composer hides both controls there; this is the guard behind
-    // them.
-    if (!user || !clip || !sendTarget || !sendJobId) return;
-    setSending(true);
-    const { url, error: uploadError } = await uploadChatAudio(
-      sendJobId,
-      user.id,
-      clip.uri
-    );
-    if (uploadError || !url) {
-      setSending(false);
-      await alertAsync(
-        'Could not send voice message',
-        userMessage(uploadError, 'Upload failed. The chat-audio storage bucket may still need setting up.')
-      );
-      return;
-    }
-
-    const { data, error } = await sendMessage({
-      target: sendTarget,
-      senderId: user.id,
-      content: '',
-      audioUrl: url,
-      audioDurationMs: clip.durationMs,
-    });
-    setSending(false);
-
-    if (error) {
-      await reportSendFailure('Could not send voice message', error);
-      return;
-    }
-    recorder.reset();
-    if (data) addOwnMessage(data);
-  }
-
   const listRef = useRef<FlatList<TimelineItem>>(null);
 
   /** An own message is in: show it, and take the reader to it (offset 0 is the bottom). */
@@ -659,8 +475,8 @@ export function ChatScreen() {
   const isSelfConversation = !!user && counterpartyId === user.id;
 
   /**
-   * LIVE LOCATION — the flag guards the ASSEMBLY, not the element, exactly as
-   * READ_TICKS does above: with it false nothing is read, nothing is
+   * LIVE LOCATION — the flag guards the ASSEMBLY, not the element: with it
+   * false nothing is read, nothing is
    * subscribed, no watcher can start, and the two cards below have no share to
    * render, so an unflipped build behaves exactly as every build before it.
    *
@@ -791,10 +607,6 @@ export function ChatScreen() {
     }
     return map;
   }, [messages]);
-
-  const targetReactions = reactionTarget ? reactionsByMessage[reactionTarget] ?? [] : [];
-  const myReactionEmoji =
-    (user && targetReactions.find((r) => r.user_id === user.id)?.emoji) || null;
 
   useEffect(() => {
     if (!counterpartyId) return;
@@ -988,65 +800,6 @@ export function ChatScreen() {
         }))
       : []),
   ];
-
-  /**
-   * TRANSLATE, one message or the whole conversation.
-   *
-   * The two entries differ only in what they pass: one string, or every
-   * message this conversation currently has text for. Batching is deliberate
-   * — "Translate Conversation" is ONE request with N strings, which is one
-   * rate-limit decision on the server rather than N.
-   *
-   * The target is the DEVICE's language. It is read here rather than inside
-   * lib/translate so that module stays free of platform APIs and testable.
-   *
-   * Everything below is dark: the entry points are behind TRANSLATION, and
-   * the Edge Function is a DRAFT that has never been deployed. Every call
-   * would resolve `unavailable`, which is exactly what the sheet says.
-   */
-  async function runTranslation(texts: string[]) {
-    // AUDIT F5 — A LIVENESS GUARD. The fetch is awaited, and the sheet can be
-    // closed (or a SECOND translation started on another message) while it is
-    // in flight. Without this, the stale answer lands in the sheet's state:
-    // either re-opening it later shows a translation of a message the user has
-    // moved on from, or the second request's result is overwritten by the
-    // first one to return. The counter is the same shape the customer-core
-    // hooks use for their own out-of-order reads.
-    const runId = ++translateRunRef.current;
-    setTranslateResult(null);
-    setTranslateOpen(true);
-    const result = await translateTexts(texts, deviceLanguage());
-    if (runId !== translateRunRef.current) return;
-    setTranslateResult(result);
-  }
-
-  /** Closing INVALIDATES whatever is in flight, which is what makes the guard
-   *  above cover the closed-mid-flight case rather than only the raced one. */
-  function closeTranslation() {
-    translateRunRef.current += 1;
-    setTranslateOpen(false);
-    setTranslateResult(null);
-  }
-
-  /**
-   * Copy, and say so when it does not land.
-   *
-   * ONE implementation for both copy affordances — the translation sheet's
-   * button and the message menu's item — because the rule they share is the
-   * one that matters. The control only renders when `canCopy()`, so reaching
-   * here without a clipboard means the native call itself refused, and silence
-   * would leave the user believing the text is on their clipboard when it is
-   * not. `subject` only names what failed; it does not change the rule.
-   */
-  async function copyOrExplain(text: string, subject: 'translation' | 'message') {
-    if (!(await copyText(text))) {
-      await alertAsync('Could not copy', `The ${subject} could not be copied on this device.`);
-    }
-  }
-
-  async function handleCopyTranslation(text: string) {
-    await copyOrExplain(text, 'translation');
-  }
 
   async function handleShareProfile() {
     if (!counterpartyId) return;
@@ -1376,29 +1129,10 @@ export function ChatScreen() {
     navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job: fetchedJob });
   }
 
-  // Long-pressing a message offers both actions rather than jumping straight
-  // to the reaction picker, so Reply is reachable the same way on every
-  // message type — text, photo or voice.
+  // Long-pressing a message opens one menu, so Reply is reachable the same
+  // way on every message type — text or photo.
   const messageMenuItems: ActionSheetItem[] = menuTarget
     ? [
-        // Reactions are stored per job (message_reactions.job_id), so they are
-        // only offered on messages belonging to the job whose reactions this
-        // conversation has loaded — never on a pair-thread message, which has
-        // no job to key one on.
-        ...(reactionsJobId && menuTarget.job_id === reactionsJobId
-          ? [
-              {
-                key: 'react',
-                label: 'React',
-                icon: 'happy-outline' as const,
-                onPress: () => {
-                  const id = menuTarget.id;
-                  setMenuTarget(null);
-                  setReactionTarget(id);
-                },
-              },
-            ]
-          : []),
         {
           key: 'reply',
           label: 'Reply',
@@ -1409,64 +1143,6 @@ export function ChatScreen() {
             setReplyTo(target);
           },
         },
-        // COPY — added 2026-08-24, and it was never here before: the clipboard
-        // boundary landed wired to the translation sheet's Copy button only,
-        // and this list was not extended with it. Nothing was failing silently
-        // on device; the item simply did not exist.
-        //
-        // Two gates, and they are different questions. `canCopy()` is the
-        // never-a-dead-control rule the sheet already follows — a Copy that
-        // cannot copy is worse than no Copy, because the user believes the
-        // text is on their clipboard and pastes something else. `content` is
-        // the same gate the TRANSLATE entries below use: a photo or a voice
-        // note has no text to put anywhere.
-        ...(canCopy() && menuTarget.content
-          ? [
-              {
-                key: 'copy',
-                label: 'Copy',
-                icon: 'copy-outline' as const,
-                onPress: () => {
-                  const text = menuTarget.content ?? '';
-                  setMenuTarget(null);
-                  void copyOrExplain(text, 'message');
-                },
-              },
-            ]
-          : []),
-        // TRANSLATE — two entries, because "this message" and "this
-        // conversation" are different amounts of text and different amounts
-        // of money, and a user should choose rather than discover. Both are
-        // behind TRANSLATION: the Edge Function is a DRAFT and has never been
-        // deployed, so every call would resolve `unavailable`.
-        // Text only — there is nothing to translate in a photo or a voice note.
-        ...(TRANSLATION && menuTarget.content
-          ? [
-              {
-                key: 'translate-message',
-                label: 'Translate This Message',
-                icon: 'language-outline' as const,
-                onPress: () => {
-                  const text = menuTarget.content ?? '';
-                  setMenuTarget(null);
-                  void runTranslation([text]);
-                },
-              },
-              {
-                key: 'translate-conversation',
-                label: 'Translate Conversation',
-                icon: 'chatbubbles-outline' as const,
-                onPress: () => {
-                  setMenuTarget(null);
-                  void runTranslation(
-                    messages
-                      .filter((m) => !m.unsent_at && !!m.content)
-                      .map((m) => m.content as string)
-                  );
-                },
-              },
-            ]
-          : []),
         // Own messages only, and only inside the 15-minute window — see
         // canUnsend() in lib/messages.ts. The RPC re-checks both server-side
         // regardless of what this menu offers.
@@ -1516,40 +1192,14 @@ export function ChatScreen() {
   }
 
 
-  async function handleSelectReaction(emoji: string) {
-    // message_reactions is keyed by job, so reactions are a job-thread
-    // feature; the React menu item is hidden everywhere else.
-    if (!user || !reactionTarget || !reactionsJobId) return;
-    const messageId = reactionTarget;
-    setReactionTarget(null);
-    const { error } = await setReaction({
-      messageId,
-      jobId: reactionsJobId,
-      userId: user.id,
-      emoji,
-    });
-    if (error) {
-      await alertAsync('Could not react', userMessage(error));
-      return;
-    }
-    // Refresh immediately for the reactor; the other party gets it via realtime.
-    await refreshReactions();
-  }
-
-  async function handleRemoveReaction() {
-    if (!user || !reactionTarget) return;
-    const messageId = reactionTarget;
-    setReactionTarget(null);
-    const { error } = await removeReaction(messageId, user.id);
-    if (error) {
-      await alertAsync('Could not remove reaction', userMessage(error));
-      return;
-    }
-    await refreshReactions();
-  }
-
   async function sendPhoto(asset: ImagePicker.ImagePickerAsset) {
-    if (!user || !sendTarget || !sendJobId) return; // See handleSendVoice for why.
+    // Chat photos are stored under `{jobId}/{userId}/…` and their storage
+    // policies authorise on that job — the pair thread has no job id to key a
+    // path on, so a photo follows the RESOLVED send target rather than the
+    // route: if this message would land in the pair thread, there is nowhere
+    // to put a file. The composer hides the controls there; this is the guard
+    // behind them.
+    if (!user || !sendTarget || !sendJobId) return;
     setSending(true);
     const { url, error: uploadError } = await uploadChatPhoto(
       sendJobId,
@@ -1606,117 +1256,14 @@ export function ChatScreen() {
     }
   }
 
-  /**
-   * A DOCUMENT GOES TO THE THREAD, EITHER KIND — and this is the one send path
-   * on this screen that does not require `sendJobId`.
-   *
-   * Photo and voice cannot: chat-photos and chat-audio authorise their inserts
-   * against a JOB, so the pair thread has nowhere to key a path, which is what
-   * `allowAttachments` has always meant. phase77's chat_documents_* policies
-   * carry a second branch on `direct_threads`, so folder one may be either id
-   * and the Document row renders on both thread kinds. The guard behind the
-   * control agrees with the control: the resolved target, whichever kind it
-   * is.
-   */
-  async function sendDocument(asset: DocumentPicker.DocumentPickerAsset) {
-    const threadId = sendJobId ?? sendDirectThreadId;
-    if (!user || !sendTarget || !threadId) return;
-    setSending(true);
-    const { url, error: uploadError } = await uploadChatDocument(
-      threadId,
-      user.id,
-      asset.uri,
-      asset.name,
-      asset.mimeType
-    );
-    if (uploadError || !url) {
-      setSending(false);
-      await alertAsync(
-        'Could not send document',
-        userMessage(
-          uploadError,
-          'Upload failed. The chat-documents storage bucket may still need setting up.'
-        )
-      );
-      return;
-    }
-
-    const { data, error } = await sendMessage({
-      target: sendTarget,
-      senderId: user.id,
-      content: '',
-      documentUrl: url,
-      // The name and the size are what let the bubble draw before anything is
-      // downloaded. `size` is optional on a picked asset, and an absent one
-      // stays absent rather than becoming a zero the bubble would label.
-      documentName: asset.name,
-      documentSizeBytes: asset.size ?? null,
-    });
-    setSending(false);
-
-    if (error) {
-      await reportSendFailure('Could not send document', error);
-      return;
-    }
-    if (data) addOwnMessage(data);
-  }
-
-  async function pickDocument() {
-    // No permission request: the system document browser is a presented picker
-    // that hands back only what the user chose, so there is no prompt to make
-    // and nothing to explain in advance. copyToCacheDirectory is what makes
-    // the returned uri readable by fetch() a moment later.
-    const result = await DocumentPicker.getDocumentAsync({
-      copyToCacheDirectory: true,
-      multiple: false,
-    });
-    if (!result.canceled && result.assets?.[0]) {
-      await sendDocument(result.assets[0]);
-    }
-  }
-
-  /**
-   * Open a document attachment IN THE OS.
-   *
-   * NOT Linking.openURL, which is what this was until 2026-08-25 and what the
-   * fence in tests/chatDocuments.test.mjs now stops coming back. Opening the
-   * signed URL left the app and handed Safari the link — putting the Supabase
-   * project ref in the address bar and in the browser's history, and leaving
-   * the file in a browser tab rather than in the OS. shareDocument downloads
-   * it first and hands the OS the local file, exactly as a shared photo
-   * already does, so the app stays in the foreground and the URL reaches no
-   * browser at all.
-   *
-   * `document_url` arrives here already exchanged for a short-lived signed URL
-   * (resolveMessageMedia), so this is the resolution the download uses; there
-   * is no second one. A signature that has outlived the thread being left open
-   * fails the download and is SAID rather than swallowed — nothing here
-   * refreshes it, and silence would read as a dead bubble.
-   *
-   * The id, not a boolean: only the bubble that was tapped spins, and the rest
-   * of the thread stays live.
-   */
-  async function openDocument(message: Message) {
-    const url = message.document_url;
-    // Already fetching one — a second tap must not start a second download.
-    if (!url || openingDocumentId) return;
-    setOpeningDocumentId(message.id);
-    const result = await shareDocument(url, message.document_name);
-    setOpeningDocumentId(null);
-    // Dismissing the OS sheet is a cancellation and returns ok, so nothing is
-    // surfaced for it. Only a real failure speaks.
-    if (!result.ok) await alertAsync('Could not open document', result.message);
-  }
-
   // F3: ONE row renderer, memoised on what a row reads, so state the rows do
   // not show (the menus, the reply bar, a send in flight) re-renders no row.
-  // The two handlers that read screen state reach it through a ref, which
-  // keeps them — and so this renderer — stable.
-  const rowHandlers = useRef({ openDocument, openOfferJob });
+  // The handler that reads screen state reaches it through a ref, which keeps
+  // it — and so this renderer — stable.
+  const rowHandlers = useRef({ openOfferJob });
   useEffect(() => {
-    rowHandlers.current = { openDocument, openOfferJob };
+    rowHandlers.current = { openOfferJob };
   });
-  const pressDocument = useCallback((message: Message) => void rowHandlers.current.openDocument(message), []);
   const openOfferJobFromRow = useCallback(
     (request: OfferWithJob) => void rowHandlers.current.openOfferJob(request),
     []
@@ -1795,25 +1342,12 @@ export function ChatScreen() {
         <ChatBubble
           message={item}
           isOwn={item.sender_id === user?.id}
-          // THE FLAG GUARDS THE ASSEMBLY, not the element. Undefined
-          // resolves to `sent` — one tick — which is exactly what an
-          // unflipped build has always shown. Own messages only:
-          // a tick on theirs would claim to know what YOU did with
-          // THEIR message.
-          delivery={
-            READ_TICKS && item.sender_id === user?.id
-              ? deliveryFor(item, readPositions)
-              : undefined
-          }
           senderName={counterparty?.full_name}
           senderAvatarUrl={counterparty?.avatar_url}
-          reactions={reactionsByMessage[item.id]}
-          // Nothing to react to or reply to on an already-unsent placeholder:
-          // the bubble withholds the long-press itself (F3).
+          // Nothing to reply to on an already-unsent placeholder: the bubble
+          // withholds the long-press itself (F3).
           onLongPressMessage={setMenuTarget}
           onPressImage={setViewerUri}
-          onPressDocument={pressDocument}
-          documentBusy={openingDocumentId === item.id}
           replyTo={item.reply_to_id ? messagesById[item.reply_to_id] : null}
           replyToName={
             item.reply_to_id
@@ -1834,11 +1368,7 @@ export function ChatScreen() {
       latestMessageIdByRequest,
       counterparty,
       respondingId,
-      readPositions,
-      reactionsByMessage,
-      openingDocumentId,
       messagesById,
-      pressDocument,
       openOfferJobFromRow,
     ]
   );
@@ -2073,7 +1603,7 @@ export function ChatScreen() {
             </View>
           ) : messagingUnlocked !== true ? (
             // Every free-form entry point at once — composer, send button, quick
-            // replies, camera, photo library and voice — rather than disabling
+            // replies, camera and photo library — rather than disabling
             // them one by one and leaving the next one to be forgotten. The
             // negotiation cards above stay fully interactive. While the answer
             // is still unknown (null) nothing is offered, so a slow read can
@@ -2098,7 +1628,7 @@ export function ChatScreen() {
 
               {/* Quoted-reply chip: what you're replying to, above the input,
                   with a way to back out — same as WhatsApp. */}
-              {replyTo && recorder.phase === 'idle' && (
+              {replyTo && (
                 <View style={styles.replyBar}>
                   <View style={styles.replyAccent} />
                   <View style={styles.replyBody}>
@@ -2131,14 +1661,6 @@ export function ChatScreen() {
                 sending={sending}
                 onPickCamera={pickFromCamera}
                 onPickLibrary={pickFromLibrary}
-                recorderPhase={recorder.phase}
-                recorderDurationMs={recorder.durationMs}
-                recorderLevels={recorder.meterLevels}
-                previewUri={recorder.previewUri}
-                onMicTap={handleMicTap}
-                onStopRecording={handleStopRecording}
-                onSendVoice={handleSendVoice}
-                onDiscardVoice={recorder.discard}
                 // The [ + ] drop-up reads the one owner rather than a boolean
                 // of its own, so opening it closes the header's dropdown in
                 // the same assignment.
@@ -2149,17 +1671,8 @@ export function ChatScreen() {
                 // route opened the screen: chat media is stored under
                 // `{jobId}/{userId}/…` and the pair thread has no job id to key
                 // a path on.
-                //
-                // CAMERA, PHOTOS AND VOICE ONLY. Document is deliberately NOT
-                // behind this: phase77's chat_documents_* policies take a job
-                // id OR a direct thread id in folder one, so it works on both
-                // thread kinds and hiding it here would hide a working
-                // feature on every pair thread. The chat-photos / chat-audio
-                // gap is real and parked; it is not closed from the client.
                 allowAttachments={!!sendJobId}
-                onPickDocument={pickDocument}
-                // Also not behind `allowAttachments`, and for a stronger
-                // reason than the document row: a share writes no file at
+                // Not behind `allowAttachments`: a share writes no file at
                 // all. It is a row in `live_location_shares`, reached through
                 // three RPCs that each take a job id or a direct thread id,
                 // so there is no bucket and no path for a pair thread to
@@ -2175,14 +1688,6 @@ export function ChatScreen() {
           )}
         </KeyboardRisingColumn>
       </View>
-
-      <ReactionPicker
-        visible={!!reactionTarget}
-        currentEmoji={myReactionEmoji}
-        onSelect={handleSelectReaction}
-        onRemove={handleRemoveReaction}
-        onClose={() => setReactionTarget(null)}
-      />
 
       <PhotoViewer
         visible={!!viewerUri}
@@ -2234,16 +1739,6 @@ export function ChatScreen() {
         subtitle={`${counterparty?.full_name ?? 'They'} will see where you are until it ends. You can stop it at any time.`}
         items={durationItems}
         onClose={() => setDurationPickerOpen(false)}
-      />
-
-      <TranslationSheet
-        visible={translateOpen}
-        onClose={closeTranslation}
-        result={translateResult}
-        // Rendered only where the clipboard actually exists — on a build
-        // without expo-clipboard's native module there is no core fallback to
-        // fall back TO, so the control is absent rather than broken.
-        onCopy={canCopy() ? handleCopyTranslation : undefined}
       />
 
       <AmountPrompt

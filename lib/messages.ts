@@ -34,24 +34,6 @@ export type Message = {
   sender_id: string;
   content: string;
   image_url: string | null;
-  /** Voice note (phase16). Null on text/photo messages, and on any row
-   *  created before that migration ran. */
-  audio_url: string | null;
-  audio_duration_ms: number | null;
-  /**
-   * Document attachment (phase77). `document_url` is the private
-   * `storage://chat-documents/…` reference, exchanged for a signed URL by
-   * resolveMessageMedia() exactly as image_url and audio_url are.
-   *
-   * THE OTHER TWO ARE WHAT LETS THE BUBBLE DRAW BEFORE DOWNLOADING ANYTHING.
-   * A document has no thumbnail and no waveform, so the name and the byte
-   * count are the whole preview — the same role audio_duration_ms plays for a
-   * voice note. Fetching the file to render its own bubble would download
-   * every attachment in a thread on open.
-   */
-  document_url: string | null;
-  document_name: string | null;
-  document_size_bytes: number | null;
   /** Quoted reply target (phase18). The quoted message is resolved from the
    *  already-loaded thread rather than joined — it's always in the same one. */
   reply_to_id: string | null;
@@ -81,9 +63,8 @@ export type Message = {
     | null;
   request_amount_cents: number | null;
   /**
-   * Unsend (phase25). Set once the sender unsends this message — content,
-   * image_url, audio_url and audio_duration_ms are wiped server-side at the
-   * same time (see unsend_message() RPC), not just hidden client-side, so a
+   * Unsend (phase25). Set once the sender unsends this message — content and
+   * image_url are wiped server-side at the same time (see unsend_message() RPC), not just hidden client-side, so a
    * placeholder is all that's left to render regardless of client version.
    */
   unsent_at: string | null;
@@ -119,41 +100,22 @@ export async function unsendMessage(messageId: string) {
 // that screen in fix run F20; WorkerJobScreen's stepper took its place.)
 
 const MESSAGE_COLUMNS =
-  'id, job_id, direct_thread_id, sender_id, content, image_url, audio_url, audio_duration_ms, document_url, document_name, document_size_bytes, reply_to_id, job_request_id, job_offer_id, request_event, request_amount_cents, unsent_at, created_at';
+  'id, job_id, direct_thread_id, sender_id, content, image_url, reply_to_id, job_request_id, job_offer_id, request_event, request_amount_cents, unsent_at, created_at';
 
-/** Replace stored private-media references with short-lived display URLs. */
+/** Replace the stored private photo reference with a short-lived display URL. */
 export async function resolveMessageMedia(message: Message): Promise<Message> {
-  const [imageUrl, audioUrl, documentUrl] = await Promise.all([
-    resolveChatMediaUrl('chat-photos', message.image_url),
-    resolveChatMediaUrl('chat-audio', message.audio_url),
-    resolveChatMediaUrl('chat-documents', message.document_url),
-  ]);
-  return {
-    ...message,
-    image_url: imageUrl,
-    audio_url: audioUrl,
-    document_url: documentUrl,
-  };
+  return { ...message, image_url: await resolveChatMediaUrl('chat-photos', message.image_url) };
 }
 
 /**
- * F5 — a whole page's media in one signing call per bucket, rather than up to
- * three per message. The realtime path keeps resolveMessageMedia for its one
- * message at a time.
+ * F5 — a whole page's photos in one signing call, rather than one per
+ * message. The realtime path keeps resolveMessageMedia for its one message at
+ * a time.
  */
 export async function resolveMessagesMedia(list: Message[]): Promise<Message[]> {
   if (list.length === 0) return list;
-  const [images, audio, documents] = await Promise.all([
-    resolveChatMediaUrls('chat-photos', list.map((m) => m.image_url)),
-    resolveChatMediaUrls('chat-audio', list.map((m) => m.audio_url)),
-    resolveChatMediaUrls('chat-documents', list.map((m) => m.document_url)),
-  ]);
-  return list.map((message, index) => ({
-    ...message,
-    image_url: images[index],
-    audio_url: audio[index],
-    document_url: documents[index],
-  }));
+  const images = await resolveChatMediaUrls('chat-photos', list.map((m) => m.image_url));
+  return list.map((message, index) => ({ ...message, image_url: images[index] }));
 }
 
 /** F5: how many messages one thread loads at a time. */
@@ -263,13 +225,6 @@ export type NewMessageInput = {
   senderId: string;
   content: string;
   imageUrl?: string | null;
-  audioUrl?: string | null;
-  audioDurationMs?: number | null;
-  /** The `storage://chat-documents/…` reference, plus the two facts the
-   *  bubble draws from before it downloads anything (phase77). */
-  documentUrl?: string | null;
-  documentName?: string | null;
-  documentSizeBytes?: number | null;
   /** Id of the message being quoted, for a WhatsApp-style reply. */
   replyToId?: string | null;
 };
@@ -318,7 +273,7 @@ export function isMessagingLockedError(
 export const MESSAGING_LOCKED_MESSAGE =
   'You can send messages once this job is confirmed. Until then, use the offer actions above to agree on a price.';
 
-/** Send a text, photo, voice or document message, optionally quoting another. */
+/** Send a text or photo message, optionally quoting another. */
 export async function sendMessage(input: NewMessageInput) {
   const { data, error } = await supabase
     .from('messages')
@@ -328,11 +283,6 @@ export async function sendMessage(input: NewMessageInput) {
       sender_id: input.senderId,
       content: input.content,
       image_url: input.imageUrl ?? null,
-      audio_url: input.audioUrl ?? null,
-      audio_duration_ms: input.audioDurationMs ?? null,
-      document_url: input.documentUrl ?? null,
-      document_name: input.documentName ?? null,
-      document_size_bytes: input.documentSizeBytes ?? null,
       reply_to_id: input.replyToId ?? null,
     })
     .select()
@@ -351,115 +301,6 @@ export async function sendMessage(input: NewMessageInput) {
 export function messagePreviewText(message: Message): string {
   if (message.unsent_at) return 'This message was unsent';
   if (message.job_request_id) return 'Job request';
-  // AHEAD OF AUDIO, and the order is the point rather than a preference. One
-  // insert writes every attachment kind, so nothing at this layer stops a row
-  // carrying two of them; whichever branch comes first decides what a quote
-  // chip and an inbox row say. A document is the more specific fact — it has a
-  // NAME, and naming it is strictly more useful than "Voice message" — so it
-  // is asked about first. The filename is the user's own text and is shown as
-  // they wrote it; a document that somehow has no name still previews as
-  // something rather than falling through to an empty ellipsis.
-  if (message.document_url) return message.document_name || 'Document';
-  if (message.audio_url) return 'Voice message';
   if (message.image_url) return message.content || 'Photo';
   return message.content || '…';
-}
-
-/**
- * The Ionicon a document bubble draws, from its FILENAME alone.
- *
- * Read off the name rather than the mime type on purpose: the mime type is
- * optional on a picked asset (`DocumentPickerAsset.mimeType?`), is absent
- * often enough on iOS to matter, and is not stored on the message row at all
- * — the extension is on the name the row does carry, so this answers for a
- * message loaded from the database exactly as it does for one just picked.
- *
- * Anything unrecognised gets the generic document glyph. It is a hint about
- * what is inside, never a claim: the file is not opened to draw its own
- * bubble, which is the whole reason the name and the size are stored beside
- * the reference.
- */
-export type DocumentIconName =
-  | 'document-text-outline'
-  | 'image-outline'
-  | 'film-outline'
-  | 'musical-notes-outline'
-  | 'grid-outline'
-  | 'easel-outline'
-  | 'archive-outline'
-  | 'document-outline';
-
-const DOCUMENT_ICONS: Record<string, DocumentIconName> = {
-  pdf: 'document-text-outline',
-  doc: 'document-text-outline',
-  docx: 'document-text-outline',
-  rtf: 'document-text-outline',
-  txt: 'document-text-outline',
-  md: 'document-text-outline',
-  pages: 'document-text-outline',
-  png: 'image-outline',
-  jpg: 'image-outline',
-  jpeg: 'image-outline',
-  gif: 'image-outline',
-  heic: 'image-outline',
-  webp: 'image-outline',
-  mp4: 'film-outline',
-  mov: 'film-outline',
-  m4v: 'film-outline',
-  mp3: 'musical-notes-outline',
-  m4a: 'musical-notes-outline',
-  wav: 'musical-notes-outline',
-  csv: 'grid-outline',
-  xls: 'grid-outline',
-  xlsx: 'grid-outline',
-  numbers: 'grid-outline',
-  ppt: 'easel-outline',
-  pptx: 'easel-outline',
-  key: 'easel-outline',
-  zip: 'archive-outline',
-  rar: 'archive-outline',
-  gz: 'archive-outline',
-  '7z': 'archive-outline',
-};
-
-export function documentIconFor(fileName: string | null | undefined): DocumentIconName {
-  if (!fileName) return 'document-outline';
-  const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
-  // A name with no dot at all reports itself as its own extension; that is
-  // not one, so it takes the generic glyph like anything else unrecognised.
-  if (!extension || extension === fileName.toLowerCase()) return 'document-outline';
-  return DOCUMENT_ICONS[extension] ?? 'document-outline';
-}
-
-/**
- * "18 KB" / "2.4 MB" for a document's byte count — the label beside a
- * filename, and the sibling of formatClipDuration() below: the one piece of
- * metadata that lets a bubble say how big the download is before anyone taps
- * it.
- *
- * KB IS 1024 BYTES HERE, matching what both mobile operating systems show a
- * user for the same file. An unknown or negative size is an empty string, not
- * "0 B" — the bubble drops the label rather than claiming an empty file.
- */
-export function formatDocumentSize(bytes: number | null | undefined): string {
-  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return '';
-  if (bytes < 1024) return `${Math.round(bytes)} B`;
-  const units = ['KB', 'MB', 'GB'];
-  let value = bytes / 1024;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  // One decimal below ten, none above: "9.4 MB" is worth the character and
-  // "247.3 MB" is not.
-  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
-}
-
-/** "0:07" / "1:23" for a clip length in milliseconds. */
-export function formatClipDuration(ms: number | null | undefined): string {
-  const total = Math.max(0, Math.round((ms ?? 0) / 1000));
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }

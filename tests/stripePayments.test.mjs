@@ -607,9 +607,9 @@ test('[static] app.config.ts declares no unused entitlement (no merchant identif
   // neither as an entitlement nor as an Info.plist key.
   assert.doesNotMatch(flat, /time-sensitive/);
   assert.doesNotMatch(flat, /entitlements:/);
-  // D17: the six usage strings, and the app's own name unchanged.
+  // D17: the five usage strings (lean D3a removed expo-audio's), and the app's own name unchanged.
   const usage = [...config.matchAll(/'(Brazos|BRAZOS) uses [^']+'/g)].map((m) => m[0]);
-  assert.equal(usage.length, 6, `six usage strings (saw ${usage.length})`);
+  assert.equal(usage.length, 5, `five usage strings (saw ${usage.length})`);
   for (const sentence of usage) assert.match(sentence, /^'Brazos uses /, `prose says Brazos: ${sentence}`);
   assert.match(config, /slug: 'BRAZOS'/);
   assert.match(config, /production: 'BRAZOS'/);

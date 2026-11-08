@@ -71,10 +71,11 @@ test('[static] both fields carry their mic, and the text keeps clear of it', () 
   assert.match(tokens, /export const fieldAccessory = \{\s*size: 26,/, 'the operator\'s smaller circles: 26');
 });
 
-test('[static] the usage strings name dictation, one microphone sentence for all three plugins', async () => {
+test('[static] the usage strings name dictation, one microphone sentence for both plugins', async () => {
   const config = read('app.config.ts');
   // FIX-RUN B12: nothing films a video, so the sentence no longer says it.
-  const sentence = 'Brazos uses your microphone only while you search or dictate by voice or record a voice message, and stops listening when you finish.';
-  assert.equal(config.split(`'${sentence}'`).length - 1, 3, 'expo-image-picker, expo-audio and expo-speech-recognition');
+  // Lean D3a: no voice messages and no expo-audio, so it no longer says that either.
+  const sentence = 'Brazos uses your microphone only while you search or dictate by voice, and stops listening when you finish.';
+  assert.equal(config.split(`'${sentence}'`).length - 1, 2, 'expo-image-picker and expo-speech-recognition');
   assert.match(config, /into the words of a job you post\. Nothing is sent to a server\./);
 });

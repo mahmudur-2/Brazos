@@ -24,23 +24,9 @@ export type Conversation = {
   last_message_sender_id: string;
   last_message_content: string;
   last_message_image_url: string | null;
-  /** Voice note (phase16). Null until that migration runs, which the inbox
-   *  preview tolerates — it just falls through to the text/photo cases. */
-  last_message_audio_url: string | null;
-  /**
-   * Document attachment (phase77, S-6). Both branches of the view carry these,
-   * so a document previews on a job thread and a pair thread alike.
-   *
-   * The URL is the raw `storage://chat-documents/…` reference and is NEVER
-   * signed here — the inbox only asks whether a document is there, and
-   * signing one URL per row on every inbox load would be N round trips to
-   * render a list nobody has tapped. The NAME is the preview.
-   */
-  last_message_document_url: string | null;
-  last_message_document_name: string | null;
   /** Unsend (phase25). Set if the last message in the thread was unsent —
-   *  the inbox preview checks this before falling back to the text/photo/
-   *  voice cases, same precedence as messagePreviewText(). */
+   *  the inbox preview checks this before falling back to the text/photo
+   *  cases, same precedence as messagePreviewText(). */
   last_message_unsent_at: string | null;
   last_message_at: string;
   /** Direct threads carry their own read state (see phase36 for why they are
@@ -86,9 +72,6 @@ export function conversationKey(c: Pick<Conversation, 'job_id' | 'direct_thread_
 export type PreviewableConversation = Pick<
   Conversation,
   | 'last_message_unsent_at'
-  | 'last_message_document_url'
-  | 'last_message_document_name'
-  | 'last_message_audio_url'
   | 'last_message_image_url'
   | 'last_message_content'
 >;
@@ -96,31 +79,16 @@ export type PreviewableConversation = Pick<
 /**
  * The one line under a name in a conversation list.
  *
- * Same precedence as messagePreviewText(): an unsent message says so and
- * carries no reactions, because there is nothing left to have reacted to.
+ * Same precedence as messagePreviewText(): an unsent message says so.
  *
  * SHARED rather than copied. Two lists render conversations now — the inbox
  * and the Face-ID-gated hidden list — and a preview that reads differently in
  * one of them would be the P3-31 duplication in its most visible form.
  */
-export function conversationPreviewText(
-  latest: PreviewableConversation,
-  reactionEmoji: readonly string[] = []
-): string {
+export function conversationPreviewText(latest: PreviewableConversation): string {
   if (latest.last_message_unsent_at) return 'This message was unsent';
-  const prefix = reactionEmoji.length > 0 ? `${reactionEmoji.join('')} ` : '';
-  // AHEAD OF VOICE, the same order messagePreviewText() uses and for the same
-  // reason: one insert writes every attachment kind, so whichever branch comes
-  // first decides what this row says, and the document is the one that has a
-  // NAME to say. The two must not diverge — an inbox row reading "Voice
-  // message" over a thread whose newest bubble is a PDF is the drift this
-  // shared implementation exists to prevent.
-  if (latest.last_message_document_url) {
-    return prefix + (latest.last_message_document_name || 'Document');
-  }
-  if (latest.last_message_audio_url) return `${prefix}Voice message`;
-  if (latest.last_message_image_url) return `${prefix}Photo sent`;
-  return prefix + (latest.last_message_content || '…');
+  if (latest.last_message_image_url) return 'Photo sent';
+  return latest.last_message_content || '…';
 }
 
 /** Only the fields the unread rule reads. */
@@ -174,7 +142,7 @@ export function resolveOtherId(
 // Never `select('*')`: the view is ours today, but a widened view must not
 // silently start shipping new columns to every inbox load.
 const CONVERSATION_COLUMNS =
-  'job_id, direct_thread_id, job_title, client_id, assigned_worker_id, last_message_id, last_message_sender_id, last_message_content, last_message_image_url, last_message_audio_url, last_message_document_url, last_message_document_name, last_message_unsent_at, last_message_at, my_read_at';
+  'job_id, direct_thread_id, job_title, client_id, assigned_worker_id, last_message_id, last_message_sender_id, last_message_content, last_message_image_url, last_message_unsent_at, last_message_at, my_read_at';
 
 /** All of the user's conversations (threads with >=1 message), newest first. */
 export async function fetchConversations(userId: string) {
@@ -309,32 +277,6 @@ export async function fetchMyReadStates(userId: string) {
     .from('message_reads')
     .select('job_id, last_read_at')
     .eq('user_id', userId);
-
-  return { data: (data ?? []) as ReadState[], error };
-}
-
-/**
- * The OTHER party's read position on the given job threads — the gold tick's
- * source for a job conversation (phase77 READ_TICKS).
- *
- * Readable since phase77's `message_reads_select_party`, which is scoped to
- * exactly one row: the row belonging to the other party of a job the caller is
- * already in. It is the same table and the same shape `fetchMyReadStates()`
- * reads, deliberately — one tick pipeline for both thread kinds, rather than
- * an RPC for job threads that could never ride realtime beside its direct
- * sibling.
- *
- * An empty `jobIds` short-circuits: PostgREST renders `in.()` for an empty
- * list, which is a syntax error rather than an empty result.
- */
-export async function fetchCounterpartyReadStates(otherId: string, jobIds: string[]) {
-  if (jobIds.length === 0) return { data: [] as ReadState[], error: null };
-
-  const { data, error } = await supabase
-    .from('message_reads')
-    .select('job_id, last_read_at')
-    .eq('user_id', otherId)
-    .in('job_id', jobIds);
 
   return { data: (data ?? []) as ReadState[], error };
 }

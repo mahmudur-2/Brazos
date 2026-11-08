@@ -235,7 +235,7 @@ test('[static] F4: one scroll path — an inverted list, an own send goes to the
   const chat = strip(read('screens/ChatScreen.tsx'));
   assert.equal((chat.match(/scrollToOffset\(\{ offset: 0, animated: true \}\)/g) ?? []).length, 1, 'one own-send scroll');
   assert.match(chat, /function addOwnMessage\(message: Message\) \{\s*addLocal\(message\);/);
-  assert.equal((chat.match(/if \(data\) addOwnMessage\(data\);/g) ?? []).length, 4, 'every send path takes the reader to its message');
+  assert.equal((chat.match(/if \(data\) addOwnMessage\(data\);/g) ?? []).length, 2, 'both send paths (text, photo) take the reader to their message');
   assert.doesNotMatch(chat, /if \(data\) addLocal\(data\);/);
   // FlashList 2 has no `inverted`; the chat stays on FlatList.
   assert.doesNotMatch(chat, /FlashList/);
@@ -315,7 +315,7 @@ test('F5: the batch signer makes one call per bucket, reuses what it signed, and
 
 test('F5: a failed batch resolves to null, never the storage:// reference', async () => {
   const { mod } = await storageWith(() => ({ data: null, error: new Error('denied') }));
-  const urls = await mod.resolveChatMediaUrls('chat-documents', ['storage://chat-documents/j/u/1.pdf']);
+  const urls = await mod.resolveChatMediaUrls('chat-photos', ['storage://chat-photos/j/u/9.jpg']);
   assert.deepEqual(urls, [null]);
   // A legacy public URL still falls back to itself, as the single resolver does.
   const legacy = 'https://x.supabase.co/storage/v1/object/public/chat-photos/j/u/3.jpg';
@@ -335,7 +335,7 @@ test('F5: the cache key strips only a signed URL’s token', async () => {
 test('[static] F5: a page is fifty, the realtime path keeps its single resolver, the bubble keys its photo', () => {
   const lib = strip(read('lib/messages.ts'));
   assert.match(lib, /export const MESSAGE_PAGE_SIZE = 50;/);
-  assert.match(lib, /resolveChatMediaUrl\('chat-documents', message\.document_url\),/);
+  assert.match(lib, /image_url: await resolveChatMediaUrl\('chat-photos', message\.image_url\)/);
   assert.match(strip(read('hooks/useConversationChat.ts')), /const message = await resolveMessageMedia\(payload\.new as Message\);/);
   assert.match(strip(read('components/ChatBubble.tsx')), /cacheKey=\{signedUrlCacheKey\(message\.image_url\)\}/);
   assert.match(strip(read('components/RemoteImage.tsx')), /source=\{cacheKey \? \{ uri, cacheKey \} : \{ uri \}\}/);
