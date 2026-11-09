@@ -1,6 +1,6 @@
 # SHIP-REPORT (lean v1 run, 2026-11-07 → 2026-11-08)
 
-Your time: ~3 min, one choice (step 8: pay for or wait for GitHub Mac minutes so phone tests 06-10 can run). Steps 1-4 done on 2026-11-08; 5-7 are optional.
+Your time: ~0 min right now. Steps 1-4 done on 2026-11-08; 5-7 are optional; step 8 was done on 2026-11-09 (the repo is public, the phone-test loop is running on its own).
 Undo of the whole run: `git checkout -b restore pre-lean-2026-11` (the tag made before any change). Nothing on staging or production was changed by the run.
 
 ## What happened
@@ -54,8 +54,13 @@ BASELINE.md's "32794 lines" was a measuring error (xargs printed one batch's tot
 | e2e iOS run 17 | 05 red: the late chip's tap hit the floating "I'm here" bar (F16, b6c93cc); then the photo picker's confirm has no "Add" label on the runner's iOS (F17, 30bb03c) | https://github.com/mahmudur-2/Brazos/actions/runs/42548237428 |
 | e2e iOS run 18 | **01-05 green** (post, bid, counter, pay, on my way, late, start, photo, complete); 06 approved and released the payment, rated 5 stars, red at "Submit review": the keyboard covered it (F18, 06f79f5) | https://github.com/mahmudur-2/Brazos/actions/runs/42550933715 |
 | e2e iOS run 19 | not started: GitHub refused the Mac job, "recent account payments have failed or your spending limit needs to be increased" (the free Mac minutes are used up; step 8) | https://github.com/mahmudur-2/Brazos/actions/runs/42553851982 |
+| e2e iOS run 20 (first run on the PUBLIC repo) | red at Install Maestro: github.com's download edge answered 504 six times (F19, 299b682: second route via `gh release download`) | https://github.com/mahmudur-2/Brazos/actions/runs/42581519233 |
+| e2e iOS run 21 | same 504s (started before F19 landed) | https://github.com/mahmudur-2/Brazos/actions/runs/42582199145 |
+| e2e iOS run 22 | 01 green in 9m35 (4m30 before: public-repo Macs run about half as fast); 02 red at the "Not published yet" scroll with the card on screen for 3 minutes, one hierarchy read outran the 20 s budget (F20, 6617ded: every scrollUntilVisible gets 60 s) | https://github.com/mahmudur-2/Brazos/actions/runs/42582975936 |
+| e2e iOS run 23 | red in 2 minutes: "iOS driver not ready in time" at Maestro's 2-minute default (F21, 8b67879: ten minutes, and one retry when no flow ran) | https://github.com/mahmudur-2/Brazos/actions/runs/42587396408 |
+| e2e iOS run 24 | on 8b67879 with F19-F21; running at the time of this report | https://github.com/mahmudur-2/Brazos/actions/runs/42588458764 |
 
-Two earlier e2e attempts died downloading Maestro (installer CDN 504/503); the workflow now installs the pinned release with retries. Maestro stops at the first red flow, so flows 07-10 have never run and 06 is proven only up to its review step. Each run costs 150-200 of the month's 2000 free Mac minutes (macOS bills at 10x); the 20 runs of 2026-11-08/09 took about 304 wall minutes, roughly 3040 billed, so the month's budget is gone and GitHub now refuses new Mac jobs.
+Two earlier e2e attempts died downloading Maestro (installer CDN 504/503); the workflow now installs the pinned release with retries. Maestro stops at the first red flow, so flows 07-10 have never run and 06 is proven only up to its review step. On the private repo the free plan's $12 of monthly compute (macOS $0.062/min) ran out after about 304 Mac minutes and GitHub refused every job, Linux too. On 2026-11-09 the owner made the repo public: public repos run on standard runners for free, with no cap. Price: the public Macs run about half as fast (run 22), and the repo's docs are readable by anyone (the history was scanned first: no key, token or password; the test phone numbers and one-time code left the docs in 7917fbd and the owner rotated the code).
 
 ## Builds (EAS, free plan)
 | profile | id | status | what it is |
@@ -77,7 +82,7 @@ App Store Connect has TWO records. "Brazos MVP" (Apple ID 6832193439, bundle `ap
 5. **`.env.example` cleanup (the chat may not open that file).** Remove the lines for EXPO_PUBLIC_POSTHOG_KEY and TWILIO_* and any script names that no longer exist (around lines 11 and 15).
 6. **Supabase advisors.** Dashboard → Database → Security Advisor and Performance Advisor → export both; paste into a chat if anything is red.
 7. **Optional EAS cleanup.** `eas env:list preview` and delete EXPO_PUBLIC_POSTHOG_KEY and the old MAESTRO_E2E_*_EMAIL / _PASSWORD secrets; confirm the staging edge-function STRIPE_SECRET_KEY starts with `sk_test_` (Supabase → Edge Functions → Secrets).
-8. **Phone tests 06-10: your choice, ~3 min.** GitHub stopped starting Mac jobs (the free 2000 minutes are spent; macOS counts 10x). Either (a) github.com → Settings → Billing and plans → Spending limits → set an Actions limit (about $0.08 per Mac minute, so one run of ~20 wall minutes costs about $1.60) and check the payment method; or (b) wait for GitHub's monthly reset (your billing date, shown on that page). Then the next chat runs, inside `C:\Users\mdmah\BRAZOS`: `gh workflow run e2e-ios.yml --ref mainexpo -f build_id=e0edf633-cd7d-4f6e-9712-afa3881b0102` and keeps fixing red flows (06 has an unproven fix; 07-10 have never run). No code change is waiting on this; TestFlight build 10 is unaffected.
+8. **Done 2026-11-09.** You made the repo public, so GitHub runs the Mac phone tests for free again; the OTP was rotated and the test numbers left the docs first. Nothing to do: the chat dispatches `gh workflow run e2e-ios.yml --ref mainexpo -f build_id=e0edf633-cd7d-4f6e-9712-afa3881b0102`, fixes red flows and re-runs until all ten are green (HANDOFF.md "Next" has the loop). Make the repo private again later if you want; then Mac minutes cost money again.
 
 ## Decided for you (flip one with its number)
 1. `lean-v1` was merged into `mainexpo` and pushed before the phone tests ran (the plan had it last): GitHub only runs a workflow that exists on `mainexpo`, and `mainexpo` is the one branch a chat may push.
@@ -85,12 +90,12 @@ App Store Connect has TWO records. "Brazos MVP" (Apple ID 6832193439, bundle `ap
 3. `graphify-out/` (the code map, 10 MB, rewritten by graphify in the background) is git-ignored instead of committed; regenerate with `graphify extract . --code-only`.
 
 ## Open items (BACKLOG.md has the rest)
-- e2e: flows 01-05 green in one run (run 18) on simulator build `e0edf633…`; 06 red at "Submit review" with a flow fix pushed but unproven (06f79f5); 07-10 have never run. Blocked on GitHub Mac minutes (step 8). 14 distinct problems were found and fixed on 2026-11-08 (two in the app: the Seal race and the sheet; the rest in the flows or the runner). A red flow is a flow or app fix, not a blocker for TestFlight.
-- Staging holds the test jobs of runs 3-18 (titles `E2E <run id>`); flow 10 deletes each run's account when it passes, and until then the hubs grow with each run.
+- e2e: flows 01-05 green in one run (run 18) on simulator build `e0edf633…`; 06 red at "Submit review" with a flow fix pushed but unproven (06f79f5); 07-10 have never run. Runs 20-24 on the public repo fixed three runner problems (F19-F21); run 24 is the first with all three. 14 distinct problems were found and fixed on 2026-11-08 (two in the app: the Seal race and the sheet; the rest in the flows or the runner). A red flow is a flow or app fix, not a blocker for TestFlight.
+- Staging holds the test jobs of runs 3-24 (titles `E2E <run id>`); flow 10 deletes each run's account when it passes, and until then the hubs grow with each run.
 - Build 9 on TestFlight has the publish bug: on a fast network a posted job can look stuck (the ring keeps turning). The job IS saved; do not tap Publish again, pull the Home list instead. Build 10 fixes it (step 4).
 - Maestro's `takeScreenshot` files are not in the run artifacts yet (only junit and the recording); the recording is enough to diagnose.
 - `banned_phones` keeps SELECT for signed-in users (zero policies, so no row is readable); a later migration can revoke it.
 - `is_blocked_between` still answers for any two users (v1.1).
 - Completion and review photos in `job-photos` are public URLs for v1 (v1.2: signed URLs).
 - `std@0.224.0` Deno import in `_shared/serviceAuth.ts` is first fetched when staging deploys (step 1).
-- Repo is private on the free plan: each e2e run costs macOS minutes at 10x; the workflow is manual-dispatch only (D-v3-10).
+- Repo is PUBLIC since 2026-11-09 (free unlimited Actions minutes, slower Macs); the workflow is manual-dispatch only (D-v3-10). Secrets live only in GitHub secrets and the Supabase dashboard.

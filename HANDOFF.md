@@ -19,40 +19,52 @@ ids, the two App Store Connect records, the owner's remaining steps and "Decided
   ring turning over a job that WAS saved (a fast answer let the intro animation stop the saved sequence).
   Build 9 still has it. Builds on 9b0064f, both FINISHED: simulator `bd7ca0f1…` (e2e-test) and store
   build 10 `23bea9d2…`, which the owner uploaded to Brazos MVP on 2026-11-08 17:11 (Apple processing).
-- e2e iOS (`.github/workflows/e2e-ios.yml`, manual dispatch, `build_id` input), 19 runs on 2026-11-08/09
-  (SHIP-REPORT has every link and fix). Simulator build `e0edf633-cd7d-4f6e-9712-afa3881b0102` (f0be185:
+- e2e iOS (`.github/workflows/e2e-ios.yml`, manual dispatch, `build_id` input): 24 runs on 2026-11-08/09
+  (SHIP-REPORT has links and fixes). Simulator build `e0edf633-cd7d-4f6e-9712-afa3881b0102` (f0be185:
   Seal fix + "All services" sheet fix) is the one to test. Run 18 (42550933715): **01-05 green**; 06 red at
   "Submit review" (keyboard over the button), fixed in 06f79f5 (flow-only), UNPROVEN. 07-10 have never run.
   Maestro stops at the first red flow; flows title jobs `E2E <run id>`, so later flows depend on the same
-  run's earlier flows. The runner now uses America/New_York (`isLateDay` uses the market date).
+  run's earlier flows. The runner uses America/New_York (`isLateDay` uses the market date).
+- The repo went PUBLIC on 2026-11-09 (owner's choice: free unlimited Mac minutes; history scanned, no
+  key/token/password; the test phone numbers + OTP left the docs in G11 and the owner rotated the OTP in
+  Supabase + GitHub secrets). Public-repo Macs run about HALF as fast (run 22: 01 took 9m35 vs 4m30), so:
+  F19 Maestro download falls back to `gh release download`; F20 every `scrollUntilVisible` timeout is 60 s;
+  F21 `MAESTRO_DRIVER_STARTUP_TIMEOUT` 600000 + one retry when no flow ran. Run 24 (42588458764, on 8b67879)
+  is the first run with all three; it was in the flows step at 09:08Z.
 - Since store build 10 the only app change is the sheet fix (f0be185): build 11 is optional.
 
 ## Blocked
 
-- GitHub refuses EVERY Actions job, Linux too (e2e run 19, 42553851982, and backup run 42572725895, both
-  "recent account payments have failed or your spending limit needs to be increased"): the month's 2000
-  free minutes are spent (macOS bills 10x; ~304 wall minutes). Until the monthly reset (the owner will not
-  pay): no CI, no pgTAP, no TestSprite, no staging pipeline (a pushed migration does NOT reach staging),
-  no e2e, no backup workflow. `npm run verify` locally is the only gate. Owner's alternatives: wait, or make
-  the repo public (public repos get unlimited free minutes; scan history for secrets first).
-- Owner asked (2026-11-09) for a complete staging backup, then a production pipeline run by a chat. The
-  backup workflow exists (`.github/workflows/backup-staging.yml`, G9) but cannot run yet. The production
-  pipeline needs the owner to change `.claude/rules/supabase.md` and CLAUDE.md first (both forbid any
-  workflow targeting production; a chat may not edit `.claude/`), and needs Actions minutes.
+- Nothing blocks the e2e loop now. A pushed migration reaches staging again (pipeline runs on Linux).
+- Owner's standing asks (2026-11-09): staging backup DONE by hand into `_archive/backups/staging-2026-11-09/`
+  (roles, schema, data incl. auth+storage rows; no photo files; git-ignored). Staging must NOT be deleted:
+  build 10 on phones, e2e, TestSprite and the pipeline all read it. The production pipeline (owner wants a
+  chat to build and apply it) still needs the owner to change `.claude/rules/supabase.md` and CLAUDE.md
+  (both forbid any workflow targeting production; a chat may not edit `.claude/`) and to add production
+  secrets to a GitHub environment; ref and password never go through a chat.
 
-## Next
+## Next (the loop; any chat, any account, continues from here)
 
-1. Once Mac minutes exist: `gh workflow run e2e-ios.yml --ref mainexpo -f build_id=e0edf633-cd7d-4f6e-9712-afa3881b0102`,
-   then `gh run watch`; read `[Passed]/[Failed]` lines from `gh run view <id> --log`, download the artifact
-   (`e2e-ios/work/Brazos/Brazos/e2e.mp4`, `e2e-junit.xml`) and cut frames with ffmpeg to see the red step.
-2. Fix red flows (a flow edit needs no build; an app fix needs a new `e2e-test` build and later a
-   `testflight` build: plain `npx eas-cli@latest build --platform ios --profile <p> --non-interactive --no-wait --json`,
-   never `release:testflight`, which auto-submits; store submits are the owner's). Maestro traps learned:
-   accessible containers fold children; a label hides inner text; `tapOn` hits the centre even under the
-   tab bar, a floating bar or the keyboard, so `scrollUntilVisible` with `centerElement: true` first;
-   `hideKeyboard` fails on Stripe's sheet; `swipe UP` dismisses the keyboard where `keyboardDismissMode` is set.
-3. Keep SHIP-REPORT's run table, "For you" and "Open items" current after each run.
-4. Backlog: `docs/BACKLOG.md` ("Security (from the lean verdict)" first).
+1. Is a run going? `gh run list -w e2e-ios.yml -L 1`. If yes: `gh run watch <id> --exit-status` (10-20 min
+   per flow on these Macs; all ten about 60-80 min). If none: dispatch
+   `gh workflow run e2e-ios.yml --ref mainexpo -f build_id=e0edf633-cd7d-4f6e-9712-afa3881b0102`.
+2. When it ends: `gh run view <id> --log | grep -E "\[Passed\]|\[Failed\]"`. All ten passed = step 4.
+3. A red flow: `gh run download <id> -D <scratch>/e2e-run-<id>`; the video is
+   `e2e-ios/work/Brazos/Brazos/e2e.mp4` (+ `e2e-junit.xml`, `e2e-debug/`). Cut frames with ffmpeg
+   (`-vf fps=1/30,scale=150:-1,tile=9x5` for a grid, `-ss` near the end for the red step). Fix the flow
+   in `.maestro/` (no build needed) or the app (new `e2e-test` build: plain
+   `npx eas-cli@latest build --platform ios --profile e2e-test --non-interactive --no-wait --json`, then the
+   new id in the dispatch). `npm run verify`, stage by path, commit `lean F<n>: ...`, `git push origin
+   mainexpo`, re-dispatch, add the run's row to SHIP-REPORT. Repeat until all ten are green.
+   Maestro traps: accessible containers fold children; a label hides inner text; `tapOn` hits the centre
+   even under the tab bar, a floating bar or the keyboard, so `scrollUntilVisible` with `centerElement:
+   true` first; `hideKeyboard` fails on Stripe's sheet; `swipe UP` dismisses the keyboard where
+   `keyboardDismissMode` is set; a slow hierarchy read needs a big `scrollUntilVisible` timeout; "iOS
+   driver not ready" is the Mac, not the flow (F21 retries once).
+4. All green: SHIP-REPORT rows + "Open items" + "Your time" updated, this file rewritten, one push, then
+   the owner's ping. Build 11 only if the owner wants the sheet fix on TestFlight (plain `testflight`
+   build, the owner pastes the submit line; never `release:testflight`).
+5. Backlog: `docs/BACKLOG.md` ("Security (from the lean verdict)" first).
 
 ## Revert
 
