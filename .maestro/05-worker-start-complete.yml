@@ -38,6 +38,13 @@ appId: app.brazos.mobile.preview
 - assertVisible: "Decline offer"
 - takeScreenshot: 05-customer-counter
 # The first "Send counter-offer" opens the inline form; the second (under its consequence line) sends it.
+# Run 12: the button sat under the tab bar and its tap went nowhere; centre it first.
+- scrollUntilVisible:
+    element:
+      text: "Send counter-offer"
+    direction: DOWN
+    centerElement: true
+    timeout: 20000
 - tapOn: "Send counter-offer"
 - extendedWaitUntil:
     visible: "COUNTERING"
