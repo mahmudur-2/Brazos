@@ -1,6 +1,6 @@
 # SHIP-REPORT (lean v1 run, 2026-11-07 → 2026-11-08)
 
-Your time: 0 min required (steps 1-4 done on 2026-11-08; 5-7 are optional).
+Your time: ~3 min, one choice (step 8: pay for or wait for GitHub Mac minutes so phone tests 06-10 can run). Steps 1-4 done on 2026-11-08; 5-7 are optional.
 Undo of the whole run: `git checkout -b restore pre-lean-2026-11` (the tag made before any change). Nothing on staging or production was changed by the run.
 
 ## What happened
@@ -42,8 +42,20 @@ BASELINE.md's "32794 lines" was a measuring error (xargs printed one batch's tot
 | e2e iOS run 5 | same as run 4 (second job saved, spinner stuck). Cause found: the Seal animation race in `components/SealTransition.tsx`, fixed in 9b0064f | https://github.com/mahmudur-2/Brazos/actions/runs/42524845926 |
 | e2e iOS run 6 | old simulator build, started before the cause was known: 01 green, 02 stuck at Publish a third time (3 of 5 publishes on staging). Run 7 on the new build is the one that counts | https://github.com/mahmudur-2/Brazos/actions/runs/42526455514 |
 | e2e iOS run 7 (simulator build on the Seal fix) | 01 green; 02: both publishes, the draft and Edit job pass (the Seal fix holds), red at the last step: the "All services" sheet is open but its rows are folded into one accessibility element (fixed in the next commit, `accessible={false}`, as ActionSheet already had) | https://github.com/mahmudur-2/Brazos/actions/runs/42528070363 |
+| e2e iOS run 8 (simulator build `e0edf633…`, the sheet fix) | 02 red: the mode row's label hides its title, so "You're in Customer mode" never matched (F8, 44a400f: the subflows and flows 08/09 look for "Switch to Worker/Customer") | https://github.com/mahmudur-2/Brazos/actions/runs/42531302624 |
+| e2e iOS run 9 | 02 green for the first time; 03 red: the sheet's exit pill reads "Back to …" not "Back" (F9, 225beb2) | https://github.com/mahmudur-2/Brazos/actions/runs/42532514287 |
+| e2e iOS run 10 | 03 green; 04 red at Pay: Stripe's keyboard covers the Pay button and Maestro's `hideKeyboard` fails on Stripe's sheet (F10, 8be5cf4) | https://github.com/mahmudur-2/Brazos/actions/runs/42534310198 |
+| e2e iOS run 11 | 04 still red at Pay (F10 did not close the keyboard; F11, 33e3633: a tap beside the ZIP field closes it) | https://github.com/mahmudur-2/Brazos/actions/runs/42536357242 |
+| e2e iOS run 12 | 04 green (card, Pay, escrow held); 02 red: the "Not published yet" draft card sat under the tab bar (F12, acb7a4b: scroll it to the centre first) | https://github.com/mahmudur-2/Brazos/actions/runs/42537623943 |
+| e2e iOS run 13 | 01-04 green; 05 red: "Send counter-offer" under the tab bar (F13, 1c6bf00) | https://github.com/mahmudur-2/Brazos/actions/runs/42540144005 |
+| e2e iOS run 14 | 03 red: "Pending bids" below the fold on a hub that grew with each run's jobs (F14, d4ede89) | https://github.com/mahmudur-2/Brazos/actions/runs/42542230849 |
+| e2e iOS run 15 | runner fault ("Device became unreachable"), rerun as 16 | https://github.com/mahmudur-2/Brazos/actions/runs/42542970067 |
+| e2e iOS run 16 | 05 red: no "Running 10 minutes late" chip. The Mac runs on UTC, so after 7 PM New York the job was "tomorrow" (F15, 5554483: the runner uses America/New_York; BACKLOG notes the wizard's device-local "Today") | https://github.com/mahmudur-2/Brazos/actions/runs/42545672277 |
+| e2e iOS run 17 | 05 red: the late chip's tap hit the floating "I'm here" bar (F16, b6c93cc); then the photo picker's confirm has no "Add" label on the runner's iOS (F17, 30bb03c) | https://github.com/mahmudur-2/Brazos/actions/runs/42548237428 |
+| e2e iOS run 18 | **01-05 green** (post, bid, counter, pay, on my way, late, start, photo, complete); 06 approved and released the payment, rated 5 stars, red at "Submit review": the keyboard covered it (F18, 06f79f5) | https://github.com/mahmudur-2/Brazos/actions/runs/42550933715 |
+| e2e iOS run 19 | not started: GitHub refused the Mac job, "recent account payments have failed or your spending limit needs to be increased" (the free Mac minutes are used up; step 8) | https://github.com/mahmudur-2/Brazos/actions/runs/42553851982 |
 
-Two earlier e2e attempts died downloading Maestro (installer CDN 504/503); the workflow now installs the pinned release with retries. Maestro stops at the first red flow, so 03-10 have not run yet; they get their first run in run 7 (new simulator build) and will likely need a few selector fixes, as 01 and 02 did. Each run costs 150-200 of the month's 2000 free Mac minutes; six runs on 2026-11-08 used about half the month.
+Two earlier e2e attempts died downloading Maestro (installer CDN 504/503); the workflow now installs the pinned release with retries. Maestro stops at the first red flow, so flows 07-10 have never run and 06 is proven only up to its review step. Each run costs 150-200 of the month's 2000 free Mac minutes (macOS bills at 10x); the 20 runs of 2026-11-08/09 took about 304 wall minutes, roughly 3040 billed, so the month's budget is gone and GitHub now refuses new Mac jobs.
 
 ## Builds (EAS, free plan)
 | profile | id | status | what it is |
@@ -52,6 +64,7 @@ Two earlier e2e attempts died downloading Maestro (installer CDN 504/503); the w
 | testflight (store, build 9) | bfb47ced-8fb9-41ba-a4cd-2c083602f2b1 | on TestFlight (Brazos MVP) and on your phone since 2026-11-08 | staging backend + Stripe TEST keys; bundle `app.brazos.mobile`; has the Seal bug |
 | e2e-test (simulator, 9b0064f) | bd7ca0f1-7b5a-4982-a3d5-5bbfc24d5680 | FINISHED | run 7 and later |
 | testflight (store, build 10, 9b0064f) | 23bea9d2-bf1c-4ded-aeae-5480d835962f | FINISHED; uploaded to Brazos MVP 2026-11-08 17:11 | the Seal fix for testers |
+| e2e-test (simulator, f0be185) | e0edf633-cd7d-4f6e-9712-afa3881b0102 | FINISHED | runs 8-18; the Seal fix plus the "All services" sheet fix. The only app change since build 10 is that sheet fix, so a build 11 is optional |
 
 App Store Connect has TWO records. "Brazos MVP" (Apple ID 6832193439, bundle `app.brazos.mobile`) is the TestFlight target: `eas.json` pins it in both submit profiles, and a test guards the pin. "BRAZOS Dev" (6832350967, `app.brazos.mobile.dev`) is your old personal dev record with the removed design studio; nothing from this run goes there (the first upload of build 9 landed there by mistake, Apple refused it, then it was re-sent with `--id` to Brazos MVP).
 
@@ -64,6 +77,7 @@ App Store Connect has TWO records. "Brazos MVP" (Apple ID 6832193439, bundle `ap
 5. **`.env.example` cleanup (the chat may not open that file).** Remove the lines for EXPO_PUBLIC_POSTHOG_KEY and TWILIO_* and any script names that no longer exist (around lines 11 and 15).
 6. **Supabase advisors.** Dashboard → Database → Security Advisor and Performance Advisor → export both; paste into a chat if anything is red.
 7. **Optional EAS cleanup.** `eas env:list preview` and delete EXPO_PUBLIC_POSTHOG_KEY and the old MAESTRO_E2E_*_EMAIL / _PASSWORD secrets; confirm the staging edge-function STRIPE_SECRET_KEY starts with `sk_test_` (Supabase → Edge Functions → Secrets).
+8. **Phone tests 06-10: your choice, ~3 min.** GitHub stopped starting Mac jobs (the free 2000 minutes are spent; macOS counts 10x). Either (a) github.com → Settings → Billing and plans → Spending limits → set an Actions limit (about $0.08 per Mac minute, so one run of ~20 wall minutes costs about $1.60) and check the payment method; or (b) wait for GitHub's monthly reset (your billing date, shown on that page). Then the next chat runs, inside `C:\Users\mdmah\BRAZOS`: `gh workflow run e2e-ios.yml --ref mainexpo -f build_id=e0edf633-cd7d-4f6e-9712-afa3881b0102` and keeps fixing red flows (06 has an unproven fix; 07-10 have never run). No code change is waiting on this; TestFlight build 10 is unaffected.
 
 ## Decided for you (flip one with its number)
 1. `lean-v1` was merged into `mainexpo` and pushed before the phone tests ran (the plan had it last): GitHub only runs a workflow that exists on `mainexpo`, and `mainexpo` is the one branch a chat may push.
@@ -71,7 +85,8 @@ App Store Connect has TWO records. "Brazos MVP" (Apple ID 6832193439, bundle `ap
 3. `graphify-out/` (the code map, 10 MB, rewritten by graphify in the background) is git-ignored instead of committed; regenerate with `graphify extract . --code-only`.
 
 ## Open items (BACKLOG.md has the rest)
-- e2e: 01 green on both accounts; 02 proven only to the Publish tap; 03-10 unrun until run 7 (new simulator build). A red flow is a flow or app fix, not a blocker for TestFlight.
+- e2e: flows 01-05 green in one run (run 18) on simulator build `e0edf633…`; 06 red at "Submit review" with a flow fix pushed but unproven (06f79f5); 07-10 have never run. Blocked on GitHub Mac minutes (step 8). 14 distinct problems were found and fixed on 2026-11-08 (two in the app: the Seal race and the sheet; the rest in the flows or the runner). A red flow is a flow or app fix, not a blocker for TestFlight.
+- Staging holds the test jobs of runs 3-18 (titles `E2E <run id>`); flow 10 deletes each run's account when it passes, and until then the hubs grow with each run.
 - Build 9 on TestFlight has the publish bug: on a fast network a posted job can look stuck (the ring keeps turning). The job IS saved; do not tap Publish again, pull the Home list instead. Build 10 fixes it (step 4).
 - Maestro's `takeScreenshot` files are not in the run artifacts yet (only junit and the recording); the recording is enough to diagnose.
 - `banned_phones` keeps SELECT for signed-in users (zero policies, so no row is readable); a later migration can revoke it.
