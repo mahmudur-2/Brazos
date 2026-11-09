@@ -77,6 +77,13 @@ jobs:
           [ -n "$app" ] || { echo "no .app in the build archive"; exit 1; }
           echo "APP_PATH=$app" >> "$GITHUB_ENV"
 
+      - name: Use the market's clock (America/New_York)
+        # The wizard's "Today" is the device's local date; the running-late chips compare with the
+        # New York date (lib/runningLate.ts). On a UTC runner the two disagree from 7 PM to midnight
+        # New York (e2e run 15, 2026-11-08). The simulator takes the host's zone.
+        run: |
+          sudo systemsetup -settimezone America/New_York
+          date
       - name: Boot an iPhone simulator and install the app
         run: |
           # Prefer an "iPhone 16", else any iPhone; newest iOS runtime first.

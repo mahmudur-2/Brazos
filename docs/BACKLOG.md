@@ -4,6 +4,10 @@ A run never builds from chat memory: an item is read from here. A feature outsid
 first. Ranked lists are in the owner's order.
 
 ## v1 bugs
+- The wizard's "Today" and "Tomorrow" chips take the device's local date, while the running-late
+  chips and the server use the New York market date (`lib/runningLate.ts`): a phone outside New York
+  between 7 PM and midnight New York time posts "Today" as the wrong market day (e2e run 15 on a UTC
+  runner, 2026-11-08; the runner now uses New York time, the app is unchanged).
 
 none open
 
