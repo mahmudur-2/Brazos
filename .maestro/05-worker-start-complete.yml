@@ -100,6 +100,13 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "I.m here"
     timeout: 30000
+# Run 16: the late chips sit under the floating stage bar; a tap at their place hit "I'm here".
+- scrollUntilVisible:
+    element:
+      text: "Running 10 minutes late"
+    direction: DOWN
+    centerElement: true
+    timeout: 20000
 - tapOn: "Running 10 minutes late"
 - extendedWaitUntil:
     visible: ".*was told ✓"
