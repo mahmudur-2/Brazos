@@ -28,10 +28,16 @@ ids, the two App Store Connect records, the owner's remaining steps and "Decided
 
 ## Blocked
 
-- GitHub refuses new Mac jobs (run 19, 42553851982: "recent account payments have failed or your spending
-  limit needs to be increased"): the month's 2000 free minutes are spent (macOS bills 10x; ~304 wall minutes
-  used). Owner's choice, SHIP-REPORT step 8: raise the Actions spending limit / fix the payment method, or
-  wait for the monthly reset. Nothing else is blocked.
+- GitHub refuses EVERY Actions job, Linux too (e2e run 19, 42553851982, and backup run 42572725895, both
+  "recent account payments have failed or your spending limit needs to be increased"): the month's 2000
+  free minutes are spent (macOS bills 10x; ~304 wall minutes). Until the monthly reset (the owner will not
+  pay): no CI, no pgTAP, no TestSprite, no staging pipeline (a pushed migration does NOT reach staging),
+  no e2e, no backup workflow. `npm run verify` locally is the only gate. Owner's alternatives: wait, or make
+  the repo public (public repos get unlimited free minutes; scan history for secrets first).
+- Owner asked (2026-11-09) for a complete staging backup, then a production pipeline run by a chat. The
+  backup workflow exists (`.github/workflows/backup-staging.yml`, G9) but cannot run yet. The production
+  pipeline needs the owner to change `.claude/rules/supabase.md` and CLAUDE.md first (both forbid any
+  workflow targeting production; a chat may not edit `.claude/`), and needs Actions minutes.
 
 ## Next
 
