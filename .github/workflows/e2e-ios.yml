@@ -131,14 +131,27 @@ jobs:
           MAESTRO_E2E_OTP_2: ${{ secrets.MAESTRO_E2E_OTP_2 }}
           # Maestro hands MAESTRO_* env vars to the flows; they title jobs "E2E <id>".
           MAESTRO_RUN_ID: ${{ github.run_id }}
-          MAESTRO_DRIVER_STARTUP_TIMEOUT: 120000
+          # Run 23 (2026-11-09, the public-repo Macs run about half as fast): the XCUITest
+          # driver was "not ready in time" at the 2-minute default. Ten minutes, and one
+          # retry when Maestro ends before a single flow ran.
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: 600000
           MAESTRO_CLI_NO_ANALYTICS: 1
         run: |
           xcrun simctl io booted recordVideo --codec=h264 --force e2e.mp4 &
           recorder=$!
           status=0
           mkdir -p e2e-debug
-          maestro test .maestro/ --format junit --output e2e-junit.xml --debug-output e2e-debug || status=$?
+          attempt=1
+          while :; do
+            status=0
+            maestro test .maestro/ --format junit --output e2e-junit.xml --debug-output e2e-debug || status=$?
+            if [ "$status" -ne 0 ] && [ "$attempt" -lt 2 ] && ! grep -q "<testcase" e2e-junit.xml 2>/dev/null; then
+              echo "Maestro ended before any flow ran (driver start-up); retrying once"
+              attempt=$((attempt + 1))
+              continue
+            fi
+            break
+          done
           # SIGINT lets simctl finish the mp4; the flows' exit code is kept.
           kill -INT "$recorder"
           wait "$recorder" || true
