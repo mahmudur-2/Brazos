@@ -133,7 +133,20 @@ appId: app.brazos.mobile.preview
 - tapOn:
     text: 'Photo, .*'
     index: 0
-- tapOn: 'Add( \(\d+\))?'
+# Multi-select picker: the confirm is "Add" / "Add (1)" on older iOS and a check (run 17: no "Add"
+# label) on newer; if neither label answers while the picker is still up, the check is tapped where
+# it sits, top right.
+- runFlow:
+    when:
+      visible: 'Add( \(\d+\))?|Done'
+    commands:
+      - tapOn: 'Add( \(\d+\))?|Done'
+- runFlow:
+    when:
+      visible: 'Select up to \d+ items\.'
+    commands:
+      - tapOn:
+          point: "90%,16%"
 - extendedWaitUntil:
     visible: "Remove photo"
     timeout: 60000
