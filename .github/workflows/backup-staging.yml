@@ -1,0 +1,112 @@
+name: Backup staging
+
+# A COMPLETE COPY OF THE STAGING PROJECT, ON DEMAND, AS A RUN ARTIFACT.
+#
+# The free tier has no backups. Before anything that could lose staging (a
+# destructive migration, a project delete, a plan change) the operator runs
+# this from the Actions tab and downloads the artifact. It holds:
+#   roles.sql               database roles (`--role-only`)
+#   schema.sql              every table, function, policy, trigger, view
+#   data.sql                every row of the app's schemas (COPY format)
+#   auth-storage-data.sql   auth users/identities and storage metadata rows
+#   storage/<bucket>/…      every file in every Storage bucket + manifest.json
+#   migrations.txt          what staging reports as applied
+#   functions.txt           the deployed edge functions
+#   secret-names.txt        edge-function secret NAMES (values cannot be read)
+#
+# Restore (another project): link it, `psql -f roles.sql`, `-f schema.sql`,
+# `-f data.sql`, `-f auth-storage-data.sql`, then upload storage/ with the
+# same script's inverse (not written yet; the manifest has every path).
+#
+# Same credentials and same CLI pin as staging.yml, same `staging`
+# environment. The job never prints a key, a connection string or a row: the
+# summary step counts COPY blocks and bytes only. Production is never a target
+# here: the ref comes from the staging environment's secret and nothing else.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-pipeline
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: dump database and storage
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 30
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Link the staging project
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Dump roles, schema and data
+        run: |
+          set -euo pipefail
+          mkdir -p backup
+          npx --yes supabase@2.116.0 db dump --linked --role-only -f backup/roles.sql
+          npx --yes supabase@2.116.0 db dump --linked -f backup/schema.sql
+          npx --yes supabase@2.116.0 db dump --linked --data-only --use-copy -f backup/data.sql
+
+      # auth.users and storage.objects live in Supabase-managed schemas, which
+      # the default dump leaves out. If the CLI refuses the schema list, the
+      # step is red here but the rest of the backup still lands; the summary
+      # says whether this file exists.
+      - name: Dump auth and storage rows
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 db dump --linked --data-only --use-copy --schema auth,storage -f backup/auth-storage-data.sql
+
+      - name: Record migrations, functions and secret names
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 migration list > backup/migrations.txt
+          npx --yes supabase@2.116.0 functions list --project-ref "$SUPABASE_PROJECT_REF" > backup/functions.txt
+          npx --yes supabase@2.116.0 secrets list --project-ref "$SUPABASE_PROJECT_REF" | awk 'NR>2 {print $1}' > backup/secret-names.txt
+
+      - name: Copy every Storage object
+        run: |
+          set -euo pipefail
+          OUT_DIR=backup/storage node scripts/backup-storage.mjs
+
+      - name: Summary (counts only)
+        run: |
+          set -euo pipefail
+          cd backup
+          echo "## files"; ls -la *.sql *.txt
+          for f in data.sql auth-storage-data.sql; do
+            if [ -f "$f" ]; then
+              echo "## COPY blocks in $f (table, rows)"
+              awk '/^COPY /{t=$2; n=0; next} /^\\\.$/{print t, n; t=""; next} t!=""{n++}' "$f"
+            else
+              echo "## WARNING: $f is missing (its step failed; auth users and storage rows are NOT in this backup)"
+            fi
+          done
+          echo "## storage"; du -sh storage 2>/dev/null || echo "no storage folder"
+
+      - name: Upload the backup
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staging-backup-${{ github.run_id }}
+          path: backup
+          retention-days: 90
+          if-no-files-found: error
