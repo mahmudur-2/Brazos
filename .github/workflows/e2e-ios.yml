@@ -24,7 +24,9 @@ jobs:
   maestro:
     name: Maestro flows on the iOS simulator
     runs-on: macos-15
-    timeout-minutes: 45
+    # Run 24 (2026-11-09): 01-03 green, 04 running, cut at 45 minutes. On the public-repo Macs a
+    # flow takes 7-11 minutes, plus about 10 for setup and the driver: ten flows need ~2 hours.
+    timeout-minutes: 180
 
     steps:
       # Third-party actions are pinned to a full commit SHA, as in ci.yml.
