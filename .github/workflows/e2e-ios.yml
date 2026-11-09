@@ -106,10 +106,15 @@ jobs:
         env:
           MAESTRO_VERSION: 2.12.1
           MAESTRO_CLI_NO_ANALYTICS: 1
+          GH_TOKEN: ${{ github.token }}
         run: |
           # The release zip, not the installer script: that script exits 0 on a
           # corrupt (504) download and leaves nothing installed.
-          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o "$RUNNER_TEMP/maestro.zip" "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
+          # Two paths to the same asset: the web download edge (504s killed runs
+          # 2026-11-08 x2 and run 20 on 2026-11-09), then the API asset route via gh.
+          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o "$RUNNER_TEMP/maestro.zip" "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip" \
+            || { echo "web download failed; trying the API asset route"; rm -f "$RUNNER_TEMP/maestro.zip";
+                 gh release download "cli-${MAESTRO_VERSION}" -R mobile-dev-inc/maestro -p maestro.zip -O "$RUNNER_TEMP/maestro.zip"; }
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$HOME/.maestro-dist"
           bin=$(find "$HOME/.maestro-dist" -type f -path '*/bin/maestro' | head -1)
           [ -n "$bin" ] || { echo "no bin/maestro in the release zip"; exit 1; }
