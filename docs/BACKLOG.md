@@ -50,6 +50,9 @@ From the lean security verdict (archived 2026-11-08, `_archive/2026-11-lean/SECU
 
 - L1. Move the `job-photos` completion and review folders to signed URLs (D-20261108-12).
 - L2. The postcss advisory waits for an Expo major.
+- L6. Dependabot (on since the repo went public, 2026-11-09) lists 9 alerts (4 high, 4 moderate, 1 low)
+  at https://github.com/mahmudur-2/Brazos/security/dependabot: triage each (dev-only or shipped, fix
+  available or waits for an Expo major) before launch.
 - L3. `supabase_admin` default privileges are Supabase-owned: raise them with the Advisor on staging.
 - L4. Export the Security Advisor and Performance Advisor reports for staging (owner, 2 minutes).
 - L5. Re-home `notify_on_bid`, then drop the `bids` table (v1.2 item 16).
