@@ -70,7 +70,7 @@ App Store Connect has TWO records. "Brazos MVP" (Apple ID 6832193439, bundle `ap
 
 ## For you (copy-paste, in this order)
 1. ~~Apply the lean migration to staging~~ DONE 2026-11-08 (no backup: Backups need the Pro plan and you declined; staging holds test data only).
-2. ~~Second test phone~~ DONE 2026-11-08 (`13473208154`, code `123456`).
+2. ~~Second test phone~~ DONE 2026-11-08 (number and code live in the GitHub secrets and the Supabase dashboard, not here: the repo is public).
 3. ~~Upload build 9 to TestFlight~~ DONE 2026-11-08: build 9 is on Brazos MVP and installed on your phone. Friends later: App Store Connect → Users and Access → add each with the Marketing role → TestFlight → group "Friends" → add them.
 4. ~~Send build 10 (the publish fix) to TestFlight~~ DONE 2026-11-08 17:11: uploaded to Brazos MVP (6832193439); Apple processes it in 5-10 min, then the TestFlight app on your phone offers Update to 1.0.0 (10). A later build needs the same one line, run inside `C:\Users\mdmah\BRAZOS`:
    `npx eas-cli@latest submit --platform ios --profile testflight --id <build id from the chat>`

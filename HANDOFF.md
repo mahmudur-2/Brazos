@@ -10,7 +10,8 @@ ids, the two App Store Connect records, the owner's remaining steps and "Decided
 - Gates: `npm run verify` green on every `lean F*` commit through 06f79f5; CI, pgTAP, TestSprite (9/9
   against the MIGRATED staging, run 42522047765) green on 9b0064f.
 - Staging has the lean migration and the 9 functions (pipeline run 42521851967, 2026-11-08). Both
-  test phones (`13473208153`, `13473208154`, code `123456`) are Supabase test numbers.
+  test phones are Supabase test numbers (numbers and code: GitHub secrets `MAESTRO_E2E_PHONE`,
+  `MAESTRO_E2E_PHONE_2`, `MAESTRO_E2E_OTP`, `MAESTRO_E2E_OTP_2`; never in a document, the repo is public).
 - TestFlight: build 9 (`bfb47ced…`) is on record "Brazos MVP" (Apple ID 6832193439, bundle
   `app.brazos.mobile`) and on the owner's phone. `eas.json` pins that record in both submit profiles
   (`tests/easProfiles.test.mjs`). "BRAZOS Dev" (6832350967, `.dev`) is the owner's old record: never submit there.
