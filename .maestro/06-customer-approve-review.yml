@@ -103,11 +103,15 @@ appId: app.brazos.mobile.preview
     id: "review-star-5"
 - tapOn: "Share how it went with .*"
 - inputText: "${output.marker} review: on time and careful."
-- tapOn: 'Comment \(optional\)'
+# Run 18: a tap on the eyebrow left the keyboard up and the Submit tap landed on a key. The screen
+# dismisses the keyboard on drag (keyboardDismissMode), so a swipe closes it; then the button is centred.
+- swipe:
+    direction: UP
 - scrollUntilVisible:
     element:
       text: "Submit review"
     direction: DOWN
+    centerElement: true
     timeout: 20000
 - tapOn: "Submit review"
 - extendedWaitUntil:
