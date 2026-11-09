@@ -176,8 +176,21 @@ appId: app.brazos.mobile.preview
     visible: "Bid Sent"
     timeout: 30000
 - tapOn: "View in My Jobs"
+# Run 13: a 30 s wait for "Pending bids" expired. Once B has accepted work (run 12 onwards) the hub
+# lists it above the bids, so the heading is scrolled to; and should the button's tap ever miss,
+# the My Jobs tab opens the same hub.
+- runFlow:
+    when:
+      visible: "View in My Jobs"
+    commands:
+      - tapOn: "My Jobs"
 - extendedWaitUntil:
-    visible: "Pending bids"
+    notVisible: "Loading your jobs…"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Pending bids"
+    direction: DOWN
     timeout: 30000
 - takeScreenshot: 03-pending-bids
 - runFlow: subflows/sign-out.yml
