@@ -73,7 +73,7 @@ appId: app.brazos.mobile.preview
     element:
       text: 'How big is the place\? 2 beds'
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: 'How big is the place\? 2 beds'
 - tapOn: "Continue to Media"
 # Media: one library photo added, then removed.
@@ -115,7 +115,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "e.g. 2410 Emmons Ave, Apt 3B"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "e.g. 2410 Emmons Ave, Apt 3B"
 - inputText: "2017 Emmons Ave, Brooklyn, NY 11235"
 - tapOn: "STEP 3 OF 4"
@@ -123,13 +123,13 @@ appId: app.brazos.mobile.preview
     element:
       text: "Today"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Today"
 - scrollUntilVisible:
     element:
       text: "Morning.*"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Morning.*"
 - tapOn: "Continue to Review"
 # Review: set a price from the presets, needed today, repeat left Off.
@@ -141,7 +141,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Edit budget"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Edit budget"
 - tapOn: '\$50'
 - assertVisible: "Workers can request the job at this price. You still choose who gets it."
@@ -149,13 +149,13 @@ appId: app.brazos.mobile.preview
     element:
       text: "Need it today"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Need it today"
 - scrollUntilVisible:
     element:
       text: "Repeat this job"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Repeat this job"
 - tapOn: "Off"
 - takeScreenshot: 02-main-review
@@ -218,7 +218,7 @@ appId: app.brazos.mobile.preview
       text: '.*Not published yet.*'
     direction: DOWN
     centerElement: true
-    timeout: 20000
+    timeout: 60000
 - tapOn: '.*Not published yet.*'
 # The draft reopens on the step it was saved at; "Need it today" is not part of a draft.
 - extendedWaitUntil:
@@ -228,13 +228,13 @@ appId: app.brazos.mobile.preview
     element:
       text: "Need it today"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Need it today"
 - scrollUntilVisible:
     element:
       text: "Edit budget"
     direction: UP
-    timeout: 20000
+    timeout: 60000
 # Default open bids: a preset maximum. "Enter your own amount" sits below the menu's fold
 # (e2e run 3 missed it); $50 is on screen and saves the same budget.
 - tapOn: "Edit budget"

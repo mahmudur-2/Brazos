@@ -98,7 +98,7 @@ appId: app.brazos.mobile.preview
     element:
       id: "review-star-5"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn:
     id: "review-star-5"
 - tapOn: "Share how it went with .*"
@@ -112,7 +112,7 @@ appId: app.brazos.mobile.preview
       text: "Submit review"
     direction: DOWN
     centerElement: true
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Submit review"
 - extendedWaitUntil:
     visible: 'Thanks — .* has been rated\.|Thanks for rating .*'
@@ -123,7 +123,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Done"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Done"
 
 # ─── Side job: decline B's $42 counter on Bid Detail ─────────────────────

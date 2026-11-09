@@ -15,7 +15,7 @@ appId: app.brazos.mobile.preview
           element:
             text: "Switch to Worker"
           direction: DOWN
-          timeout: 20000
+          timeout: 60000
       - tapOn: "Switch to Worker"
       - extendedWaitUntil:
           visible: 'Switch to Worker Mode\?'

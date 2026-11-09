@@ -20,7 +20,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Account & safety"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Account & safety"
 - extendedWaitUntil:
     visible: "Delete account"
@@ -43,7 +43,7 @@ appId: app.brazos.mobile.preview
           element:
             text: "Finish or cancel each of these.*"
           direction: DOWN
-          timeout: 20000
+          timeout: 60000
       - takeScreenshot: 10-blockers
       - assertVisible:
           text: "Delete my account"

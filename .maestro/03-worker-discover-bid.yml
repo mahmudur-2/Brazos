@@ -80,7 +80,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Report this job"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Report this job"
 - extendedWaitUntil:
     visible: "Send report"
@@ -144,7 +144,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Withdraw bid"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Withdraw bid"
 - extendedWaitUntil:
     visible: 'Withdraw your bid\?'

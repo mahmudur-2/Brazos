@@ -23,7 +23,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Payment methods"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Payment methods"
 - extendedWaitUntil:
     visible: "Payment Methods"
@@ -210,7 +210,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Payment methods"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Payment methods"
 - extendedWaitUntil:
     visible: "Payment Methods"

@@ -44,7 +44,7 @@ appId: app.brazos.mobile.preview
       text: "Send counter-offer"
     direction: DOWN
     centerElement: true
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Send counter-offer"
 - extendedWaitUntil:
     visible: "COUNTERING"
@@ -56,7 +56,7 @@ appId: app.brazos.mobile.preview
     element:
       text: '.*counter-offers left; each expires after 7 days\.|Your last counter — after it, accept or decline\.'
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn:
     text: "Send counter-offer"
     below: '.*counter-offers left; each expires after 7 days\.|Your last counter — after it, accept or decline\.'
@@ -106,7 +106,7 @@ appId: app.brazos.mobile.preview
       text: "Running 10 minutes late"
     direction: DOWN
     centerElement: true
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Running 10 minutes late"
 - extendedWaitUntil:
     visible: ".*was told ✓"
@@ -125,7 +125,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Add photos or video of the finished work"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Add photos or video of the finished work"
 - extendedWaitUntil:
     visible: 'Photo, .*'

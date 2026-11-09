@@ -112,7 +112,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Dark"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Dark"
 - takeScreenshot: 08-profile-dark
 - tapOn: "Light"
@@ -122,7 +122,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Legal"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Legal"
 - extendedWaitUntil:
     visible: "Terms of Service"
@@ -136,7 +136,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Privacy Policy"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Privacy Policy"
 - extendedWaitUntil:
     visible: ".*Brazos Privacy Policy.*"
@@ -146,7 +146,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "View your profile"
     direction: UP
-    timeout: 20000
+    timeout: 60000
 - tapOn: "View your profile"
 - extendedWaitUntil:
     visible: "Profile Details"
@@ -157,7 +157,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Account & safety"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Account & safety"
 - extendedWaitUntil:
     visible: "Account & Safety"

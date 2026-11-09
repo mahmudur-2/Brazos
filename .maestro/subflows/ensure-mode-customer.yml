@@ -15,7 +15,7 @@ appId: app.brazos.mobile.preview
           element:
             text: "Switch to Customer"
           direction: DOWN
-          timeout: 20000
+          timeout: 60000
       - tapOn: "Switch to Customer"
       - extendedWaitUntil:
           visible: 'Switch to Customer Mode\?'

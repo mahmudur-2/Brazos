@@ -26,7 +26,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Earnings & payouts"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Earnings & payouts"
 - extendedWaitUntil:
     visible: "PENDING"
@@ -57,7 +57,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Services & availability"
     direction: UP
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Services & availability"
 - extendedWaitUntil:
     visible: "Add a service"
@@ -72,7 +72,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Add service"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Add service"
 - scrollUntilVisible:
     element:

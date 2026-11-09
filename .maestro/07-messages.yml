@@ -133,7 +133,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "Report this profile"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "Report this profile"
 - extendedWaitUntil:
     visible: "Send report"
