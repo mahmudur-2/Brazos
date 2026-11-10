@@ -1,0 +1,33 @@
+appId: app.brazos.mobile.preview
+# Shared: tap the button that opens the photo picker until a library photo shows. On a slow Mac the picker
+# can sit on "Loading..." for good (e2e run 26, flow 05: a minute of spinner, then the 30 s wait ran out).
+# If no photo shows, a swipe down closes the picker sheet and the next try opens it again. The swipe only
+# runs while the opener button is hidden behind the sheet, so a lost tap is retried, never swiped.
+# Param: TAP (the opener button's text).
+---
+- repeat:
+    times: 3
+    while:
+      notVisible: 'Photo, .*'
+    commands:
+      - tapOn:
+          text: ${TAP}
+          optional: true
+      - extendedWaitUntil:
+          visible: 'Photo, .*'
+          timeout: 45000
+          optional: true
+      - runFlow:
+          when:
+            notVisible: 'Photo, .*'
+          commands:
+            - runFlow:
+                when:
+                  notVisible: ${TAP}
+                commands:
+                  - swipe:
+                      start: 50%, 15%
+                      end: 50%, 92%
+- extendedWaitUntil:
+    visible: 'Photo, .*'
+    timeout: 30000

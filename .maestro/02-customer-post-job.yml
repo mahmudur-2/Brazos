@@ -80,10 +80,10 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "STEP 2 OF 4"
     timeout: 30000
-- tapOn: "Add a photo"
-- extendedWaitUntil:
-    visible: 'Photo, .*'
-    timeout: 30000
+- runFlow:
+    file: subflows/open-photo-picker.yml
+    env:
+      TAP: "Add a photo"
 - tapOn:
     text: 'Photo, .*'
     index: 0
