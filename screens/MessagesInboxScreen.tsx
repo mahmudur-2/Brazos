@@ -192,6 +192,7 @@ export function MessagesInboxScreen() {
   // Each row's •••, which the dropdown opens under.
   const moreRefs = useRef(new Map<string, View | null>());
   const [reportTarget, setReportTarget] = useState<SheetTarget | null>(null);
+  const reportAfterMenu = useRef<SheetTarget | null>(null);
   // Session-only, deliberately. Which slice of your own inbox you were last
   // looking at is not worth a stored preference, and restoring a filter that
   // hides most of your conversations is a confusing way to open a screen.
@@ -450,8 +451,10 @@ export function MessagesInboxScreen() {
           onBlock: () => toggleBlock(menuTarget),
           onUnblock: () => toggleBlock(menuTarget),
           onReport: () => {
+            // Run 31: opened in the same instant the menu's Modal closed, iOS dismissed the report
+            // with it and nothing appeared. It opens once the menu has gone (GlassDropdown onClosed).
+            reportAfterMenu.current = menuTarget;
             setMenuUserId(null);
-            setReportTarget(menuTarget);
           },
         }),
       ]
@@ -673,6 +676,11 @@ export function MessagesInboxScreen() {
         request={menuRequest}
         groups={menuGroups}
         onClose={() => setMenuUserId(null)}
+        onClosed={() => {
+          const target = reportAfterMenu.current;
+          reportAfterMenu.current = null;
+          if (target) setReportTarget(target);
+        }}
         accessibilityLabel={menuTarget ? `Manage conversation with ${menuTarget.name}` : 'Manage conversation'}
       />
 

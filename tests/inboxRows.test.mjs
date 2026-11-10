@@ -106,3 +106,11 @@ test('the row speaks what it shows: a waiting request is in the label, and a car
   assert.doesNotMatch(conversations, /last_message_content \|\| '…'/);
   assert.match(conversations, /last_message_content \|\| 'Job update'/);
 });
+
+test('the inbox opens Report only after its menu has closed (run 31: iOS dismissed it with the menu)', () => {
+  const inbox = stripComments(read('screens/MessagesInboxScreen.tsx'));
+  const onReport = inbox.match(/onReport: \(\) => \{([\s\S]*?)\}/);
+  assert.ok(onReport, 'the inbox menu has no onReport');
+  assert.doesNotMatch(onReport[1], /setReportTarget\(/, 'Report must not open while the menu Modal is closing');
+  assert.match(inbox, /onClosed=\{\(\) => \{[\s\S]*?reportAfterMenu\.current[\s\S]*?setReportTarget\(target\)/);
+});
