@@ -67,7 +67,8 @@ export type PreviewableConversation = Pick<
 export function conversationPreviewText(latest: PreviewableConversation): string {
   if (latest.last_message_unsent_at) return 'This message was unsent';
   if (latest.last_message_image_url) return 'Photo sent';
-  return latest.last_message_content || '…';
+  // A message with no text is a card (an offer or a job update); run 27 showed a bare "…" for it.
+  return latest.last_message_content || 'Job update';
 }
 
 /** Only the fields the unread rule reads. */

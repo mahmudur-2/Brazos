@@ -18,6 +18,8 @@ appId: app.brazos.mobile.preview
 - evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
 
 # ─── A: Inbox → the main job's conversation ──────────────────────────────
+# Run 27: rows are found by the person's name, the text on screen; the job title was only in the spoken
+# label (now it matches the chip), and a slow Mac needed about 50 s for the first load.
 - tapOn: "Inbox"
 - extendedWaitUntil:
     visible: "All conversations"
@@ -26,11 +28,11 @@ appId: app.brazos.mobile.preview
 - tapOn: "Requests conversations"
 - tapOn: "All conversations"
 - extendedWaitUntil:
-    visible: ".*${output.marker} main.*"
-    timeout: 30000
+    visible: "E2E Worker(, .*)?"
+    timeout: 60000
 - takeScreenshot: 07-inbox-customer
 - tapOn:
-    text: ".*${output.marker} main.*"
+    text: "E2E Worker(, .*)?"
     index: 0
 - extendedWaitUntil:
     visible: "Message…"
@@ -162,12 +164,12 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 - tapOn: "Unread conversations"
 - extendedWaitUntil:
-    visible: ".*unread.*${output.marker} main.*"
-    timeout: 30000
+    visible: "E2E Customer, .*unread.*"
+    timeout: 60000
 - takeScreenshot: 07-inbox-worker-unread
 - tapOn: "All conversations"
 - longPressOn:
-    text: ".*unread.*${output.marker} main.*"
+    text: "E2E Customer, .*unread.*"
     index: 0
 - extendedWaitUntil:
     visible: "Report"
@@ -179,7 +181,7 @@ appId: app.brazos.mobile.preview
     timeout: 15000
 - tapOn: "Cancel"
 - tapOn:
-    text: ".*${output.marker} main.*"
+    text: "E2E Customer(, .*)?"
     index: 0
 - extendedWaitUntil:
     visible: ".*${output.marker} hello.*"
@@ -195,6 +197,6 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "All conversations"
     timeout: 30000
-- assertNotVisible: ".*unread.*${output.marker} main.*"
+- assertNotVisible: "E2E Customer, .*unread.*"
 - takeScreenshot: 07-inbox-worker-read
 - runFlow: subflows/sign-out.yml

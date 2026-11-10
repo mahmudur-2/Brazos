@@ -110,7 +110,14 @@ export function ConversationRow({
         name,
         count != null ? `${count} unread` : unread ? 'unread' : null,
         preview,
-        job ? (job.stage ? `${job.stage.word}, ${job.title}` : job.title) : null,
+        // VoiceOver hears the chip that is on screen: the request when one waits, else the job.
+        awaitingRequest
+          ? 'Job request, needs your reply'
+          : job
+            ? job.stage
+              ? `${job.stage.word}, ${job.title}`
+              : job.title
+            : null,
       ]
         .filter(Boolean)
         .join(', ')}

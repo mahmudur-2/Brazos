@@ -96,3 +96,13 @@ test('[static] #53 — the ••• opens the glass dropdown: one group, no "�
   assert.match(menu, /const SCREEN_EDGE = 8;/);
   assert.match(menu, /item\.destructive \? colors\.dropDanger : colors\.dropGlyph/);
 });
+
+test('the row speaks what it shows: a waiting request is in the label, and a card is never a bare "…" (run 27)', () => {
+  const row = stripComments(read('components/ConversationRow.tsx'));
+  const label = row.match(/accessibilityLabel=\{\[([\s\S]*?)\]\s*\.filter/);
+  assert.ok(label, 'the row label array was not found');
+  assert.match(label[1], /awaitingRequest\s*\?\s*'Job request, needs your reply'/);
+  const conversations = stripComments(read('lib/conversations.ts'));
+  assert.doesNotMatch(conversations, /last_message_content \|\| '…'/);
+  assert.match(conversations, /last_message_content \|\| 'Job update'/);
+});
