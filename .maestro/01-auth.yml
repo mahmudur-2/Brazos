@@ -15,10 +15,11 @@ appId: app.brazos.mobile.preview
 - takeScreenshot: 01-welcome
 
 # Email create account: the empty form names each missing field (Create itself is never sent: it would mint a real email account).
-- tapOn: "Continue with email"
-- extendedWaitUntil:
-    visible: "Use Phone Number Instead"
-    timeout: 15000
+- runFlow:
+    file: subflows/welcome-tap.yml
+    env:
+      TAP: "Continue with email"
+      NEXT: "Use Phone Number Instead"
 - tapOn:
     text: "Create account"
     below: "Password"
@@ -32,10 +33,11 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "Continue with phone"
     timeout: 15000
-- tapOn: "Continue with phone"
-- extendedWaitUntil:
-    visible: "One account. Two ways to use it."
-    timeout: 15000
+- runFlow:
+    file: subflows/welcome-tap.yml
+    env:
+      TAP: "Continue with phone"
+      NEXT: "One account. Two ways to use it."
 - tapOn: "Switch modes to hire help or find work."
 - tapOn:
     text: "Create account"
@@ -48,10 +50,11 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "I already have an account"
     timeout: 15000
-- tapOn: "I already have an account"
-- extendedWaitUntil:
-    visible: "Sign in to Brazos"
-    timeout: 15000
+- runFlow:
+    file: subflows/welcome-tap.yml
+    env:
+      TAP: "I already have an account"
+      NEXT: "Sign in to Brazos"
 - tapOn: "Continue"
 - assertVisible: "Enter your phone number."
 - tapOn: "Use Email Instead"

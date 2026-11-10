@@ -9,10 +9,11 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "I already have an account"
     timeout: 60000
-- tapOn: "I already have an account"
-- extendedWaitUntil:
-    visible: "Sign in to Brazos"
-    timeout: 15000
+- runFlow:
+    file: welcome-tap.yml
+    env:
+      TAP: "I already have an account"
+      NEXT: "Sign in to Brazos"
 # PhoneNumberInput drops the leading 1 of a NANP number as it is typed.
 - tapOn: "Phone number, United States, plus 1"
 - inputText: ${PHONE}
@@ -44,10 +45,11 @@ appId: app.brazos.mobile.preview
       - extendedWaitUntil:
           visible: "Continue with phone"
           timeout: 15000
-      - tapOn: "Continue with phone"
-      - extendedWaitUntil:
-          visible: "One account. Two ways to use it."
-          timeout: 15000
+      - runFlow:
+          file: welcome-tap.yml
+          env:
+            TAP: "Continue with phone"
+            NEXT: "One account. Two ways to use it."
       - tapOn: "Carlos Reyes"
       - inputText: ${NAME}
       - tapOn: "Phone number, United States, plus 1"

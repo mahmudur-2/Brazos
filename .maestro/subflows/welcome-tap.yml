@@ -1,0 +1,21 @@
+appId: app.brazos.mobile.preview
+# Shared: tap a Welcome button until the screen it opens shows. Welcome's rim light never stops moving, so a
+# slow Mac can lose the tap (e2e run 25: "Continue with email" tapped, Welcome stayed for three minutes).
+# A tap that did land leaves the button off screen, so the next try's optional tap is a no-op.
+# Params: TAP (the Welcome button's text), NEXT (text on the screen it opens).
+---
+- repeat:
+    times: 3
+    while:
+      notVisible: ${NEXT}
+    commands:
+      - tapOn:
+          text: ${TAP}
+          optional: true
+      - extendedWaitUntil:
+          visible: ${NEXT}
+          timeout: 20000
+          optional: true
+- extendedWaitUntil:
+    visible: ${NEXT}
+    timeout: 15000
