@@ -16,6 +16,7 @@ import {
 import { completePasswordReset, MIN_PASSWORD_LENGTH, setRecoveryPending } from '../lib/passwordReset';
 import { userMessage } from '../lib/errorMessage';
 import { Announce } from '../hooks/useAnnounce';
+import { useAuth } from '../hooks/useAuth';
 
 /**
  * 2026-09-26 (the refresh, audit M-21) — SET A NEW PASSWORD.
@@ -40,6 +41,21 @@ export function ResetPasswordScreen() {
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const { logout } = useAuth();
+  const leavingRef = useRef(false);
+  const [leaving, setLeaving] = useState(false);
+
+  // A4: the recovery session is a real session, so without this the only way out was a new
+  // password. Leaving clears the pending flag, then signs the recovery session out.
+  async function handleLeave() {
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    setLeaving(true);
+    setRecoveryPending(false);
+    await logout();
+    leavingRef.current = false;
+    setLeaving(false);
+  }
 
   async function handleSave() {
     if (saving) return;
@@ -77,7 +93,8 @@ export function ResetPasswordScreen() {
 
   const footer = (
     <View style={styles.footer}>
-      <AuthButton title="Save new password" themed hero lit chevron onPress={handleSave} loading={saving} />
+      <AuthButton title="Save new password" themed hero lit chevron onPress={handleSave} loading={saving} disabled={leaving} />
+      <AuthButton title="Cancel and sign out" themed variant="ghost" onPress={() => void handleLeave()} loading={leaving} disabled={saving} />
     </View>
   );
 

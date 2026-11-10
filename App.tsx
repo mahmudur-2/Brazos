@@ -21,6 +21,13 @@ import {
   setRecoveryPending,
   subscribeRecovery,
 } from './lib/passwordReset';
+import {
+  RECOVERY_LINK_FAILED,
+  recoveryNeedsConsent,
+  recoveryTokenSubject,
+  type RecoveryTokens,
+} from './lib/passwordResetLink';
+import { alertAsync, confirmAsync } from './lib/dialog';
 import { ResetPasswordScreen } from './screens/ResetPasswordScreen';
 import { flushPendingNavigation, navigationRef } from './lib/navigationRef';
 import { ThemeProvider } from './lib/ThemeContext';
@@ -92,8 +99,33 @@ function RootNavigator() {
   const [recoveryPending, setRecoveryPendingState] = useState(isRecoveryPending());
   useEffect(() => subscribeRecovery(setRecoveryPendingState), []);
   const handledInitialUrl = useRef(false);
+  const signedInUserIdRef = useRef<string | null>(null);
+  signedInUserIdRef.current = user?.id ?? null;
   useEffect(() => {
     let active = true;
+    // A3: a link whose token belongs to another account than the one signed in swaps that account
+    // (setSession replaces the session) - so the person agrees first, naming the account. Declining
+    // does nothing. A link that cannot be opened says so instead of only logging.
+    const openRecovery = async (recovery: RecoveryTokens) => {
+      const subject = recoveryTokenSubject(recovery.accessToken);
+      if (recoveryNeedsConsent(signedInUserIdRef.current, subject)) {
+        const ok = await confirmAsync({
+          title: 'Reset another account’s password?',
+          message: `This link resets the password for ${subject?.email ?? 'another account'}. Continue and sign out of your current account?`,
+          confirmText: 'Continue',
+          cancelText: 'Cancel',
+          destructive: true,
+        });
+        if (!ok || !active) return;
+      }
+      const { error } = await beginRecovery(recovery);
+      if (error) {
+        console.error('[link] password recovery failed', error.message);
+        await alertAsync('Couldn’t open the reset link', RECOVERY_LINK_FAILED);
+        return;
+      }
+      setRecoveryPending(true);
+    };
     const dispatch = (url: string | null) => {
       if (!active || !url) return;
       // FIX-RUN B16: a bank's 3-D Secure page returning to the payment sheet.
@@ -105,10 +137,7 @@ function RootNavigator() {
       // with its own recovery session, then the new-password screen opens.
       const recovery = parseRecoveryLink(url);
       if (recovery) {
-        void beginRecovery(recovery).then(({ error }) => {
-          if (error) console.error('[link] password recovery failed', error.message);
-          else setRecoveryPending(true);
-        });
+        void openRecovery(recovery);
         return;
       }
       void handleAppLink(url, linkBridge);
