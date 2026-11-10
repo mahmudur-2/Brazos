@@ -51,9 +51,9 @@ jobs:
         run: |
           meta="$RUNNER_TEMP/build.json"
           if [ -n "$BUILD_ID" ]; then
-            npx --yes eas-cli@latest build:view "$BUILD_ID" --json > "$meta"
+            npx --yes eas-cli@27.7.0 build:view "$BUILD_ID" --json > "$meta"
           else
-            npx --yes eas-cli@latest build:list --platform ios --profile e2e-test --status finished --limit 1 --json --non-interactive > "$meta"
+            npx --yes eas-cli@27.7.0 build:list --platform ios --profile e2e-test --status finished --limit 1 --json --non-interactive > "$meta"
           fi
           # build:list prints an array, build:view one object.
           url=$(node -e '
@@ -159,17 +159,26 @@ jobs:
           wait "$recorder" || true
           exit "$status"
 
+      # The repo is public: anyone signed in to GitHub can download artifacts, and the video shows the
+      # test phone numbers and codes being typed. Only an encrypted bundle leaves the Mac.
+      - name: Encrypt results
+        if: always()
+        env:
+          ARTIFACT_KEY: ${{ secrets.ARTIFACT_KEY }}
+        run: |
+          if [ -z "$ARTIFACT_KEY" ]; then echo "ARTIFACT_KEY secret is missing; nothing is uploaded"; exit 1; fi
+          mkdir -p e2e-results
+          cp -R e2e-junit.xml e2e-debug e2e.mp4 ./*.png ~/.maestro/tests e2e-results/ 2>/dev/null || true
+          tar -cf - e2e-results | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
+            --passphrase-fd 3 -o e2e-results.tar.gpg 3<<<"$ARTIFACT_KEY"
+          rm -rf e2e-results
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: e2e-ios
-          path: |
-            e2e-junit.xml
-            e2e-debug/
-            e2e.mp4
-            *.png
-            ~/.maestro/tests/
+          path: e2e-results.tar.gpg
           if-no-files-found: warn
           retention-days: 14
 

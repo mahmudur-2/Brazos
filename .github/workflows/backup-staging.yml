@@ -4,7 +4,8 @@ name: Backup staging
 #
 # The free tier has no backups. Before anything that could lose staging (a
 # destructive migration, a project delete, a plan change) the operator runs
-# this from the Actions tab and downloads the artifact. It holds:
+# this from the Actions tab and downloads the artifact (backup.tar.gpg, encrypted
+# with the ARTIFACT_KEY secret because the repo is public). It holds:
 #   roles.sql               database roles (`--role-only`)
 #   schema.sql              every table, function, policy, trigger, view
 #   data.sql                every row of the app's schemas (COPY format)
@@ -103,10 +104,22 @@ jobs:
           done
           echo "## storage"; du -sh storage 2>/dev/null || echo "no storage folder"
 
+      # The repo is public: anyone signed in to GitHub can download artifacts. The dump holds every user
+      # row and phone number, so only an encrypted file leaves the runner (no key, no upload).
+      # Decrypt: gpg --batch --pinentry-mode loopback --passphrase-file <key file> -d backup.tar.gpg | tar -x
+      - name: Encrypt the backup
+        env:
+          ARTIFACT_KEY: ${{ secrets.ARTIFACT_KEY }}
+        run: |
+          if [ -z "$ARTIFACT_KEY" ]; then echo "ARTIFACT_KEY secret is missing; refusing to upload a plaintext dump"; exit 1; fi
+          tar -cf - backup | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
+            --passphrase-fd 3 -o backup.tar.gpg 3<<<"$ARTIFACT_KEY"
+          rm -rf backup
+
       - name: Upload the backup
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: staging-backup-${{ github.run_id }}
-          path: backup
+          path: backup.tar.gpg
           retention-days: 90
           if-no-files-found: error

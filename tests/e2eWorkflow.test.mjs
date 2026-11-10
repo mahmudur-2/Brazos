@@ -49,9 +49,10 @@ test('e2e iOS pins every action to a full SHA with a version comment', () => {
   assert.deepEqual(unpinned, [], `unpinned action reference(s): ${unpinned.join(', ')}`);
 });
 
-test('e2e iOS reads only the Expo token and the four Maestro test-account secrets', () => {
+test('e2e iOS reads only the Expo token, the four Maestro test-account secrets and the artifact key', () => {
   const names = [...new Set([...code.matchAll(/secrets\.(\w+)/g)].map((m) => m[1]))].sort();
   assert.deepEqual(names, [
+    'ARTIFACT_KEY',
     'EXPO_TOKEN',
     'MAESTRO_E2E_OTP',
     'MAESTRO_E2E_OTP_2',
