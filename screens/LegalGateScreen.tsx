@@ -388,7 +388,7 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
                 off={<Ionicons name="square-outline" size={24} color={colors.textSubtle} />}
               />
               <Text style={styles.checkLabel}>
-                I have read and agree to the Terms of Service and Privacy Policy.
+                I am 18 or older, and I have read and agree to the Terms of Service and Privacy Policy.
               </Text>
             </Pressable>
           </Animated.View>

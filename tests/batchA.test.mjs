@@ -59,3 +59,19 @@ test('A11 · a release with no answer is re-read before the screen says where th
   assert.ok(network > 0 && reread > network, 'the network branch re-reads the payment');
   assert.ok(claim > reread, 'the "nothing was released" line only follows a re-read (the generic branch is later)');
 });
+
+test('A12 · the Terms promise no mute tool and no payments test mode, the draft banner stays, the versions moved', () => {
+  const terms = read('lib/legal/termsOfService.ts');
+  assert.doesNotMatch(terms, /\bmute\b|test mode|test cards/i);
+  assert.match(terms, /block and report other users/);
+  const index = read('lib/legal/index.ts');
+  assert.match(index, /export const TERMS_VERSION = '2026-11-10-draft4';/);
+  assert.match(index, /export const PRIVACY_VERSION = '2026-11-10-draft4';/);
+});
+
+test('A13 · the one agreement checkbox also confirms 18+, and the e2e flow still finds it', () => {
+  const gate = read('screens/LegalGateScreen.tsx');
+  assert.match(gate, /I am 18 or older, and I have read and agree to the Terms of Service and Privacy Policy\./);
+  // .maestro/subflows/accept-legal.yml taps '.*I have read and agree.*' (a substring match).
+  assert.match(gate, /I have read and agree/);
+});

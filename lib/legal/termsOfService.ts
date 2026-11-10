@@ -118,9 +118,6 @@ are entered into Stripe's own payment form and never reach Brazos.
   hiring. The card is stored by Stripe, not by Brazos, and can be removed at
   any time in Payment methods.
 
-Before launch, payments may run in a test mode, in which test cards are used
-and no real money moves.
-
 Payments arranged outside Brazos are outside these Terms, and Brazos is not
 responsible for non-payment, underpayment, or any other dispute about them.
 
@@ -214,7 +211,7 @@ contain certain words it does not allow.
 
 ## 9. Reporting, suspension and termination
 
-Brazos provides in-app tools to block, mute, and report other users, and to
+Brazos provides in-app tools to block and report other users, and to
 report what they post — job posts, profiles, reviews, photos and messages.
 Reports are reviewed by Brazos administrators. When you block someone, their
 posts, profile and reviews no longer appear to you, and they cannot message

@@ -367,7 +367,7 @@ test('B1 · Terms and Privacy state the payment facts, name every processor, and
   assert.doesNotMatch(terms, /service fee/i, 'the Terms name no fee the app never shows');
   // B1 review: the card path with Stripe test keys shows no "Test mode" label (that is sandbox
   // copy), so the Terms may not promise the app announces test mode.
-  assert.match(terms, /payments may run in a test mode, in which test cards are used\s+and no real money moves/);
+  // A12 (lean P5): the Terms no longer mention a test mode at all (tests/batchA.test.mjs pins that).
   assert.doesNotMatch(terms, /says so wherever that applies/);
 
   // Privacy: every processor by name, on-device speech, the 90-day prune, and
