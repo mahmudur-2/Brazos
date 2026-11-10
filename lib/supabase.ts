@@ -2,6 +2,7 @@ import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
 import { secureSessionStorage } from './secureSessionStorage';
+import { withRequestTimeout } from './fetchTimeout';
 import type { Database } from './supabaseTypes';
 
 // The URL and the publishable key come from config/env.ts and nowhere else.
@@ -24,4 +25,7 @@ export const supabase = createClient<Database>(env.EXPO_PUBLIC_SUPABASE_URL, env
     // React Native has no URL to parse the session from.
     detectSessionInUrl: false,
   },
+  // A6: every REST / auth / function call ends after 15 s (storage transfers and the realtime
+  // socket are exempt - lib/fetchTimeout.ts).
+  global: { fetch: withRequestTimeout(fetch) },
 });

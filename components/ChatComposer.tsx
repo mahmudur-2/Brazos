@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GlowTextInput } from '../components/GlowTextInput';
 import { DropMenu, type DropMenuItem } from './DropMenu';
@@ -45,6 +45,10 @@ import {
 const COMPOSER_CONTROL_SIZE = 46;
 const ICON_GLYPH_SIZE = 26;
 const SEND_GLYPH_SIZE = 22;
+/** A10: the longest chat message, and where the counter starts to show. */
+export const CHAT_MESSAGE_MAX = 2000;
+const CHAT_MESSAGE_WARN_AT = 1800;
+
 /** The send arrow's fade. Short on purpose: it tracks typing, and anything
  *  slower lags behind the first character. */
 const MORPH_MS = 140;
@@ -177,6 +181,13 @@ export function ChatComposer({
         closeLabel="Close attachment menu"
       />
 
+      {/* The counter shows only near the cap (the pitch field's pattern: a hint, not a gauge). */}
+      {text.length >= CHAT_MESSAGE_WARN_AT ? (
+        <Text style={styles.counter}>
+          {text.length}/{CHAT_MESSAGE_MAX}
+        </Text>
+      ) : null}
+
       <View style={styles.row}>
         {menuItems.length > 0 && (
           <Pressable
@@ -205,6 +216,8 @@ export function ChatComposer({
           placeholder="Message…"
           placeholderTextColor={colors.textSubtle}
           multiline
+          // A10: a hard cap so one message cannot be a megabyte (the database CHECK follows in batch B).
+          maxLength={CHAT_MESSAGE_MAX}
         />
 
         {/* Always laid out so the row's width never changes as the text
@@ -235,6 +248,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
   anchor: {
     position: 'relative',
+  },
+  counter: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: spacing.lg,
+    fontSize: 12,
+    color: colors.textMuted,
   },
   row: {
     flexDirection: 'row',

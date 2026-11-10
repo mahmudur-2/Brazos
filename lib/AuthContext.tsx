@@ -13,6 +13,9 @@ import { fetchCurrentUserBanned, updateProfile } from './profiles';
 import { unregisterPushToken } from './pushNotifications';
 import { setSentryUser } from './observability/sentry';
 
+/** A6: the most sign-out waits for this device to detach from push. */
+const LOGOUT_PUSH_UNREGISTER_MS = 5000;
+
 /**
  * Ends the session on this device without the network (B6). The public
  * `signOut({ scope: 'local' })` still posts to /logout and keeps the session
@@ -194,7 +197,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
         // RLS-scoped to the signed-in user, so it would be rejected after
         // sign-out. Without it, the next person to sign in on this phone would
         // keep receiving the previous user's notifications.
-        await unregisterPushToken();
+        // A6: bounded - a hung unregister (no network, a stuck token read) must not hold sign-out.
+        await Promise.race([
+          unregisterPushToken().catch(() => undefined),
+          new Promise<void>((resolve) => setTimeout(resolve, LOGOUT_PUSH_UNREGISTER_MS)),
+        ]);
         const { error } = await supabase.auth.signOut();
         if (!error) return { error };
         // FIX-RUN B6: sign-out never fails offline. auth-js keeps the session

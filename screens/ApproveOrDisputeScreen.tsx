@@ -16,7 +16,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { alertAsync } from '../lib/dialog';
 import { invalidateJobs } from '../lib/queryClient';
-import { userMessage } from '../lib/errorMessage';
+import { isNetworkError, userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
 import { paymentEyebrow } from '../lib/moneyCopy';
@@ -185,6 +185,23 @@ export function ApproveOrDisputeScreen() {
       // F13: an own mutation — the cached hub and feed are out of date.
       invalidateJobs();
       if (result.error || !result.data) {
+        // A11: no answer (offline, a timeout) says nothing about whether the release happened. Read the
+        // payment again BEFORE saying anything about where the money is.
+        if (isNetworkError(result.error)) {
+          const fresh = await fetchJobPaymentState(job.id);
+          if (!fresh.error && fresh.data) {
+            setPayment(fresh.data);
+            if (isReleased(fresh.data) || isReleaseRequested(fresh.data)) {
+              navigation.replace('ReviewAndTip', { job });
+              return;
+            }
+            await alertAsync('The payment was not released', 'We checked again: the funds are still held and nothing was released. Check your connection and try again.');
+            return;
+          }
+          await alertAsync('We couldn’t confirm the release', 'We couldn’t reach Brazos to check whether the payment was released. Check your connection, then pull to refresh before you decide. Approving again is safe — a payment is released only once.');
+          await load();
+          return;
+        }
         await alertAsync(
           'Could not release the payment',
           `${userMessage(result.error, 'Check your connection and try again.')}\n\nThe funds are exactly where they were — nothing was released.`

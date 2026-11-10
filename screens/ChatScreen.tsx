@@ -192,6 +192,7 @@ export function ChatScreen() {
     action: 'accept' | 'decline' | 'withdraw';
   } | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const respondingRef = useRef(false);
   const [openingJobId, setOpeningJobId] = useState<string | null>(null);
 
   // The direct thread's own row, for working out who the other person is when
@@ -744,7 +745,9 @@ export function ChatScreen() {
     action: 'accept' | 'decline' | 'counter' | 'withdraw',
     amountCents?: number
   ) {
-    if (respondingId) return;
+    // A8: the ref is the guard (state is stale inside a double tap); the state draws the busy card.
+    if (respondingRef.current) return;
+    respondingRef.current = true;
     setRespondingId(request.id);
     // One RPC per action rather than an action string the server has to
     // re-parse. Each validates the turn, the lifecycle state and the counter
@@ -761,6 +764,7 @@ export function ChatScreen() {
             : await counterOffer(request.id, amountCents ?? 0);
     // F13: an own mutation — the cached hub and feed are out of date.
     invalidateJobs();
+    respondingRef.current = false;
     setRespondingId(null);
 
     if (error) {

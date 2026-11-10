@@ -388,27 +388,32 @@ function App() {
     // which is every build today — it is a Fragment, so the tree below is
     // byte-for-byte the same shape either way. See lib/motion120/vendor.ts for
     // why the load is lazy and caught rather than a static import.
-    <MotionRoot>
-      <SafeAreaProvider>
-        <AuthProvider>
-          <QueryClientProvider client={queryClient}>
-          <QueryAuthBridge />
-          <LaunchGate>
-            {/* Theme resolution sits INSIDE the launch gate deliberately (4D-4):
-                the provider reads the stored preference before the themed tree
-                first paints, holding a neutral loader for that beat — and the
-                locked launch layer, which renders from the first frame, covers
-                that gate, so a cold start in dark mode never flashes light.
-                Everything that repaints on a palette change lives below this
-                line; the launch layer itself is locked and light by design. */}
-            <ThemeProvider>
-              <ThemedNavigation />
-            </ThemeProvider>
-          </LaunchGate>
-          </QueryClientProvider>
-        </AuthProvider>
-      </SafeAreaProvider>
-    </MotionRoot>
+    // A7: the outermost boundary - above the motion root, safe-area, auth, query and theme providers, so a
+    // crash in any of them still ends in a fallback (it reads no provider). The inner boundary inside the
+    // navigation container stays for screen crashes.
+    <AppErrorBoundary scope="root">
+      <MotionRoot>
+        <SafeAreaProvider>
+          <AuthProvider>
+            <QueryClientProvider client={queryClient}>
+            <QueryAuthBridge />
+            <LaunchGate>
+              {/* Theme resolution sits INSIDE the launch gate deliberately (4D-4):
+                  the provider reads the stored preference before the themed tree
+                  first paints, holding a neutral loader for that beat — and the
+                  locked launch layer, which renders from the first frame, covers
+                  that gate, so a cold start in dark mode never flashes light.
+                  Everything that repaints on a palette change lives below this
+                  line; the launch layer itself is locked and light by design. */}
+              <ThemeProvider>
+                <ThemedNavigation />
+              </ThemeProvider>
+            </LaunchGate>
+            </QueryClientProvider>
+          </AuthProvider>
+        </SafeAreaProvider>
+      </MotionRoot>
+    </AppErrorBoundary>
   );
 }
 

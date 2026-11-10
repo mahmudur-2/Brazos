@@ -49,6 +49,24 @@ function codeOf(error: ErrorLike): string {
 }
 
 /**
+ * A failure that says nothing about whether the server acted: the request never got an answer
+ * (no connection, a timeout). The same test userMessage uses for the offline sentence. A11 uses it
+ * so a screen never claims "nothing happened" when it cannot know.
+ */
+export function isNetworkError(error: ErrorLike): boolean {
+  const lower = rawOf(error).toLowerCase();
+  const code = codeOf(error);
+  return (
+    lower.includes('network request failed') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('networkerror') ||
+    lower.includes('timeout') ||
+    code === 'ENOTFOUND' ||
+    code === 'ECONNREFUSED'
+  );
+}
+
+/**
  * The stable, friendly sentence for any failure. `fallback` overrides the
  * generic default when a caller has better context ("Nothing was charged").
  *

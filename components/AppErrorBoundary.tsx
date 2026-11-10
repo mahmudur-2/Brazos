@@ -1,6 +1,6 @@
 import { Component, Fragment, type ErrorInfo, type PropsWithChildren, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { colors as defaultColors, radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { Sentry } from '../lib/observability/sentry';
 
 type AppErrorBoundaryState = {
@@ -32,7 +32,7 @@ type AppErrorBoundaryState = {
  * a crash in the screen tree never unmounts the provider above it, so the
  * hook is safe in every scenario where this fallback can render at all.
  */
-export class AppErrorBoundary extends Component<PropsWithChildren, AppErrorBoundaryState> {
+export class AppErrorBoundary extends Component<PropsWithChildren<{ scope?: 'app' | 'root' }>, AppErrorBoundaryState> {
   state: AppErrorBoundaryState = { crashed: false, generation: 0 };
 
   static getDerivedStateFromError(): Partial<AppErrorBoundaryState> {
@@ -71,7 +71,13 @@ export class AppErrorBoundary extends Component<PropsWithChildren, AppErrorBound
 
   render(): ReactNode {
     if (this.state.crashed) {
-      return <CrashFallback onReset={this.reset} />;
+      // A7: the 'root' boundary sits ABOVE the theme and the other providers, so a crash in one of
+      // them (the theme provider included) lands in a fallback that reads no provider at all.
+      return this.props.scope === 'root' ? (
+        <SafeCrashFallback onReset={this.reset} />
+      ) : (
+        <CrashFallback onReset={this.reset} />
+      );
     }
 
     return <Fragment key={this.state.generation}>{this.props.children}</Fragment>;
@@ -80,6 +86,15 @@ export class AppErrorBoundary extends Component<PropsWithChildren, AppErrorBound
 
 function CrashFallback({ onReset }: { onReset: () => void }) {
   const { palette: colors } = useThemeColors();
+  return <CrashFallbackView onReset={onReset} palette={colors} />;
+}
+
+/** The fallback with safe defaults: the static light palette, no context read. */
+function SafeCrashFallback({ onReset }: { onReset: () => void }) {
+  return <CrashFallbackView onReset={onReset} palette={defaultColors as ColorPalette} />;
+}
+
+function CrashFallbackView({ onReset, palette: colors }: { onReset: () => void; palette: ColorPalette }) {
   const styles = stylesFor(colors);
   return (
     <View style={styles.container}>

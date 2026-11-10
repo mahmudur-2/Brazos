@@ -3,6 +3,7 @@ import { useScrollClearance } from '../ui/primitives';
 import {
   ActivityIndicator,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { PressScale } from '../components/PressScale';
+import { KeyboardAvoid } from '../components/KeyboardAvoid';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   useFocusEffect,
@@ -52,6 +54,7 @@ import { ModeSwitchRow } from '../components/ModeSwitchRow';
 import { uploadAvatar } from '../lib/storage';
 import type { ThemePreference } from '../lib/themePreference';
 import { isValidPhone } from '../lib/validation';
+import { DEFAULT_COUNTRY, splitInternational, toE164 } from '../lib/phoneNumber';
 import type {
   ProfileStackNavigation,
   ProfileStackParamList,
@@ -527,41 +530,36 @@ export function ProfileScreen() {
       return;
     }
 
+    // Phones are stored E.164 (lib/phoneNumber.ts), as sign-up stores them: a typed "+44…" keeps its
+    // country, anything else is read as a national number in the default country.
+    const split = splitInternational(phone);
+    const phoneE164 = split ? toE164(split.country, split.national) : toE164(DEFAULT_COUNTRY, phone);
+    if (!phoneE164) {
+      setPhoneError('Enter a valid phone number.');
+      return;
+    }
+
     setSaving(true);
 
     let avatar = profile?.avatar_url ?? null;
+    let photoFailed = false;
     if (pendingAsset) {
       const { url, error } = await uploadAvatar(user.id, pendingAsset);
-      if (error) {
-        await alertAsync(
-          'Photo upload failed',
-          'Saving your other details. Set up the "avatars" storage bucket (phase7 SQL) to enable photos.'
-        );
-      } else {
-        avatar = url;
-      }
+      // A failed upload never clobbers the photo already there (avatar stays as it was).
+      if (error) photoFailed = true;
+      else avatar = url;
     }
 
     const patch = {
       full_name: fullName.trim(),
-      phone: phone.trim(),
+      phone: phoneE164,
       avatar_url: avatar,
       bio: bio.trim() || null,
       language,
       categories,
     };
 
-    let { data, error } = await updateProfile(user.id, patch);
-    let partial = false;
-    // If the extended columns aren't migrated yet, save the core fields only.
-    if (error && (error as { code?: string }).code === '42703') {
-      partial = true;
-      ({ data, error } = await updateProfile(user.id, {
-        full_name: patch.full_name,
-        phone: patch.phone,
-        avatar_url: patch.avatar_url,
-      }));
-    }
+    const { data, error } = await updateProfile(user.id, patch);
 
     setSaving(false);
 
@@ -572,12 +570,13 @@ export function ProfileScreen() {
     if (data) setProfile(data);
     setPendingAsset(null);
     leaveEditing();
-    await alertAsync(
-      'Saved',
-      partial
-        ? 'Saved name, phone and photo. Run the phase7 SQL to enable bio, language and categories.'
-        : 'Your profile has been updated.'
-    );
+    // "Saved" is never said over a photo that did not go up.
+    await (photoFailed
+      ? alertAsync(
+          'Saved, but your photo didn’t upload',
+          'Your other changes are saved and your current photo is unchanged. Check your connection and choose the photo again.'
+        )
+      : alertAsync('Saved', 'Your profile has been updated.'));
   }
 
 
@@ -760,6 +759,8 @@ export function ProfileScreen() {
       {loading ? (
         <ScreenStateView state={SPINNER_STATE} />
       ) : (
+        // The edit form has text inputs: the shared keyboard-aware column (native-ui rule).
+        <KeyboardAvoid style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={[styles.content, { gap: contentGap, paddingBottom: navClearance }]}
           keyboardShouldPersistTaps="handled"
@@ -1164,6 +1165,7 @@ export function ProfileScreen() {
             </>
           ) : null}
         </ScrollView>
+        </KeyboardAvoid>
       )}
 
       <PhotoViewer
@@ -1256,6 +1258,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   safe: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  flex: {
+    flex: 1,
   },
   content: {
     paddingHorizontal: spacing.lg,

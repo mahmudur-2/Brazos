@@ -75,6 +75,9 @@ export function useProfile() {
     }
     publish({ error: null });
     const { data, error: fetchError } = await fetchMyProfile(user.id);
+    // A5: the store belongs to whoever is signed in NOW. A response for an account that was
+    // signed out or switched away while this was in flight must not be published as theirs.
+    if (snapshot.userId !== user.id) return;
     if (fetchError) publish({ error: userMessage(fetchError), loading: false });
     else publish({ profile: data, loading: false, error: null, userId: user.id });
   }, [user]);
