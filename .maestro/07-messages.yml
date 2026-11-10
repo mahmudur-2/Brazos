@@ -52,7 +52,20 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: ".*${output.marker} undo.*"
     timeout: 30000
-- longPressOn: ".*${output.marker} undo.*"
+# Run 30: a long-press one second after Send was lost (the bubble moved as the sent message settled);
+# the menu's "Reply" says it opened, so the press is retried until it does.
+- repeat:
+    times: 3
+    while:
+      notVisible: "Reply"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - longPressOn: ".*${output.marker} undo.*"
+      - extendedWaitUntil:
+          visible: "Reply"
+          timeout: 5000
+          optional: true
 - extendedWaitUntil:
     visible: "Unsend"
     timeout: 15000
