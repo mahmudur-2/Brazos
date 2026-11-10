@@ -18,6 +18,18 @@ appId: app.brazos.mobile.preview
 - tapOn: "Phone number, United States, plus 1"
 - inputText: ${PHONE}
 - tapOn: "Continue"
+# Run 33: the simulator dropped one typed digit, so the number failed its length check; clear and type again.
+- repeat:
+    times: 2
+    while:
+      visible: "Enter a 10-digit phone number."
+    commands:
+      - tapOn: "Phone number, United States, plus 1"
+      - eraseText: 20
+      - inputText: ${PHONE}
+      - tapOn: "Continue"
+      - waitForAnimationToEnd:
+          timeout: 3000
 - extendedWaitUntil:
     visible: "Enter the 6-digit code|We couldn.t send a code to that number.*|Too many requests.*"
     timeout: 30000
