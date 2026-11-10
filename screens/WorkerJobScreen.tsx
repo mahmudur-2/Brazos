@@ -49,6 +49,7 @@ import { userMessage } from '../lib/errorMessage';
 import { Sentry } from '../lib/observability/sentry';
 import {
   arrivalWindowLabel,
+  cancelJob,
   categoryAccent,
   completionPhotosOf,
   completionVideosOf,
@@ -63,7 +64,8 @@ import {
 } from '../lib/jobs';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { paymentsMode } from '../lib/adapters/payments';
-import { paymentEyebrow } from '../lib/moneyCopy';
+import { noShowConfirm, paymentEyebrow, workerCancelConfirm } from '../lib/moneyCopy';
+import { noShowReportable } from '../lib/paymentRules';
 import {
   brazosFeeCents,
   fetchJobPaymentState,
@@ -227,6 +229,8 @@ export function WorkerJobScreen() {
   // checked whenever the worker looks. Re-read on focus so the customer's
   // checkout/approval on their side shows up when the worker returns here.
   const [payment, setPayment] = useState<Payment | null>(null);
+  // A failed ledger read is not "no payment": the cancel confirms say nothing about money until one landed.
+  const [paymentRead, setPaymentRead] = useState(false);
   const [issueOpen, setIssueOpen] = useState(false);
   // 2026-09-28 (LUX-LIST-64 #63, audit M-14) — the stored payout state, read on
   // the card path only, so an approved payment
@@ -250,7 +254,10 @@ export function WorkerJobScreen() {
       let active = true;
       if (!job || job.status === 'open') return;
       fetchJobPaymentState(job.id).then(({ data, error: paymentError }) => {
-        if (active && !paymentError) setPayment(data);
+        if (active && !paymentError) {
+          setPayment(data);
+          setPaymentRead(true);
+        }
       });
       fetchOpenJobDispute(job.id).then(({ data, error: disputeError }) => {
         if (active && !disputeError) setIssueOpen(!!data);
@@ -290,6 +297,47 @@ export function WorkerJobScreen() {
       return;
     }
     await refresh();
+  }
+
+  /**
+   * A1 — the worker's two exits, both through cancel_job(): cancelling the job (the customer is
+   * refunded in full) and reporting a customer no-show (a claim that moves no money by itself).
+   * The ref is the double-tap guard; the state only draws the spinner.
+   */
+  const exitingRef = useRef(false);
+  const [exiting, setExiting] = useState<'worker_cancelled' | 'customer_no_show' | null>(null);
+  async function handleExit(reason: 'worker_cancelled' | 'customer_no_show') {
+    if (exitingRef.current || !job) return;
+    exitingRef.current = true;
+    setExiting(reason);
+    try {
+      const paid: 'held' | 'unpaid' | 'unknown' = !paymentRead
+        ? 'unknown'
+        : payment && isHeld(payment)
+          ? 'held'
+          : !payment || payment.status === 'unfunded' || payment.status === 'authorized'
+            ? 'unpaid'
+            : 'unknown';
+      const copy = (reason === 'worker_cancelled' ? workerCancelConfirm : noShowConfirm)({
+        customerFirstName: clientFirstName,
+        paid,
+      });
+      const ok = await confirmAsync({ ...copy, destructive: true });
+      if (!ok) return;
+      const { error: cancelError } = await cancelJob(job.id, reason);
+      // F13: an own mutation — the cached hub and feed are out of date.
+      invalidateJobs();
+      if (cancelError) {
+        await alertAsync(
+          reason === 'worker_cancelled' ? 'Could not cancel the job' : 'Could not report the no-show',
+          userMessage(cancelError)
+        );
+      }
+      await refresh();
+    } finally {
+      exitingRef.current = false;
+      setExiting(null);
+    }
   }
 
   /**
@@ -1038,6 +1086,29 @@ export function WorkerJobScreen() {
 
               {/* The payment drops below the stage while the job is live. */}
               {paymentCard}
+
+              {/* A1: the worker's way out. "Customer wasn't there" shows only when cancel_job()
+                  would accept it (noShowReportable mirrors its four gates). */}
+              {isWorker ? (
+                <View style={styles.exitRow}>
+                  {job && noShowReportable({ job }) ? (
+                    <Button
+                      title="Customer wasn’t there"
+                      variant="secondary"
+                      onPress={() => void handleExit('customer_no_show')}
+                      loading={exiting === 'customer_no_show'}
+                      disabled={exiting !== null || working}
+                    />
+                  ) : null}
+                  <Button
+                    title="Cancel this job"
+                    variant="destructive"
+                    onPress={() => void handleExit('worker_cancelled')}
+                    loading={exiting === 'worker_cancelled'}
+                    disabled={exiting !== null || working}
+                  />
+                </View>
+              ) : null}
             </>
           ) : (
             <>
@@ -1165,6 +1236,9 @@ export function WorkerJobScreen() {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  exitRow: {
+    gap: spacing.sm,
+  },
   // M-3 — the stage screen: getting there, your progress, and the one pinned
   // primary.
   thereCard: {

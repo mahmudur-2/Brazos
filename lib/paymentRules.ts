@@ -143,3 +143,152 @@ export function customerChargeCents(
 ): number {
   return payment.charge_amount_cents ?? payment.amount_cents;
 }
+
+/* ------------------------------------------------------------------------- *
+ * CANCELLING A HIRED JOB — the client-side preview of cancel_job().
+ *
+ * `public.cancel_job(p_job_id, p_reason)` is the authority and decides again
+ * at the moment of the call (supabase/migrations/20261108000000_lean_v1.sql).
+ * These functions only say, before the tap, what the SQL will most likely do,
+ * mirroring it case for case (tests/cancelJob.test.mjs holds the pairing):
+ *   customer_cancelled — in_progress always carries the fee; otherwise free
+ *     when the job has no scheduled_date, or within 15 minutes of acceptance
+ *     (the agreement snapshot's accepted_at), or more than 24h before the
+ *     arrival anchor (scheduled_date + arrival_start_hour, America/New_York);
+ *     else the cancellation fee, taken from the agreed price alone.
+ *   customer_no_show — assigned, arrived_at set, a scheduled job, and now
+ *     past scheduled_date + arrival_end_hour (default 24) in America/New_York.
+ * When the client cannot know (no agreement snapshot, or its price differs
+ * from the payment's, so the SQL would read the CURRENT fee schedule), the
+ * preview is null and the screen says what depends on timing without a figure.
+ * ------------------------------------------------------------------------- */
+
+const CANCEL_GRACE_MS = 15 * 60_000;
+const CANCEL_FREE_BEFORE_MS = 24 * 3_600_000;
+/** How close to a free/fee switch the preview is flagged as possibly different by the time it runs. */
+const CANCEL_NEAR_BOUNDARY_MS = 2 * 60_000;
+const CANCEL_MARKET_TIME_ZONE = 'America/New_York';
+
+/** The fee terms of a hire: the `job_agreements` snapshot, as cancel_job() reads it through job_terms(). */
+export type CancelTerms = {
+  accepted_at: string | null;
+  agreed_price_cents: number;
+  cancel_fee_bps: number;
+  cancel_fee_min_cents: number;
+  cancel_fee_max_cents: number;
+};
+
+/** cancellation_fee_cents(): least(max, greatest(min, round(price * bps / 10000))), never above the price. */
+export function cancellationFeeCents(terms: CancelTerms, amountCents: number): number {
+  // round() of a non-negative numeric is half-up; the integer form is exact.
+  const rounded = Math.floor((amountCents * terms.cancel_fee_bps + 5000) / 10000);
+  const fee = Math.min(terms.cancel_fee_max_cents, Math.max(terms.cancel_fee_min_cents, rounded));
+  return Math.min(fee, amountCents);
+}
+
+/** `date::timestamp + hours` read as America/New_York wall time, as epoch ms (null for an unreadable date). */
+export function marketWallClockMs(dateKey: string, hours: number): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateKey);
+  if (!m) return null;
+  const wall = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) + hours * 3_600_000;
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: CANCEL_MARKET_TIME_ZONE,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+    });
+    // The zone's offset at an instant: what its wall clock reads, minus the instant, as if both were UTC.
+    const offsetAt = (instant: number): number => {
+      const get = (type: string) => Number(fmt.formatToParts(instant).find((p) => p.type === type)?.value);
+      const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+      return asUtc - Math.floor(instant / 1000) * 1000;
+    };
+    // Two passes settle the offset across a DST change.
+    let guess = wall - offsetAt(wall);
+    guess = wall - offsetAt(guess);
+    return Number.isFinite(guess) ? guess : null;
+  } catch {
+    return null;
+  }
+}
+
+export type CustomerCancelPreview =
+  /** Nothing was charged (no payment, or one never funded): no money moves. */
+  | { kind: 'no_charge' }
+  /** The whole charge goes back to the customer. */
+  | { kind: 'free'; refundCents: number; nearBoundary: boolean }
+  /** The cancellation fee goes to the worker; the rest of the charge goes back. */
+  | { kind: 'fee'; feeCents: number; refundCents: number; nearBoundary: boolean };
+
+/**
+ * What cancel_job('customer_cancelled') will do with the money, or null when
+ * this client cannot say (the screen then shows copy without a figure).
+ */
+export function customerCancelPreview({
+  job,
+  payment,
+  terms,
+  nowMs = Date.now(),
+}: {
+  job: { status: string; scheduled_date: string | null; arrival_start_hour: number | null };
+  payment: { status: string; amount_cents: number; charge_amount_cents?: number | null } | null;
+  terms: CancelTerms | null;
+  nowMs?: number;
+}): CustomerCancelPreview | null {
+  if (!payment || payment.status === 'unfunded' || payment.status === 'authorized') return { kind: 'no_charge' };
+  if (payment.status !== 'held') return null;
+  const charge = payment.charge_amount_cents;
+  if (charge == null || !terms || terms.agreed_price_cents !== payment.amount_cents) return null;
+
+  let free: boolean;
+  let boundaryMs: number | null = null;
+  if (job.status === 'in_progress') {
+    free = false;
+  } else if (job.scheduled_date == null) {
+    free = true;
+  } else {
+    const acceptedMs = terms.accepted_at ? Date.parse(terms.accepted_at) : NaN;
+    const graceEnd = Number.isFinite(acceptedMs) ? acceptedMs + CANCEL_GRACE_MS : null;
+    if (graceEnd != null && nowMs <= graceEnd) {
+      free = true;
+      boundaryMs = graceEnd;
+    } else {
+      const anchor = marketWallClockMs(job.scheduled_date, job.arrival_start_hour ?? 0);
+      if (anchor == null) return null;
+      const freeUntil = anchor - CANCEL_FREE_BEFORE_MS;
+      free = nowMs < freeUntil;
+      boundaryMs = free ? freeUntil : null;
+    }
+  }
+  const nearBoundary = boundaryMs != null && Math.abs(boundaryMs - nowMs) <= CANCEL_NEAR_BOUNDARY_MS;
+  if (free) return { kind: 'free', refundCents: charge, nearBoundary };
+  const feeCents = cancellationFeeCents(terms, payment.amount_cents);
+  return { kind: 'fee', feeCents, refundCents: charge - feeCents, nearBoundary };
+}
+
+/**
+ * Whether cancel_job('customer_no_show') will be accepted: the job is still
+ * assigned, the worker marked arrival, it is a scheduled job, and the arrival
+ * window (scheduled_date + arrival_end_hour, 24 when open-ended) has passed.
+ */
+export function noShowReportable({
+  job,
+  nowMs = Date.now(),
+}: {
+  job: {
+    status: string;
+    arrived_at: string | null;
+    scheduled_date: string | null;
+    arrival_end_hour: number | null;
+  };
+  nowMs?: number;
+}): boolean {
+  if (job.status !== 'assigned' || !job.arrived_at || !job.scheduled_date) return false;
+  const windowEnd = marketWallClockMs(job.scheduled_date, job.arrival_end_hour ?? 24);
+  return windowEnd != null && nowMs > windowEnd;
+}

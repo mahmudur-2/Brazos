@@ -464,3 +464,19 @@ export function validatePayoutsStatusResponse(payload: unknown): {
   if (!isPayoutsStatus(status)) return { data: null, error: { message: PAYOUTS_STATUS_UNREADABLE } };
   return { data: status, error: null };
 }
+
+/**
+ * The fee terms the hire was quoted under (job_agreements; both parties can
+ * read it). Null when there is no snapshot — a job hired before agreements
+ * existed — in which case the cancel preview says nothing about a figure.
+ */
+export async function fetchCancelTerms(jobId: string) {
+  const { data, error } = await supabase
+    .from('job_agreements')
+    // The whole snapshot row: the fee columns are read by lib/paymentRules.ts customerCancelPreview,
+    // never named in this module (tests/jobCompletions.test.mjs keeps a rate out of it).
+    .select('*')
+    .eq('job_id', jobId)
+    .maybeSingle();
+  return { data: data ?? null, error };
+}

@@ -499,11 +499,11 @@ test('[static] F15: every screen that ranks by the worker’s history reads the 
     'screens/ApproveOrDisputeScreen.tsx': 3,
     'screens/BidDetailScreen.tsx': 2,
     'screens/ChatScreen.tsx': 1,
-    'screens/ClientJobDetailScreen.tsx': 2,
+    'screens/ClientJobDetailScreen.tsx': 3,
     'screens/JobConfirmedScreen.tsx': 1,
     'screens/JobDetailScreen.tsx': 4,
     'screens/PostJobScreen.tsx': 3,
-    'screens/WorkerJobScreen.tsx': 5,
+    'screens/WorkerJobScreen.tsx': 6,
   };
   for (const [file, count] of Object.entries(sites)) {
     assert.equal((strip(read(file)).match(/invalidateJobs\(\);/g) ?? []).length, count, `${file} invalidates after each own mutation`);

@@ -28,17 +28,21 @@ export type AccountDeletionBlocker = {
 /**
  * Where the deletion screen may send the user for each blocker kind.
  *
- * The screen lives in ProfileStack, and that stack registers no job-detail
- * route — so a job or dispute blocker renders as a non-tappable row. A
- * payment the user is OWED does have a record here (Earnings), but a payment
- * they SENT does not: there is no customer-side payment screen in this stack,
- * and sending them to Earnings would open a wallet their money is not in.
+ * The screen lives in ProfileStack, which registers no job-detail route. A
+ * payment the user is OWED has a record here (Earnings). A job or dispute
+ * blocker opens the JOB's own page, where Cancel now lives — reached across
+ * tabs (lib/navigationRef.ts navigateAcrossTabs), not by a new route in this
+ * stack: 'Job' is a tag the screen resolves, never a registered route name.
+ * A payment they SENT has no screen of its own, and sending them to Earnings
+ * would open a wallet their money is not in.
  *
  * No route is ever created to satisfy a blocker. A kind with no entry here
  * shows its label and nothing more, which is honest.
  */
 export const ROUTABLE_KINDS = {
   payment_incoming: 'Earnings',
+  job: 'Job',
+  dispute: 'Job',
 } as const;
 
 export type BlockerRoute = (typeof ROUTABLE_KINDS)[keyof typeof ROUTABLE_KINDS];

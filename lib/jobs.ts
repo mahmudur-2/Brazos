@@ -7,6 +7,7 @@ import { supabase } from './supabase';
 import { coordinateLocationError, publicLocationLabel } from './locationPrivacy';
 import { DEFAULT_PRICING_MODE, pricingModeFrom, type PricingMode } from './pricingMode';
 import { moneyCeilingError } from './validation';
+import { userMessage } from './errorMessage';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -623,6 +624,25 @@ export async function updateJob(jobId: string, input: NewJobInput) {
 export async function deleteJob(jobId: string) {
   const { error } = await supabase.from('jobs').delete().eq('id', jobId);
   return { error };
+}
+
+/** The three reasons cancel_job() accepts (supabase/migrations/20261108000000_lean_v1.sql). */
+export type CancelJobReason = 'customer_cancelled' | 'worker_cancelled' | 'customer_no_show';
+
+/**
+ * Cancel a hired or open job through THE one path, `cancel_job()`: the server
+ * checks who may cancel with which reason, applies the fee rule and queues the
+ * refund. Returns the cancelled job, or a plain-words error — never the raw
+ * RPC text (lib/errorMessage.ts userMessage).
+ */
+export async function cancelJob(jobId: string, reason: CancelJobReason) {
+  const { data, error } = await supabase
+    .rpc('cancel_job', { p_job_id: jobId, p_reason: reason })
+    .single();
+  if (error) {
+    return { data: null, error: { message: userMessage(error, 'The job could not be cancelled. Please try again.') } };
+  }
+  return { data: data ? mapJobRow(data) : null, error: null };
 }
 
 export type JobPrivateLocation = {

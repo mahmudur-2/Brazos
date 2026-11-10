@@ -50,6 +50,7 @@ import { fetchProfileById, type Profile } from '../lib/profiles';
 import { invalidateJobs } from '../lib/queryClient';
 import {
   canOfferJobFunding,
+  fetchCancelTerms,
   fetchJobPaymentState,
   isCancellationFeeKept,
   isHeld,
@@ -60,9 +61,9 @@ import {
   type JobPriceQuote,
   type Payment,
 } from '../lib/payments';
-import { customerChargeCents } from '../lib/paymentRules';
+import { customerCancelPreview, customerChargeCents } from '../lib/paymentRules';
 import { paymentsMode } from '../lib/adapters/payments';
-import { paymentEyebrow } from '../lib/moneyCopy';
+import { customerCancelConfirm, paymentEyebrow } from '../lib/moneyCopy';
 import { cardLabel, listSavedCards, type SavedCard } from '../lib/paymentMethods';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
@@ -92,6 +93,7 @@ import {
 import {
   arrivalWindowLabel,
   budgetRangeLabel,
+  cancelJob,
   categoryAccent,
   completionPhotosOf,
   completionVideosOf,
@@ -319,6 +321,51 @@ export function ClientJobDetailScreen() {
     // confirmAccept is this render's own; the gate above is what the effect waits on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.intent, params.offerId, loading, canAccept, cardsRead, pendingBids]);
+
+  // A1 — cancel_job('customer_cancelled'), the one cancel path. The ref is the double-tap guard;
+  // the state only draws the spinner. Payment and fee terms are read fresh at the tap, so the
+  // confirm names the money as it stands now (the server decides again when the call lands).
+  const cancellingRef = useRef(false);
+  const [cancelling, setCancelling] = useState(false);
+  async function handleCancelJob() {
+    if (cancellingRef.current) return;
+    cancellingRef.current = true;
+    setCancelling(true);
+    const cancelledJobId = job.id;
+    try {
+      let preview: ReturnType<typeof customerCancelPreview> = null;
+      if (job.status === 'open') {
+        preview = { kind: 'no_charge' };
+      } else {
+        const [paymentResult, termsResult] = await Promise.all([
+          fetchJobPaymentState(cancelledJobId),
+          fetchCancelTerms(cancelledJobId),
+        ]);
+        if (!paymentResult.error && !termsResult.error) {
+          preview = customerCancelPreview({ job, payment: paymentResult.data, terms: termsResult.data });
+        }
+      }
+      if (!screenMountedRef.current || currentJobIdRef.current !== cancelledJobId) return;
+      const ok = await confirmAsync({
+        ...customerCancelConfirm(preview, { workerFirstName, format: formatBudget }),
+        destructive: true,
+      });
+      if (!ok) return;
+      const { error: cancelError } = await cancelJob(cancelledJobId, 'customer_cancelled');
+      // F13: an own mutation — the cached hub and feed are out of date.
+      invalidateJobs();
+      if (!screenMountedRef.current || currentJobIdRef.current !== cancelledJobId) return;
+      if (cancelError) {
+        await alertAsync('Could not cancel the job', userMessage(cancelError));
+      }
+      // Success or not, re-read: the job page then shows what actually happened to the job and the money.
+      setStatusReadAttempt((attempt) => attempt + 1);
+      await refreshJob();
+    } finally {
+      cancellingRef.current = false;
+      if (screenMountedRef.current) setCancelling(false);
+    }
+  }
 
   async function handleStopSeries() {
     if (!series || stoppingSeries) return;
@@ -1529,6 +1576,21 @@ export function ClientJobDetailScreen() {
             )}
           </>
         )}
+        {/* A1: cancelling a job that is open with bids, hired, or under way. A job open with no
+            bids keeps the owner's Delete (JobOwnerActions) instead. */}
+        {job.status === 'assigned' ||
+        job.status === 'in_progress' ||
+        (job.status === 'open' && !loading && bids.length > 0) ? (
+          <Button
+            title="Cancel job"
+            variant="destructive"
+            palette={emeraldColors}
+            onPress={() => void handleCancelJob()}
+            loading={cancelling}
+            disabled={cancelling || acceptingId !== null}
+            accessibilityLabel="Cancel job"
+          />
+        ) : null}
         </ScrollView>
         {primaryAction ? (
           <View style={[styles.actionBar, { paddingBottom: footerPad }]}>

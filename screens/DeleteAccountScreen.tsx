@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,7 +6,9 @@ import { TextField } from '../components/TextField';
 import { FormScreen } from '../ui/templates/FormScreen';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
-import { goBackOrHome } from '../lib/navigationRef';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
+import { fetchJobById } from '../lib/jobs';
+import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { deleteMyAccount, fetchAccountDeletionBlockers } from '../lib/accountDeletion';
 import { paymentsMode } from '../lib/adapters/payments';
@@ -49,6 +51,8 @@ export function DeleteAccountScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const navigation = useNavigation<ProfileStackNavigation>();
+  const { user } = useAuth();
+  const openingRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -81,6 +85,28 @@ export function DeleteAccountScreen() {
     // as plain text, because this stack has no route for it and phase67's
     // scope forbids inventing one.
     if (row.route === 'Earnings') navigation.navigate('Earnings');
+    if (row.route === 'Job' && row.refId) void openBlockingJob(row.refId);
+  }
+
+  // A job (or the dispute on it) that blocks deletion: open the job's own page, where Cancel is.
+  // The customer's page and the worker's are different screens, so the job says which this user is.
+  async function openBlockingJob(jobId: string) {
+    if (openingRef.current) return;
+    openingRef.current = true;
+    try {
+      const { data: job, error } = await fetchJobById(jobId);
+      if (error || !job) {
+        await alertAsync('Couldn’t open this job', userMessage(error, 'Check your connection and try again.'));
+        return;
+      }
+      if (user && job.client_id === user.id) {
+        navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job }, { fallbackToTabRoot: true });
+      } else {
+        navigateAcrossTabs('MyJobs', 'WorkerJob', { jobId: job.id }, { fallbackToTabRoot: true });
+      }
+    } finally {
+      openingRef.current = false;
+    }
   }
 
   async function handleDelete() {

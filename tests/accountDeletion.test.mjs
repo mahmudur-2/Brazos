@@ -11,9 +11,10 @@ import { dirname, join } from 'node:path';
  *   1. formatBlockerList is EXECUTED, not read: the empty case means
  *      "deletion permitted" and produces no headline, and the populated case
  *      groups, keys and routes every row.
- *   2. A blocker kind with no route in this stack stays non-tappable. The
- *      deletion screen lives in ProfileStack, which registers no job-detail
- *      route, and phase67's scope forbids adding one.
+ *   2. A blocker kind with no route stays non-tappable. The deletion screen
+ *      lives in ProfileStack, which registers no job-detail route and gets
+ *      none: a job or dispute row is the tag 'Job', which the screen opens
+ *      across tabs.
  *   3. Neither RPC wrapper passes a user id. The subject is auth.uid() on the
  *      server; a caller-supplied id would make the blocker list an oracle.
  *   4. The delete flow signs out LOCALLY and swallows the failure. The auth
@@ -76,11 +77,11 @@ test('a populated blocker list groups, keys and routes every row', () => {
     ['Job', 'Payment', 'Payment', 'Dispute']
   );
 
-  // Only the payee-side payment has a record in ProfileStack. Everything else
-  // renders label-only, because no route exists and none may be created.
+  // A job and the dispute on it open the job's own page (where Cancel lives); the payee-side
+  // payment opens Earnings. A payment the user SENT has no screen and renders label-only.
   assert.deepEqual(
     list.rows.map((r) => r.route),
-    [null, 'Earnings', null, null]
+    ['Job', 'Earnings', null, 'Job']
   );
 
   // Keys are unique even when two rows point at the same record.

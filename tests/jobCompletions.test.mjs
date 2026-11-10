@@ -128,7 +128,10 @@ function clientSources() {
     };
     walk(base);
   }
-  return files.filter((f) => f !== 'lib/payments.ts');
+  // lib/paymentRules.ts is lib/payments.ts's pure half (the predicates moved there verbatim, R6a);
+  // it also holds the cancel_job() mirror, whose cancel_fee_* columns come off the hire's own
+  // job_agreements snapshot - a rate read from the server, never one written in the client.
+  return files.filter((f) => f !== 'lib/payments.ts' && f !== 'lib/paymentRules.ts');
 }
 
 test('5 · no client file outside the helper subtracts a fee from an amount, adds fees together, or names a rate', () => {

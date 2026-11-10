@@ -123,3 +123,101 @@ export function paymentCaption(facts: PaymentCaptionFacts, viewer: MoneyViewer):
       return null;
   }
 }
+
+/**
+ * A2 — WHAT A CUSTOMER IS TOLD ABOUT CANCELLING BEFORE THEY PAY. One sentence,
+ * from one constant, on the accept confirm and on Checkout. It carries
+ * Terms §4's real numbers (lib/legal/termsOfService.ts, "Cancelling.") and the
+ * rule cancel_job() applies (lib/paymentRules.ts customerCancelPreview).
+ */
+export const CANCELLATION_DISCLOSURE =
+  'Free to cancel within 15 minutes of hiring or more than 24 hours before the visit; after that a cancellation fee may go to the worker.';
+
+/** A2 — the honest line beside the checkout total: held, not insured. */
+export const PAYMENT_HELD_NOT_INSURANCE =
+  'Your payment is held until you approve the work. It is not insurance.';
+
+/* ------------------------------------------------------------------------- *
+ * A1 — THE CANCEL CONFIRMS. What each party is told, in money, before they
+ * cancel a job. The amounts come from lib/paymentRules.ts (a mirror of
+ * cancel_job(), which decides again when the call lands); `format` is
+ * formatBudget, passed in so this module keeps no runtime imports.
+ * ------------------------------------------------------------------------- */
+
+export type CancelConfirmCopy = { title: string; message: string; confirmText: string; cancelText: string };
+
+type CustomerCancelPreviewShape =
+  | { kind: 'no_charge' }
+  | { kind: 'free'; refundCents: number; nearBoundary: boolean }
+  | { kind: 'fee'; feeCents: number; refundCents: number; nearBoundary: boolean }
+  | null;
+
+const CANNOT_UNDO = 'This can’t be undone.';
+const NEAR_CUTOFF = ' The free-cancellation cutoff is only minutes away, so the amount is set when you confirm.';
+const REFUND_TIMING = 'Refunds go back to your card, usually within 5–10 business days.';
+
+/** The customer's confirm for cancel_job('customer_cancelled'). A null preview states no figure. */
+export function customerCancelConfirm(
+  preview: CustomerCancelPreviewShape,
+  opts: { workerFirstName: string; format: (cents: number) => string }
+): CancelConfirmCopy {
+  const base = { title: 'Cancel this job?', confirmText: 'Cancel job', cancelText: 'Keep job' };
+  const { workerFirstName: worker, format } = opts;
+  if (!preview) {
+    return {
+      ...base,
+      message: `Depending on timing, a cancellation fee may go to ${worker}; the rest comes back to you. The job page shows where the money went. ${CANNOT_UNDO}`,
+    };
+  }
+  switch (preview.kind) {
+    case 'no_charge':
+      return { ...base, message: `You haven’t paid for this job, so no money moves. ${CANNOT_UNDO}` };
+    case 'free':
+      return {
+        ...base,
+        message: `Free — you get ${format(preview.refundCents)} back in full. ${REFUND_TIMING} ${CANNOT_UNDO}${preview.nearBoundary ? NEAR_CUTOFF : ''}`,
+      };
+    case 'fee':
+      return {
+        ...base,
+        message: `A ${format(preview.feeCents)} cancellation fee goes to ${worker}; ${format(preview.refundCents)} comes back to you. ${REFUND_TIMING} ${CANNOT_UNDO}${preview.nearBoundary ? NEAR_CUTOFF : ''}`,
+      };
+  }
+}
+
+/**
+ * The worker's confirm for cancel_job('worker_cancelled'). `paid` is the
+ * ledger state: held (the customer is refunded in full), unpaid (nothing was
+ * taken), or unknown (the read failed / another state — say nothing about money).
+ * Nothing here claims a reliability or reputation effect: no code applies one.
+ */
+export function workerCancelConfirm(opts: { customerFirstName: string; paid: 'held' | 'unpaid' | 'unknown' }): CancelConfirmCopy {
+  const { customerFirstName: customer, paid } = opts;
+  const money =
+    paid === 'held'
+      ? `${customer} is refunded in full.`
+      : paid === 'unpaid'
+        ? `${customer} hasn’t paid yet, so no money moves.`
+        : `${customer} is refunded in full if they have paid.`;
+  return {
+    title: 'Cancel this job?',
+    message: `${money} ${customer} is told you cancelled. ${CANNOT_UNDO}`,
+    confirmText: 'Cancel this job',
+    cancelText: 'Keep job',
+  };
+}
+
+/** The worker's confirm for cancel_job('customer_no_show'): a claim, never a payout. */
+export function noShowConfirm(opts: { customerFirstName: string; paid: 'held' | 'unpaid' | 'unknown' }): CancelConfirmCopy {
+  const { customerFirstName: customer, paid } = opts;
+  const money =
+    paid === 'unpaid'
+      ? `${customer} hasn’t paid, so no money moves.`
+      : `It opens a claim and moves no money until Brazos reviews it; ${customer} is told.`;
+  return {
+    title: `${customer} wasn’t there?`,
+    message: `This closes the job. ${money} ${CANNOT_UNDO}`,
+    confirmText: 'Report no-show',
+    cancelText: 'Go back',
+  };
+}
