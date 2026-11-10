@@ -87,9 +87,24 @@ appId: app.brazos.mobile.preview
     visible: "Photos"
     timeout: 15000
 - tapOn: "Photos"
+# Run 36: the system picker sat on "Loading..." past 30 s on the CI Mac; wait longer, then reopen it once.
 - extendedWaitUntil:
     visible: 'Photo, .*'
-    timeout: 30000
+    timeout: 60000
+    optional: true
+- runFlow:
+    when:
+      notVisible: 'Photo, .*'
+    commands:
+      - tapOn: "Cancel"
+      - tapOn: "Attach"
+      - extendedWaitUntil:
+          visible: "Photos"
+          timeout: 15000
+      - tapOn: "Photos"
+- extendedWaitUntil:
+    visible: 'Photo, .*'
+    timeout: 60000
 - tapOn:
     text: 'Photo, .*'
     index: 0
