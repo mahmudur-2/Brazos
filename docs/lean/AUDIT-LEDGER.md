@@ -15,6 +15,14 @@ before it entered this list. Status: OPEN, FIXING (batch), FIXED (commit), OWNER
 | R14 | LICENSE was Expo's MIT template (anyone could copy the app) | G15 f45a804 | file read |
 | R9a | Secret scanning + push protection were off | repo setting | `gh api` shows enabled |
 | E1 | Welcome taps lost on slow Macs (run 25) | F23 2cc09c2 | run 25 video |
+| E2 | Inbox row: VoiceOver heard "Working, <job>" while the screen showed "Job request · needs your reply"; a card message previewed as a bare "…" | F25 2865121 | run 27 screen hierarchy + screenshot; unit test |
+
+## Open, found by e2e (investigate on the local stack before fixing)
+
+| ID | Finding | Proof |
+|---|---|---|
+| E3 | After flow 06 approved the main job, flow 07's Inbox still derived its stage as "Working" (`in_progress`), and the job was still picked as the pair's active job | run 27 screen hierarchy (spoken label) |
+| E4 | After flow 06 declined the worker's $42 counter, the customer's row still said "Job request · needs your reply" (`pendingByThread` still held the chain) | run 27 screenshot |
 
 ## Batch A: app fixes (Sonnet fixer, orchestrator reviews), commits `lean P1..P5`
 

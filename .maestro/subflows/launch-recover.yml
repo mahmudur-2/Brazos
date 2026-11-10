@@ -1,0 +1,21 @@
+appId: app.brazos.mobile.preview
+# Run 28: after a clean launch reinstalled the app, the simulator said it was "unknown to FrontBoard"
+# and the launch failed. The clean launch is optional; this waits for Welcome and relaunches if it never came.
+---
+- extendedWaitUntil:
+    visible: "I already have an account"
+    timeout: 30000
+    optional: true
+- runFlow:
+    when:
+      notVisible: "I already have an account"
+    commands:
+      - retry:
+          maxRetries: 2
+          commands:
+            - launchApp:
+                permissions:
+                  all: allow
+            - extendedWaitUntil:
+                visible: "I already have an account"
+                timeout: 30000

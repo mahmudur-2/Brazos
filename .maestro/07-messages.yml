@@ -7,6 +7,8 @@ appId: app.brazos.mobile.preview
     clearKeychain: true
     permissions:
       all: allow
+    optional: true
+- runFlow: subflows/launch-recover.yml
 - runFlow:
     file: subflows/sign-in-phone.yml
     env:
@@ -150,6 +152,8 @@ appId: app.brazos.mobile.preview
     clearKeychain: true
     permissions:
       all: allow
+    optional: true
+- runFlow: subflows/launch-recover.yml
 - runFlow:
     file: subflows/sign-in-phone.yml
     env:
