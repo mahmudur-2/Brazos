@@ -13,7 +13,7 @@ import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
-import { FEE_NAME, PAY_AND_PROTECT } from '../lib/moneyCopy';
+import { CANCELLATION_DISCLOSURE, FEE_NAME, PAY_AND_PROTECT, PAYMENT_HELD_NOT_INSURANCE } from '../lib/moneyCopy';
 import { customerChargeCents } from '../lib/paymentRules';
 import {
   canOfferJobFunding,
@@ -623,6 +623,8 @@ export function CheckoutScreen() {
                         </Text>
                       </View>
                     ) : null}
+                    <Text style={styles.explainText}>{PAYMENT_HELD_NOT_INSURANCE}</Text>
+                    <Text style={styles.explainText}>{CANCELLATION_DISCLOSURE}</Text>
                     {quoteError && !figures ? (
                       <>
                         <Text style={styles.explainText}>{quoteError}</Text>

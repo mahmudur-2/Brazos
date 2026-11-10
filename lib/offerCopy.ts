@@ -28,6 +28,7 @@
  */
 
 import { formatShortDay } from './time';
+import { CANCELLATION_DISCLOSURE } from './moneyCopy';
 
 /** The amber "whose move" pill beside the heading. */
 export const YOUR_MOVE_BADGE_LABEL = 'Your move';
@@ -101,7 +102,10 @@ export function acceptOfferConfirmMessage(input: {
     input.savedCardLabel && quote
       ? ` ${input.savedCardLabel} is charged the total now, and the funds are held in protection until you approve the work.`
       : ' Next you’ll protect the payment in checkout.';
-  return lines + selects + next;
+  // A2: what cancelling costs is said before the money moves — one sentence, one constant.
+  return `${lines}${selects}${next}
+
+${CANCELLATION_DISCLOSURE}`;
 }
 
 /**

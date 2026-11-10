@@ -71,13 +71,18 @@ const navModule = (async () =>
 const copyModule = (async () =>
   import(
     toDataUrl(
-      // F19: offerCopy's one import is the import-free lib/time.ts, pointed at its file.
+      // F19: offerCopy's imports are the import-free lib/time.ts and lib/moneyCopy.ts, pointed at their files.
       stripTypeScriptTypes(await read('lib/offerCopy.ts'), { mode: 'strip' }).replace(
         "from './time'",
         `from '${new URL('../lib/time.ts', import.meta.url).href}'`,
+      ).replace(
+        "from './moneyCopy'",
+        `from '${new URL('../lib/moneyCopy.ts', import.meta.url).href}'`,
       ),
     ),
   ))();
+
+const { CANCELLATION_DISCLOSURE } = await import(new URL('../lib/moneyCopy.ts', import.meta.url).href);
 
 const CUSTOMER = 'customer-1';
 const WORKER = 'worker-1';
@@ -430,19 +435,23 @@ test('the actionable card uses the required labels, order and icons', async () =
 
 test('A5 — the accept confirmation body is one text: three money lines, then what the tap does', async () => {
   const { acceptOfferConfirmMessage } = await copyModule;
+  // A2: the cancellation disclosure ends every accept confirm (lib/moneyCopy.ts CANCELLATION_DISCLOSURE).
+  const TAIL = `
+
+${CANCELLATION_DISCLOSURE}`;
   const quote = { priceLabel: '$120', feeLabel: '$9', totalLabel: '$129' };
   const lines = 'Agreed price $120 · Protection fee $9 · Total charged $129.\n\n';
   const selects = 'This selects their bid for the job — the other active bids will no longer be eligible.';
   // Card path, no saved card: checkout is next.
-  assert.equal(acceptOfferConfirmMessage({ quote }), `${lines}${selects} Next you’ll protect the payment in checkout.`);
+  assert.equal(acceptOfferConfirmMessage({ quote }), `${lines}${selects} Next you’ll protect the payment in checkout.${TAIL}`);
   // Card path, the confirm names the saved card: it is charged now — only with a quote.
   assert.equal(
     acceptOfferConfirmMessage({ quote, savedCardLabel: 'Visa ···· 4242' }),
-    `${lines}${selects} Visa ···· 4242 is charged the total now, and the funds are held in protection until you approve the work.`
+    `${lines}${selects} Visa ···· 4242 is charged the total now, and the funds are held in protection until you approve the work.${TAIL}`
   );
   assert.equal(
     acceptOfferConfirmMessage({ quote: null, savedCardLabel: 'Visa ···· 4242' }),
-    `${selects} Next you’ll protect the payment in checkout.`,
+    `${selects} Next you’ll protect the payment in checkout.${TAIL}`,
     'no quote, no "charged now" — the card pays only against a total the confirm showed'
   );
   // Without a quote the money lines are left out, never guessed.
