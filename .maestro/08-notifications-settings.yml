@@ -40,7 +40,9 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "Job & Bids|Job Details"
     timeout: 30000
-- tapOn: 'Back( to .*)?'
+# Run 32: the job opens in the My Jobs tab (the push router's cross-tab landing), so Back stays there;
+# the feed is still open on the Home tab.
+- tapOn: "Home"
 - extendedWaitUntil:
     visible: "Notification settings"
     timeout: 30000
