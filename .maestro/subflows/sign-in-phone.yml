@@ -100,13 +100,19 @@ appId: app.brazos.mobile.preview
     when:
       visible: "Set up your experience"
     commands:
-      - assertVisible: "Review Terms & Privacy to finish setup."
-      - assertVisible:
-          text: "Finish setup"
-          enabled: false
       - tapOn: '${LANDING}\..*'
-      - tapOn: 'Terms and Privacy\. Review both documents to continue\.'
-      - runFlow: accept-legal.yml
+      # Run 29: an account that accepted the current Terms at the gate earlier comes back to Setup
+      # with them already reviewed (the server holds that acceptance); only an unreviewed one is walked.
+      - runFlow:
+          when:
+            visible: 'Terms and Privacy\. Review both documents to continue\.'
+          commands:
+            - assertVisible: "Review Terms & Privacy to finish setup."
+            - assertVisible:
+                text: "Finish setup"
+                enabled: false
+            - tapOn: 'Terms and Privacy\. Review both documents to continue\.'
+            - runFlow: accept-legal.yml
       - extendedWaitUntil:
           visible: 'Terms and Privacy\. Reviewed\.'
           timeout: 30000
