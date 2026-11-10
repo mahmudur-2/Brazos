@@ -18,6 +18,13 @@ before it entered this list. Status: OPEN, FIXING (batch), FIXED (commit), OWNER
 
 ## Batch A: app fixes (Sonnet fixer, orchestrator reviews), commits `lean P1..P5`
 
+FIXED 2026-11-10: P1 84c7d4e, P2 d7e0b04, P3 0c8aa40, P4 e5eab93, P5 98d6443 (verify 1274 pass).
+Proven by unit tests only so far; the e2e run on a build that includes them is still owed.
+Follow-ups found while fixing: the cancel preview in `lib/paymentRules.ts` mirrors `cancel_job()`
+(rates from the hire's snapshot) — a server preview RPC in batch B would remove the mirror; the worker
+cannot see when "Customer wasn't there" will appear; logout's bounded push-unregister keeps running
+in the background after sign-out.
+
 | ID | Finding | Source |
 |---|---|---|
 | C1 | No Cancel anywhere: `cancel_job` RPC never called; blocks account deletion (App Store 5.1.1v) | CEO#1, verified grep |
@@ -37,6 +44,11 @@ before it entered this list. Status: OPEN, FIXING (batch), FIXED (commit), OWNER
 | L2 | Terms require 18+, sign-up never asks | CEO#3 |
 
 ## Batch B: database and payment fixes (critical skill: Fable blueprint, Opus build, Fable review, local pgTAP)
+
+DEFERRED to the next run (owner's weekly token cap, 2026-11-10). Start with B1, B5, B6, B3, B8: each
+gets a pgTAP test that fails on today's schema first. Local stack works: start Docker Desktop
+(`%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe`), `npx supabase start`, `npm run db:reset`,
+`npm run db:test` (baseline 2026-11-10: 33 files, 1782 tests, PASS).
 
 | ID | Finding | Source | Proof |
 |---|---|---|---|
