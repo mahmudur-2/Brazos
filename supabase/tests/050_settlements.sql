@@ -30,14 +30,12 @@
 --     URL used points at 127.0.0.1:1 and the transaction rolls back before
 --     any request could commit to pg_net's queue, so nothing is ever sent.
 --
--- WHAT THIS FILE CANNOT PROVE, said plainly rather than faked:
---   pg_cron is NOT installed on the local stack, so no assertion here creates
---   or reads a real cron.job row. §1 proves the CORRECTED PROBE against a real
---   two-overload function and proves the skip-with-notice branch executes
---   without raising; §5 proves the three job names and the untouched
---   brazos-drain-push out of the shipped function's own definition. That the
---   schedules actually appear in cron.job is staging's to show, on the
---   operator's Actions-tab trigger.
+-- pg_cron and pg_net are installed by 20261112000100_schedules_loud.sql
+-- (ledger B7). §1 proves the CORRECTED PROBE against a real two-overload
+-- function and that the installer schedules on the real extension; §5 proves
+-- the three job names and the untouched brazos-drain-push out of the shipped
+-- function's own definition. That cron.job holds exactly the expected timers
+-- is 331_schedules_loud.sql's to prove.
 --
 -- PAIRING (C-3): every refusal sits beside the positive control on the same
 -- fixture. throws_ok pins code AND message; a null code would pass on a typo
@@ -103,16 +101,16 @@ select ok(
   '1: runner — the probe is not merely always-true: an absent name is false'
 );
 select ok(
-  not public.pg_function_present('cron', 'schedule'),
-  '1: runner — pg_cron really is absent on the local stack, so the branch exercised below is the skip branch'
+  public.pg_function_present('cron', 'schedule'),
+  '1: runner — the probe sees the real pg_cron (two cron.schedule overloads), installed by a migration (B7)'
 );
 select lives_ok(
   $$ select public.install_settlement_schedules() $$,
-  '1: runner — the installer does NOT raise when the cron namespace is absent (a local reset must still succeed)'
+  '1: runner — the installer runs on the real extension without raising'
 );
 select is(
-  public.install_settlement_schedules(), 'skipped: pg_cron absent',
-  '1: runner — and it reports the skip rather than silently doing nothing'
+  public.install_settlement_schedules(), 'scheduled: 3',
+  '1: runner — and it reports its three timers scheduled, never a skip'
 );
 select is(
   public.install_settlement_schedules(), public.install_settlement_schedules(),
@@ -182,11 +180,10 @@ select throws_ok(
   '3: runner — the URL alone is not enough: the guard is an OR over BOTH names'
 );
 
--- pg_net is NOT installed on the local stack, so the satisfied path cannot run
--- to completion here: it reaches net.http_post and dies there. That is still
--- the positive control this section needs — it proves the Vault lookup found
--- both secrets and the guard let the call through — so the assertion is
--- written against the SQLSTATE rather than against success.
+-- pg_net is installed (B7), so the satisfied path runs to completion: the
+-- Vault lookup finds both secrets, the guard lets the call through, and
+-- net.http_post queues a request to 127.0.0.1:1 inside this transaction. The
+-- rollback removes it from pg_net's queue before it is ever sent.
 create or replace function tests.r5_drain_outcome() returns text language plpgsql as $$
 begin
   perform public.drain_settlements();
@@ -201,8 +198,8 @@ select isnt(
   '3: runner — with BOTH secrets present the named guard STOPS refusing, which is what proves the body actually reads the Vault (positive control)'
 );
 select is(
-  tests.r5_drain_outcome(), '3F000',
-  '3: runner — and where it stops instead is net.http_post: pg_net is absent locally, so this proof reaches the POST and no further'
+  tests.r5_drain_outcome(), 'ok',
+  '3: runner — and the call reaches net.http_post and returns: pg_net is installed, so the drain completes'
 );
 
 delete from vault.secrets where name = 'process_settlements_url';
@@ -299,9 +296,9 @@ select ok(
 -- ---------------------------------------------------------------------------
 -- §5. EXACTLY THREE SCHEDULES, AND brazos-drain-push IS NOT ONE (C-2 bullet 5)
 --
--- pg_cron is absent locally, so cron.job cannot be read. What CAN be read is
--- the shipped installer's own definition, and that is what says which names
--- it will create when it runs on a stack that has pg_cron.
+-- The shipped installer's own definition says which names it creates; that
+-- cron.job holds exactly those (and the other installers' timers) is
+-- 331_schedules_loud.sql's to prove.
 -- ---------------------------------------------------------------------------
 select ok(
   pg_get_functiondef('public.install_settlement_schedules()'::regprocedure) like '%install_settlement_schedules%',

@@ -93,8 +93,8 @@ select ok(coalesce((select bool_and(not has_function_privilege('authenticated', 
                       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                      where n.nspname = 'public' and p.proname in ('expire_open_jobs', 'install_lifecycle_schedules')), false),
   'X6: expire_open_jobs and install_lifecycle_schedules run as service_role only');
-select is(public.install_lifecycle_schedules(), 'skipped: pg_cron absent',
-  'X6: the installer skips on the local stack, where pg_cron is absent');
+select is(public.install_lifecycle_schedules(), 'scheduled: close-unpaid-hires, expire-open-jobs, close-no-show-hires',
+  'X6: the installer schedules its three timers (pg_cron is installed by a migration, B7)');
 
 select * from finish();
 rollback;

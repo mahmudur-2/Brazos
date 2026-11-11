@@ -2806,6 +2806,15 @@ export type Database = {
         Args: { p_a: string; p_b: string }
         Returns: string
       }
+      expected_schedules: {
+        Args: never
+        Returns: {
+          command: string
+          installer: string
+          jobname: string
+          schedule: string
+        }[]
+      }
       expire_offer_if_stale: {
         Args: { p_offer: Database["public"]["Tables"]["job_offers"]["Row"] }
         Returns: boolean
@@ -2900,6 +2909,7 @@ export type Database = {
       install_push_schedule: { Args: never; Returns: string }
       install_receipt_schedule: { Args: never; Returns: string }
       install_reminder_schedule: { Args: never; Returns: string }
+      install_schedules: { Args: never; Returns: string }
       install_series_schedule: { Args: never; Returns: string }
       install_settlement_schedules: { Args: never; Returns: string }
       is_active_user: { Args: never; Returns: boolean }
@@ -3394,6 +3404,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      schedule_health: { Args: never; Returns: Json }
+      schema_fingerprint: { Args: never; Returns: Json }
       series_close_offers: {
         Args: { p_actor: string; p_job_id: string }
         Returns: undefined
@@ -3418,6 +3430,10 @@ export type Database = {
         Returns: string
       }
       set_active_mode: { Args: { p_mode: string }; Returns: string }
+      set_drain_secrets: {
+        Args: { p_functions_base_url: string; p_service_key: string }
+        Returns: undefined
+      }
       set_payment_account: {
         Args: { p_account_id: string; p_user_id: string }
         Returns: string

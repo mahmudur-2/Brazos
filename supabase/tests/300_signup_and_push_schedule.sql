@@ -2,17 +2,16 @@
 -- and 45: sign-up creates the profile through the on_auth_user_created trigger, and
 -- install_push_schedule() puts brazos-drain-push on pg_cron.
 --
--- FIXTURE SURGERY, DECLARED: pg_cron is not installed on the local stack, so §2 builds a stand-in
--- inside the transaction (schema cron, a cron.job table, cron.schedule(text, text, text) and
--- cron.unschedule(bigint) in pg_cron's call shapes) to prove what the installer writes and that a
--- second run replaces its job instead of adding one. That the real extension accepts the same calls
--- is staging's to show. Everything rolls back; no commit.
+-- pg_cron is installed by 20261112000100_schedules_loud.sql (ledger B7), so §2 runs the installer
+-- against the real extension: what it writes, and that a second run replaces its job instead of
+-- adding one. The skip it used to assert is now an error (331_schedules_loud.sql). Everything rolls
+-- back; no commit.
 \set tests_included 1
 \ir _helpers.sql
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(20);
+select plan(19);
 
 -- ---------------------------------------------------------------------------
 -- §1. Sign-up creates the profile (ruling 44).
@@ -98,30 +97,11 @@ select ok(not has_function_privilege('authenticated', 'public.install_push_sched
 select ok(not has_function_privilege('anon', 'public.install_push_schedule()', 'EXECUTE'),
   '45: anon may not');
 
-select ok(not public.pg_function_present('cron', 'schedule'),
-  '45: precondition: this stack has no pg_cron (the stand-in below is the only cron schema)');
-select is(public.install_push_schedule(), 'skipped: pg_cron absent',
-  '45: without pg_cron the installer skips with a notice, so a reset never fails on it');
-
--- SURGERY: the pg_cron stand-in.
-create schema cron;
-create table cron.job (jobid bigserial primary key, jobname text, schedule text not null, command text not null);
-create function cron.schedule(p_jobname text, p_schedule text, p_command text) returns bigint
-language plpgsql as $$
-declare v_id bigint;
-begin
-  insert into cron.job (jobname, schedule, command) values (p_jobname, p_schedule, p_command) returning jobid into v_id;
-  return v_id;
-end $$;
-create function cron.unschedule(p_jobid bigint) returns boolean
-language plpgsql as $$
-begin
-  delete from cron.job where jobid = p_jobid;
-  return found;
-end $$;
+select ok(public.pg_function_present('cron', 'schedule'),
+  '45: pg_cron is installed by a migration (B7), so the installer has nothing to skip');
 
 select is(public.install_push_schedule(), 'scheduled: brazos-drain-push',
-  '45: with pg_cron present the installer schedules the drain');
+  '45: the installer schedules the drain');
 select is((select count(*) from cron.job where jobname = 'brazos-drain-push'), 1::bigint,
   '45: the push cron job exists after install_push_schedule()');
 select ok((select schedule = '* * * * *' and command = 'select public.drain_notification_outbox();'
