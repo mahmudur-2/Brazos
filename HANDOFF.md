@@ -76,21 +76,8 @@ says "Payouts aren't set up yet".
 - Source of the sentence: `supabase/functions/connect-onboarding/index.ts` answers HTTP 502 with it when
   Stripe refuses `POST /v2/core/accounts` (line 190) or `POST /v2/core/account_links` (line 232). The
   app shows the same sentence for any other 502 (`lib/payments/stripeRules.ts`).
-- The status is still "none", so the account create is the likely failure (a conclusion, not seen).
-- The cause is ONE log line on staging: `connect-onboarding: account create <status>: <type · code ·
-  message>` (or `account link ...`). It holds no secret. No chat has read it: a chat does not contact a
-  remote Supabase project.
-- Not the cause, by reading: the old build (its 15 calls on this path fit today's server); this run's
-  code (3 new lines in the function, the hourly limit of `f0d2faa`; the Stripe call is from
-  2026-08-29). Unlikely, by run 39: a wrong key or an unknown version `2026-08-26.dahlia` (flow 04
-  paid by card with both through `create-payment`).
 - Never proven: no record shows that payout set-up, or a transfer to a worker, ever ran on staging or
-  on a device.
-- Open causes, most likely first, none checked: (a) the Stripe test account has not turned on Connect,
-  has no finished platform profile, or has no access to Accounts v2; (b) Stripe refuses the request
-  body (the test worker signs in by phone, so no `contact_email` is sent); (c) the idempotency key
-  `brazos-account-<user id>` replays the first failed answer for about a day; (d) the key is a
-  restricted key with no Connect rights; (e) the function crashed or timed out (a gateway 502).
+  on a device. No test covers the account-create request body (`tests/connect.test.mjs:22-25`).
 
 **2. Phone flows 03-07 and 09 cannot pass** until the test worker ("E2E Worker") has payouts on: since
 B11 a worker without payouts cannot bid, counter, accept or be hired (ledger O8).
@@ -104,17 +91,10 @@ company sends the production sign-in codes; the two URLs in App Store Connect (O
 
 ## Next
 
-1. **Chat, no owner time:** try to see the error on the local stack. Start Docker Desktop, `npx supabase
-   start`, call `connect-onboarding` as a local test user (B10's proof called each function this way:
-   ledger row B10) and read the local log line. The answer "not configured" means the local stack has
-   no Stripe key: go to step 2. Never read `.env`.
-2. **Owner, about 3 min:** Supabase dashboard → staging project → Edge Functions → `connect-onboarding`
-   → Logs. Tap "Set up payouts" in the app one more time, then send the newest line that starts with
-   `connect-onboarding:`. Second source: Stripe dashboard in test mode → Developers → Logs → the failed
-   `POST /v2/core/accounts`.
-3. **Fix by cause.** (a) and (d) are owner clicks in the Stripe dashboard: write them one by one. (b)
-   and (e) are code in a critical folder and money: an Opus builder reports its plan first, then a
-   local test, then a push (the pipeline deploys). (c): wait a day, or change the key's text.
+1. Done: the cause is in Blocked 0 (the local stack has no Stripe key, so it cannot show it).
+2. **Owner, about 1 min:** the "Acknowledge" click of Blocked 0 (ii).
+3. **Fix (i)** as Blocked 0 "Next" says: an Opus builder reports its plan first, then tests, then a push
+   (the pipeline deploys).
 4. **Prove the path before the owner tries again.** The lesson of this run: he got this step before
    anyone had run it. Then the **owner, about 10 min:** payout set-up as the test worker until the page
    says "Payouts are set up". Test sign-in number and code: Supabase dashboard → Authentication → Sign
