@@ -227,12 +227,15 @@ select tests.clear_auth();
 select tests.authenticate_as(:'customer');
 select (public.begin_job_payment(:'j1')).id as p1 \gset
 insert into fx values ('p1', :'p1');
+-- lean B17 (20261112010800): a party no longer selects the bps columns; the runner reads them.
+select tests.clear_auth();
 select ok((select status = 'unfunded' and provider = 'stripe' and kind = 'job_payment'
              and amount_cents = 5000 and customer_fee_cents = 375 and platform_fee_cents = 375 and tax_cents = 0
              and charge_amount_cents = 5375 and customer_fee_bps = 750 and worker_fee_bps = 750
              and funding_due_at is not null and payer_id = :'customer' and payee_id = :'worker'
            from public.payments where id = :'p1'),
   '7: begin_job_payment freezes both fee sides and tax; charge_amount_cents = amount + customer fee + tax');
+select tests.authenticate_as(:'customer');
 select is((public.begin_job_payment(:'j1')).id, :'p1'::uuid, '7: begin_job_payment is idempotent on the unfunded row');
 select tests.authenticate_as(:'worker');
 select throws_ok($$ select public.transition_job_status((select v from fx where k = 'j1'), 'in_progress') $$,
@@ -377,11 +380,14 @@ select throws_ok($$ select public.begin_tip_payment((select v from fx where k = 
   'P0001', 'Enter a tip amount greater than zero', '5: a zero tip is refused');
 select (public.begin_tip_payment(:'j3', 2500)).id as t3 \gset
 insert into fx values ('t3', :'t3');
+-- lean B17 (20261112010800): a party no longer selects customer_fee_bps; the runner reads it.
+select tests.clear_auth();
 select ok((select status = 'unfunded' and provider = 'stripe' and kind = 'tip' and amount_cents = 2500
              and platform_fee_cents = 0 and customer_fee_cents = 188 and customer_fee_bps = 750 and tax_cents = 0
              and charge_amount_cents = 2688 and payee_id = :'worker' and funding_due_at is not null
            from public.payments where id = :'t3'),
   '5: the stripe tip row is born unfunded at the ratio ceiling, customer fee only (platform_fee_cents = 0)');
+select tests.authenticate_as(:'customer');
 select is((public.begin_tip_payment(:'j3', 2500)).id, :'t3'::uuid, '5: begin_tip_payment is idempotent on the unfunded tip');
 select tests.authenticate_as(:'worker');
 select throws_ok($$ select public.begin_tip_payment((select v from fx where k = 'j3'), 500) $$,

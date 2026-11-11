@@ -439,6 +439,13 @@ export type Database = {
             foreignKeyName: "job_disputes_payment_id_fkey"
             columns: ["payment_id"]
             isOneToOne: false
+            referencedRelation: "payment_money"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "job_disputes_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
             referencedRelation: "payments"
             referencedColumns: ["id"]
           },
@@ -1231,6 +1238,13 @@ export type Database = {
             foreignKeyName: "payment_events_payment_id_fkey"
             columns: ["payment_id"]
             isOneToOne: false
+            referencedRelation: "payment_money"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "payment_events_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
             referencedRelation: "payments"
             referencedColumns: ["id"]
           },
@@ -1264,12 +1278,83 @@ export type Database = {
           },
         ]
       }
+      payment_transfers: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          payment_id: string
+          reversed_cents: number
+          transfer_ref: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          payment_id: string
+          reversed_cents?: number
+          transfer_ref: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          payment_id?: string
+          reversed_cents?: number
+          transfer_ref?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_transfers_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payment_money"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "payment_transfers_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_transfers_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "refunds_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_transfers_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "refunds_ready"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_transfers_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "transfers_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_transfers_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "transfers_ready"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount_cents: number
           authorized_at: string | null
           charge_amount_cents: number | null
           chargeback_at: string | null
+          chargeback_cents: number | null
           chargeback_ref: string | null
           created_at: string
           customer_fee_bps: number | null
@@ -1287,10 +1372,15 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
+          refund_sent_at: string | null
+          refund_sent_attempt: number | null
+          refund_stopped_at: string | null
+          refunded_cents: number | null
           release_reason: string | null
           release_requested_at: string | null
           released_at: string | null
@@ -1301,6 +1391,9 @@ export type Database = {
           transfer_cents: number | null
           transfer_ref: string | null
           transfer_reversed_at: string | null
+          transfer_sent_at: string | null
+          transfer_sent_attempt: number | null
+          transfer_stopped_at: string | null
           updated_at: string
           worker_fee_bps: number | null
         }
@@ -1309,6 +1402,7 @@ export type Database = {
           authorized_at?: string | null
           charge_amount_cents?: number | null
           chargeback_at?: string | null
+          chargeback_cents?: number | null
           chargeback_ref?: string | null
           created_at?: string
           customer_fee_bps?: number | null
@@ -1326,10 +1420,15 @@ export type Database = {
           platform_fee_cents: number
           provider?: string
           provider_ref?: string | null
+          received_cents?: number | null
           refund_attempts?: number
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
+          refund_sent_at?: string | null
+          refund_sent_attempt?: number | null
+          refund_stopped_at?: string | null
+          refunded_cents?: number | null
           release_reason?: string | null
           release_requested_at?: string | null
           released_at?: string | null
@@ -1340,6 +1439,9 @@ export type Database = {
           transfer_cents?: number | null
           transfer_ref?: string | null
           transfer_reversed_at?: string | null
+          transfer_sent_at?: string | null
+          transfer_sent_attempt?: number | null
+          transfer_stopped_at?: string | null
           updated_at?: string
           worker_fee_bps?: number | null
         }
@@ -1348,6 +1450,7 @@ export type Database = {
           authorized_at?: string | null
           charge_amount_cents?: number | null
           chargeback_at?: string | null
+          chargeback_cents?: number | null
           chargeback_ref?: string | null
           created_at?: string
           customer_fee_bps?: number | null
@@ -1365,10 +1468,15 @@ export type Database = {
           platform_fee_cents?: number
           provider?: string
           provider_ref?: string | null
+          received_cents?: number | null
           refund_attempts?: number
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
+          refund_sent_at?: string | null
+          refund_sent_attempt?: number | null
+          refund_stopped_at?: string | null
+          refunded_cents?: number | null
           release_reason?: string | null
           release_requested_at?: string | null
           released_at?: string | null
@@ -1379,6 +1487,9 @@ export type Database = {
           transfer_cents?: number | null
           transfer_ref?: string | null
           transfer_reversed_at?: string | null
+          transfer_sent_at?: string | null
+          transfer_sent_attempt?: number | null
+          transfer_stopped_at?: string | null
           updated_at?: string
           worker_fee_bps?: number | null
         }
@@ -1576,6 +1687,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "jobs"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipt_outbox_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payment_money"
+            referencedColumns: ["payment_id"]
           },
           {
             foreignKeyName: "receipt_outbox_payment_id_fkey"
@@ -1809,12 +1927,51 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_attention: {
+        Row: {
+          cents: number | null
+          detail: string | null
+          job_id: string | null
+          overdue: boolean | null
+          payment_id: string | null
+          reason: string | null
+          since: string | null
+          what: string | null
+        }
+        Relationships: []
+      }
+      payment_money: {
+        Row: {
+          charge_amount_cents: number | null
+          chargeback_cents: number | null
+          facts_known: boolean | null
+          job_id: string | null
+          kind: Database["public"]["Enums"]["payment_kind"] | null
+          left_cents: number | null
+          payment_id: string | null
+          received_cents: number | null
+          refunded_cents: number | null
+          short_cents: number | null
+          status: Database["public"]["Enums"]["payment_status"] | null
+          transferred_cents: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       refunds_due: {
         Row: {
           amount_cents: number | null
           authorized_at: string | null
           charge_amount_cents: number | null
           chargeback_at: string | null
+          chargeback_cents: number | null
           chargeback_ref: string | null
           created_at: string | null
           customer_fee_bps: number | null
@@ -1832,10 +1989,15 @@ export type Database = {
           platform_fee_cents: number | null
           provider: string | null
           provider_ref: string | null
+          received_cents: number | null
           refund_attempts: number | null
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
+          refund_sent_at: string | null
+          refund_sent_attempt: number | null
+          refund_stopped_at: string | null
+          refunded_cents: number | null
           release_reason: string | null
           release_requested_at: string | null
           released_at: string | null
@@ -1846,6 +2008,9 @@ export type Database = {
           transfer_cents: number | null
           transfer_ref: string | null
           transfer_reversed_at: string | null
+          transfer_sent_at: string | null
+          transfer_sent_attempt: number | null
+          transfer_stopped_at: string | null
           updated_at: string | null
           worker_fee_bps: number | null
         }
@@ -1854,6 +2019,7 @@ export type Database = {
           authorized_at?: string | null
           charge_amount_cents?: number | null
           chargeback_at?: string | null
+          chargeback_cents?: number | null
           chargeback_ref?: string | null
           created_at?: string | null
           customer_fee_bps?: number | null
@@ -1871,10 +2037,15 @@ export type Database = {
           platform_fee_cents?: number | null
           provider?: string | null
           provider_ref?: string | null
+          received_cents?: number | null
           refund_attempts?: number | null
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
+          refund_sent_at?: string | null
+          refund_sent_attempt?: number | null
+          refund_stopped_at?: string | null
+          refunded_cents?: number | null
           release_reason?: string | null
           release_requested_at?: string | null
           released_at?: string | null
@@ -1885,6 +2056,9 @@ export type Database = {
           transfer_cents?: number | null
           transfer_ref?: string | null
           transfer_reversed_at?: string | null
+          transfer_sent_at?: string | null
+          transfer_sent_attempt?: number | null
+          transfer_stopped_at?: string | null
           updated_at?: string | null
           worker_fee_bps?: number | null
         }
@@ -1893,6 +2067,7 @@ export type Database = {
           authorized_at?: string | null
           charge_amount_cents?: number | null
           chargeback_at?: string | null
+          chargeback_cents?: number | null
           chargeback_ref?: string | null
           created_at?: string | null
           customer_fee_bps?: number | null
@@ -1910,10 +2085,15 @@ export type Database = {
           platform_fee_cents?: number | null
           provider?: string | null
           provider_ref?: string | null
+          received_cents?: number | null
           refund_attempts?: number | null
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
+          refund_sent_at?: string | null
+          refund_sent_attempt?: number | null
+          refund_stopped_at?: string | null
+          refunded_cents?: number | null
           release_reason?: string | null
           release_requested_at?: string | null
           released_at?: string | null
@@ -1924,6 +2104,9 @@ export type Database = {
           transfer_cents?: number | null
           transfer_ref?: string | null
           transfer_reversed_at?: string | null
+          transfer_sent_at?: string | null
+          transfer_sent_attempt?: number | null
+          transfer_stopped_at?: string | null
           updated_at?: string | null
           worker_fee_bps?: number | null
         }
@@ -1964,6 +2147,7 @@ export type Database = {
           authorized_at: string | null
           charge_amount_cents: number | null
           chargeback_at: string | null
+          chargeback_cents: number | null
           chargeback_ref: string | null
           created_at: string | null
           customer_fee_bps: number | null
@@ -1981,10 +2165,15 @@ export type Database = {
           platform_fee_cents: number | null
           provider: string | null
           provider_ref: string | null
+          received_cents: number | null
           refund_attempts: number | null
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
+          refund_sent_at: string | null
+          refund_sent_attempt: number | null
+          refund_stopped_at: string | null
+          refunded_cents: number | null
           release_reason: string | null
           release_requested_at: string | null
           released_at: string | null
@@ -1995,6 +2184,9 @@ export type Database = {
           transfer_cents: number | null
           transfer_ref: string | null
           transfer_reversed_at: string | null
+          transfer_sent_at: string | null
+          transfer_sent_attempt: number | null
+          transfer_stopped_at: string | null
           updated_at: string | null
           worker_fee_bps: number | null
         }
@@ -2003,6 +2195,7 @@ export type Database = {
           authorized_at?: string | null
           charge_amount_cents?: number | null
           chargeback_at?: string | null
+          chargeback_cents?: number | null
           chargeback_ref?: string | null
           created_at?: string | null
           customer_fee_bps?: number | null
@@ -2020,10 +2213,15 @@ export type Database = {
           platform_fee_cents?: number | null
           provider?: string | null
           provider_ref?: string | null
+          received_cents?: number | null
           refund_attempts?: number | null
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
+          refund_sent_at?: string | null
+          refund_sent_attempt?: number | null
+          refund_stopped_at?: string | null
+          refunded_cents?: number | null
           release_reason?: string | null
           release_requested_at?: string | null
           released_at?: string | null
@@ -2034,6 +2232,9 @@ export type Database = {
           transfer_cents?: number | null
           transfer_ref?: string | null
           transfer_reversed_at?: string | null
+          transfer_sent_at?: string | null
+          transfer_sent_attempt?: number | null
+          transfer_stopped_at?: string | null
           updated_at?: string | null
           worker_fee_bps?: number | null
         }
@@ -2042,6 +2243,7 @@ export type Database = {
           authorized_at?: string | null
           charge_amount_cents?: number | null
           chargeback_at?: string | null
+          chargeback_cents?: number | null
           chargeback_ref?: string | null
           created_at?: string | null
           customer_fee_bps?: number | null
@@ -2059,10 +2261,15 @@ export type Database = {
           platform_fee_cents?: number | null
           provider?: string | null
           provider_ref?: string | null
+          received_cents?: number | null
           refund_attempts?: number | null
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
+          refund_sent_at?: string | null
+          refund_sent_attempt?: number | null
+          refund_stopped_at?: string | null
+          refunded_cents?: number | null
           release_reason?: string | null
           release_requested_at?: string | null
           released_at?: string | null
@@ -2073,6 +2280,9 @@ export type Database = {
           transfer_cents?: number | null
           transfer_ref?: string | null
           transfer_reversed_at?: string | null
+          transfer_sent_at?: string | null
+          transfer_sent_attempt?: number | null
+          transfer_stopped_at?: string | null
           updated_at?: string | null
           worker_fee_bps?: number | null
         }
@@ -2113,6 +2323,7 @@ export type Database = {
           authorized_at: string | null
           charge_amount_cents: number | null
           chargeback_at: string | null
+          chargeback_cents: number | null
           chargeback_ref: string | null
           created_at: string | null
           customer_fee_bps: number | null
@@ -2130,9 +2341,15 @@ export type Database = {
           platform_fee_cents: number | null
           provider: string | null
           provider_ref: string | null
+          received_cents: number | null
+          refund_attempts: number | null
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
+          refund_sent_at: string | null
+          refund_sent_attempt: number | null
+          refund_stopped_at: string | null
+          refunded_cents: number | null
           release_reason: string | null
           release_requested_at: string | null
           released_at: string | null
@@ -2143,6 +2360,9 @@ export type Database = {
           transfer_cents: number | null
           transfer_ref: string | null
           transfer_reversed_at: string | null
+          transfer_sent_at: string | null
+          transfer_sent_attempt: number | null
+          transfer_stopped_at: string | null
           updated_at: string | null
           worker_fee_bps: number | null
         }
@@ -2151,6 +2371,7 @@ export type Database = {
           authorized_at?: string | null
           charge_amount_cents?: number | null
           chargeback_at?: string | null
+          chargeback_cents?: number | null
           chargeback_ref?: string | null
           created_at?: string | null
           customer_fee_bps?: number | null
@@ -2168,9 +2389,15 @@ export type Database = {
           platform_fee_cents?: number | null
           provider?: string | null
           provider_ref?: string | null
+          received_cents?: number | null
+          refund_attempts?: number | null
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
+          refund_sent_at?: string | null
+          refund_sent_attempt?: number | null
+          refund_stopped_at?: string | null
+          refunded_cents?: number | null
           release_reason?: string | null
           release_requested_at?: string | null
           released_at?: string | null
@@ -2181,6 +2408,9 @@ export type Database = {
           transfer_cents?: number | null
           transfer_ref?: string | null
           transfer_reversed_at?: string | null
+          transfer_sent_at?: string | null
+          transfer_sent_attempt?: number | null
+          transfer_stopped_at?: string | null
           updated_at?: string | null
           worker_fee_bps?: number | null
         }
@@ -2189,6 +2419,7 @@ export type Database = {
           authorized_at?: string | null
           charge_amount_cents?: number | null
           chargeback_at?: string | null
+          chargeback_cents?: number | null
           chargeback_ref?: string | null
           created_at?: string | null
           customer_fee_bps?: number | null
@@ -2206,9 +2437,15 @@ export type Database = {
           platform_fee_cents?: number | null
           provider?: string | null
           provider_ref?: string | null
+          received_cents?: number | null
+          refund_attempts?: number | null
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
+          refund_sent_at?: string | null
+          refund_sent_attempt?: number | null
+          refund_stopped_at?: string | null
+          refunded_cents?: number | null
           release_reason?: string | null
           release_requested_at?: string | null
           released_at?: string | null
@@ -2219,6 +2456,9 @@ export type Database = {
           transfer_cents?: number | null
           transfer_ref?: string | null
           transfer_reversed_at?: string | null
+          transfer_sent_at?: string | null
+          transfer_sent_attempt?: number | null
+          transfer_stopped_at?: string | null
           updated_at?: string | null
           worker_fee_bps?: number | null
         }
@@ -2259,6 +2499,7 @@ export type Database = {
           authorized_at: string | null
           charge_amount_cents: number | null
           chargeback_at: string | null
+          chargeback_cents: number | null
           chargeback_ref: string | null
           created_at: string | null
           customer_fee_bps: number | null
@@ -2276,9 +2517,15 @@ export type Database = {
           platform_fee_cents: number | null
           provider: string | null
           provider_ref: string | null
+          received_cents: number | null
+          refund_attempts: number | null
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
+          refund_sent_at: string | null
+          refund_sent_attempt: number | null
+          refund_stopped_at: string | null
+          refunded_cents: number | null
           release_reason: string | null
           release_requested_at: string | null
           released_at: string | null
@@ -2289,6 +2536,9 @@ export type Database = {
           transfer_cents: number | null
           transfer_ref: string | null
           transfer_reversed_at: string | null
+          transfer_sent_at: string | null
+          transfer_sent_attempt: number | null
+          transfer_stopped_at: string | null
           updated_at: string | null
           worker_fee_bps: number | null
         }
@@ -2297,6 +2547,7 @@ export type Database = {
           authorized_at?: string | null
           charge_amount_cents?: number | null
           chargeback_at?: string | null
+          chargeback_cents?: number | null
           chargeback_ref?: string | null
           created_at?: string | null
           customer_fee_bps?: number | null
@@ -2314,9 +2565,15 @@ export type Database = {
           platform_fee_cents?: number | null
           provider?: string | null
           provider_ref?: string | null
+          received_cents?: number | null
+          refund_attempts?: number | null
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
+          refund_sent_at?: string | null
+          refund_sent_attempt?: number | null
+          refund_stopped_at?: string | null
+          refunded_cents?: number | null
           release_reason?: string | null
           release_requested_at?: string | null
           released_at?: string | null
@@ -2327,6 +2584,9 @@ export type Database = {
           transfer_cents?: number | null
           transfer_ref?: string | null
           transfer_reversed_at?: string | null
+          transfer_sent_at?: string | null
+          transfer_sent_attempt?: number | null
+          transfer_stopped_at?: string | null
           updated_at?: string | null
           worker_fee_bps?: number | null
         }
@@ -2335,6 +2595,7 @@ export type Database = {
           authorized_at?: string | null
           charge_amount_cents?: number | null
           chargeback_at?: string | null
+          chargeback_cents?: number | null
           chargeback_ref?: string | null
           created_at?: string | null
           customer_fee_bps?: number | null
@@ -2352,9 +2613,15 @@ export type Database = {
           platform_fee_cents?: number | null
           provider?: string | null
           provider_ref?: string | null
+          received_cents?: number | null
+          refund_attempts?: number | null
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
+          refund_sent_at?: string | null
+          refund_sent_attempt?: number | null
+          refund_stopped_at?: string | null
+          refunded_cents?: number | null
           release_reason?: string | null
           release_requested_at?: string | null
           released_at?: string | null
@@ -2365,6 +2632,9 @@ export type Database = {
           transfer_cents?: number | null
           transfer_ref?: string | null
           transfer_reversed_at?: string | null
+          transfer_sent_at?: string | null
+          transfer_sent_attempt?: number | null
+          transfer_stopped_at?: string | null
           updated_at?: string | null
           worker_fee_bps?: number | null
         }
@@ -2447,6 +2717,7 @@ export type Database = {
           authorized_at: string | null
           charge_amount_cents: number | null
           chargeback_at: string | null
+          chargeback_cents: number | null
           chargeback_ref: string | null
           created_at: string
           customer_fee_bps: number | null
@@ -2464,10 +2735,15 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
+          refund_sent_at: string | null
+          refund_sent_attempt: number | null
+          refund_stopped_at: string | null
+          refunded_cents: number | null
           release_reason: string | null
           release_requested_at: string | null
           released_at: string | null
@@ -2478,6 +2754,9 @@ export type Database = {
           transfer_cents: number | null
           transfer_ref: string | null
           transfer_reversed_at: string | null
+          transfer_sent_at: string | null
+          transfer_sent_attempt: number | null
+          transfer_stopped_at: string | null
           updated_at: string
           worker_fee_bps: number | null
         }
@@ -2495,6 +2774,7 @@ export type Database = {
           authorized_at: string | null
           charge_amount_cents: number | null
           chargeback_at: string | null
+          chargeback_cents: number | null
           chargeback_ref: string | null
           created_at: string
           customer_fee_bps: number | null
@@ -2512,10 +2792,15 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
+          refund_sent_at: string | null
+          refund_sent_attempt: number | null
+          refund_stopped_at: string | null
+          refunded_cents: number | null
           release_reason: string | null
           release_requested_at: string | null
           released_at: string | null
@@ -2526,6 +2811,9 @@ export type Database = {
           transfer_cents: number | null
           transfer_ref: string | null
           transfer_reversed_at: string | null
+          transfer_sent_at: string | null
+          transfer_sent_attempt: number | null
+          transfer_stopped_at: string | null
           updated_at: string
           worker_fee_bps: number | null
         }
@@ -2827,6 +3115,7 @@ export type Database = {
           authorized_at: string | null
           charge_amount_cents: number | null
           chargeback_at: string | null
+          chargeback_cents: number | null
           chargeback_ref: string | null
           created_at: string
           customer_fee_bps: number | null
@@ -2844,10 +3133,15 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
+          refund_sent_at: string | null
+          refund_sent_attempt: number | null
+          refund_stopped_at: string | null
+          refunded_cents: number | null
           release_reason: string | null
           release_requested_at: string | null
           released_at: string | null
@@ -2858,6 +3152,9 @@ export type Database = {
           transfer_cents: number | null
           transfer_ref: string | null
           transfer_reversed_at: string | null
+          transfer_sent_at: string | null
+          transfer_sent_attempt: number | null
+          transfer_stopped_at: string | null
           updated_at: string
           worker_fee_bps: number | null
         }[]
@@ -2941,6 +3238,7 @@ export type Database = {
           authorized_at: string | null
           charge_amount_cents: number | null
           chargeback_at: string | null
+          chargeback_cents: number | null
           chargeback_ref: string | null
           created_at: string
           customer_fee_bps: number | null
@@ -2958,10 +3256,15 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
+          refund_sent_at: string | null
+          refund_sent_attempt: number | null
+          refund_stopped_at: string | null
+          refunded_cents: number | null
           release_reason: string | null
           release_requested_at: string | null
           released_at: string | null
@@ -2972,6 +3275,9 @@ export type Database = {
           transfer_cents: number | null
           transfer_ref: string | null
           transfer_reversed_at: string | null
+          transfer_sent_at: string | null
+          transfer_sent_attempt: number | null
+          transfer_stopped_at: string | null
           updated_at: string
           worker_fee_bps: number | null
         }
@@ -3145,6 +3451,19 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      payment_record_reversal: {
+        Args: {
+          p_amount_cents: number
+          p_payment_id: string
+          p_ref: string
+          p_reversed_cents: number
+        }
+        Returns: undefined
+      }
+      payment_record_transfer: {
+        Args: { p_amount_cents: number; p_payment_id: string; p_ref: string }
+        Returns: boolean
+      }
       pg_function_present: {
         Args: { p_name: string; p_namespace: string }
         Returns: boolean
@@ -3233,6 +3552,25 @@ export type Database = {
         }
         Returns: boolean
       }
+      record_settlement_result: {
+        Args: {
+          p_attempt: number
+          p_error: string
+          p_kind: string
+          p_next: string
+          p_payment_id: string
+        }
+        Returns: boolean
+      }
+      record_settlement_sent: {
+        Args: {
+          p_amount_cents: number
+          p_kind: string
+          p_payment_id: string
+          p_ref: string
+        }
+        Returns: boolean
+      }
       register_push_token: {
         Args: { p_platform?: string; p_token: string }
         Returns: undefined
@@ -3244,6 +3582,7 @@ export type Database = {
           authorized_at: string | null
           charge_amount_cents: number | null
           chargeback_at: string | null
+          chargeback_cents: number | null
           chargeback_ref: string | null
           created_at: string
           customer_fee_bps: number | null
@@ -3261,10 +3600,15 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
+          refund_sent_at: string | null
+          refund_sent_attempt: number | null
+          refund_stopped_at: string | null
+          refunded_cents: number | null
           release_reason: string | null
           release_requested_at: string | null
           released_at: string | null
@@ -3275,6 +3619,9 @@ export type Database = {
           transfer_cents: number | null
           transfer_ref: string | null
           transfer_reversed_at: string | null
+          transfer_sent_at: string | null
+          transfer_sent_attempt: number | null
+          transfer_stopped_at: string | null
           updated_at: string
           worker_fee_bps: number | null
         }
@@ -3341,6 +3688,7 @@ export type Database = {
           authorized_at: string | null
           charge_amount_cents: number | null
           chargeback_at: string | null
+          chargeback_cents: number | null
           chargeback_ref: string | null
           created_at: string
           customer_fee_bps: number | null
@@ -3358,10 +3706,15 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
+          refund_sent_at: string | null
+          refund_sent_attempt: number | null
+          refund_stopped_at: string | null
+          refunded_cents: number | null
           release_reason: string | null
           release_requested_at: string | null
           released_at: string | null
@@ -3372,6 +3725,9 @@ export type Database = {
           transfer_cents: number | null
           transfer_ref: string | null
           transfer_reversed_at: string | null
+          transfer_sent_at: string | null
+          transfer_sent_attempt: number | null
+          transfer_stopped_at: string | null
           updated_at: string
           worker_fee_bps: number | null
         }
@@ -3394,6 +3750,63 @@ export type Database = {
           p_status: string
         }
         Returns: undefined
+      }
+      resolve_tip: {
+        Args: { p_outcome: string; p_payment_id: string }
+        Returns: {
+          amount_cents: number
+          authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_cents: number | null
+          chargeback_ref: string | null
+          created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
+          held_at: string | null
+          id: string
+          job_id: string
+          kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
+          offer_id: string | null
+          paid_out_at: string | null
+          payee_id: string
+          payer_id: string
+          platform_fee_cents: number
+          provider: string
+          provider_ref: string | null
+          received_cents: number | null
+          refund_attempts: number
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
+          refund_sent_at: string | null
+          refund_sent_attempt: number | null
+          refund_stopped_at: string | null
+          refunded_cents: number | null
+          release_reason: string | null
+          release_requested_at: string | null
+          released_at: string | null
+          status: Database["public"]["Enums"]["payment_status"]
+          stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
+          transfer_sent_at: string | null
+          transfer_sent_attempt: number | null
+          transfer_stopped_at: string | null
+          updated_at: string
+          worker_fee_bps: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       review_is_revealed: {
         Args: {
@@ -3448,6 +3861,23 @@ export type Database = {
       }
       set_payouts_status: {
         Args: { p_status: string; p_user_id: string }
+        Returns: boolean
+      }
+      settlement_attempt_closed: {
+        Args: {
+          p_attempt: number
+          p_sent_at: string
+          p_sent_attempt: number
+          p_stopped_at: string
+        }
+        Returns: boolean
+      }
+      settlement_send_begin: {
+        Args: { p_attempt: number; p_kind: string; p_payment_id: string }
+        Returns: boolean
+      }
+      settlement_send_reopen: {
+        Args: { p_kind: string; p_payment_id: string }
         Returns: boolean
       }
       should_notify: {
