@@ -25,6 +25,7 @@
 // ============================================================================
 
 import { notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser } from '../_shared/serviceAuth.ts';
+import { overHourlyLimit, RATE_LIMITED } from '../_shared/rateLimit.ts';
 
 const STRIPE_API = 'https://api.stripe.com';
 // The version the mobile SDK speaks, pinned on the ephemeral key only (create-payment's own).
@@ -103,6 +104,8 @@ Deno.serve(async (req) => {
   const caller = await verifiedUser(req, 'Sign in to manage your cards.', 'Could not reach your cards right now. Try again.');
   if (caller instanceof Response) return caller;
   const userId = caller.id;
+  // B10: one hit on the caller's hourly counter before anything reaches the provider.
+  if (await overHourlyLimit(serviceRpc, 'payment-methods', userId)) return json({ error: RATE_LIMITED }, 429);
 
   let action = '';
   let paymentMethodId = '';

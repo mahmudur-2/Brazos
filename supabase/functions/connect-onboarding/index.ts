@@ -52,6 +52,7 @@
 // ============================================================================
 
 import { notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser } from '../_shared/serviceAuth.ts';
+import { overHourlyLimit, RATE_LIMITED } from '../_shared/rateLimit.ts';
 
 const STRIPE_API = 'https://api.stripe.com';
 
@@ -153,6 +154,8 @@ Deno.serve(async (req) => {
     const caller = await resolveCaller(req, auth);
     if (caller instanceof Response) return caller;
     const userId = caller.userId;
+    // B10: one hit on the caller's hourly counter before anything reaches the provider.
+    if (await overHourlyLimit(serviceRpc, 'connect-onboarding', userId)) return json({ error: RATE_LIMITED }, 429);
 
     // --- 2. The payout account, created once and reused forever --------------
     const stored = await serviceRpc('get_payment_account', { p_user_id: userId });

@@ -33,6 +33,7 @@
 // ============================================================================
 
 import { notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser } from '../_shared/serviceAuth.ts';
+import { overHourlyLimit, RATE_LIMITED } from '../_shared/rateLimit.ts';
 import { classifyAccount } from './classify.mjs';
 
 const STRIPE_API = 'https://api.stripe.com';
@@ -104,6 +105,8 @@ Deno.serve(async (req) => {
   const caller = await verifiedUser(req, 'Sign in to check your payouts.', 'Could not check your payouts. Try again.');
   if (caller instanceof Response) return caller;
   const userId = caller.id;
+  // B10: one hit on the caller's hourly counter before anything reaches the provider.
+  if (await overHourlyLimit(serviceRpc, 'connect-status', userId)) return json({ error: RATE_LIMITED }, 429);
 
   try {
     // --- 2. No account yet: nothing to ask the provider ----------------------
