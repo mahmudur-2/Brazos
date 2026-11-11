@@ -6,7 +6,8 @@
 // and the recipient configuration only — and hands the client a single-use
 // hosted-onboarding URL to open in a system browser session (never a
 // WebView). The provider collects everything else: name, entity type, bank
-// account.
+// account. The one thing it needs up front, a contact email, comes from the
+// worker's request body or the sign-in email (account.mjs).
 //
 //   Deploy:  the staging pipeline deploys every function directory on push.
 //
@@ -53,6 +54,7 @@
 
 import { notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser } from '../_shared/serviceAuth.ts';
 import { overHourlyLimit, RATE_LIMITED } from '../_shared/rateLimit.ts';
+import { contactEmail, createRefusal, newAccount, withoutEmails } from './account.mjs';
 
 const STRIPE_API = 'https://api.stripe.com';
 
@@ -106,12 +108,12 @@ async function stripeV2(
 }
 
 /** The provider's error, reduced to its type, code and message. Never the
- * whole response. */
+ * whole response, and never an email address the message may echo. */
 function providerError(body: Record<string, unknown>): string {
   const err = (body.error ?? {}) as { type?: unknown; code?: unknown; message?: unknown };
-  return [err.type, err.code, err.message]
+  return withoutEmails([err.type, err.code, err.message]
     .filter((part) => typeof part === 'string' && part.length > 0)
-    .join(' · ') || 'no error body';
+    .join(' · ') || 'no error body');
 }
 
 /** Who is calling, as the AUTH SERVER reads the token — plus their stored
@@ -166,28 +168,17 @@ Deno.serve(async (req) => {
     let status = caller.status;
 
     if (!accountId) {
-      // Express dashboard, recipient configuration, stripe_transfers only:
-      // the platform charges and transfers, the worker only receives (D1).
-      // us, and the verified user's email when it has one; display name and
-      // entity type are the hosted flow's to collect (D2). Nothing monetary.
-      const account: Record<string, unknown> = {
-        dashboard: 'express',
-        defaults: {
-          responsibilities: { fees_collector: 'application', losses_collector: 'application' },
-        },
-        identity: { country: 'us' },
-        configuration: {
-          recipient: {
-            capabilities: { stripe_balance: { stripe_transfers: { requested: true } } },
-          },
-        },
-      };
-      if (caller.email) account.contact_email = caller.email;
+      // Stripe refuses a recipient account without a contact email: the one
+      // the worker typed ({"email"}), else the verified sign-in email. Passed
+      // to Stripe once, here; never stored, never logged (account.mjs).
+      const contact = contactEmail(await req.json().catch(() => null), caller.email);
+      if ('error' in contact) return json({ error: contact.error }, 400);
 
-      const created = await stripeV2('POST', '/v2/core/accounts', account, `brazos-account-${userId}`);
+      const created = await stripeV2('POST', '/v2/core/accounts', newAccount(contact.email), `brazos-account-${userId}`);
       if (!created.ok || typeof created.body.id !== 'string') {
         console.error(`connect-onboarding: account create ${created.status}: ${providerError(created.body)}`);
-        return json({ error: 'The payment provider is unavailable right now.' }, 502);
+        const refused = createRefusal(created.body);
+        return json({ error: refused.error }, refused.status);
       }
 
       // set_payment_account returns the EFFECTIVE id: if another request

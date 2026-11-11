@@ -14,6 +14,15 @@ import {
   refreshPage,
   returnPage,
 } from '../supabase/functions/connect-return/page.mjs';
+import {
+  EMAIL_INVALID,
+  EMAIL_MISSING,
+  PROVIDER_UNAVAILABLE,
+  contactEmail,
+  createRefusal,
+  newAccount,
+  withoutEmails,
+} from '../supabase/functions/connect-onboarding/account.mjs';
 
 // ---------------------------------------------------------------------------
 // The two parts of the Connect functions a test in this repository can execute
@@ -237,4 +246,104 @@ test('11 · the bounce hands PAGE_HEADERS to the Response as a constructed Heade
   assert.match(bounce, /headers: new Headers\(PAGE_HEADERS\),/, 'index.ts constructs a Headers object from PAGE_HEADERS');
   assert.ok(!/\{\s*\.\.\.PAGE_HEADERS\s*\}/.test(bounce), 'and no longer spreads it into a plain object');
   assert.match(bounce, /text\/plain/, 'and names the live text/plain observation it answers');
+});
+
+// ---------------------------------------------------------------------------
+// connect-onboarding / account.mjs — the payout account's create body and the
+// contact email Stripe requires with the recipient configuration (a phone
+// sign-in has no auth email, so the worker types one on Payouts).
+// ---------------------------------------------------------------------------
+
+test('12 · the create body is today’s account plus contact_email, exactly the address given', () => {
+  assert.deepEqual(newAccount('worker@example.com'), {
+    dashboard: 'express',
+    defaults: {
+      responsibilities: { fees_collector: 'application', losses_collector: 'application' },
+    },
+    identity: { country: 'us' },
+    configuration: {
+      recipient: {
+        capabilities: { stripe_balance: { stripe_transfers: { requested: true } } },
+      },
+    },
+    contact_email: 'worker@example.com',
+  });
+  assert.equal(newAccount('other@example.org').contact_email, 'other@example.org');
+});
+
+test('13 · the contact email: the typed address (trimmed) wins, else the sign-in email; none or a bad one is refused', () => {
+  // Typed, with or without a sign-in email: the typed one, trimmed.
+  assert.deepEqual(contactEmail({ email: '  worker@example.com ' }, null), { email: 'worker@example.com' });
+  assert.deepEqual(contactEmail({ email: 'typed@example.com' }, 'signin@example.com'), { email: 'typed@example.com' });
+  // Nothing typed (an older app sends {}): the verified sign-in email.
+  for (const body of [{}, null, undefined, 'text', 42, [], { email: '' }, { email: '   ' }, { email: 42 }, { email: null }]) {
+    assert.deepEqual(contactEmail(body, 'signin@example.com'), { email: 'signin@example.com' }, `fallback: ${JSON.stringify(body)}`);
+    assert.deepEqual(contactEmail(body, null), { error: EMAIL_MISSING }, `missing: ${JSON.stringify(body)}`);
+    assert.deepEqual(contactEmail(body, undefined), { error: EMAIL_MISSING }, `missing (no sign-in email): ${JSON.stringify(body)}`);
+  }
+  // A typed address that fails the rule is refused, never swapped for the sign-in email.
+  for (const bad of ['asdf', 'a@b', 'a b@example.com', 'a@exa mple.com', '@example.com', 'a@.', `${'x'.repeat(243)}@example.com`]) {
+    assert.deepEqual(contactEmail({ email: bad }, 'signin@example.com'), { error: EMAIL_INVALID }, `invalid: ${bad}`);
+  }
+  // 254 characters is the longest accepted.
+  const longest = `${'x'.repeat(242)}@example.com`;
+  assert.equal(longest.length, 254);
+  assert.deepEqual(contactEmail({ email: longest }, null), { email: longest });
+  // The sentences: plain, one each, never the provider's name or the 502.
+  assert.equal(EMAIL_MISSING, 'Payout setup needs an email address — update Brazos, then try again.');
+  assert.equal(EMAIL_INVALID, 'That email address doesn’t look right — check it and try again.');
+  for (const sentence of [EMAIL_MISSING, EMAIL_INVALID]) {
+    assert.doesNotMatch(sentence, /stripe|unavailable/i);
+  }
+});
+
+test('14 · a refused create: Stripe’s email_invalid is the worker’s address (400); every other refusal is the 502', () => {
+  // The sandbox answer for "payout-probe@bad..example" (which passes the app's rule).
+  assert.deepEqual(createRefusal({ error: { type: 'invalid_request_error', code: 'email_invalid', message: 'Invalid email.' } }), {
+    status: 400,
+    error: EMAIL_INVALID,
+  });
+  assert.equal(PROVIDER_UNAVAILABLE, 'The payment provider is unavailable right now.');
+  for (const body of [
+    { error: { code: 'account_creation_losses_collector_unavailable' } },
+    { error: { code: 'invalid_fields', message: 'If configuration.recipient is supplied, the Account must have a contact email.' } },
+    { error: { message: 'Invalid email.' } },
+    { code: 'email_invalid' },
+    { error: 'email_invalid' },
+    { id: 7 },
+    {},
+    null,
+    undefined,
+  ]) {
+    assert.deepEqual(createRefusal(body), { status: 502, error: PROVIDER_UNAVAILABLE }, `502: ${JSON.stringify(body)}`);
+  }
+});
+
+test('15 · the log never carries an address, and connect-onboarding is wired through account.mjs', () => {
+  assert.equal(withoutEmails('invalid_request_error · email_invalid · Invalid email.'), 'invalid_request_error · email_invalid · Invalid email.');
+  assert.equal(withoutEmails('bad: Payout-Probe@bad..example, and a@b.co.'), 'bad: [email] and [email]');
+
+  const fn = readFileSync(new URL('../supabase/functions/connect-onboarding/index.ts', import.meta.url), 'utf8');
+  assert.match(fn, /^import \{ contactEmail, createRefusal, newAccount, withoutEmails \} from '\.\/account\.mjs';$/m);
+  // The body is read only when no account exists, refused with a 400 before anything reaches Stripe.
+  const branch = fn.indexOf('if (!accountId) {');
+  const read = fn.indexOf('const contact = contactEmail(await req.json().catch(() => null), caller.email);');
+  const refuse = fn.indexOf("if ('error' in contact) return json({ error: contact.error }, 400);");
+  const create = fn.indexOf("stripeV2('POST', '/v2/core/accounts', newAccount(contact.email), `brazos-account-${userId}`)");
+  for (const [name, at] of Object.entries({ branch, read, refuse, create })) assert.ok(at > -1, `${name} is in index.ts`);
+  assert.ok(branch < read && read < refuse && refuse < create, 'no account → read the email → refuse → create');
+  assert.equal(fn.split('req.json(').length - 1, 1, 'the body is read once');
+  // Only newAccount builds the body: no contact_email of its own in index.ts.
+  assert.doesNotMatch(fn, /contact_email/);
+  // A refused create: the same log line, then the refusal account.mjs decides.
+  const failed = fn.indexOf('connect-onboarding: account create ${created.status}: ${providerError(created.body)}');
+  const decided = fn.indexOf('const refused = createRefusal(created.body);');
+  const answered = fn.indexOf('return json({ error: refused.error }, refused.status);');
+  for (const [name, at] of Object.entries({ failed, decided, answered })) assert.ok(at > -1, `${name} is in index.ts`);
+  assert.ok(create < failed && failed < decided && decided < answered);
+  // Every provider error line goes through the redaction; nothing logs the email itself.
+  assert.match(fn, /return withoutEmails\(/);
+  for (const line of fn.split('\n').filter((l) => l.includes('console.'))) {
+    assert.doesNotMatch(line, /contact|email/i, `logs no address: ${line.trim()}`);
+  }
 });

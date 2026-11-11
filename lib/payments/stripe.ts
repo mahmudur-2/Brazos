@@ -246,15 +246,17 @@ export async function fetchMyPayoutsStatus(): Promise<{
  * single-use hosted onboarding link. Returns the STORED status at the time of
  * the call and the url the screen opens in a system browser session. The
  * status it returns is never "enabled" by this call's doing — only
- * connect-status moves it.
+ * connect-status moves it. `email` (no payout account yet): the contact email
+ * the provider requires; the server reads it only when it creates the account
+ * and never stores it.
  */
-export async function beginPayoutsOnboarding(): Promise<{
+export async function beginPayoutsOnboarding(email?: string): Promise<{
   data: PayoutsOnboarding | null;
   error: { message: string } | null;
 }> {
   let invoked: { data: unknown; error: unknown };
   try {
-    invoked = await supabase.functions.invoke('connect-onboarding', { body: {} });
+    invoked = await supabase.functions.invoke('connect-onboarding', { body: email ? { email } : {} });
   } catch (error) {
     invoked = { data: null, error };
   }

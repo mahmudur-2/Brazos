@@ -487,3 +487,119 @@ test('[static] 13 · PayoutsScreen (n4b) reads the ledger beside the status read
   // The ledger read never writes the status: still exactly one setStatus call.
   assert.equal((code.match(/setStatus\(/g) ?? []).length, 1);
 });
+
+// ---------------------------------------------------------------------------
+// The payout account's contact email (2026-11-11): the provider refuses a
+// recipient account without one and a phone sign-in has none, so the worker
+// types it on Payouts before the first setup. The server half is executed in
+// tests/connect.test.mjs; here, the client half.
+// ---------------------------------------------------------------------------
+
+globalThis.__DEV__ = false; // what a user of a release build sees
+const { extractInvokeError, INVOKE_ERROR_RAW } = await import(pathToFileURL(join(root, 'lib/payments/stripeRules.ts')).href);
+const { userMessage } = await import(pathToFileURL(join(root, 'lib/errorMessage.ts')).href);
+const { EMAIL_INVALID, EMAIL_MISSING, contactEmail, createRefusal } = await import(
+  pathToFileURL(join(root, 'supabase/functions/connect-onboarding/account.mjs')).href
+);
+let validationJs = stripTypeScriptTypes(read('lib/validation.ts'), { mode: 'strip' });
+const jobsImport = "import { formatBudget } from './jobs';";
+assert.ok(validationJs.includes(jobsImport), 'lib/validation.ts imports formatBudget from ./jobs');
+validationJs = validationJs.replace(jobsImport, () => formatBudgetSource);
+const { isValidEmail } = await import(toDataUrl(validationJs));
+
+test('14 · one email rule: what enables "Set up payouts" is exactly what the server accepts', () => {
+  const samples = [
+    'worker@example.com',
+    ' worker@example.com ',
+    'w.o+rk@sub.example.co',
+    'a@b.c',
+    'payout-probe@bad..example',
+    'asdf',
+    'a@b',
+    'a b@example.com',
+    'a@exa mple.com',
+    '@example.com',
+    'a@.',
+    'a@@b.co',
+    '',
+    '   ',
+  ];
+  for (const sample of samples) {
+    const server = contactEmail({ email: sample }, null);
+    const accepted = 'email' in server;
+    // An empty field is "nothing typed" to the server (no sign-in email here, so missing); the app keeps the button off.
+    assert.equal(isValidEmail(sample), accepted, `${JSON.stringify(sample)}: app ${isValidEmail(sample)}, server ${JSON.stringify(server)}`);
+  }
+});
+
+test('15 · executed: an older app (no field) and this one show the server’s refusal as written, never the 502', () => {
+  const refusal = (status, error) => ({
+    name: 'FunctionsHttpError',
+    message: INVOKE_ERROR_RAW,
+    context: { status, ok: false },
+  });
+  for (const sentence of [EMAIL_MISSING, EMAIL_INVALID, createRefusal({ error: { code: 'email_invalid' } }).error]) {
+    const { status, message } = extractInvokeError(refusal(400, sentence), JSON.stringify({ error: sentence }));
+    assert.equal(status, 400);
+    assert.equal(message, sentence);
+    // beginPayoutsOnboarding's userMessage, then requestLink's, with the screen's fallback.
+    const shown = userMessage({ message: userMessage(message) }, 'Check your connection and try again.');
+    assert.equal(shown, sentence, 'the sentence survives both passes unchanged');
+    assert.doesNotMatch(shown, /unavailable/);
+  }
+});
+
+test('[static] 16 · the email field: no payout account yet only, the email keyboard, labelled, Set up off until it looks right, sent once', () => {
+  // The boundary sends the address only when one is given; the server reads it only when it creates the account.
+  const boundary = stripComments(read('lib/payments/stripe.ts'));
+  assert.match(boundary, /export async function beginPayoutsOnboarding\(email\?: string\): Promise</);
+  assert.match(boundary, /supabase\.functions\.invoke\('connect-onboarding', \{ body: email \? \{ email \} : \{\} \}\)/);
+
+  const src = read('screens/PayoutsScreen.tsx');
+  const code = stripComments(src);
+  assert.match(code, /import \{ TextField \} from '\.\.\/components\/TextField';/);
+  assert.match(code, /import \{ isValidEmail \} from '\.\.\/lib\/validation';/);
+  assert.match(code, /const \[email, setEmail\] = useState\(user\?\.email \?\? ''\);/, 'prefilled with the sign-in email when one exists');
+  assert.match(code, /const needsEmail = status === 'none';/);
+  assert.match(code, /const emailReady = !needsEmail \|\| isValidEmail\(email\);/);
+  assert.match(code, /<Button title=\{view\.cta\} onPress=\{\(\) => void openSetup\(\)\} loading=\{opening\} disabled=\{opening \|\| !emailReady\} \/>/);
+
+  // The field: inside the needsEmail branch, the why line first, then the input.
+  const start = code.indexOf('{needsEmail ? (');
+  assert.ok(start > -1, 'the field renders under needsEmail');
+  const end = code.indexOf(') : null}', start);
+  assert.ok(end > start, 'the needsEmail branch closes');
+  const field = code.slice(start, end);
+  assert.match(field, /<Text style=\{styles\.body\}>\{PAYOUTS_EMAIL_WHY\}<\/Text>\s*<TextField/);
+  for (const prop of [
+    'label="Email"',
+    'value={email}',
+    'onChangeText={setEmail}',
+    'keyboardType="email-address"',
+    'autoCapitalize="none"',
+    'autoCorrect={false}',
+    'autoComplete="email"',
+    'textContentType="emailAddress"',
+    'placeholder="you@example.com"',
+    'maxLength={254}',
+    'returnKeyType="done"',
+    'accessibilityLabel="Email address for your payout account"',
+  ]) {
+    assert.ok(field.includes(prop), `the field has ${prop}`);
+  }
+  assert.doesNotMatch(field, /onSubmitEditing|autoFocus/, '"Done" only closes the keyboard; nothing opens it on arrival');
+  assert.match(
+    src,
+    /PAYOUTS_EMAIL_WHY =\s*'The payment provider needs an email address for your payout account\.'/
+  );
+
+  // The address rides only the first setup; the expired-link bounce (an account exists) sends none,
+  // and requestLink does not change while the worker types (its dependencies are unchanged).
+  assert.match(code, /const url = freshUrl \?\? \(await requestLink\(needsEmail \? email\.trim\(\) : undefined\)\);/);
+  assert.match(code, /await beginPayoutsOnboarding\(typedEmail\);/);
+  assert.match(code, /return data\.url;\s*\}, \[readStatus\]\);/);
+  assert.match(code, /setNotice\(PAYOUTS_LINK_EXPIRED_NOTICE\);\s*const url = await requestLink\(\);/);
+  // The screen's own copy still names no provider, and nothing here stores the address.
+  assert.doesNotMatch(code, /'Stripe'|"Stripe"|Stripe /);
+  assert.doesNotMatch(code, /supabase|\.rpc\(|\.from\(/);
+});

@@ -3,6 +3,7 @@ import { ActivityIndicator, AppState, Linking, Pressable, StyleSheet, Text, View
 import { useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
+import { TextField } from '../components/TextField';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useAuth } from '../hooks/useAuth';
@@ -19,6 +20,7 @@ import {
 import { fetchMyEarnings, type EarningsRow } from '../lib/earnings';
 import type { ProfileStackParamList } from '../lib/navigation';
 import { EYEBROW_TYPE, radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { isValidEmail } from '../lib/validation';
 
 /**
  * R6c (D1) — Payouts: the worker's payout state, over the R5b Connect
@@ -57,6 +59,10 @@ export const PAYOUTS_DISABLED_BODY =
   'Payments aren’t available right now, so there is no payout account to set up.';
 export const PAYOUTS_OPEN_FAILED =
   'The setup page could not be opened on this device. Nothing changed — try again.';
+/** Why the email field is there: the provider refuses a payout account
+ *  without one, and a phone sign-in has none. */
+export const PAYOUTS_EMAIL_WHY =
+  'The payment provider needs an email address for your payout account.';
 
 const STATUS_ICON: Record<PayoutsStatus, keyof typeof Ionicons.glyphMap> = {
   none: 'wallet-outline',
@@ -85,6 +91,9 @@ export function PayoutsScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   // A link already minted for ?from=refresh, opened on the next tap.
   const [freshUrl, setFreshUrl] = useState<string | null>(null);
+  // The payout account's contact email, typed before the first setup; the
+  // sign-in email when there is one. Sent once, never stored here.
+  const [email, setEmail] = useState(user?.email ?? '');
   const refreshingRef = useRef(false);
   const activeRef = useRef(true);
 
@@ -152,8 +161,8 @@ export function PayoutsScreen() {
 
   /** connect-onboarding: the single-use url, and the stored state re-read
    *  (a brand-new account is action_needed) rather than trusted off the body. */
-  const requestLink = useCallback(async (): Promise<string | null> => {
-    const { data, error } = await beginPayoutsOnboarding();
+  const requestLink = useCallback(async (typedEmail?: string): Promise<string | null> => {
+    const { data, error } = await beginPayoutsOnboarding(typedEmail);
     if (!activeRef.current) return null;
     if (error || !data) {
       await alertAsync(
@@ -192,7 +201,7 @@ export function PayoutsScreen() {
     if (opening) return;
     setOpening(true);
     try {
-      const url = freshUrl ?? (await requestLink());
+      const url = freshUrl ?? (await requestLink(needsEmail ? email.trim() : undefined));
       if (!url || !activeRef.current) return;
       setFreshUrl(null);
       setNotice(null);
@@ -207,6 +216,10 @@ export function PayoutsScreen() {
   }
 
   const view = status ? payoutsCta(status) : null;
+  // No payout account yet: the email field shows, and Set up waits for an
+  // address that looks right.
+  const needsEmail = status === 'none';
+  const emailReady = !needsEmail || isValidEmail(email);
   // n4b: both reads or nothing — null is unknown, and unknown says nothing.
   const setupNotice = status && rows ? payoutSetupNotice(status, rows) : null;
 
@@ -214,7 +227,7 @@ export function PayoutsScreen() {
    *  action_needed, "Check again" for under_review (a re-check of a status, not a
    *  failed load — E7), nothing when enabled. */
   const actionButton = view?.cta ? (
-    <Button title={view.cta} onPress={() => void openSetup()} loading={opening} disabled={opening} />
+    <Button title={view.cta} onPress={() => void openSetup()} loading={opening} disabled={opening || !emailReady} />
   ) : view?.refresh ? (
     <Button
       title="Check again"
@@ -280,6 +293,25 @@ export function PayoutsScreen() {
                       </View>
                     </View>
                     <Text style={styles.body}>{view.body}</Text>
+                    {needsEmail ? (
+                      <>
+                        <Text style={styles.body}>{PAYOUTS_EMAIL_WHY}</Text>
+                        <TextField
+                          label="Email"
+                          value={email}
+                          onChangeText={setEmail}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          autoComplete="email"
+                          textContentType="emailAddress"
+                          placeholder="you@example.com"
+                          maxLength={254}
+                          returnKeyType="done"
+                          accessibilityLabel="Email address for your payout account"
+                        />
+                      </>
+                    ) : null}
                     {refreshing ? (
                       <Text style={styles.meta}>Checking with the payment provider…</Text>
                     ) : null}
