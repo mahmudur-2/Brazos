@@ -23,29 +23,28 @@
 // value would be a defect even if the number happened to be right.
 //
 // ---------------------------------------------------------------------------
-// SUCCESS RECORDS NOTHING BACK ON THE LEDGER, AND THAT IS THE CONTRACT
+// ONE ATTEMPT = ONE KEY, AND EVERY ANSWER IS WRITTEN BACK AT ONCE (lean B16)
 // ---------------------------------------------------------------------------
-// transfer_ref is written by apply_payment_event() on transfer.created, and
-// refund_ref on charge.refunded. attach_provider_ref() is the PaymentIntent's
-// entry point and nothing else. So a row STAYS in its queue until its event
-// lands, and this function may well see it again on the next tick. That is
-// safe, and only because of the idempotency keys below: a repeat inside the
-// provider's idempotency window returns the SAME transfer or refund rather than
-// creating a second one.
+// The provider saves the first answer under an idempotency key and forgets the
+// key after 24 hours; a key sent again after that is a NEW request. So a row
+// that waited for its webhook could be paid twice. Each row now runs, in this
+// order and no other:
 //
-// FAILURE IS RECORDED — R6b, after the 2026-08-30 money walk. The provider
-// saves the status and body of the FIRST request made under an idempotency
-// key, success or failure alike, and replays it for 24 hours. Before R6b a
-// failed attempt wrote nothing back, so the key never changed and every tick
-// replayed the first tick's refusal — a transfer refused for an unfunded
-// platform balance stayed refused for four ticks after the balance was funded,
-// until a hand UPDATE of transfer_attempts rotated the key. Now every
-// non-success goes through record_settlement_attempt(): last_error and
-// updated_at always, and the kind's attempt counter + 1 — a NEW key — only
-// when classify.mjs says the cached result is a definitive 4xx refusal. A 409
-// (the original request may still be executing) and a 5xx (money may already
-// have moved) keep the key: rotated, each is a second payment. classify.mjs
-// states the whole rule.
+//   1. settlement_send_begin(id, kind, attempt): the database says whether this
+//      attempt may be sent now, and starts its 23-hour clock on first use.
+//   2. the POST, under settlementKey(kind, id, attempt) (classify.mjs).
+//   3. the write-back of settlementVerdict(kind, answer) (classify.mjs):
+//        sent     record_settlement_sent: the transfer or refund id and amount,
+//                 so the row leaves its queue without waiting for the webhook
+//                 (apply_payment_event records the same object idempotently);
+//        refused  record_settlement_result 'new_key': the next tick sends a new
+//                 attempt (or 'stop' for a refund that cannot fix itself);
+//        unknown  record_settlement_result 'same_key': the next tick sends the
+//                 same key; after 23 hours the queue no longer offers the row
+//                 and it shows in payment_attention for the owner.
+//
+// A write-back that fails is an unknown: the next tick sends the same key and
+// the provider replays its first answer.
 //
 // THE TRANSFER MUST CARRY metadata[payment_id]. apply_payment_event() resolves
 // an event to a ledger row by metadata.payment_id first, then by provider_ref
@@ -59,13 +58,13 @@
 // Service role only, checked before anything else runs. Both queues are views
 // granted to service_role alone — authenticated and anon are revoked — so the
 // GRANTs are the real defence and the check below is the first line of it,
-// exactly as in send-push. The one write this function makes,
-// record_settlement_attempt(), is a service_role-only RPC that touches three
-// non-money columns and can never move money.
+// exactly as in send-push. Its three writes — settlement_send_begin,
+// record_settlement_sent, record_settlement_result — are service_role-only
+// RPCs that record what happened and can never move money.
 // ============================================================================
 
 import { requireServiceRole } from '../_shared/serviceAuth.ts';
-import { classifySettlementFailure } from './classify.mjs';
+import { settlementKey, settlementVerdict } from './classify.mjs';
 
 const STRIPE_API = 'https://api.stripe.com';
 
@@ -97,7 +96,7 @@ type RefundRow = {
 type Kind = 'transfer' | 'refund';
 
 /** What the provider call came back with, or what it threw. */
-type FailureOutcome = {
+type Outcome = {
   status?: number;
   body?: Record<string, unknown>;
   threw?: unknown;
@@ -108,24 +107,23 @@ type Tally = {
   succeeded: number;
   /**
    * Not settled yet, and nothing is wrong with it: the balance is not yet
-   * available (in live mode ordinary timing), a 409, a 429, a 5xx or a throw.
-   * The row stays queued and the next tick retries — with a rotated key only
-   * where classify.mjs allows one.
+   * available (a new key next tick), or an unknown answer (the same key next
+   * tick, for at most 23 hours).
    */
   deferred: number;
   /**
-   * A terminal 4xx the provider will refuse again on every retry until a human
-   * acts. The key is rotated so that retry asks afresh; the row stays queued.
+   * A refusal that will repeat until a person acts (a new key every tick), or
+   * a stop: the row shows in payment_attention.
    */
   failed: number;
   /**
-   * Amount null or not positive (D1 forbids substituting a computed one) — or,
-   * since R6b, a non-success whose record could not be written: a recorder
-   * failure means the RPC or the schema is broken, which is defect-class. That
-   * is the one way a row counts here AND in deferred or failed.
+   * Amount null or not positive (D1 forbids substituting a computed one), a
+   * begin that errored, or an answer whose write-back failed: the RPC or the
+   * schema is broken, which is defect-class. A failed write-back of a 2xx
+   * counts here AND in deferred: the same key goes again next tick.
    */
   defects: number;
-  /** Nothing to send to: no connected account, or no charge to refund. */
+  /** Nothing to send to, or the database said not now (settlement_send_begin false). */
   blocked: number;
 };
 
@@ -215,54 +213,68 @@ function cents(value: number | null | undefined): number | null {
 }
 
 /**
- * Writes one non-success to the ledger row through record_settlement_attempt()
- * (D2): last_error and updated_at always, the kind's attempt counter + 1 when
- * rotate is true. The RPC touches nothing else and moves no money.
- *
- * WRAPPED SO IT CAN NEVER ABORT THE PASS. A recorder that fails means the RPC
- * or the schema is broken, which is defect-class: it is logged here, counted
- * by the caller, and the loop goes on to the next row.
- * @returns whether the row was recorded
+ * A service_role RPC that returns a boolean. Never throws: an error, a non-2xx
+ * or a non-boolean answer is null, which the caller counts as a defect.
  */
-async function recordAttempt(kind: Kind, paymentId: string, rotate: boolean, error: string): Promise<boolean> {
+async function rpcBoolean(fn: string, args: Record<string, unknown>, label: string): Promise<boolean | null> {
   try {
-    const res = await serviceRpc('record_settlement_attempt', {
-      p_payment_id: paymentId,
-      p_kind: kind,
-      p_rotate: rotate,
-      p_error: error,
-    });
+    const res = await serviceRpc(fn, args);
     if (!res.ok) {
-      console.error(
-        `process-settlements: record_settlement_attempt(${kind}) for payment ${paymentId} failed ${res.status}: ${(await res.text()).slice(0, 300)}`
-      );
-      return false;
+      console.error(`process-settlements: ${fn} for ${label} failed ${res.status}: ${(await res.text()).slice(0, 300)}`);
+      return null;
     }
-    const matched = await res.json().catch(() => null);
-    if (matched !== true) {
-      console.error(`process-settlements: record_settlement_attempt(${kind}) for payment ${paymentId} matched no row`);
-      return false;
-    }
-    return true;
+    const answer = await res.json().catch(() => null);
+    return typeof answer === 'boolean' ? answer : null;
   } catch (err) {
-    console.error(`process-settlements: record_settlement_attempt(${kind}) for payment ${paymentId} threw:`, err);
-    return false;
+    console.error(`process-settlements: ${fn} for ${label} threw:`, err);
+    return null;
   }
 }
 
 /**
- * One non-success, whichever pass: classified (D1, D7), tallied, recorded
- * (D2). The single implementation of the rule for both queues.
+ * Step 1 of a row: may this attempt be sent now? true = send; false = not now
+ * (the row left the queue, the attempt moved on, or its 23 hours are over);
+ * null = the begin itself failed, and nothing is sent.
  */
-async function recordFailure(counts: Tally, kind: Kind, paymentId: string, outcome: FailureOutcome): Promise<void> {
-  const verdict = classifySettlementFailure(outcome);
+function beginSend(kind: Kind, paymentId: string, attempt: number): Promise<boolean | null> {
+  return rpcBoolean(
+    'settlement_send_begin',
+    { p_payment_id: paymentId, p_kind: kind, p_attempt: attempt },
+    `${kind} ${paymentId}`
+  );
+}
+
+/**
+ * Step 3 of a row: the verdict on the answer, tallied and written back at
+ * once. The single implementation of the rule for both queues.
+ */
+async function settle(counts: Tally, kind: Kind, paymentId: string, attempt: number, outcome: Outcome): Promise<void> {
+  const verdict = settlementVerdict(kind, outcome);
+  const label = `${kind} ${paymentId} attempt ${attempt}`;
+  if (verdict.next === 'write_back') {
+    const recorded = await rpcBoolean(
+      'record_settlement_sent',
+      { p_payment_id: paymentId, p_kind: kind, p_ref: verdict.ref, p_amount_cents: verdict.amount },
+      label
+    );
+    if (recorded === null) {
+      // Unknown: the next tick sends the same key and the provider replays this answer.
+      counts.deferred++;
+      counts.defects++;
+      return;
+    }
+    counts.succeeded++;
+    return;
+  }
   if (verdict.deferred) counts.deferred++;
   else counts.failed++;
-  console.error(
-    `process-settlements: ${kind} for payment ${paymentId} ${verdict.deferred ? 'deferred' : 'failed'} — ${verdict.message} (key ${verdict.rotate ? 'rotated' : 'kept'})`
+  console.error(`process-settlements: ${label} ${verdict.result}, next ${verdict.next} — ${verdict.message}`);
+  const recorded = await rpcBoolean(
+    'record_settlement_result',
+    { p_payment_id: paymentId, p_kind: kind, p_attempt: attempt, p_next: verdict.next, p_error: verdict.message },
+    label
   );
-  const recorded = await recordAttempt(kind, paymentId, verdict.rotate, verdict.message);
-  if (!recorded) counts.defects++;
+  if (recorded === null) counts.defects++;
 }
 
 // ---------------------------------------------------------------------------
@@ -306,10 +318,11 @@ async function runTransfers(): Promise<Tally> {
 
   for (const row of rows) {
     // FAILURE ISOLATION: one row that throws must not abort this pass, the
-    // other pass, or the summary. A throw is a non-success like any other and
-    // is recorded below — deferred, key kept: the request may have reached the
-    // provider, which is exactly what the idempotency key is for.
-    let failure: FailureOutcome | undefined;
+    // other pass, or the summary. A throw after the begin is an unknown answer
+    // and is written back below — same key next tick: the request may have
+    // reached the provider, which is exactly what the idempotency key is for.
+    const attempt = row.transfer_attempts ?? 0;
+    let outcome: Outcome;
     try {
       const amount = cents(row.transfer_cents);
       if (amount === null) {
@@ -325,14 +338,23 @@ async function runTransfers(): Promise<Tally> {
         continue;
       }
 
+      // 1. BEGIN. The database checks the row is still ready for THIS attempt
+      // and starts the attempt's 23-hour clock on its first use.
+      const begun = await beginSend('transfer', row.id, attempt);
+      if (begun === null) {
+        counts.defects++;
+        continue;
+      }
+      if (!begun) {
+        counts.blocked++;
+        continue;
+      }
+
       counts.attempted++;
-      // THE KEY CARRIES THE COUNTER. The provider caches the first result under
-      // a key for 24 hours, success or failure, and only a new key sends a new
-      // request. Two writers move the counter, both in the database:
-      // resolve_job_dispute when it re-opens a reversed transfer (a real second
-      // transfer, never the reversed one played back), and
-      // record_settlement_attempt when classify.mjs says a cached refusal must
-      // be left behind. This function never changes the counter itself.
+      // 2. POST. The key is the payment and the attempt number, nothing else.
+      // Only the database moves the counter: record_settlement_result on a
+      // refusal, resolve_job_dispute and resolve_tip when they re-open a
+      // reversed transfer, settlement_send_reopen when the owner says so.
       const result = await stripe(
         '/v1/transfers',
         {
@@ -341,24 +363,14 @@ async function runTransfers(): Promise<Tally> {
           destination,
           'metadata[payment_id]': row.id,
         },
-        `tr:${row.id}:${row.transfer_attempts ?? 0}`
+        settlementKey('transfer', row.id, attempt)
       );
-
-      if (result.ok) {
-        // SUCCESS WRITES NOTHING BACK, and that is correct and unchanged (R6b):
-        // transfer_ref is written by apply_payment_event() on the
-        // transfer.created webhook, the one writer of that column, and the row
-        // leaves transfers_due when the event lands. Do not "fix" this by
-        // recording the ref from the response — a second writer for one column
-        // is how a ledger drifts.
-        counts.succeeded++;
-        continue;
-      }
-      failure = { status: result.status, body: result.body };
+      outcome = { status: result.status, body: result.body };
     } catch (err) {
-      failure = { threw: err ?? 'unknown' };
+      outcome = { threw: err ?? 'unknown' };
     }
-    await recordFailure(counts, 'transfer', row.id, failure);
+    // 3. WRITE-BACK, at once, whatever the answer.
+    await settle(counts, 'transfer', row.id, attempt, outcome);
   }
 
   return counts;
@@ -377,9 +389,10 @@ async function runRefunds(): Promise<Tally> {
   );
 
   for (const row of rows) {
-    // FAILURE ISOLATION, as in pass one; a throw is recorded, deferred, key
-    // kept.
-    let failure: FailureOutcome | undefined;
+    // FAILURE ISOLATION, as in pass one; a throw after the begin is an unknown
+    // answer, same key next tick.
+    const attempt = row.refund_attempts ?? 0;
+    let outcome: Outcome;
     try {
       const amount = cents(row.refund_cents);
       if (amount === null) {
@@ -394,16 +407,19 @@ async function runRefunds(): Promise<Tally> {
         continue;
       }
 
+      // 1. BEGIN, as in pass one.
+      const begun = await beginSend('refund', row.id, attempt);
+      if (begun === null) {
+        counts.defects++;
+        continue;
+      }
+      if (!begun) {
+        counts.blocked++;
+        continue;
+      }
+
       counts.attempted++;
-      // THE KEY CARRIES THE COUNTER (R6b). Before, the refund key was the
-      // payment id alone — one refund per ledger row, which is still the
-      // intent — but a refund whose first attempt was refused was then wedged
-      // for 24 hours with no way to rotate the key, even by hand. Now
-      // refund_attempts (20260920000000_settlement_retry.sql) is part of the
-      // key, exposed through refunds_due, and record_settlement_attempt moves
-      // it only when classify.mjs says the cached result is a definitive
-      // refusal. A repeat inside the window under the same key still returns
-      // the same refund.
+      // 2. POST, under rf:<id>:<refund_attempts>; only the database moves the counter.
       const result = await stripe(
         '/v1/refunds',
         {
@@ -411,21 +427,14 @@ async function runRefunds(): Promise<Tally> {
           amount: String(amount),
           'metadata[payment_id]': row.id,
         },
-        `rf:${row.id}:${row.refund_attempts ?? 0}`
+        settlementKey('refund', row.id, attempt)
       );
-
-      if (result.ok) {
-        // SUCCESS WRITES NOTHING BACK, as in pass one: refund_ref is written by
-        // apply_payment_event() on the charge.refunded webhook, and the row
-        // leaves refunds_due when it lands.
-        counts.succeeded++;
-        continue;
-      }
-      failure = { status: result.status, body: result.body };
+      outcome = { status: result.status, body: result.body };
     } catch (err) {
-      failure = { threw: err ?? 'unknown' };
+      outcome = { threw: err ?? 'unknown' };
     }
-    await recordFailure(counts, 'refund', row.id, failure);
+    // 3. WRITE-BACK, at once, whatever the answer.
+    await settle(counts, 'refund', row.id, attempt, outcome);
   }
 
   return counts;

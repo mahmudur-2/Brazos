@@ -443,19 +443,23 @@ select is((select last_error from public.payments where id = :'p1'), 'refund: gr
   '5: runner — and wrote');
 
 -- ---------------------------------------------------------------------------
--- §6. THE VIEWS (D5): transfers_due byte-unchanged; refunds_due with the same
+-- §6. THE VIEWS (D5): transfers_due unchanged by R6b; refunds_due with the same
 --     predicate, refund_attempts appended, the same rows admitted and refused.
+--     lean B16/B18 (20261112010300) replaced both views since: each keeps every
+--     clause it had and appends the money guards; `select p.*` appended the nine
+--     20261112010100 columns after refund_attempts. The pins below are the live
+--     definitions after that file.
 -- ---------------------------------------------------------------------------
 select is(
   btrim(regexp_replace(pg_get_viewdef('public.transfers_due'::regclass, true), '\s+', ' ', 'g')),
-  'SELECT id, job_id, payer_id, payee_id, amount_cents, platform_fee_cents, stripe_payment_intent_id, status, created_at, kind, offer_id, provider, provider_ref, authorized_at, held_at, updated_at, released_at, release_reason, paid_out_at, customer_fee_bps, customer_fee_cents, worker_fee_bps, tax_cents, transfer_ref, refund_ref, release_requested_at, funding_due_at, chargeback_ref, chargeback_at, last_error, transfer_cents, refund_cents, refund_reason, transfer_reversed_at, transfer_attempts, charge_amount_cents FROM payments p WHERE provider = ''stripe''::text AND release_requested_at IS NOT NULL AND transfer_ref IS NULL AND transfer_reversed_at IS NULL AND COALESCE(transfer_cents, 0) > 0 AND NOT (EXISTS ( SELECT 1 FROM job_disputes d WHERE d.job_id = p.job_id AND d.status = ''open''::dispute_status)) ORDER BY release_requested_at;',
-  '6: transfers_due is BYTE-UNCHANGED — its definition is exactly what 20260905 §15 created (captured from the stack before this migration existed)'
+  'SELECT id, job_id, payer_id, payee_id, amount_cents, platform_fee_cents, stripe_payment_intent_id, status, created_at, kind, offer_id, provider, provider_ref, authorized_at, held_at, updated_at, released_at, release_reason, paid_out_at, customer_fee_bps, customer_fee_cents, worker_fee_bps, tax_cents, transfer_ref, refund_ref, release_requested_at, funding_due_at, chargeback_ref, chargeback_at, last_error, transfer_cents, refund_cents, refund_reason, transfer_reversed_at, transfer_attempts, charge_amount_cents, refund_attempts, received_cents, refunded_cents, chargeback_cents, transfer_sent_attempt, transfer_sent_at, transfer_stopped_at, refund_sent_attempt, refund_sent_at, refund_stopped_at FROM payments p WHERE provider = ''stripe''::text AND release_requested_at IS NOT NULL AND transfer_ref IS NULL AND transfer_reversed_at IS NULL AND COALESCE(transfer_cents, 0) > 0 AND NOT (EXISTS ( SELECT 1 FROM job_disputes d WHERE d.job_id = p.job_id AND d.status = ''open''::dispute_status)) AND (status = ANY (ARRAY[''held''::payment_status, ''partially_refunded''::payment_status])) AND chargeback_at IS NULL AND COALESCE(received_cents, charge_amount_cents) = charge_amount_cents AND transfer_cents <= (charge_amount_cents - GREATEST(COALESCE(refunded_cents, 0), COALESCE(refund_cents, 0))) AND NOT (EXISTS ( SELECT 1 FROM payment_transfers t WHERE t.payment_id = p.id AND t.reversed_cents < t.amount_cents)) AND NOT settlement_attempt_closed(transfer_attempts, transfer_sent_attempt, transfer_sent_at, transfer_stopped_at) ORDER BY release_requested_at;',
+  '6: transfers_due is 20260905 §15''s definition with the lean B16/B18 guards appended to its WHERE (20261112010300), nothing else different'
 );
 select is(
   (select string_agg(column_name::text, ',' order by ordinal_position) from information_schema.columns
     where table_schema = 'public' and table_name = 'transfers_due'),
-  'id,job_id,payer_id,payee_id,amount_cents,platform_fee_cents,stripe_payment_intent_id,status,created_at,kind,offer_id,provider,provider_ref,authorized_at,held_at,updated_at,released_at,release_reason,paid_out_at,customer_fee_bps,customer_fee_cents,worker_fee_bps,tax_cents,transfer_ref,refund_ref,release_requested_at,funding_due_at,chargeback_ref,chargeback_at,last_error,transfer_cents,refund_cents,refund_reason,transfer_reversed_at,transfer_attempts,charge_amount_cents',
-  '6: transfers_due still lists the 36 columns it was created with — refund_attempts is NOT among them, which is what "a view freezes its column list" means'
+  'id,job_id,payer_id,payee_id,amount_cents,platform_fee_cents,stripe_payment_intent_id,status,created_at,kind,offer_id,provider,provider_ref,authorized_at,held_at,updated_at,released_at,release_reason,paid_out_at,customer_fee_bps,customer_fee_cents,worker_fee_bps,tax_cents,transfer_ref,refund_ref,release_requested_at,funding_due_at,chargeback_ref,chargeback_at,last_error,transfer_cents,refund_cents,refund_reason,transfer_reversed_at,transfer_attempts,charge_amount_cents,refund_attempts,received_cents,refunded_cents,chargeback_cents,transfer_sent_attempt,transfer_sent_at,transfer_stopped_at,refund_sent_attempt,refund_sent_at,refund_stopped_at',
+  '6: transfers_due lists its 36 original columns in order, then refund_attempts and the nine 20261112010100 columns, appended when 20261112010300 replaced it'
 );
 
 select has_column('public', 'refunds_due', 'refund_attempts', '6: refunds_due now exposes refund_attempts');
@@ -468,24 +472,24 @@ select is(
 );
 select is(
   (select column_name::text from information_schema.columns
-    where table_schema = 'public' and table_name = 'refunds_due' order by ordinal_position desc limit 1),
+    where table_schema = 'public' and table_name = 'refunds_due' and ordinal_position = 37),
   'refund_attempts',
-  '6: and refund_attempts is the LAST column — appended, never inserted or reordered'
+  '6: and refund_attempts is still the 37th column — appended, never inserted or reordered; the lean columns come after it'
 );
 select is(
   (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'refunds_due'),
-  37::bigint,
-  '6: exactly one column gained: 36 → 37'
+  46::bigint,
+  '6: 36 → 37 (R6b) → 46 (the nine 20261112010100 columns)'
 );
 select is(
   btrim(regexp_replace(pg_get_viewdef('public.refunds_due'::regclass, true), '\s+', ' ', 'g')),
-  'SELECT id, job_id, payer_id, payee_id, amount_cents, platform_fee_cents, stripe_payment_intent_id, status, created_at, kind, offer_id, provider, provider_ref, authorized_at, held_at, updated_at, released_at, release_reason, paid_out_at, customer_fee_bps, customer_fee_cents, worker_fee_bps, tax_cents, transfer_ref, refund_ref, release_requested_at, funding_due_at, chargeback_ref, chargeback_at, last_error, transfer_cents, refund_cents, refund_reason, transfer_reversed_at, transfer_attempts, charge_amount_cents, refund_attempts FROM payments p WHERE provider = ''stripe''::text AND COALESCE(refund_cents, 0) > 0 AND refund_ref IS NULL AND status <> ''refunded''::payment_status ORDER BY updated_at;',
-  '6: refunds_due''s definition is 20260905''s with refund_attempts appended to the select list and NOTHING else different'
+  'SELECT id, job_id, payer_id, payee_id, amount_cents, platform_fee_cents, stripe_payment_intent_id, status, created_at, kind, offer_id, provider, provider_ref, authorized_at, held_at, updated_at, released_at, release_reason, paid_out_at, customer_fee_bps, customer_fee_cents, worker_fee_bps, tax_cents, transfer_ref, refund_ref, release_requested_at, funding_due_at, chargeback_ref, chargeback_at, last_error, transfer_cents, refund_cents, refund_reason, transfer_reversed_at, transfer_attempts, charge_amount_cents, refund_attempts, received_cents, refunded_cents, chargeback_cents, transfer_sent_attempt, transfer_sent_at, transfer_stopped_at, refund_sent_attempt, refund_sent_at, refund_stopped_at FROM payments p WHERE provider = ''stripe''::text AND COALESCE(refund_cents, 0) > 0 AND refund_ref IS NULL AND status <> ''refunded''::payment_status AND (status = ANY (ARRAY[''held''::payment_status, ''released''::payment_status, ''paid_out''::payment_status, ''voided''::payment_status, ''failed''::payment_status])) AND COALESCE(refunded_cents, 0) = 0 AND chargeback_at IS NULL AND COALESCE(received_cents, charge_amount_cents) = charge_amount_cents AND refund_cents <= (charge_amount_cents - (( SELECT COALESCE(sum(t.amount_cents - t.reversed_cents), 0::bigint)::integer AS "coalesce" FROM payment_transfers t WHERE t.payment_id = p.id))) AND NOT settlement_attempt_closed(refund_attempts, refund_sent_attempt, refund_sent_at, refund_stopped_at) ORDER BY updated_at;',
+  '6: refunds_due''s definition is 20260905''s with refund_attempts appended (R6b) and the lean B16/B18 guards appended to its WHERE (20261112010300)'
 );
-select is(
-  substring(regexp_replace(pg_get_viewdef('public.refunds_due'::regclass, true), '\s+', ' ', 'g') from 'WHERE.*$'),
-  'WHERE provider = ''stripe''::text AND COALESCE(refund_cents, 0) > 0 AND refund_ref IS NULL AND status <> ''refunded''::payment_status ORDER BY updated_at;',
-  '6: its WHERE / ORDER BY predicate is byte-for-byte the 20260905 one'
+select ok(
+  starts_with(substring(regexp_replace(pg_get_viewdef('public.refunds_due'::regclass, true), '\s+', ' ', 'g') from 'WHERE.*$'),
+              'WHERE provider = ''stripe''::text AND COALESCE(refund_cents, 0) > 0 AND refund_ref IS NULL AND status <> ''refunded''::payment_status AND '),
+  '6: its WHERE still opens with the 20260905 predicate, byte for byte; the lean guards follow it'
 );
 select ok(not has_table_privilege('authenticated', 'public.refunds_due', 'SELECT'),
   '6: authenticated still has no SELECT on refunds_due after the replace');

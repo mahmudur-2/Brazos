@@ -19,7 +19,8 @@ import {
 // Deno function and by this file — the shape connect.test.mjs established.
 //
 // THE RULE UNDER TEST (R6b D1), as one predicate:
-//   rotate = status >= 400 && status < 500 && status !== 409 && status !== 429
+//   rotate = status >= 400 && status < 500 && status is not 401, 403, 409 or 429
+//   (lean B16 added 401 and 403), and not an idempotency error
 //   a throw is never a rotation
 // and (D7): deferred = balance_insufficient, 409, 429, 5xx, a throw; failed =
 // any other 4xx. The 5xx-does-not-rotate and 409-does-not-rotate cases are
@@ -58,13 +59,21 @@ test('2 · a terminal 400 rotates and does not defer — it will refuse again un
     ['no such destination', refusal(400, 'resource_missing', "No such destination: 'acct_1Nope'")],
     ['already refunded', refusal(400, 'charge_already_refunded', 'Charge ch_1 has already been refunded.')],
     ['a parameter error', refusal(400, 'parameter_invalid_integer', 'Invalid integer: 92.5')],
-    ['a bad key', refusal(401, undefined, 'Invalid API Key provided', 'invalid_request_error')],
-    ['a forbidden call', refusal(403, 'account_invalid', 'The provided key does not have access to account acct_1.')],
     ['a missing resource', refusal(404, 'resource_missing', 'No such payment_intent: pi_1')],
   ];
   for (const [label, outcome] of cases) {
     const verdict = classifySettlementFailure(outcome);
     both(verdict, true, false, label);
+    assert.ok(verdict.message.startsWith(String(outcome.status)), `${label}: the message leads with the status`);
+  }
+  // lean B16: a 401 or 403 is answered before the provider looks at the key, so it proves nothing
+  // about what the key did: the same key next time, deferred, never a rotation.
+  for (const [label, outcome] of [
+    ['a bad key', refusal(401, undefined, 'Invalid API Key provided', 'invalid_request_error')],
+    ['a forbidden call', refusal(403, 'account_invalid', 'The provided key does not have access to account acct_1.')],
+  ]) {
+    const verdict = classifySettlementFailure(outcome);
+    both(verdict, false, true, label);
     assert.ok(verdict.message.startsWith(String(outcome.status)), `${label}: the message leads with the status`);
   }
 });
@@ -170,7 +179,8 @@ test('9 · a malformed or empty body on a 4xx rotates, does not defer, and the m
 test('10 · the predicate, stated once, holds over every status from 400 to 599', () => {
   for (let status = 400; status <= 599; status++) {
     const verdict = classifySettlementFailure({ status, body: {}, threw: null });
-    const expectRotate = status < 500 && status !== 409 && status !== 429;
+    // lean B16: 401 and 403 joined 409 and 429 — none of them proves the key moved nothing.
+    const expectRotate = status < 500 && ![401, 403, 409, 429].includes(status);
     assert.equal(verdict.rotate, expectRotate, `${status}: rotate`);
     // With no provider code a 4xx is failed and everything else is deferred.
     assert.equal(verdict.deferred, !expectRotate, `${status}: deferred`);
@@ -222,7 +232,7 @@ test('12 · every result carries both flags as booleans, a code that is null or 
 // The drain itself, as raw text — this repository's normal fence shape for a
 // Deno handler nothing here can load.
 // ---------------------------------------------------------------------------
-test('13 · the drain (raw text): refunds_due select names refund_attempts, both keys carry their counter, classify.mjs is imported by relative path, the recorder runs in both passes, and (n4b) only an ENABLED payout account is paid', () => {
+test('13 · the drain (raw text): refunds_due select names refund_attempts, both keys carry their counter, classify.mjs is imported by relative path, every answer is written back in both passes, and (n4b) only an ENABLED payout account is paid', () => {
   const src = readFileSync(new URL('../supabase/functions/process-settlements/index.ts', import.meta.url), 'utf8');
 
   // The refunds query reads the counter the key is built from; the transfers
@@ -254,33 +264,37 @@ test('13 · the drain (raw text): refunds_due select names refund_attempts, both
   assert.doesNotMatch(reordered, /\bdrop |\brename |truncate|delete from/i, 'additive — never destructive');
   assert.doesNotMatch(src, /transfers_ready\?select=[^`]*order=/, "the drain adds no order of its own: the view's is the queue's");
 
-  // Both idempotency keys carry their counter, and the counter-less refund
-  // key — the one that could not be rotated even by hand — is gone.
-  assert.match(src, /`tr:\$\{row\.id\}:\$\{row\.transfer_attempts \?\? 0\}`/, 'the transfer key is tr:<id>:<transfer_attempts>');
-  assert.match(src, /`rf:\$\{row\.id\}:\$\{row\.refund_attempts \?\? 0\}`/, 'the refund key is rf:<id>:<refund_attempts>');
+  // Both idempotency keys carry their counter (lean B16: built by classify.mjs settlementKey, with
+  // the attempt the row was read with), and the counter-less refund key is gone.
+  assert.match(src, /const attempt = row\.transfer_attempts \?\? 0;/, 'the transfer attempt is transfer_attempts');
+  assert.match(src, /const attempt = row\.refund_attempts \?\? 0;/, 'the refund attempt is refund_attempts');
+  assert.match(src, /settlementKey\('transfer', row\.id, attempt\)/, 'the transfer key is tr:<id>:<transfer_attempts>');
+  assert.match(src, /settlementKey\('refund', row\.id, attempt\)/, 'the refund key is rf:<id>:<refund_attempts>');
   assert.ok(!/`rf:\$\{row\.id\}`/.test(src), 'the counter-less refund key is gone');
 
   // The classifier is the sibling this file executes, imported by relative
-  // path, and it is what decides rotate and deferred.
-  assert.match(src, /^import \{ classifySettlementFailure \} from '\.\/classify\.mjs';$/m, 'classify.mjs is imported by relative path');
-  assert.match(src, /const verdict = classifySettlementFailure\(outcome\);/, 'and its verdict is the one the drain acts on');
-  assert.match(src, /await recordAttempt\(kind, paymentId, verdict\.rotate, verdict\.message\)/, 'rotate comes from the verdict, never from the drain');
+  // path, and it is what decides the next step.
+  assert.match(src, /^import \{ settlementKey, settlementVerdict \} from '\.\/classify\.mjs';$/m, 'classify.mjs is imported by relative path');
+  assert.match(src, /const verdict = settlementVerdict\(kind, outcome\);/, 'and its verdict is the one the drain acts on');
+  assert.match(src, /p_next: verdict\.next, p_error: verdict\.message/, 'the next step comes from the verdict, never from the drain');
 
-  // record_settlement_attempt is called through the one recorder, and the
-  // recorder runs in both passes — on a refusal and on a throw alike.
-  assert.match(src, /serviceRpc\('record_settlement_attempt', \{/, 'the recorder calls record_settlement_attempt through serviceRpc');
-  assert.match(src, /p_payment_id: paymentId,\s*p_kind: kind,\s*p_rotate: rotate,\s*p_error: error,/, 'with the four arguments the RPC declares');
+  // lean B16: every answer is written back through the one settle(), in both passes — a 2xx through
+  // record_settlement_sent, anything else through record_settlement_result; the R6b recorder is
+  // no longer called.
+  assert.match(src, /'record_settlement_sent',\s*\{ p_payment_id: paymentId, p_kind: kind, p_ref: verdict\.ref, p_amount_cents: verdict\.amount \}/);
+  assert.match(src, /'record_settlement_result',\s*\{ p_payment_id: paymentId, p_kind: kind, p_attempt: attempt, p_next: verdict\.next, p_error: verdict\.message \}/);
+  assert.ok(!/record_settlement_attempt/.test(src.replace(/\/\/[^\n]*/g, '')), 'record_settlement_attempt is not called');
   const one = src.indexOf('// Pass one:');
   const two = src.indexOf('// Pass two:');
   const serve = src.indexOf('Deno.serve(');
   assert.ok(one > -1 && two > one && serve > two, 'the two pass sections and the handler are found, in order');
   const passOne = src.slice(one, two);
   const passTwo = src.slice(two, serve);
-  assert.match(passOne, /await recordFailure\(counts, 'transfer', row\.id, failure\);/, 'pass one records every non-success as a transfer');
-  assert.match(passTwo, /await recordFailure\(counts, 'refund', row\.id, failure\);/, 'pass two records every non-success as a refund');
-  assert.equal((passOne.match(/failure = \{ threw: err \?\? 'unknown' \};/g) ?? []).length, 1, 'pass one turns a throw into a recorded failure');
-  assert.equal((passTwo.match(/failure = \{ threw: err \?\? 'unknown' \};/g) ?? []).length, 1, 'pass two turns a throw into a recorded failure');
-  assert.match(src, /if \(!recorded\) counts\.defects\+\+;/, 'a row that could not be recorded counts as a defect');
+  assert.match(passOne, /await settle\(counts, 'transfer', row\.id, attempt, outcome\);/, 'pass one writes back every answer as a transfer');
+  assert.match(passTwo, /await settle\(counts, 'refund', row\.id, attempt, outcome\);/, 'pass two writes back every answer as a refund');
+  assert.equal((passOne.match(/outcome = \{ threw: err \?\? 'unknown' \};/g) ?? []).length, 1, 'pass one turns a throw into an answer');
+  assert.equal((passTwo.match(/outcome = \{ threw: err \?\? 'unknown' \};/g) ?? []).length, 1, 'pass two turns a throw into an answer');
+  assert.match(src, /if \(recorded === null\) counts\.defects\+\+;/, 'a row that could not be recorded counts as a defect');
 
   // n4b (2026-09-05): the drain pays only a payee whose payout account is
   // ENABLED — payment_accounts.payouts_enabled, derived by set_payouts_status()
@@ -300,9 +314,8 @@ test('13 · the drain (raw text): refunds_due select names refund_attempts, both
   // The tally the operator reads.
   assert.match(src, /\(\): Tally => \(\{ attempted: 0, succeeded: 0, deferred: 0, failed: 0, defects: 0, blocked: 0 \}\)/, 'the tally is { attempted, succeeded, deferred, failed, defects, blocked }');
 
-  // Success still writes nothing back — said at both success sites, and no
-  // ref is written from a response anywhere in the file.
-  assert.equal((src.match(/SUCCESS WRITES NOTHING BACK/g) ?? []).length, 2, 'both success branches say nothing is written back');
+  // lean B16: a success is written back at once, through the RPC only — no ref column is written
+  // from here and no provider ref is attached.
   assert.ok(!/attach_provider_ref/.test(src.replace(/\/\/[^\n]*/g, '')), 'no ref is attached from here');
   assert.ok(!/transfer_ref|refund_ref/.test(src.replace(/\/\/[^\n]*/g, '')), 'and neither ref column is named outside a comment');
 });
