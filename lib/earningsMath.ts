@@ -16,7 +16,30 @@ import type { Payment } from './payments';
 export type EarningsRow = Payment & {
   job_title: string | null;
   job_completed_at?: string | null;
+  /** B23: the job's status, off the same jobs read as the title. */
+  job_status?: string | null;
 };
+
+type ReceiveFacts = Pick<Payment, 'refund_cents' | 'transfer_cents'> & { job_status?: string | null };
+
+/**
+ * B23: a row the ledger has sent home — a refund queued or landed (refund_cents set), or any
+ * row on a cancelled job (a no-show claim leaves it held, undirected, until a decision). Such
+ * a row pays the worker only what the ledger transfers: the cancellation fee, or nothing.
+ */
+function goesHome(row: ReceiveFacts): boolean {
+  return (row.refund_cents ?? 0) > 0 || row.job_status === 'cancelled';
+}
+
+/**
+ * B23: what this row puts in the worker's hands — the ONE amount the ledger row, the totals
+ * and Worker Home's payout line show. Every other row pays the take; `take` is lib/payments.ts
+ * workerTakeCents, injected (the lib/earningsCopy.ts arrangement), so this module keeps no
+ * runtime import and the fee arithmetic stays in one file.
+ */
+export function workerReceivesCents<R extends ReceiveFacts>(row: R, take: (row: R) => number): number {
+  return goesHome(row) ? row.transfer_cents ?? 0 : take(row);
+}
 
 export type EarningsSummary = {
   pendingCents: number;
@@ -26,24 +49,22 @@ export type EarningsSummary = {
   rows: EarningsRow[];
 };
 
-export function deriveEarnings(rows: EarningsRow[]): EarningsSummary {
+export function deriveEarnings(rows: EarningsRow[], take: (row: EarningsRow) => number): EarningsSummary {
   let pendingCents = 0;
   let availableCents = 0;
   let transferredCents = 0;
   let feeCents = 0;
   for (const row of rows) {
-    // Final sweep (2026-10-03): a held row the ledger has directed home — a
-    // cancelled job's refund queued on the card path (refund_cents set, the
-    // status waiting for charge.refunded) — is not pending earnings. Only what
-    // the ledger says still travels to the worker counts: the late-cancel fee
-    // (transfer_cents), nothing on a full refund. Same predicate as the
-    // screens (lib/paymentRules.ts isRefundQueued), spelled on the columns
-    // because this module imports nothing.
-    if (row.status === 'held') {
-      pendingCents += (row.refund_cents ?? 0) > 0 ? row.transfer_cents ?? 0 : row.amount_cents;
-    } else if (row.status === 'released') availableCents += row.amount_cents;
-    else if (row.status === 'paid_out') transferredCents += row.amount_cents;
-    feeCents += row.platform_fee_cents;
+    // Final sweep (2026-10-03), B23: a row the ledger has sent home counts only
+    // what still travels to the worker (workerReceivesCents). A transfer that
+    // landed is available: released, or released_at stamped by transfer.created
+    // on a cancellation fee whose row stays held or partially_refunded.
+    const cents = workerReceivesCents(row, take);
+    if (row.status === 'paid_out') transferredCents += cents;
+    else if (row.status === 'released' || row.released_at) availableCents += cents;
+    else pendingCents += cents;
+    // B23: no fee is kept on a job sent home (the whole cancellation fee goes to the worker).
+    if (!goesHome(row)) feeCents += row.platform_fee_cents;
   }
   return { pendingCents, availableCents, transferredCents, feeCents, rows };
 }

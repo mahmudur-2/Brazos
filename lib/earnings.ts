@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Payment } from './payments';
+import { workerTakeCents, type Payment } from './payments';
 import { deriveEarnings, type EarningsRow } from './earningsMath';
 
 export { deriveEarnings } from './earningsMath';
@@ -18,7 +18,8 @@ export type { EarningsRow, EarningsSummary } from './earningsMath';
  * The screen's every figure must be reproducible by re-summing `rows`.
  */
 
-const EARNING_STATUSES = ['held', 'released', 'paid_out'] as const;
+// B23: partially_refunded is read too — a late cancellation's fee, once the refund lands.
+const EARNING_STATUSES = ['held', 'released', 'paid_out', 'partially_refunded'] as const;
 
 /**
  * Every money row where the user is the payee (job payments AND tips), with
@@ -47,18 +48,19 @@ export async function fetchMyEarnings(userId: string) {
 
   const payments = (data ?? []) as Payment[];
   const jobIds = [...new Set(payments.map((p) => p.job_id))];
-  const jobs = new Map<string, { title: string; completed_at: string | null }>();
+  const jobs = new Map<string, { title: string; completed_at: string | null; status: string | null }>();
   if (jobIds.length > 0) {
     const { data: jobRows } = await supabase
       .from('jobs')
-      .select('id, title, completed_at')
+      .select('id, title, completed_at, status')
       .in('id', jobIds);
     for (const j of (jobRows ?? []) as {
       id: string;
       title: string;
       completed_at: string | null;
+      status: string | null;
     }[]) {
-      jobs.set(j.id, { title: j.title, completed_at: j.completed_at });
+      jobs.set(j.id, { title: j.title, completed_at: j.completed_at, status: j.status });
     }
   }
 
@@ -68,7 +70,8 @@ export async function fetchMyEarnings(userId: string) {
       ...p,
       job_title: job?.title ?? null,
       job_completed_at: job?.completed_at ?? null,
+      job_status: job?.status ?? null,
     };
   });
-  return { data: deriveEarnings(rows), error: null };
+  return { data: deriveEarnings(rows, workerTakeCents), error: null };
 }

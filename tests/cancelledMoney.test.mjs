@@ -26,6 +26,7 @@ const { isRefundQueued, isCancellationFeeKept, isReleaseRequested } = await impo
   pathToFileURL(join(root, 'lib/paymentRules.ts')).href
 );
 const { deriveEarnings } = await import(pathToFileURL(join(root, 'lib/earningsMath.ts')).href);
+const take = (r) => r.amount_cents - r.platform_fee_cents;
 
 test('the cancellation shape: a held row with a refund queued, with or without the late-cancel fee', () => {
   // ban_user() / worker_cancelled / customer_cancelled_free: the whole charge home.
@@ -48,19 +49,19 @@ test('the cancellation shape: a held row with a refund queued, with or without t
 
 test('Earnings never counts a refund going home as pending — only the fee that still travels', () => {
   const base = { id: 'p', job_id: 'j', platform_fee_cents: 0, job_title: 'x' };
-  assert.equal(deriveEarnings([{ ...base, status: 'held', amount_cents: 10000 }]).pendingCents, 10000, 'a plain held row is pending');
+  assert.equal(deriveEarnings([{ ...base, status: 'held', amount_cents: 10000 }], take).pendingCents, 10000, 'a plain held row is pending');
   assert.equal(
-    deriveEarnings([{ ...base, status: 'held', amount_cents: 10000, refund_cents: 10750, transfer_cents: 0 }]).pendingCents,
+    deriveEarnings([{ ...base, status: 'held', amount_cents: 10000, refund_cents: 10750, transfer_cents: 0 }], take).pendingCents,
     0,
     'a full refund queued is nothing pending'
   );
   assert.equal(
-    deriveEarnings([{ ...base, status: 'held', amount_cents: 10000, refund_cents: 9750, transfer_cents: 1000 }]).pendingCents,
+    deriveEarnings([{ ...base, status: 'held', amount_cents: 10000, refund_cents: 9750, transfer_cents: 1000 }], take).pendingCents,
     1000,
     'a late cancellation pends the fee alone'
   );
   assert.equal(
-    deriveEarnings([{ ...base, status: 'held', amount_cents: 10000, refund_cents: null }]).pendingCents,
+    deriveEarnings([{ ...base, status: 'held', amount_cents: 10000, refund_cents: null }], take).pendingCents,
     10000,
     'a null refund is no refund'
   );

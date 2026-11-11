@@ -13,7 +13,8 @@ import { useMode } from '../modes/ModeProvider';
 import { paymentsMode } from '../lib/adapters/payments';
 import { payoutSetupNotice, payoutsCta, workerTakeCents, type PayoutsStatus } from '../lib/payments';
 import { fetchMyPayoutsStatus } from '../lib/payments/stripe';
-import { deriveEarnings, fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
+import { fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
+import { workerReceivesCents } from '../lib/earningsMath';
 import { earningsRowMeta } from '../lib/earningsCopy';
 import { releaseAtLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
 import { formatBudget } from '../lib/jobs';
@@ -83,13 +84,10 @@ export function EarningsScreen() {
         : { kind: 'ready' };
 
   const s = summary;
-  // R6c (D7): every figure a worker reads as "yours" is the take —
-  // amount_cents − platform_fee_cents through the one helper — bucketed by
-  // the same deriveEarnings the ledger read uses, so there is still one
-  // bucketing rule; the fee card below still sums the fees themselves.
-  const take = s
-    ? deriveEarnings(s.rows.map((row) => ({ ...row, amount_cents: workerTakeCents(row) })))
-    : null;
+  // R6c (D7), B23: every figure a worker reads as "yours" is what the ledger
+  // sends them — the take, or on a job sent home only the cancellation fee —
+  // through lib/earningsMath.ts workerReceivesCents, which the ledger read
+  // already sums into the buckets; the fee card below still sums the fees themselves.
   // One clock reading per load, so every ledger line below is measured
   // against the same instant rather than each drifting on its own render.
   const nowMs = useMemo(() => Date.now(), [summary]);
@@ -102,7 +100,7 @@ export function EarningsScreen() {
         onBack={goBackOrHome}
         state={state}
         sections={
-          !s || !take
+          !s
             ? []
             : [
                 {
@@ -113,19 +111,19 @@ export function EarningsScreen() {
                       <Bucket
                         label="PENDING"
                         icon="shield-outline"
-                        cents={take.pendingCents}
+                        cents={s.pendingCents}
                         note="Held in protection"
                       />
                       <Bucket
                         label="AVAILABLE"
                         icon="wallet-outline"
-                        cents={take.availableCents}
+                        cents={s.availableCents}
                         note="Released to you"
                       />
                       <Bucket
                         label="TRANSFERRED"
                         icon="arrow-up-circle-outline"
-                        cents={take.transferredCents}
+                        cents={s.transferredCents}
                         note="Transferred to you"
                       />
                     </View>
@@ -182,6 +180,9 @@ export function EarningsScreen() {
                                     release_reason: row.release_reason,
                                     released_at: row.released_at,
                                     paid_out_at: row.paid_out_at,
+                                    refund_cents: row.refund_cents,
+                                    transfer_cents: row.transfer_cents,
+                                    job_status: row.job_status,
                                     releaseDeadlineMs: releaseDeadlineMs({
                                       completed_at: row.job_completed_at ?? null,
                                     }),
@@ -192,7 +193,7 @@ export function EarningsScreen() {
                                 )}
                               </Text>
                             </View>
-                            <MoneyText cents={workerTakeCents(row)} state={row.status} captionHidden />
+                            <MoneyText cents={workerReceivesCents(row, workerTakeCents)} state={row.status} captionHidden />
                             {mode === 'worker' && row.job_id ? (
                               <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
                             ) : null}

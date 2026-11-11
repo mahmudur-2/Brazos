@@ -22,7 +22,9 @@ const read = (rel) => readFile(join(root, rel), 'utf8');
 
 // deriveEarnings is pure; its only import is a type. Import it for real.
 const earningsUrl = pathToFileURL(join(root, "lib/earningsMath.ts")).href;
-const { deriveEarnings } = await import(earningsUrl);
+const { deriveEarnings, workerReceivesCents } = await import(earningsUrl);
+// B23: the take is injected, as the screens inject lib/payments.ts workerTakeCents.
+const take = (r) => r.amount_cents - r.platform_fee_cents;
 
 // a6: the ledger's meta copy is pure too — no runtime imports at all, the
 // formatters are injected — so it is executed here, not read as text.
@@ -43,13 +45,13 @@ test('the wallet is exactly a sum over rows', () => {
   const s = deriveEarnings([
     row('held', 6000), row('held', 4500),
     row('released', 4500, 0), row('paid_out', 2000),
-  ]);
+  ], take);
   assert.equal(s.pendingCents, 10500);
   assert.equal(s.availableCents, 4500);
   assert.equal(s.transferredCents, 2000);
   assert.equal(s.feeCents, 0);
   // Empty ledger derives an all-zero wallet, never NaN or undefined.
-  const empty = deriveEarnings([]);
+  const empty = deriveEarnings([], take);
   assert.deepEqual(
     [empty.pendingCents, empty.availableCents, empty.transferredCents, empty.feeCents],
     [0, 0, 0, 0]
@@ -195,10 +197,10 @@ test('B21 · the read carries refund_cents and transfer_cents, so a refund-queue
   // A late cancellation: most goes home, the fee goes to the worker. A full refund: nothing.
   const fee = pick({ ...row('held', 10000), refund_cents: 9750, transfer_cents: 1000 });
   const full = pick({ ...row('held', 10000), refund_cents: 10750, transfer_cents: 0 });
-  assert.equal(deriveEarnings([fee]).pendingCents, 1000);
-  assert.equal(deriveEarnings([full]).pendingCents, 0);
+  assert.equal(deriveEarnings([fee], take).pendingCents, 1000);
+  assert.equal(deriveEarnings([full], take).pendingCents, 0);
   // A plain held row is still pending in full.
-  assert.equal(deriveEarnings([pick(row('held', 6000))]).pendingCents, 6000);
+  assert.equal(deriveEarnings([pick(row('held', 6000))], take).pendingCents, 6000);
 });
 
 // B21 — a tip is held, then on its way, then released: never "approved" (no one approves a tip) and
@@ -224,6 +226,124 @@ test('B21 · a tip row has its own sentence: on its way, never approved, no rele
   assert.equal(earningsRowMeta(facts({ release_requested_at: queued }), NOW, FAKE), `Approved ${EM} payout on its way`);
   // The screen hands the kind in.
   assert.match(await read('screens/EarningsScreen.tsx'), /kind: row\.kind,/);
+});
+
+// B23 — a cancelled job's row. The shapes are the local stack's own (a rolled-back probe of
+// cancel_job, transfer.created and charge.refunded, 2026-11-11): $50 job, $3.75 worker fee,
+// $53.75 charged; the late fee is $15.00 and goes to the worker whole (cancellation_fee_cents).
+// Each row is built from exactly the columns the two reads select, as PostgREST hands them back.
+const B23_QUEUED = '2026-09-05T11:00:00Z';
+const B23_SENT = '2026-09-05T11:30:00Z';
+async function b23Pick() {
+  const earnings = await read('lib/earnings.ts');
+  const paymentsSelect = earnings.slice(earnings.indexOf(".from('payments')"), earnings.indexOf(".eq('payee_id'"));
+  const columns = paymentsSelect.match(/\.select\(\s*'([^']+)'/)[1].split(',').map((c) => c.trim());
+  return (full, jobStatus) => ({
+    ...Object.fromEntries(columns.map((c) => [c, full[c]])),
+    job_title: 'T',
+    job_status: jobStatus,
+  });
+}
+const b23 = (over) => ({ ...row('held', 5000, 375), provider: 'stripe', refund_cents: null, transfer_cents: null, ...over });
+const B23_CASES = {
+  // A: free cancel, worker cancel, ban, or a refund decision — the whole charge goes home.
+  A: b23({ refund_cents: 5375, transfer_cents: 0 }),
+  // B: late cancel — the fee is queued for the worker, the rest goes home.
+  B: b23({ refund_cents: 3875, transfer_cents: 1500, release_reason: 'cancellation_fee', release_requested_at: B23_QUEUED }),
+  // C: transfer.created landed first — released_at stamped, the row stays held.
+  C: b23({ refund_cents: 3875, transfer_cents: 1500, release_reason: 'cancellation_fee', release_requested_at: B23_QUEUED, released_at: B23_SENT }),
+  // D: then charge.refunded — partially_refunded, the fee long sent.
+  D: b23({ status: 'partially_refunded', refund_cents: 3875, transfer_cents: 1500, release_reason: 'cancellation_fee', release_requested_at: B23_QUEUED, released_at: B23_SENT }),
+  // D2: charge.refunded landed first — partially_refunded, the fee not sent yet.
+  D2: b23({ status: 'partially_refunded', refund_cents: 3875, transfer_cents: 1500, release_reason: 'cancellation_fee', release_requested_at: B23_QUEUED }),
+  // E: a no-show claim — the job is cancelled, the row held and untouched until a decision.
+  E: b23({}),
+};
+const b23Facts = (r, over = {}) => ({
+  status: r.status, kind: r.kind, release_requested_at: r.release_requested_at, release_reason: r.release_reason,
+  released_at: r.released_at, paid_out_at: r.paid_out_at, refund_cents: r.refund_cents,
+  transfer_cents: r.transfer_cents, job_status: r.job_status, releaseDeadlineMs: null, ...over,
+});
+
+test('B23 · each cancelled-job case shows what the worker receives, on rows built from the real select', async () => {
+  const pick = await b23Pick();
+  const rows = Object.fromEntries(Object.entries(B23_CASES).map(([k, r]) => [k, pick(r, 'cancelled')]));
+  // The sentences: where the money goes, never the job-payment words.
+  assert.equal(earningsRowMeta(b23Facts(rows.A), NOW, FAKE), 'Refund on its way to the customer');
+  assert.equal(earningsRowMeta(b23Facts(rows.B), NOW, FAKE), `Cancellation fee ${EM} on its way to you`);
+  assert.equal(
+    earningsRowMeta(b23Facts(rows.B, { waitingOnPayoutSetup: true }), NOW, FAKE),
+    `Cancellation fee ${EM} waiting on your payout setup`
+  );
+  assert.equal(earningsRowMeta(b23Facts(rows.C), NOW, FAKE), `Cancellation fee ${EM} sent to your payout account`);
+  assert.equal(earningsRowMeta(b23Facts(rows.D), NOW, FAKE), `Cancellation fee ${EM} sent to your payout account`);
+  assert.equal(earningsRowMeta(b23Facts(rows.D2), NOW, FAKE), `Cancellation fee ${EM} on its way to you`);
+  assert.equal(earningsRowMeta(b23Facts(rows.E), NOW, FAKE), `Held ${EM} waiting on a decision`);
+  for (const r of Object.values(rows)) {
+    assert.doesNotMatch(earningsRowMeta(b23Facts(r), NOW, FAKE), /Approved|protection|Released|\bpaid\b/);
+  }
+  // The amounts: what the ledger sends the worker, never the full take.
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(rows).map(([k, r]) => [k, workerReceivesCents(r, take)])),
+    { A: 0, B: 1500, C: 1500, D: 1500, D2: 1500, E: 0 }
+  );
+  // The totals, beside a plain held job as the control: the fee card never counts a refunded
+  // job's fee (none is kept: the whole cancellation fee goes to the worker).
+  const control = pick(row('held', 5000, 375), 'completed');
+  const s = deriveEarnings([...Object.values(rows), control], take);
+  assert.deepEqual(
+    [s.pendingCents, s.availableCents, s.transferredCents, s.feeCents],
+    [1500 + 1500 + 4625, 1500 + 1500, 0, 375]
+  );
+  // The screen hands the facts in and shows the same amount.
+  const screen = await read('screens/EarningsScreen.tsx');
+  for (const f of ['refund_cents', 'transfer_cents', 'job_status']) {
+    assert.match(screen, new RegExp(`${f}: row\\.${f},`), `the screen hands ${f} in`);
+  }
+  assert.match(screen, /<MoneyText cents=\{workerReceivesCents\(row, workerTakeCents\)\} state=\{row\.status\} captionHidden \/>/);
+  // job_status comes off the jobs read, beside the title.
+  const earnings = await read('lib/earnings.ts');
+  const jobsSelect = earnings.slice(earnings.indexOf(".from('jobs')"), earnings.indexOf(".in('id', jobIds)"));
+  assert.match(jobsSelect, /\bstatus\b/, "the jobs read carries the job's status");
+  assert.match(earnings, /job_status: job\?\.status \?\? null,/, 'and the row carries it as job_status');
+});
+
+test('B23 · a fee that was sent counts as available, also after the refund (partially_refunded is read)', async () => {
+  const earnings = await read('lib/earnings.ts');
+  assert.match(earnings, /const EARNING_STATUSES = \['held', 'released', 'paid_out', 'partially_refunded'\] as const;/);
+  const pick = await b23Pick();
+  for (const k of ['C', 'D']) {
+    const s = deriveEarnings([pick(B23_CASES[k], 'cancelled')], take);
+    assert.deepEqual([s.pendingCents, s.availableCents, s.transferredCents], [0, 1500, 0], `${k}: the sent fee is available`);
+  }
+  const d2 = deriveEarnings([pick(B23_CASES.D2, 'cancelled')], take);
+  assert.deepEqual([d2.pendingCents, d2.availableCents], [1500, 0], 'D2: refunded first, the fee still pending');
+  // A refund by hand after the release (charge.refunded moves a released row to
+  // partially_refunded): the amount is the transfer that was actually sent.
+  const byHand = pick(
+    { ...row('partially_refunded', 5000, 375), provider: 'stripe', refund_cents: 1000, transfer_cents: 4625, release_reason: 'approved', release_requested_at: B23_QUEUED, released_at: B23_SENT },
+    'completed'
+  );
+  assert.equal(workerReceivesCents(byHand, take), 4625);
+  assert.deepEqual([deriveEarnings([byHand], take).availableCents, deriveEarnings([byHand], take).feeCents], [4625, 0]);
+  assert.equal(earningsRowMeta(b23Facts(byHand), NOW, FAKE), 'Partly refunded to the customer');
+  // A full refund leaves the read (refunded is not an earning status) and still gets no label.
+  assert.equal(earningsRowMeta(facts({ status: 'refunded' }), NOW, FAKE), '');
+});
+
+test('B23 · one amount function: the ledger row, the totals and Worker Home count the fee, never the full take', async () => {
+  const home = await read('screens/WorkerHomeScreen.tsx');
+  assert.match(home, /\.reduce\(\(sum, row\) => sum \+ workerReceivesCents\(row, workerTakeCents\), 0\);/);
+  assert.match(await read('lib/earnings.ts'), /return \{ data: deriveEarnings\(rows, workerTakeCents\), error: null \};/);
+  const screen = await read('screens/EarningsScreen.tsx');
+  for (const bucket of ['s.pendingCents', 's.availableCents', 's.transferredCents']) {
+    assert.ok(screen.includes(`cents={${bucket}}`), `${bucket} feeds its bucket`);
+  }
+  assert.doesNotMatch(screen, /deriveEarnings/, 'the screen no longer re-derives the summary');
+  // Worker Home's line: the approved job's take and the queued fee, never the cancelled job's take.
+  const pick = await b23Pick();
+  const approved = pick({ ...row('held', 5000, 375), provider: 'stripe', release_requested_at: B23_QUEUED }, 'completed');
+  assert.equal(workerReceivesCents(approved, take) + workerReceivesCents(pick(B23_CASES.B, 'cancelled'), take), 4625 + 1500);
 });
 
 test('a6 · a missing timestamp is TRIMMED, not left with a trailing space', () => {

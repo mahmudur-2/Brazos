@@ -27,7 +27,6 @@ const flatten = (s) => s.replace(/\s+/g, ' ').trim();
 const worker = stripComments(read('screens/WorkerJobScreen.tsx'));
 const workerFlat = flatten(worker);
 const earnings = stripComments(read('screens/EarningsScreen.tsx'));
-const earningsFlat = flatten(earnings);
 const payments = stripComments(read('lib/payments.ts'));
 const paymentsFlat = flatten(payments);
 
@@ -154,15 +153,14 @@ test('5 · no client file outside the helper subtracts a fee from an amount, add
 });
 
 test('6 · Earnings buckets and rows read the take through the helper, bucketed by the one deriveEarnings', () => {
-  assert.match(
-    earningsFlat,
-    /const take = s \? deriveEarnings\(s\.rows\.map\(\(row\) => \(\{ \.\.\.row, amount_cents: workerTakeCents\(row\) \}\)\)\) : null;/
-  );
-  for (const bucket of ['take.pendingCents', 'take.availableCents', 'take.transferredCents']) {
+  // B23: the ledger read derives the buckets with the take injected (lib/earnings.ts), and a
+  // row shows lib/earningsMath.ts workerReceivesCents — the take, or a job sent home's fee.
+  assert.match(read('lib/earnings.ts'), /deriveEarnings\(rows, workerTakeCents\)/);
+  assert.doesNotMatch(earnings, /deriveEarnings/, 'the screen does not re-derive the buckets');
+  for (const bucket of ['s.pendingCents', 's.availableCents', 's.transferredCents']) {
     assert.ok(earnings.includes(`cents={${bucket}}`), `${bucket} feeds its bucket`);
   }
-  assert.doesNotMatch(earnings, /cents=\{s\.(pending|available|transferred)Cents\}/, 'no bucket shows the raw amount any more');
-  assert.match(earnings, /<MoneyText cents=\{workerTakeCents\(row\)\} state=\{row\.status\} captionHidden \/>/);
+  assert.match(earnings, /<MoneyText cents=\{workerReceivesCents\(row, workerTakeCents\)\} state=\{row\.status\} captionHidden \/>/);
   assert.doesNotMatch(earnings, /cents=\{row\.amount_cents\}/);
   assert.match(earnings, /note="Held in protection"/);
   assert.match(earnings, /note="Released to you"/);

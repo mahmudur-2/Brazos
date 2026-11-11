@@ -37,6 +37,10 @@ export type EarningsRowFacts = {
   release_reason?: string | null;
   released_at?: string | null;
   paid_out_at?: string | null;
+  /** B23: where the ledger sends the money on a cancelled or refunded job. */
+  refund_cents?: number | null;
+  transfer_cents?: number | null;
+  job_status?: string | null;
   /** releaseDeadlineMs(job) computed by the caller from job_completed_at; null when no clock runs. */
   releaseDeadlineMs: number | null;
   /** 2026-09-28 (LUX-LIST-64 #63, M-14): payoutSetupNotice() (lib/payments.ts)
@@ -55,6 +59,22 @@ export function earningsRowMeta(
   nowMs: number,
   f: EarningsFormatters
 ): string {
+  // B23: a row the ledger has sent home (lib/earningsMath.ts workerReceivesCents) says where
+  // the money goes — never the job-payment words. A fee whose transfer landed (released_at,
+  // stamped by transfer.created) is sent; paid_out is never written today, so "sent" is final.
+  const refunded = (row.refund_cents ?? 0) > 0;
+  if (refunded || row.job_status === 'cancelled') {
+    if (row.release_reason === 'cancellation_fee' && (row.transfer_cents ?? 0) > 0) {
+      if (row.released_at) return 'Cancellation fee — sent to your payout account';
+      return row.waitingOnPayoutSetup
+        ? 'Cancellation fee — waiting on your payout setup'
+        : 'Cancellation fee — on its way to you';
+    }
+    if (!refunded) return 'Held — waiting on a decision';
+    if (row.status === 'held') return 'Refund on its way to the customer';
+    return row.status === 'partially_refunded' ? 'Partly refunded to the customer' : '';
+  }
+
   if (row.status === 'held' && row.kind === 'tip') {
     // B21: no one approves a tip and no release clock runs on it. A charged tip
     // is queued for transfer at once (release_requested_at, B1) and is on its

@@ -32,7 +32,7 @@ import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import { useWorkerSkills } from '../hooks/useWorkerSkills';
 import { alertAsync } from '../lib/dialog';
-import { openJobsPotential } from '../lib/earningsMath';
+import { openJobsPotential, workerReceivesCents } from '../lib/earningsMath';
 import { userMessage } from '../lib/errorMessage';
 import { resolveCurrentPlace } from '../lib/geolocation';
 import { fetchJobsWithinRadius } from '../lib/hotspots';
@@ -204,7 +204,7 @@ export function WorkerHomeScreen() {
         }
         const cents = earnings.data.rows
           .filter((row) => payoutSetupNotice(status.data, [row]) !== null)
-          .reduce((sum, row) => sum + workerTakeCents(row), 0);
+          .reduce((sum, row) => sum + workerReceivesCents(row, workerTakeCents), 0);
         setPayoutWaitCents(cents > 0 ? cents : null);
       })();
       return () => {

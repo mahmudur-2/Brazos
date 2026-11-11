@@ -58,6 +58,7 @@ test('3 · the worker-facing surfaces are untouched by this rule — they read t
   for (const file of ['screens/WorkerJobScreen.tsx', 'screens/EarningsScreen.tsx']) {
     const code = stripComments(read(file));
     assert.doesNotMatch(code, /customerChargeCents/, `${file} is not a customer surface`);
-    assert.match(code, /workerTakeCents\(/);
+    // B23: Earnings reads the take through workerReceivesCents (lib/earningsMath.ts), injected.
+    assert.match(code, /workerTakeCents\(|workerReceivesCents\(row, workerTakeCents\)/);
   }
 });
