@@ -9,6 +9,7 @@ import { PostJobScreen } from '../screens/PostJobScreen';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
 import { SubmitBidScreen } from '../screens/SubmitBidScreen';
 import { WorkerHomeScreen } from '../screens/WorkerHomeScreen';
+import { WorkerJobScreen } from '../screens/WorkerJobScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
@@ -74,6 +75,8 @@ function WorkerHomeStackNavigator() {
       <WorkerHomeStack.Screen name="PostJob" component={PostJobScreen} />
       <WorkerHomeStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <WorkerHomeStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
+      {/* E5: a notification's job opens here when the person is on Home (the feed), so Back returns to it. */}
+      <WorkerHomeStack.Screen name="WorkerJob" component={WorkerJobScreen} getId={({ params }) => params?.jobId} />
     </WorkerHomeStack.Navigator>
   );
 }

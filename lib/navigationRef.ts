@@ -89,7 +89,21 @@ export type CrossTabOptions = {
    * already on the tab's stack rather than pushing a second copy of it.
    */
   pop?: boolean;
+  /**
+   * E5: land on the tab the person is on when its stack registers the target,
+   * so Back returns to where they were (a notification tapped in Home's feed);
+   * else on `tab`. Decided at dispatch, against the tree mounted then.
+   */
+  inPlace?: boolean;
 };
+
+/** E5: the focused tab, when its stack has rendered and registers `screen`. */
+function focusedTabWith(screen: string): string | undefined {
+  const root = navigationRef.getRootState();
+  const focused = root?.routes?.[root.index ?? 0];
+  const nested = focused?.state as { routeNames?: string[] } | undefined;
+  return nested?.routeNames?.includes(screen) ? focused?.name : undefined;
+}
 
 /**
  * THE way to dispatch across sibling tabs. Every cross-tab jump in the app
@@ -119,6 +133,7 @@ export function navigateAcrossTabs(
   options?: CrossTabOptions
 ): void {
   navigateWhenReady(() => {
+    if (options?.inPlace && screen) tab = focusedTabWith(screen) ?? tab;
     if (canNavigateTo(tab, screen)) {
       if (screen) {
         navigationRef.navigate(tab, {

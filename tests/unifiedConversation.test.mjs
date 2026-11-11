@@ -325,8 +325,8 @@ test('counterpartyId is canonical and the legacy shapes stay valid', async () =>
   // has to manufacture a counterparty id.
   assert.match(nav, /\(ChatTarget & \{ counterpartyId\?: undefined \}\)/);
   assert.match(nav, /\{ counterpartyId: string; jobId\?: undefined; directThreadId\?: undefined \}/);
-  // Chat is still registered in all four stacks that mount it.
-  assert.equal((nav.match(/Chat: ChatTargetParams;/g) ?? []).length, 4);
+  // Chat is still registered in all five stacks that mount it (E5 added the customer Home stack).
+  assert.equal((nav.match(/Chat: ChatTargetParams;/g) ?? []).length, 5);
 
   const chat = stripComments(await read('screens/ChatScreen.tsx'));
   // The person is derived at the screen boundary from whichever id arrived.

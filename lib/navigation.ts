@@ -166,6 +166,17 @@ export type CustomerHomeStackParamList = {
    * keyboard popping on every first tab visit would be noise.
    */
   WorkerSearch: { query?: string; category?: string; autoFocus?: boolean } | undefined;
+  /** E5: a notification's job opens on this stack when the person is on Home (the feed), with every
+   *  screen it leads to; the same params as on My Jobs. */
+  ClientJobDetail: MyJobsStackParamList['ClientJobDetail'];
+  CompareBids: MyJobsStackParamList['CompareBids'];
+  BidDetail: MyJobsStackParamList['BidDetail'];
+  Counteroffer: MyJobsStackParamList['Counteroffer'];
+  Checkout: MyJobsStackParamList['Checkout'];
+  JobConfirmed: MyJobsStackParamList['JobConfirmed'];
+  ApproveOrDispute: MyJobsStackParamList['ApproveOrDispute'];
+  ReviewAndTip: MyJobsStackParamList['ReviewAndTip'];
+  Chat: ChatTargetParams;
 };
 
 export type CustomerHomeStackNavigation =
@@ -283,6 +294,8 @@ export type WorkerHomeStackParamList = {
     lng?: number;
     label?: string;
   };
+  /** E5: a notification's job opens on this stack when the person is on Home (the feed). */
+  WorkerJob: MyJobsStackParamList['WorkerJob'];
 };
 
 export type WorkerHomeStackNavigation =

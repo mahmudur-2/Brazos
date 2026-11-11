@@ -9,12 +9,21 @@ import type {
   CustomerParamList,
   DiscoverStackParamList,
 } from '../lib/navigation';
+import { ApproveOrDisputeScreen } from '../screens/ApproveOrDisputeScreen';
+import { BidDetailScreen } from '../screens/BidDetailScreen';
+import { ChatScreen } from '../screens/ChatScreen';
+import { CheckoutScreen } from '../screens/CheckoutScreen';
+import { ClientJobDetailScreen } from '../screens/ClientJobDetailScreen';
+import { CompareBidsScreen } from '../screens/CompareBidsScreen';
+import { CounterofferScreen } from '../screens/CounterofferScreen';
 import { HomeScreen } from '../screens/HomeScreen';
+import { JobConfirmedScreen } from '../screens/JobConfirmedScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';
 import { PostJobScreen } from '../screens/PostJobScreen';
 import { useMode } from '../modes';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
+import { ReviewAndTipScreen } from '../screens/ReviewAndTipScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
 import { WorkerSearchScreen } from '../screens/WorkerSearchScreen';
 import {
@@ -117,6 +126,17 @@ function CustomerHomeStackNavigator() {
       <CustomerHomeStack.Screen name="WorkerSearch" component={WorkerSearchScreen} />
       <CustomerHomeStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <CustomerHomeStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
+      {/* E5: a notification's job opens here when the person is on Home (the feed), so Back returns
+          to it; every screen the job leads to rides along (tests/crossTabNavigation.test.mjs). */}
+      <CustomerHomeStack.Screen name="ClientJobDetail" component={ClientJobDetailScreen} getId={({ params }) => params?.job?.id} />
+      <CustomerHomeStack.Screen name="CompareBids" component={CompareBidsScreen} />
+      <CustomerHomeStack.Screen name="BidDetail" component={BidDetailScreen} />
+      <CustomerHomeStack.Screen name="Counteroffer" component={CounterofferScreen} />
+      <CustomerHomeStack.Screen name="Checkout" component={CheckoutScreen} />
+      <CustomerHomeStack.Screen name="JobConfirmed" component={JobConfirmedScreen} />
+      <CustomerHomeStack.Screen name="ApproveOrDispute" component={ApproveOrDisputeScreen} />
+      <CustomerHomeStack.Screen name="ReviewAndTip" component={ReviewAndTipScreen} />
+      <CustomerHomeStack.Screen name="Chat" component={ChatScreen} />
     </CustomerHomeStack.Navigator>
   );
 }

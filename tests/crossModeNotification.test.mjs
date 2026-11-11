@@ -29,14 +29,16 @@ const toDataUrl = (js) =>
 
 // --- Load the real module with its effectful imports stubbed ---------------
 
-const calls = { navigate: [], fetch: [], alerts: [] };
+const calls = { navigate: [], fetch: [], alerts: [], options: [] };
 let fetchResult = { data: null, error: null };
 globalThis.__crossMode_fetchJobById = async (jobId) => {
   calls.fetch.push(jobId);
   return fetchResult;
 };
 globalThis.__crossMode_navigateAcrossTabs = (...args) => {
-  calls.navigate.push(args);
+  // E5: the fourth argument (the in-place option) is checked on its own, at the end of this file.
+  calls.navigate.push(args.slice(0, 3));
+  calls.options.push(args[3]);
 };
 globalThis.__crossMode_alertAsync = async (title, message) => {
   calls.alerts.push({ title, message });
@@ -92,6 +94,7 @@ function resetCalls() {
   calls.navigate.length = 0;
   calls.fetch.length = 0;
   calls.alerts.length = 0;
+  calls.options.length = 0;
 }
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -329,4 +332,77 @@ test('a payload with no screen at all stays silent — opening the app is not an
 
   assert.equal(calls.alerts.length, 0);
   assert.equal(calls.navigate.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// E5 — a notification's job opens on top of the tab the person is on (the feed
+// sits on Home), so Back returns there. navigateAcrossTabs() runs for real
+// here, against a fake container whose Home stack registers exactly what the
+// real navigator file registers.
+// ---------------------------------------------------------------------------
+
+globalThis.__DEV__ = false;
+const nav = { state: null, calls: [] };
+globalThis.__e5_ref = {
+  isReady: () => true,
+  getRootState: () => nav.state,
+  navigate: (...args) => nav.calls.push(args),
+  canGoBack: () => false,
+  goBack: () => {},
+};
+let refJs = stripTypeScriptTypes(read('lib/navigationRef.ts'), { mode: 'strip' });
+const refImport = "import { createNavigationContainerRef } from '@react-navigation/native';";
+assert.ok(refJs.includes(refImport), 'expected the one runtime import of lib/navigationRef.ts');
+refJs = refJs.replace(refImport, 'const createNavigationContainerRef = () => globalThis.__e5_ref;');
+const { navigateAcrossTabs } = await import(toDataUrl(refJs));
+
+/** The routes a Home stack registers, read from its navigator file. */
+const homeRoutes = (file, stack) =>
+  [...read(file).matchAll(new RegExp(`<${stack}\\.Screen\\s+name="([^"]+)"`, 'g'))].map((m) => m[1]);
+
+/** The person is on Home's feed; the other tabs have not rendered yet. */
+const onHomeFeed = (routeNames) => ({
+  type: 'tab',
+  index: 0,
+  routes: [
+    { name: 'Home', state: { routeNames, index: 1, routes: [{ name: routeNames[0] }, { name: 'Notifications' }] } },
+    { name: 'MyJobs' },
+    { name: 'Messages' },
+  ],
+});
+
+test('E5 · a notification asks to open in place', async () => {
+  resetCalls();
+  fetchResult = { data: { id: 'job-e5', title: 'Fix sink' }, error: null };
+  await handleNotificationData({ screen: 'ClientJobDetail', jobId: 'job-e5' }, makeBridge('customer', async () => true));
+  await handleNotificationData({ screen: 'WorkerJob', jobId: 'job-e5w' }, makeBridge('worker', async () => true));
+  assert.deepEqual(calls.options, [{ inPlace: true }, { inPlace: true }]);
+  fetchResult = { data: null, error: null };
+});
+
+test('E5 · on the Home feed, a job opens on the Home stack, so Back returns to the feed', () => {
+  nav.calls.length = 0;
+  nav.state = onHomeFeed(homeRoutes('navigation/CustomerRoot.tsx', 'CustomerHomeStack'));
+  navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job: { id: 'j' } }, { inPlace: true });
+  assert.deepEqual(nav.calls, [['Home', { screen: 'ClientJobDetail', params: { job: { id: 'j' } }, initial: false }]]);
+
+  nav.calls.length = 0;
+  nav.state = onHomeFeed(homeRoutes('navigation/WorkerRoot.tsx', 'WorkerHomeStack'));
+  navigateAcrossTabs('MyJobs', 'WorkerJob', { jobId: 'w' }, { inPlace: true });
+  navigateAcrossTabs('MyJobs', 'JobDetail', { job: { id: 'o' } }, { inPlace: true });
+  assert.deepEqual(
+    nav.calls.map(([tab, payload]) => [tab, payload.screen]),
+    [['Home', 'WorkerJob'], ['Home', 'JobDetail']]
+  );
+});
+
+test('E5 · a screen the tab lacks, or a caller that does not ask, still lands on its own tab', () => {
+  nav.calls.length = 0;
+  nav.state = onHomeFeed(homeRoutes('navigation/CustomerRoot.tsx', 'CustomerHomeStack'));
+  navigateAcrossTabs('MyJobs', 'WorkerJob', { jobId: 'w' }, { inPlace: true });
+  navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job: { id: 'j' } });
+  assert.deepEqual(
+    nav.calls.map(([tab, payload]) => [tab, payload.screen]),
+    [['MyJobs', 'WorkerJob'], ['MyJobs', 'ClientJobDetail']]
+  );
 });

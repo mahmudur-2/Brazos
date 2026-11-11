@@ -14,9 +14,10 @@ import { Sentry } from './observability/sentry';
  * rule is how one of them ends up unguarded. This file keeps the deliberate
  * DROP behaviour (no fallbackToTabRoot): a tapped alert that cannot reach its
  * subject is better ignored than answered with an unrelated screen.
+ * E5: in place — on the tab the person is on when its stack has the screen.
  */
 const navigateChecked = (tab: string, screen?: string, params?: object): void =>
-  navigateAcrossTabs(tab, screen, params);
+  navigateAcrossTabs(tab, screen, params, { inPlace: true });
 
 // ---------------------------------------------------------------------------
 // Notification payload -> destination screen.

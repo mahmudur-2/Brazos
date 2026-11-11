@@ -266,7 +266,8 @@ test('customer code cannot name a worker route', () => {
     );
   }
   // ...and it is not registered there either, so it could not render anyway.
-  assert.doesNotMatch(customerRoot, /WorkerResultsScreen|JobDetailScreen/);
+  // (\b: E5 registers the customer's own ClientJobDetailScreen there, which is not the bid screen.)
+  assert.doesNotMatch(customerRoot, /WorkerResultsScreen|\bJobDetailScreen/);
 });
 
 test('worker code cannot name the customer post/search routes', () => {

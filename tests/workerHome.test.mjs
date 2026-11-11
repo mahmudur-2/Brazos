@@ -753,5 +753,7 @@ test('T7: the worker Home stack keeps its routes, in order, minus BrowseJobs', (
     'PostJob',
     'WorkerProfile',
     'ProfileReviews',
+    // E5: a notification's job opens on Home when the person is there (the feed).
+    'WorkerJob',
   ]);
 });
