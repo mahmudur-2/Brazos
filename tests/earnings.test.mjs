@@ -185,6 +185,47 @@ test('#63 · an approved payment waiting on the payout setup says so, and only t
   assert.match(home, /Set up payouts to receive \{formatBudget\(payoutWaitCents\)\}/);
 });
 
+// B21 — the refund-queued branch of deriveEarnings runs on what the read returns: the row is
+// built from exactly the columns lib/earnings.ts selects, as PostgREST would hand it back.
+test('B21 · the read carries refund_cents and transfer_cents, so a refund-queued held row is not pending', async () => {
+  const earnings = await read('lib/earnings.ts');
+  const paymentsSelect = earnings.slice(earnings.indexOf(".from('payments')"), earnings.indexOf(".eq('payee_id'"));
+  const columns = paymentsSelect.match(/\.select\(\s*'([^']+)'/)[1].split(',').map((c) => c.trim());
+  const pick = (full) => ({ ...Object.fromEntries(columns.map((c) => [c, full[c]])), job_title: 'T' });
+  // A late cancellation: most goes home, the fee goes to the worker. A full refund: nothing.
+  const fee = pick({ ...row('held', 10000), refund_cents: 9750, transfer_cents: 1000 });
+  const full = pick({ ...row('held', 10000), refund_cents: 10750, transfer_cents: 0 });
+  assert.equal(deriveEarnings([fee]).pendingCents, 1000);
+  assert.equal(deriveEarnings([full]).pendingCents, 0);
+  // A plain held row is still pending in full.
+  assert.equal(deriveEarnings([pick(row('held', 6000))]).pendingCents, 6000);
+});
+
+// B21 — a tip is held, then on its way, then released: never "approved" (no one approves a tip) and
+// never on the job's release clock. B1 queues a charged tip at once (release_requested_at set).
+test('B21 · a tip row has its own sentence: on its way, never approved, no release clock', async () => {
+  const tip = (over) => facts({ kind: 'tip', provider: 'stripe', ...over });
+  const queued = '2026-09-05T11:00:00Z';
+  assert.equal(earningsRowMeta(tip({ release_requested_at: queued }), NOW, FAKE), 'On its way to you');
+  assert.equal(
+    earningsRowMeta(tip({ release_requested_at: queued, waitingOnPayoutSetup: true }), NOW, FAKE),
+    'Waiting on your payout setup'
+  );
+  // Held but not queued (B1's amount lock): no clock, even when the job has one.
+  assert.equal(earningsRowMeta(tip({ releaseDeadlineMs: NOW + 41 * HOUR }), NOW, FAKE), `Held ${EM} not sent yet`);
+  assert.equal(
+    earningsRowMeta(tip({ status: 'released', released_at: '2026-09-05T10:00:00Z' }), NOW, FAKE),
+    `Released 2 h ago ${EM} on its way to your bank`
+  );
+  for (const over of [{ release_requested_at: queued }, {}, { releaseDeadlineMs: NOW - HOUR }]) {
+    assert.doesNotMatch(earningsRowMeta(tip(over), NOW, FAKE), /Approved|Paid|protection/);
+  }
+  // A job payment keeps its sentence.
+  assert.equal(earningsRowMeta(facts({ release_requested_at: queued }), NOW, FAKE), `Approved ${EM} payout on its way`);
+  // The screen hands the kind in.
+  assert.match(await read('screens/EarningsScreen.tsx'), /kind: row\.kind,/);
+});
+
 test('a6 · a missing timestamp is TRIMMED, not left with a trailing space', () => {
   // The choice pinned (D3): today's ternary rendered "Released " with a
   // trailing space when released_at was null. Trimmed here, so the card-path

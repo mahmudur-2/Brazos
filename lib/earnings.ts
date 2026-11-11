@@ -37,7 +37,7 @@ export async function fetchMyEarnings(userId: string) {
   const { data, error } = await supabase
     .from('payments')
     .select(
-      'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at, release_requested_at'
+      'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at, release_requested_at, refund_cents, transfer_cents'
     )
     .eq('payee_id', userId)
     .in('status', [...EARNING_STATUSES])

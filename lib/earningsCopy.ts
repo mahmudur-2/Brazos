@@ -31,6 +31,8 @@
 
 export type EarningsRowFacts = {
   status: string;
+  /** B21: 'tip' gets its own sentences; a job payment's is the default. */
+  kind?: string;
   release_requested_at?: string | null;
   release_reason?: string | null;
   released_at?: string | null;
@@ -53,6 +55,14 @@ export function earningsRowMeta(
   nowMs: number,
   f: EarningsFormatters
 ): string {
+  if (row.status === 'held' && row.kind === 'tip') {
+    // B21: no one approves a tip and no release clock runs on it. A charged tip
+    // is queued for transfer at once (release_requested_at, B1) and is on its
+    // way until transfer.created releases it; one held without the queue waits.
+    if (!row.release_requested_at) return 'Held — not sent yet';
+    return row.waitingOnPayoutSetup ? 'Waiting on your payout setup' : 'On its way to you';
+  }
+
   if (row.status === 'held') {
     // D23 first: a requested release is a decision the customer has already
     // made, so the protection sentence must never describe that row.

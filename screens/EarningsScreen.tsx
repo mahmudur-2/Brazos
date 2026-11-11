@@ -177,6 +177,7 @@ export function EarningsScreen() {
                                 {earningsRowMeta(
                                   {
                                     status: row.status,
+                                    kind: row.kind,
                                     release_requested_at: row.release_requested_at,
                                     release_reason: row.release_reason,
                                     released_at: row.released_at,
