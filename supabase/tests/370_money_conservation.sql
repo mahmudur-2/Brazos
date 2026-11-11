@@ -70,6 +70,11 @@ declare
   v_job uuid;
   v_offer uuid;
 begin
+  -- B10: this file hires many times inside one frozen now(), past the ten posts an hour one customer
+  -- may make. The limit is not what this file tests (410_abuse_limits.sql is), so the runner starts
+  -- each hire with both counters at zero.
+  perform tests.clear_auth();
+  update public.rate_counters set hits = 0 where user_id in (v_customer, v_worker);
   perform tests.authenticate_as(v_customer);
   select (public.create_job(
     p_title := p_title, p_description := 'Money probe row, rolled back',

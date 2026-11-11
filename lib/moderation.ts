@@ -160,6 +160,10 @@ export const REPORT_SUBJECT_KINDS = ['job', 'profile', 'review', 'portfolio_item
 
 export type ReportSubject = { kind: (typeof REPORT_SUBJECT_KINDS)[number]; id: string };
 
+/** The longest description a report may carry: the database refuses a longer one
+ *  (B10, 20261112032000_text_caps.sql), so the form stops typing there. */
+export const REPORT_DESCRIPTION_MAX = 2000;
+
 export async function createReport(params: {
   reporterId: string;
   reportedId: string;

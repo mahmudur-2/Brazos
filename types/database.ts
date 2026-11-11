@@ -1637,6 +1637,35 @@ export type Database = {
           },
         ]
       }
+      rate_counters: {
+        Row: {
+          action: string
+          hits: number
+          user_id: string
+          window_start: string
+        }
+        Insert: {
+          action: string
+          hits: number
+          user_id: string
+          window_start: string
+        }
+        Update: {
+          action?: string
+          hits?: number
+          user_id?: string
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rate_counters_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       receipt_outbox: {
         Row: {
           attempts: number
@@ -3400,6 +3429,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      market_cell_centre: {
+        Args: { p_lat: number; p_lng: number }
+        Returns: Record<string, unknown>
+      }
       messaging_unlocked: {
         Args: { p_direct_thread_id?: string; p_job_id?: string }
         Returns: boolean
@@ -3548,6 +3581,15 @@ export type Database = {
           worker_fee_cents: number
           worker_receives_cents: number
         }[]
+      }
+      rate_limit_take: {
+        Args: {
+          p_action: string
+          p_max: number
+          p_user: string
+          p_window: string
+        }
+        Returns: boolean
       }
       receipt_details: { Args: { p_payment_id: string }; Returns: Json }
       record_settlement_attempt: {

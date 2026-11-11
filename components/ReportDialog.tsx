@@ -17,7 +17,7 @@ import { Toggle } from '../ui/primitives';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { blockUser, createReport, REPORT_REASONS, type ReportReason } from '../lib/moderation';
-import type { ReportSubject } from '../lib/moderation';
+import { REPORT_DESCRIPTION_MAX, type ReportSubject } from '../lib/moderation';
 import {
   radius,
   shadows,
@@ -217,6 +217,7 @@ export function ReportDialog({
                 autoCapitalize="sentences"
                 multiline
                 numberOfLines={3}
+                maxLength={REPORT_DESCRIPTION_MAX}
                 style={styles.multiline}
               />
 
