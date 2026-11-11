@@ -18,16 +18,14 @@
 // the database, never here.
 //
 // ---------------------------------------------------------------------------
-// WHO IS ALLOWED — THE DATABASE DECIDES WHO IS CALLING, AS IN create-payment
+// WHO IS ALLOWED — THE AUTH SERVER DECIDES WHO IS CALLING, AS IN create-payment
 // ---------------------------------------------------------------------------
-// The caller's own Authorization header is forwarded to PostgREST with the
-// ANON key as apikey — create-payment's exact shape — and my_payouts_status()
-// runs AS THE CALLER. PostgREST verifies the token's signature with the
-// project's secret before it runs anything, so a forged or expired token is
-// refused HERE even if the platform's own JWT check (config.toml
-// verify_jwt = true, which the dashboard can override) were ever switched
-// off. Only a token the database has accepted has its sub and email claims
-// read, and those are read locally: no admin or auth surface is called.
+// verifiedUser() (lean K1) asks the auth server who the token belongs to; the
+// user id and email come from that answer only, never from the token itself.
+// The platform's own JWT check (config.toml verify_jwt = true) is no proof: it
+// admits the public key. my_payouts_status() then runs AS THE CALLER, with the
+// caller's own Authorization header and the publishable key as apikey —
+// create-payment's exact shape.
 //
 // get_payment_account / set_payment_account / set_payouts_status are
 // service_role, because they are writes and reads no client may make; the
@@ -53,6 +51,8 @@
 // Stripe-Version; the v1 calls elsewhere are form-encoded.
 // ============================================================================
 
+import { notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser } from '../_shared/serviceAuth.ts';
+
 const STRIPE_API = 'https://api.stripe.com';
 
 // Accounts v2 pins an exact API version per request. The account's configured
@@ -60,8 +60,6 @@ const STRIPE_API = 'https://api.stripe.com';
 const STRIPE_V2_VERSION = '2026-08-26.dahlia';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 
 type Caller = { userId: string; email?: string; status: string };
@@ -71,14 +69,6 @@ function json(body: Record<string, unknown>, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
-}
-
-function serviceHeaders(): Record<string, string> {
-  return {
-    apikey: SERVICE_KEY,
-    Authorization: `Bearer ${SERVICE_KEY}`,
-    'Content-Type': 'application/json',
-  };
 }
 
 /** A service_role RPC: writes no client may make. */
@@ -123,30 +113,15 @@ function providerError(body: Record<string, unknown>): string {
     .join(' · ') || 'no error body';
 }
 
-/** The payload of a JWT, decoded and nothing more. Its authenticity is
- * established by PostgREST accepting the same token in resolveCaller(). */
-function jwtClaims(token: string): Record<string, unknown> | null {
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-  try {
-    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
-    const bytes = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
-    const parsed = JSON.parse(new TextDecoder().decode(bytes));
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
-}
+/** Who is calling, as the AUTH SERVER reads the token — plus their stored
+ * payout status, read as the caller. A Response is a refusal. */
+async function resolveCaller(req: Request, auth: string): Promise<Caller | Response> {
+  const user = await verifiedUser(req, 'Sign in to set up payouts.', 'Could not start payout setup. Try again.');
+  if (user instanceof Response) return user;
 
-/** Who is calling, as the DATABASE sees them — plus their stored payout
- * status, which the same round trip returns. A Response is a refusal. */
-async function resolveCaller(auth: string): Promise<Caller | Response> {
   const asCaller = await fetch(`${SUPABASE_URL}/rest/v1/rpc/my_payouts_status`, {
     method: 'POST',
-    headers: { apikey: ANON_KEY, Authorization: auth, 'Content-Type': 'application/json' },
+    headers: { apikey: PUBLISHABLE_KEY, Authorization: auth, 'Content-Type': 'application/json' },
     body: '{}',
   });
   if (!asCaller.ok) {
@@ -161,36 +136,21 @@ async function resolveCaller(auth: string): Promise<Caller | Response> {
     throw new Error('my_payouts_status returned no status');
   }
 
-  const claims = jwtClaims(auth.slice('Bearer '.length));
-  const sub = claims?.sub;
-  if (typeof sub !== 'string' || sub.length === 0) {
-    return json({ error: 'Sign in to set up payouts.' }, 401);
-  }
-  const email = claims?.email;
-  return {
-    userId: sub,
-    email: typeof email === 'string' && email.includes('@') ? email : undefined,
-    status,
-  };
+  return { userId: user.id, email: user.email ?? undefined, status };
 }
 
 Deno.serve(async (req) => {
-  if (!SUPABASE_URL || !ANON_KEY || !SERVICE_KEY || !STRIPE_SECRET_KEY) {
-    console.error('connect-onboarding: SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY / STRIPE_SECRET_KEY not set');
-    return json({ error: 'not configured' }, 500);
-  }
+  const unset = notConfigured('connect-onboarding', { SUPABASE_URL, PUBLISHABLE_KEY, SECRET_KEY, STRIPE_SECRET_KEY });
+  if (unset) return unset;
   if (req.method !== 'POST') {
     return json({ error: 'Method not allowed.' }, 405);
   }
 
   const auth = req.headers.get('Authorization') ?? '';
-  if (!auth.startsWith('Bearer ')) {
-    return json({ error: 'Sign in to set up payouts.' }, 401);
-  }
 
   try {
-    // --- 1. The database decides who is calling ------------------------------
-    const caller = await resolveCaller(auth);
+    // --- 1. The auth server decides who is calling ---------------------------
+    const caller = await resolveCaller(req, auth);
     if (caller instanceof Response) return caller;
     const userId = caller.userId;
 
@@ -205,7 +165,7 @@ Deno.serve(async (req) => {
     if (!accountId) {
       // Express dashboard, recipient configuration, stripe_transfers only:
       // the platform charges and transfers, the worker only receives (D1).
-      // us, and the verified token's email when it has one; display name and
+      // us, and the verified user's email when it has one; display name and
       // entity type are the hosted flow's to collect (D2). Nothing monetary.
       const account: Record<string, unknown> = {
         dashboard: 'express',

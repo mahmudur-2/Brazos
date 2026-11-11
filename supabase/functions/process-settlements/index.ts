@@ -63,7 +63,7 @@
 // RPCs that record what happened and can never move money.
 // ============================================================================
 
-import { requireServiceRole } from '../_shared/serviceAuth.ts';
+import { notConfigured, requireServiceRole, SECRET_KEY, serviceHeaders } from '../_shared/serviceAuth.ts';
 import { settlementKey, settlementVerdict } from './classify.mjs';
 
 const STRIPE_API = 'https://api.stripe.com';
@@ -76,7 +76,6 @@ const STRIPE_API = 'https://api.stripe.com';
 const QUEUE_LIMIT = 25;
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 
 type TransferRow = {
@@ -134,14 +133,6 @@ function json(body: Record<string, unknown>, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
-}
-
-function serviceHeaders(): Record<string, string> {
-  return {
-    apikey: SERVICE_KEY,
-    Authorization: `Bearer ${SERVICE_KEY}`,
-    'Content-Type': 'application/json',
-  };
 }
 
 async function getRows<T>(path: string): Promise<T[]> {
@@ -441,15 +432,13 @@ async function runRefunds(): Promise<Tally> {
 }
 
 Deno.serve(async (req) => {
-  if (!SUPABASE_URL || !SERVICE_KEY || !STRIPE_SECRET_KEY) {
-    console.error('process-settlements: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / STRIPE_SECRET_KEY not set');
-    return json({ error: 'not configured' }, 500);
-  }
+  const unset = notConfigured('process-settlements', { SUPABASE_URL, SECRET_KEY, STRIPE_SECRET_KEY });
+  if (unset) return unset;
 
   // Before anything else. Supabase's own verify_jwt would accept any signed-in
   // user's token, so this comparison — not that gate — is what keeps ordinary
   // users out of the money queues.
-  const refused = requireServiceRole(req, SERVICE_KEY);
+  const refused = requireServiceRole(req);
   if (refused) return refused;
 
   // Transfers first, then refunds. Each pass is independent: a pass that throws

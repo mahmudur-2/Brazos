@@ -107,8 +107,8 @@ test('[static] create-payment: the opt-in sets or clears the intent\'s future us
 
 test('[static] payment-methods: only the caller\'s own cards, removal checked for ownership, nothing charged', () => {
   const fn = read('supabase/functions/payment-methods/index.ts');
-  assert.match(fn, /fetch\(`\$\{SUPABASE_URL\}\/auth\/v1\/user`, \{ headers: \{ apikey: ANON_KEY, Authorization: auth \} \}\)/);
-  assert.match(fn, /if \(!userId\) return json\(\{ error: 'Sign in to manage your cards\.' \}, 401\);/);
+  // lean K1: the caller from the auth server alone (verifiedUser, fenced in tests/edgeServiceAuth.test.mjs).
+  assert.match(fn, /const caller = await verifiedUser\(req, 'Sign in to manage your cards\.', 'Could not reach your cards right now\. Try again\.'\);\s*if \(caller instanceof Response\) return caller;\s*const userId = caller\.id;/);
   assert.match(fn, /if \(action !== 'list' && action !== 'setup' && action !== 'remove'\) return json\(\{ error: 'Unknown action\.' \}, 400\);/);
   assert.match(
     fn,

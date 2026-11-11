@@ -22,15 +22,16 @@
 // WHO IS ALLOWED — TWO DIFFERENT CREDENTIALS, ON PURPOSE
 // ---------------------------------------------------------------------------
 // begin_job_payment() runs AS THE CALLER: the caller's own Authorization
-// header is forwarded to PostgREST with the ANON key as apikey, so the database
-// sees the real user and its own checks decide whether this person may pay for
-// this job. This function holds no authority over that and must not: it never
-// calls that RPC with the service key.
+// header is forwarded to PostgREST with the publishable key as apikey, so the
+// database sees the real user and its own checks decide whether this person may
+// pay for this job. This function holds no authority over that and must not: it
+// never calls that RPC with the service key.
 //
 // attach_provider_ref() and the customer reference are service_role, because
-// they are writes no client may make. config.toml keeps verify_jwt = true here,
-// so the platform has already rejected an unauthenticated caller before this
-// code runs — but the RPC grants are the real defence, as always.
+// they are writes no client may make. Before any of it, verifiedUser() asks the
+// auth server who the token belongs to (lean K1): the platform's verify_jwt is
+// no proof, since it admits the public key. The RPC grants are the real
+// defence, as always.
 //
 // ---------------------------------------------------------------------------
 // WHY A STORED CUSTOMER REFERENCE AND NOT AN IDEMPOTENCY KEY
@@ -54,7 +55,7 @@
 // cents greater than zero, starts a TIP instead of the job payment: the one
 // difference is which RPC the database decides with — begin_tip_payment(),
 // called AS THE CALLER exactly as begin_job_payment() is, with the caller's
-// own token and the anon key. begin_tip_payment() enforces the kill switch,
+// own token and the publishable key. begin_tip_payment() enforces the kill switch,
 // ownership, that the job is completed, that the job payment released first,
 // one tip per job and both tip ceilings — and its refusals are passed through
 // verbatim, as the job path's are. Everything after step 1 is shared and
@@ -88,6 +89,8 @@
 // outcome is unknown, so the app watches the ledger instead of guessing.
 // ============================================================================
 
+import { notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser } from '../_shared/serviceAuth.ts';
+
 const STRIPE_API = 'https://api.stripe.com';
 
 // Idea 20: an intent created without payment_method_types takes the account's
@@ -104,13 +107,10 @@ const OFF_SESSION_RETURN_URL = 'brazos://checkout';
 const STRIPE_VERSION = '2026-08-26.dahlia';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 
 type PaymentRow = {
   id?: string;
-  payer_id?: string;
   charge_amount_cents?: number | null;
   provider_ref?: string | null;
 };
@@ -120,14 +120,6 @@ function json(body: Record<string, unknown>, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
-}
-
-function serviceHeaders(): Record<string, string> {
-  return {
-    apikey: SERVICE_KEY,
-    Authorization: `Bearer ${SERVICE_KEY}`,
-    'Content-Type': 'application/json',
-  };
 }
 
 /** A service_role RPC: writes no client may make. */
@@ -173,15 +165,13 @@ async function stripeGet(path: string): Promise<{ ok: boolean; status: number; b
 
 
 Deno.serve(async (req) => {
-  if (!SUPABASE_URL || !ANON_KEY || !SERVICE_KEY || !STRIPE_SECRET_KEY) {
-    console.error('create-payment: SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY / STRIPE_SECRET_KEY not set');
-    return json({ error: 'not configured' }, 500);
-  }
+  const unset = notConfigured('create-payment', { SUPABASE_URL, PUBLISHABLE_KEY, SECRET_KEY, STRIPE_SECRET_KEY });
+  if (unset) return unset;
 
+  // lean K1: the caller, as the auth server reads the token. Everything below acts for caller.id.
+  const caller = await verifiedUser(req, 'Sign in to protect a payment.', 'Could not start this payment. Try again.');
+  if (caller instanceof Response) return caller;
   const auth = req.headers.get('Authorization') ?? '';
-  if (!auth.startsWith('Bearer ')) {
-    return json({ error: 'Sign in to protect a payment.' }, 401);
-  }
 
   let jobId = '';
   // R6c (D4): present → a tip; absent → the job payment. Validated before any
@@ -225,7 +215,7 @@ Deno.serve(async (req) => {
 
   try {
     // --- 1. The database decides, as the caller ------------------------------
-    // The caller's own token, the anon key as apikey. begin_job_payment()
+    // The caller's own token, the publishable key as apikey. begin_job_payment()
     // enforces the paymentsEnabled kill switch, that this user owns this job,
     // that a worker is assigned, and that an agreed amount exists — and it
     // returns the unfunded row, creating it if this is the first attempt.
@@ -234,12 +224,12 @@ Deno.serve(async (req) => {
     const begun = tipAmountCents != null
       ? await fetch(`${SUPABASE_URL}/rest/v1/rpc/begin_tip_payment`, {
           method: 'POST',
-          headers: { apikey: ANON_KEY, Authorization: auth, 'Content-Type': 'application/json' },
+          headers: { apikey: PUBLISHABLE_KEY, Authorization: auth, 'Content-Type': 'application/json' },
           body: JSON.stringify({ p_job_id: jobId, p_amount_cents: tipAmountCents }),
         })
       : await fetch(`${SUPABASE_URL}/rest/v1/rpc/begin_job_payment`, {
       method: 'POST',
-      headers: { apikey: ANON_KEY, Authorization: auth, 'Content-Type': 'application/json' },
+      headers: { apikey: PUBLISHABLE_KEY, Authorization: auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({ p_job_id: jobId }),
     });
 
@@ -255,10 +245,10 @@ Deno.serve(async (req) => {
 
     const payment = (await begun.json()) as PaymentRow;
     const paymentId = payment.id ?? '';
-    const userId = payment.payer_id ?? '';
+    const userId = caller.id;
     const amount = payment.charge_amount_cents;
 
-    if (!paymentId || !userId) {
+    if (!paymentId) {
       throw new Error('begin_job_payment returned no payment row');
     }
     // D1's sanity check. Not a fallback — a refusal.

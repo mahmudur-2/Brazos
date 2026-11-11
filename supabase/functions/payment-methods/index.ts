@@ -13,7 +13,8 @@
 //   POST { "action": "setup" }                              → { customerId, setupIntentClientSecret, ephemeralKeySecret }
 //   POST { "action": "remove", "paymentMethodId": "pm_…" }  → { removed: true }
 //
-// WHO: the caller, from their own token — read back from the auth API, never trusted from the body.
+// WHO: the caller, from their own token — read back from the auth server by verifiedUser() (lean K1),
+// never decoded here and never trusted from the body.
 // The customer reference is service_role (get_payment_customer / set_payment_customer), as in
 // create-payment. A card is removed only when it is on the caller's own customer.
 //
@@ -23,13 +24,13 @@
 // WHY plain fetch: the same reason as create-payment — no SDK, no import map, no version drift.
 // ============================================================================
 
+import { notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser } from '../_shared/serviceAuth.ts';
+
 const STRIPE_API = 'https://api.stripe.com';
 // The version the mobile SDK speaks, pinned on the ephemeral key only (create-payment's own).
 const STRIPE_VERSION = '2026-08-26.dahlia';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 
 type Card = { id: string; brand: string; last4: string; expMonth: number | null; expYear: number | null };
@@ -41,7 +42,7 @@ function json(body: Record<string, unknown>, status = 200): Response {
 function serviceRpc(fn: string, args: Record<string, unknown>): Promise<Response> {
   return fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
     method: 'POST',
-    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
+    headers: serviceHeaders(),
     body: JSON.stringify(args),
   });
 }
@@ -63,14 +64,6 @@ async function stripe(
   });
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   return { ok: res.ok, status: res.status, body };
-}
-
-/** The caller, from their own token. */
-async function callerId(auth: string): Promise<string | null> {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: ANON_KEY, Authorization: auth } });
-  if (!res.ok) return null;
-  const user = (await res.json().catch(() => ({}))) as { id?: unknown };
-  return typeof user.id === 'string' ? user.id : null;
 }
 
 async function storedCustomer(userId: string): Promise<string | null> {
@@ -105,12 +98,11 @@ async function listCards(customerId: string): Promise<Card[]> {
 }
 
 Deno.serve(async (req) => {
-  if (!SUPABASE_URL || !ANON_KEY || !SERVICE_KEY || !STRIPE_SECRET_KEY) {
-    console.error('payment-methods: not configured');
-    return json({ error: 'not configured' }, 500);
-  }
-  const auth = req.headers.get('Authorization') ?? '';
-  if (!auth.startsWith('Bearer ')) return json({ error: 'Sign in to manage your cards.' }, 401);
+  const unset = notConfigured('payment-methods', { SUPABASE_URL, PUBLISHABLE_KEY, SECRET_KEY, STRIPE_SECRET_KEY });
+  if (unset) return unset;
+  const caller = await verifiedUser(req, 'Sign in to manage your cards.', 'Could not reach your cards right now. Try again.');
+  if (caller instanceof Response) return caller;
+  const userId = caller.id;
 
   let action = '';
   let paymentMethodId = '';
@@ -125,9 +117,6 @@ Deno.serve(async (req) => {
   if (action !== 'list' && action !== 'setup' && action !== 'remove') return json({ error: 'Unknown action.' }, 400);
 
   try {
-    const userId = await callerId(auth);
-    if (!userId) return json({ error: 'Sign in to manage your cards.' }, 401);
-
     if (action === 'list') {
       const customerId = await storedCustomer(userId);
       return json({ cards: customerId ? await listCards(customerId) : [] });

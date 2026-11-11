@@ -44,7 +44,7 @@
 // recipient's address is read from the auth admin API with the service key and never logged.
 // ============================================================================
 
-import { requireServiceRole } from '../_shared/serviceAuth.ts';
+import { notConfigured, requireServiceRole, SECRET_KEY, serviceHeaders } from '../_shared/serviceAuth.ts';
 import { buildReceipt, cardLabel } from './receipt.mjs';
 
 const RESEND_URL = 'https://api.resend.com/emails';
@@ -56,7 +56,6 @@ const CLAIM_SIZE = 20;
 const MAX_PASSES = 5;
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
 const RECEIPT_FROM_SET = Deno.env.get('RECEIPT_FROM') ?? '';
 const RECEIPT_FROM = RECEIPT_FROM_SET || 'Brazos <onboarding@resend.dev>';
@@ -74,14 +73,6 @@ type ReceiptRow = {
 };
 
 type Status = 'pending' | 'sent' | 'skipped' | 'failed';
-
-function serviceHeaders(): Record<string, string> {
-  return {
-    apikey: SERVICE_KEY,
-    Authorization: `Bearer ${SERVICE_KEY}`,
-    'Content-Type': 'application/json',
-  };
-}
 
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
@@ -213,15 +204,11 @@ async function sendOne(row: ReceiptRow): Promise<Status> {
 }
 
 Deno.serve(async (req) => {
-  if (!SUPABASE_URL || !SERVICE_KEY) {
-    return new Response(JSON.stringify({ error: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const unset = notConfigured('send-receipts', { SUPABASE_URL, SECRET_KEY });
+  if (unset) return unset;
 
   // Only the service role may drain the outbox — verify_jwt alone would admit any signed-in user.
-  const refused = requireServiceRole(req, SERVICE_KEY);
+  const refused = requireServiceRole(req);
   if (refused) return refused;
 
   const totals: Record<Status | 'claimed', number> = { claimed: 0, sent: 0, skipped: 0, failed: 0, pending: 0 };

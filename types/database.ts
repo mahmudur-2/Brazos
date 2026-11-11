@@ -3066,7 +3066,10 @@ export type Database = {
       decline_offer: { Args: { p_offer_id: string }; Returns: undefined }
       delete_my_account: { Args: never; Returns: undefined }
       drain_notification_outbox: { Args: never; Returns: number }
+      drain_probe: { Args: never; Returns: Json }
+      drain_probe_status: { Args: { p_probe: Json }; Returns: Json }
       drain_receipts: { Args: never; Returns: number }
+      drain_receipts_post: { Args: never; Returns: number }
       drain_settlements: { Args: never; Returns: number }
       drop_series_worker: { Args: { p_series_id: string }; Returns: undefined }
       enqueue_notification: {

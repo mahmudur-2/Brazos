@@ -399,14 +399,15 @@ deno_version = 2
 # executes; it defaults to ON, and a request it rejects gets a 401 without the
 # function's code ever running.
 #
-# Only functions that need a NON-DEFAULT answer are listed. send-push has no
-# entry and works over the default, so
-# process-settlements has none either — it is woken by pg_cron through
-# net.http_post carrying the service-role key as a Bearer token, and its own
-# first statement compares that token to the service-role key regardless.
-# send-receipts (idea 8, 2026-09-30) is the same shape: woken by pg_cron through
-# drain_receipts() with the service-role key, first statement the same comparison,
-# so it too has no entry here.
+# That check is NO PROOF OF A CALLER (lean K1): it admits the publishable key,
+# and a project on the new keys has no JWT-shaped secret key at all. So every
+# function checks its caller in its own code: the four user functions ask the
+# auth server who the token belongs to (verifiedUser), and the three timer
+# functions compare the server key in constant time (requireServiceRole).
+# send-push, send-receipts and process-settlements are woken by pg_cron through
+# net.http_post with the stored server key on apikey and as a Bearer token;
+# they are set OFF below, so a new secret key, which is not a JWT, reaches
+# that comparison instead of a platform 401.
 # ---------------------------------------------------------------------------
 [functions.stripe-webhook]
 # THE PROVIDER SENDS NO SUPABASE JWT. Without this line the platform answers
@@ -456,6 +457,19 @@ verify_jwt = true
 # AFTER EVERY DEPLOY: confirm the dashboard's per-function toggle for
 # connect-return still shows JWT verification OFF, exactly as for
 # stripe-webhook.
+verify_jwt = false
+
+[functions.send-push]
+# Woken by pg_cron (drain_notification_outbox) with the server key; its first
+# statement after the configuration check, requireServiceRole, is the check.
+verify_jwt = false
+
+[functions.send-receipts]
+# Woken by pg_cron (drain_receipts) with the server key; the same check.
+verify_jwt = false
+
+[functions.process-settlements]
+# Woken by pg_cron (drain_settlements) with the server key; the same check.
 verify_jwt = false
 
 [analytics]

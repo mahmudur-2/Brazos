@@ -32,11 +32,11 @@ const count = (haystack, needle) => haystack.split(needle).length - 1;
 
 /** The job branch's call site, exactly as R6a shipped it (flattened). */
 const JOB_CALL =
-  "await fetch(`${SUPABASE_URL}/rest/v1/rpc/begin_job_payment`, { method: 'POST', headers: { apikey: ANON_KEY, Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_job_id: jobId }), })";
+  "await fetch(`${SUPABASE_URL}/rest/v1/rpc/begin_job_payment`, { method: 'POST', headers: { apikey: PUBLISHABLE_KEY, Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_job_id: jobId }), })";
 
 /** The tip branch's call site: same token, same key, the amount as the RPC's second argument. */
 const TIP_CALL =
-  "await fetch(`${SUPABASE_URL}/rest/v1/rpc/begin_tip_payment`, { method: 'POST', headers: { apikey: ANON_KEY, Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_job_id: jobId, p_amount_cents: tipAmountCents }), })";
+  "await fetch(`${SUPABASE_URL}/rest/v1/rpc/begin_tip_payment`, { method: 'POST', headers: { apikey: PUBLISHABLE_KEY, Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_job_id: jobId, p_amount_cents: tipAmountCents }), })";
 
 test('1 · begin_tip_payment is called exactly once, and only under the tip parameter', () => {
   assert.equal(count(code, 'rpc/begin_tip_payment'), 1, 'one tip RPC call site');
@@ -46,7 +46,7 @@ test('1 · begin_tip_payment is called exactly once, and only under the tip para
 });
 
 test('2 · the job branch call site is the same bytes it was before the tip existed', () => {
-  assert.ok(flat.includes(JOB_CALL), 'begin_job_payment is still called with the caller token, the anon key and { p_job_id: jobId } alone');
+  assert.ok(flat.includes(JOB_CALL), 'begin_job_payment is still called with the caller token, the publishable key and { p_job_id: jobId } alone');
   assert.doesNotMatch(code, /begin_job_payment[^\n]*p_amount_cents/, 'the job RPC never receives an amount');
 });
 

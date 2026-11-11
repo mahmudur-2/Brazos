@@ -26,7 +26,7 @@
 // the first line of defence, the GRANTs are the real one.
 // ============================================================================
 
-import { requireServiceRole } from '../_shared/serviceAuth.ts';
+import { notConfigured, requireServiceRole, SECRET_KEY, serviceHeaders } from '../_shared/serviceAuth.ts';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
@@ -56,16 +56,11 @@ type ExpoTicket = {
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
 function rpc(fn: string, args: Record<string, unknown>): Promise<Response> {
   return fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
     method: 'POST',
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-    },
+    headers: serviceHeaders(),
     body: JSON.stringify(args),
   });
 }
@@ -210,17 +205,13 @@ async function runPass(): Promise<{ claimed: number; sent: number; failed: numbe
 }
 
 Deno.serve(async (req) => {
-  if (!SUPABASE_URL || !SERVICE_KEY) {
-    return new Response(
-      JSON.stringify({ error: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
+  const unset = notConfigured('send-push', { SUPABASE_URL, SECRET_KEY });
+  if (unset) return unset;
 
   // Only the service role may drain the outbox. Supabase's own verify_jwt (if
   // left on) would accept any signed-in user's token, so this comparison — not
   // that gate — is what keeps ordinary users out.
-  const refused = requireServiceRole(req, SERVICE_KEY);
+  const refused = requireServiceRole(req);
   if (refused) return refused;
 
   const totals = { claimed: 0, sent: 0, failed: 0, passes: 0 };

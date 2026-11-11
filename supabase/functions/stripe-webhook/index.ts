@@ -61,6 +61,7 @@
 // (20261112010200_apply_payment_event.sql). Do not subscribe it.
 // ============================================================================
 
+import { notConfigured, SECRET_KEY, serviceHeaders } from '../_shared/serviceAuth.ts';
 import { verifyStripeSignature } from './verify.mjs';
 
 const HANDLED_EVENTS = new Set([
@@ -83,7 +84,6 @@ const MAX_APPLY_ATTEMPTS = 5;
 
 const WEBHOOK_SECRET = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
 type StripeEvent = {
   id?: string;
@@ -96,14 +96,6 @@ function json(body: Record<string, unknown>, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
-}
-
-function serviceHeaders(): Record<string, string> {
-  return {
-    apikey: SERVICE_KEY,
-    Authorization: `Bearer ${SERVICE_KEY}`,
-    'Content-Type': 'application/json',
-  };
 }
 
 /**
@@ -125,10 +117,8 @@ async function readAttempts(eventId: string): Promise<number | null> {
 }
 
 Deno.serve(async (req) => {
-  if (!WEBHOOK_SECRET || !SUPABASE_URL || !SERVICE_KEY) {
-    console.error('stripe-webhook: STRIPE_WEBHOOK_SECRET / SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set');
-    return json({ error: 'not configured' }, 500);
-  }
+  const unset = notConfigured('stripe-webhook', { STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET, SUPABASE_URL, SECRET_KEY });
+  if (unset) return unset;
 
   // THE RAW BODY, READ EXACTLY ONCE. The signature covers these bytes; a
   // re-serialisation of a parsed object is a different string and would never
