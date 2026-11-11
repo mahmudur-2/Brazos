@@ -224,4 +224,80 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 - assertNotVisible: 'Delete this job\?'
 - takeScreenshot: 06-reuse-deleted
+
+# ─── E6 clean-up: cancel this run's side job (open, bids, never hired or paid) ─
+# Every command is optional until a device run has shown it work: a clean-up must never fail flow 06.
+# The sign-out below starts with a relaunch, so a step left half-done here cannot leak into it.
+- launchApp:
+    stopApp: true
+    optional: true
+- runFlow:
+    file: subflows/launch-settle.yml
+    optional: true
+- extendedWaitUntil:
+    visible: 'What do you need done\?'
+    timeout: 60000
+    optional: true
+- tapOn:
+    text: "Create"
+    optional: true
+- extendedWaitUntil:
+    visible: "My jobs"
+    timeout: 15000
+    optional: true
+- tapOn:
+    text: "My jobs"
+    optional: true
+- extendedWaitUntil:
+    notVisible: "Loading your jobs…"
+    timeout: 30000
+    optional: true
+- scrollUntilVisible:
+    element:
+      text: '.*${output.marker} side.*'
+    direction: DOWN
+    timeout: 30000
+    optional: true
+- tapOn:
+    text: '.*${output.marker} side.*'
+    index: 0
+    optional: true
+- extendedWaitUntil:
+    visible: "Job & Bids"
+    timeout: 30000
+    optional: true
+# An open job with bids shows "Cancel job" at the foot of the page (screens/ClientJobDetailScreen.tsx).
+- scrollUntilVisible:
+    element:
+      text: "Cancel job"
+    direction: DOWN
+    centerElement: true
+    timeout: 30000
+    optional: true
+- tapOn:
+    text: "Cancel job"
+    optional: true
+# The confirm (lib/moneyCopy.ts customerCancelConfirm): an open job is the no-charge case.
+- extendedWaitUntil:
+    visible: 'Cancel this job\?'
+    timeout: 15000
+    optional: true
+- assertVisible:
+    text: 'You haven.t paid for this job, so no money moves\..*'
+    optional: true
+- tapOn:
+    text: "Cancel job"
+    rightOf: "Keep job"
+    optional: true
+- extendedWaitUntil:
+    visible: "This job was cancelled"
+    timeout: 30000
+    optional: true
+# The no-payment sentence: the cancel left no payment row on this job.
+- assertVisible:
+    text: 'No further action is needed\..*'
+    optional: true
+- takeScreenshot:
+    path: 06-side-cancelled
+    optional: true
 - runFlow: subflows/sign-out.yml
