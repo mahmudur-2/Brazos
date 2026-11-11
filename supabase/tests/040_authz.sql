@@ -1120,13 +1120,17 @@ select throws_ok($$ insert into storage.objects (bucket_id, name) values ('chat-
 select is((select count(*) from storage.objects where bucket_id = 'chat-photos'), 0::bigint, 'stranger: reads no chat photo');
 
 -- job-photos: three write paths — postings/<uid>/…, <job>/… for the assigned
--- worker, reviews/<uid>/… — and one bucket-wide read.
+-- worker while the job is in progress, reviews/<uid>/… — and, since B9, a read
+-- scoped to the uploader's own folder and the two parties of a job's folder
+-- (400_access_matrix.sql §3 has the full matrix).
 select tests.authenticate_as(:'owner');
 select lives_ok($$ insert into storage.objects (bucket_id, name) values ('job-photos', 'postings/' || (select v from fx where k = 'owner')::text || '/authz.jpg') $$,
   'owner: writes a posting photo under their own uid (positive control)');
 select tests.authenticate_as(:'worker');
+-- B17: completion files are written while the job is in progress, so the worker starts j_live first.
+select public.transition_job_status(:'j_live', 'in_progress');
 select lives_ok($$ insert into storage.objects (bucket_id, name) values ('job-photos', (select v from fx where k = 'j_live')::text || '/authz-done.jpg') $$,
-  'worker: writes a completion photo on j_live, the job assigned to them (positive control)');
+  'worker: writes a completion photo on j_live, the job assigned to them and in progress (positive control)');
 select lives_ok($$ insert into storage.objects (bucket_id, name) values ('job-photos', 'reviews/' || (select v from fx where k = 'worker')::text || '/authz.jpg') $$,
   'worker: writes a review photo under their own uid (positive control)');
 select tests.authenticate_as(:'stranger');
@@ -1138,8 +1142,8 @@ select tests.authenticate_as(:'bidder');
 select throws_ok($$ insert into storage.objects (bucket_id, name) values ('job-photos', (select v from fx where k = 'j_live')::text || '/authz-bidder.jpg') $$,
   '42501', 'new row violates row-level security policy for table "objects"', 'bidder: cannot write a completion photo on the job they lost');
 select tests.authenticate_as(:'stranger');
-select is((select count(*) from storage.objects where bucket_id = 'job-photos'), 3::bigint,
-  'stranger: CAN read all three job photos — job_photos_read carries no ownership clause, so job photos are readable by every account by design');
+select is((select count(*) from storage.objects where bucket_id = 'job-photos'), 0::bigint,
+  'B9: stranger: lists none of the three job photos — job_photos_read admits only the uploader''s own folder and the parties of a job''s folder');
 with u as (update storage.objects set metadata = '{}'::jsonb where bucket_id = 'job-photos' returning 1)
 select is((select count(*) from u), 0::bigint, 'stranger: an UPDATE of a job photo touches zero rows (no UPDATE policy covers this bucket at all)');
 

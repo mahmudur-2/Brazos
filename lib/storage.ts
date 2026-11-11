@@ -196,7 +196,10 @@ export async function uploadAvatar(userId: string, asset: ImagePickerAsset) {
 export async function uploadJobPhoto(jobId: string, asset: ImagePickerAsset) {
   const rawExt = (asset.uri.split('?')[0].split('.').pop() ?? 'jpg').toLowerCase();
   const ext = rawExt.length <= 4 ? rawExt : 'jpg';
-  return uploadAsset(BUCKET, `${jobId}/${Date.now()}.${ext}`, asset);
+  // A random suffix, as for postings and reviews: two photos picked in the same millisecond must not
+  // land on one name, because the bucket has no UPDATE policy for the upsert's overwrite path.
+  const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return uploadAsset(BUCKET, `${jobId}/${unique}.${ext}`, asset);
 }
 
 /**
