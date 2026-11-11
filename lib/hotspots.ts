@@ -220,14 +220,14 @@ export function milesBetween(lat1: number, lng1: number, lat2: number, lng2: num
 export type NearbyJob = OpenJob & { distance_miles: number };
 
 /**
- * Exact job-level distance, server-side — Worker Home's "X within N miles"
- * pill and its results screen both call this, so a stated radius claim is
- * backed by real Haversine distance against job_locations (phase12's
- * RLS-locked exact-coordinate table), not hotspot-cell membership. See
- * supabase/phase41_jobs_within_radius.sql for the RPC itself: it never
- * returns any job's raw lat/lng, only public fields + distance_miles, and a
- * job with no job_locations row (no precise coordinates recorded) is
- * excluded by the RPC's own join rather than guessed at.
+ * Job-level distance, server-side — Worker Home's "X within N miles" pill and
+ * its results screen both call this. The distance is measured to the centre of
+ * the job's ~0.27-mile market cell (the cell job_hotspots() draws), snapped to
+ * half a mile, never to the job's exact point: B2, so repeated searches from
+ * moved points cannot trilaterate a home (20261112030000_distance_from_cell_centre.sql).
+ * The RPC never returns any job's raw lat/lng, only public fields +
+ * distance_miles, and a job with no job_locations row (no coordinates recorded)
+ * is excluded by the RPC's own join rather than guessed at.
  */
 export async function fetchJobsWithinRadius(
   lat: number,
