@@ -367,6 +367,9 @@ select is(
   '4: runner — exactly one such constraint: dropped and re-added, not duplicated'
 );
 
+-- ADAPTATION 4 (_helpers.sql): §5 and §6 start from a fresh account's payout state, no row.
+select tests.set_payouts(u, 'none') from unnest(array[:'worker', :'stranger']::uuid[]) as u;
+
 -- ---------------------------------------------------------------------------
 -- §5. P5 — AUTHORIZATION. The provider account id and the payout state are
 --     neither client-readable nor client-writable, by any identity; the one

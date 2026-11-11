@@ -28,6 +28,8 @@ grant select, insert on fx to anon, authenticated, service_role;
 
 select tests.create_user('a9.customer@brazos.test', 'Cara Customer') as customer \gset
 select tests.create_user('a9.payable@brazos.test',  'Pat Payable')   as payable  \gset
+-- ADAPTATION 4 (_helpers.sql): this file writes each payee's payout account itself, so none to start.
+select tests.set_payouts(:'payable', 'none');
 insert into fx values ('customer', :'customer'), ('payable', :'payable');
 
 -- Thirty blocked payees, each with a job and a due row released BEFORE the payable one.
@@ -41,6 +43,7 @@ declare
 begin
   for v_i in 1..30 loop
     v_worker := tests.create_user('a9.blocked' || v_i || '@brazos.test', 'Blocked ' || v_i);
+    perform tests.set_payouts(v_worker, 'none');
     insert into public.jobs (client_id, title, assigned_worker_id)
     values (v_customer, 'A9 blocked fixture ' || v_i, v_worker) returning id into v_job;
     insert into public.payments (job_id, payer_id, payee_id, amount_cents, platform_fee_cents, provider, status)
@@ -157,6 +160,7 @@ declare
 begin
   for v_i in 1..25 loop
     v_worker := tests.create_user('a9r.refused' || v_i || '@brazos.test', 'Refused ' || v_i);
+    perform tests.set_payouts(v_worker, 'none');
     insert into public.payment_accounts (user_id, stripe_account_id, payouts_enabled, payouts_status)
     values (v_worker, 'acct_a9r_refused_' || v_i, true, 'enabled');
     insert into public.jobs (client_id, title, assigned_worker_id)
@@ -175,6 +179,7 @@ begin
 end $$;
 -- The one row never tried, released LAST — after every refused row.
 select tests.create_user('a9r.fresh@brazos.test', 'Fay Fresh') as fresh \gset
+select tests.set_payouts(:'fresh', 'none');
 insert into public.payment_accounts (user_id, stripe_account_id, payouts_enabled, payouts_status)
 values (:'fresh', 'acct_a9r_fresh', true, 'enabled');
 insert into public.jobs (client_id, title, assigned_worker_id)

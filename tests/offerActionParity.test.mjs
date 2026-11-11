@@ -370,18 +370,19 @@ test('the counter cap is still 10 per side, per chain', async () => {
   // The other side's allowance is independent and untouched.
   assert.equal(countersRemaining(chain, CUSTOMER), 10);
 
-  // Server-side cap unchanged: the baseline's (phase63's) counter_offer() is
-  // still the newest one.
-  const baseline = await read('supabase/migrations/20260901000000_baseline.sql');
-  const sql = baseline.slice(
-    baseline.indexOf('CREATE OR REPLACE FUNCTION "public"."counter_offer"('),
-    baseline.indexOf('ALTER FUNCTION "public"."counter_offer"(')
-  );
-  assert.match(sql, /v_max_per_side constant integer := 10;/);
-  for (const file of readdirSync(new URL('../supabase/migrations', import.meta.url))) {
-    if (!file.endsWith('.sql') || file.startsWith('20260901000000_')) continue;
-    assert.doesNotMatch(await read(`supabase/migrations/${file}`), /function public\.counter_offer\(/i, `${file} redefines counter_offer()`);
+  // Server-side cap unchanged: the NEWEST counter_offer() still caps each side at 10. B11
+  // (20261112040000_payouts_gate.sql) restates the baseline's (phase63's) body with the payout gate.
+  let newest = null;
+  for (const file of readdirSync(new URL('../supabase/migrations', import.meta.url)).sort()) {
+    if (!file.endsWith('.sql')) continue;
+    const text = await read(`supabase/migrations/${file}`);
+    const at = text.indexOf('CREATE OR REPLACE FUNCTION "public"."counter_offer"(');
+    if (at >= 0) newest = { file, text: text.slice(at) };
   }
+  assert.ok(newest, 'counter_offer() is defined');
+  const body = newest.text.slice(0, newest.text.indexOf('\n$$;'));
+  assert.ok(body.length > 0, `${newest.file}: counter_offer() body found`);
+  assert.match(body, /v_max_per_side constant integer := 10;/, `${newest.file}: the cap is 10`);
 });
 
 // ---------------------------------------------------------------------------

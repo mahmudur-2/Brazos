@@ -29,6 +29,7 @@ import { DropMenu, type DropMenuItem } from '../components/DropMenu';
 import { nextMenu, personSafetyItems, type ChatMenu } from '../lib/chatMenus';
 import { invalidateJobs } from '../lib/queryClient';
 import { OfferCard } from '../components/OfferCard';
+import { PayoutsGateCard, useMyPayoutsGate } from '../components/PayoutsGateCard';
 import { PhotoViewer } from '../components/PhotoViewer';
 
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -92,6 +93,7 @@ import {
   counterOffer,
   declineOffer,
   isCounterLimitError,
+  isOfferActionableBy,
   offerIdOf,
   withdrawOffer,
   type OfferWithJob,
@@ -390,6 +392,10 @@ export function ChatScreen() {
     offers: threadOffers,
     refresh: refreshRequests,
   } = useThreadOffers(messages);
+  // B11: the payout state is read only while an offer here waits on this user as its worker.
+  const payouts = useMyPayoutsGate(
+    threadOffers.some((offer) => offer.worker_id === user?.id && isOfferActionableBy(offer, user?.id))
+  );
 
   const listRef = useRef<FlatList<TimelineItem>>(null);
 
@@ -1071,6 +1077,13 @@ export function ChatScreen() {
                   : undefined
               }
             />
+            {/* B11: the hire request he must answer, while his payouts are not on. */}
+            {request &&
+            request.worker_id === user?.id &&
+            latestMessageIdByRequest[offerId] === item.id &&
+            isOfferActionableBy(request, user?.id) ? (
+              <PayoutsGateCard status={payouts} framed />
+            ) : null}
           </View>
         );
       }
@@ -1107,6 +1120,7 @@ export function ChatScreen() {
       respondingId,
       messagesById,
       openOfferJobFromRow,
+      payouts,
     ]
   );
 

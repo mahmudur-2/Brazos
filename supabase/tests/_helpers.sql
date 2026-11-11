@@ -34,6 +34,14 @@
 --   exercise PostgREST itself (schema cache, JWT verification, the
 --   statement_timeout the roles migration sets at login).
 --
+--   ADAPTATION 4 (B11, 20261112040000_payouts_gate.sql): sign-up makes no
+--   payout account, but tests.create_user gives every account an ENABLED one
+--   (a test acct_ id, then set_payouts_status 'enabled'), because a worker
+--   without one can no longer bid, counter or be hired. A test about another
+--   payout state says so with tests.set_payouts(user, status); 'none' removes
+--   the row, the state of a fresh real account. Nothing here proves Stripe's
+--   onboarding or connect-status itself.
+--
 -- Anything not listed above is the same object staging has.
 create extension if not exists pgtap with schema extensions;
 
@@ -44,8 +52,27 @@ create schema if not exists tests;
 -- those roles need to reach the schema and the functions.
 grant usage on schema tests to anon, authenticated;
 
+-- ADAPTATION 4: sets a user's payout state through the service-role functions
+-- connect-onboarding and connect-status call. 'none' removes the row (no payout
+-- account, as after sign-up). Runner only.
+create or replace function tests.set_payouts(p_user uuid, p_status text)
+returns void
+language plpgsql
+as $$
+begin
+  if p_status = 'none' then
+    delete from public.payment_accounts where user_id = p_user;
+    return;
+  end if;
+  perform public.set_payment_account(p_user, 'acct_test_' || replace(p_user::text, '-', ''));
+  perform public.set_payouts_status(p_user, p_status);
+end
+$$;
+revoke all on function tests.set_payouts(uuid, text) from public;
+
 -- Creates an account the way sign-up leaves it: an auth.users row, whose
--- handle_new_user trigger writes the profile. Returns the new id.
+-- handle_new_user trigger writes the profile. Returns the new id. Plus
+-- ADAPTATION 4: an enabled payout account.
 create or replace function tests.create_user(p_email text, p_full_name text default null)
 returns uuid
 language plpgsql
@@ -64,6 +91,7 @@ begin
     '{"provider":"email","providers":["email"]}'::jsonb,
     jsonb_build_object('full_name', v_name), now(), now(), '', '', '', ''
   );
+  perform tests.set_payouts(v_id, 'enabled');
   return v_id;
 end
 $$;

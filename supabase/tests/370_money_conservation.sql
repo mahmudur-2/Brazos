@@ -55,6 +55,8 @@ create temp table mc_book (
 select tests.create_user('mc.customer@brazos.test', 'Mo Customer') as customer \gset
 select tests.create_user('mc.worker@brazos.test',   'Mia Worker')  as worker   \gset
 insert into fx values ('customer', :'customer'), ('worker', :'worker');
+-- ADAPTATION 4 (_helpers.sql): the worker's payout account is this file's own, written below.
+select tests.set_payouts(:'worker', 'none');
 insert into public.payment_accounts (user_id, stripe_account_id, payouts_enabled, payouts_status)
 values (:'worker', 'acct_mc_worker', true, 'enabled');
 

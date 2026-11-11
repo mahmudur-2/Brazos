@@ -39,7 +39,9 @@ import {
   declineOfferConfirmTitle,
   offerExpiryLabel,
   offerResponseNote,
+  payoutsGateCard,
 } from '../lib/offerCopy';
+import { PayoutsGateCard, useMyPayoutsGate } from '../components/PayoutsGateCard';
 import { useAuth } from '../hooks/useAuth';
 import { useOpenJobDetail } from '../hooks/useJobDetail';
 import { useMode } from '../modes';
@@ -190,6 +192,9 @@ export function JobDetailScreen() {
   const insets = useSafeAreaInsets();
 
   const isOwnJob = !!user && job.client_id === user.id;
+  // B11: a worker whose payouts are not on sees the payout card in place of the offer buttons.
+  const payouts = useMyPayoutsGate(mode === 'worker' && !isOwnJob);
+  const payoutsGateShown = payoutsGateCard(payouts) !== null;
 
   // D11: one quote_job_price() read per distinct figure — a min–max budget is
   // two calls, a single budget one — only for the worker view that renders
@@ -839,6 +844,12 @@ export function JobDetailScreen() {
                   onCounter={() => setShowCounterForm((visible) => !visible)}
                   onDecline={() => setConfirmResponse('decline')}
                 />
+                {/* B11: accept and counter need payouts on; decline never does. */}
+                {payoutsGateShown ? (
+                  <View style={styles.counterFormWrap}>
+                    <PayoutsGateCard status={payouts} />
+                  </View>
+                ) : null}
                 {showCounterForm ? (
                   <View style={styles.counterFormWrap}>
                     <OfferComposer
@@ -1063,7 +1074,12 @@ export function JobDetailScreen() {
           )}
           </View>
         </ScrollView>
-        {showBidBar ? (
+        {showBidBar && payoutsGateShown ? (
+          <View style={[styles.bidBar, { paddingBottom: footerPad }]}>
+            <PayoutsGateCard status={payouts} />
+          </View>
+        ) : null}
+        {showBidBar && !payoutsGateShown ? (
           <View style={[styles.bidBar, { paddingBottom: footerPad }]}>
             <View style={styles.bidBarRow}>
               {job.budget_cents != null ? (

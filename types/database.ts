@@ -4179,6 +4179,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      worker_payouts_ready: { Args: { p_user: string }; Returns: boolean }
     }
     Enums: {
       bid_status: "pending" | "accepted" | "rejected" | "withdrawn"

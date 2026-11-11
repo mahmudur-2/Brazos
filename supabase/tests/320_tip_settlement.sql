@@ -219,6 +219,8 @@ select is(
 );
 
 -- The service path of connect-onboarding: the account stored, not yet enabled.
+-- ADAPTATION 4 (_helpers.sql): from no payout account, as a worker who never set one up.
+select tests.set_payouts(:'worker', 'none');
 select public.set_payment_account(:'worker', 'acct_b1_worker');
 select is(
   jsonb_build_object(

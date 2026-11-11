@@ -29,6 +29,7 @@
 
 import { formatShortDay } from './time';
 import { CANCELLATION_DISCLOSURE } from './moneyCopy';
+import type { PayoutsStatus } from './payments';
 
 /** The amber "whose move" pill beside the heading. */
 export const YOUR_MOVE_BADGE_LABEL = 'Your move';
@@ -174,4 +175,32 @@ export function acceptOfferConfirmTitle(amountLabel: string, viewerIsWorker: boo
 /** Fix F — decline confirms with the exact amount too. */
 export function declineOfferConfirmTitle(amountLabel: string, viewerIsWorker: boolean): string {
   return `Decline this ${amountLabel} ${offerNoun(viewerIsWorker)}?`;
+}
+
+/**
+ * B11 (docs/critical/job-lifecycle.md): the card a worker sees in place of the offer buttons while
+ * his payout account is not on. The server refuses the bid, counter or accept either way
+ * (20261112040000_payouts_gate.sql); this says it before he tries. Null is today's buttons: the
+ * state is unknown (not read, a failed read or refresh, not the card path) or enabled.
+ */
+export type PayoutsGateView = { title: string | null; body: string; cta: string | null };
+
+export function payoutsGateCard(status: PayoutsStatus | null): PayoutsGateView | null {
+  if (status === 'none' || status === 'action_needed') {
+    return {
+      title: 'Finish payout set-up first',
+      body: 'You need a payout account before you can send offers.',
+      cta: 'Set up payouts',
+    };
+  }
+  if (status === 'under_review') {
+    return { title: null, body: 'Your payout account is under review. You can send offers once it is on.', cta: null };
+  }
+  return null;
+}
+
+/** The states the provider can have moved since the last check: the gate's one connect-status refresh
+ *  runs only for these. 'none' has no account to ask about; 'enabled' needs nothing. */
+export function payoutsGateRefreshes(status: PayoutsStatus | null): boolean {
+  return status === 'action_needed' || status === 'under_review';
 }
