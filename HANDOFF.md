@@ -3,7 +3,7 @@
 Resume: read CLAUDE.md, this file, then `git log -12 --oneline` and `git status`, then do "Next". Git owns
 branch, HEAD and tree; older sections of this file are in git history. Written 2026-11-10 ~21:30Z by the
 orchestrating chat (Opus 5.5), which stopped at the owner's weekly token cap (10% used; hard stop 15%).
-The website lines were rewritten 2026-11-11 ~05:30Z by the website chat (Fable 5.2); it did not touch the
+The website lines were rewritten 2026-11-11 ~07:00Z by the website chat (Fable 5.2); it did not touch the
 e2e loop, so every e2e line below is as the orchestrating chat left it. The B1 (tip) lines were
 written 2026-11-11 ~06:35Z by the B1 chat (Fable 5.2); it did not touch the e2e loop either.
 
@@ -34,17 +34,16 @@ written 2026-11-11 ~06:35Z by the B1 chat (Fable 5.2); it did not touch the e2e 
   not confirmed on screen until the transfer lands (read from the old classifier, not run on a
   phone). The next app build carries the new wording. No Maestro flow pays a tip (flow 06 only
   checks "Add a tip?" is visible).
-- The website chat reports (not checked by the B1 chat) that the owner deployed `site/` as a
-  Cloudflare Worker with static assets named `brazos`, not Pages, live at
-  https://brazos.brazosapp.workers.dev/ (`/privacy` and `/support` are the two App Store Connect
-  URLs; the owner's paste is not yet confirmed). The website lines below still say "Cloudflare
-  Pages": the website chat updates them, with ledger O2 and ARCHITECTURE.
-- The public website (brief: `docs/lean/WEBSITE-BRIEF.md`) is **built, not deployed** (G19, 29554fb):
-  Terms and Privacy rewritten for launch in `lib/legal/` (version `2026-11-11`, the draft notice removed
-  at the owner's word), `node scripts/build-site.mjs` writes `site/` (git-ignored) in the look the owner
-  picked (C "Ledger": no logo, no image, light and dark from the device). The owner uploads `site/` to
-  Cloudflare Pages and pastes two URLs into App Store Connect (ledger O2). Done only when the owner has
-  opened the live links.
+- The public website (brief: `docs/lean/WEBSITE-BRIEF.md`) is **live** at
+  https://brazos.brazosapp.workers.dev/ (built by G19, 29554fb): Terms and Privacy rewritten for launch
+  in `lib/legal/` (version `2026-11-11`, the draft notice removed at the owner's word),
+  `node scripts/build-site.mjs` writes `site/` (git-ignored) in the look the owner picked (C "Ledger":
+  no logo, no image, light and dark from the device). The owner uploaded `site/` to Cloudflare as a
+  Worker with static assets named `brazos` (not Pages; HTML handling `auto-trailing-slash`, not found
+  `404-page`); the account's workers.dev subdomain is `brazosapp`. Checked with curl 2026-11-11
+  ~06:45Z: `/`, `/support`, `/privacy`, `/terms` return 200 and equal the built files byte for byte,
+  an unknown path returns the built 404 page, the `_headers` rules are applied, no cookie is set.
+  Still the owner's: paste `/privacy` and `/support` into App Store Connect (ledger O2; not confirmed).
 - The new legal version asks every existing account to accept again on its next open of a build that
   holds it. Build `c14fa739…` still holds the draft4 text; the next app build picks up the new one.
 - Run 37 (after this file was first written): 01-02 green, 03 red with no Maestro message; artifacts
@@ -57,7 +56,7 @@ written 2026-11-11 ~06:35Z by the B1 chat (Fable 5.2); it did not touch the e2e 
 - Nothing blocks the loop. Owner-only items are O1-O7 in the ledger (lawyer review, public privacy and
   support URLs, OTP rotation, App Review payment path, production env check, production auth settings,
   branch protection).
-- Website, owner only: the Cloudflare Pages upload and the App Store Connect URLs (O2). Open questions
+- Website, owner only: pasting the two URLs into App Store Connect (O2). Open questions
   the owner has not answered: arbitration or New York courts (as written); which company sends the
   production sign-in codes (the policy says "a text-message provider"). No company owns Brazos yet, so
   the Terms name "the operator of Brazos": form an LLC, then put its name and address in section 1
@@ -120,4 +119,5 @@ written 2026-11-11 ~06:35Z by the B1 chat (Fable 5.2); it did not touch the e2e 
   settlement re-opens the amount hole); `git revert c8be212` undoes the app wording and the tests.
   Production was never touched.
 - The website and the legal rewrite: `git revert 29554fb` (texts, versions, script, tests in one commit);
-  the live site, once uploaded, is rolled back in Cloudflare Pages (Deployments → an older one → Rollback).
+  the live site is rolled back in Cloudflare (Workers & Pages → `brazos` → Deployments → an older
+  version → Rollback), or by uploading an older build of `site/` to the same Worker.
