@@ -54,6 +54,11 @@
 // and that subscription MUST CHANGE TOGETHER: a type added there and not here
 // is answered 200 and dropped on the floor; a type added here and not there
 // never arrives.
+//
+// payment_intent.payment_failed is left out ON PURPOSE (lean B22): a declined
+// card leaves the PaymentIntent open for another card, so the event changes
+// nothing on the ledger, and apply_payment_event has no arm for it
+// (20261112010200_apply_payment_event.sql). Do not subscribe it.
 // ============================================================================
 
 import { verifyStripeSignature } from './verify.mjs';

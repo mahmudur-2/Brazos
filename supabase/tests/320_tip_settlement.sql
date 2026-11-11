@@ -21,7 +21,7 @@
 -- intent exists (T8), a raise above the ceiling (T9), the first amount's intent paid after the
 -- change (T10). J5 (4000) carries T11: a charge that reports a different amount than the row.
 --
--- FIXTURE SURGERY, DECLARED (one, before T4a): now() is fixed for the whole transaction, so a replay
+-- FIXTURE SURGERY, DECLARED (two: one before T4a, one in T5b, said where it is done): now() is fixed for the whole transaction, so a replay
 -- that re-stamped held_at or release_requested_at would write the value already there and T4a could
 -- not see it. The runner rewinds t1's two stamps by one hour first; a re-stamp then shows. T7 needs
 -- none: open_job_dispute refuses once the job payment has released (test 12), so J3's report is
@@ -431,9 +431,13 @@ select tests.ts_event('evt_ts_tx_failed', 'payment_intent.payment_failed', :'tx'
 select is(
   (select jsonb_build_object('event', tests.ts_event_state('evt_ts_tx_failed'), 'status', p.status::text, 'refund_cents', p.refund_cents)
      from public.payments p where p.id = :'tx'),
-  jsonb_build_object('event', 'processed', 'status', 'failed', 'refund_cents', null),
-  'B1 rule 5 (T5b fixture): a failed card payment leaves the tip failed, with nothing to refund yet'
+  jsonb_build_object('event', 'processed', 'status', 'unfunded', 'refund_cents', null),
+  'B1 rule 5 / lean B22 (T5b fixture): a failed card attempt changes nothing; the tip stays unfunded, with nothing to refund'
 );
+-- SURGERY, DECLARED (the second): lean B22 took the payment_failed arm out, so no event writes
+-- 'failed' any more. Rows written before that change can still read failed; the runner sets it
+-- here so the late success below still proves how such a row is paid.
+update public.payments set status = 'failed' where id = :'tx';
 select tests.ts_event('evt_ts_tx_succeeded', 'payment_intent.succeeded', :'tx', '{"id":"pi_ts_tx"}'::jsonb);
 select is(
   (select jsonb_build_object(
