@@ -75,7 +75,9 @@ export function paymentCaption(facts: PaymentCaptionFacts, viewer: MoneyViewer):
   const name = facts.counterpartFirstName?.trim() || null;
   const customer = viewer === 'customer';
   if (facts.tip) {
-    if (facts.status === 'held') return customer ? 'Tip held in protection' : `Tip from ${name ?? 'the customer'} — on its way`;
+    // B1: a held tip is charged and already queued for transfer to the worker;
+    // it reads "on its way" until transfer.created releases it.
+    if (facts.status === 'held') return customer ? `Tip on its way to ${name ?? 'your worker'}` : `Tip from ${name ?? 'the customer'} — on its way`;
     if (facts.status === 'released' || facts.status === 'paid_out') {
       return customer ? `Tip sent to ${name ?? 'your worker'}` : 'Tip received';
     }

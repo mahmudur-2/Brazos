@@ -16,10 +16,11 @@
 // Every number sent to the provider is read VERBATIM from a payments column:
 // transfer_cents to transfer, refund_cents to refund. Both were decided by the
 // database — release_job_payment, auto_release_due_payments, cancel_job and
-// resolve_job_dispute write them. This function adds nothing, rounds nothing
-// and derives nothing. A row whose amount is null or not positive is SKIPPED
-// and counted as a defect; substituting a computed value would be a defect even
-// if the number happened to be right.
+// resolve_job_dispute write them, and apply_payment_event writes a charged
+// tip's transfer_cents (B1, 20261111000000_tip_settlement.sql). This function
+// adds nothing, rounds nothing and derives nothing. A row whose amount is null
+// or not positive is SKIPPED and counted as a defect; substituting a computed
+// value would be a defect even if the number happened to be right.
 //
 // ---------------------------------------------------------------------------
 // SUCCESS RECORDS NOTHING BACK ON THE LEDGER, AND THAT IS THE CONTRACT

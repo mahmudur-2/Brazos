@@ -33,9 +33,11 @@ import {
   classifyTipPoll,
   fetchJobPaymentState,
   fetchJobTip,
+  isHeld,
   isReleased,
   isReleaseRequested,
   type Payment,
+  type TipPollState,
 } from '../lib/payments';
 import {
   presentCheckoutSheet,
@@ -80,15 +82,22 @@ const TIP_PRESETS_CENTS = [500, 1000, 2000];
  * ceiling — are shown as they are), the row is read back so the confirm
  * dialog shows ITS charge_amount_cents, the same payment sheet takes the
  * card, and the screen POLLS the tip row (2s, up to 30s) for exactly three
- * outcomes: released (a tip has no held stop — payment_intent.succeeded
- * releases it), gone (the row failed or was voided), or timed out (an honest
+ * outcomes: confirmed (the row reads held — payment_intent.succeeded charged
+ * the card and queued the tip for transfer to the worker (B1) — or already
+ * released), gone (the row failed or was voided), or timed out (an honest
  * sentence and a re-read; never a second tip). A dismissed sheet is not an
  * error: the unfunded row keeps its funding window and the controls return.
- * Nothing here says "sent" or "charged" before the ledger says released.
+ * Nothing here says the tip was sent, or went to the worker, before the
+ * ledger says released: a held tip is on its way.
  */
 
 /** R6c (D3): the tip poll's three terminal branches, plus idle. */
 type TipPhase = 'idle' | 'confirming' | 'gone' | 'timeout';
+
+/** B1: the poll's success, for the poll and the re-read alike — the card was
+ *  charged and the tip is held, queued for transfer to the worker
+ *  ('charged'), or its transfer already landed ('released'). */
+const isTipConfirmed = (outcome: TipPollState) => outcome === 'charged' || outcome === 'released';
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -200,6 +209,9 @@ export function ReviewAndTipScreen() {
   const tipValid = tipCents != null && !Number.isNaN(tipCents) && tipCents > 0 && tipCents <= 100000;
   // R6c (D3): on the card path a tip row can exist UNFUNDED (minted, sheet
   // not finished); it is a tip in progress, never a tip that went through.
+  // B1: past unfunded the card was charged — a held tip is on its way to the
+  // worker and a released one reached them; the note under the amount says
+  // which.
   const tipPending = !!tip && tip.status === 'unfunded';
   const tipDone = !!tip && !tipPending;
 
@@ -273,7 +285,9 @@ export function ReviewAndTipScreen() {
    * The poll (R6a D7's shape): fetchJobTip every 2 seconds for up to 30
    * seconds after a successful sheet. "Seen" starts true — create-payment
    * returned the row's id — so a row that reads null now IS the failed/voided
-   * signal. Released is success: a tip has no held stop.
+   * signal. Charged (held) or released is success: payment_intent.succeeded
+   * holds the tip and queues its transfer at once (B1), and transfer.created
+   * releases it.
    */
   async function confirmCardTip() {
     setTipPhase('confirming');
@@ -288,7 +302,7 @@ export function ReviewAndTipScreen() {
           seen = true;
           setTip(data);
         }
-        if (outcome === 'released') {
+        if (isTipConfirmed(outcome)) {
           setTipPhase('idle');
           setTipChoice(null);
           setCustomTip('');
@@ -311,7 +325,7 @@ export function ReviewAndTipScreen() {
     if (!activeRef.current || error) return;
     const outcome = classifyTipPoll({ status: data?.status ?? null, seen: true });
     if (data) setTip(data);
-    if (outcome === 'released') {
+    if (isTipConfirmed(outcome)) {
       setTipPhase('idle');
       setTipChoice(null);
       setCustomTip('');
@@ -444,7 +458,29 @@ export function ReviewAndTipScreen() {
           : tax > 0
             ? ` Your card is charged the tip plus ${formatBudget(tax)} tax, through the secure payment sheet.`
             : ' Your card is charged through the secure payment sheet.';
-    return `A ${formatBudget(amount)} tip goes straight to ${who} as its own payment, separate from the job payment.${charge} One tip per job.`;
+    return `A ${formatBudget(amount)} tip goes to ${who} as its own payment, separate from the job payment.${charge} One tip per job.`;
+  })();
+
+  // R6c (D3) and B1: the note under a charged tip's amount. Where the tip is
+  // follows the row: held is on its way to the worker (charged, its transfer
+  // queued), released or paid_out went to them, and any other state (a
+  // refund) gets no such sentence. The all-in figure is the tip ROW's
+  // charge_amount_cents, read off the row — the card was charged once the
+  // row is past unfunded.
+  const tipDoneNote = (() => {
+    if (!tip) return null;
+    const where = isHeld(tip)
+      ? `Your tip is on its way to ${workerName ?? 'the worker'} on top of the job payment.`
+      : isReleased(tip)
+        ? `Your tip went to ${workerName ?? 'the worker'} on top of the job payment.`
+        : null;
+    const charged =
+      tip.charge_amount_cents == null
+        ? null
+        : tip.charge_amount_cents > tip.amount_cents
+          ? `Your card was charged ${formatBudget(tip.charge_amount_cents)} — the tip plus its protection fee.`
+          : `Your card was charged ${formatBudget(tip.charge_amount_cents)}.`;
+    return [where, charged].filter(Boolean).join(' ') || null;
   })();
 
   return (
@@ -530,16 +566,7 @@ export function ReviewAndTipScreen() {
               {tipDone && tip ? (
                 <>
                   <MoneyText cents={tip.amount_cents} state={tip.status} tip counterpartFirstName={firstNameOf(workerName)} />
-                  <Text style={styles.cardNote}>
-                    {/* R6c (D3): the all-in figure is the tip ROW's
-                        charge_amount_cents, read off the row, and it is
-                        said only once the row reads released. */}
-                    {tip.charge_amount_cents != null
-                      ? tip.charge_amount_cents > tip.amount_cents
-                        ? `Your tip went to ${workerName ?? 'the worker'} on top of the job payment. Your card was charged ${formatBudget(tip.charge_amount_cents)} — the tip plus its protection fee.`
-                        : `Your tip went to ${workerName ?? 'the worker'} on top of the job payment. Your card was charged ${formatBudget(tip.charge_amount_cents)}.`
-                      : `Your tip went to ${workerName ?? 'the worker'} on top of the job payment.`}
-                  </Text>
+                  {tipDoneNote ? <Text style={styles.cardNote}>{tipDoneNote}</Text> : null}
                 </>
               ) : paymentsMode === 'disabled' ? (
                 <Text style={styles.cardNote}>
@@ -581,7 +608,7 @@ export function ReviewAndTipScreen() {
                     <Text style={styles.cardNote}>
                       The card was charged, but the app hasn’t seen the tip confirm
                       yet. Check again shortly — once it confirms, the tip shows
-                      here as sent.
+                      here.
                     </Text>
                     <Button
                       title="Check again"

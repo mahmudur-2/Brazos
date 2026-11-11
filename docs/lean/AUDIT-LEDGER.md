@@ -17,6 +17,7 @@ before it entered this list. Status: OPEN, FIXING (batch), FIXED (commit), OWNER
 | E1 | Welcome taps lost on slow Macs (run 25) | F23 2cc09c2 | run 25 video |
 | E2 | Inbox row: VoiceOver heard "Working, <job>" while the screen showed "Job request · needs your reply"; a card message previewed as a bare "…" | F25 2865121 | run 27 screen hierarchy + screenshot; unit test |
 | E7 | Report from an inbox row's menu did nothing on iOS (opened while the menu's Modal closed) | F29 b2314da | run 31 hierarchy; run 32 flow 07 green; unit test |
+| B1 | Tips were charged and marked released but never entered `transfers_due`: the worker was never paid the tip. Now a charged tip is `held`, queued in `transfers_due` for the whole tip, and `released` only by `transfer.created`; the app says "on its way" until then. Found in review and closed in the same migration: `begin_tip_payment()` could rewrite an unfunded tip's amount in place (a small charge could queue a large transfer, and the tip cap was skipped); a tip row's amount is now never rewritten, and a tip is queued only when the amount received equals the row's charge | lean B1 (`20261111000000_tip_settlement.sql`, blueprint `docs/critical/tip-settlement.md`) | local stack: `320_tip_settlement.sql` failed 10 of 15 before the migration, and its 5 hardening tests failed before the hardening; after: `npm run db:test` 34 files, 1805 tests, PASS; `npm run verify` 1282 pass |
 
 ## Open, found by e2e (investigate on the local stack before fixing)
 
@@ -56,14 +57,14 @@ in the background after sign-out.
 
 ## Batch B: database and payment fixes (critical skill: Fable blueprint, Opus build, Fable review, local pgTAP)
 
-DEFERRED to the next run (owner's weekly token cap, 2026-11-10). Start with B1, B5, B6, B3, B8: each
+DEFERRED to the next run (owner's weekly token cap, 2026-11-10). B1 is fixed (2026-11-11, see Fixed).
+Next: B5, B6, B3, B8: each
 gets a pgTAP test that fails on today's schema first. Local stack works: start Docker Desktop
 (`%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe`), `npx supabase start`, `npm run db:reset`,
-`npm run db:test` (baseline 2026-11-10: 33 files, 1782 tests, PASS).
+`npm run db:test` (baseline 2026-11-11, after B1: 34 files, 1805 tests, PASS).
 
 | ID | Finding | Source | Proof |
 |---|---|---|---|
-| B1 | Tips are charged and marked released but never enter `transfers_due`: the worker is never paid the tip | backend#1 | code read (create-payment has no transfer_data; tip row has no release_requested_at/transfer_cents) |
 | B2 | `jobs_within_radius` accepts any origin: exact job location recoverable by trilateration | backend#2, CEO#5 | code read |
 | B3 | Hired worker can read the customer's exact address forever (no status/time limit) | CEO#6 | policy read |
 | B4 | Accept-then-never-pay: unfunded expiry voids payment but the job stays assigned forever | CEO#2 | code read |
@@ -80,6 +81,11 @@ gets a pgTAP test that fails on today's schema first. Local stack works: start D
 | B15 | Jobs never expire; owner cannot close a job that has offers | CEO#14 | code read |
 | B16 | Possible second transfer after the 24 h idempotency window if webhooks stall | backend#7 | plausible |
 | B17 | Smaller: missing indexes, payments columns over-exposed, no amount check on success, notifications never 'failed', status oracles, completion-photo deletion, ON DELETE CASCADE on payments | backend#16-22 | code read |
+| B18 | `transfers_due` does not look at `status`: a charge refunded or lost to a card dispute after release was requested and before `transfer.created` is still transferred. Job payments today; tips too since B1 | B1 review | view read (static) |
+| B19 | Tips charged BEFORE the B1 fix are `released` with no `transfer_ref` and were never transferred. The fix does not touch them (staging is Stripe test mode; production has no users). Owner decides: leave, or a one-off requeue | B1 | code read; not counted on staging (a run never contacts a remote project) |
+| B20 | A reversed tip transfer is parked (`transfer_reversed_at`) and nothing un-parks a tip (only `resolve_job_dispute` clears a park). A tip held by the new amount lock also waits for an operator, with no screen for it | B1 review | code read |
+| B21 | Earnings: `lib/earnings.ts` does not select `refund_cents` / `transfer_cents`, so the refund-queued branch in `lib/earningsMath.ts` cannot fire (a cancelled job's refund-queued held row still counts as pending earnings); a queued tip reads "Approved — payout on its way", wording made for a job payment | B1 review | code read (static, not run) |
+| B22 | Stale column comments on `payments.transfer_cents` and `payments.released_at` (they predate tips taking the transfer route); `payment_intent.payment_failed` is handled in SQL but is not a subscribed webhook event | B1 review | code read |
 
 ## Needs you (owner)
 

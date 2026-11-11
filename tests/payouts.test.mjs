@@ -180,7 +180,7 @@ test('4 · the connect responses are validated field by field — a guessed link
   }
 });
 
-test('5 · the tip poll classifier (R6c D3): released is success, failed / voided / vanished is gone, unfunded is pending', () => {
+test('5 · the tip poll classifier (R6c D3, B1 rule 8): held is charged and released is released (both success), failed / voided / vanished is gone, unfunded is pending', () => {
   assert.equal(classifyTipPoll({ status: 'released', seen: true }), 'released');
   assert.equal(classifyTipPoll({ status: 'paid_out', seen: true }), 'released');
   assert.equal(classifyTipPoll({ status: 'failed', seen: true }), 'gone');
@@ -188,7 +188,29 @@ test('5 · the tip poll classifier (R6c D3): released is success, failed / voide
   assert.equal(classifyTipPoll({ status: null, seen: true }), 'gone', 'a seen row that vanished is gone');
   assert.equal(classifyTipPoll({ status: null, seen: false }), 'pending', 'a row not yet there is not gone');
   assert.equal(classifyTipPoll({ status: 'unfunded', seen: true }), 'pending');
-  assert.equal(classifyTipPoll({ status: 'held', seen: true }), 'pending', 'a tip never reads held; if one did, keep waiting');
+  assert.equal(
+    classifyTipPoll({ status: 'held', seen: true }),
+    'charged',
+    'B1: a held tip was charged and is queued for its transfer: the poll succeeds, as charged, not released'
+  );
+});
+
+test('[static] 5b · the tip card (B1 rule 8): "went to" only behind isReleased, "on its way" behind isHeld, and no word of sent or paid', () => {
+  const src = read('screens/ReviewAndTipScreen.tsx');
+  const start = src.indexOf('const tipDoneNote = (() => {');
+  assert.notEqual(start, -1, 'the tip card computes its note in tipDoneNote');
+  const end = src.indexOf('})();', start);
+  assert.notEqual(end, -1, 'tipDoneNote closes');
+  const note = src.slice(start, end);
+
+  assert.match(note, /isHeld\(tip\)\s*\?\s*`Your tip is on its way to /, 'a held tip is on its way');
+  assert.match(note, /:\s*isReleased\(tip\)\s*\?\s*`Your tip went to /, 'only a released tip went to the worker');
+  assert.doesNotMatch(note, /\b(sent|paid|received)\b/i, 'the note never says sent, paid or received');
+
+  // The two sentences exist once each, inside that guarded note and nowhere else on the screen.
+  assert.equal(src.split('Your tip went to').length - 1, 1, '"Your tip went to" appears once');
+  assert.equal(src.split('Your tip is on its way to').length - 1, 1, '"Your tip is on its way to" appears once');
+  assert.ok(!src.includes('goes straight to'), 'the confirm dialog no longer promises the tip goes straight to the worker');
 });
 
 // ---------------------------------------------------------------------------

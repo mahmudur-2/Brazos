@@ -30,7 +30,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(63);
+select plan(64);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -223,8 +223,14 @@ select (public.begin_tip_payment(:'job1', 500)).id as tip1 \gset
 insert into fx values ('tip1', :'tip1');
 select tests.clear_auth();
 select tests.lc_event('payment_intent.succeeded', :'tip1', 'pi_lc_tip1');
-select ok((select kind = 'tip' and status = 'released' and amount_cents = 500 and released_at is not null from public.payments where id = :'tip1'),
-  'G5: the tip is a released tip ledger row at 500');
+select ok((select kind = 'tip' and status = 'held' and amount_cents = 500 and held_at is not null
+                  and release_requested_at is not null and transfer_cents = 500 and released_at is null and transfer_ref is null
+             from public.payments where id = :'tip1'),
+  'G5: the charged tip is held and queued for its transfer at 500, not released before the transfer lands (B1 rule 1)');
+select tests.lc_event('transfer.created', :'tip1', 'tr_lc_tip1');
+select ok((select kind = 'tip' and status = 'released' and amount_cents = 500 and released_at is not null and transfer_ref = 'tr_lc_tip1'
+             from public.payments where id = :'tip1'),
+  'G5: the tip is a released tip ledger row at 500 once its transfer lands (B1 rule 3)');
 select tests.authenticate_as(:'customer');
 
 -- ---------------------------------------------------------------------------

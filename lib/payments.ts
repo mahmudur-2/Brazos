@@ -71,8 +71,9 @@ export type Payment = {
   status: PaymentStatus;
   authorized_at: string | null;
   held_at: string | null;
-  /** When the row left held for released (phase51). Tips are born released
-   *  and stamp it at insert. Null until then. */
+  /** When the row left held for released (phase51): transfer.created stamps
+   *  it. A tip is held once its card is charged and released only when its
+   *  transfer lands, like a job payment (B1, 20261111000000). Null until then. */
   released_at: string | null;
   /** 'approved' = the customer approved the work; 'auto_approved' = the 72h
    *  on-read clock ran out (phase51). Null for tips and unreleased rows. */
@@ -95,7 +96,9 @@ export type Payment = {
    *  (D9, D14). */
   funding_due_at?: string | null;
   /** D23: set by release_job_payment / auto_release_due_payments on a stripe
-   *  row while its status stays held — approved, payout pending. */
+   *  row while its status stays held — approved, payout pending. A charged
+   *  tip gets it from apply_payment_event at payment_intent.succeeded: a tip
+   *  needs no approval (B1). */
   release_requested_at?: string | null;
   /** What release requested be transferred to the worker. */
   transfer_cents?: number | null;
@@ -290,20 +293,24 @@ export async function fetchJobPaymentStatusesByJobIds(jobIds: string[]) {
 }
 
 /**
- * R6c (D3): the tip poll's three terminal branches, decided from one read of
- * the tip row — the tip's mirror of stripeRules' classifyCheckoutPoll:
- *   'released' — payment_intent.succeeded landed; a tip has no held stop, so
- *                released (or, swept later, paid_out) IS success.
+ * R6c (D3): the tip poll's terminal branches, decided from one read of the tip
+ * row — the tip's mirror of stripeRules' classifyCheckoutPoll:
+ *   'charged'  — payment_intent.succeeded landed: the card was charged and the
+ *                tip is held, already queued for transfer to the worker
+ *                (release_requested_at and transfer_cents set at once, B1). The
+ *                poll's success — but the tip is on its way, not yet sent.
+ *   'released' — the transfer landed (transfer.created), or, swept later,
+ *                paid_out: the tip reached the worker. Also success.
  *   'gone'     — fetchJobTip filters failed and voided, so a row that was
  *                seen and now reads null is the failed/voided signal; a row
  *                that reads failed or voided outright says the same thing.
  *   'pending'  — anything else (unfunded). Keep polling until the deadline;
- *                the deadline is the screen's third branch, not a state here.
+ *                the deadline is the screen's own branch, not a state here.
  *
  * `seen` starts true from the paymentId create-payment returned — a row that
  * never existed is not "gone", it is not yet there.
  */
-export type TipPollState = 'released' | 'gone' | 'pending';
+export type TipPollState = 'charged' | 'released' | 'gone' | 'pending';
 
 export function classifyTipPoll({
   status,
@@ -312,6 +319,7 @@ export function classifyTipPoll({
   status: string | null | undefined;
   seen: boolean;
 }): TipPollState {
+  if (status === 'held') return 'charged';
   if (status === 'released' || status === 'paid_out') return 'released';
   if (status === 'failed' || status === 'voided') return 'gone';
   if (status == null) return seen ? 'gone' : 'pending';

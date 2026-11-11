@@ -80,8 +80,12 @@ test('C4 · the table says the right thing for the states that matter most', () 
   // Settled: the customer's figure is their charge, the worker's their take.
   assert.equal(paymentCaption({ status: 'released' }, 'customer'), 'Paid');
   assert.equal(paymentCaption({ status: 'released' }, 'worker'), 'You received');
-  // Tips.
-  assert.equal(paymentCaption({ status: 'held', tip: true }, 'customer'), 'Tip held in protection');
+  // Tips. B1: a held tip was charged and is queued for its transfer; it reads "on its way" until
+  // transfer.created releases it.
+  assert.equal(paymentCaption({ status: 'held', tip: true, counterpartFirstName: 'Sam' }, 'customer'), 'Tip on its way to Sam');
+  assert.equal(paymentCaption({ status: 'held', tip: true }, 'customer'), 'Tip on its way to your worker');
+  assert.equal(paymentCaption({ status: 'held', tip: true }, 'worker'), 'Tip from the customer — on its way');
+  assert.equal(paymentCaption({ status: 'held', tip: true, counterpartFirstName: 'Sam' }, 'worker'), 'Tip from Sam — on its way');
   assert.equal(paymentCaption({ status: 'released', tip: true, counterpartFirstName: 'Sam' }, 'customer'), 'Tip sent to Sam');
   assert.equal(paymentCaption({ status: 'released', tip: true }, 'worker'), 'Tip received');
   // A whitespace name falls back rather than printing "to  ".
@@ -99,6 +103,27 @@ test('C4 · the table says the right thing for the states that matter most', () 
   assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true, releaseRequested: true }, 'worker'), 'Cancellation fee — on its way to you');
   // Off a held row the facts say nothing: a settled refund keeps its own words.
   assert.equal(paymentCaption({ status: 'refunded', refundQueued: true }, 'customer'), 'Refunded');
+});
+
+test('B1 rule 8 · a held tip reads "on its way" and never says sent, received or paid, for either viewer', () => {
+  const variants = [
+    {},
+    { counterpartFirstName: 'Sam' },
+    { counterpartFirstName: '  ' },
+    { releaseRequested: true },
+    { releaseRequested: true, counterpartFirstName: 'Sam' },
+    { releaseRequested: true, waitingOnPayoutSetup: true },
+    { issueOpen: true },
+  ];
+  for (const viewer of ['customer', 'worker']) {
+    for (const extra of variants) {
+      const line = paymentCaption({ status: 'held', tip: true, ...extra }, viewer);
+      const label = `held tip/${viewer} ${JSON.stringify(extra)}: ${line}`;
+      assert.equal(typeof line, 'string', `${label} has a caption`);
+      assert.doesNotMatch(line, /sent|received|paid/i, `${label} must not say sent, received or paid before the tip is released`);
+      assert.match(line, /on its way/, `${label} reads "on its way"`);
+    }
+  }
 });
 
 test('[static] C4 · MoneyText and StatusPill hold no money words of their own; the screens use the glossary', () => {

@@ -248,7 +248,13 @@ workers" from it. **Saved cards** live on the Stripe customer
 (`payment_accounts.stripe_customer_id`); `payment-methods` lists, adds and removes them. Hiring
 from a push opens an in-app confirm ("Accept & pay"), never pays silently, and a declined saved
 card alerts in-app and pushes a Checkout link. **Tips** are a second `payments` row
-(`kind = tip`, `begin_tip_payment()`), opened after release.
+(`kind = tip`, `begin_tip_payment()`), opened after release. A charged tip takes the job payment's
+settlement route, with no approval step: `payment_intent.succeeded` leaves the row `held` with
+`release_requested_at` and `transfer_cents` (the whole tip) set, `process-settlements` sends the
+transfer from `transfers_ready`, and `transfer.created` marks it `released`. Nothing calls a tip
+sent before that. A tip row's amount is never rewritten (a different amount voids the unfunded row
+and mints a new one, through the ceiling trigger), and a tip is queued only when the event's
+`amount_received` equals the row's `charge_amount_cents` (`docs/critical/tip-settlement.md`).
 
 ## Disputes
 

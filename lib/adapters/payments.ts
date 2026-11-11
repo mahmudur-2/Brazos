@@ -29,8 +29,10 @@ import {
  *               transfer.created (D23). A tip is a second checkout session
  *               (beginTipCheckout, R6c): create-payment mints the tip row
  *               through the database's tip RPC, the same sheet takes the
- *               card, and payment_intent.succeeded releases it — a tip has
- *               no held stop. Payouts run on the provider's own schedule.
+ *               card, and payment_intent.succeeded holds it and requests its
+ *               transfer at once — a tip needs no approval — so it, too,
+ *               reads released only on transfer.created (B1). Payouts run on
+ *               the provider's own schedule.
  *   disabled  — fail-closed. Every call refuses with the same message, so a
  *               build without a payment mode cannot half-work.
  *
@@ -72,8 +74,9 @@ export type PaymentProvider = {
   /**
    * R6c (D3/D4): mint the stripe TIP row and its payment intent through the
    * same create-payment function (tipAmountCents in the body), returning what
-   * the payment sheet needs. The row is `unfunded` until the webhook lands and
-   * has no held stop: payment_intent.succeeded releases it. The RPC's own
+   * the payment sheet needs. The row is `unfunded` until the webhook lands;
+   * payment_intent.succeeded then holds it with its transfer already
+   * requested, and transfer.created releases it (B1). The RPC's own
    * refusals (one tip per job, release first, the ceiling's dollar sentence)
    * come back verbatim. Disabled refuses it.
    */

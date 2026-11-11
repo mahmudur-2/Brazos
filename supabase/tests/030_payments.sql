@@ -389,8 +389,9 @@ select throws_ok($$ select public.begin_tip_payment((select v from fx where k = 
 select tests.clear_auth();
 select is((select status::text from public.payments where id = :'t3'), 'unfunded', '5: the tip is still unfunded before the provider event');
 select is(tests.r4_event('evt_t3', 'payment_intent.succeeded', :'t3'::text, '{"id":"pi_t3"}'::jsonb) ->> 'ok', 'true', '5: payment_intent.succeeded applies to the tip');
-select ok((select status = 'released' and released_at is not null and held_at is null from public.payments where id = :'t3'),
-  '5: the tip reaches released only on payment_intent.succeeded (no held stop for a tip)');
+select ok((select status = 'held' and held_at is not null and release_requested_at is not null and transfer_cents = 2500
+                  and released_at is null and transfer_ref is null from public.payments where id = :'t3'),
+  '5: payment_intent.succeeded holds the tip and queues all 2500 for transfer; it is not released before the transfer lands (B1 rule 1)');
 select tests.authenticate_as(:'customer');
 select throws_ok($$ select public.begin_tip_payment((select v from fx where k = 'j3'), 500) $$,
   'P0001', 'A tip was already added to this job', '5: one tip per job');
