@@ -142,13 +142,16 @@ jobs:
           xcrun simctl io booted recordVideo --codec=h264 --force e2e.mp4 &
           recorder=$!
           status=0
-          mkdir -p e2e-debug e2e-junit
+          # e2e-junit holds one result per flow, always the last attempt's. A rerun's first attempt goes
+          # to e2e-reruns, which nothing counts; it stays empty on a run without a rerun.
+          mkdir -p e2e-debug e2e-junit e2e-reruns
           # Run 37 (2026-11-10): Maestro's own iOS driver died in flow 03 (DeviceUnreachableException,
           # mobile-dev-inc/maestro#3538, open: a status-bar read races the closing keyboard) and the run
           # stopped there. One `maestro test` per flow, in file order: each flow gets a fresh driver, and
           # a red flow no longer hides the ones after it, so one run reports all ten.
           for flow in .maestro/[0-9][0-9]-*.yml; do
             name=$(basename "$flow" .yml)
+            # One counter for both retries: a flow gets at most one extra pass, whatever the reason.
             attempt=1
             while :; do
               rc=0
@@ -157,6 +160,22 @@ jobs:
                 echo "Maestro ended before $name ran (driver start-up); retrying once"
                 attempt=$((attempt + 1))
                 continue
+              fi
+              # Maestro's driver died mid-flow (#3538): one more pass, only for the flows a second pass
+              # cannot fool (01 and 10 change nothing; 07 and 09 fail loudly on what a cut pass leaves).
+              # 02-06 move one shared job along, so a second pass would repeat steps already done. 08 is
+              # out: a pass cut between the two taps of a switch would leave that setting flipped unseen.
+              if [ "$rc" -ne 0 ] && [ "$attempt" -lt 2 ] && grep -q "DeviceUnreachableException" "e2e-junit/$name.xml" 2>/dev/null; then
+                case "$name" in
+                  01-*|07-*|09-*|10-*)
+                    mv "e2e-junit/$name.xml" "e2e-reruns/$name.attempt1.xml"
+                    line="RERUN $name: Maestro's driver died on attempt 1 (DeviceUnreachableException); attempt 1's junit is e2e-reruns/$name.attempt1.xml"
+                    echo "$line"
+                    echo "- $line" >> "$GITHUB_STEP_SUMMARY"
+                    attempt=$((attempt + 1))
+                    continue
+                    ;;
+                esac
               fi
               break
             done
@@ -176,7 +195,7 @@ jobs:
         run: |
           if [ -z "$ARTIFACT_KEY" ]; then echo "ARTIFACT_KEY secret is missing; nothing is uploaded"; exit 1; fi
           mkdir -p e2e-results
-          cp -R e2e-junit e2e-debug e2e.mp4 ./*.png ~/.maestro/tests e2e-results/ 2>/dev/null || true
+          cp -R e2e-junit e2e-reruns e2e-debug e2e.mp4 ./*.png ~/.maestro/tests e2e-results/ 2>/dev/null || true
           tar -cf - e2e-results | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
             --passphrase-fd 3 -o e2e-results.tar.gpg 3<<<"$ARTIFACT_KEY"
           rm -rf e2e-results
