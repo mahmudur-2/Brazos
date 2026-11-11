@@ -531,16 +531,57 @@ test('smoke checks: each function answers an unauthenticated call in its own wor
   assert.equal(push.headers.Authorization, undefined);
 });
 
-test('smoke checks fail in plain words: the gateway, a missing secret, a 5xx', async () => {
+test('connect-status (verify_jwt = true): any 401 refuses the caller, from the gateway or the function', async () => {
+  const own = await cmd(world(), ['smoke', 'status']);
+  assert.equal(own.code, 0, own.log.join('\n'));
+  assert.equal(own.outputs().note, 'HTTP 401, refused in its own words');
+
+  // The gateway's words on a new project are unknown; a 401 in any words passes.
+  for (const body of [{ msg: 'Missing authorization header' }, { code: 401, message: 'Invalid JWT' }, undefined]) {
+    const gateway = await cmd(world({ functions: { 'connect-status': [401, body] } }), ['smoke', 'status']);
+    assert.equal(gateway.code, 0, `${JSON.stringify(body)}: ${gateway.log.join('\n')}`);
+    assert.equal(gateway.outputs().note, 'HTTP 401, refused by the gateway');
+  }
+
+  const open = await cmd(world({ functions: { 'connect-status': [200, { state: 'none' }] } }), ['smoke', 'status']);
+  assert.equal(open.code, 1);
+  assert.equal(open.outputs().reason, 'connect-status answered HTTP 200, so a caller who is not signed in was not refused.');
+  const missing = await cmd(world({ functions: { 'connect-status': [404, { message: 'not found' }] } }), ['smoke', 'status']);
+  assert.equal(missing.code, 1);
+  assert.equal(missing.outputs().reason, 'connect-status is not deployed (HTTP 404).');
+  const unconfigured = await cmd(world({ functions: { 'connect-status': [500, { error: 'not configured' }] } }), ['smoke', 'status']);
+  assert.equal(unconfigured.code, 1);
+  assert.match(unconfigured.outputs().reason, /not configured/);
+  const busy = await cmd(world({ functions: { 'connect-status': [403, {}] } }), ['smoke', 'status']);
+  assert.match(busy.outputs().reason, /HTTP 403, not the 401 that refuses this call\./);
+});
+
+test('send-push and stripe-webhook stay strict: their own code must answer, in their own words', async () => {
   const gateway = await cmd(world({ functions: { 'send-push': [401, { msg: 'Invalid JWT' }] } }), ['smoke', 'push']);
   assert.equal(gateway.code, 1);
   assert.match(gateway.outputs().reason, /refused by the gateway.*verify_jwt/);
-  const unconfigured = await cmd(world({ functions: { 'connect-status': [500, { error: 'not configured' }] } }), ['smoke', 'status']);
-  assert.match(unconfigured.outputs().reason, /not configured/);
-  const gateway401 = await cmd(world({ functions: { 'connect-status': [401, { msg: 'Missing authorization header' }] } }), ['smoke', 'status']);
-  assert.match(gateway401.outputs().reason, /not in its own words/);
+  const otherWords = await cmd(world({ functions: { 'send-push': [403, { error: 'something else' }] } }), ['smoke', 'push']);
+  assert.equal(otherWords.code, 1);
+  assert.match(otherWords.outputs().reason, /not in its own words/);
+  const bare = await cmd(world({ functions: { 'send-push': [403, undefined] } }), ['smoke', 'push']);
+  assert.equal(bare.code, 1);
+  const pushOk = await cmd(world(), ['smoke', 'push']);
+  assert.equal(pushOk.outputs().note, "HTTP 403, the function's own answer");
   const down = await cmd(world({ functions: { 'stripe-webhook': [502, {}] } }), ['smoke', 'webhook']);
   assert.match(down.outputs().reason, /HTTP 502/);
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(SMOKE).map(([k, s]) => [k, s.gatewayToo])),
+    { push: false, status: true, webhook: false },
+    'only connect-status may be answered by the gateway'
+  );
+});
+
+test('the verify_jwt settings the smoke rows rely on are the ones in supabase/config.toml', () => {
+  const toml = readFileSync(join(ROOT, 'supabase/config.toml'), 'utf8');
+  const jwt = (fn) => toml.match(new RegExp(`\\[functions\\.${fn}\\][^\\[]*?verify_jwt = (true|false)`))?.[1];
+  assert.equal(jwt('send-push'), 'false');
+  assert.equal(jwt('stripe-webhook'), 'false');
+  assert.equal(jwt('connect-status'), 'true');
 });
 
 test('the smoke answers are the functions’ own words, read from their source', () => {

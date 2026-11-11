@@ -418,7 +418,7 @@ jobs:
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
-      - name: connect-status asks for sign-in
+      - name: connect-status refuses a caller who is not signed in
         id: smoke_status
         run: |
           set -euo pipefail

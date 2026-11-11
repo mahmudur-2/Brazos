@@ -14,7 +14,7 @@
  *   secrets                      the function secret STRIPE_SECRET_KEY
  *   webhook                      the Stripe TEST webhook and STRIPE_WEBHOOK_SECRET, found by its URL
  *   vault                        set_drain_secrets(): the URL and the key the timers call functions with
- *   smoke <push|status|webhook>  one function answers a call without a user in its own words
+ *   smoke <push|status|webhook>  one function refuses a call without a user (see SMOKE)
  *   timers                       one test call from the database to each drain gets HTTP 200
  *   auth                         the sign-in settings: scripts/production-auth.json plus Twilio
  *   fingerprint <file>           the hosted database matches the local build of the same commit
@@ -521,12 +521,23 @@ async function vault(io) {
   note(io, `timer key stored: ${key.type}`);
 }
 
-/** Each function's own answer to a call without a user, word for word from its source. */
+/**
+ * Each function's answer to a call without a user, word for word from its source. send-push and
+ * stripe-webhook have verify_jwt = false, so their own code must answer, in its own words.
+ * connect-status keeps verify_jwt = true (two checks: the gateway's and its own), so its 401 may
+ * come from either; the row proves only that a caller who is not signed in is refused, and never
+ * matches the gateway's words, which a new project may change.
+ */
 export const SMOKE = Object.freeze({
-  push: Object.freeze({ fn: 'send-push', status: 403, error: 'forbidden', key: null }),
-  status: Object.freeze({ fn: 'connect-status', status: 401, error: 'Sign in to check your payouts.', key: 'publishable' }),
-  webhook: Object.freeze({ fn: 'stripe-webhook', status: 400, error: 'invalid signature', key: null }),
+  push: Object.freeze({ fn: 'send-push', status: 403, error: 'forbidden', key: null, gatewayToo: false }),
+  status: Object.freeze({ fn: 'connect-status', status: 401, error: 'Sign in to check your payouts.', key: 'publishable', gatewayToo: true }),
+  webhook: Object.freeze({ fn: 'stripe-webhook', status: 400, error: 'invalid signature', key: null, gatewayToo: false }),
 });
+
+/** Whether an answer passes the row: the status always, the function's own words only where required. */
+function smokePasses(s, res) {
+  return res.status === s.status && (s.gatewayToo || res.json?.error === s.error);
+}
 
 function smokeReason(s, res) {
   const own = res.json?.error;
@@ -536,8 +547,11 @@ function smokeReason(s, res) {
   if (res.status === s.status) return `${s.fn} answered HTTP ${res.status}, but not in its own words: the gateway refused the call before its code ran.`;
   if (res.status === 404) return `${s.fn} is not deployed (HTTP 404).`;
   if (own === 'not configured') return `${s.fn} answers "not configured": a secret or key it needs is missing on the project.`;
-  if (res.status === 0 || res.status >= 500) return `${s.fn} failed (HTTP ${res.status}) instead of answering in its own words.`;
-  return `${s.fn} answered HTTP ${res.status}, not its own ${s.status} answer.`;
+  if (s.gatewayToo && res.status >= 200 && res.status < 300) {
+    return `${s.fn} answered HTTP ${res.status}, so a caller who is not signed in was not refused.`;
+  }
+  if (res.status === 0 || res.status >= 500) return `${s.fn} failed (HTTP ${res.status}) instead of refusing the call.`;
+  return `${s.fn} answered HTTP ${res.status}, not the ${s.status} that refuses this call.`;
 }
 
 async function smoke(io, which) {
@@ -555,9 +569,14 @@ async function smoke(io, which) {
   let res;
   for (;;) {
     res = await call(io, url, { method: 'POST', headers, json: {} });
-    if (res.status === s.status && res.json?.error === s.error) {
-      io.log(`${s.fn}: HTTP ${s.status} in its own words.`);
-      note(io, `HTTP ${s.status}, the function's own answer`);
+    if (smokePasses(s, res)) {
+      const who = !s.gatewayToo
+        ? "the function's own answer"
+        : res.json?.error === s.error
+          ? 'refused in its own words'
+          : 'refused by the gateway';
+      io.log(`${s.fn}: HTTP ${s.status}, ${who}.`);
+      note(io, `HTTP ${s.status}, ${who}`);
       return;
     }
     if (io.now() >= deadline) break;
@@ -715,7 +734,7 @@ const ROWS = Object.freeze({
     ['webhook', 'Stripe test webhook'],
     ['vault', 'Timer key stored'],
     ['smoke_push', 'send-push refuses a stranger'],
-    ['smoke_status', 'connect-status asks for sign-in'],
+    ['smoke_status', 'connect-status refuses a caller who is not signed in'],
     ['smoke_webhook', 'stripe-webhook checks the signature'],
     ['timers', 'Timers reach the functions'],
     ['auth', 'Sign-in settings'],

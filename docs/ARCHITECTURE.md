@@ -458,12 +458,13 @@ shared module beyond `_shared/serviceAuth.ts` (below), no function computes a mo
 not type-checked.
 `supabase/config.toml` is the only source of `verify_jwt`: `stripe-webhook` and `connect-return`
 are `false` (Stripe and a browser send no JWT); `create-payment`, `connect-onboarding`,
-`connect-status`, `payment-methods` are `true`; `send-push`, `send-receipts` and
-`process-settlements` run on the platform default (the last two woken by pg_cron with the
-service-role key as Bearer). After every deploy, confirm the dashboard still shows JWT
-verification off for `stripe-webhook` and `connect-return`. On production, the Production button's
-smoke checks prove after each deploy that `send-push`, `connect-status` and `stripe-webhook` answer
-with their own code, not the gateway's (Production button, below).
+`connect-status`, `payment-methods` are `true` (two checks: the gateway's and the function's own);
+`send-push`, `send-receipts` and `process-settlements` are `false` and check the server key
+themselves (`requireServiceRole` in `_shared/serviceAuth.ts`), since the database and pg_cron wake
+them with it. After every deploy, confirm the dashboard still shows JWT verification off for
+`stripe-webhook` and `connect-return`. On production, the Production button's smoke checks prove
+after each deploy that `send-push` and `stripe-webhook` answer with their own code, and that
+`connect-status` refuses a caller who is not signed in (HTTP 401, from the gateway or the function).
 
 | Function | Role |
 |---|---|
