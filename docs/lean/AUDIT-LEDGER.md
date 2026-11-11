@@ -85,8 +85,8 @@ gets a pgTAP test that fails on today's schema first. Local stack works: start D
 
 | ID | What | Why |
 |---|---|---|
-| O1 | Lawyer review of Terms + Privacy; then remove the "working draft" banner | shown to every user and App Review |
-| O2 | Public URLs for Privacy Policy and Support (App Store Connect requires them); a support mailbox that is not personal Gmail | release#4, CEO#20 |
+| O1 | Lawyer review of Terms + Privacy (rewritten 2026-11-11, version `2026-11-11`; the "working draft" banner was removed at the owner's word, so the review is now owed on live text). Ask the lawyer: arbitration or New York courts, the operator's legal name and address (no company exists yet: form an LLC first), the limited-collection-agent clause, a DMCA agent | shown to every user and App Review |
+| O2 | Public URLs for Privacy Policy and Support: the site is built (`node scripts/build-site.mjs` writes `site/`), not deployed. Owner: upload `site/` to Cloudflare Pages (project `brazos`), then paste `/privacy` and `/support` into App Store Connect. Still open: a support mailbox that is not personal Gmail | release#4, CEO#20 |
 | O3 | Rotate the two test OTP codes again (Supabase test phones + GitHub secrets) | old public videos showed them |
 | O4 | Decide the App Review payment path (live keys + review card) and remove review test phones after approval | release#5 |
 | O5 | Before the first production build: `eas env:list production` shows a live Stripe key, Sentry DSN, Sentry auth token | release#6 |

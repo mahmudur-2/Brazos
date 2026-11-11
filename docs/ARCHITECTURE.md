@@ -508,3 +508,22 @@ is a tripwire, not a proof. Staging is what installed TestFlight builds read, so
 build still reads breaks it the moment it lands; additive SQL cannot. A migration that adds an
 enum value is its own file. Production is hand-applied and no job targets it. `ci.yml` runs
 `npm run verify` with no secrets; `pgtap.yml` runs `db:reset` then `db:test` on a local stack.
+
+## Legal text and the public website
+
+`lib/legal/termsOfService.ts` and `lib/legal/privacyPolicy.ts` are the one source of the Terms and
+the Privacy Policy; `lib/legal/index.ts` holds the versions the gate records (`legal_acceptances`,
+one row per document and version, so a new version asks everyone again). The app renders them with
+`components/MarkdownText.tsx` (headings, paragraphs, bullets only).
+
+`node scripts/build-site.mjs` reads those two strings as text, with the support address from
+`lib/appLinks.ts`, and writes `site/` (git-ignored): `index.html`, `support.html`, `privacy.html`,
+`terms.html`, `404.html` and `_headers`. No dependency, no script tag, no cookie, no request to
+another host; colours follow `prefers-color-scheme`. The Support page's steps are written in the
+script and name real controls (Cancel job, Report, Block, Report an issue, Delete account): change
+them when those controls change. Hosting is the owner's manual upload of `site/` to Cloudflare
+Pages; nothing deploys it. `tests/buildSite.test.mjs` builds to a temp folder and checks the
+pages against the source.
+
+Check after a change to either text: bump the version if the substance moved, `npm run verify`,
+`node scripts/build-site.mjs`, then the owner uploads `site/` again.
