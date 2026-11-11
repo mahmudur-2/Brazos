@@ -49,7 +49,7 @@ project is never contacted (the owner pauses it).
 
 ## Blocked
 
-**1. Payout set-up: the server fix is deployed; the app fix is on no device (2026-11-11, 16:00 UTC).**
+**1. Payout set-up STARTS on staging (proven 2026-11-11, 16:02 UTC); the worker is not yet set up.**
 - Cause, proven in Stripe's request log (sandbox "Brazos sandbox" `acct_1U2Ol543w4QKhn3t`; staging's key
   belongs to it, not to "Test mode"): `POST /v2/core/accounts` → 400 "the Account must have a contact
   email". A phone user has no email anywhere and production is phone-only: no worker could set up
@@ -64,8 +64,12 @@ project is never contacted (the owner pauses it).
 - Proven in the shell at the pinned version: the exact create body + an email → 200; the exact
   account-link body → 200; the read has the fields `connect-status/classify.mjs` uses. The chat's two
   test accounts are closed.
-- NOT proven: nobody called the deployed function; no device showed the field. The e2e build holds
-  the old app code; it has no update channel and needs no field once the test worker has an account.
+- Proven on the owner's phone (build 10 + the update below): the Email field showed, Stripe's page
+  opened. Stripe's log at 16:02 UTC: `POST /v2/core/accounts` 200 (from Deno, pinned version, with
+  `contact_email` and the key `brazos-account-…`), then `POST /v2/core/account_links` 200.
+- NOT proven: Stripe's page to its end, `connect-status` after it, a transfer to the worker. The e2e
+  build holds the old app code; it has no update channel and needs no field once the test worker
+  has an account.
 - Delivery, done with the owner's yes: an over-the-air update on channel `testflight` (runtime 1.0.0 =
   build 10; update group `67c92705-9241-429d-a7aa-569e60b8a38b`, made at `fc8a096`). It holds ALL app
   code since build 10 (`9b0064f`), not only the field. How: the four `env` values of eas.json's
@@ -89,9 +93,8 @@ company sends the production sign-in codes; the two URLs in App Store Connect (O
 
 ## Next
 
-1. **Owner, about 3 min:** close and open the TestFlight app twice (the update of Blocked 1 loads),
-   type an email, tap "Set up payouts". The chat then reads Stripe's log (200 on `accounts` and
-   `account_links`). The lesson of this run: prove a step before the owner gets it.
+1. Done: payout set-up starts (Blocked 1). The lesson of this run: prove a step before the owner
+   gets it.
 2. **Owner, about 10 min:** Stripe's page as the test worker until the app says "Payouts are set up".
    Test sign-in number and code: Supabase dashboard → Authentication → Sign In / Providers → Phone →
    test numbers. Values for Stripe's page: Stripe's public "Testing Connect" page.
