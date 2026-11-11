@@ -18,6 +18,10 @@ orchestrating chat (Opus 5.5), which stopped at the owner's weekly token cap (10
   flow-only, so no new build is needed unless an app bug shows up.
 - The audit (2026-11-10): `docs/lean/AUDIT-LEDGER.md` is the single list of every flaw: fixed, open from
   e2e (E3-E6), batch B deferred (database and payments), owner items O1-O7, later.
+- Separate task the owner asked for: the public website (Privacy, Terms, Support for App Store Connect),
+  reviewed by Fable and styled as Brazos: `docs/lean/WEBSITE-BRIEF.md` has the whole brief.
+- Run 37 (after this file was first written): 01-02 green, 03 red with no Maestro message; artifacts
+  not yet read.
 - Gates on HEAD 0d454ae: `npm run verify` 1276 pass, 0 fail. Tree clean after this commit.
 
 ## Blocked
