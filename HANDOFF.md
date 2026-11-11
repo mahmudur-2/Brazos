@@ -73,9 +73,8 @@ project is never contacted (the owner pauses it).
   the next screen does not show; the two worker searches search again, then retype.
 - Run 41 left test data on staging: its main job paid and held, never started; its side job open with a
   $45 counter. Test money only.
-- Temp files, safe to delete (about 11 GB; the proof of run 41 and run 43 is in the first):
-  `C:\Users\mdmah\AppData\Local\Temp\claude\f6f81b5a6ab2e394\43304863-547b-4a8a-beb7-ab7a8724198f\scratchpad`
-  `C:\Users\mdmah\AppData\Local\Temp\claude\c0009c647868b50f\24e8eca1-c2ee-4dee-91dd-7aea6fecc9f7\scratchpad`
+- The temp files of this run (about 11 GB, with the downloaded proof of runs 41 and 43) were deleted at
+  the owner's word. The run artifacts stay at GitHub (encrypted) for as long as GitHub keeps them.
 
 ## Blocked
 
