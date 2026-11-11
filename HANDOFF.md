@@ -49,6 +49,26 @@ project is never contacted (the owner pauses it).
 
 ## Blocked
 
+**0. The cause of 1 is PROVEN (a later chat, 2026-11-11 about 16:30 UTC; this beats the "open causes"
+list in 1).** The owner allowed the chat to read Stripe and the Supabase dashboard in his Chrome. Staging's
+Stripe key belongs to the sandbox "Brazos sandbox" (`acct_1U2Ol543w4QKhn3t`), not to "Test mode". Its
+request log holds three `POST /v2/core/accounts` → 400 at 14:39 UTC. Two causes, both seen:
+- (i) Stripe's answer in the log: `invalid_fields` · "If configuration.recipient is supplied, the Account
+  must have a contact email." A phone user has no email anywhere (not in `auth.users`, no column, no
+  screen), and production is phone-only, so NO user can set up payouts. An account without the recipient
+  part is refused too (`dashboard` needs it): tried in the sandbox's Workbench shell.
+- (ii) The same request PLUS a test email, tried in that shell: `account_creation_losses_collector_
+  unavailable`. With `losses_collector: stripe` Stripe says a recipient-only account can only use
+  `application`. Reason: the sandbox's Connect platform profile (Settings → Connect → Platform profile)
+  says "Onboarding incomplete" and its "Refunds and chargebacks liability acknowledgement" is not
+  acknowledged. Only the owner clicks "Acknowledge". `POST /v1/accounts` (Express, no email) gives the same
+  error, so it is not yet known if v1 works without an email.
+- Not a cause: the idempotency key (API v2 runs a failed request again). No test account was created.
+- Next: owner clicks Acknowledge → the chat repeats both shell tests (exact body + email; v1 without
+  email) → pick the fix for (i): v1 create (server only, Stripe's page asks for the email, no new build) if
+  a v1 account works with `connect-status`'s v2 read and the v2 account link; else an email input in the
+  app (new build). Money and a critical folder: the builder reports its plan first.
+
 **1. Payout set-up fails on staging.** The owner tried it on his phone (build 10, signed in as the test
 worker, 2026-11-11 about 14:40 UTC). Profile → Earnings & payouts → Set up payouts gives: "Could not
 start payout setup. The payment provider is unavailable right now. Nothing changed." The page still
