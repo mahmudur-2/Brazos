@@ -3,6 +3,8 @@
 Resume: read CLAUDE.md, this file, then `git log -12 --oneline` and `git status`, then do "Next". Git owns
 branch, HEAD and tree; older sections of this file are in git history. Written 2026-11-10 ~21:30Z by the
 orchestrating chat (Opus 5.5), which stopped at the owner's weekly token cap (10% used; hard stop 15%).
+The website lines were rewritten 2026-11-11 ~05:30Z by the website chat (Fable 5.2); it did not touch the
+e2e loop, so every e2e line below is as the orchestrating chat left it.
 
 ## Now
 
@@ -18,17 +20,31 @@ orchestrating chat (Opus 5.5), which stopped at the owner's weekly token cap (10
   flow-only, so no new build is needed unless an app bug shows up.
 - The audit (2026-11-10): `docs/lean/AUDIT-LEDGER.md` is the single list of every flaw: fixed, open from
   e2e (E3-E6), batch B deferred (database and payments), owner items O1-O7, later.
-- Separate task the owner asked for: the public website (Privacy, Terms, Support for App Store Connect),
-  reviewed by Fable and styled as Brazos: `docs/lean/WEBSITE-BRIEF.md` has the whole brief.
+- The public website (brief: `docs/lean/WEBSITE-BRIEF.md`) is **built, not deployed** (G19, 29554fb):
+  Terms and Privacy rewritten for launch in `lib/legal/` (version `2026-11-11`, the draft notice removed
+  at the owner's word), `node scripts/build-site.mjs` writes `site/` (git-ignored) in the look the owner
+  picked (C "Ledger": no logo, no image, light and dark from the device). The owner uploads `site/` to
+  Cloudflare Pages and pastes two URLs into App Store Connect (ledger O2). Done only when the owner has
+  opened the live links.
+- The new legal version asks every existing account to accept again on its next open of a build that
+  holds it. Build `c14fa739…` still holds the draft4 text; the next app build picks up the new one.
 - Run 37 (after this file was first written): 01-02 green, 03 red with no Maestro message; artifacts
   not yet read.
-- Gates on HEAD 0d454ae: `npm run verify` 1276 pass, 0 fail. Tree clean after this commit.
+- Gates on 29554fb: `npm run verify` 1280 pass, 0 fail (4 new in `tests/buildSite.test.mjs`).
 
 ## Blocked
 
 - Nothing blocks the loop. Owner-only items are O1-O7 in the ledger (lawyer review, public privacy and
   support URLs, OTP rotation, App Review payment path, production env check, production auth settings,
   branch protection).
+- Website, owner only: the Cloudflare Pages upload and the App Store Connect URLs (O2). Open questions
+  the owner has not answered: arbitration or New York courts (as written); which company sends the
+  production sign-in codes (the policy says "a text-message provider"). No company owns Brazos yet, so
+  the Terms name "the operator of Brazos": form an LLC, then put its name and address in section 1
+  and bump the version (O1).
+- What the new Terms say and the code does not yet do: a tip "goes to the Worker" (B1: it never
+  does; fix B1 or switch tips off before launch) and Brazos "may recover" money lost to a card dispute
+  (B13).
 
 ## Next
 
@@ -75,3 +91,5 @@ orchestrating chat (Opus 5.5), which stopped at the owner's weekly token cap (10
 - One slice: `git revert <hash>` (`lean P*`, `F*`, `G*` commits on `mainexpo`). App fixes this run:
   P1-P5 (84c7d4e..98d6443), F25 2865121, F29 b2314da; everything else is `.maestro/` or docs.
 - Database: untouched this run (batch B deferred). Production was never touched.
+- The website and the legal rewrite: `git revert 29554fb` (texts, versions, script, tests in one commit);
+  the live site, once uploaded, is rolled back in Cloudflare Pages (Deployments → an older one → Rollback).
