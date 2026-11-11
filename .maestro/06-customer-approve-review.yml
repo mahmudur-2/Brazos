@@ -116,6 +116,8 @@ appId: app.brazos.mobile.preview
     centerElement: true
     timeout: 60000
 - tapOn: "Submit review"
+# This tap closes the keyboard (runs 38-39: iOS retires it ~4.8 s later), so keyboard-settle follows, as in flow 03.
+- runFlow: subflows/keyboard-settle.yml
 - extendedWaitUntil:
     visible: 'Thanks — .* has been rated\.|Thanks for rating .*'
     timeout: 60000

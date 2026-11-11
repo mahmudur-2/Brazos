@@ -99,6 +99,8 @@ appId: app.brazos.mobile.preview
 - tapOn: "e.g. 45"
 - inputText: "45"
 - tapOn: "COUNTERING"
+# Each step that closes the keyboard is followed by keyboard-settle, as in flow 03 (runs 38-39: iOS retires it ~4.8 s later).
+- runFlow: subflows/keyboard-settle.yml
 - tapOn: "Send counter-offer"
 - extendedWaitUntil:
     visible: 'Job & Bids|Job Details|No counter-offers left|Could not send.*'
@@ -165,6 +167,7 @@ appId: app.brazos.mobile.preview
 # the sheet title as the documented fallback (a tap outside a field also ends editing).
 - tapOn:
     point: "90%,61%"
+- runFlow: subflows/keyboard-settle.yml
 - tapOn: "Add card"
 - waitForAnimationToEnd:
     timeout: 5000

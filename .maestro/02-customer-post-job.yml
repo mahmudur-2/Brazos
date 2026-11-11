@@ -66,6 +66,8 @@ appId: app.brazos.mobile.preview
 - inputText: "Deep clean of a two bedroom apartment for the lean end to end run."
 # Static step text: closes the keyboard (the step's ScrollView handles taps; a bare text does not).
 - tapOn: "STEP 1 OF 4"
+# Each step that closes the keyboard is followed by keyboard-settle, as in flow 03 (runs 38-39: iOS retires it ~4.8 s later).
+- runFlow: subflows/keyboard-settle.yml
 - runFlow:
     when:
       visible: "Show the questions"
@@ -105,6 +107,7 @@ appId: app.brazos.mobile.preview
 - tapOn: "e.g. Sheepshead Bay"
 - inputText: "Sheepshead Bay, Brooklyn"
 - tapOn: "STEP 3 OF 4"
+- runFlow: subflows/keyboard-settle.yml
 - tapOn: "Use my current location"
 - waitForAnimationToEnd:
     timeout: 20000
@@ -121,6 +124,7 @@ appId: app.brazos.mobile.preview
 - tapOn: "e.g. 2410 Emmons Ave, Apt 3B"
 - inputText: "2017 Emmons Ave, Brooklyn, NY 11235"
 - tapOn: "STEP 3 OF 4"
+- runFlow: subflows/keyboard-settle.yml
 - scrollUntilVisible:
     element:
       text: "Today"
@@ -178,6 +182,7 @@ appId: app.brazos.mobile.preview
 - tapOn: "Describe what you need done…"
 - inputText: "Help moving a sofa and two boxes down one flight of stairs."
 - tapOn: "STEP 1 OF 4"
+- runFlow: subflows/keyboard-settle.yml
 - tapOn: "Moving"
 - runFlow:
     when:
@@ -195,6 +200,7 @@ appId: app.brazos.mobile.preview
 - tapOn: "e.g. Sheepshead Bay"
 - inputText: "Sheepshead Bay, Brooklyn"
 - tapOn: "STEP 3 OF 4"
+- runFlow: subflows/keyboard-settle.yml
 - tapOn: "Use my current location"
 - waitForAnimationToEnd:
     timeout: 20000

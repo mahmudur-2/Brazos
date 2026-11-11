@@ -91,6 +91,8 @@ appId: app.brazos.mobile.preview
       - tapOn: "Verification code, 6 digits"
       - inputText: "${OTP === '000000' ? '111111' : '000000'}"
       - tapOn: "Enter the 6-digit code"
+      # This tap closes the keyboard; iOS retires it 4.7-4.9 s later (runs 38-39), so keyboard-settle follows.
+      - runFlow: keyboard-settle.yml
       - tapOn: "Verify and continue"
       # GoTrue answers a wrong code with otp_expired or otp_invalid (lib/phoneAuth/errors.ts).
       - extendedWaitUntil:
@@ -102,6 +104,7 @@ appId: app.brazos.mobile.preview
 - tapOn: "Verification code, 6 digits"
 - inputText: ${OTP}
 - tapOn: "Enter the 6-digit code"
+- runFlow: keyboard-settle.yml
 - tapOn: "Verify and continue"
 
 # First sign-in of an account: Setup (Start in + Terms); a new legal version: the gate alone.
