@@ -16,10 +16,13 @@ export { PRIVACY_POLICY, TERMS_OF_SERVICE };
 // record months later is which text was on screen at the time.
 // ---------------------------------------------------------------------------
 
+// 2026-11-11 (website brief): both texts rewritten for launch and checked claim by claim against the code;
+// the draft notice is gone at the owner's word (the lawyer review, ledger O1, is still owed), and the
+// version no longer says "draft" because both legal screens print it.
 // draft4 (lean P5): the Terms no longer mention a payments test mode or a mute tool; the gate asks for 18+.
 // draft3 (lean E4): portfolio photos left the Terms; the Privacy Policy says profile photos are public too.
-export const TERMS_VERSION = '2026-11-10-draft4';
-export const PRIVACY_VERSION = '2026-11-10-draft4';
+export const TERMS_VERSION = '2026-11-11';
+export const PRIVACY_VERSION = '2026-11-11';
 
 export type LegalDocumentKey = 'terms' | 'privacy';
 

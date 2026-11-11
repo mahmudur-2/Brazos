@@ -60,13 +60,15 @@ test('A11 · a release with no answer is re-read before the screen says where th
   assert.ok(claim > reread, 'the "nothing was released" line only follows a re-read (the generic branch is later)');
 });
 
-test('A12 · the Terms promise no mute tool and no payments test mode, the draft banner stays, the versions moved', () => {
+test('A12 · the Terms promise no mute tool and no payments test mode, the draft banner is gone, the versions moved', () => {
   const terms = read('lib/legal/termsOfService.ts');
   assert.doesNotMatch(terms, /\bmute\b|test mode|test cards/i);
   assert.match(terms, /block and report other users/);
+  // 2026-11-11: the owner had the notice removed (it said the text was not an enforceable agreement); ledger O1 is still owed.
+  assert.doesNotMatch(terms, /Working draft/i);
   const index = read('lib/legal/index.ts');
-  assert.match(index, /export const TERMS_VERSION = '2026-11-10-draft4';/);
-  assert.match(index, /export const PRIVACY_VERSION = '2026-11-10-draft4';/);
+  assert.match(index, /export const TERMS_VERSION = '2026-11-11';/);
+  assert.match(index, /export const PRIVACY_VERSION = '2026-11-11';/);
 });
 
 test('A13 · the one agreement checkbox also confirms 18+, and the e2e flow still finds it', () => {

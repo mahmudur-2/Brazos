@@ -299,12 +299,12 @@ test('shared components used by other screens were not repainted for this one', 
 test('the privacy policy states the deletion and media facts the code proves', () => {
   const policy = read('lib/legal/privacyPolicy.ts');
 
-  // The working-draft banner survives every edit until counsel reviews it.
-  assert.match(policy, /Working draft — pending legal review/);
+  // 2026-11-11: the working-draft banner left at the owner's word (the lawyer review, ledger O1, is still owed).
+  assert.doesNotMatch(policy, /Working draft/i);
 
   // Deletion is the real in-app control (ProfileStack registers
   // DeleteAccount), not the old reporting-tool workaround.
-  assert.match(policy, /You can delete your account in the app: Profile → Delete Account\./);
+  assert.match(policy, /You can delete your account in the app: Profile → Account & safety → Delete\s+account\./);
   assert.doesNotMatch(
     policy,
     /request deletion of your account at any time through the in-app\s*reporting tool/
@@ -342,8 +342,8 @@ test('B1 · Terms and Privacy state the payment facts, name every processor, and
   const policy = read('lib/legal/privacyPolicy.ts');
 
   for (const [name, doc] of [['terms', terms], ['privacy', policy]]) {
-    // The draft notice stays until counsel signs off (B1a).
-    assert.match(doc, /Working draft — pending legal review/, `${name} keeps the draft notice`);
+    // 2026-11-11: the draft notice is gone at the owner's word; a text that calls itself unenforceable protects nobody.
+    assert.doesNotMatch(doc, /Working draft/i, `${name} carries no draft notice`);
     // The old false sentence never returns.
     assert.doesNotMatch(doc, /does not (currently )?process payments/i, `${name} no longer denies processing payments`);
     // The contact is the published support address, through the one constant.

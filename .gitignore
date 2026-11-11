@@ -76,3 +76,6 @@ start.ps1
 _archive/
 
 graphify-out/
+
+# The public website, rebuilt by scripts/build-site.mjs from lib/legal/ (never edited by hand).
+site/
