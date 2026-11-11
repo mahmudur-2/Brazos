@@ -49,7 +49,7 @@ project is never contacted (the owner pauses it).
 
 ## Blocked
 
-**1. Payout set-up STARTS on staging (proven 2026-11-11, 16:02 UTC); the worker is not yet set up.**
+**1. Payout set-up works on staging (2026-11-11); not blocked any more, kept for the facts.**
 - Cause, proven in Stripe's request log (sandbox "Brazos sandbox" `acct_1U2Ol543w4QKhn3t`; staging's key
   belongs to it, not to "Test mode"): `POST /v2/core/accounts` → 400 "the Account must have a contact
   email". A phone user has no email anywhere and production is phone-only: no worker could set up
@@ -67,9 +67,12 @@ project is never contacted (the owner pauses it).
 - Proven on the owner's phone (build 10 + the update below): the Email field showed, Stripe's page
   opened. Stripe's log at 16:02 UTC: `POST /v2/core/accounts` 200 (from Deno, pinned version, with
   `contact_email` and the key `brazos-account-…`), then `POST /v2/core/account_links` 200.
-- NOT proven: Stripe's page to its end, `connect-status` after it, a transfer to the worker. The e2e
-  build holds the old app code; it has no update channel and needs no field once the test worker
-  has an account.
+- The owner then did Stripe's page as the test worker. Read in the sandbox shell: account
+  `acct_1UadyW43w4324f4q`, `stripe_transfers` "active", requirements "eventually_due" (so
+  `classify.mjs` gives "enabled").
+- NOT proven: that this account is the "E2E Worker" of the phone flows and that staging stores
+  "enabled" (no chat reads the staging database: the next phone run shows both); a transfer to the
+  worker. The e2e build holds the old app code; it has no update channel and needs no field now.
 - Delivery, done with the owner's yes: an over-the-air update on channel `testflight` (runtime 1.0.0 =
   build 10; update group `67c92705-9241-429d-a7aa-569e60b8a38b`, made at `fc8a096`). It holds ALL app
   code since build 10 (`9b0064f`), not only the field. How: the four `env` values of eas.json's
@@ -81,8 +84,8 @@ project is never contacted (the owner pauses it).
   only). The privacy text (`lib/legal/privacyPolicy.ts:169-172`) does not say the app passes an email
   to Stripe.
 
-**2. Phone flows 03-07 and 09 cannot pass** until the test worker ("E2E Worker") has payouts on: since
-B11 a worker without payouts cannot bid, counter, accept or be hired (ledger O8).
+**2. Phone flows 03-07 and 09** needed the test worker ("E2E Worker") to have payouts on (B11, ledger
+   O8). Done by the owner (Blocked 1); no phone run has shown it yet.
 
 **3. Steps that only the owner does** (a chat refuses them, also under "bypass permissions"): identity
 or bank values on Stripe's page (also Stripe's public test values, also by a script); passwords, keys
@@ -95,9 +98,8 @@ company sends the production sign-in codes; the two URLs in App Store Connect (O
 
 1. Done: payout set-up starts (Blocked 1). The lesson of this run: prove a step before the owner
    gets it.
-2. **Owner, about 10 min:** Stripe's page as the test worker until the app says "Payouts are set up".
-   Test sign-in number and code: Supabase dashboard → Authentication → Sign In / Providers → Phone →
-   test numbers. Values for Stripe's page: Stripe's public "Testing Connect" page.
+2. Done by the owner: Stripe's page as the test worker (test sign-in number: Supabase dashboard →
+   Authentication → Sign In / Providers → Phone; values: Stripe's public "Testing Connect" page).
 3. **Phone runs**, one at a time, about 2 hours each, no database or function push while one runs:
    `gh workflow run e2e-ios.yml -R mahmudur-2/Brazos --ref mainexpo -f build_id=e93b75b2-a5fc-4147-aac9-1391ebc8de54`
    Result: `gh run view <id> -R mahmudur-2/Brazos --log | grep -oE "\[(Passed|Failed)\] .*"`. Red:
