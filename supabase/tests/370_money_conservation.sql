@@ -19,7 +19,8 @@
 -- each assertion below fails, before the fix, for the reason it names.
 --
 -- THE CAST: a customer, a worker with an enabled payout account, the runner (RLS bypassed; fixtures,
--- ground truth, the webhook's stand-in) and service_role (the drain's and the owner's RPCs).
+-- ground truth, the webhook's stand-in) and service_role (the drain's and the owner's RPCs). §N adds
+-- a second customer for the two notices under a card dispute.
 --
 -- FIXTURE SURGERY, DECLARED. now() is fixed inside a transaction, so time moves only by surgery:
 --   * tests.mc_age moves a payment's mc_book rows and its transfer/refund clocks back by an
@@ -34,7 +35,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(74);
+select plan(78);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -633,6 +634,57 @@ select is(jsonb_build_object(
               and (tests.mc_reasons(:'po2') like '%refund: card dispute open: no refund%')),
   jsonb_build_object('refunds_queued', 2, 'in_refunds_due', 0, 'in_transfers_due', 0, 'listed', true),
   'O1 (B13, addition 1): cancel_job''s free cancel and close_no_show_hires queue the refund, but a row under a card dispute is never sent and shows in payment_attention');
+
+-- ---------------------------------------------------------------------------
+-- §N. B24, B8 follow-up (20261112010900): a notice never says "refunded in full" while a card
+--     dispute holds the refund. The two disputed jobs belong to a customer of their own, so "no
+--     row for that customer says refunded in full" reads every notice that customer has.
+-- ---------------------------------------------------------------------------
+select tests.create_user('mc.n.customer@brazos.test', 'Nia Customer') as ncustomer \gset
+update fx set v = :'ncustomer' where k = 'customer';
+select tests.mc_funded('MC-N close disputed', tests.mc_ny_today() - 1, 9::smallint, 12::smallint) as pn1 \gset
+select tests.mc_funded('MC-N cancel disputed') as pn2 \gset
+update fx set v = :'customer' where k = 'customer';
+select tests.mc_funded('MC-N close plain', tests.mc_ny_today() - 1, 9::smallint, 12::smallint) as pn3 \gset
+select tests.mc_funded('MC-N cancel plain') as pn4 \gset
+select tests.mc_dispute('evt_mc_n1_c', :'pn1', 'created', 'needs_response');
+select tests.mc_dispute('evt_mc_n2_c', :'pn2', 'created', 'needs_response');
+select tests.authenticate_as(:'worker');
+select public.cancel_job((select job_id from public.payments where id = :'pn2'), 'worker_cancelled');
+select public.cancel_job((select job_id from public.payments where id = :'pn4'), 'worker_cancelled');
+select tests.clear_auth();
+select public.close_no_show_hires((((tests.mc_ny_today() - 1)::timestamp + interval '12 hours') at time zone 'America/New_York') + interval '25 hours');
+
+select is(jsonb_build_object(
+    'body', (select n.body from public.notification_outbox n
+              where n.recipient_id = :'ncustomer' and n.type = 'job_cancelled'
+                and n.data ->> 'jobId' = (select job_id::text from public.payments where id = :'pn1')),
+    'refunded_in_full', (select count(*) from public.notification_outbox n
+                          where n.recipient_id = :'ncustomer' and n.body ilike '%refunded in full%')),
+  jsonb_build_object(
+    'body', 'MC-N close disputed: the worker did not arrive, so the job was closed. Your bank is reviewing this payment. Your money comes back when the bank decides.',
+    'refunded_in_full', 0),
+  'N1 (B24): close_no_show_hires under a card dispute tells the customer the bank is reviewing the payment, and no notice to that customer says refunded in full');
+select is(jsonb_build_object(
+    'body', (select n.body from public.notification_outbox n
+              where n.recipient_id = :'ncustomer' and n.type = 'job_cancelled'
+                and n.data ->> 'jobId' = (select job_id::text from public.payments where id = :'pn2')),
+    'refunded_in_full', (select count(*) from public.notification_outbox n
+                          where n.recipient_id = :'ncustomer' and n.body ilike '%refunded in full%')),
+  jsonb_build_object(
+    'body', 'The worker cancelled this job. Your bank is reviewing this payment. Your money comes back when the bank decides.',
+    'refunded_in_full', 0),
+  'N2 (B8): cancel_job worker_cancelled under a card dispute tells the customer the bank is reviewing the payment, and no notice to that customer says refunded in full');
+select is((select n.body from public.notification_outbox n
+            where n.recipient_id = :'customer' and n.type = 'job_cancelled'
+              and n.data ->> 'jobId' = (select job_id::text from public.payments where id = :'pn3')),
+  'MC-N close plain: the worker did not arrive, so your payment is being refunded in full.',
+  'N3 (B24): without a card dispute, close_no_show_hires keeps today''s notice');
+select is((select n.body from public.notification_outbox n
+            where n.recipient_id = :'customer' and n.type = 'job_cancelled'
+              and n.data ->> 'jobId' = (select job_id::text from public.payments where id = :'pn4')),
+  'The worker cancelled this job. Your payment is being refunded in full.',
+  'N4 (B8): without a card dispute, cancel_job worker_cancelled keeps today''s notice');
 
 -- ---------------------------------------------------------------------------
 -- §P. Addition 2: a held job payment on a job that never ends is listed after 7 days.

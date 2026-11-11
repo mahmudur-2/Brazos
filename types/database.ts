@@ -3464,6 +3464,10 @@ export type Database = {
         Args: { p_amount_cents: number; p_payment_id: string; p_ref: string }
         Returns: boolean
       }
+      payment_refund_held_by_dispute: {
+        Args: { p_payment_id: string }
+        Returns: boolean
+      }
       pg_function_present: {
         Args: { p_name: string; p_namespace: string }
         Returns: boolean
