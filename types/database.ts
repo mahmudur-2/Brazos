@@ -2809,6 +2809,7 @@ export type Database = {
         Args: { p_offer: Database["public"]["Tables"]["job_offers"]["Row"] }
         Returns: boolean
       }
+      expire_open_jobs: { Args: { p_now?: string }; Returns: number }
       expire_unfunded_payments: {
         Args: never
         Returns: {
@@ -2893,6 +2894,7 @@ export type Database = {
       }
       get_payment_account: { Args: { p_user_id: string }; Returns: string }
       get_payment_customer: { Args: { p_user_id: string }; Returns: string }
+      install_lifecycle_schedules: { Args: never; Returns: string }
       install_payment_events_prune: { Args: never; Returns: string }
       install_push_schedule: { Args: never; Returns: string }
       install_receipt_schedule: { Args: never; Returns: string }
