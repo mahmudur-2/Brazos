@@ -1,9 +1,8 @@
 # HANDOFF
 
 Resume: read CLAUDE.md, this file, then `git log -25 --oneline` and `git status`, then do "Next". Git owns
-branch, HEAD and tree; older versions of this file are in git history. Written 2026-11-11 about 15:00 UTC
-by the orchestrating chat (Fable 5.2). The owner said "pause all process": the helpers, the watchers and
-phone run 40 are stopped. Nothing runs. Nothing waits in the work tree.
+branch, HEAD and tree; older versions of this file are in git history. Written 2026-11-11 about 16:00 UTC
+by the orchestrating chat (Fable 5.2). Phone run 40 was stopped at the owner's word. Nothing runs. Nothing waits in the work tree.
 
 ## Now
 
@@ -16,7 +15,7 @@ project is never contacted (the owner pauses it).
 - All fixes are on `mainexpo` and pushed. Batch B is fixed (B19 stays; owner: "its ok"); each row, its
   proof and its open parts: `docs/lean/AUDIT-LEDGER.md`. This chat's commits: `git log --oneline 2dd4dc0..`
   (among them the access-rights fix `5dc2ce8` and the realtime clean-up `60d77fe`).
-- `npm run verify`: exit 0, 1410 pass, 0 fail, 0 skipped (this chat, on the final tree).
+- `npm run verify`: exit 0, 1417 pass, 0 fail, 0 skipped (at `fb4700b`).
 - `npm run db:test` on the local stack: 50 files, 2158 tests, PASS (at `60d77fe`; no database file
   changed after it).
 - Staging equals the migration files: pipeline run 43036282885, `prove` 19 of 19 sections PASS. That
@@ -26,8 +25,9 @@ project is never contacted (the owner pauses it).
   the first real press proves its remote steps. Owner's steps: `docs/production/owner-steps.md` (24
   steps, about 77 min, 7 secrets, 2 approvals).
 - Simulator build for the phone tests: EAS `e93b75b2-a5fc-4147-aac9-1391ebc8de54` (profile `e2e-test`,
-  commit `1633f10`, the 10th iOS build this month). App code did not change after `1633f10`: it is the
-  final build. The owner's phone has TestFlight build 10 (`9b0064f`).
+  commit `1633f10`, the 10th iOS build this month). App code changed once after
+  `1633f10`: the Email field of `fb4700b` (Blocked 1). The owner's phone has TestFlight build 10
+  (`9b0064f`).
 
 **Landed, not proven on a device** (flow files and the workflow only)
 - `1633f10`: an 18 s wait after each app launch. `40c3005`: flow 06 cancels its side job (E6).
@@ -49,35 +49,31 @@ project is never contacted (the owner pauses it).
 
 ## Blocked
 
-**0. The cause of 1 is PROVEN (a later chat, 2026-11-11 about 16:30 UTC; this beats the "open causes"
-list in 1).** The owner allowed the chat to read Stripe and the Supabase dashboard in his Chrome. Staging's
-Stripe key belongs to the sandbox "Brazos sandbox" (`acct_1U2Ol543w4QKhn3t`), not to "Test mode". Its
-request log holds three `POST /v2/core/accounts` → 400 at 14:39 UTC. Two causes, both seen:
-- (i) Stripe's answer in the log: `invalid_fields` · "If configuration.recipient is supplied, the Account
-  must have a contact email." A phone user has no email anywhere (not in `auth.users`, no column, no
-  screen), and production is phone-only, so NO user can set up payouts. An account without the recipient
-  part is refused too (`dashboard` needs it): tried in the sandbox's Workbench shell.
-- (ii) The same request PLUS a test email, tried in that shell: `account_creation_losses_collector_
-  unavailable`. With `losses_collector: stripe` Stripe says a recipient-only account can only use
-  `application`. Reason: the sandbox's Connect platform profile (Settings → Connect → Platform profile)
-  says "Onboarding incomplete" and its "Refunds and chargebacks liability acknowledgement" is not
-  acknowledged. Only the owner clicks "Acknowledge". `POST /v1/accounts` (Express, no email) gives the same
-  error, so it is not yet known if v1 works without an email.
-- Not a cause: the idempotency key (API v2 runs a failed request again). No test account was created.
-- Next: owner clicks Acknowledge → the chat repeats both shell tests (exact body + email; v1 without
-  email) → pick the fix for (i): v1 create (server only, Stripe's page asks for the email, no new build) if
-  a v1 account works with `connect-status`'s v2 read and the v2 account link; else an email input in the
-  app (new build). Money and a critical folder: the builder reports its plan first.
-
-**1. Payout set-up fails on staging.** The owner tried it on his phone (build 10, signed in as the test
-worker, 2026-11-11 about 14:40 UTC). Profile → Earnings & payouts → Set up payouts gives: "Could not
-start payout setup. The payment provider is unavailable right now. Nothing changed." The page still
-says "Payouts aren't set up yet".
-- Source of the sentence: `supabase/functions/connect-onboarding/index.ts` answers HTTP 502 with it when
-  Stripe refuses `POST /v2/core/accounts` (line 190) or `POST /v2/core/account_links` (line 232). The
-  app shows the same sentence for any other 502 (`lib/payments/stripeRules.ts`).
-- Never proven: no record shows that payout set-up, or a transfer to a worker, ever ran on staging or
-  on a device. No test covers the account-create request body (`tests/connect.test.mjs:22-25`).
+**1. Payout set-up: the server fix is deployed; the app fix is on no device (2026-11-11, 16:00 UTC).**
+- Cause, proven in Stripe's request log (sandbox "Brazos sandbox" `acct_1U2Ol543w4QKhn3t`; staging's key
+  belongs to it, not to "Test mode"): `POST /v2/core/accounts` → 400 "the Account must have a contact
+  email". A phone user has no email anywhere and production is phone-only: no worker could set up
+  payouts. No way around it (tried in the sandbox's Workbench shell): without the recipient part
+  `dashboard` is refused; `POST /v1/accounts` is refused for this platform.
+- Second cause, gone: the sandbox's "Refunds and chargebacks liability acknowledgement" (Settings →
+  Connect → Platform profile). The owner clicked it. A new Stripe account or live mode needs it again.
+- Fix `fb4700b` (pipeline 43052135870 green, function deployed): Payouts shows an Email field while no
+  account exists; `connect-onboarding` reads `{"email"}` only when it creates the account, sends it as
+  `contact_email`, never stores or logs it (`connect-onboarding/account.mjs`, tested). No email → 400
+  "update Brazos"; Stripe's `email_invalid` → 400 "check it".
+- Proven in the shell at the pinned version: the exact create body + an email → 200; the exact
+  account-link body → 200; the read has the fields `connect-status/classify.mjs` uses. The chat's two
+  test accounts are closed.
+- NOT proven: nobody called the deployed function; no device showed the field. Build 10 and the e2e
+  build hold the old app code (a phone user gets the "update Brazos" sentence).
+- Delivery: `runtimeVersion` is the app version (1.0.0 = build 10) and channel `testflight` is empty, so
+  an over-the-air update reaches build 10: `eas update --channel testflight --environment preview` with
+  the four `env` values of eas.json's `testflight` profile. Never done on this channel; needs the
+  owner's yes; undo: `eas update:roll-back-to-embedded`. The e2e build has no channel and needs no
+  field once the test worker has an account.
+- New, not fixed: a phone user gets no email receipts (`send-receipts/index.ts:109`: sign-in email
+  only). The privacy text (`lib/legal/privacyPolicy.ts:169-172`) does not say the app passes an email
+  to Stripe.
 
 **2. Phone flows 03-07 and 09 cannot pass** until the test worker ("E2E Worker") has payouts on: since
 B11 a worker without payouts cannot bid, counter, accept or be hired (ledger O8).
@@ -91,16 +87,13 @@ company sends the production sign-in codes; the two URLs in App Store Connect (O
 
 ## Next
 
-1. Done: the cause is in Blocked 0 (the local stack has no Stripe key, so it cannot show it).
-2. **Owner, about 1 min:** the "Acknowledge" click of Blocked 0 (ii).
-3. **Fix (i)** as Blocked 0 "Next" says: an Opus builder reports its plan first, then tests, then a push
-   (the pipeline deploys).
-4. **Prove the path before the owner tries again.** The lesson of this run: he got this step before
-   anyone had run it. Then the **owner, about 10 min:** payout set-up as the test worker until the page
-   says "Payouts are set up". Test sign-in number and code: Supabase dashboard → Authentication → Sign
-   In / Providers → Phone → test numbers. Values for Stripe's page: Stripe's public "Testing Connect"
-   page.
-5. **Phone runs**, one at a time, about 2 hours each, no database or function push while one runs:
+1. **Owner's yes**, then the over-the-air update of Blocked 1 (try `expo export` first). The owner
+   restarts the app twice, types an email, taps "Set up payouts"; the chat reads Stripe's log (200 on
+   `accounts` and `account_links`). The lesson of this run: prove a step before the owner gets it.
+2. **Owner, about 10 min:** Stripe's page as the test worker until the app says "Payouts are set up".
+   Test sign-in number and code: Supabase dashboard → Authentication → Sign In / Providers → Phone →
+   test numbers. Values for Stripe's page: Stripe's public "Testing Connect" page.
+3. **Phone runs**, one at a time, about 2 hours each, no database or function push while one runs:
    `gh workflow run e2e-ios.yml -R mahmudur-2/Brazos --ref mainexpo -f build_id=e93b75b2-a5fc-4147-aac9-1391ebc8de54`
    Result: `gh run view <id> -R mahmudur-2/Brazos --log | grep -oE "\[(Passed|Failed)\] .*"`. Red:
    `gh run download <id>`, then decrypt (GPG; key file `C:\Users\mdmah\.brazos-artifact-key`, never
@@ -108,12 +101,12 @@ company sends the production sign-in codes; the two URLs in App Store Connect (O
    "green after one driver death": tell the owner. Known gaps: keyboard-closing taps in flows 07-10
    were not checked (flow 10 has one, in its no-blocker branch); with payouts on, test money really
    moves to the worker for the first time, so flows 05-09 can show texts that no run has seen.
-6. **Final gate:** `npm run verify`, `npm run db:test`. Then the records: the ledger (its "local only"
+4. **Final gate:** `npm run verify`, `npm run db:test`. Then the records: the ledger (its "local only"
    line is out of date; O8; E3, E4, E6; a new row for `60d77fe`) and `docs/lean/SHIP-REPORT.md` (runs 39
    and 40, build `e93b75b2`, the rerun guard, the holds).
-7. **Owner:** production by `docs/production/owner-steps.md`. The chat asks one yes/no question before
+5. **Owner:** production by `docs/production/owner-steps.md`. The chat asks one yes/no question before
    each production action. The owner approves within one day of the press.
-8. **Tell the owner before production** (not said yet): the Maestro bug can still kill a run; B3 (the
+6. **Tell the owner before production** (not said yet): the Maestro bug can still kill a run; B3 (the
    exact address only while a job is assigned or in progress); B9 (completion photos only while in
    progress); B12 (a ban records the sign-in phone); the B11 texts, and that a build with payments
    `disabled` cannot take bids; the money marks (overdue after 2 business days, nothing automatic after
