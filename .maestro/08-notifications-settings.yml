@@ -121,11 +121,14 @@ appId: app.brazos.mobile.preview
 - tapOn: "Light"
 - takeScreenshot: 08-profile-light
 - tapOn: "Auto — follow the system"
+# Run 38: "Legal" stopped at the screen's foot, so its rows opened under the floating tab bar and the
+# "Terms of Service" tap hit the + button. Centered, the rows open above the bar.
 - scrollUntilVisible:
     element:
       text: "Legal"
     direction: DOWN
     timeout: 60000
+    centerElement: true
 - tapOn: "Legal"
 - extendedWaitUntil:
     visible: "Terms of Service"
