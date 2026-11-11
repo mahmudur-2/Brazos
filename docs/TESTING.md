@@ -45,7 +45,11 @@ there and must say so. Identity in tests is a transaction-local role switch plus
 `request.jwt.claims`. `.github/workflows/pgtap.yml` runs reset and test on a runner-started stack.
 Never run these commands, or any SQL, against a remote project: `--linked`, `--db-url` and
 `--project-ref` never appear in a run. Staging gets a migration only through the pipeline
-(`docs/ARCHITECTURE.md`, Staging pipeline); production is the owner's, by hand.
+(`docs/ARCHITECTURE.md`, Staging pipeline); production only through the Production button, which
+only the owner starts. Its logic is tested offline: `tests/productionDeploy.test.mjs` (fake fetch,
+including a search of all output for every secret in raw and encoded form),
+`tests/productionWorkflow.test.mjs` (the workflow's shape) and `tests/stagingScan.test.mjs` (the
+scan, run on fixture files). Staging's `prove` job runs the same schema check first.
 
 ## 3. Maestro iPhone flows
 

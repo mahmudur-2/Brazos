@@ -29,7 +29,7 @@ iOS only; no Android or web config. Expo SDK: `package.json`. Trunk: `mainexpo`;
 - Never modify, weaken or bypass `.claude/` or its deny list.
 
 ## Supabase
-Production (`avkighsiufeefyycbebf`) is never contacted, read or write. `.env` stays on staging; never modify it. A run uses only the local stack, never a remote project. Staging gets migrations only through the pipeline; a destructive file waits for the owner's click. Rest: `.claude/rules/supabase.md`.
+The retired production project (`avkighsiufeefyycbebf`) is never contacted, read or write. The new production project is reached only by the Production button (`.github/workflows/production.yml`), which only the owner starts and approves; a chat never starts, approves or re-runs it and never contacts that project. `.env` stays on staging; never modify it. A run uses only the local stack, never a remote project. Staging gets migrations only through the pipeline; a destructive file waits for the owner's click. Rest: `.claude/rules/supabase.md`.
 
 ## Workflow
 Verify: npm run verify

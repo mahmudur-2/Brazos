@@ -92,13 +92,13 @@ Not authorised for any run until the owner says so.
   corrective migration.
 - Twilio Verify values in the Supabase dashboard (Authentication, Providers, Phone), then
   `EXPO_PUBLIC_PHONE_AUTH_MODE=supabase` (`docs/ARCHITECTURE.md`, Phone sign-in).
-- Production migration: manual, by the owner, one file at a time, in filename order; never by a
-  chat or a workflow.
+- Production: the owner's steps for the Production button (`docs/production/owner-steps.md`); a
+  real-money switch needs its own dated decision (D-20261111-3).
 - Resend (`RESEND_API_KEY`, `RECEIPT_FROM`) on staging, and a domain with a support inbox, before real
   customers.
 - Stripe housekeeping: rename the test account "Brazos sandbox" before launch; roll the publishable
   test key that once appeared in terminal output.
-- Supabase Pro at the launch gate; diagnose the roughly 2 GB of cached egress production burned
-  with no users (an old build or crawlers on public bucket URLs).
+- Supabase Pro at the launch gate; diagnose the roughly 2 GB of cached egress the retired production
+  project burned with no users (an old build or crawlers on public bucket URLs).
 - A read-only staging Postgres role for runs: the connection string would live outside the
   repository; needs a dated `docs/DECISIONS.md` row before any run uses it.

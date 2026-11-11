@@ -66,4 +66,5 @@ Branch, HEAD and the working tree are Git's: read them with `git`, never from a 
 Schema changes are timestamped files in `supabase/migrations/`, never edited once applied. A push
 to `mainexpo` that touches `supabase/` starts `.github/workflows/staging.yml`: verify, apply every
 pending migration, then deploy the edge functions. A migration that drops or renames something
-stops the pipeline for the owner. Production is never automated: the owner applies it by hand.
+stops the pipeline for the owner. Production has its own button, `.github/workflows/production.yml`,
+which only the owner starts and approves (`docs/production/owner-steps.md`).

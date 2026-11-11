@@ -40,7 +40,8 @@ Turning SMS on, in this order:
 2. Supabase dashboard only: Authentication, Providers, Phone, Twilio Verify. Enter the three
    values there, enable the provider, keep the code length at six (`OTP_LENGTH` in
    `lib/phoneAuth/types.ts`; change both together). They never go into `.env`, `app.config.ts`,
-   EAS secrets read by the client, or the repository.
+   EAS secrets read by the client, or the repository. On production, the Production button sets
+   them instead, from the `production` environment's secrets and `scripts/production-auth.json`.
 3. Set `EXPO_PUBLIC_PHONE_AUTH_MODE=supabase`; restart Metro or rebuild (inlined at bundle time).
 4. Check: a new sign-up makes a session and a profile with the E.164 number; a returning sign-in
    makes no second account; an unknown number on sign-in creates no account
@@ -460,7 +461,9 @@ are `false` (Stripe and a browser send no JWT); `create-payment`, `connect-onboa
 `connect-status`, `payment-methods` are `true`; `send-push`, `send-receipts` and
 `process-settlements` run on the platform default (the last two woken by pg_cron with the
 service-role key as Bearer). After every deploy, confirm the dashboard still shows JWT
-verification off for `stripe-webhook` and `connect-return`.
+verification off for `stripe-webhook` and `connect-return`. On production, the Production button's
+smoke checks prove after each deploy that `send-push`, `connect-status` and `stripe-webhook` answer
+with their own code, not the gateway's (Production button, below).
 
 | Function | Role |
 |---|---|
@@ -503,7 +506,10 @@ the event matches no row); idempotency keys `tr:<payment id>:<transfer_attempts>
 `supabase/functions/**` or `supabase/config.toml`, and on manual dispatch with one input,
 `allow_destructive` (default false). Three jobs in order: `verify` (`npm run verify`), `migrate`
 (environment `staging`: link, list pending, the safety gate, `db push`, list again), `deploy` (every
-function). The CLI is pinned (`supabase@2.116.0`); no third-party action holds the credentials.
+function). Two more jobs only report, and never block: `local` (no secret: a fresh local database
+and its schema fingerprint) and `prove` (environment `staging`: the hosted schema against that
+fingerprint), so the Production button's schema check runs on staging first. The CLI is pinned
+(`supabase@2.116.0`); no third-party action holds the credentials.
 
 The safety gate is `scripts/staging-scan.sh` over the files staging reports pending (from the
 database, never the git diff). With `allow_destructive` false, a pending file containing
@@ -512,8 +518,31 @@ database, never the git diff). With `allow_destructive` false, a pending file co
 deploy stops with it; the operator applies the file by hand or re-runs with the override. The scan
 is a tripwire, not a proof. Staging is what installed TestFlight builds read, so removing what a
 build still reads breaks it the moment it lands; additive SQL cannot. A migration that adds an
-enum value is its own file. Production is hand-applied and no job targets it. `ci.yml` runs
+enum value is its own file. No job here targets production. `ci.yml` runs
 `npm run verify` with no secrets; `pgtap.yml` runs `db:reset` then `db:test` on a local stack.
+
+## Production button
+
+`.github/workflows/production.yml` runs only when the owner starts it (one input,
+`allow_destructive`, default false); the owner's steps are `docs/production/owner-steps.md`. Four
+jobs: `verify`; `local` (no secret: a fresh local database and its fingerprint, as an artifact);
+`plan` (environment `production`, approved by the owner: safety checks, project status, keys, link,
+migration list, the plan and its code; it changes nothing); `apply` (environment `production`,
+approved again: the same checks, the plan code compared with the database again, `db push`, the
+schema compared with `local` (a hard gate: a difference stops the run), every function, the Stripe
+secrets, the Stripe test webhook, the timer key, three smoke checks, the timer proof, the sign-in
+settings). The logic is `scripts/production-deploy.mjs`; the secret jobs install no npm package.
+The timer proof is `drain_probe()`: one real call from the database to each of the three drains
+with the stored key, each of which must get HTTP 200 (`drain_probe_status()`).
+
+The safety checks refuse the staging ref, the retired ref, a Stripe key that does not start with
+`sk_test_` and an environment with no required reviewer. Every step is safe to repeat: the webhook
+is found by its URL, and each setting is read back after it is written. The server key is the
+secret key named `default` (else the legacy `service_role` key), masked before any use; it goes to
+the timers through `set_drain_secrets` on every press, and the functions get only
+`STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. The scan is `scripts/staging-scan.sh`: on a
+database with no applied migration, a flagged file is listed and allowed; after that, it needs
+`allow_destructive`. Each job ends with one PASS/FAIL table and one sentence per FAIL.
 
 ## Legal text and the public website
 
