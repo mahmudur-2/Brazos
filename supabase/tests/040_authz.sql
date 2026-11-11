@@ -526,12 +526,11 @@ select throws_ok($$ insert into public.messages (direct_thread_id, sender_id, co
   '42501', 'new row violates row-level security policy for table "messages"', 'bidder: free-form message to the owner is refused pre-hire (phase66 lock)');
 select throws_ok($$ insert into public.messages (job_id, sender_id, content) values ((select v from fx where k = 'j_live'), (select v from fx where k = 'bidder'), 'lost bidder') $$,
   '42501', 'new row violates row-level security policy for table "messages"', 'bidder: cannot post on the job thread they lost');
--- The policy exempts payload-free negotiation events (job_offer_id set,
--- empty content, no media) from the lock. The exemption is what the lock
--- must not be smuggled through: a structured row that CARRIES text is
--- free-form messaging wearing a costume. (R3b probed the exemption itself
--- and found a party CAN insert an empty fake event row; that is reported,
--- not asserted here — see the run report.)
+-- A structured negotiation event (job_offer_id, request_event) is the offer
+-- functions' to write. Until B14 the policy exempted a payload-free one from
+-- the lock, and a party could insert an empty fake event row; since B14 no
+-- client row may carry those columns at all (400_access_matrix.sql §4). A
+-- structured row that CARRIES text is still refused, as before.
 select throws_ok($$ insert into public.messages (direct_thread_id, sender_id, content, job_offer_id, request_event) values ((select v from fx where k = 'dt_ob'), (select v from fx where k = 'bidder'), 'smuggled text', (select v from fx where k = 'o_open_b'), 'created') $$,
   '42501', 'new row violates row-level security policy for table "messages"', 'bidder: cannot smuggle text through a structured negotiation event pre-hire');
 select tests.authenticate_as(:'stranger');

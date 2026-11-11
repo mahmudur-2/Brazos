@@ -48,11 +48,11 @@ async function baselineFunction(name) {
   return sql.slice(start, end);
 }
 
-/** The `with check (...)` body of the INSERT policy, as lean_v1 restated it. */
+/** The `with check (...)` body of the INSERT policy, as B14 restated it (the newest definition). */
 async function insertPolicyBody() {
-  const sql = await read('supabase/migrations/20261108000000_lean_v1.sql');
+  const sql = await read('supabase/migrations/20261112031500_message_cards_server_only.sql');
   const start = sql.indexOf('alter policy messages_insert_party on public.messages with check (');
-  assert.ok(start > 0, 'lean_v1 must restate messages_insert_party');
+  assert.ok(start > 0, 'B14 must restate messages_insert_party');
   const end = sql.indexOf('\n);', start);
   assert.ok(end > start, 'the policy must be bounded by its closing parenthesis');
   return sql.slice(start, end);
@@ -66,18 +66,13 @@ async function insertPolicyBody() {
 test('offer, counteroffer, accept and decline all still succeed pre-confirmation', async () => {
   const policy = await insertPolicyBody();
 
-  // The policy exempts a structured negotiation row outright, keyed on the
-  // discriminator the app itself reads first. (Hire requests and voice notes,
-  // the other two shapes, went in lean D6 with their columns.)
-  // And the exemption cannot be abused as a free-form channel: a client-
-  // supplied event row may carry no text or photo — exactly the shape
-  // offer_post_event() and create_offer() write.
-  assert.match(
-    policy,
-    /or \(job_offer_id is not null and coalesce\(btrim\(content\), ''\) = '' and image_url is null\)/
-  );
+  // B14: the policy no longer exempts a structured negotiation row. A client
+  // row is plain — the three card columns stay null — so nobody can post a
+  // card for an offer, a counter or an acceptance that never happened.
+  assert.match(policy, /and job_offer_id is null\s+and request_event is null\s+and request_amount_cents is null/);
+  assert.doesNotMatch(policy, /job_offer_id is not null/, 'no exemption for a card-shaped row is left');
 
-  // The stronger reason it cannot break: every writer of a negotiation event
+  // Why the negotiation cannot break: every writer of a negotiation event
   // is SECURITY DEFINER, so it does not meet this policy at all.
   for (const fn of ['offer_post_event', 'create_offer']) {
     const head = (await baselineFunction(fn)).slice(0, 1200);
