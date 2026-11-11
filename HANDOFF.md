@@ -1,123 +1,154 @@
 # HANDOFF
 
-Resume: read CLAUDE.md, this file, then `git log -12 --oneline` and `git status`, then do "Next". Git owns
-branch, HEAD and tree; older sections of this file are in git history. Written 2026-11-10 ~21:30Z by the
-orchestrating chat (Opus 5.5), which stopped at the owner's weekly token cap (10% used; hard stop 15%).
-The website lines were rewritten 2026-11-11 ~07:00Z by the website chat (Fable 5.2); it did not touch the
-e2e loop, so every e2e line below is as the orchestrating chat left it. The B1 (tip) lines were
-written 2026-11-11 ~06:35Z by the B1 chat (Fable 5.2); it did not touch the e2e loop either.
+Resume: read CLAUDE.md, this file, then `git log -25 --oneline` and `git status`, then do "Next". Git owns
+branch, HEAD and tree; older versions of this file are in git history. Written 2026-11-11 about 15:00 UTC
+by the orchestrating chat (Fable 5.2). The owner said "pause all process": the helpers, the watchers and
+phone run 40 are stopped. Nothing runs. Nothing waits in the work tree.
 
 ## Now
 
-- Lean v1 of Brazos (iOS, Expo) is on `mainexpo`. The open task: all ten Maestro flows green on GitHub
-  Actions (public repo, free Macs), TWICE in a row on the final build (lean plan F4), then the H3 final
-  gate (verify, db:test, e2e, TestSprite), SHIP-REPORT, this file, push, one short owner message.
-- **Run 37 is RUNNING**: https://github.com/mahmudur-2/Brazos/actions/runs/42903515400 (head 0d454ae,
-  F33), simulator build `c14fa739-532f-4cfe-a3f8-d96b1974a3a7`. Ten flows take ~90 min.
-- Proven: run 32 had 01-07 green in one run; runs 33-36 each went red on Mac timing, fixed in the flows
-  (F31-F33) or re-run (35: driver lost the simulator). **08, 09, 10 have never passed.** Expect one or
-  two fixes each: the normal shape of this work.
-- Build `c14fa739…` holds the app fixes P1-P5, F25, F29. Every later fix (F26-F28, F30-F33) is
-  flow-only, so no new build is needed unless an app bug shows up.
-- The audit (2026-11-10): `docs/lean/AUDIT-LEDGER.md` is the single list of every flaw: fixed, open from
-  e2e (E3-E6), batch B deferred (database and payments), owner items O1-O7, later.
-- **B1 is fixed** (c8be212, `supabase/migrations/20261111000000_tip_settlement.sql`, blueprint
-  `docs/critical/tip-settlement.md`): a charged tip is now `held`, queued in `transfers_due` for the
-  whole tip, sent by `process-settlements`, and `released` only by `transfer.created`. The app says
-  "on its way" until then. The review found a second hole and it is closed in the same migration: a
-  tip row's amount is never rewritten, and a tip is queued only when the amount received equals the
-  row's charge. Proven on the local stack. On staging the pipeline applied it
-  (https://github.com/mahmudur-2/Brazos/actions/runs/42972896348: verify, migrate, deploy all
-  green; "List migrations (after)" shows `20261111000000` on both sides). Not tried with a real
-  test-mode tip on a phone. Production: the owner applies the file by hand, as always.
-- Build `c14fa739…` holds the OLD tip screen: its poll waits for `released`, so on it a paid tip is
-  not confirmed on screen until the transfer lands (read from the old classifier, not run on a
-  phone). The next app build carries the new wording. No Maestro flow pays a tip (flow 06 only
-  checks "Add a tip?" is visible).
-- The public website (brief: `docs/lean/WEBSITE-BRIEF.md`) is **live** at
-  https://brazos.brazosapp.workers.dev/ (built by G19, 29554fb): Terms and Privacy rewritten for launch
-  in `lib/legal/` (version `2026-11-11`, the draft notice removed at the owner's word),
-  `node scripts/build-site.mjs` writes `site/` (git-ignored) in the look the owner picked (C "Ledger":
-  no logo, no image, light and dark from the device). The owner uploaded `site/` to Cloudflare as a
-  Worker with static assets named `brazos` (not Pages; HTML handling `auto-trailing-slash`, not found
-  `404-page`); the account's workers.dev subdomain is `brazosapp`. Checked with curl 2026-11-11
-  ~06:45Z: `/`, `/support`, `/privacy`, `/terms` return 200 and equal the built files byte for byte,
-  an unknown path returns the built 404 page, the `_headers` rules are applied, no cookie is set.
-  Still the owner's: paste `/privacy` and `/support` into App Store Connect (ledger O2; not confirmed).
-- The new legal version asks every existing account to accept again on its next open of a build that
-  holds it. Build `c14fa739…` still holds the draft4 text; the next app build picks up the new one.
-- Run 37 (after this file was first written): 01-02 green, 03 red with no Maestro message; artifacts
-  not yet read.
-- Gates on c8be212: `npm run verify` 1282 pass, 0 fail; `npm run db:test` on the local stack 34 files,
-  1805 tests, PASS, none skipped (`320_tip_settlement.sql` is new: 22 tests).
+**The task (owner, 2026-11-11):** fix every open flaw in one run, then production. Production = a NEW
+empty Supabase project that changes only by one GitHub button, which only the owner presses. Test money
+only (Stripe not live). No LLC yet. The repo stays public until the phone tests pass. The old production
+project is never contacted (the owner pauses it).
+
+**Done, with proof**
+- All fixes are on `mainexpo` and pushed. Batch B is fixed (B19 stays; owner: "its ok"); each row, its
+  proof and its open parts: `docs/lean/AUDIT-LEDGER.md`. This chat's commits: `git log --oneline 2dd4dc0..`
+  (among them the access-rights fix `5dc2ce8` and the realtime clean-up `60d77fe`).
+- `npm run verify`: exit 0, 1410 pass, 0 fail, 0 skipped (this chat, on the final tree).
+- `npm run db:test` on the local stack: 50 files, 2158 tests, PASS (at `60d77fe`; no database file
+  changed after it).
+- Staging equals the migration files: pipeline run 43036282885, `prove` 19 of 19 sections PASS. That
+  compares the schema only. No edge function (server code at Supabase) was called on staging after its
+  deploy.
+- The Production button (`.github/workflows/production.yml`) was rehearsed on the local stack only. Only
+  the first real press proves its remote steps. Owner's steps: `docs/production/owner-steps.md` (24
+  steps, about 77 min, 7 secrets, 2 approvals).
+- Simulator build for the phone tests: EAS `e93b75b2-a5fc-4147-aac9-1391ebc8de54` (profile `e2e-test`,
+  commit `1633f10`, the 10th iOS build this month). App code did not change after `1633f10`: it is the
+  final build. The owner's phone has TestFlight build 10 (`9b0064f`).
+
+**Landed, not proven on a device** (flow files and the workflow only)
+- `1633f10`: an 18 s wait after each app launch. `40c3005`: flow 06 cancels its side job (E6).
+- `91a2ffb`: a flow runs one more time after a Maestro driver death (`DeviceUnreachableException`); only
+  flows 01, 07, 09, 10; attempt 1 is kept in `e2e-reruns/`; a `RERUN` line goes to the log and the run
+  summary. Tested only as a dry run on Windows.
+- `ad3bc58`: a 6 s hold after each keyboard-closing tap in the sign-in and flows 02-06 (12 holds).
+- B11 (`83219cf`): the new payout card and its texts were never seen on a phone.
+
+**Phone tests** (the bar: ten flows green, two runs in a row, on the final code)
+- Run 39 (43009644487, `2dd4dc0`): 9 of 10. Flow 02 died of the Maestro driver bug
+  (mobile-dev-inc/maestro#3538): a screen read in flight when iOS retires its keyboard process, about
+  4.8 s after a keyboard-closing tap or 8-14 s after a launch (a helper measured runs 37-39; this chat
+  did not check the numbers). The waits and holds above are the answer.
+- Run 40 (43036821370, `60d77fe`): cancelled after 27 min at the owner's word. GitHub kept no log and no
+  artifact, so it shows nothing. No run on the final code yet.
+- Temp files of this chat (about 3 GB, run 38 artifacts, safe to delete):
+  `C:\Users\mdmah\AppData\Local\Temp\claude\c0009c647868b50f\24e8eca1-c2ee-4dee-91dd-7aea6fecc9f7\scratchpad`
 
 ## Blocked
 
-- Nothing blocks the loop. Owner-only items are O1-O7 in the ledger (lawyer review, public privacy and
-  support URLs, OTP rotation, App Review payment path, production env check, production auth settings,
-  branch protection).
-- Website, owner only: pasting the two URLs into App Store Connect (O2). Open questions
-  the owner has not answered: arbitration or New York courts (as written); which company sends the
-  production sign-in codes (the policy says "a text-message provider"). No company owns Brazos yet, so
-  the Terms name "the operator of Brazos": form an LLC, then put its name and address in section 1
-  and bump the version (O1).
-- What the new Terms say and the code does not yet do: Brazos "may recover" money lost to a card
-  dispute (B13). A tip "goes to the Worker" is now true in the code (B1, c8be212) once the migration
-  is on the database the app talks to.
-- Owner decision (ledger B19): tips charged before the fix were never transferred and the fix does
-  not touch them. Staging is Stripe test mode and production has no users, so "leave them" is a
-  fair answer; a one-off requeue is the other.
+**1. Payout set-up fails on staging.** The owner tried it on his phone (build 10, signed in as the test
+worker, 2026-11-11 about 14:40 UTC). Profile → Earnings & payouts → Set up payouts gives: "Could not
+start payout setup. The payment provider is unavailable right now. Nothing changed." The page still
+says "Payouts aren't set up yet".
+- Source of the sentence: `supabase/functions/connect-onboarding/index.ts` answers HTTP 502 with it when
+  Stripe refuses `POST /v2/core/accounts` (line 190) or `POST /v2/core/account_links` (line 232). The
+  app shows the same sentence for any other 502 (`lib/payments/stripeRules.ts`).
+- The status is still "none", so the account create is the likely failure (a conclusion, not seen).
+- The cause is ONE log line on staging: `connect-onboarding: account create <status>: <type · code ·
+  message>` (or `account link ...`). It holds no secret. No chat has read it: a chat does not contact a
+  remote Supabase project.
+- Not the cause, by reading: the old build (its 15 calls on this path fit today's server); this run's
+  code (3 new lines in the function, the hourly limit of `f0d2faa`; the Stripe call is from
+  2026-08-29). Unlikely, by run 39: a wrong key or an unknown version `2026-08-26.dahlia` (flow 04
+  paid by card with both through `create-payment`).
+- Never proven: no record shows that payout set-up, or a transfer to a worker, ever ran on staging or
+  on a device.
+- Open causes, most likely first, none checked: (a) the Stripe test account has not turned on Connect,
+  has no finished platform profile, or has no access to Accounts v2; (b) Stripe refuses the request
+  body (the test worker signs in by phone, so no `contact_email` is sent); (c) the idempotency key
+  `brazos-account-<user id>` replays the first failed answer for about a day; (d) the key is a
+  restricted key with no Connect rights; (e) the function crashed or timed out (a gateway 502).
+
+**2. Phone flows 03-07 and 09 cannot pass** until the test worker ("E2E Worker") has payouts on: since
+B11 a worker without payouts cannot bid, counter, accept or be hired (ledger O8).
+
+**3. Steps that only the owner does** (a chat refuses them, also under "bypass permissions"): identity
+or bank values on Stripe's page (also Stripe's public test values, also by a script); passwords, keys
+and secrets; a new account or project; the Production button and its approvals; anything sent to Apple.
+
+**4. Owner items O1-O8** are in the ledger. Not answered yet: arbitration or New York courts; which
+company sends the production sign-in codes; the two URLs in App Store Connect (O2).
 
 ## Next
 
-1. `gh run list -R mahmudur-2/Brazos -w e2e-ios.yml -L 1`. Running → `gh run watch <id> --exit-status`
-   in the background. None running → dispatch:
-   `gh workflow run e2e-ios.yml -R mahmudur-2/Brazos --ref mainexpo -f build_id=c14fa739-532f-4cfe-a3f8-d96b1974a3a7`
-2. Result: `gh run view <id> --log | grep -oE "\[(Passed|Failed)\] .*"`. Ten passed → dispatch the
-   same again; two all-green in a row → step 5.
-3. Red: `gh run download <id> -R mahmudur-2/Brazos -D <scratchpad>/r<n>`, then decrypt (the artifact is
-   GPG-encrypted; the key file is `C:\Users\mdmah\.brazos-artifact-key`, never print it):
-   `gpg --batch --pinentry-mode loopback --passphrase-file /c/Users/mdmah/.brazos-artifact-key -d <dl>/e2e-ios/e2e-results.tar.gpg | tar -x -C <dir>`.
-   Look at `e2e-debug/.maestro/tests/*/<flow>/screenshots/` (the failing step's PNG) and the matching
-   `screen-hierarchy/*.json` (grep `accessibilityText`). `e2e-junit.xml` has the exception.
-4. Decide: a Mac timing loss (lost tap, slow picker, dropped digit) → flow fix with a bounded retry
-   (`repeat ... while`, `optional: true` waits); a real app bug → code fix + unit test + a new build
-   (`npx --yes eas-cli@27.7.0 build --platform ios --profile e2e-test --non-interactive --no-wait --json`,
-   wait for FINISHED, use the new id). Then `npm run verify`, stage exact paths, `git diff --cached
-   --name-status`, commit `lean F<n>: <what> (run <n>: <why>)` (next is F34), `git push origin mainexpo`,
-   add the SHIP-REPORT row, re-dispatch. Reuse `subflows/` (welcome-tap, launch-recover,
-   open-photo-picker, sign-in-phone, sign-out) before writing a new retry.
-5. Two all-green: H3 gate. `npm run verify`; `npm run db:test` on the local stack (start Docker Desktop
-   `%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe`, `npx supabase start`, `npm run db:reset`,
-   `npm run db:test`; baseline 34 files, 1805 tests); TestSprite per the lean plan. Then SHIP-REPORT,
-   ledger, this file, push, a short owner message with both run links.
-6. Then batch B (ledger; B1 is done): start with B5 (fee math overflows above
-   ~$28.6k), B6 (realtime publication missing on a fresh project), B3 (hired worker reads the address
-   forever), B8 (no-show worker gets the cancellation fee). Each first gets a pgTAP test that fails on
-   today's schema; critical folders, so Fable blueprint, Opus build, Fable review. Then E3/E4 (stale
-   inbox stage and pending chain after flow 06) on the local stack, then E5 (notification opens the job
-   in place), E6 (test jobs pile up; tied to B15).
+1. **Chat, no owner time:** try to see the error on the local stack. Start Docker Desktop, `npx supabase
+   start`, call `connect-onboarding` as a local test user (B10's proof called each function this way:
+   ledger row B10) and read the local log line. The answer "not configured" means the local stack has
+   no Stripe key: go to step 2. Never read `.env`.
+2. **Owner, about 3 min:** Supabase dashboard → staging project → Edge Functions → `connect-onboarding`
+   → Logs. Tap "Set up payouts" in the app one more time, then send the newest line that starts with
+   `connect-onboarding:`. Second source: Stripe dashboard in test mode → Developers → Logs → the failed
+   `POST /v2/core/accounts`.
+3. **Fix by cause.** (a) and (d) are owner clicks in the Stripe dashboard: write them one by one. (b)
+   and (e) are code in a critical folder and money: an Opus builder reports its plan first, then a
+   local test, then a push (the pipeline deploys). (c): wait a day, or change the key's text.
+4. **Prove the path before the owner tries again.** The lesson of this run: he got this step before
+   anyone had run it. Then the **owner, about 10 min:** payout set-up as the test worker until the page
+   says "Payouts are set up". Test sign-in number and code: Supabase dashboard → Authentication → Sign
+   In / Providers → Phone → test numbers. Values for Stripe's page: Stripe's public "Testing Connect"
+   page.
+5. **Phone runs**, one at a time, about 2 hours each, no database or function push while one runs:
+   `gh workflow run e2e-ios.yml -R mahmudur-2/Brazos --ref mainexpo -f build_id=e93b75b2-a5fc-4147-aac9-1391ebc8de54`
+   Result: `gh run view <id> -R mahmudur-2/Brazos --log | grep -oE "\[(Passed|Failed)\] .*"`. Red:
+   `gh run download <id>`, then decrypt (GPG; key file `C:\Users\mdmah\.brazos-artifact-key`, never
+   print it; the full command is in this file's git history). A green run with a `RERUN` line counts as
+   "green after one driver death": tell the owner. Known gaps: keyboard-closing taps in flows 07-10
+   were not checked (flow 10 has one, in its no-blocker branch); with payouts on, test money really
+   moves to the worker for the first time, so flows 05-09 can show texts that no run has seen.
+6. **Final gate:** `npm run verify`, `npm run db:test`. Then the records: the ledger (its "local only"
+   line is out of date; O8; E3, E4, E6; a new row for `60d77fe`) and `docs/lean/SHIP-REPORT.md` (runs 39
+   and 40, build `e93b75b2`, the rerun guard, the holds).
+7. **Owner:** production by `docs/production/owner-steps.md`. The chat asks one yes/no question before
+   each production action. The owner approves within one day of the press.
+8. **Tell the owner before production** (not said yet): the Maestro bug can still kill a run; B3 (the
+   exact address only while a job is assigned or in progress); B9 (completion photos only while in
+   progress); B12 (a ban records the sign-in phone); the B11 texts, and that a build with payments
+   `disabled` cannot take bids; the money marks (overdue after 2 business days, nothing automatic after
+   a card dispute, the 7-day "held long" mark, `payment_attention`) and his three answers
+   (`record_settlement_sent`, `settlement_send_reopen`, `resolve_tip`); the Earnings texts of B21 and
+   B23; E5 is Home only; on production email receipts are off until a Resend key is added, and there
+   is no test sign-in number; before 2027 staging needs the new key in its Vault and an app build with
+   the publishable key; Dependabot shows 9 alerts in build tools (N6); Terms §4 against the no-show
+   waiver (N3); the deny-lines step in `.claude/settings.json`.
 
 ## Rules in force
 
-- Never contact production Supabase; never read or modify `.env`; staging only through the pipeline.
-- Never print a secret, phone number or OTP; redact long numbers in any output you paste.
-- Stage by explicit path; never reset --hard, clean, stash, revert, --amend; push only
-  `git push origin mainexpo` after `npm run verify` exits 0 in the same run. Never edit `.claude/`.
-- No store submission and never `npm run release:testflight` (it auto-submits).
-- Owner's budget rule: a weekly cap set per run; check `get_usage` each wake and hand off before it.
+- No chat touches production: never start, approve or re-run the Production workflow (`gh` here is
+  signed in as the owner, so only this rule stops it). Never contact a remote Supabase project; staging
+  changes only by a push to `mainexpo`.
+- Never read or change `.env`. Never print a secret, a phone number or a sign-in code.
+- Never run `npm run release:testflight` or `release:production`. No store submission by a chat.
+- Git: stay on `mainexpo`; stage by exact path; push only `git push origin mainexpo` after
+  `npm run verify` exits 0 in the same run; never reset --hard, clean, stash, amend or `--no-verify`.
+- Never edit `.claude/`. A migration is a new file dated after every other; never edit an applied one.
+- Helpers (owner's rules; project memory `brazos-helper-spawn-rules`): Opus builders, Sonnet readers, a
+  named model and effort, the full Karpathy Guide in each brief, plan first for architecture, money and
+  security. To the owner: Simplified English, the answer first, about ten lines, "Your time: ~N min".
 
 ## Revert
 
-- The whole lean run: `git checkout -b restore pre-lean-2026-11` (tag before any change).
-- One slice: `git revert <hash>` (`lean P*`, `F*`, `G*` commits on `mainexpo`). App fixes this run:
-  P1-P5 (84c7d4e..98d6443), F25 2865121, F29 b2314da; everything else is `.maestro/` or docs.
-- Database: one migration, B1 (`20261111000000_tip_settlement.sql`, c8be212). Never edit or delete it
-  once applied. Undo is a NEW migration that re-creates `apply_payment_event()` from
-  `20260915000000_connect_onboarding.sql` §1 and `begin_tip_payment()` from
-  `20260905000000_stripe_foundation.sql` §16, both together (the old tip begin with the new
-  settlement re-opens the amount hole); `git revert c8be212` undoes the app wording and the tests.
-  Production was never touched.
-- The website and the legal rewrite: `git revert 29554fb` (texts, versions, script, tests in one commit);
-  the live site is rolled back in Cloudflare (Workers & Pages → `brazos` → Deployments → an older
-  version → Rollback), or by uploading an older build of `site/` to the same Worker.
+- One change: `git revert <hash>` (list: `git log --oneline 2dd4dc0..`). The flow and workflow commits
+  (`1633f10`, `40c3005`, `91a2ffb`, `ad3bc58`) hold no app or server code.
+- A commit that holds a migration is never undone by `git revert` (that removes an applied file). Staging
+  has every migration of this run: undo is a NEW migration. `60d77fe` took `bids`, `direct_threads` and
+  `message_reads` out of staging's realtime list (nothing listens to them); undo = a new migration that
+  adds them. B11 undo (a worker without payouts can bid again) is money: plan first.
+- Production was never touched. The old production project was never contacted.
+- The whole lean run: tag `pre-lean-2026-11` (`git checkout -b restore pre-lean-2026-11`).
+- Website and legal texts (live at https://brazos.brazosapp.workers.dev/): `git revert 29554fb`; the live
+  site rolls back in Cloudflare (Workers & Pages → `brazos` → Deployments → Rollback).
+- B1 (tips, `c8be212`): undo only by a new migration; the two functions to restore are named in this
+  file's git history.
