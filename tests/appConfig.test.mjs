@@ -5,7 +5,7 @@ import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 // Both refs come from the one module that defines them, so no project ref is
 // ever retyped into a test file.
-import { PRODUCTION_REF, STAGING_REF } from '../scripts/supabase-ref.mjs';
+import { RETIRED_PRODUCTION_REF, STAGING_REF } from '../scripts/supabase-ref.mjs';
 import { decode } from './pngGeometry.mjs';
 
 // ===========================================================================
@@ -123,7 +123,7 @@ test('no project ref, URL or key is written into the app config', () => {
   // may name no project applies to it for the same reason: a ref committed
   // into build configuration is a ref that ships wherever that configuration
   // is read. The gate's own module is the single place either ref is spelled.
-  assert.equal(source.includes(PRODUCTION_REF), false, 'the production ref is in app.config.ts');
+  assert.equal(source.includes(RETIRED_PRODUCTION_REF), false, 'the retired production ref is in app.config.ts');
   assert.equal(source.includes(STAGING_REF), false, 'the staging ref is in app.config.ts');
   assert.doesNotMatch(source, /supabase\.(co|in)/i);
   assert.doesNotMatch(source, /\beyJ|sb_publishable_|sb_pu_|sb_secret_/);

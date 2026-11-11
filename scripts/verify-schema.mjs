@@ -24,7 +24,7 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PRODUCTION_REF, refFromJwt, refFromRestUrl } from './supabase-ref.mjs';
+import { RETIRED_PRODUCTION_REF, refFromJwt, refFromRestUrl } from './supabase-ref.mjs';
 
 export const FORMAT = 'brazos-schema-fingerprint/1';
 
@@ -209,7 +209,7 @@ export function hostedTarget(env) {
   const url = String(env.FINGERPRINT_URL ?? '').trim().replace(/\/+$/, '');
   const key = String(env.FINGERPRINT_KEY ?? '').trim();
   if (url === '' || key === '') throw new StopError('refused: FINGERPRINT_URL and FINGERPRINT_KEY must both be set');
-  if (refFromRestUrl(url) === PRODUCTION_REF || url.includes(PRODUCTION_REF) || refFromJwt(key) === PRODUCTION_REF) {
+  if (refFromRestUrl(url) === RETIRED_PRODUCTION_REF || url.includes(RETIRED_PRODUCTION_REF) || refFromJwt(key) === RETIRED_PRODUCTION_REF) {
     throw new StopError('refused: the retired project is never contacted');
   }
   if (!/^https:\/\//i.test(url)) throw new StopError('refused: FINGERPRINT_URL must be https');

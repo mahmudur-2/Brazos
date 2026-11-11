@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { PRODUCTION_REF, STAGING_REF } from '../scripts/supabase-ref.mjs';
+import { RETIRED_PRODUCTION_REF, STAGING_REF } from '../scripts/supabase-ref.mjs';
 
 /**
  * The TestSprite gate (lean E6): contract tests of the nine server functions,
@@ -112,7 +112,7 @@ test('no contract test holds a secret-shaped string or the production ref', () =
   ];
   for (const file of [...suiteFiles, 'README.md']) {
     const text = read(`${SUITE}/${file}`);
-    assert.ok(!text.includes(PRODUCTION_REF), `${file} names the production project`);
+    assert.ok(!text.includes(RETIRED_PRODUCTION_REF), `${file} names the retired production project`);
     for (const shape of shapes) assert.doesNotMatch(text, shape, `${file} holds a secret-shaped string`);
   }
 });

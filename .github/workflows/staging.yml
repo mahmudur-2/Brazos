@@ -1,6 +1,8 @@
 name: Staging pipeline
 
-# ONE WORKFLOW, THREE ORDERED JOBS: verify → migrate → deploy.
+# ONE WORKFLOW: verify → migrate → deploy, in strict order, plus two jobs that
+# prove the Production button's tools on staging first: `local` (no secret)
+# and `prove` (a report that never blocks).
 #
 # WHY ONE FILE. This replaces `.github/workflows/db-push.yml`, which it deletes
 # in the same commit. Two workflows triggered by the same push cannot be
@@ -24,9 +26,9 @@ name: Staging pipeline
 # moment it lands. Hence: additive migrations flow automatically, destructive
 # ones stop and wait for a human. See `scripts/staging-scan.sh`.
 #
-# PRODUCTION IS NEVER AUTOMATED. It stays hand-applied by the operator, in
-# their own shell, one migration at a time. No job in this repository targets
-# it and none ever should.
+# PRODUCTION HAS ITS OWN BUTTON: .github/workflows/production.yml, which only
+# the owner starts and approves (docs/production/owner-steps.md). No job in
+# THIS file targets production, and none ever should.
 #
 # The `staging` environment is restricted to the mainexpo branch and holds the
 # three secrets read below: SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF and
@@ -70,7 +72,8 @@ concurrency:
   group: staging-pipeline
   cancel-in-progress: false
 
-# THREE JOBS, STRICTLY ORDERED, ALL UNCONDITIONAL. No job below carries a path
+# THE THREE PIPELINE JOBS ARE STRICTLY ORDERED AND UNCONDITIONAL (`local` and
+# `prove`, at the end, only report). No job below carries a path
 # condition, a changed-files check, or an `if` of any kind beyond the default
 # `needs` chain. Detecting "what actually changed" inside a workflow requires
 # either a third-party action — unacceptable in a workflow holding database
@@ -298,3 +301,102 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+  # ── The Production button's tools, proven on staging first ─────────────────
+  # `local` builds the database of this commit on the runner's own stack and
+  # holds no secret (it runs npm ci, which no job holding a secret may do).
+  # `prove` compares staging's schema with it — read-only, through
+  # scripts/production-deploy.mjs, the same command the Production button runs.
+  # (The button's timer proof makes real calls, so it does not run here.) It is
+  # a REPORT: continue-on-error, so a red proof never blocks a staging deploy.
+  # Its table is in the run summary.
+  local:
+    name: build the database locally (no secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          npm ci
+
+      - name: Start the local stack
+        run: |
+          set -euo pipefail
+          npx supabase start
+
+      - name: Reset the local database
+        run: |
+          set -euo pipefail
+          npm run db:reset
+
+      - name: Fingerprint the local database
+        run: |
+          set -euo pipefail
+          node scripts/verify-schema.mjs print local --json > local-fingerprint.json
+
+      - name: Hand the fingerprint to the prove job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: local-fingerprint
+          path: local-fingerprint.json
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Stop the local stack
+        if: always()
+        run: |
+          set -euo pipefail
+          npx supabase stop --no-backup
+
+  prove:
+    name: prove staging matches (report)
+    needs: [migrate, local]
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 15
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Fetch the local fingerprint
+        id: download
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: local-fingerprint
+          path: ${{ runner.temp }}/local
+
+      - name: Staging database matches the local build
+        id: fingerprint
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs fingerprint "$RUNNER_TEMP/local/local-fingerprint.json"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Result
+        id: summary
+        if: always()
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs summary prove
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}

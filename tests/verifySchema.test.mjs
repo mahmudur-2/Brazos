@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { PRODUCTION_REF, STAGING_REF } from '../scripts/supabase-ref.mjs';
+import { RETIRED_PRODUCTION_REF, STAGING_REF } from '../scripts/supabase-ref.mjs';
 import {
   FORMAT,
   RULES,
@@ -202,7 +202,7 @@ test('hosted: refused outside GitHub Actions, and for the retired project, befor
   const staging = `https://${STAGING_REF}.supabase.co`;
   assert.throws(() => hostedTarget({ FINGERPRINT_URL: staging, FINGERPRINT_KEY: 'test-key-not-real' }), /inside GitHub Actions/);
   assert.throws(
-    () => hostedTarget({ GITHUB_ACTIONS: 'true', FINGERPRINT_URL: `https://${PRODUCTION_REF}.supabase.co`, FINGERPRINT_KEY: 'test-key-not-real' }),
+    () => hostedTarget({ GITHUB_ACTIONS: 'true', FINGERPRINT_URL: `https://${RETIRED_PRODUCTION_REF}.supabase.co`, FINGERPRINT_KEY: 'test-key-not-real' }),
     /retired project/
   );
   assert.throws(() => hostedTarget({ GITHUB_ACTIONS: 'true', FINGERPRINT_URL: staging, FINGERPRINT_KEY: '' }), /must both be set/);
@@ -287,7 +287,7 @@ test('CLI: hosted is refused with exit 2 outside GitHub Actions and for the reti
 
   const retired = run(['print', 'hosted'], {
     GITHUB_ACTIONS: 'true',
-    FINGERPRINT_URL: `https://${PRODUCTION_REF}.supabase.co`,
+    FINGERPRINT_URL: `https://${RETIRED_PRODUCTION_REF}.supabase.co`,
     FINGERPRINT_KEY: key,
   });
   assert.equal(retired.status, 2);

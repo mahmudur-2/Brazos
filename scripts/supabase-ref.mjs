@@ -1,8 +1,8 @@
 /**
  * THE Supabase project-ref parsers (one shared implementation — see
  * verify-schema.mjs's env-parity gate, which these were extracted from, and
- * eas-build-pre-install.mjs, which pins production builds to the production
- * project). Refs only are ever compared and printed — never a URL, key, or
+ * eas-build-pre-install.mjs, which pins every build profile to one project).
+ * Refs only are ever compared and printed — never a URL, key, or
  * connection string. Dependency-free on purpose: the EAS pre-install hook
  * runs before node_modules exists.
  */
@@ -36,16 +36,25 @@ export function refFromJwt(k) {
 }
 
 /**
- * The two Supabase projects this repository may ever name — moved here from
- * eas-build-pre-install.mjs so there is exactly ONE definition of each.
- * eas-build-pre-install.mjs pins every EAS build profile to one of them, and
- * verify-schema.mjs hard-refuses the production one before constructing any
- * request. Import these, never retype a ref: a second literal is how the two
- * gates drift apart, and the production literal doubles as the mechanical
- * deny sentinel (see CLAUDE.md), so every occurrence must be deliberate.
+ * The Supabase projects this repository may name — ONE definition of each.
+ * Import these, never retype a ref: a second literal is how the gates drift
+ * apart.
+ *
+ * STAGING_REF: what every non-production EAS build profile is pinned to.
+ *
+ * RETIRED_PRODUCTION_REF: the old production project, retired 2026-11-11
+ * (docs/DECISIONS.md). Nothing may reach it: verify-schema.mjs and the
+ * Production button refuse it, no build profile expects it, and the literal
+ * stays the mechanical deny sentinel in CLAUDE.md.
+ *
+ * THE NEW PRODUCTION REF IS NOT HERE YET, on purpose. It exists only once the
+ * owner creates the project (docs/production/owner-steps.md); the Production
+ * button reads it from its SUPABASE_PROJECT_REF secret. Until a chat writes it
+ * into eas-build-pre-install.mjs, a `production` build fails with a named
+ * reason instead of guessing.
  */
 export const STAGING_REF = 'zzkumxcjtbqoselzptig';
-export const PRODUCTION_REF = 'avkighsiufeefyycbebf';
+export const RETIRED_PRODUCTION_REF = 'avkighsiufeefyycbebf';
 
 /**
  * SUPABASE_KEY format classification — one rule for both gates.

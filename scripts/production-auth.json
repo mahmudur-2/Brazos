@@ -1,0 +1,9 @@
+{
+  "site_url": "https://brazos.brazosapp.workers.dev",
+  "uri_allow_list": "brazos://reset-password",
+  "password_min_length": 8,
+  "disable_signup": false,
+  "external_email_enabled": false,
+  "external_phone_enabled": true,
+  "sms_provider": "twilio_verify"
+}

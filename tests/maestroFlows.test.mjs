@@ -24,7 +24,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { PRODUCTION_REF } from '../scripts/supabase-ref.mjs';
+import { RETIRED_PRODUCTION_REF } from '../scripts/supabase-ref.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (rel) => readFileSync(join(root, rel), 'utf8').replace(/\r\n/g, '\n');
@@ -118,7 +118,7 @@ test('no credential shape reaches .maestro/, and only the allowed MAESTRO_* name
     assert.doesNotMatch(text, /\bsk_/, `${rel}: secret-key prefix`);
     assert.doesNotMatch(text, /eyJ/, `${rel}: JWT-shaped literal`);
     assert.doesNotMatch(text, /\d{10,}/, `${rel}: a 10+ digit run (phone, code or card)`);
-    assert.ok(!text.includes(PRODUCTION_REF), `${rel} names the production ref`);
+    assert.ok(!text.includes(RETIRED_PRODUCTION_REF), `${rel} names the retired production ref`);
   }
   const flowText = allFlows().map((f) => f.text).join('\n');
   const used = new Set(flowText.match(/\bMAESTRO_[A-Z0-9_]+/g) ?? []);

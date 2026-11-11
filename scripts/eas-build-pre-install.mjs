@@ -45,20 +45,17 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  keyKind,
-  refFromRestUrl,
-  refFromJwt,
-  STAGING_REF,
-  PRODUCTION_REF,
-} from './supabase-ref.mjs';
+import { keyKind, refFromRestUrl, refFromJwt, STAGING_REF } from './supabase-ref.mjs';
 
 /**
  * The one Supabase project each EAS BUILD PROFILE (EAS_BUILD_PROFILE) may build
  * against; a profile absent here is refused, and tests/buildGate.test.mjs keeps
  * this map and eas.json's `build` keys identical. development, preview,
- * e2e-test and testflight build against STAGING; only `production` reaches the
- * production project, and it stays unused until real money.
+ * e2e-test and testflight build against STAGING. `production` is null until
+ * the new production project exists: write its ref here once the owner has it
+ * (docs/production/owner-steps.md). Until then every production build fails
+ * with a named reason, and the retired project (RETIRED_PRODUCTION_REF) is
+ * expected by no profile at all.
  * `testflight` is the store-distributed STAGING build for the TestFlight cohort
  * (D-20260905-1): bundle id app.brazos.mobile, Stripe test key. Its EAS
  * ENVIRONMENT is `preview`, which holds staging values (verified 2026-11-08);
@@ -70,8 +67,11 @@ export const EXPECTED_REF = Object.freeze({
   preview: STAGING_REF,
   'e2e-test': STAGING_REF,
   testflight: STAGING_REF,
-  production: PRODUCTION_REF,
+  production: null,
 });
+
+export const PRODUCTION_REF_NOT_WRITTEN =
+  'the new production project ref is not written into scripts/eas-build-pre-install.mjs yet';
 
 /**
  * Every dotenv-style file the Expo CLI could consult for any mode this process
@@ -172,6 +172,9 @@ export function evaluateGate(env, envFiles = []) {
     };
   }
   const expected = EXPECTED_REF[profile];
+  if (expected === null) {
+    return { ok: false, profile, expected: null, sources: [], notes: [], problems: [PRODUCTION_REF_NOT_WRITTEN] };
+  }
   const problems = [];
   const sources = [];
   const notes = [];

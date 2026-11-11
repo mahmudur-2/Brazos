@@ -1,0 +1,466 @@
+name: Production
+
+# THE PRODUCTION BUTTON. The owner starts it from the Actions tab (Run workflow)
+# and approves it twice; nothing else starts it, and no chat ever starts,
+# approves or re-runs it. It sets up and updates the production Supabase
+# project from this commit: migrations, edge functions, function secrets, the
+# Stripe TEST webhook, the key the timers use, and the sign-in settings. It ends
+# with one PASS/FAIL table in the run summary.
+#
+# The owner's guide: docs/production/owner-steps.md. The logic:
+# scripts/production-deploy.mjs (tests/productionDeploy.test.mjs). This file
+# only orchestrates; tests/productionWorkflow.test.mjs pins its shape.
+#
+# FOUR JOBS
+#   verify  the offline suite, as in staging.yml. No secret.
+#   local   builds the database from this commit on the runner's own local
+#           stack and hands its fingerprint to `apply` as an artifact. No
+#           secret: it runs npm ci, and a job that holds a production secret
+#           never runs npm ci or code from node_modules (an install script can
+#           write to GITHUB_ENV and change the steps after it).
+#   plan    FIRST APPROVAL. Reads production and writes the plan to the run
+#           summary: the files to apply, the files the scan flags, the plan
+#           code. Changes nothing.
+#   apply   SECOND APPROVAL. Applies exactly that plan, and stops by itself when
+#           the plan code changed in between.
+#
+# SAFETY RULES, each pinned by a test
+#   * workflow_dispatch is the only trigger.
+#   * plan and apply run in the `production` environment, whose required
+#     reviewer is the owner; the first guard stops when that rule is missing.
+#   * Least permissions. GitHub's own actions only, pinned by full SHA at the
+#     SHAs staging.yml uses; the Supabase CLI through the same pinned npx.
+#   * Secrets reach a step through env: only, never inside run text.
+#   * The guards refuse the staging project, the retired production project,
+#     and any Stripe key that is not sk_test_: test money only.
+#   * Every step is safe to repeat, so pressing the button again is always safe.
+#   * The repository is public, so every log line is public: nothing prints a
+#     key, token, password, sign-in code or phone number.
+#
+# The `production` environment holds the seven secrets read below. The project
+# ref is one of them, so no ref is ever written into this file.
+
+on:
+  workflow_dispatch:
+    inputs:
+      allow_destructive:
+        description: 'Apply a migration the safety scan flagged, after you have read it. Not needed on the first run.'
+        type: boolean
+        default: false
+        required: false
+
+permissions:
+  contents: read
+
+# One production run at a time, and a run that is applying is never cancelled.
+concurrency:
+  group: production-pipeline
+  cancel-in-progress: false
+
+jobs:
+  # Copied from staging.yml's verify job: nothing reaches production until the
+  # offline suite is green on this commit.
+  verify:
+    name: lint + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          npm ci
+
+      - name: Verify
+        run: |
+          set -euo pipefail
+          npm run verify
+
+  # What the database of this commit looks like, built where no secret exists.
+  # Same commands as pgtap.yml; the fingerprint is the proof tool's own JSON.
+  local:
+    name: build the database locally (no secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          npm ci
+
+      - name: Start the local stack
+        run: |
+          set -euo pipefail
+          npx supabase start
+
+      - name: Reset the local database
+        run: |
+          set -euo pipefail
+          npm run db:reset
+
+      - name: Fingerprint the local database
+        run: |
+          set -euo pipefail
+          node scripts/verify-schema.mjs print local --json > local-fingerprint.json
+
+      - name: Hand the fingerprint to the apply job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: local-fingerprint
+          path: local-fingerprint.json
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Stop the local stack
+        if: always()
+        run: |
+          set -euo pipefail
+          npx supabase stop --no-backup
+
+  # FIRST APPROVAL. Reads only: no db push, no deploy, no secret set.
+  plan:
+    name: plan (changes nothing)
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      plan_code: ${{ steps.plan.outputs.plan_code }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # No npm cache in a job that holds secrets.
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+
+      # Branch, the seven secrets, the refs, sk_test_, and the approval rule
+      # (read with this run's own token; actions: read is enough).
+      - name: Safety checks
+        id: guards
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs guards
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_VERIFY_SERVICE_SID: ${{ secrets.TWILIO_VERIFY_SERVICE_SID }}
+
+      - name: Project is running
+        id: status
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs status
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Project keys (types only)
+        id: keys
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs keys
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Link the production project
+        id: link
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 link --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Read the migration list
+        id: list
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 migration list | tee "$RUNNER_TEMP/migrations.txt"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      # The same scan and the same pending set as staging (scripts/staging-scan.sh).
+      # On an empty database a flagged file is listed and does not stop the plan.
+      - name: Plan and safety scan
+        id: plan
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs plan "$RUNNER_TEMP/migrations.txt"
+        env:
+          ALLOW_DESTRUCTIVE: ${{ inputs.allow_destructive == true && 'true' || 'false' }}
+
+      - name: Result
+        id: summary
+        if: always()
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs summary plan
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}
+
+  # SECOND APPROVAL. Order is the safety property: the plan check before any
+  # change; migrations, then the schema compare (a hard gate), before the
+  # functions that may need them; the functions' secrets and the timer key
+  # before the checks that call the functions.
+  apply:
+    name: apply (second approval)
+    needs: [plan, local]
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Fetch the local fingerprint
+        id: download
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: local-fingerprint
+          path: ${{ runner.temp }}/local
+
+      - name: Safety checks
+        id: guards
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs guards
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_VERIFY_SERVICE_SID: ${{ secrets.TWILIO_VERIFY_SERVICE_SID }}
+
+      - name: Project is running
+        id: status
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs status
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Project keys (types only)
+        id: keys
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs keys
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Link the production project
+        id: link
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 link --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Read the migration list (before)
+        id: list_before
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 migration list | tee "$RUNNER_TEMP/migrations.txt"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      # The plan the owner approved, made again from the database as it is now.
+      # A different code means something changed: nothing is applied.
+      - name: Plan unchanged since your approval
+        id: check
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs check "$RUNNER_TEMP/migrations.txt"
+        env:
+          PLAN_CODE: ${{ needs.plan.outputs.plan_code }}
+          ALLOW_DESTRUCTIVE: ${{ inputs.allow_destructive == true && 'true' || 'false' }}
+
+      - name: Apply the migrations
+        id: push
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Read the migration list (after)
+        id: list_after
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 migration list
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      # A HARD GATE: the database must now equal the local build of this
+      # commit. A difference stops the run here, before any function, secret,
+      # webhook or setting changes.
+      - name: Database matches the local build
+        id: fingerprint
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs fingerprint "$RUNNER_TEMP/local/local-fingerprint.json"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      # Every function, every press; verify_jwt comes from supabase/config.toml
+      # only, exactly as staging.yml deploys.
+      - name: Deploy the edge functions
+        id: deploy
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 functions deploy --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: List the edge functions
+        id: functions_list
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 functions list --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Function secret STRIPE_SECRET_KEY
+        id: secrets
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs secrets
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+
+      - name: Stripe test webhook
+        id: webhook
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs webhook
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+
+      # Every press stores the current server key for the timers, so a press
+      # after a key change repairs them.
+      - name: Timer key stored
+        id: vault
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs vault
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: send-push refuses a stranger
+        id: smoke_push
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs smoke push
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: connect-status asks for sign-in
+        id: smoke_status
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs smoke status
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: stripe-webhook checks the signature
+        id: smoke_webhook
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs smoke webhook
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Timers reach the functions
+        id: timers
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs timers
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Sign-in settings
+        id: auth
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs auth
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_VERIFY_SERVICE_SID: ${{ secrets.TWILIO_VERIFY_SERVICE_SID }}
+
+      - name: Result
+        id: summary
+        if: always()
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs summary apply
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}

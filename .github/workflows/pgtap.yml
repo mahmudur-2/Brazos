@@ -20,9 +20,10 @@ name: pgTAP
 # no --db-url, no --project-ref — and it consumes no secret: no environment,
 # no `secrets.` reference, no env block. The stack it starts is Docker on the
 # runner, reachable at 127.0.0.1 only, and it is stopped in the last step
-# whatever the outcome. Staging and production are untouched by design; the
-# staging pipeline (staging.yml) is the only workflow that reaches a remote
-# project, and it does so after its own verify job, never from here.
+# whatever the outcome. Staging and production are untouched by design. Only
+# three workflows reach a remote project, each after a verify job or by hand,
+# never from here: staging.yml and backup-staging.yml (staging), and
+# production.yml (the Production button, which only the owner starts).
 #
 # Third-party actions are pinned to the same full commit SHAs ci.yml uses: a
 # tag is mutable and can be repointed at new code after review.

@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# staging-scan.sh — the destructive-migration tripwire for the staging pipeline.
+# staging-scan.sh — the destructive-migration tripwire for the staging pipeline
+# and for the Production button (.github/workflows/production.yml).
+#
+# THE PRODUCTION BUTTON RUNS THE SAME SCAN. It reads the same table, calls the
+# same modes and gets the same flags. One difference is decided outside this
+# file, in scripts/production-deploy.mjs: when --applied-count says the
+# production database holds no migration at all, nothing can break there, so a
+# flagged file is listed and applied anyway. Once anything is applied, a flag
+# stops production exactly as it stops staging.
 #
 # WHY THIS IS A SCRIPT AND NOT INLINE YAML. The scan is proven by EXECUTING it
 # against fixture files before it ships, and a proof is only a proof if it runs
@@ -37,6 +45,7 @@
 # USAGE
 #   staging-scan.sh <allow_destructive: true|false> [migration file ...]
 #   staging-scan.sh --pending-files <migration-list output file | ->
+#   staging-scan.sh --applied-count <migration-list output file | ->
 #
 #   Zero migration files is success: nothing pending is nothing to scan.
 #   exit 0 — safe; or flagged with allow_destructive=true, in which case every
@@ -51,6 +60,7 @@ set -euo pipefail
 if [ "$#" -lt 1 ]; then
   echo "staging-scan.sh: usage: staging-scan.sh <true|false> [migration file ...]" >&2
   echo "staging-scan.sh:        staging-scan.sh --pending-files <migration-list output file | ->" >&2
+  echo "staging-scan.sh:        staging-scan.sh --applied-count <migration-list output file | ->" >&2
   exit 2
 fi
 
@@ -98,6 +108,17 @@ fi
 #   exit 0 — the pending set was resolved; it may legitimately be empty.
 #   exit 1 — FATAL: an unreadable table, or a version with no matching file.
 #   exit 2 — called wrongly (missing or unreadable input).
+#
+#   staging-scan.sh --applied-count <migration-list output file | ->
+#
+#   stdout — one number: how many versions the database reports as applied
+#            (rows whose REMOTE cell holds a 14-digit version, including a
+#            version this checkout has no file for). 0 means an empty database.
+#   exit 0 — counted.
+#   exit 1 — FATAL: the same unreadable-table rule as --pending-files. A table
+#            that cannot be read never answers 0, because 0 is the answer that
+#            lets a flagged file through on production.
+#   exit 2 — called wrongly (missing or unreadable input).
 # ---------------------------------------------------------------------------
 
 MIGRATIONS_DIR="supabase/migrations"
@@ -109,34 +130,25 @@ normalise_table() {
   sed -e 's/\xe2\x94\x82/|/g' -e 's/`//g'
 }
 
-resolve_pending_files() {
-  local source="$1"
-  local list rows pending_versions readable local_count version
-  local matches=()
-  local pending=()
+# Reads the table from a file or stdin into TABLE_RAW (as printed) and
+# TABLE_ROWS (normalised), and stops FATAL when it holds no readable version
+# while migration files exist. Shared by --pending-files and --applied-count,
+# so both modes refuse the same unreadable table in the same words.
+load_table() {
+  local source="$1" flag="$2" readable local_count
 
   if [ "$source" = "-" ]; then
-    list="$(cat)"
+    TABLE_RAW="$(cat)"
   elif [ -f "$source" ]; then
-    list="$(cat "$source")"
+    TABLE_RAW="$(cat "$source")"
   else
-    echo "staging-scan.sh: --pending-files: no such input file: ${source}" >&2
+    echo "staging-scan.sh: ${flag}: no such input file: ${source}" >&2
     exit 2
   fi
 
-  rows="$(printf '%s\n' "$list" | normalise_table)"
+  TABLE_ROWS="$(printf '%s\n' "$TABLE_RAW" | normalise_table)"
 
-  pending_versions="$(printf '%s\n' "$rows" | awk -F'|' '
-    NF >= 2 {
-      local_v = $1; remote_v = $2
-      gsub(/[[:space:]]/, "", local_v)
-      gsub(/[[:space:]]/, "", remote_v)
-      if (local_v ~ /^[0-9]+$/ && length(local_v) == 14 && remote_v == "") {
-        print local_v
-      }
-    }')"
-
-  readable="$(printf '%s\n' "$rows" | awk -F'|' '
+  readable="$(printf '%s\n' "$TABLE_ROWS" | awk -F'|' '
     NF >= 2 { v = $1; gsub(/[[:space:]]/, "", v); if (v ~ /^[0-9]+$/ && length(v) == 14) n++ }
     END { print n + 0 }')"
 
@@ -150,9 +162,38 @@ resolve_pending_files() {
     echo "${local_count} migration file(s) exist locally. The pinned CLI's output" >&2
     echo "format is not what this parse expects, and guessing what is pending is" >&2
     echo "exactly the mistake this gate exists to prevent. Raw output follows:" >&2
-    printf '%s\n' "$list" >&2
+    printf '%s\n' "$TABLE_RAW" >&2
     exit 1
   fi
+}
+
+count_applied() {
+  local applied
+  load_table "$1" --applied-count
+  applied="$(printf '%s\n' "$TABLE_ROWS" | awk -F'|' '
+    NF >= 2 { r = $2; gsub(/[[:space:]]/, "", r); if (r ~ /^[0-9]+$/ && length(r) == 14) n++ }
+    END { print n + 0 }')"
+  echo "Migrations the database reports as applied: ${applied}" >&2
+  printf '%s\n' "$applied"
+  exit 0
+}
+
+resolve_pending_files() {
+  local pending_versions version
+  local matches=()
+  local pending=()
+
+  load_table "$1" --pending-files
+
+  pending_versions="$(printf '%s\n' "$TABLE_ROWS" | awk -F'|' '
+    NF >= 2 {
+      local_v = $1; remote_v = $2
+      gsub(/[[:space:]]/, "", local_v)
+      gsub(/[[:space:]]/, "", remote_v)
+      if (local_v ~ /^[0-9]+$/ && length(local_v) == 14 && remote_v == "") {
+        print local_v
+      }
+    }')"
 
   # Map each pending version to its file. Exactly one file per version, or this
   # cannot know what to scan and says so. Collected first and printed last, so
@@ -161,7 +202,7 @@ resolve_pending_files() {
     [ -n "$version" ] || continue
     matches=("$MIGRATIONS_DIR/${version}"_*.sql)
     if [ "${#matches[@]}" -ne 1 ] || [ ! -f "${matches[0]}" ]; then
-      echo "FATAL: staging reports ${version} pending, but" >&2
+      echo "FATAL: the database reports ${version} pending, but" >&2
       echo "${MIGRATIONS_DIR}/${version}_*.sql did not resolve to exactly one" >&2
       echo "existing file. Matched: ${matches[*]}" >&2
       echo "Cannot decide what to scan, and will not guess." >&2
@@ -172,7 +213,7 @@ resolve_pending_files() {
 
   echo "Pending migrations, resolved from the database:" >&2
   if [ "${#pending[@]}" -eq 0 ]; then
-    echo "  (none — staging is already at the committed head)" >&2
+    echo "  (none — the database is already at the committed head)" >&2
   else
     printf '  %s\n' "${pending[@]}" >&2
     printf '%s\n' "${pending[@]}"
@@ -189,6 +230,16 @@ if [ "$1" = "--pending-files" ]; then
     exit 2
   fi
   resolve_pending_files "$1"
+fi
+
+if [ "$1" = "--applied-count" ]; then
+  shift
+  if [ "$#" -ne 1 ]; then
+    echo "staging-scan.sh: --applied-count takes exactly one argument: the file" >&2
+    echo "holding the migration table, or - to read it from stdin." >&2
+    exit 2
+  fi
+  count_applied "$1"
 fi
 
 allow_destructive="$1"
@@ -348,12 +399,11 @@ fi
 echo "STOPPING. NOTHING HAS BEEN APPLIED."
 echo ""
 echo "This migration removes or renames something an installed build may still read."
-echo "Staging is what the TestFlight builds on real phones talk to, so applying this"
-echo "would break those builds the moment it lands — not at the next release."
+echo "Installed builds read this database (TestFlight builds read staging; store"
+echo "builds read production), so applying it would break them the moment it lands."
 echo ""
 echo "Two ways forward:"
-echo "  1. Apply it by hand, at a moment of your choosing, with those builds in mind;"
-echo "     or"
-echo "  2. re-run this pipeline from the Actions tab (Run workflow) with"
+echo "  1. Change the migration so it only adds, and push again; or"
+echo "  2. start this workflow again from the Actions tab (Run workflow) with"
 echo "     allow_destructive CHECKED, once you have read the lines above."
 exit 1
