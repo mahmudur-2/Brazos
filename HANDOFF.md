@@ -64,13 +64,15 @@ project is never contacted (the owner pauses it).
 - Proven in the shell at the pinned version: the exact create body + an email → 200; the exact
   account-link body → 200; the read has the fields `connect-status/classify.mjs` uses. The chat's two
   test accounts are closed.
-- NOT proven: nobody called the deployed function; no device showed the field. Build 10 and the e2e
-  build hold the old app code (a phone user gets the "update Brazos" sentence).
-- Delivery: `runtimeVersion` is the app version (1.0.0 = build 10) and channel `testflight` is empty, so
-  an over-the-air update reaches build 10: `eas update --channel testflight --environment preview` with
-  the four `env` values of eas.json's `testflight` profile. Never done on this channel; needs the
-  owner's yes; undo: `eas update:roll-back-to-embedded`. The e2e build has no channel and needs no
-  field once the test worker has an account.
+- NOT proven: nobody called the deployed function; no device showed the field. The e2e build holds
+  the old app code; it has no update channel and needs no field once the test worker has an account.
+- Delivery, done with the owner's yes: an over-the-air update on channel `testflight` (runtime 1.0.0 =
+  build 10; update group `67c92705-9241-429d-a7aa-569e60b8a38b`, made at `fc8a096`). It holds ALL app
+  code since build 10 (`9b0064f`), not only the field. How: the four `env` values of eas.json's
+  `testflight` profile in the shell; `eas env:exec preview "npx expo export --platform ios --clear
+  --output-dir <dir>"` (without `--clear` a stale Metro cache left the Stripe key out of the bundle);
+  check the bundle; `eas update --channel testflight --environment preview --platform ios
+  --skip-bundler --input-dir <dir>`. Undo: `eas update:roll-back-to-embedded`.
 - New, not fixed: a phone user gets no email receipts (`send-receipts/index.ts:109`: sign-in email
   only). The privacy text (`lib/legal/privacyPolicy.ts:169-172`) does not say the app passes an email
   to Stripe.
@@ -87,9 +89,9 @@ company sends the production sign-in codes; the two URLs in App Store Connect (O
 
 ## Next
 
-1. **Owner's yes**, then the over-the-air update of Blocked 1 (try `expo export` first). The owner
-   restarts the app twice, types an email, taps "Set up payouts"; the chat reads Stripe's log (200 on
-   `accounts` and `account_links`). The lesson of this run: prove a step before the owner gets it.
+1. **Owner, about 3 min:** close and open the TestFlight app twice (the update of Blocked 1 loads),
+   type an email, tap "Set up payouts". The chat then reads Stripe's log (200 on `accounts` and
+   `account_links`). The lesson of this run: prove a step before the owner gets it.
 2. **Owner, about 10 min:** Stripe's page as the test worker until the app says "Payouts are set up".
    Test sign-in number and code: Supabase dashboard → Authentication → Sign In / Providers → Phone →
    test numbers. Values for Stripe's page: Stripe's public "Testing Connect" page.
