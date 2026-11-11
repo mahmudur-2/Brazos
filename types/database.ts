@@ -2989,6 +2989,10 @@ export type Database = {
           worker_fee_cents: number
         }[]
       }
+      job_window_end: {
+        Args: { p_arrival_end_hour: number; p_scheduled_date: string }
+        Returns: string
+      }
       jobs_in_cell: {
         Args: { p_ilat: number; p_ilng: number }
         Returns: {
@@ -3188,6 +3192,10 @@ export type Database = {
       prune_payment_event_payloads: {
         Args: { p_older_than?: string }
         Returns: number
+      }
+      queue_free_cancel_refund: {
+        Args: { p_payment_id: string }
+        Returns: undefined
       }
       quiet_hours_until: { Args: { p_recipient: string }; Returns: string }
       quote_job_price: {
@@ -3664,6 +3672,13 @@ export type Database = {
           category: string
           job_count: number
         }[]
+      }
+      worker_missed_window: {
+        Args: {
+          p_at: string
+          p_job: Database["public"]["Tables"]["jobs"]["Row"]
+        }
+        Returns: boolean
       }
     }
     Enums: {

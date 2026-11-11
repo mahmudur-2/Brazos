@@ -493,7 +493,9 @@ select ok((select refund_cents = 5375 and transfer_cents = 0 and refund_reason =
   '8: free within 15 minutes of acceptance — the grace overrides the window');
 
 -- J6: the fee inside the window; floors at $15; §10 transfer.created first
-select tests.r4_hire(:'customer', :'worker', 5000, 'R4 J6 fee inside the window', tests.r4_today(), 9::smallint, 12::smallint) as j6 \gset
+-- The window runs to midnight (end hour 24): inside it at any hour the suite runs. With an earlier
+-- end, an afternoon run is past the window with no arrival, which B8 makes free (340).
+select tests.r4_hire(:'customer', :'worker', 5000, 'R4 J6 fee inside the window', tests.r4_today(), 9::smallint, 24::smallint) as j6 \gset
 insert into fx values ('j6', :'j6');
 select tests.r4_fund(:'customer', :'j6', 'evt_j6') as p6 \gset
 insert into fx values ('p6', :'p6');
@@ -519,7 +521,7 @@ select ok((select status = 'partially_refunded' and refund_ref = 're_j6' from pu
 select is((select count(*) from public.refunds_due where id = :'p6'), 0::bigint, '10: the settled refund leaves refunds_due');
 
 -- J8: the fee never exceeds the agreed price; the protection fee still refunds
-select tests.r4_hire(:'customer', :'worker', 1000, 'R4 J8 ten dollar job', tests.r4_today(), 9::smallint, 12::smallint) as j8 \gset
+select tests.r4_hire(:'customer', :'worker', 1000, 'R4 J8 ten dollar job', tests.r4_today(), 9::smallint, 24::smallint) as j8 \gset
 select tests.r4_fund(:'customer', :'j8', 'evt_j8') as p8 \gset
 select tests.r4_age_agreement(:'j8', interval '1 hour');
 select tests.authenticate_as(:'customer');

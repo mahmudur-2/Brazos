@@ -153,9 +153,12 @@ export function customerChargeCents(
  * mirroring it case for case (tests/cancelJob.test.mjs holds the pairing):
  *   customer_cancelled — in_progress always carries the fee; otherwise free
  *     when the job has no scheduled_date, or within 15 minutes of acceptance
- *     (the agreement snapshot's accepted_at), or more than 24h before the
- *     arrival anchor (scheduled_date + arrival_start_hour, America/New_York);
- *     else the cancellation fee, taken from the agreed price alone.
+ *     (the agreement snapshot's accepted_at), or (B8, worker_missed_window)
+ *     when the job is assigned, the worker never marked arrived and now is past
+ *     scheduled_date + arrival_end_hour (default 24) plus late_minutes, or more
+ *     than 24h before the arrival anchor (scheduled_date + arrival_start_hour,
+ *     America/New_York); else the cancellation fee, taken from the agreed price
+ *     alone (supabase/migrations/20261111100100_worker_no_show.sql).
  *   customer_no_show — assigned, arrived_at set, a scheduled job, and now
  *     past scheduled_date + arrival_end_hour (default 24) in America/New_York.
  * When the client cannot know (no agreement snapshot, or its price differs
@@ -222,8 +225,26 @@ export type CustomerCancelPreview =
   | { kind: 'no_charge' }
   /** The whole charge goes back to the customer. */
   | { kind: 'free'; refundCents: number; nearBoundary: boolean }
+  /** The worker missed the arrival window and never marked arrived: the whole charge goes back. */
+  | { kind: 'worker_no_show'; refundCents: number }
   /** The cancellation fee goes to the worker; the rest of the charge goes back. */
   | { kind: 'fee'; feeCents: number; refundCents: number; nearBoundary: boolean };
+
+type CancelJobFacts = {
+  status: string;
+  scheduled_date: string | null;
+  arrival_start_hour: number | null;
+  arrival_end_hour: number | null;
+  arrived_at: string | null;
+  late_minutes: number | null;
+};
+
+/** worker_missed_window(): assigned, never arrived, dated, now past the window end plus the reported delay. */
+function workerMissedWindow(job: CancelJobFacts, nowMs: number): boolean {
+  if (job.status !== 'assigned' || job.arrived_at || !job.scheduled_date) return false;
+  const windowEnd = marketWallClockMs(job.scheduled_date, job.arrival_end_hour ?? 24);
+  return windowEnd != null && nowMs > windowEnd + (job.late_minutes ?? 0) * 60_000;
+}
 
 /**
  * What cancel_job('customer_cancelled') will do with the money, or null when
@@ -235,7 +256,7 @@ export function customerCancelPreview({
   terms,
   nowMs = Date.now(),
 }: {
-  job: { status: string; scheduled_date: string | null; arrival_start_hour: number | null };
+  job: CancelJobFacts;
   payment: { status: string; amount_cents: number; charge_amount_cents?: number | null } | null;
   terms: CancelTerms | null;
   nowMs?: number;
@@ -257,6 +278,8 @@ export function customerCancelPreview({
     if (graceEnd != null && nowMs <= graceEnd) {
       free = true;
       boundaryMs = graceEnd;
+    } else if (workerMissedWindow(job, nowMs)) {
+      return { kind: 'worker_no_show', refundCents: charge };
     } else {
       const anchor = marketWallClockMs(job.scheduled_date, job.arrival_start_hour ?? 0);
       if (anchor == null) return null;

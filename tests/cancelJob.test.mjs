@@ -102,6 +102,61 @@ test('customer preview: no charge, or a figure the client cannot know', () => {
   assert.equal(customerCancelPreview({ ...base, payment: { ...HELD, charge_amount_cents: null } }), null);
 });
 
+// B8 (supabase/migrations/20261111100100_worker_no_show.sql, worker_missed_window): 2026-11-20 9 to 12
+// EST, so the window ends at 17:00Z; agreed long before, so the grace is over.
+const NO_SHOW_JOB = {
+  status: 'assigned',
+  scheduled_date: '2026-11-20',
+  arrival_start_hour: 9,
+  arrival_end_hour: 12,
+  arrived_at: null,
+  late_minutes: null,
+};
+const EARLY = { ...TERMS, accepted_at: '2026-11-10T00:00:00Z' };
+
+test('customer preview (B8): the worker never arrived and the window is over: free, as worker_no_show', () => {
+  const p = (job, iso) => customerCancelPreview({ job, payment: HELD, terms: EARLY, nowMs: at(iso) });
+  assert.equal(p(NO_SHOW_JOB, '2026-11-20T17:00:00Z').kind, 'fee', 'at the window end it is not over yet');
+  assert.deepEqual(p(NO_SHOW_JOB, '2026-11-20T17:01:00Z'), { kind: 'worker_no_show', refundCents: 10750 });
+  assert.equal(p({ ...NO_SHOW_JOB, arrived_at: '2026-11-20T16:00:00Z' }, '2026-11-20T17:01:00Z').kind, 'fee', 'an arrival keeps the fee');
+  assert.equal(p({ ...NO_SHOW_JOB, status: 'in_progress' }, '2026-11-20T17:01:00Z').kind, 'fee', 'work started keeps the fee');
+  assert.equal(p({ ...NO_SHOW_JOB, arrival_start_hour: null, arrival_end_hour: null }, '2026-11-21T04:59:00Z').kind, 'fee');
+  assert.equal(p({ ...NO_SHOW_JOB, arrival_start_hour: null, arrival_end_hour: null }, '2026-11-21T05:01:00Z').kind, 'worker_no_show', 'no end hour: midnight');
+});
+
+test('customer preview (B8): the worker’s reported delay moves the line', () => {
+  const late = { ...NO_SHOW_JOB, late_minutes: 30 };
+  const p = (iso) => customerCancelPreview({ job: late, payment: HELD, terms: EARLY, nowMs: at(iso) });
+  assert.equal(p('2026-11-20T17:30:00Z').kind, 'fee');
+  assert.equal(p('2026-11-20T17:31:00Z').kind, 'worker_no_show');
+});
+
+test('customer preview (B8): the 15-minute grace is checked first and stays plain free', () => {
+  const p = customerCancelPreview({
+    job: NO_SHOW_JOB,
+    payment: HELD,
+    terms: { ...TERMS, accepted_at: '2026-11-20T17:00:00Z' },
+    nowMs: at('2026-11-20T17:05:00Z'),
+  });
+  assert.equal(p.kind, 'free');
+});
+
+test('the mirror pairs with the SQL: one predicate, the delay term, the server-only reason', () => {
+  const sql = read('supabase/migrations/20261111100100_worker_no_show.sql');
+  assert.match(sql, /p_job\.arrived_at is null/);
+  assert.match(sql, /make_interval\(mins => coalesce\(p_job\.late_minutes, 0\)::int\)/);
+  assert.match(sql, /elsif public\.worker_missed_window\(v_job, v_now\) then\s+[^\n]*\n\s+v_free := true;\s+v_reason := 'worker_no_show';/);
+  assert.match(sql, /p_reason not in \('customer_cancelled', 'worker_cancelled', 'customer_no_show'\)/, 'a client can never send it');
+});
+
+test('the customer confirm for a worker no-show is free in full and names the worker', () => {
+  const format = (c) => `$${(c / 100).toFixed(2)}`;
+  const m = copy.customerCancelConfirm({ kind: 'worker_no_show', refundCents: 10750 }, { workerFirstName: 'Sam', format }).message;
+  assert.match(m, /^Sam didn’t arrive in the arrival window, so this is free — you get \$107\.50 back in full\./);
+  assert.match(m, /can’t be undone/);
+  assert.doesNotMatch(m, /cancellation fee/);
+});
+
 test('no-show gates: assigned, arrived, scheduled, and past scheduled_date + arrival_end_hour (default 24)', () => {
   const job = { status: 'assigned', arrived_at: '2026-11-20T22:00:00Z', scheduled_date: '2026-11-20', arrival_end_hour: 20 };
   // The window ends 20:00 EST = 2026-11-21T01:00Z.

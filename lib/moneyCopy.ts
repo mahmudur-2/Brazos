@@ -151,6 +151,7 @@ export type CancelConfirmCopy = { title: string; message: string; confirmText: s
 type CustomerCancelPreviewShape =
   | { kind: 'no_charge' }
   | { kind: 'free'; refundCents: number; nearBoundary: boolean }
+  | { kind: 'worker_no_show'; refundCents: number }
   | { kind: 'fee'; feeCents: number; refundCents: number; nearBoundary: boolean }
   | null;
 
@@ -178,6 +179,11 @@ export function customerCancelConfirm(
       return {
         ...base,
         message: `Free — you get ${format(preview.refundCents)} back in full. ${REFUND_TIMING} ${CANNOT_UNDO}${preview.nearBoundary ? NEAR_CUTOFF : ''}`,
+      };
+    case 'worker_no_show':
+      return {
+        ...base,
+        message: `${worker} didn’t arrive in the arrival window, so this is free — you get ${format(preview.refundCents)} back in full. ${REFUND_TIMING} ${CANNOT_UNDO}`,
       };
     case 'fee':
       return {
