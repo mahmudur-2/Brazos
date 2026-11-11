@@ -20,11 +20,19 @@ appId: app.brazos.mobile.preview
 - evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
 
 # ─── Main job: Review tab → Finished Work ────────────────────────────────
-- tapOn: "Create"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Create"
+      NEXT: "My jobs"
 - extendedWaitUntil:
     visible: "My jobs"
     timeout: 15000
-- tapOn: "My jobs"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "My jobs"
+      NEXT: 'Back( to .*)?'
 - extendedWaitUntil:
     notVisible: "Loading your jobs…"
     timeout: 30000
@@ -137,11 +145,19 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: 'What do you need done\?'
     timeout: 60000
-- tapOn: "Create"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Create"
+      NEXT: "My jobs"
 - extendedWaitUntil:
     visible: "My jobs"
     timeout: 15000
-- tapOn: "My jobs"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "My jobs"
+      NEXT: 'Back( to .*)?'
 - extendedWaitUntil:
     notVisible: "Loading your jobs…"
     timeout: 30000
@@ -188,17 +204,39 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: 'What do you need done\?'
     timeout: 60000
-- tapOn: "Create"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Create"
+      NEXT: "Reuse a past job"
 - extendedWaitUntil:
     visible: "Reuse a past job"
     timeout: 15000
-- tapOn: "Reuse a past job"
+# The row opens its strip of "Post again: …" cards in place; a second tap would close it, so it is
+# tried again only where the 30 s wait below would have failed (subflows/home-tap.yml).
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Reuse a past job"
+      NEXT: 'Post again: .*'
 - extendedWaitUntil:
     visible: "Post again: ${output.marker} main"
     timeout: 30000
-- tapOn:
-    text: "Post again: ${output.marker} main"
-    index: 0
+# Run 41: the sheet sits over Home, whose LiveDot hides a lost finger-lift from Maestro; tap again while
+# the wizard has not opened. home-tap.yml's pattern inline, since this tap keeps its index 0.
+- repeat:
+    times: 3
+    while:
+      notVisible: "STEP 4 OF 4"
+    commands:
+      - tapOn:
+          text: "Post again: ${output.marker} main"
+          index: 0
+          optional: true
+      - extendedWaitUntil:
+          visible: "STEP 4 OF 4"
+          timeout: 30000
+          optional: true
 - extendedWaitUntil:
     visible: "STEP 4 OF 4"
     timeout: 30000
@@ -240,15 +278,21 @@ appId: app.brazos.mobile.preview
     visible: 'What do you need done\?'
     timeout: 60000
     optional: true
-- tapOn:
-    text: "Create"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Create"
+      NEXT: "My jobs"
     optional: true
 - extendedWaitUntil:
     visible: "My jobs"
     timeout: 15000
     optional: true
-- tapOn:
-    text: "My jobs"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "My jobs"
+      NEXT: 'Back( to .*)?'
     optional: true
 - extendedWaitUntil:
     notVisible: "Loading your jobs…"

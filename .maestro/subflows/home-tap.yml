@@ -1,0 +1,19 @@
+appId: app.brazos.mobile.preview
+# Shared: tap a control on a Home screen (or a sheet over it) until the screen it opens shows. Run 41: the simulator
+# lost the finger-lift of a tap (touch-down, then a cancel; no onPress), and Home's LiveDot never stops moving, so
+# Maestro judged "something changed" and never retried. Each try waits 30 s, as long as the flow's own wait, so a tap
+# that landed is tried again only where that wait would have failed. The flow's own wait after this stays the judge.
+# Params: TAP (the control's text), NEXT (text that shows only once it opened, never before the tap).
+---
+- repeat:
+    times: 3
+    while:
+      notVisible: ${NEXT}
+    commands:
+      - tapOn:
+          text: ${TAP}
+          optional: true
+      - extendedWaitUntil:
+          visible: ${NEXT}
+          timeout: 30000
+          optional: true

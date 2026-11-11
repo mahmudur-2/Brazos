@@ -10,7 +10,11 @@ appId: app.brazos.mobile.preview
     visible: 'What do you need done\?|Search for jobs or areas'
     timeout: 60000
 - runFlow: dismiss-permission-prompts.yml
-- tapOn: "Profile"
+- runFlow:
+    file: home-tap.yml
+    env:
+      TAP: "Profile"
+      NEXT: 'Switch to (Worker|Customer)'
 - scrollUntilVisible:
     element:
       text: "Sign out"

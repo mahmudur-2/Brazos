@@ -17,7 +17,11 @@ appId: app.brazos.mobile.preview
       NAME: "E2E Customer"
       LANDING: "Hire help"
 - runFlow: subflows/ensure-mode-customer.yml
-- tapOn: "Profile"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Profile"
+      NEXT: "Switch to Worker"
 - scrollUntilVisible:
     element:
       text: "Account & safety"

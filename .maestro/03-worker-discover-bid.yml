@@ -20,7 +20,11 @@ appId: app.brazos.mobile.preview
 - evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
 
 # ─── Map tab ─────────────────────────────────────────────────────────────
-- tapOn: "Map"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Map"
+      NEXT: "Explore nearby jobs"
 - extendedWaitUntil:
     visible: "Explore nearby jobs"
     timeout: 30000
@@ -36,6 +40,38 @@ appId: app.brazos.mobile.preview
 - tapOn: "Search"
 # Each step that closes the keyboard is followed by keyboard-settle (run 38: the driver died as iOS retired it).
 - runFlow: subflows/keyboard-settle.yml
+# Run 41: a lost finger-lift on Home (its LiveDot hides it from Maestro) left the field unfocused, so the text went
+# nowhere. Only while the card has not shown: Search once more (a lost Search tap keeps the text), then the field
+# cleared, typed and searched again. A search that showed the card is never repeated.
+- extendedWaitUntil:
+    visible: '${output.marker} main(, needed today)?'
+    timeout: 60000
+    optional: true
+- runFlow:
+    when:
+      notVisible: '${output.marker} main(, needed today)?'
+    commands:
+      - tapOn:
+          text: "Search"
+          optional: true
+      - runFlow: subflows/keyboard-settle.yml
+      - extendedWaitUntil:
+          visible: '${output.marker} main(, needed today)?'
+          timeout: 60000
+          optional: true
+- runFlow:
+    when:
+      notVisible: '${output.marker} main(, needed today)?'
+    commands:
+      - tapOn:
+          text: "Search for jobs or areas"
+          optional: true
+      - eraseText: 50
+      - inputText: "${output.marker} main"
+      - tapOn:
+          text: "Search"
+          optional: true
+      - runFlow: subflows/keyboard-settle.yml
 - extendedWaitUntil:
     visible: '${output.marker} main(, needed today)?'
     timeout: 60000
@@ -106,6 +142,36 @@ appId: app.brazos.mobile.preview
 - inputText: "${output.marker} side"
 - tapOn: "Search"
 - runFlow: subflows/keyboard-settle.yml
+# Run 41: the lost finger-lift on Home, handled as in the main job's search above.
+- extendedWaitUntil:
+    visible: '${output.marker} side(, needed today)?'
+    timeout: 60000
+    optional: true
+- runFlow:
+    when:
+      notVisible: '${output.marker} side(, needed today)?'
+    commands:
+      - tapOn:
+          text: "Search"
+          optional: true
+      - runFlow: subflows/keyboard-settle.yml
+      - extendedWaitUntil:
+          visible: '${output.marker} side(, needed today)?'
+          timeout: 60000
+          optional: true
+- runFlow:
+    when:
+      notVisible: '${output.marker} side(, needed today)?'
+    commands:
+      - tapOn:
+          text: "Search for jobs or areas"
+          optional: true
+      - eraseText: 50
+      - inputText: "${output.marker} side"
+      - tapOn:
+          text: "Search"
+          optional: true
+      - runFlow: subflows/keyboard-settle.yml
 - extendedWaitUntil:
     visible: '${output.marker} side(, needed today)?'
     timeout: 60000

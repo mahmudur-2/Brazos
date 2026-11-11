@@ -22,7 +22,11 @@ appId: app.brazos.mobile.preview
 # ─── A: Inbox → the main job's conversation ──────────────────────────────
 # Run 27: rows are found by the person's name, the text on screen; the job title was only in the spoken
 # label (now it matches the chip), and a slow Mac needed about 50 s for the first load.
-- tapOn: "Inbox"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Inbox"
+      NEXT: "All conversations"
 - extendedWaitUntil:
     visible: "All conversations"
     timeout: 30000
@@ -190,7 +194,11 @@ appId: app.brazos.mobile.preview
       NAME: "E2E Worker"
       LANDING: "Find work"
 - runFlow: subflows/ensure-mode-worker.yml
-- tapOn: "Inbox"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Inbox"
+      NEXT: "All conversations"
 - extendedWaitUntil:
     visible: "All conversations"
     timeout: 30000

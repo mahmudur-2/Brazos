@@ -10,7 +10,11 @@ appId: app.brazos.mobile.preview
     when:
       visible: "Search for jobs or areas"
     commands:
-      - tapOn: "Profile"
+      - runFlow:
+          file: home-tap.yml
+          env:
+            TAP: "Profile"
+            NEXT: "Switch to Customer"
       - scrollUntilVisible:
           element:
             text: "Switch to Customer"

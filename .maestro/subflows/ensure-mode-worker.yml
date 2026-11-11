@@ -10,7 +10,11 @@ appId: app.brazos.mobile.preview
     when:
       visible: 'What do you need done\?'
     commands:
-      - tapOn: "Profile"
+      - runFlow:
+          file: home-tap.yml
+          env:
+            TAP: "Profile"
+            NEXT: "Switch to Worker"
       - scrollUntilVisible:
           element:
             text: "Switch to Worker"

@@ -2,16 +2,32 @@ appId: app.brazos.mobile.preview
 # Shared: answers the push pre-prompt (lib/pushNotifications.ts) and the "<thing> is off" prompts (lib/permissionPrompt.ts).
 # Proves nothing itself; flows call it after landing so no dialog can sit over the next tap.
 ---
-- runFlow:
-    when:
+# Run 41: these dialogs open over Home, whose LiveDot hides a lost finger-lift from Maestro; tap again
+# while the dialog stays, as sign-out.yml does for its confirm.
+- repeat:
+    times: 3
+    while:
       visible: 'Get notified\?'
     commands:
-      - tapOn: "Not now"
-- runFlow:
-    when:
+      - tapOn:
+          text: "Not now"
+          optional: true
+      - extendedWaitUntil:
+          notVisible: 'Get notified\?'
+          timeout: 5000
+          optional: true
+- repeat:
+    times: 3
+    while:
       visible: '(Camera|Microphone|Speech|Location) is off'
     commands:
-      - tapOn: "Not now"
+      - tapOn:
+          text: "Not now"
+          optional: true
+      - extendedWaitUntil:
+          notVisible: '(Camera|Microphone|Speech|Location) is off'
+          timeout: 5000
+          optional: true
 - runFlow:
     when:
       visible: "Allow While Using App"

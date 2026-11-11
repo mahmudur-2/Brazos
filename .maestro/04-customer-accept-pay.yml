@@ -20,7 +20,11 @@ appId: app.brazos.mobile.preview
 - evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
 
 # ─── Payment methods: start with no saved card, so Checkout takes the sheet path ─
-- tapOn: "Profile"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Profile"
+      NEXT: "Switch to Worker"
 - scrollUntilVisible:
     element:
       text: "Payment methods"
@@ -58,11 +62,19 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 
 # ─── Side job: Bid Detail → counter-offer $45 ────────────────────────────
-- tapOn: "Create"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Create"
+      NEXT: "My jobs"
 - extendedWaitUntil:
     visible: "My jobs"
     timeout: 15000
-- tapOn: "My jobs"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "My jobs"
+      NEXT: 'Back( to .*)?'
 - extendedWaitUntil:
     notVisible: "Loading your jobs…"
     timeout: 30000
@@ -211,7 +223,11 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: 'What do you need done\?'
     timeout: 60000
-- tapOn: "Profile"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Profile"
+      NEXT: "Switch to Worker"
 - scrollUntilVisible:
     element:
       text: "Payment methods"

@@ -26,11 +26,27 @@ appId: app.brazos.mobile.preview
     when:
       visible: "Dismiss how Brazos works"
     commands:
-      - tapOn: "Dismiss how Brazos works"
+      # Run 41: Home's LiveDot hides a lost finger-lift from Maestro; tap again while the card stays.
+      - repeat:
+          times: 3
+          while:
+            visible: "Dismiss how Brazos works"
+          commands:
+            - tapOn:
+                text: "Dismiss how Brazos works"
+                optional: true
+            - extendedWaitUntil:
+                notVisible: "Dismiss how Brazos works"
+                timeout: 15000
+                optional: true
       - assertNotVisible: "Dismiss how Brazos works"
 - takeScreenshot: 02-home
 # The bell (components/NotificationBell.tsx) opens the feed; its gear proves the screen.
-- tapOn: 'Notifications(, \d+ unread)?'
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: 'Notifications(, \d+ unread)?'
+      NEXT: "Notification settings"
 - extendedWaitUntil:
     visible: "Notification settings"
     timeout: 30000
@@ -39,7 +55,11 @@ appId: app.brazos.mobile.preview
     visible: 'What do you need done\?'
     timeout: 30000
 # The avatar opens Profile on its edit surface (components/HomeAvatarButton.tsx).
-- tapOn: "Edit your profile"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Edit your profile"
+      NEXT: "Edit Profile"
 - extendedWaitUntil:
     visible: "Edit Profile"
     timeout: 30000
@@ -56,7 +76,11 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 
 # ─── Main job: a Home tile → the wizard with its category, set price $50 ─
-- tapOn: "House Cleaning"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "House Cleaning"
+      NEXT: "STEP 1 OF 4"
 - extendedWaitUntil:
     visible: "STEP 1 OF 4"
     timeout: 30000
@@ -173,7 +197,11 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: 'What do you need done\?'
     timeout: 30000
-- tapOn: "Post a job"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Post a job"
+      NEXT: "STEP 1 OF 4"
 - extendedWaitUntil:
     visible: "STEP 1 OF 4"
     timeout: 30000
@@ -227,7 +255,11 @@ appId: app.brazos.mobile.preview
     direction: DOWN
     centerElement: true
     timeout: 60000
-- tapOn: '.*Not published yet.*'
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: '.*Not published yet.*'
+      NEXT: "STEP 4 OF 4"
 # The draft reopens on the step it was saved at; "Need it today" is not part of a draft.
 - extendedWaitUntil:
     visible: "STEP 4 OF 4"
@@ -293,11 +325,19 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: 'What do you need done\?'
     timeout: 60000
-- tapOn: "View all services"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "View all services"
+      NEXT: "Pick what you need help with"
 - extendedWaitUntil:
     visible: "Pick what you need help with"
     timeout: 15000
-- tapOn: "Moving Help"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Moving Help"
+      NEXT: "STEP 1 OF 4"
 - extendedWaitUntil:
     visible: "STEP 1 OF 4"
     timeout: 30000

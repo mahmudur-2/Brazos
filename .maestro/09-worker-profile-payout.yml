@@ -20,7 +20,11 @@ appId: app.brazos.mobile.preview
 - evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
 
 # ─── Earnings & Payouts ──────────────────────────────────────────────────
-- tapOn: "Profile"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Profile"
+      NEXT: "Switch to Customer"
 - extendedWaitUntil:
     visible: "Switch to Customer"
     timeout: 30000

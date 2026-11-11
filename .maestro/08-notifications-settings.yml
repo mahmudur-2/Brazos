@@ -20,7 +20,11 @@ appId: app.brazos.mobile.preview
 - evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
 
 # ─── Notifications feed ──────────────────────────────────────────────────
-- tapOn: 'Notifications(, \d+ unread)?'
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: 'Notifications(, \d+ unread)?'
+      NEXT: "Notification settings"
 - extendedWaitUntil:
     visible: "Notification settings"
     timeout: 30000
@@ -107,7 +111,11 @@ appId: app.brazos.mobile.preview
 - tapOn: 'Back( to .*)?'
 
 # ─── Profile: appearance, Legal, details, Account & safety ───────────────
-- tapOn: "Profile"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Profile"
+      NEXT: "Switch to Worker"
 - extendedWaitUntil:
     visible: "Switch to Worker"
     timeout: 30000

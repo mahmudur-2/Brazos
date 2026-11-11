@@ -25,6 +25,38 @@ appId: app.brazos.mobile.preview
 - tapOn: "Search"
 # Each step that closes the keyboard is followed by keyboard-settle, as in flow 03 (runs 38-39: iOS retires it ~4.8 s later).
 - runFlow: subflows/keyboard-settle.yml
+# Run 41: here the field's tap lost its finger-lift (Home's LiveDot hides that from Maestro), the text went nowhere
+# and Search ran on an empty field. Only while the card has not shown: Search once more (a lost Search tap keeps the
+# text), then the field cleared, typed and searched again. A search that showed the card is never repeated.
+- extendedWaitUntil:
+    visible: '${output.marker} side(, needed today)?'
+    timeout: 60000
+    optional: true
+- runFlow:
+    when:
+      notVisible: '${output.marker} side(, needed today)?'
+    commands:
+      - tapOn:
+          text: "Search"
+          optional: true
+      - runFlow: subflows/keyboard-settle.yml
+      - extendedWaitUntil:
+          visible: '${output.marker} side(, needed today)?'
+          timeout: 60000
+          optional: true
+- runFlow:
+    when:
+      notVisible: '${output.marker} side(, needed today)?'
+    commands:
+      - tapOn:
+          text: "Search for jobs or areas"
+          optional: true
+      - eraseText: 50
+      - inputText: "${output.marker} side"
+      - tapOn:
+          text: "Search"
+          optional: true
+      - runFlow: subflows/keyboard-settle.yml
 - extendedWaitUntil:
     visible: '${output.marker} side(, needed today)?'
     timeout: 60000
@@ -78,7 +110,11 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "Search for jobs or areas"
     timeout: 60000
-- tapOn: "My Jobs"
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "My Jobs"
+      NEXT: "Accepted work and open bids."
 - extendedWaitUntil:
     notVisible: "Loading your jobs…"
     timeout: 30000
