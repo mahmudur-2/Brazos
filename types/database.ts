@@ -2637,6 +2637,7 @@ export type Database = {
           would_again_yes: number
         }[]
       }
+      close_unpaid_hires: { Args: { p_now?: string }; Returns: number }
       counter_offer: {
         Args: { p_amount_cents: number; p_offer_id: string }
         Returns: string

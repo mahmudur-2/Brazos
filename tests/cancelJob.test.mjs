@@ -157,6 +157,12 @@ test('the customer confirm for a worker no-show is free in full and names the wo
   assert.doesNotMatch(m, /cancellation fee/);
 });
 
+test('B4: both sides are told an unpaid hire is closed', () => {
+  assert.match(read('screens/ClientJobDetailScreen.tsx'), /If it isn’t protected within 24 hours of hiring, the job is closed\./);
+  assert.match(read('screens/ClientJobDetailScreen.tsx'), /; if it isn’t protected by then, the job is closed/);
+  assert.match(read('screens/WorkerJobScreen.tsx'), /If it isn’t protected within 24 hours of the hire, the job is closed\./);
+});
+
 test('no-show gates: assigned, arrived, scheduled, and past scheduled_date + arrival_end_hour (default 24)', () => {
   const job = { status: 'assigned', arrived_at: '2026-11-20T22:00:00Z', scheduled_date: '2026-11-20', arrival_end_hour: 20 };
   // The window ends 20:00 EST = 2026-11-21T01:00Z.

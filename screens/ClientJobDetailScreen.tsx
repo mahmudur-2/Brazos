@@ -1307,12 +1307,16 @@ export function ClientJobDetailScreen() {
                       : ''}
                   {/* D14: the remaining funding window, in the app's plain
                       voice, off the one countdown formatter. */}
+                  {/* B4: close_unpaid_hires closes an assigned job not protected
+                      24 hours after the hire, or after a started checkout's window. */}
                   {fundingWindowOpen
                     ? ` The funding window closes ${releaseAtLabel(
                         fundingDueMs as number,
                         Date.now()
-                      )}.`
-                    : ''}
+                      )}${job.status === 'assigned' ? '; if it isn’t protected by then, the job is closed' : ''}.`
+                    : job.status === 'assigned'
+                      ? ' If it isn’t protected within 24 hours of hiring, the job is closed.'
+                      : ''}
                   {!paymentsEnabled
                     ? ' Payments are paused right now — check back shortly to protect it.'
                     : ''}

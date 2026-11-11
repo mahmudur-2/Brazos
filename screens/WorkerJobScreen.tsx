@@ -967,7 +967,7 @@ export function WorkerJobScreen() {
                 ) : null}
                 <Text style={styles.stageNote}>
                   {awaitingProtection
-                    ? `Waiting for ${clientName} to protect the payment. Until it’s held, sort out the details in chat.`
+                    ? `Waiting for ${clientName} to protect the payment. If it isn’t protected within 24 hours of the hire, the job is closed. Until it’s held, sort out the details in chat.`
                     : `Each tap tells ${clientName} where things stand — nothing tracks your location.`}
                 </Text>
               </Card>
