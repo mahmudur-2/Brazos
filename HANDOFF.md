@@ -4,7 +4,8 @@ Resume: read CLAUDE.md, this file, then `git log -12 --oneline` and `git status`
 branch, HEAD and tree; older sections of this file are in git history. Written 2026-11-10 ~21:30Z by the
 orchestrating chat (Opus 5.5), which stopped at the owner's weekly token cap (10% used; hard stop 15%).
 The website lines were rewritten 2026-11-11 ~05:30Z by the website chat (Fable 5.2); it did not touch the
-e2e loop, so every e2e line below is as the orchestrating chat left it.
+e2e loop, so every e2e line below is as the orchestrating chat left it. The B1 (tip) lines were
+written 2026-11-11 ~06:35Z by the B1 chat (Fable 5.2); it did not touch the e2e loop either.
 
 ## Now
 
@@ -20,6 +21,24 @@ e2e loop, so every e2e line below is as the orchestrating chat left it.
   flow-only, so no new build is needed unless an app bug shows up.
 - The audit (2026-11-10): `docs/lean/AUDIT-LEDGER.md` is the single list of every flaw: fixed, open from
   e2e (E3-E6), batch B deferred (database and payments), owner items O1-O7, later.
+- **B1 is fixed** (c8be212, `supabase/migrations/20261111000000_tip_settlement.sql`, blueprint
+  `docs/critical/tip-settlement.md`): a charged tip is now `held`, queued in `transfers_due` for the
+  whole tip, sent by `process-settlements`, and `released` only by `transfer.created`. The app says
+  "on its way" until then. The review found a second hole and it is closed in the same migration: a
+  tip row's amount is never rewritten, and a tip is queued only when the amount received equals the
+  row's charge. Proven on the local stack. On staging the pipeline applied it
+  (https://github.com/mahmudur-2/Brazos/actions/runs/42972896348: verify, migrate, deploy all
+  green; "List migrations (after)" shows `20261111000000` on both sides). Not tried with a real
+  test-mode tip on a phone. Production: the owner applies the file by hand, as always.
+- Build `c14fa739…` holds the OLD tip screen: its poll waits for `released`, so on it a paid tip is
+  not confirmed on screen until the transfer lands (read from the old classifier, not run on a
+  phone). The next app build carries the new wording. No Maestro flow pays a tip (flow 06 only
+  checks "Add a tip?" is visible).
+- The website chat reports (not checked by the B1 chat) that the owner deployed `site/` as a
+  Cloudflare Worker with static assets named `brazos`, not Pages, live at
+  https://brazos.brazosapp.workers.dev/ (`/privacy` and `/support` are the two App Store Connect
+  URLs; the owner's paste is not yet confirmed). The website lines below still say "Cloudflare
+  Pages": the website chat updates them, with ledger O2 and ARCHITECTURE.
 - The public website (brief: `docs/lean/WEBSITE-BRIEF.md`) is **built, not deployed** (G19, 29554fb):
   Terms and Privacy rewritten for launch in `lib/legal/` (version `2026-11-11`, the draft notice removed
   at the owner's word), `node scripts/build-site.mjs` writes `site/` (git-ignored) in the look the owner
@@ -30,7 +49,8 @@ e2e loop, so every e2e line below is as the orchestrating chat left it.
   holds it. Build `c14fa739…` still holds the draft4 text; the next app build picks up the new one.
 - Run 37 (after this file was first written): 01-02 green, 03 red with no Maestro message; artifacts
   not yet read.
-- Gates on 29554fb: `npm run verify` 1280 pass, 0 fail (4 new in `tests/buildSite.test.mjs`).
+- Gates on c8be212: `npm run verify` 1282 pass, 0 fail; `npm run db:test` on the local stack 34 files,
+  1805 tests, PASS, none skipped (`320_tip_settlement.sql` is new: 22 tests).
 
 ## Blocked
 
@@ -42,9 +62,12 @@ e2e loop, so every e2e line below is as the orchestrating chat left it.
   production sign-in codes (the policy says "a text-message provider"). No company owns Brazos yet, so
   the Terms name "the operator of Brazos": form an LLC, then put its name and address in section 1
   and bump the version (O1).
-- What the new Terms say and the code does not yet do: a tip "goes to the Worker" (B1: it never
-  does; fix B1 or switch tips off before launch) and Brazos "may recover" money lost to a card dispute
-  (B13).
+- What the new Terms say and the code does not yet do: Brazos "may recover" money lost to a card
+  dispute (B13). A tip "goes to the Worker" is now true in the code (B1, c8be212) once the migration
+  is on the database the app talks to.
+- Owner decision (ledger B19): tips charged before the fix were never transferred and the fix does
+  not touch them. Staging is Stripe test mode and production has no users, so "leave them" is a
+  fair answer; a one-off requeue is the other.
 
 ## Next
 
@@ -67,9 +90,9 @@ e2e loop, so every e2e line below is as the orchestrating chat left it.
    open-photo-picker, sign-in-phone, sign-out) before writing a new retry.
 5. Two all-green: H3 gate. `npm run verify`; `npm run db:test` on the local stack (start Docker Desktop
    `%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe`, `npx supabase start`, `npm run db:reset`,
-   `npm run db:test`; baseline 33 files, 1782 tests); TestSprite per the lean plan. Then SHIP-REPORT,
+   `npm run db:test`; baseline 34 files, 1805 tests); TestSprite per the lean plan. Then SHIP-REPORT,
    ledger, this file, push, a short owner message with both run links.
-6. Then batch B (ledger): start with B1 (tips never reach the worker), B5 (fee math overflows above
+6. Then batch B (ledger; B1 is done): start with B5 (fee math overflows above
    ~$28.6k), B6 (realtime publication missing on a fresh project), B3 (hired worker reads the address
    forever), B8 (no-show worker gets the cancellation fee). Each first gets a pgTAP test that fails on
    today's schema; critical folders, so Fable blueprint, Opus build, Fable review. Then E3/E4 (stale
@@ -90,6 +113,11 @@ e2e loop, so every e2e line below is as the orchestrating chat left it.
 - The whole lean run: `git checkout -b restore pre-lean-2026-11` (tag before any change).
 - One slice: `git revert <hash>` (`lean P*`, `F*`, `G*` commits on `mainexpo`). App fixes this run:
   P1-P5 (84c7d4e..98d6443), F25 2865121, F29 b2314da; everything else is `.maestro/` or docs.
-- Database: untouched this run (batch B deferred). Production was never touched.
+- Database: one migration, B1 (`20261111000000_tip_settlement.sql`, c8be212). Never edit or delete it
+  once applied. Undo is a NEW migration that re-creates `apply_payment_event()` from
+  `20260915000000_connect_onboarding.sql` §1 and `begin_tip_payment()` from
+  `20260905000000_stripe_foundation.sql` §16, both together (the old tip begin with the new
+  settlement re-opens the amount hole); `git revert c8be212` undoes the app wording and the tests.
+  Production was never touched.
 - The website and the legal rewrite: `git revert 29554fb` (texts, versions, script, tests in one commit);
   the live site, once uploaded, is rolled back in Cloudflare Pages (Deployments → an older one → Rollback).
