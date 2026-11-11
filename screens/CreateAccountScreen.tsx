@@ -29,9 +29,10 @@ import { phoneAuth } from '../lib/phoneAuth';
  *
  * Two values, both of which the account will need anyway: a name and a number.
  * No email, no password — a phone signup that quietly collected a password
- * would be a second credential nobody asked for. The email/password form still
- * exists, one tap away on EmailCreateAccount, and is what actually registers
- * anyone until SMS is switched on.
+ * would be a second credential nobody asked for. This screen opens only while
+ * phone sign-in is live, and then it offers no email sign-up (B12): every new
+ * account carries a verified phone. Until SMS is switched on, Welcome sends
+ * sign-up to the email form instead (PHONE_ENTRY).
  *
  * Nothing is written anywhere at this point. The name travels to VerifyPhone as
  * a draft and only becomes a profile once a real session exists — no hosted row
@@ -178,20 +179,6 @@ export function CreateAccountScreen() {
             onPress={handleCreateAccount}
             loading={loading}
             accessibilityHint="Send a verification code to this phone number"
-          />
-          <AuthButton
-            title="Use Email Instead"
-            variant="ghost"
-            themed
-            onPress={() =>
-              navigation.navigate('EmailCreateAccount', {
-                fullName: fullName.trim() || undefined,
-                phoneDigits: phoneDigits || undefined,
-                country,
-              })
-            }
-            disabled={loading}
-            accessibilityHint="Sign up with an email address and password"
           />
         </View>
       </View>

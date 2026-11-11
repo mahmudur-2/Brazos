@@ -48,12 +48,13 @@ test('n5 · Welcome leads with Continue with phone (the operator\'s ruling); ema
   assert.match(buttons[0], /\bthemed\b/);
   assert.doesNotMatch(buttons[0], /variant=/, 'the phone button is the primary treatment');
 
-  // SECOND: email, still present, primary treatment, to the registered EmailCreateAccount route.
+  // SECOND: email, primary treatment, to the registered EmailCreateAccount route — shown only while
+  // phone sign-in is not live (B12, tests/authPhone.test.mjs).
   assert.match(buttons[1], /title="Continue with email"/);
   assert.match(buttons[1], /navigation\.navigate\('EmailCreateAccount'\)/);
   assert.match(buttons[1], /accessibilityHint="Create an account with your email"/);
   assert.match(buttons[1], /\bthemed\b/);
-  assert.doesNotMatch(buttons[1], /variant=/, 'the email button is neither hidden nor demoted');
+  assert.doesNotMatch(buttons[1], /variant=/, 'the email button is not demoted');
 
   // THIRD: unchanged.
   assert.match(buttons[2], /title="I already have an account"/);

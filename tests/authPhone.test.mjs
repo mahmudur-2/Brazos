@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
@@ -192,8 +192,8 @@ test('the phone field is the only path from the auth flow to the backend', () =>
   for (const source of [createAccount, emailCreateAccount]) {
     assert.match(source, /const phone = toE164\(country, phoneDigits\)/);
     assert.match(source, /phoneValidationError\(country, phoneDigits\)/);
-    // 2026-09-26 (the refresh, audit M-18): the email form may start on the
-    // country the phone form already had, handed over by "Use Email Instead".
+    // 2026-09-26 (the refresh, audit M-18): the email form may start on a
+    // country handed over in its params (the phone form's hand-over went with B12).
     assert.match(source, /useState<Country>\((?:params\?\.country \?\? )?DEFAULT_COUNTRY\)/);
   }
   assert.match(emailCreateAccount, /signUp\(trimmedEmail, password, trimmedName, phone\)/);
@@ -342,6 +342,35 @@ test('B2 · Welcome routes through PHONE_ENTRY and the email screens gate their 
     const src = read(path);
     assert.match(src, /\{PHONE_ENTRY\.live && \(\s*<AuthButton\s+title="Use Phone Number Instead"/, `${path} hides the phone button while SMS is off`);
   }
+});
+
+// B12 — while phone sign-in is live every new account carries a verified phone (production's email
+// provider is off), so no reachable control may open the email sign-up. Off live, nothing changes.
+test('B12 · with phone sign-in live, no reachable control opens the email sign-up', () => {
+  // Welcome's email button exists only while the phone screens are not live.
+  assert.match(
+    read('screens/WelcomeScreen.tsx'),
+    /\{!PHONE_ENTRY\.live && \(\s*<AuthButton\s+title="Continue with email"/,
+    'Welcome hides "Continue with email" while phone sign-in is live'
+  );
+  // CreateAccount opens only while live (PHONE_ENTRY.createAccount), so it offers no email sign-up.
+  assert.doesNotMatch(read('screens/CreateAccountScreen.tsx'), /title="Use Email Instead"/);
+  // Every screen or component that names the route, and why it may.
+  const named = [];
+  for (const dir of ['screens', 'components']) {
+    for (const name of readdirSync(join(root, dir))) {
+      if (/\.tsx?$/.test(name) && read(`${dir}/${name}`).includes("'EmailCreateAccount'")) named.push(`${dir}/${name}`);
+    }
+  }
+  assert.deepEqual(named.sort(), [
+    'screens/EmailCreateAccountScreen.tsx', // its own route type
+    'screens/VerifyPhoneScreen.tsx', // the mock provider's finish, below
+    'screens/WelcomeScreen.tsx', // gated above
+  ]);
+  const verify = read('screens/VerifyPhoneScreen.tsx');
+  const mockOnly = verify.slice(verify.indexOf('{mockVerified ? ('), verify.indexOf(') : stale ? ('));
+  assert.ok(mockOnly.includes("'EmailCreateAccount'"), "VerifyPhone names the route only in the mock provider's finish");
+  assert.match(verify, /if \(result\.status === 'verified-mock'\) \{\s*setMockVerified\(true\);/);
 });
 
 // ===========================================================================

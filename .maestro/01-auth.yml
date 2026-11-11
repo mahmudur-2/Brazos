@@ -1,6 +1,6 @@
 appId: app.brazos.mobile.preview
-# F1 auth (signed out): Welcome, email create + sign-in forms, phone create form, country picker, VerifyPhone, LegalGate, Setup, sign out.
-# Proves every auth form names its missing field, a wrong code is refused, both accounts get in by phone (created on a first run), and sign-out lands on Welcome.
+# F1 auth (signed out): Welcome, phone create form, email sign-in form, country picker, VerifyPhone, LegalGate, Setup, sign out.
+# Proves no email sign-up is offered with phone sign-in live, every auth form names its missing field, a wrong code is refused, both accounts get in by phone (created on a first run), and sign-out lands on Welcome.
 ---
 - launchApp:
     clearState: true
@@ -13,33 +13,17 @@ appId: app.brazos.mobile.preview
     visible: "I already have an account"
     timeout: 60000
 - assertVisible: "Continue with phone"
-- assertVisible: "Continue with email"
+# B12: the e2e build has phone sign-in live, so every new account carries a verified phone.
+- assertNotVisible: "Continue with email"
 - takeScreenshot: 01-welcome
 
-# Email create account: the empty form names each missing field (Create itself is never sent: it would mint a real email account).
-- runFlow:
-    file: subflows/welcome-tap.yml
-    env:
-      TAP: "Continue with email"
-      NEXT: "Use Phone Number Instead"
-- tapOn:
-    text: "Create account"
-    below: "Password"
-- assertVisible: "Enter your full name."
-- assertVisible: "Enter your email address."
-- assertVisible: "Choose a password."
-- takeScreenshot: 01-email-create-errors
-- tapOn: "Go back"
-
-# Phone create account: the name is required.
-- extendedWaitUntil:
-    visible: "Continue with phone"
-    timeout: 15000
+# Phone create account: no email sign-up; the empty form names each missing field (Create itself is never sent).
 - runFlow:
     file: subflows/welcome-tap.yml
     env:
       TAP: "Continue with phone"
       NEXT: "One account. Two ways to use it."
+- assertNotVisible: "Use Email Instead"
 - tapOn: "Switch modes to hire help or find work."
 - tapOn:
     text: "Create account"

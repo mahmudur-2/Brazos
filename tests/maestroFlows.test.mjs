@@ -180,3 +180,19 @@ test('the e2e-test profile is a credential-less simulator build in the Beta shap
   assert.equal(profile.env.APP_VARIANT, 'preview');
   assert.equal(profile.env.EXPO_PUBLIC_APP_VARIANT, 'preview');
 });
+
+test('B12 · flow 01 walks the live-phone build: no email sign-up is offered, and the empty phone form is refused', () => {
+  // The e2e build has phone sign-in live, so Welcome and the phone form offer no email sign-up.
+  assert.equal(JSON.parse(read('eas.json')).build['e2e-test'].env.EXPO_PUBLIC_PHONE_AUTH_MODE, 'supabase');
+  const flow = read('.maestro/01-auth.yml');
+  assert.match(flow, /^- assertNotVisible: "Continue with email"$/m);
+  for (const { rel, text } of allFlows()) {
+    assert.doesNotMatch(text, /(TAP|tapOn): "Continue with email"/, `${rel} taps a button the e2e build does not show`);
+  }
+  // On the phone form: no "Use Email Instead", and Create with empty fields names both.
+  const form = flow.slice(flow.indexOf('TAP: "Continue with phone"'));
+  const at = (s) => form.indexOf(s);
+  assert.ok(at('- assertNotVisible: "Use Email Instead"') > 0, 'the phone form offers no email sign-up');
+  assert.ok(at('- assertNotVisible: "Use Email Instead"') < at('- assertVisible: "Enter your full name."'));
+  assert.ok(at('- assertVisible: "Enter your full name."') < at('- assertVisible: "Enter your phone number."'));
+});

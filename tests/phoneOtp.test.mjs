@@ -658,8 +658,9 @@ test('both halves of each pair are registered and offer each other', () => {
   assert.match(flow, /name="EmailCreateAccount" component=\{EmailCreateAccountScreen\}/);
 
   assert.match(signIn, /navigation\.navigate\('EmailSignIn'\)/);
-  // M-18: the phone form hands over what was typed.
-  assert.match(createAccount, /navigation\.navigate\('EmailCreateAccount', \{\s*fullName: fullName\.trim\(\) \|\| undefined,\s*phoneDigits: phoneDigits \|\| undefined,\s*country,\s*\}\)/);
+  // B12: the phone form opens only while phone sign-in is live, and then offers no email sign-up
+  // (M-18's hand-over went with its button; tests/authPhone.test.mjs B12).
+  assert.doesNotMatch(createAccount, /EmailCreateAccount'/);
   // popTo, not navigate: under React Navigation 7 navigate() pushes when the
   // target isn't current, which would stack a duplicate over the screen the
   // user came from and discard what they had typed there.

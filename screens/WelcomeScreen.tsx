@@ -344,15 +344,19 @@ export function WelcomeScreen() {
           accessibilityHint="Create an account with your phone number"
           light={rimLight}
         />
-        <AuthButton
-          title="Continue with email"
-          themed
-          hero
-          icon="mail-outline"
-          chevron
-          onPress={() => navigation.navigate('EmailCreateAccount')}
-          accessibilityHint="Create an account with your email"
-        />
+        {/* B12: while phone sign-in is live every new account carries a verified
+            phone, so the email sign-up is offered only while it is not. */}
+        {!PHONE_ENTRY.live && (
+          <AuthButton
+            title="Continue with email"
+            themed
+            hero
+            icon="mail-outline"
+            chevron
+            onPress={() => navigation.navigate('EmailCreateAccount')}
+            accessibilityHint="Create an account with your email"
+          />
+        )}
         <AuthButton
           title="I already have an account"
           variant="ghost"

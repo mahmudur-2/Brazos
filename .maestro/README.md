@@ -2,7 +2,7 @@
 Run: `maestro test .maestro/` (config.yaml runs 01 → 10 in order and stops at the first failure). CI: `.github/workflows/e2e-ios.yml` on the `e2e-test` build runs each flow on its own, in file order, and goes on after a red one (run 37: Maestro's driver died mid-flow, mobile-dev-inc/maestro#3538).
 Accounts: A = CUSTOMER (`MAESTRO_E2E_PHONE` / `MAESTRO_E2E_OTP`), B = WORKER (`MAESTRO_E2E_PHONE_2` / `MAESTRO_E2E_OTP_2`): Supabase test phone numbers, 11 digits with the leading 1. The first run creates both (Setup + LegalGate); later runs sign in. Titles carry `E2E ${MAESTRO_RUN_ID}` (default `E2E lean`); flows pick the newest card.
 Every flow: clean launch → sign in (subflows/sign-in-phone.yml) → its screens → signed out. One two-party job ("main") runs 02 → 06; a small "side" job carries the open-bids, counter, withdraw and decline paths.
-- 01-auth: Welcome, email/phone forms name each missing field, country picker, wrong code refused, both accounts in, sign out.
+- 01-auth: Welcome and the phone form offer no email sign-up (phone sign-in live), phone create and email sign-in forms name each missing field, country picker, wrong code refused, both accounts in, sign out.
 - 02-customer-post-job: Home (bell, avatar, tiles, All services), wizard (category, questions, photo add/remove, area + GPS + address, Today, set price $50, Need it today, Repeat Off), draft save + resume, open bids, Edit job.
 - 03-worker-discover-bid: Map tab, search, Filters sheet, JobDetail with no exact address, $50 bid at the set price, written $40 bid (pitch rule), withdraw + rebid, report dialog.
 - 04-customer-accept-pay: saved cards cleared, Bid Detail counter $45, accept $50, Checkout (save card), Stripe sheet 4242, Job Confirmed held copy, saved card listed + removed.
