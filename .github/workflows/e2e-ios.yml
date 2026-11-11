@@ -142,17 +142,25 @@ jobs:
           xcrun simctl io booted recordVideo --codec=h264 --force e2e.mp4 &
           recorder=$!
           status=0
-          mkdir -p e2e-debug
-          attempt=1
-          while :; do
-            status=0
-            maestro test .maestro/ --format junit --output e2e-junit.xml --debug-output e2e-debug || status=$?
-            if [ "$status" -ne 0 ] && [ "$attempt" -lt 2 ] && ! grep -q "<testcase" e2e-junit.xml 2>/dev/null; then
-              echo "Maestro ended before any flow ran (driver start-up); retrying once"
-              attempt=$((attempt + 1))
-              continue
-            fi
-            break
+          mkdir -p e2e-debug e2e-junit
+          # Run 37 (2026-11-10): Maestro's own iOS driver died in flow 03 (DeviceUnreachableException,
+          # mobile-dev-inc/maestro#3538, open: a status-bar read races the closing keyboard) and the run
+          # stopped there. One `maestro test` per flow, in file order: each flow gets a fresh driver, and
+          # a red flow no longer hides the ones after it, so one run reports all ten.
+          for flow in .maestro/[0-9][0-9]-*.yml; do
+            name=$(basename "$flow" .yml)
+            attempt=1
+            while :; do
+              rc=0
+              maestro test "$flow" --format junit --output "e2e-junit/$name.xml" --debug-output e2e-debug || rc=$?
+              if [ "$rc" -ne 0 ] && [ "$attempt" -lt 2 ] && ! grep -q "<testcase" "e2e-junit/$name.xml" 2>/dev/null; then
+                echo "Maestro ended before $name ran (driver start-up); retrying once"
+                attempt=$((attempt + 1))
+                continue
+              fi
+              break
+            done
+            [ "$rc" -eq 0 ] || status=1
           done
           # SIGINT lets simctl finish the mp4; the flows' exit code is kept.
           kill -INT "$recorder"
@@ -168,7 +176,7 @@ jobs:
         run: |
           if [ -z "$ARTIFACT_KEY" ]; then echo "ARTIFACT_KEY secret is missing; nothing is uploaded"; exit 1; fi
           mkdir -p e2e-results
-          cp -R e2e-junit.xml e2e-debug e2e.mp4 ./*.png ~/.maestro/tests e2e-results/ 2>/dev/null || true
+          cp -R e2e-junit e2e-debug e2e.mp4 ./*.png ~/.maestro/tests e2e-results/ 2>/dev/null || true
           tar -cf - e2e-results | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
             --passphrase-fd 3 -o e2e-results.tar.gpg 3<<<"$ARTIFACT_KEY"
           rm -rf e2e-results

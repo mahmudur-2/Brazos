@@ -70,7 +70,10 @@ test('e2e iOS never builds, submits or reaches Supabase', () => {
 });
 
 test('e2e iOS runs every flow and always keeps the results', () => {
-  assert.match(code, /maestro test \.maestro\/ /);
+  // Run 37: one maestro invocation per flow, so a dead driver or a red flow never hides the rest.
+  assert.match(code, /for flow in \.maestro\/\[0-9\]\[0-9\]-\*\.yml; do/);
+  assert.match(code, /maestro test "\$flow" /);
+  assert.match(code, /\[ "\$rc" -eq 0 \] \|\| status=1/, 'a red flow must still fail the job');
   assert.doesNotMatch(code, /maestro test[^\n]*\|\|\s*true/, 'a failing flow must fail the job');
   assert.match(code, /- name: Upload results\n\s+if: always\(\)\n\s+uses: actions\/upload-artifact@/);
 });

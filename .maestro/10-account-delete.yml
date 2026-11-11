@@ -32,9 +32,13 @@ appId: app.brazos.mobile.preview
     visible: "What is removed"
     timeout: 30000
 - assertVisible: "What is kept, and why"
-- extendedWaitUntil:
-    visible: "Finish or cancel each of these.*|Type DELETE to confirm account deletion"
-    timeout: 30000
+# Both the blockers' note and the DELETE field sit below the two explainer cards, off a 852 pt screen,
+# and Maestro counts an off-screen element as not visible: scroll to whichever this account shows.
+- scrollUntilVisible:
+    element:
+      text: "Finish or cancel each of these.*|Type DELETE to confirm account deletion"
+    direction: DOWN
+    timeout: 60000
 - takeScreenshot: 10-delete-account
 # A live job blocks deletion: the button stays disabled.
 - runFlow:

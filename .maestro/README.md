@@ -1,5 +1,5 @@
 # Maestro flows (lean v1, iPhone simulator, staging backend, Stripe test mode)
-Run: `maestro test .maestro/` (config.yaml runs 01 → 10 in order and stops at the first failure). CI: `.github/workflows/e2e-ios.yml` on the `e2e-test` build.
+Run: `maestro test .maestro/` (config.yaml runs 01 → 10 in order and stops at the first failure). CI: `.github/workflows/e2e-ios.yml` on the `e2e-test` build runs each flow on its own, in file order, and goes on after a red one (run 37: Maestro's driver died mid-flow, mobile-dev-inc/maestro#3538).
 Accounts: A = CUSTOMER (`MAESTRO_E2E_PHONE` / `MAESTRO_E2E_OTP`), B = WORKER (`MAESTRO_E2E_PHONE_2` / `MAESTRO_E2E_OTP_2`): Supabase test phone numbers, 11 digits with the leading 1. The first run creates both (Setup + LegalGate); later runs sign in. Titles carry `E2E ${MAESTRO_RUN_ID}` (default `E2E lean`); flows pick the newest card.
 Every flow: clean launch → sign in (subflows/sign-in-phone.yml) → its screens → signed out. One two-party job ("main") runs 02 → 06; a small "side" job carries the open-bids, counter, withdraw and decline paths.
 - 01-auth: Welcome, email/phone forms name each missing field, country picker, wrong code refused, both accounts in, sign out.
