@@ -51,8 +51,10 @@ From the lean security verdict (archived 2026-11-08, `_archive/2026-11-lean/SECU
 - L1. Move the `job-photos` completion and review folders to signed URLs (D-20261108-12).
 - L2. The postcss advisory waits for an Expo major.
 - L6. Dependabot (on since the repo went public, 2026-11-09) lists 9 alerts (4 high, 4 moderate, 1 low)
-  at https://github.com/mahmudur-2/Brazos/security/dependabot: triage each (dev-only or shipped, fix
-  available or waits for an Expo major) before launch.
+  at https://github.com/mahmudur-2/Brazos/security/dependabot. Triaged 2026-11-11 (ledger N6): all in
+  build tools that Expo brings in (`image-size`, `postcss`, `glob`, `minimatch`, `deepmerge`); they
+  run on the build machine, not on the phone. The fix is an Expo patch update: a dependency change,
+  flag it first.
 - L3. `supabase_admin` default privileges are Supabase-owned: raise them with the Advisor on staging.
 - L4. Export the Security Advisor and Performance Advisor reports for staging (owner, 2 minutes).
 - L5. Re-home `notify_on_bid`, then drop the `bids` table (v1.2 item 16).
@@ -82,6 +84,31 @@ From the lean security verdict (archived 2026-11-08, `_archive/2026-11-lean/SECU
 - Staging rows titled `E2E <timestamp>` pile up from the Maestro money walk; purge by title prefix
   once they get in the way.
 - TestSprite happy-path tests need a staging test-user token (auto-auth is Pro): add when the plan allows.
+- A notification tapped from Messages, Discover or Profile still opens its job in My Jobs: the E5 fix
+  (`c88cecf`) opens it in place only from the Home tab, whose stacks register the job screens.
+- Tell the workers who bid when a job closes: a design answer, not made in the 2026-11-11 run.
+- Send transfers with source_transaction (the charge id, PaymentIntent.latest_charge, stored at
+  funding) so Stripe caps each transfer at its charge; verify in Stripe test mode.
+- A database rule "no account without a sign-in phone" (B12, part 2): it needs a new migration that
+  replaces `handle_new_user`, and changes in `supabase/seed.sql`, `supabase/tests/_helpers.sql` and
+  the tests that create email-only users.
+- Hide email sign-in on production builds (B12, the part still open).
+- A rule for a job that stays assigned or in progress while its money is held (ledger N2): nothing
+  ends it and no money moves by itself; `payment_attention` lists it 7 days after its date window,
+  or after the hire when it has no date. What should happen, and after how long, is a product
+  decision.
+- `begin_job_payment`, `begin_tip_payment` and `release_job_payment` return the payer's own full
+  payment row, with the 20 internal columns the app's 26-column read hides (ledger N7).
+- The `PGRST202` fallbacks in `lib/profiles.ts` are dead code against the current schema (ledger N8).
+- Remove the DELETE listener in `hooks/useJobOwnerActions.ts` (an offer row is never removed while its
+  job exists; ledger N1).
+- Before Supabase removes the legacy keys on staging: set_drain_secrets(staging base, the new secret
+  key) and confirm drain_probe_status is all 200. Ship an app build whose public key is the
+  sb_publishable_ key.
+- Then delete the SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY fallback in _shared/serviceAuth.ts,
+  along with its unit tests.
+- Maestro's iOS driver bug (mobile-dev-inc/maestro#3538) can still end other flows: the fix in
+  `ff0784b` (a pause after each step that closes the keyboard) covers flow 03 only.
 
 ## Parked operator decisions
 

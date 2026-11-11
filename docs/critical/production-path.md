@@ -278,7 +278,9 @@ approves once per run. Steps in order:
     401 (this replaces the hand check asked for at `stripe-webhook/index.ts:38-41`).
 11. Function secrets by name: `STRIPE_SECRET_KEY`; optional `RESEND_API_KEY`, `RECEIPT_FROM`,
     `RECEIPT_REPLY_TO` (receipts are skipped until the first two exist). Never `RECEIPT_TEST_TO`.
-    `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` come from the platform.
+    `SUPABASE_URL`, `SUPABASE_SECRET_KEYS`, `SUPABASE_PUBLISHABLE_KEYS`, `SUPABASE_SERVICE_ROLE_KEY`
+    and `SUPABASE_ANON_KEY` come from the platform; `supabase/functions/_shared/serviceAuth.ts` reads
+    the key named `default` in the first two, else the legacy one.
 12. Stripe test webhook: list endpoints; if none points at this project's `stripe-webhook`, create one
     with the seven events of `HANDLED_EVENTS` (`stripe-webhook/index.ts:61-69`), mask the signing
     secret from the answer and set it as `STRIPE_WEBHOOK_SECRET` `[doc T1]`. If the endpoint exists

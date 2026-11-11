@@ -152,11 +152,21 @@ Screens branch on raw `job.status` only for control flow. A raw status-to-step m
 `lib/jobLifecycle.ts` fails `tests/lifecycle.test.mjs`. Customer Home lists the posted jobs that
 need the customer's move through `lib/homeAttention.ts`, the only place that rule lives.
 
-Cancellation: `cancel_job()` is the only exit. A cancelled job is terminal. It is free outside the
-window and within 15 minutes of acceptance inside it; otherwise a fee applies (2000 bps, floor
-$15, cap $35, never above the price). A worker cancellation refunds in full; an unfunded payment is
-voided; a completed job is refused. Pending offers are declined by `jobs_settle_offers_on_cancel`.
-The other party is notified once, with no amount in the copy.
+Cancellation: `cancel_job()` is the only exit a person can take; three server timers also close
+jobs (below). A cancelled job is terminal. It is free outside the window, within 15 minutes of
+acceptance inside it, and when the worker missed the arrival window and never marked arrived (the
+job records `worker_no_show`); otherwise a fee applies (2000 bps, floor $15, cap $35, never above
+the price). A worker cancellation refunds in full; an unfunded payment is voided; a completed job is
+refused. Pending offers are declined by `jobs_settle_offers_on_cancel`. The other party is notified
+once, with no amount in the copy.
+
+The timers (`install_lifecycle_schedules()`, service role) cancel with `cancelled_by` null; each
+person told gets one notice, with no amount. `close_unpaid_hires` (every 15 minutes) closes a hire
+with no money on it 24 hours after the hire (`unpaid`, both sides told). `expire_open_jobs`
+(hourly) closes an open market job nobody is hired for 24 hours after its arrival window ends, or
+30 days after posting when it has no date (`expired`, the owner told). `close_no_show_hires` (hourly) closes a held, dated job
+whose worker never marked arrived 24 hours after the window end plus the reported delay, with a full
+refund (`worker_no_show`, both sides told).
 
 Also in v1: needed today (`needed_today`), running late (`late_minutes`, 10/20/30 minute chips),
 day-before reminders, and repeat jobs (`job_series`: weekly, biweekly or monthly; a 24-hour first
@@ -192,7 +202,8 @@ or imitate them.
 
 Integer cents everywhere, shown only through `formatBudget()`. Writes go through the adapter
 `lib/adapters/payments.ts` into SECURITY DEFINER RPCs, never from a screen. `payments` grants
-SELECT to its two parties and nothing more. Job budgets, offer amounts and payment amounts carry a
+its two parties SELECT on 26 columns, the ones the app shows (`job_payment_state()` blanks the other
+20), and nothing more. Job budgets, offer amounts and payment amounts carry a
 10,000,000-cent ceiling enforced by CHECK constraints; tips keep a separate cap (`tip_max_bps`
 5000, `tip_max_cents` 100000 in `fee_schedule`).
 
@@ -232,8 +243,10 @@ unfunded --payment_intent.succeeded--> held --release--> held + release_requeste
   refund-directed, parked). `job_completed` rides the always-on `jobs` notification category, which
   no preference or block suppresses.
 - An open dispute freezes release: the approval RPC and the auto-release both refuse.
-- `transfer.reversed` parks the row: it keeps `release_requested_at`, clears `released_at` and
-  `transfer_ref`, and stamps `transfer_reversed_at`. Only `resolve_job_dispute()` clears the park.
+- `transfer.reversed` parks the row when no transfer of the payment is left live: it keeps
+  `release_requested_at`, clears `released_at` and `transfer_ref`, and stamps `transfer_reversed_at`.
+  A partial reversal parks nothing and waits for a person. Only `resolve_job_dispute()` (a job
+  payment) or `resolve_tip()` (a tip) clears the park.
 - `payout.paid` is deliberately unhandled; the ledger stops at `released` (`paid_out` stays in the
   enum). There is no `adjustment` payment kind: renegotiate before funding; after funding, a
   top-up rides the tip rail.
@@ -339,7 +352,8 @@ a worker assigned. Before that, offer events render as negotiation cards.
 ## Location privacy and storage
 
 The exact address and coordinates live in `job_locations`, never on `jobs`. RLS grants it to the
-job owner and the assigned worker only, and it is never added to realtime. A `job_private_details`
+job owner and the assigned worker only (the worker only while the job is `assigned` or
+`in_progress`), and it is never added to realtime. A `job_private_details`
 table was never built; `job_locations` is that surface. Open-market surfaces show approximate
 location only, enforced by RLS and not by the frontend.
 
@@ -378,10 +392,13 @@ tokens live in `push_tokens`, unregistered on sign-out. `should_notify()` honour
 person's preferences.
 
 pg_cron calls `drain_notification_outbox()` every minute (`install_push_schedule()`); it reads the
-endpoint and the `service_role` key from Supabase Vault and posts to `send-push` through pg_net.
-The call is fire-and-forget: `cron.job_run_details` shows success regardless of delivery;
-`net._http_response` holds the outcome. The local stack has no pg_cron or pg_net, so the installer
-skips there with a notice.
+endpoint and the server key from Supabase Vault and posts to `send-push` through pg_net, with the
+key on `apikey` and as Bearer. The call is fire-and-forget: `cron.job_run_details` shows success
+regardless of delivery; `net._http_response` holds the outcome. pg_cron and pg_net come from a
+migration (`20261112000100_schedules_loud.sql`), on the local stack too: `install_schedules()` raises
+when a timer skips or is missing, `schedule_health()` names missing timers and absent Vault names,
+and `set_drain_secrets()` writes the Vault secrets the drains read. `drain_probe()` makes one real
+call to each drain and `drain_probe_status()` shows its HTTP status.
 
 ## Account deletion
 
@@ -408,7 +425,8 @@ Read the rows: `RAISE NOTICE` output never shows in the SQL editor.
 RLS is on everywhere. Anything a caller cannot see under RLS is served by a narrow security
 definer function that returns the minimum: a count, an aggregate, or the caller's own row.
 `anon` has no EXECUTE by default and default EXECUTE grants are off, so a new function is
-unreachable until its migration grants it. Security definer bodies pin `search_path`; views are
+unreachable until its migration grants it; on a new cloud project too, since
+`20261112050000_access_start_state.sql` takes back the rights its defaults give. Security definer bodies pin `search_path`; views are
 `security_invoker`. Every new security definer function in `public` carries its own
 `revoke`/`grant` in the migration that creates it (`.claude/rules/supabase.md`). Client code never
 trusts its own state for a transition that matters: it calls the RPC and handles the error.
@@ -417,19 +435,20 @@ value, so the sort cannot leak the precision the rounding removes. Reports and b
 `ban_user()`; a server-side content filter (`blocked_terms`, `reject_blocked_terms`) checks posts,
 bios, services, offers, reviews and messages.
 
-## Data model: 28 tables
+## Data model: 30 tables
 
 | Table | Role | Writes | Reads |
 |---|---|---|---|
 | `jobs` | the job | RPC only | owner, assigned worker, open-market projection |
 | `job_offers` | offer chains | RPC only | the parties |
 | `bids` | legacy projection; drives the new-bid push | trigger | parties |
-| `job_locations` | exact address | RPC | owner and assigned worker |
+| `job_locations` | exact address | RPC | owner; assigned worker while assigned or in progress |
 | `job_agreements`, `job_completions` | price snapshot at accept (immutable); completion photos | trigger; `transition_job_status()` | the parties |
 | `job_series` | repeat-job series | RPC | column-level for owner |
 | `job_disputes` | reported issues | RPC; resolve is service_role | the parties |
 | `payments` | the ledger (job payments and tips) | RPC and webhook | its two parties |
 | `payment_events`, `payment_accounts`, `fee_schedule` | Stripe event inbox; Stripe customer and Connect ids; fee rates | service_role (rates: migration) | service_role |
+| `payment_transfers` | one row per Stripe transfer: its amount and how much was reversed | webhook and the settlement write-back | service_role |
 | `app_config` | remote switches (maintenance, posting, payments) | operator | everyone |
 | `profiles` | identity and reputation signals | RPC and self | column grants |
 | `worker_services` | a worker's services and prices | owner | visible rules |
@@ -443,17 +462,19 @@ bios, services, offers, reviews and messages.
 | `reports`, `blocks` | report records; blocked people | owner | admin; owner |
 | `banned_phones`, `blocked_terms` | ban list; content-filter list | `ban_user()`; operator | service_role |
 | `legal_acceptances` | Terms and Privacy acceptance | owner | owner |
+| `rate_counters` | per account and action, the current window and its hits | `rate_limit_take()` | nobody (no grant) |
 
-Plus views `conversations`, `transfers_due`, `refunds_due`, `transfers_ready`, `refunds_ready`, and
-126 functions. The schema is the numbered files in `supabase/migrations/` (baseline `20260901000000`
-to `20261108010000_lean_v1_grants.sql`). A migration file existing is not evidence staging has it: the
+Plus views `conversations`, `transfers_due`, `refunds_due`, `transfers_ready`, `refunds_ready`,
+`payment_money` and `payment_attention` (service_role), and the functions. The schema is the
+numbered files in `supabase/migrations/` (baseline `20260901000000` to
+`20261112050000_access_start_state.sql`). A migration file existing is not evidence staging has it: the
 pipeline's list-after step is.
 
 ## Edge functions (9)
 
 House style: plain `fetch` to PostgREST and Stripe, no `supabase-js`, no import map, no
-shared module beyond `_shared/serviceAuth.ts` (below), no function computes a monetary amount
-(every cent sent to Stripe is read verbatim from a `payments` column). The other import is
+shared module beyond `_shared/serviceAuth.ts` and `_shared/rateLimit.ts` (below), no function
+computes a monetary amount (every cent sent to Stripe is read verbatim from a `payments` column). The other import is
 `stripe-webhook`'s sibling `./verify.mjs`, because a Node test runs it. `supabase/functions/` is
 not type-checked.
 `supabase/config.toml` is the only source of `verify_jwt`: `stripe-webhook` and `connect-return`
@@ -478,9 +499,19 @@ after each deploy that `send-push` and `stripe-webhook` answer with their own co
 | `send-push` | drains `notification_outbox` through Expo push (100 per request, 10 passes) |
 | `send-receipts` | drains `receipt_outbox` by email (Resend) |
 
-**`_shared/serviceAuth.ts`** is the one shared module (D-20261108-10): a constant-time check of the
-service-role key in the Bearer header, POST only. `send-push`, `send-receipts` and
-`process-settlements` call it first, since the database and pg_cron wake them with that key.
+**`_shared/serviceAuth.ts`** (D-20261111-16) reads the keys: the key named `default` in
+`SUPABASE_SECRET_KEYS` and `SUPABASE_PUBLISHABLE_KEYS` first, the legacy `SUPABASE_SERVICE_ROLE_KEY`
+and `SUPABASE_ANON_KEY` as fallback; a missing or empty variable is absent. It holds the two caller
+checks. `requireServiceRole` (POST only; either server key, on `apikey` or as Bearer, constant time)
+runs first in `send-push`, `send-receipts` and `process-settlements`, since the database and pg_cron
+wake them with that key. `verifiedUser` (the auth server says who the token belongs to; nothing is
+decoded) runs in the four user functions.
+
+**`_shared/rateLimit.ts`**: `create-payment`, `payment-methods`, `connect-onboarding` and
+`connect-status` each take one hit on the caller's hourly counter (`rate_limit_take`, service role)
+right after `verifiedUser` and before any Stripe call. Limits per account per hour: 150, 600, 100
+and 300; past them, HTTP 429. A fault in the check never stops a payment: it is logged and the call
+goes on.
 
 **Webhook events**, exactly seven: `payment_intent.succeeded`, `payment_intent.canceled`,
 `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed`, `transfer.created`,
@@ -496,10 +527,13 @@ attempts, any other insert failure, an unreachable RPC or a throw is 500, so Str
 the caller. Stripe calls carry idempotency keys (`brazos-customer-<user id>`,
 `brazos-intent-<payment id>`); the intent amount is `charge_amount_cents` verbatim with
 `metadata[payment_id]`. Success returns four strings and no amount. Failures: 4xx with the RPC's
-own message, 401 no session, 409 no amount yet, 502 Stripe down. **`process-settlements`** sends
-`transfer_cents` and `refund_cents` verbatim; a transfer carries `metadata[payment_id]` (without it
-the event matches no row); idempotency keys `tr:<payment id>:<transfer_attempts>` and
-`rf:<payment id>`; it writes nothing back, since `transfer_ref` and `refund_ref` arrive by webhook.
+own message, 401 no session, 409 no amount yet, 429 past the hourly limit, 502 Stripe down.
+**`process-settlements`** sends `transfer_cents` and `refund_cents` verbatim; a transfer carries
+`metadata[payment_id]` (without it the event matches no row). One attempt = one key:
+`tr:<payment id>:<attempt>` and `rf:<payment id>:<attempt>`. Before each send
+`settlement_send_begin` asks the database, and every answer is written back at once
+(`record_settlement_sent` on a 2xx with an id, `record_settlement_result` otherwise). A key first
+used 23 hours ago is no longer offered; the row shows in `payment_attention` for the owner.
 
 ## Staging pipeline
 

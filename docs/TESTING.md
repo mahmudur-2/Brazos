@@ -40,8 +40,8 @@ Docker Desktop must be running and the local stack started with `npx supabase st
 
 Always `db:reset` before `db:test`. A schema change is done when `db:reset` is clean, `db:test`
 is fully green and `types/database.ts` is regenerated in the same commit. The local stack has
-`vault` but not `pg_cron` or `pg_net`, so anything reaching `cron.job` or `net.http_post` stops
-there and must say so. Identity in tests is a transaction-local role switch plus
+`vault`, `pg_cron` and `pg_net` (the last two come from `20261112000100_schedules_loud.sql`), so the
+timers are installed there too and a timer that skips is an error. Identity in tests is a transaction-local role switch plus
 `request.jwt.claims`. `.github/workflows/pgtap.yml` runs reset and test on a runner-started stack.
 Never run these commands, or any SQL, against a remote project: `--linked`, `--db-url` and
 `--project-ref` never appear in a run. Staging gets a migration only through the pipeline
@@ -50,6 +50,18 @@ only the owner starts. Its logic is tested offline: `tests/productionDeploy.test
 including a search of all output for every secret in raw and encoded form),
 `tests/productionWorkflow.test.mjs` (the workflow's shape) and `tests/stagingScan.test.mjs` (the
 scan, run on fixture files). Staging's `prove` job runs the same schema check first.
+
+- A local stack that has run for days can have a storage server older than its storage schema.
+  Then every upload answers 500 with "database error, code: 42P10" (seen 2026-11-11: storage server
+  v1.71.0 against schema step 79). Fix: `npx supabase stop`, then `npx supabase start` (no data is
+  lost), then `npm run db:reset`.
+- In a chat's shell the Supabase CLI sees an AI agent and prints JSON, so
+  `scripts/staging-scan.sh --pending-files` and `--applied-count` stop with FATAL on its migration
+  list. GitHub Actions is not affected. To get the table the scan reads:
+
+  ```
+  env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SESSION_ID -u CLAUDE_AGENT_SDK_VERSION -u AI_AGENT npx supabase migration list --local
+  ```
 
 ## 3. Maestro iPhone flows
 
@@ -105,7 +117,8 @@ never in this repository.
 
 - Two test accounts on staging: a **customer** (starts in "Hire help") and a **worker** (starts in
   "Find work"; finish Stripe's payout onboarding in test mode so a release can land). Sign them up
-  in the app by email so each accepts the current Terms and Privacy.
+  in the app so each accepts the current Terms and Privacy. A build with phone sign-in live offers
+  no email sign-up (`screens/WelcomeScreen.tsx`), so use the test phone numbers below.
 - Phone sign-in: in the Supabase dashboard (Authentication, Providers, Phone) add a test phone
   number with a fixed code, so the reviewer never needs a real SMS.
 - Payments: Stripe test mode. The card is `4242 4242 4242 4242`, any future expiry, any CVC, any

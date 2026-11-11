@@ -65,7 +65,7 @@ Production takes test money only (D-20261111-3).
 18. When the plan job ends, open the run's Summary. Read the PRODUCTION PLAN table.
     - You see: the files the button will apply, and the last line "PRODUCTION PLAN: PASS". On the first press, every file is new. Files the scan flags are listed and allowed, because the database is empty.
     - If you see FAIL: the sentence in that row says what to do. Do the step, then press again.
-19. Then "apply (second approval)" shows Waiting. Approve it only if the plan is what you expect. If not, click Reject. Nothing changed.
+19. Then "apply (second approval)" shows Waiting. Approve it only if the plan is what you expect. If not, click Reject. Nothing changed. Approve it within one day of pressing the button, because the local fingerprint the apply job needs is kept for one day; after that, press the button again.
 20. When the apply job ends, read the PRODUCTION table in the Summary.
     - You see: every row PASS, and the last line "PRODUCTION: PASS".
     - If you see FAIL: read the sentence in the first FAIL row. Rows after it that say "This check did not run" only follow from it. Do what the first sentence says, then press again.
