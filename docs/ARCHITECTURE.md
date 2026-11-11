@@ -527,9 +527,10 @@ one row per document and version, so a new version asks everyone again). The app
 `terms.html`, `404.html` and `_headers`. No dependency, no script tag, no cookie, no request to
 another host; colours follow `prefers-color-scheme`. The Support page's steps are written in the
 script and name real controls (Cancel job, Report, Block, Report an issue, Delete account): change
-them when those controls change. Hosting is the owner's manual upload of `site/` to Cloudflare
-Pages; nothing deploys it. `tests/buildSite.test.mjs` builds to a temp folder and checks the
-pages against the source.
+them when those controls change. Hosting is the owner's manual upload of `site/` to a Cloudflare
+Worker with static assets named `brazos` (HTML handling `auto-trailing-slash`, not found
+`404-page`), served at https://brazos.brazosapp.workers.dev/; nothing deploys it.
+`tests/buildSite.test.mjs` builds to a temp folder and checks the pages against the source.
 
 Check after a change to either text: bump the version if the substance moved, `npm run verify`,
 `node scripts/build-site.mjs`, then the owner uploads `site/` again.

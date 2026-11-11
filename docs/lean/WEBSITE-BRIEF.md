@@ -1,5 +1,9 @@
 # Brief for the next chat: the Brazos website (Privacy, Terms, Support)
 
+Outcome (2026-11-11): done. The site is live at https://brazos.brazosapp.workers.dev/ on a Cloudflare
+Worker, not Pages, so the `brazos.pages.dev` addresses below were never used. Current facts: `HANDOFF.md`
+and ledger O2. The rest of this file is the brief as it was written.
+
 Written 2026-11-10 by the orchestrating chat, at the owner's request. Read CLAUDE.md first, then this
 file. This is a standalone task; it does not continue the e2e loop in HANDOFF.md.
 
