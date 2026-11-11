@@ -474,8 +474,10 @@ pipeline's list-after step is.
 
 House style: plain `fetch` to PostgREST and Stripe, no `supabase-js`, no import map, no
 shared module beyond `_shared/serviceAuth.ts` and `_shared/rateLimit.ts` (below), no function
-computes a monetary amount (every cent sent to Stripe is read verbatim from a `payments` column). The other import is
-`stripe-webhook`'s sibling `./verify.mjs`, because a Node test runs it. `supabase/functions/` is
+computes a monetary amount (every cent sent to Stripe is read verbatim from a `payments` column). The other imports:
+a function's own sibling `.mjs` file of pure logic, because a Node test runs it (`stripe-webhook/verify.mjs`,
+`process-settlements/classify.mjs`, `connect-status/classify.mjs`, `connect-return/page.mjs`,
+`send-receipts/receipt.mjs`), and Deno's `timingSafeEqual` in `_shared/serviceAuth.ts`. `supabase/functions/` is
 not type-checked.
 `supabase/config.toml` is the only source of `verify_jwt`: `stripe-webhook` and `connect-return`
 are `false` (Stripe and a browser send no JWT); `create-payment`, `connect-onboarding`,
