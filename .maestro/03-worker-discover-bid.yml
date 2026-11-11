@@ -34,6 +34,8 @@ appId: app.brazos.mobile.preview
 - tapOn: "Search for jobs or areas"
 - inputText: "${output.marker} main"
 - tapOn: "Search"
+# Each step that closes the keyboard is followed by keyboard-settle (run 38: the driver died as iOS retired it).
+- runFlow: subflows/keyboard-settle.yml
 - extendedWaitUntil:
     visible: '${output.marker} main(, needed today)?'
     timeout: 60000
@@ -102,6 +104,7 @@ appId: app.brazos.mobile.preview
 - tapOn: "Search for jobs or areas"
 - inputText: "${output.marker} side"
 - tapOn: "Search"
+- runFlow: subflows/keyboard-settle.yml
 - extendedWaitUntil:
     visible: '${output.marker} side(, needed today)?'
     timeout: 60000
@@ -118,6 +121,7 @@ appId: app.brazos.mobile.preview
 - tapOn: "e.g. 45"
 - inputText: "40"
 - tapOn: "YOU.RE BIDDING ON"
+- runFlow: subflows/keyboard-settle.yml
 # A bid needs a pitch (components/OfferComposer.tsx).
 - tapOn: "Send bid"
 - extendedWaitUntil:
@@ -127,6 +131,7 @@ appId: app.brazos.mobile.preview
 - tapOn: 'Why should the customer pick you\?'
 - inputText: "I have a dolly and can do it tomorrow morning."
 - tapOn: "YOU.RE BIDDING ON"
+- runFlow: subflows/keyboard-settle.yml
 - tapOn: "Tomorrow"
 - takeScreenshot: 03-side-bid-form
 - tapOn: "Send bid"
@@ -165,9 +170,11 @@ appId: app.brazos.mobile.preview
 - tapOn: "e.g. 45"
 - inputText: "40"
 - tapOn: "YOU.RE BIDDING ON"
+- runFlow: subflows/keyboard-settle.yml
 - tapOn: 'Why should the customer pick you\?'
 - inputText: "I have a dolly and can do it tomorrow morning."
 - tapOn: "YOU.RE BIDDING ON"
+- runFlow: subflows/keyboard-settle.yml
 - tapOn: "Send bid"
 - extendedWaitUntil:
     visible: 'Bid Sent|Get notified\?|Could not send bid'

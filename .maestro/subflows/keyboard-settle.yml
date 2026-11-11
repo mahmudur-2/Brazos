@@ -1,0 +1,8 @@
+appId: app.brazos.mobile.preview
+# Shared: about 4.5 s after the keyboard hides, iOS retires its keyboard process (InputUI). A Maestro screen read
+# in flight at that instant can kill Maestro's iOS driver (mobile-dev-inc/maestro#3538; runs 37 and 38, flow 03,
+# both right after the side job's "Send bid"). This holds still for 6 s on the Mac alone (a clock loop in Maestro's
+# JS; nothing reaches the simulator), so that instant passes with no read in flight.
+# Call it right after a step that closes the keyboard.
+---
+- evalScript: "${var end = Date.now() + 6000; while (Date.now() < end);}"
