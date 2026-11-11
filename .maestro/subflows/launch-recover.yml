@@ -2,6 +2,8 @@ appId: app.brazos.mobile.preview
 # Run 28: after a clean launch reinstalled the app, the simulator said it was "unknown to FrontBoard"
 # and the launch failed. The clean launch is optional; this waits for Welcome and relaunches if it never came.
 ---
+# Every clean launch comes straight here, so the launch's keyboard-process instant is waited out here.
+- runFlow: launch-settle.yml
 - extendedWaitUntil:
     visible: "I already have an account"
     timeout: 30000
@@ -16,6 +18,7 @@ appId: app.brazos.mobile.preview
             - launchApp:
                 permissions:
                   all: allow
+            - runFlow: launch-settle.yml
             - extendedWaitUntil:
                 visible: "I already have an account"
                 timeout: 30000

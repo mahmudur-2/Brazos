@@ -98,6 +98,7 @@ appId: app.brazos.mobile.preview
 # ─── Side job: a written bid, the pitch rule, withdraw, then bid again ───
 - launchApp:
     stopApp: true
+- runFlow: subflows/launch-settle.yml
 - extendedWaitUntil:
     visible: "Search for jobs or areas"
     timeout: 60000

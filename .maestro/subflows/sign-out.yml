@@ -4,6 +4,8 @@ appId: app.brazos.mobile.preview
 ---
 - launchApp:
     stopApp: true
+# Run 39: flow 02's driver died on the first read after this relaunch.
+- runFlow: launch-settle.yml
 - extendedWaitUntil:
     visible: 'What do you need done\?|Search for jobs or areas'
     timeout: 60000

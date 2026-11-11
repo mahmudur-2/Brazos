@@ -1,0 +1,10 @@
+appId: app.brazos.mobile.preview
+# Shared: after every launch, iOS's keyboard process (InputUI) attaches to the new app and retires about 4.4 s
+# later: 7.6 to 14.0 s after the launch across run 39's 33 launches. A Maestro screen read in flight at that
+# instant can kill Maestro's iOS driver (mobile-dev-inc/maestro#3538; run 39, flow 02: the read right after
+# sign-out's relaunch). This holds still for 18 s on the Mac alone (Maestro's JS clock; nothing reaches the
+# simulator), so that instant passes with no read in flight. Call it right after each launchApp.
+---
+- evalScript: "${var end = Date.now() + 6000; while (Date.now() < end);}"
+- evalScript: "${var end = Date.now() + 6000; while (Date.now() < end);}"
+- evalScript: "${var end = Date.now() + 6000; while (Date.now() < end);}"

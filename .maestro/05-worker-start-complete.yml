@@ -71,6 +71,7 @@ appId: app.brazos.mobile.preview
 # ─── Main job: hired and held → on my way → late → start → complete ──────
 - launchApp:
     stopApp: true
+- runFlow: subflows/launch-settle.yml
 - extendedWaitUntil:
     visible: "Search for jobs or areas"
     timeout: 60000

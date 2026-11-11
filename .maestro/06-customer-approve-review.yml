@@ -131,6 +131,7 @@ appId: app.brazos.mobile.preview
 # ─── Side job: decline B's $42 counter on Bid Detail ─────────────────────
 - launchApp:
     stopApp: true
+- runFlow: subflows/launch-settle.yml
 - extendedWaitUntil:
     visible: 'What do you need done\?'
     timeout: 60000
@@ -181,6 +182,7 @@ appId: app.brazos.mobile.preview
 # ─── Reuse a past job: post the main job again, then delete the copy ─────
 - launchApp:
     stopApp: true
+- runFlow: subflows/launch-settle.yml
 - extendedWaitUntil:
     visible: 'What do you need done\?'
     timeout: 60000

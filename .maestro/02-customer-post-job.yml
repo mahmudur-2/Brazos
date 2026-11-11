@@ -283,6 +283,7 @@ appId: app.brazos.mobile.preview
 # ─── All services: the sheet starts a post in the picked category ────────
 - launchApp:
     stopApp: true
+- runFlow: subflows/launch-settle.yml
 - extendedWaitUntil:
     visible: 'What do you need done\?'
     timeout: 60000

@@ -204,6 +204,7 @@ appId: app.brazos.mobile.preview
 # ─── The card the checkout saved, then removed (leaves the account card-free) ─
 - launchApp:
     stopApp: true
+- runFlow: subflows/launch-settle.yml
 - extendedWaitUntil:
     visible: 'What do you need done\?'
     timeout: 60000
