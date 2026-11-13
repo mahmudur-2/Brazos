@@ -13,7 +13,7 @@ memory `brazos-directing-prompt-and-guide`. To the owner: his steps in the chat,
 empty Supabase project that changes only by one GitHub button. Test money only (Stripe not live). No LLC
 yet. The repo stays public. The old production project is never contacted (the owner paused it).
 
-**Production set-up: the button passed (2026-11-13). No app build points at production yet.**
+**Production set-up: the button passed (2026-11-13); build 11 points at production; sign-in works.**
 - New Supabase project `brazos-production`, ref `agjwgvclzvjmpqhjutpd` (us-east-1), made by the owner.
 - Stripe sandbox "Brazos production" (`acct_1UbCNU3EJxHAJMVZ`): Connect platform profile complete, the
   liability acknowledgement shows "Completed November 11, 2026". Not proven: a worker's payout set-up
@@ -21,9 +21,6 @@ yet. The repo stays public. The old production project is never contacted (the o
 - Twilio: the account has credit; the Verify service "Brazos" (SMS + email) existed and is reused.
 - GitHub environment "Production": reviewer `mahmudur-2`, branch `mainexpo`, 7 secrets present. A custom
   rule `TestSprite` was on; the owner turned it off (the rules API now lists no custom rule).
-- **Runs 43369079390 and 43373752766 failed** at "Function secret STRIPE_SECRET_KEY" (HTTP 403): the
-  first token `production button` had no row "Edge Function Secrets", and the second run still used
-  it (the new token was not yet made). Both applied the database and the functions.
 - **Run 43435759116 (at `78571b9`): "PRODUCTION: PASS", all 20 rows.** The owner made and pasted the
   new token `production button 2` (10 rows: `docs/production/owner-steps.md` step 5). The chat pressed
   the button and approved both steps at the owner's word ("do everything yourself from now on");
@@ -33,8 +30,6 @@ yet. The repo stays public. The old production project is never contacted (the o
   connect-status HTTP 401, stripe-webhook HTTP 400 (each the function's own answer); the timers reach
   send-push, process-settlements and send-receipts (HTTP 200); phone sign-in through Twilio Verify,
   email sign-in off.
-- After the pass the chat deleted the old token `production button` (Supabase: "Successfully deleted
-  access token"; the owner's word).
 - Not proven by the button: a real sign-in, a job or a payment on production.
 - expo.dev, step G done (2026-11-13). `production` holds `EXPO_PUBLIC_SUPABASE_URL` =
   `https://agjwgvclzvjmpqhjutpd.supabase.co`, `EXPO_PUBLIC_SUPABASE_KEY` (owner's paste,
@@ -48,6 +43,10 @@ yet. The repo stays public. The old production project is never contacted (the o
 - Build gate (reader, `node --test tests/buildGate.test.mjs` 21/21): it stops a wrong URL ref and a
   legacy JWT key of another project; it does NOT catch a `sb_publishable_` key of another project and
   never checks the Stripe key. The first production sign-in is the proof for the Supabase key.
+- **First production build and sign-in (2026-11-13):** the owner ran `npm run release:production`;
+  build 11 (1.0.0) reached TestFlight. His first try failed (Twilio 21608, Blocked 1); he added his
+  number as a Twilio verified caller ID and then signed in (his word; the earlier log already showed
+  the request reached `agjwgvclzvjmpqhjutpd` and made his user, so the Supabase key is right).
 - The `production` and `testflight` profiles both build variant `production` (bundle
   `app.brazos.mobile`, App Store Connect app `6832193439`): a production build lands in the same
   TestFlight app as the staging builds; build 10 stays installable there for staging.
@@ -74,10 +73,11 @@ needed on a device. All rows and proof: `docs/lean/AUDIT-LEDGER.md`, `docs/lean/
 
 ## Blocked
 
-**1. The first production build is the owner's** (it goes to Apple): `npm run release:production`.
-Then his first sign-in on that build proves the Supabase key. List names without values:
-`npx eas env:list <env> --format long | grep -iE '^\s*(Name|Environments)'` (`--non-interactive`
-does not exist on `env:list`).
+**1. Twilio Primary Compliance Profile is the owner's** (identity form, Twilio reviews it). Until it is
+approved, Twilio sends codes only to "verified caller IDs" (error 21608, read in the production auth
+log 2026-11-13 19:12 UTC; the account `AC…9497` is paid, "Active", $20.00, and is the one production
+uses). Form: Twilio console, Trust Hub, compliance profiles, primary. List expo.dev names without
+values: `npx eas env:list <env> --format long | grep -iE '^\s*(Name|Environments)'`.
 
 **2. Open flaw, the owner has not decided:** a phone user gets no email receipts
 (`supabase/functions/send-receipts/index.ts:109`: sign-in email only).
@@ -91,7 +91,9 @@ in App Store Connect (O2). The sign-in codes come from Twilio Verify.
 
 ## Next
 
-1. **After Blocked 1:** a sign-in, a job and a test payment on production. The Production button is needed again only after a new migration or function change. A new chat asks
+1. **A job and a test payment on production:** needs a second account (a client cannot bid on its
+   own job, baseline migration), so a second phone number, added as a verified caller ID until
+   Blocked 1 is approved. The Production button is needed again only after a new migration or function change. A new chat asks
    the owner first, reads the plan, and approves only when it shows nothing unexpected. Read results:
    `gh run view <id> -R mahmudur-2/Brazos --json status,conclusion,jobs`, `--log-failed` after the
    end, `gh api repos/mahmudur-2/Brazos/actions/runs/<id>/approvals`. No push to `mainexpo` while a
