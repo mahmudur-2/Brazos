@@ -2,7 +2,7 @@
 
 Resume: read CLAUDE.md, this file, then `git log -25 --oneline` and `git status`, then do "Next". Git owns
 branch, HEAD and tree; older versions of this file are in git history. Written 2026-11-13 by the
-orchestrating chat (Fable 5.2); an Opus 5.5 chat takes over (the owner's word). Nothing runs. Nothing
+orchestrating chat (Fable 5.2), updated the same day by the Opus 5.5 chat that took over as director. Nothing runs. Nothing
 waits in the work tree. The owner's directing prompt and the Karpathy Guide, word for word: project
 memory `brazos-directing-prompt-and-guide`. To the owner: his steps in the chat, in few words, never
 "read this document".
@@ -36,12 +36,21 @@ yet. The repo stays public. The old production project is never contacted (the o
 - After the pass the chat deleted the old token `production button` (Supabase: "Successfully deleted
   access token"; the owner's word).
 - Not proven by the button: a real sign-in, a job or a payment on production.
-- expo.dev, environment `production`: the chat set `EXPO_PUBLIC_SUPABASE_URL` to
-  `https://agjwgvclzvjmpqhjutpd.supabase.co` (2026-11-13, `eas env:update`, read back with
-  `eas env:get`; before that it held the RETIRED project's URL; the owner's word: "do everything
-  yourself"). The two keys there were NOT read or changed by the chat: take them as the retired
-  project's until the owner pastes the new ones. **No production build before both pastes** (not
-  checked: whether the gate catches a key that belongs to another project).
+- expo.dev, step G done (2026-11-13). `production` holds `EXPO_PUBLIC_SUPABASE_URL` =
+  `https://agjwgvclzvjmpqhjutpd.supabase.co`, `EXPO_PUBLIC_SUPABASE_KEY` (owner's paste,
+  `sb_publishable_`) and `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` (owner's paste). The owner first pasted
+  the Stripe key into `preview`; the chat moved that variable to `production` (`eas env:update
+  --variable-environment preview --environment production`) and the owner pasted the staging key into
+  `preview` again. Checked by counts of the account id inside each key, no value printed:
+  `production` = sandbox "Brazos production" (`acct_1UbCNU3EJxHAJMVZ`), `preview` = "Brazos sandbox"
+  (`acct_1U2Ol543w4QKhn3t`), no `pk_live`. NOT checkable without a sign-in: that the Supabase key
+  belongs to `brazos-production` (a `sb_publishable_` key holds no ref).
+- Build gate (reader, `node --test tests/buildGate.test.mjs` 21/21): it stops a wrong URL ref and a
+  legacy JWT key of another project; it does NOT catch a `sb_publishable_` key of another project and
+  never checks the Stripe key. The first production sign-in is the proof for the Supabase key.
+- The `production` and `testflight` profiles both build variant `production` (bundle
+  `app.brazos.mobile`, App Store Connect app `6832193439`): a production build lands in the same
+  TestFlight app as the staging builds; build 10 stays installable there for staging.
 
 **Code since the last handoff (pushed; CI run 43370777178 success at `064c003`)**
 - `c1ac2a5`: the `production` build profile is pinned to the new ref (`PRODUCTION_REF` in
@@ -65,11 +74,10 @@ needed on a device. All rows and proof: `docs/lean/AUDIT-LEDGER.md`, `docs/lean/
 
 ## Blocked
 
-**1. Step G: two pastes are the owner's** (`docs/production/owner-steps.md` step 21), on expo.dev,
-environment `production`: `EXPO_PUBLIC_SUPABASE_KEY` (Supabase `brazos-production`, API Keys, the
-Publishable key `default`) and `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` (the `pk_test_` key of the sandbox
-"Brazos production"). A chat must not type a key. After them a chat checks the three names are
-there (`eas env:list`, names only; never print a key).
+**1. The first production build is the owner's** (it goes to Apple): `npm run release:production`.
+Then his first sign-in on that build proves the Supabase key. List names without values:
+`npx eas env:list <env> --format long | grep -iE '^\s*(Name|Environments)'` (`--non-interactive`
+does not exist on `env:list`).
 
 **2. Open flaw, the owner has not decided:** a phone user gets no email receipts
 (`supabase/functions/send-receipts/index.ts:109`: sign-in email only).
@@ -83,8 +91,7 @@ in App Store Connect (O2). The sign-in codes come from Twilio Verify.
 
 ## Next
 
-1. **After step G:** a production app build and its first sign-in are the owner's (Apple). The
-   Production button is needed again only after a new migration or function change. A new chat asks
+1. **After Blocked 1:** a sign-in, a job and a test payment on production. The Production button is needed again only after a new migration or function change. A new chat asks
    the owner first, reads the plan, and approves only when it shows nothing unexpected. Read results:
    `gh run view <id> -R mahmudur-2/Brazos --json status,conclusion,jobs`, `--log-failed` after the
    end, `gh api repos/mahmudur-2/Brazos/actions/runs/<id>/approvals`. No push to `mainexpo` while a
