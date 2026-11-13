@@ -7,11 +7,10 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   EXPECTED_REF,
-  PRODUCTION_REF_NOT_WRITTEN,
   evaluateGate,
   parseEnvText,
 } from '../scripts/eas-build-pre-install.mjs';
-import { RETIRED_PRODUCTION_REF } from '../scripts/supabase-ref.mjs';
+import { PRODUCTION_REF, RETIRED_PRODUCTION_REF } from '../scripts/supabase-ref.mjs';
 
 // The EAS build gate, exercised the way EAS runs it: spawned as a process
 // with an injected environment, asserting exit code plus the named reason.
@@ -23,8 +22,9 @@ const GATE = fileURLToPath(new URL('../scripts/eas-build-pre-install.mjs', impor
 
 const STAGING = EXPECTED_REF.development;
 // The retired production project: no profile may build against it. The new
-// production ref is not written yet, so EXPECTED_REF.production is null.
+// production project is the one `production` builds against.
 const RETIRED = RETIRED_PRODUCTION_REF;
+const PRODUCTION = PRODUCTION_REF;
 
 // A legacy-shaped Supabase key is a JWT whose payload carries { ref }. The
 // header must be real base64 JSON so the fixture starts with eyJ like every
@@ -42,6 +42,10 @@ const stagingEnv = () => ({
 const retiredEnv = () => ({
   EXPO_PUBLIC_SUPABASE_URL: urlFor(RETIRED),
   EXPO_PUBLIC_SUPABASE_KEY: jwtFor(RETIRED),
+});
+const productionEnv = () => ({
+  EXPO_PUBLIC_SUPABASE_URL: urlFor(PRODUCTION),
+  EXPO_PUBLIC_SUPABASE_KEY: jwtFor(PRODUCTION),
 });
 
 // Spawn the gate in a throwaway directory (so the developer's real .env can
@@ -110,14 +114,26 @@ test('development profile with the retired production env fails closed', () => {
   assertFailure(result, `resolves to ${RETIRED}, expected ${STAGING}`);
 });
 
-// `production` waits for the new project's ref (docs/production/owner-steps.md):
-// until a chat writes it into the gate, every production build fails with a
-// named reason, whatever it was handed. `testflight` is the staging store build
-// (D-20260905-1) and must refuse the retired production project.
-test('production profile fails closed, named, until the new production ref is written', () => {
-  for (const env of [stagingEnv(), retiredEnv()]) {
+// `production` builds against the new production project (D-20261111-1) and
+// nothing else. `testflight` is the staging store build (D-20260905-1) and
+// must refuse the retired production project.
+test('production profile with the new production env passes', () => {
+  const result = runGate({ EAS_BUILD_PROFILE: 'production', ...productionEnv() });
+  assert.equal(result.status, 0, `stdout: ${result.stdout}\nstderr: ${result.stderr}`);
+  assert.ok(result.stdout.includes(`gate: OK — "production" builds against ${PRODUCTION}.`));
+});
+
+test('production profile with the staging or the retired env fails closed, named', () => {
+  for (const [ref, env] of [[STAGING, stagingEnv()], [RETIRED, retiredEnv()]]) {
     const result = runGate({ EAS_BUILD_PROFILE: 'production', ...env });
-    assertFailure(result, PRODUCTION_REF_NOT_WRITTEN);
+    assertFailure(result, `resolves to ${ref}, expected ${PRODUCTION}`);
+  }
+});
+
+test('no other profile accepts the production project', () => {
+  for (const profile of ['development', 'preview', 'e2e-test', 'testflight']) {
+    const result = runGate({ EAS_BUILD_PROFILE: profile, ...productionEnv() });
+    assertFailure(result, `resolves to ${PRODUCTION}, expected ${STAGING}`);
   }
 });
 
@@ -238,8 +254,10 @@ test('every profile in the expected-ref map is one of the five known profiles', 
   assert.equal(EXPECTED_REF.preview, STAGING);
   assert.equal(EXPECTED_REF['e2e-test'], STAGING);
   assert.equal(EXPECTED_REF.testflight, STAGING);
-  // Not written yet: the owner creates the new production project first.
-  assert.equal(EXPECTED_REF.production, null);
+  // The new production project, distinct from staging and the retired one.
+  assert.equal(EXPECTED_REF.production, PRODUCTION);
+  assert.notEqual(PRODUCTION, STAGING);
+  assert.notEqual(PRODUCTION, RETIRED);
   // No profile may reach the retired project, and only `production` is off
   // staging. Counted rather than listed, so a new pin has to be deliberate.
   assert.equal(Object.values(EXPECTED_REF).includes(RETIRED), false);
@@ -306,6 +324,7 @@ test('the preview profile is a standalone staging build on its own channel', () 
   // no project, no URL and no key at all — not the production ref, not the
   // staging one, and nothing key-shaped.
   assert.equal(text.includes(RETIRED), false, 'no retired production ref in eas.json');
+  assert.equal(text.includes(PRODUCTION), false, 'no production ref in eas.json');
   assert.equal(text.includes(STAGING), false, 'no staging ref in eas.json');
   assert.doesNotMatch(text, /supabase\.(co|in)/i, 'no Supabase URL may appear in eas.json');
   assert.doesNotMatch(text, /\beyJ|sb_publishable_|sb_pu_|sb_secret_/, 'no key may appear in eas.json');

@@ -80,7 +80,7 @@ What the table means: each row is one check that ran. PASS means the button saw 
     - `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY`: the `pk_test_` key from step 8
 
     Put them on expo.dev: the project, Environment variables, environment `production`.
-22. Give a chat the ref only (it is not a secret). The chat writes it into the build gate (`scripts/eas-build-pre-install.mjs`). Until then, every production build stops at the gate.
+22. Done 2026-11-13: the ref is in the build gate (`PRODUCTION_REF` in `scripts/supabase-ref.mjs`, used by `scripts/eas-build-pre-install.mjs`). A production build against any other project stops at the gate.
 23. Receipts: until you set `RESEND_API_KEY` and `RECEIPT_FROM` on the project, each receipt is marked "skipped", with the reason, and logged. No email goes out.
 24. The Stripe sandbox now has a webhook to `https://<ref>.supabase.co/functions/v1/stripe-webhook`. Do not change it. If you delete it, press the button again.
 

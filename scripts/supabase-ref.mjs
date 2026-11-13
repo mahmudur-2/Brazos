@@ -47,14 +47,14 @@ export function refFromJwt(k) {
  * Production button refuse it, no build profile expects it, and the literal
  * stays the mechanical deny sentinel in CLAUDE.md.
  *
- * THE NEW PRODUCTION REF IS NOT HERE YET, on purpose. It exists only once the
- * owner creates the project (docs/production/owner-steps.md); the Production
- * button reads it from its SUPABASE_PROJECT_REF secret. Until a chat writes it
- * into eas-build-pre-install.mjs, a `production` build fails with a named
- * reason instead of guessing.
+ * PRODUCTION_REF: the new production project (D-20261111-1), written here
+ * 2026-11-13. Only the `production` EAS build profile is pinned to it
+ * (eas-build-pre-install.mjs); the Production button reads its own
+ * SUPABASE_PROJECT_REF secret and does not import this.
  */
 export const STAGING_REF = 'zzkumxcjtbqoselzptig';
 export const RETIRED_PRODUCTION_REF = 'avkighsiufeefyycbebf';
+export const PRODUCTION_REF = 'agjwgvclzvjmpqhjutpd';
 
 /**
  * SUPABASE_KEY format classification — one rule for both gates.
