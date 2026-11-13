@@ -2,7 +2,10 @@
 
 Resume: read CLAUDE.md, this file, then `git log -25 --oneline` and `git status`, then do "Next". Git owns
 branch, HEAD and tree; older versions of this file are in git history. Written 2026-11-13 by the
-orchestrating chat (Fable 5.2). Nothing runs. Nothing waits in the work tree.
+orchestrating chat (Fable 5.2); an Opus 5.5 chat takes over (the owner's word). Nothing runs. Nothing
+waits in the work tree. The owner's directing prompt and the Karpathy Guide, word for word: project
+memory `brazos-directing-prompt-and-guide`. To the owner: his steps in the chat, in few words, never
+"read this document".
 
 ## Now
 
@@ -32,11 +35,13 @@ yet. The repo stays public. The old production project is never contacted (the o
   email sign-in off.
 - After the pass the chat deleted the old token `production button` (Supabase: "Successfully deleted
   access token"; the owner's word).
-- Not proven by the button: a real sign-in, a job or a payment on production. On expo.dev the
-  `production` environment still holds the RETIRED project's URL in `EXPO_PUBLIC_SUPABASE_URL` (read
-  with `eas env:get`, 2026-11-13), so the build gate stops a production build until step G. The chat
-  did not change it: the URL and the two keys must change together (not checked: whether the gate
-  catches a key that belongs to another project).
+- Not proven by the button: a real sign-in, a job or a payment on production.
+- expo.dev, environment `production`: the chat set `EXPO_PUBLIC_SUPABASE_URL` to
+  `https://agjwgvclzvjmpqhjutpd.supabase.co` (2026-11-13, `eas env:update`, read back with
+  `eas env:get`; before that it held the RETIRED project's URL; the owner's word: "do everything
+  yourself"). The two keys there were NOT read or changed by the chat: take them as the retired
+  project's until the owner pastes the new ones. **No production build before both pastes** (not
+  checked: whether the gate catches a key that belongs to another project).
 
 **Code since the last handoff (pushed; CI run 43370777178 success at `064c003`)**
 - `c1ac2a5`: the `production` build profile is pinned to the new ref (`PRODUCTION_REF` in
@@ -60,14 +65,17 @@ needed on a device. All rows and proof: `docs/lean/AUDIT-LEDGER.md`, `docs/lean/
 
 ## Blocked
 
-**1. Step G is the owner's step** (`docs/production/owner-steps.md` step 21): three values in the
-`production` environment on expo.dev, changed in one sitting. Two are keys; a chat must not type a key.
+**1. Step G: two pastes are the owner's** (`docs/production/owner-steps.md` step 21), on expo.dev,
+environment `production`: `EXPO_PUBLIC_SUPABASE_KEY` (Supabase `brazos-production`, API Keys, the
+Publishable key `default`) and `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` (the `pk_test_` key of the sandbox
+"Brazos production"). A chat must not type a key. After them a chat checks the three names are
+there (`eas env:list`, names only; never print a key).
 
 **2. Open flaw, the owner has not decided:** a phone user gets no email receipts
 (`supabase/functions/send-receipts/index.ts:109`: sign-in email only).
 
 **3. Steps that only the owner does** (a chat refuses them, also with "full control"): identity or bank
-values on Stripe's page; passwords, keys and tokens (also the three expo.dev values of step G); legal
+values on Stripe's page; passwords, keys and tokens (also the two key values of step G); legal
 acknowledgements; anything sent to Apple.
 
 **4. Owner items O1-O8** are in the ledger. Not answered: arbitration or New York courts; the two URLs
