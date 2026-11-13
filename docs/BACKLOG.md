@@ -8,6 +8,11 @@ first. Ranked lists are in the owner's order.
   chips and the server use the New York market date (`lib/runningLate.ts`): a phone outside New York
   between 7 PM and midnight New York time posts "Today" as the wrong market day (e2e run 15 on a UTC
   runner, 2026-11-08; the runner now uses New York time, the app is unchanged).
+- After Stripe's payout set-up, the return page (`supabase/functions/connect-return`) shows its HTML
+  source as text and never opens the app: Supabase serves HTML from `*.supabase.co` as text/plain, so
+  its redirect script never runs. A real worker is left on a code page with no way back (seen on
+  production by the owner, 2026-11-13; the set-up itself succeeded). Likely fix: answer with an HTTP
+  302 to `brazos://payouts?from=return` instead of a page; then one Production button press.
 
 none open
 
