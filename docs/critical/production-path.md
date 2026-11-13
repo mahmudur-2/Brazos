@@ -289,7 +289,8 @@ approves once per run. Steps in order:
 14. Timers: `schedule_health()` must show no missing Vault name; wait up to 180 s for a `succeeded`
     run of `brazos-drain-push` that started after step 13.
 15. Sign-in settings: `PATCH /v1/projects/{ref}/config/auth` with the wanted values `[doc S3]`, then
-    read back and compare. `sms_test_otp` is never sent, so the owner's test numbers stay untouched.
+    read back and compare. `sms_test_otp` is sent only when the optional secret `PRODUCTION_TEST_OTP`
+    (`<digits>=<6-digit code>`) is set, with an expiry 7 days later; unset, test numbers stay untouched.
 16. Fingerprint: start the local stack on the runner, reset, `compare local hosted`.
 17. Summary: one line per check with PASS or FAIL, then `PRODUCTION: PASS` or
     `PRODUCTION: FAIL at <check>`. Stop the local stack under `if: always()`.

@@ -126,9 +126,12 @@ test('secrets reach a step through env only, by their own name, never inside run
     const m = line.match(/^ {10}([A-Z_]+): \$\{\{ secrets\.([A-Z_]+) \}\}$/);
     assert.ok(m, `secret outside a step env mapping: ${line.trim()}`);
     assert.equal(m[1], m[2], `${m[2]} is renamed to ${m[1]}`);
-    assert.ok(SEVEN.includes(m[2]), `${m[2]} is not one of the seven secrets`);
+    assert.ok([...SEVEN, 'PRODUCTION_TEST_OTP'].includes(m[2]), `${m[2]} is not one of the seven secrets`);
   }
   for (const name of SEVEN) assert.match(text, new RegExp(`secrets\\.${name}\\b`), `${name} is never used`);
+  // The optional test sign-in number reaches the sign-in step only.
+  const otpSteps = steps(P.apply).concat(steps(P.plan)).filter((s) => s.includes('secrets.PRODUCTION_TEST_OTP'));
+  assert.deepEqual(otpSteps.map(stepId), ['auth']);
   // No expression is ever expanded into shell text: inputs and outputs arrive through env too.
   for (const [name, job] of Object.entries(P)) {
     for (const step of steps(job)) {

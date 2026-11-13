@@ -661,6 +661,40 @@ test('auth: the PATCH carries the file and the three Twilio values, never a test
   assert.deepEqual(authDiff({ a: 8, b: false }, { a: '8', b: false }), []);
 });
 
+const TEST_OTP = '15550000000=123456'; // a fake test value, never a real number
+
+test('auth: PRODUCTION_TEST_OTP adds one test sign-in number for 7 days, read back, never printed', async () => {
+  const w = world();
+  const r = await cmd(w, ['auth'], { PRODUCTION_TEST_OTP: TEST_OTP });
+  assert.equal(r.code, 0, r.log.join('\n'));
+  const body = JSON.parse(w.timeline.find((e) => e.kind === 'request' && e.method === 'PATCH').body);
+  assert.equal(body.sms_test_otp, TEST_OTP);
+  assert.equal(body.sms_test_otp_valid_until, '2026-11-19T10:00:00.000Z');
+  const { compare } = authWanted({ ...SECRETS, PRODUCTION_TEST_OTP: TEST_OTP }, w.now);
+  assert.equal(compare.sms_test_otp, TEST_OTP, 'the test number is read back');
+  assert.equal('sms_test_otp_valid_until' in compare, false);
+  assert.equal(r.outputs().note, 'phone sign-in through Twilio Verify; email sign-in off; one test sign-in number until 2026-11-19');
+  const printed = [r.log.join('\n'), JSON.stringify(r.outputs()), r.summary()].join('\n');
+  for (const part of [TEST_OTP, ...TEST_OTP.split('=')]) assert.equal(printed.includes(part), false, 'the test number was printed');
+
+  // A test number that did not take is named, not shown.
+  const stuck = await cmd(world({ authTakes: false }), ['auth'], { PRODUCTION_TEST_OTP: TEST_OTP });
+  assert.match(stuck.outputs().reason, /did not take: .*sms_test_otp/);
+  assert.equal(JSON.stringify(stuck.outputs()).includes(TEST_OTP.split('=')[0]), false);
+});
+
+test('auth: a malformed PRODUCTION_TEST_OTP stops before any change and is never printed', async () => {
+  for (const bad of ['+15550000000=123456', '15550000000=12345', '15550000000', '15550000000=123456,15550000001=123456']) {
+    const w = world();
+    const r = await cmd(w, ['auth'], { PRODUCTION_TEST_OTP: bad });
+    assert.equal(r.code, 1, bad);
+    assert.match(r.outputs().reason, /PRODUCTION_TEST_OTP is not/);
+    assert.equal(w.timeline.some((e) => e.kind === 'request' && e.method === 'PATCH'), false, 'a PATCH was sent');
+    const printed = [r.log.join('\n'), JSON.stringify(r.outputs()), r.summary()].join('\n');
+    assert.equal(printed.includes('15550000000'), false, `the value was printed: ${bad}`);
+  }
+});
+
 // ---- fingerprint and the table ---------------------------------------------------------------------
 
 test('fingerprint: the proof tool gets the project URL and the server key, and nothing else', async () => {

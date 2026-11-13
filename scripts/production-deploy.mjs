@@ -649,15 +649,28 @@ async function timers(io) {
 
 // ---- sign-in settings ----------------------------------------------------------------------------
 
-/** The PATCH body, and the part of it that is read back (never the Twilio token). */
-export function authWanted(env, root = ROOT) {
+const TEST_OTP_DAYS = 7;
+
+/**
+ * The PATCH body, and the part of it that is read back (never the Twilio token). The optional
+ * PRODUCTION_TEST_OTP adds one test sign-in number for 7 days; its value is never printed.
+ */
+export function authWanted(env, now, root = ROOT) {
   const file = JSON.parse(readFileSync(path.join(root, 'scripts', 'production-auth.json'), 'utf8'));
   const compare = {
     ...file,
     sms_twilio_verify_account_sid: env.TWILIO_ACCOUNT_SID,
     sms_twilio_verify_message_service_sid: env.TWILIO_VERIFY_SERVICE_SID,
   };
-  return { body: { ...compare, sms_twilio_verify_auth_token: env.TWILIO_AUTH_TOKEN }, compare };
+  const body = { ...compare, sms_twilio_verify_auth_token: env.TWILIO_AUTH_TOKEN };
+  const otp = env.PRODUCTION_TEST_OTP;
+  if (!otp) return { body, compare, testUntil: null };
+  if (!/^\d{8,15}=\d{6}$/.test(otp)) {
+    stop('PRODUCTION_TEST_OTP is not one phone number in digits, an equals sign and a 6-digit code.');
+  }
+  const testUntil = new Date(now + TEST_OTP_DAYS * 86_400_000).toISOString();
+  compare.sms_test_otp = otp;
+  return { body: { ...body, sms_test_otp: otp, sms_test_otp_valid_until: testUntil }, compare, testUntil };
 }
 
 /** Names of the wanted settings the project does not hold. Names only, never values. */
@@ -670,7 +683,7 @@ async function auth(io) {
   for (const name of ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_VERIFY_SERVICE_SID']) {
     if (!io.env[name]) stop(`${name} is missing from the production environment.`);
   }
-  const { body, compare } = authWanted(io.env);
+  const { body, compare, testUntil } = authWanted(io.env, io.now());
   const res = await mgmt(io, ref, '/config/auth', { method: 'PATCH', json: body });
   if (!res.ok) stop(`Supabase refused the sign-in settings (HTTP ${res.status}).`);
   const back = await mgmt(io, ref, '/config/auth');
@@ -678,7 +691,11 @@ async function auth(io) {
   const differ = authDiff(compare, back.json);
   if (differ.length > 0) stop(`These sign-in settings did not take: ${differ.join(', ')}.`);
   io.log(`Sign-in settings: ${Object.keys(compare).length} read back as wanted.`);
-  note(io, 'phone sign-in through Twilio Verify; email sign-in off');
+  note(
+    io,
+    'phone sign-in through Twilio Verify; email sign-in off' +
+      (testUntil ? `; one test sign-in number until ${testUntil.slice(0, 10)}` : '')
+  );
 }
 
 // ---- fingerprint ---------------------------------------------------------------------------------
