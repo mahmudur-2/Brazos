@@ -207,7 +207,7 @@ your account.
 
 ### The website
 
-The Brazos website sets no cookies, runs no analytics and loads no scripts.
+The Brazos website sets no cookies, runs no analytics and loads no scripts from other companies.
 Like any website, its host receives your IP address and basic browser details
 when you open a page. If you email us, we receive your email address and what
 you write.
