@@ -21,7 +21,7 @@ Production takes test money only (D-20261111-3).
    - A new token is scoped (it gets only the access that you select). Resource access: Project, `brazos-production` only. Set these 10 rows, and no other:
      Read-write: Project Settings, Auth Config, Edge Functions, Edge Function Secrets.
      Read: API Keys, API Key Secrets, Data API Config, Database Config, Connection Pooling, Storage Config.
-   - A token cannot be changed after you make it. If a row is missing, make a new token and delete the old one. Run 43369079390 stopped with HTTP 403 at "Function secret STRIPE_SECRET_KEY" because the row Edge Function Secrets was missing.
+   - A token cannot be changed after you make it. If a row is missing, make a new token and delete the old one. Run 43369079390 stopped with HTTP 403 at "Function secret STRIPE_SECRET_KEY" because the row Edge Function Secrets was missing. The token in use since 2026-11-13 is `production button 2` (run 43435759116: PASS); the first token is deleted.
    - You see: a token that starts with `sbp_`.
 
 ## C. Stripe (test mode only)
@@ -84,7 +84,7 @@ What the table means: each row is one check that ran. PASS means the button saw 
     - `EXPO_PUBLIC_SUPABASE_KEY`: Supabase, Project Settings, API Keys, the Publishable key named `default`
     - `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY`: the `pk_test_` key from step 8
 
-    Put them on expo.dev: the project, Environment variables, environment `production`.
+    Put them on expo.dev: the project, Environment variables, environment `production`. On 2026-11-13 that environment still held the retired project's URL: replace all three values in one sitting, never the URL alone.
 22. Done 2026-11-13: the ref is in the build gate (`PRODUCTION_REF` in `scripts/supabase-ref.mjs`, used by `scripts/eas-build-pre-install.mjs`). A production build against any other project stops at the gate.
 23. Receipts: until you set `RESEND_API_KEY` and `RECEIPT_FROM` on the project, each receipt is marked "skipped", with the reason, and logged. No email goes out.
 24. The Stripe sandbox now has a webhook to `https://<ref>.supabase.co/functions/v1/stripe-webhook`. Do not change it. If you delete it, press the button again.

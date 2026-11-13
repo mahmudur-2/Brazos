@@ -10,7 +10,7 @@ orchestrating chat (Fable 5.2). Nothing runs. Nothing waits in the work tree.
 empty Supabase project that changes only by one GitHub button. Test money only (Stripe not live). No LLC
 yet. The repo stays public. The old production project is never contacted (the owner paused it).
 
-**Production set-up: started, not complete (2026-11-13)**
+**Production set-up: the button passed (2026-11-13). No app build points at production yet.**
 - New Supabase project `brazos-production`, ref `agjwgvclzvjmpqhjutpd` (us-east-1), made by the owner.
 - Stripe sandbox "Brazos production" (`acct_1UbCNU3EJxHAJMVZ`): Connect platform profile complete, the
   liability acknowledgement shows "Completed November 11, 2026". Not proven: a worker's payout set-up
@@ -18,29 +18,25 @@ yet. The repo stays public. The old production project is never contacted (the o
 - Twilio: the account has credit; the Verify service "Brazos" (SMS + email) existed and is reused.
 - GitHub environment "Production": reviewer `mahmudur-2`, branch `mainexpo`, 7 secrets present. A custom
   rule `TestSprite` was on; the owner turned it off (the rules API now lists no custom rule).
-- **Run 43369079390** (at `4dae46c`): the owner pressed the button and approved both steps (GitHub's
-  record: two approvals by `mahmudur-2`). PASS: Safety checks, Project is running, Project keys, Link,
-  the migration list, Plan unchanged, Apply the migrations, "Database matches the local build", Deploy
-  the edge functions, List the edge functions. **FAIL: Function secret STRIPE_SECRET_KEY, HTTP 403.**
-  Not run: Stripe test webhook, Timer key stored, the three refuse checks, Timers reach the functions,
-  Sign-in settings.
-- **Run 43373752766** (at `64fb589`): after the owner's "Pasted", the chat pressed the button and
-  approved both steps (GitHub's record: two approvals by `mahmudur-2`, each comment says "Approved by
-  the chat at the owner's word"). Plan `82e580fc`: 0 to apply, 0 flagged. Same result: PASS up to
-  "List the edge functions", then **FAIL: Function secret STRIPE_SECRET_KEY, HTTP 403**.
-- So production HAS the full database and the edge functions. It has NO Stripe function secret, no
-  Stripe webhook, no timer key and no phone sign-in settings. The app cannot work against it yet.
-- Cause (seen in Supabase after the second run): the token list holds only `production button`
-  ("last used" = the time of the second run); no `production button 2` exists. Its "View permissions":
-  9 rows, and the row "Edge Function Secrets" is missing. So the new token was never made, and the
-  value pasted into GitHub was the old token. Supabase's docs: that endpoint needs
-  `edge_functions_secrets_write` and no other permission. A token cannot be changed. The 10 rows:
-  `docs/production/owner-steps.md` step 5. Whether the other 9 rows are enough for the steps that did
-  not run is proven only by the next run.
-- Left ready in the owner's Chrome, a second time (gone if Chrome reloads the tab): the Supabase form
-  for `production button 2` at its last step (10 rows seen on the review page, project
-  `brazos-production` only, never expires as the first one), and GitHub's "Update secret" dialog for
-  `SUPABASE_ACCESS_TOKEN`.
+- **Runs 43369079390 and 43373752766 failed** at "Function secret STRIPE_SECRET_KEY" (HTTP 403): the
+  first token `production button` had no row "Edge Function Secrets", and the second run still used
+  it (the new token was not yet made). Both applied the database and the functions.
+- **Run 43435759116 (at `78571b9`): "PRODUCTION: PASS", all 20 rows.** The owner made and pasted the
+  new token `production button 2` (10 rows: `docs/production/owner-steps.md` step 5). The chat pressed
+  the button and approved both steps at the owner's word ("do everything yourself from now on");
+  GitHub's record: two approvals by `mahmudur-2` with the chat's comments. Plan `7b938245`: 0 to
+  apply, 0 flagged, 70 applied before. Rows: database matches the local build; functions deployed and
+  listed; STRIPE_SECRET_KEY set; Stripe test webhook made; timer key stored; send-push HTTP 403,
+  connect-status HTTP 401, stripe-webhook HTTP 400 (each the function's own answer); the timers reach
+  send-push, process-settlements and send-receipts (HTTP 200); phone sign-in through Twilio Verify,
+  email sign-in off.
+- After the pass the chat deleted the old token `production button` (Supabase: "Successfully deleted
+  access token"; the owner's word).
+- Not proven by the button: a real sign-in, a job or a payment on production. On expo.dev the
+  `production` environment still holds the RETIRED project's URL in `EXPO_PUBLIC_SUPABASE_URL` (read
+  with `eas env:get`, 2026-11-13), so the build gate stops a production build until step G. The chat
+  did not change it: the URL and the two keys must change together (not checked: whether the gate
+  catches a key that belongs to another project).
 
 **Code since the last handoff (pushed; CI run 43370777178 success at `064c003`)**
 - `c1ac2a5`: the `production` build profile is pinned to the new ref (`PRODUCTION_REF` in
@@ -64,10 +60,8 @@ needed on a device. All rows and proof: `docs/lean/AUDIT-LEDGER.md`, `docs/lean/
 
 ## Blocked
 
-**1. The new Supabase token is the owner's step.** Its value shows on the screen once; a chat must not
-see, copy or type a token. Owner: click "Create token" (this click was missed the first time), copy,
-paste into GitHub's `SUPABASE_ACCESS_TOKEN`, Update secret. Check before a new press (read only):
-the token list shows `production button 2`. The old token is deleted only after a PASS.
+**1. Step G is the owner's step** (`docs/production/owner-steps.md` step 21): three values in the
+`production` environment on expo.dev, changed in one sitting. Two are keys; a chat must not type a key.
 
 **2. Open flaw, the owner has not decided:** a phone user gets no email receipts
 (`supabase/functions/send-receipts/index.ts:109`: sign-in email only).
@@ -81,16 +75,14 @@ in App Store Connect (O2). The sign-in codes come from Twilio Verify.
 
 ## Next
 
-1. **After the owner's paste: the Production button again** (new plan, two approvals). The owner's word
-   to the chat of 2026-11-13: "any necessary steps, please make them yourselves ... Fully autonomously
-   complete this entire thing". That chat told the owner first, then pressed and approved run
-   43373752766 (the plan showed nothing to apply). A new chat asks the owner first.
-   Read results (read only): `gh run view <id> -R mahmudur-2/Brazos --json status,conclusion,jobs`,
-   `--log-failed` after the end, `gh api repos/mahmudur-2/Brazos/actions/runs/<id>/approvals`.
-   No push to `mainexpo` while a Production run is active.
-2. **After "PRODUCTION: PASS"** (owner-steps part G): the three expo.dev values of the `production`
-   environment (owner); receipts stay off until `RESEND_API_KEY` and `RECEIPT_FROM`; do not change the
-   Stripe webhook. Then rebuild and upload the website (the privacy text changed; upload = owner).
+1. **After step G:** a production app build and its first sign-in are the owner's (Apple). The
+   Production button is needed again only after a new migration or function change. A new chat asks
+   the owner first, reads the plan, and approves only when it shows nothing unexpected. Read results:
+   `gh run view <id> -R mahmudur-2/Brazos --json status,conclusion,jobs`, `--log-failed` after the
+   end, `gh api repos/mahmudur-2/Brazos/actions/runs/<id>/approvals`. No push to `mainexpo` while a
+   Production run is active.
+2. Receipts stay off until `RESEND_API_KEY` and `RECEIPT_FROM`; do not change the Stripe webhook.
+   Rebuild and upload the website (the privacy text changed; upload = owner).
 3. **Tell the owner before launch** (said only in short form; six small items left out): the two limits
    of the bar; a worker types an email at payout set-up; live mode needs the liability acknowledgement
    again; the Maestro bug can still kill a phone run; B3 (exact address only while assigned or in
@@ -127,7 +119,8 @@ in App Store Connect (O2). The sign-in codes come from Twilio Verify.
 
 - One change: `git revert <hash>` (list: `git log --oneline 2dd4dc0..`). `c1ac2a5` and `064c003` hold no
   migration; a revert of `064c003` must also keep `PRIVACY_VERSION` in step with the text.
-- Production: the database and functions of run 43369079390 are applied (43373752766 changed nothing). Undo of a migration is a NEW
+- Production: the database and functions are applied (run 43369079390); run 43435759116 added the
+  Stripe secret, the webhook, the timer key and the sign-in settings. Undo of a migration is a NEW
   migration, never `git revert`. The simplest full undo while the project is empty of users: the owner
   deletes the project `brazos-production` and makes a new one (new ref in `scripts/supabase-ref.mjs`).
 - `fb4700b` (Email field + `connect-onboarding`): `git revert fb4700b`, push, then
