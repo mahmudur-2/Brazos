@@ -8,11 +8,8 @@ import {
   classifyAccount,
 } from '../supabase/functions/connect-status/classify.mjs';
 import {
-  PAGE_HEADERS,
-  bouncePage,
+  bounce,
   payoutsHref,
-  refreshPage,
-  returnPage,
 } from '../supabase/functions/connect-return/page.mjs';
 import {
   EMAIL_INVALID,
@@ -32,7 +29,7 @@ import {
 // here runs Deno, so the handlers are unproven by any harness — said so in the
 // run report rather than papered over. Two pieces are different: the
 // CLASSIFICATION of a provider account into the one app-facing payout state,
-// and the BOUNCE PAGES the return function serves. Both are pure, both live in
+// and the BOUNCE the return function answers. Both are pure, both live in
 // their own .mjs files, and both are imported unchanged by the Deno function
 // and by this file — the shape stripeWebhookSignature.test.mjs established.
 //
@@ -160,29 +157,21 @@ test('5 · every result is one of the states the database admits', () => {
   }
 });
 
-test('6 · both pages carry the scheme anchor, and the script sends the browser to the same place', () => {
-  const returned = returnPage(SCHEME);
-  const refreshed = refreshPage(SCHEME);
-  assert.ok(returned.includes('<a href="brazos://payouts?from=return">'), 'the return page links into the app');
-  assert.ok(returned.includes('location.href = "brazos://payouts?from=return";'), 'and its script goes there too');
-  assert.ok(refreshed.includes('<a href="brazos://payouts?from=refresh">'), 'the refresh page links into the app');
-  assert.ok(refreshed.includes('location.href = "brazos://payouts?from=refresh";'), 'and its script goes there too');
+test('6 · the bounce is a 302 to the app scheme: from=return, or from=refresh', () => {
+  const returned = bounce(null, SCHEME);
+  assert.equal(returned.status, 302);
+  assert.equal(returned.headers.Location, 'brazos://payouts?from=return');
+  const refreshed = bounce('1', SCHEME);
+  assert.equal(refreshed.status, 302);
+  assert.equal(refreshed.headers.Location, 'brazos://payouts?from=refresh');
   assert.equal(payoutsHref(SCHEME, 'return'), 'brazos://payouts?from=return');
-  assert.notEqual(returned, refreshed, 'the two pages differ');
-  assert.ok(refreshed.includes('Set up payouts again'), 'the refresh page tells the worker how to get a fresh link');
-  for (const page of [returned, refreshed]) {
-    assert.ok(page.startsWith('<!doctype html>'), 'a complete document');
-    assert.ok(page.includes('<meta charset="utf-8">'), 'declaring its charset');
-    assert.ok(!/<(script|link|img|iframe)[^>]*\s(src|href)=["']https?:/i.test(page), 'and no external resource');
-  }
 });
 
 test('7 · the bounce selects by the refresh flag and never echoes a request value', () => {
-  assert.equal(bouncePage('1', SCHEME), refreshPage(SCHEME), '?refresh=1 is the refresh page');
-  assert.equal(bouncePage(null, SCHEME), returnPage(SCHEME), 'no flag is the return page');
-  assert.equal(bouncePage(undefined, SCHEME), returnPage(SCHEME));
-  assert.equal(bouncePage('0', SCHEME), returnPage(SCHEME));
-  assert.equal(bouncePage('true', SCHEME), returnPage(SCHEME));
+  assert.equal(bounce('1', SCHEME).headers.Location, 'brazos://payouts?from=refresh', '?refresh=1 is the refresh bounce');
+  for (const value of [null, undefined, '0', 'true', '']) {
+    assert.equal(bounce(value, SCHEME).headers.Location, 'brazos://payouts?from=return', `${JSON.stringify(value)} is the return bounce`);
+  }
 
   const hostile = [
     '1<script>alert(1)</script>',
@@ -192,30 +181,29 @@ test('7 · the bounce selects by the refresh flag and never echoes a request val
     'brazos://payouts?from=attacker',
   ];
   for (const value of hostile) {
-    const page = bouncePage(value, SCHEME);
-    assert.ok(!page.includes(value), `the page must not contain the request value ${JSON.stringify(value)}`);
-    assert.ok(
-      page === returnPage(SCHEME) || page === refreshPage(SCHEME),
-      'and must be exactly one of the two constant pages'
-    );
-    // Only the exact string '1' selects the refresh page.
-    assert.equal(page, returnPage(SCHEME));
+    const answer = bounce(value, SCHEME);
+    assert.ok(!JSON.stringify(answer).includes(value), `the answer must not contain the request value ${JSON.stringify(value)}`);
+    // Only the exact string '1' selects the refresh bounce.
+    assert.deepEqual(answer, bounce(null, SCHEME));
   }
 });
 
-test('8 · the headers are text/html; charset=utf-8 and no-store', () => {
-  assert.equal(PAGE_HEADERS['Content-Type'], 'text/html; charset=utf-8');
-  assert.equal(PAGE_HEADERS['Cache-Control'], 'no-store');
-  assert.ok(Object.isFrozen(PAGE_HEADERS), 'and nothing can add to them at runtime');
+test('8 · the headers are the Location and no-store, nothing else', () => {
+  for (const flag of [null, '1']) {
+    const { headers } = bounce(flag, SCHEME);
+    assert.deepEqual(Object.keys(headers), ['Location', 'Cache-Control']);
+    assert.equal(headers['Cache-Control'], 'no-store');
+    assert.ok(Object.isFrozen(headers), 'and nothing can add to them at runtime');
+  }
 });
 
-test('9 · a scheme that is not a plain URL scheme is refused, not rendered', () => {
+test('9 · a scheme that is not a plain URL scheme is refused, not sent', () => {
   for (const bad of ['', 'Brazos', 'brazos://', 'javascript:', '"><script>', 'br azos', 42, null, undefined]) {
-    assert.throws(() => returnPage(bad), /plain URL scheme/, `${JSON.stringify(bad)} must be refused`);
-    assert.throws(() => refreshPage(bad), /plain URL scheme/);
+    assert.throws(() => bounce(null, bad), /plain URL scheme/, `${JSON.stringify(bad)} must be refused`);
+    assert.throws(() => bounce('1', bad), /plain URL scheme/);
   }
-  // Paired control: the real scheme renders.
-  assert.ok(returnPage(SCHEME).length > 0);
+  // Paired control: the real scheme is sent.
+  assert.equal(bounce(null, SCHEME).headers.Location, 'brazos://payouts?from=return');
 });
 
 test('10 · the scheme literal in connect-return is the one app.config.ts declares', () => {
@@ -228,24 +216,19 @@ test('10 · the scheme literal in connect-return is the one app.config.ts declar
   assert.equal(bounce[1], SCHEME, 'and this file tests that literal');
 });
 
-test('11 · the bounce hands PAGE_HEADERS to the Response as a constructed Headers object, and that object still says text/html', () => {
-  // R6b D9: the DEPLOYED function was probed on 2026-08-30 serving the
-  // correct body as text/plain — Deno's default when no Content-Type reaches
-  // the Response — while PAGE_HEADERS in source has said text/html since R5b
-  // (test 8). The one code-side variable, a plain-object spread of a frozen
-  // object as header init, is replaced by a constructed Headers object.
-  // Executed: that construction, under node's Headers.
-  const headers = new Headers(PAGE_HEADERS);
-  assert.equal(headers.get('content-type'), 'text/html; charset=utf-8');
-  assert.equal(headers.get('cache-control'), 'no-store');
-  assert.equal([...headers.keys()].length, 2, 'and nothing else');
-  // Raw text: index.ts constructs Headers from PAGE_HEADERS and no longer
-  // spreads it.
-  const read = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8');
-  const bounce = read('../supabase/functions/connect-return/index.ts');
-  assert.match(bounce, /headers: new Headers\(PAGE_HEADERS\),/, 'index.ts constructs a Headers object from PAGE_HEADERS');
-  assert.ok(!/\{\s*\.\.\.PAGE_HEADERS\s*\}/.test(bounce), 'and no longer spreads it into a plain object');
-  assert.match(bounce, /text\/plain/, 'and names the live text/plain observation it answers');
+test('11 · index.ts answers GET with the bounce: no body, its status, its headers as a Headers object', () => {
+  // Supabase serves HTML from *.supabase.co as text/plain, so the old page's
+  // redirect script never ran (production, 2026-11-13). Executed: the
+  // construction index.ts uses, under node's Headers.
+  const built = new Headers(bounce(null, SCHEME).headers);
+  assert.equal(built.get('location'), 'brazos://payouts?from=return');
+  assert.equal(built.get('cache-control'), 'no-store');
+  assert.equal([...built.keys()].length, 2, 'and nothing else');
+  // Raw text: index.ts sends exactly that, with no page.
+  const source = readFileSync(new URL('../supabase/functions/connect-return/index.ts', import.meta.url), 'utf8');
+  assert.match(source, /const \{ status, headers \} = bounce\(refresh, APP_SCHEME\);/);
+  assert.match(source, /return new Response\(null, \{ status, headers: new Headers\(headers\) \}\);/);
+  assert.ok(!/text\/html/.test(source), 'and serves no HTML page');
 });
 
 // ---------------------------------------------------------------------------

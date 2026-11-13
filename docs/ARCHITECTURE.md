@@ -487,7 +487,8 @@ themselves (`requireServiceRole` in `_shared/serviceAuth.ts`), since the databas
 them with it. After every deploy, confirm the dashboard still shows JWT verification off for
 `stripe-webhook` and `connect-return`. On production, the Production button's smoke checks prove
 after each deploy that `send-push` and `stripe-webhook` answer with their own code, and that
-`connect-status` refuses a caller who is not signed in (HTTP 401, from the gateway or the function).
+`connect-status` refuses a caller who is not signed in (HTTP 401, from the gateway or the function),
+and that `connect-return` answers a GET with HTTP 302 to `brazos://payouts?from=return`.
 
 | Function | Role |
 |---|---|
@@ -495,7 +496,7 @@ after each deploy that `send-push` and `stripe-webhook` answer with their own co
 | `create-payment` | starts the Stripe side of a row `begin_job_payment()` holds |
 | `process-settlements` | drains `transfers_due` and `refunds_due` every five minutes |
 | `connect-onboarding` | creates the worker's Stripe account and a hosted-onboarding link |
-| `connect-return` | stateless bounce from hosted onboarding back to the app |
+| `connect-return` | stateless HTTP 302 from hosted onboarding back to the app |
 | `connect-status` | classifies the Stripe account into the one app-facing payout state |
 | `payment-methods` | list, add (setup intent) and remove saved cards |
 | `send-push` | drains `notification_outbox` through Expo push (100 per request, 10 passes) |

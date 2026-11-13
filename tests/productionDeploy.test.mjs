@@ -23,6 +23,7 @@ import {
   webhookContract,
 } from '../scripts/production-deploy.mjs';
 import { RETIRED_PRODUCTION_REF, STAGING_REF } from '../scripts/supabase-ref.mjs';
+import { bounce } from '../supabase/functions/connect-return/page.mjs';
 
 // scripts/production-deploy.mjs, the Production button's logic, driven through a fake fetch: no
 // network, no database, no Stripe. Every value below is fake and shaped so that the repository's
@@ -79,6 +80,7 @@ function world(over = {}) {
       'send-push': [403, { error: 'forbidden' }],
       'connect-status': [401, { error: 'Sign in to check your payouts.' }],
       'stripe-webhook': [400, { error: 'invalid signature' }],
+      'connect-return': [302, undefined, 'brazos://payouts?from=return'],
     },
     rpcMissingFor: 0,
     vault: null,
@@ -94,9 +96,10 @@ function world(over = {}) {
   return w;
 }
 
-function respond(status, body) {
+function respond(status, body, location = null) {
   const text = body === undefined ? '' : JSON.stringify(body);
-  return { status, ok: status >= 200 && status < 300, text: async () => text };
+  const headers = { get: (name) => (name.toLowerCase() === 'location' ? location : null) };
+  return { status, ok: status >= 200 && status < 300, headers, text: async () => text };
 }
 
 function fakeFetch(w) {
@@ -104,7 +107,7 @@ function fakeFetch(w) {
     const method = init.method ?? 'GET';
     const headers = init.headers ?? {};
     const body = init.body === undefined ? '' : String(init.body);
-    w.timeline.push({ kind: 'request', method, url, headers, body });
+    w.timeline.push({ kind: 'request', method, url, headers, body, redirect: init.redirect });
     const u = new URL(url);
     const m = (re) => u.pathname.match(re);
 
@@ -167,8 +170,8 @@ function fakeFetch(w) {
     if (u.host === `${REF}.supabase.co`) {
       const fn = m(/^\/functions\/v1\/([a-z-]+)$/);
       if (fn) {
-        const [status, answer] = w.functions[fn[1]] ?? [404, { message: 'not found' }];
-        return respond(status, answer);
+        const [status, answer, location] = w.functions[fn[1]] ?? [404, { message: 'not found' }];
+        return respond(status, answer, location);
       }
       const rpc = m(/^\/rest\/v1\/rpc\/([a-z_]+)$/);
       if (rpc) {
@@ -512,7 +515,7 @@ test('vault: every press stores the functions URL and the server key, waiting wh
 });
 
 test('smoke checks: each function answers an unauthenticated call in its own words', async () => {
-  assert.deepEqual(Object.keys(SMOKE), ['push', 'status', 'webhook']);
+  assert.deepEqual(Object.keys(SMOKE), ['push', 'status', 'webhook', 'return']);
   for (const which of Object.keys(SMOKE)) {
     const r = await cmd(world(), ['smoke', which]);
     assert.equal(r.code, 0, `${which}: ${r.log.join('\n')}`);
@@ -571,7 +574,7 @@ test('send-push and stripe-webhook stay strict: their own code must answer, in t
   assert.match(down.outputs().reason, /HTTP 502/);
   assert.deepEqual(
     Object.fromEntries(Object.entries(SMOKE).map(([k, s]) => [k, s.gatewayToo])),
-    { push: false, status: true, webhook: false },
+    { push: false, status: true, webhook: false, return: false },
     'only connect-status may be answered by the gateway'
   );
 });
@@ -582,6 +585,7 @@ test('the verify_jwt settings the smoke rows rely on are the ones in supabase/co
   assert.equal(jwt('send-push'), 'false');
   assert.equal(jwt('stripe-webhook'), 'false');
   assert.equal(jwt('connect-status'), 'true');
+  assert.equal(jwt('connect-return'), 'false');
 });
 
 test('the smoke answers are the functions’ own words, read from their source', () => {
@@ -590,6 +594,34 @@ test('the smoke answers are the functions’ own words, read from their source',
   assert.ok(`${src('send-push/index.ts')}\n${shared}`.includes(`'${SMOKE.push.error}'`), 'send-push lost its forbidden answer');
   assert.ok(src('connect-status/index.ts').includes(`'${SMOKE.status.error}'`), 'connect-status lost its sign-in sentence');
   assert.ok(src('stripe-webhook/index.ts').includes(`'${SMOKE.webhook.error}'`), 'stripe-webhook lost its signature answer');
+  assert.equal(bounce(null, 'brazos').headers.Location, SMOKE.return.location, 'connect-return no longer sends the browser where its row expects');
+  assert.equal(bounce(null, 'brazos').status, SMOKE.return.status);
+});
+
+test('connect-return: a GET without a key, not following the redirect, must get a 302 to the app', async () => {
+  const w = world();
+  const ok = await cmd(w, ['smoke', 'return']);
+  assert.equal(ok.code, 0, ok.log.join('\n'));
+  assert.equal(ok.outputs().note, "HTTP 302, the function's own answer");
+  const call = w.timeline.find((e) => e.kind === 'request' && e.url.endsWith('/functions/v1/connect-return'));
+  assert.equal(call.method, 'GET');
+  assert.equal(call.redirect, 'manual');
+  assert.equal(call.body, '');
+  assert.equal(call.headers.apikey, undefined);
+  assert.equal(call.headers.Authorization, undefined);
+
+  const page = await cmd(world({ functions: { 'connect-return': [200, undefined] } }), ['smoke', 'return']);
+  assert.equal(page.code, 1);
+  assert.equal(page.outputs().reason, 'connect-return answered HTTP 200, not a 302 to brazos://payouts?from=return.');
+  const elsewhere = await cmd(world({ functions: { 'connect-return': [302, undefined, 'https://example.com/'] } }), ['smoke', 'return']);
+  assert.equal(elsewhere.code, 1);
+  assert.equal(elsewhere.outputs().reason, 'connect-return answered HTTP 302, not a 302 to brazos://payouts?from=return.');
+  const refreshed = await cmd(world({ functions: { 'connect-return': [302, undefined, 'brazos://payouts?from=refresh'] } }), ['smoke', 'return']);
+  assert.equal(refreshed.code, 1);
+  const gateway = await cmd(world({ functions: { 'connect-return': [401, { msg: 'Invalid JWT' }] } }), ['smoke', 'return']);
+  assert.match(gateway.outputs().reason, /refused by the gateway.*verify_jwt/);
+  const missing = await cmd(world({ functions: {} }), ['smoke', 'return']);
+  assert.equal(missing.outputs().reason, 'connect-return is not deployed (HTTP 404).');
 });
 
 test('timers: one test call from the database to each drain, with the stored key, must get HTTP 200', async () => {
@@ -795,6 +827,7 @@ test('no secret, key, token or password appears in the log, the outputs or the s
     ['smoke', 'push'],
     ['smoke', 'status'],
     ['smoke', 'webhook'],
+    ['smoke', 'return'],
     ['timers'],
     ['auth'],
     ['fingerprint', fp],

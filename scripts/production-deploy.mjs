@@ -14,7 +14,7 @@
  *   secrets                      the function secret STRIPE_SECRET_KEY
  *   webhook                      the Stripe TEST webhook and STRIPE_WEBHOOK_SECRET, found by its URL
  *   vault                        set_drain_secrets(): the URL and the key the timers call functions with
- *   smoke <push|status|webhook>  one function refuses a call without a user (see SMOKE)
+ *   smoke <push|status|webhook|return>  one function answers a call without a user (see SMOKE)
  *   timers                       one test call from the database to each drain gets HTTP 200
  *   auth                         the sign-in settings: scripts/production-auth.json plus Twilio
  *   fingerprint <file>           the hosted database matches the local build of the same commit
@@ -93,8 +93,9 @@ function mask(io, value) {
 // ---- HTTP --------------------------------------------------------------------------------------
 
 /** status 0 means the request never got an answer. The body is parsed, never printed. */
-async function call(io, url, { method = 'GET', headers = {}, json, form } = {}) {
+async function call(io, url, { method = 'GET', headers = {}, json, form, redirect } = {}) {
   const init = { method, headers: { Accept: 'application/json', ...headers } };
+  if (redirect !== undefined) init.redirect = redirect;
   if (json !== undefined) {
     init.headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(json);
@@ -107,8 +108,9 @@ async function call(io, url, { method = 'GET', headers = {}, json, form } = {}) 
   try {
     res = await io.fetch(url, init);
   } catch {
-    return { status: 0, ok: false, json: null };
+    return { status: 0, ok: false, json: null, location: null };
   }
+  const location = res.headers?.get?.('location') ?? null;
   let body = null;
   try {
     const text = await res.text();
@@ -116,7 +118,7 @@ async function call(io, url, { method = 'GET', headers = {}, json, form } = {}) 
   } catch {
     body = null;
   }
-  return { status: res.status, ok: res.ok, json: body };
+  return { status: res.status, ok: res.ok, json: body, location };
 }
 
 function refProblem(ref, { allowStaging = false } = {}) {
@@ -526,16 +528,20 @@ async function vault(io) {
  * stripe-webhook have verify_jwt = false, so their own code must answer, in its own words.
  * connect-status keeps verify_jwt = true (two checks: the gateway's and its own), so its 401 may
  * come from either; the row proves only that a caller who is not signed in is refused, and never
- * matches the gateway's words, which a new project may change.
+ * matches the gateway's words, which a new project may change. connect-return (verify_jwt = false)
+ * answers a GET from the browser with a 302 into the app: its row checks the exact Location, read
+ * without following the redirect.
  */
 export const SMOKE = Object.freeze({
   push: Object.freeze({ fn: 'send-push', status: 403, error: 'forbidden', key: null, gatewayToo: false }),
   status: Object.freeze({ fn: 'connect-status', status: 401, error: 'Sign in to check your payouts.', key: 'publishable', gatewayToo: true }),
   webhook: Object.freeze({ fn: 'stripe-webhook', status: 400, error: 'invalid signature', key: null, gatewayToo: false }),
+  return: Object.freeze({ fn: 'connect-return', method: 'GET', status: 302, location: 'brazos://payouts?from=return', key: null, gatewayToo: false }),
 });
 
-/** Whether an answer passes the row: the status always, the function's own words only where required. */
+/** Whether an answer passes the row: the status always, then the exact Location or the function's own words where required. */
 function smokePasses(s, res) {
+  if (s.location) return res.status === s.status && res.location === s.location;
   return res.status === s.status && (s.gatewayToo || res.json?.error === s.error);
 }
 
@@ -544,6 +550,7 @@ function smokeReason(s, res) {
   if (res.status === 401 && s.status !== 401) {
     return `${s.fn} was refused by the gateway (HTTP 401) before its code ran: verify_jwt is on, and supabase/config.toml says it must be off.`;
   }
+  if (s.location && res.status !== 404) return `${s.fn} answered HTTP ${res.status}, not a ${s.status} to ${s.location}.`;
   if (res.status === s.status) return `${s.fn} answered HTTP ${res.status}, but not in its own words: the gateway refused the call before its code ran.`;
   if (res.status === 404) return `${s.fn} is not deployed (HTTP 404).`;
   if (own === 'not configured') return `${s.fn} answers "not configured": a secret or key it needs is missing on the project.`;
@@ -556,7 +563,7 @@ function smokeReason(s, res) {
 
 async function smoke(io, which) {
   const s = Object.hasOwn(SMOKE, which ?? '') ? SMOKE[which] : null;
-  if (!s) stop('smoke needs one of: push, status, webhook.');
+  if (!s) stop('smoke needs one of: push, status, webhook, return.');
   const ref = projectRef(io);
   const headers = {};
   if (s.key === 'publishable') {
@@ -568,7 +575,7 @@ async function smoke(io, which) {
   const deadline = io.now() + 60_000;
   let res;
   for (;;) {
-    res = await call(io, url, { method: 'POST', headers, json: {} });
+    res = s.method === 'GET' ? await call(io, url, { headers, redirect: 'manual' }) : await call(io, url, { method: 'POST', headers, json: {} });
     if (smokePasses(s, res)) {
       const who = !s.gatewayToo
         ? "the function's own answer"
@@ -753,6 +760,7 @@ const ROWS = Object.freeze({
     ['smoke_push', 'send-push refuses a stranger'],
     ['smoke_status', 'connect-status refuses a caller who is not signed in'],
     ['smoke_webhook', 'stripe-webhook checks the signature'],
+    ['smoke_return', 'connect-return sends the browser back to the app'],
     ['timers', 'Timers reach the functions'],
     ['auth', 'Sign-in settings'],
   ],

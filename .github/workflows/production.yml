@@ -435,6 +435,14 @@ jobs:
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
+      - name: connect-return sends the browser back to the app
+        id: smoke_return
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs smoke return
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
       - name: Timers reach the functions
         id: timers
         run: |
