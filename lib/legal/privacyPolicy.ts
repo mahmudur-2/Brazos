@@ -35,7 +35,7 @@ import { SUPPORT_EMAIL } from '../appLinks';
 export const PRIVACY_POLICY = `
 # Brazos Privacy Policy
 
-Last updated: 11 November 2026
+Last updated: 13 November 2026
 
 This policy explains what personal information Brazos collects, why, who
 receives it, how long it is kept, and the choices you have. "Brazos", "we" and
@@ -169,7 +169,9 @@ If you choose to save a card for faster hiring, Stripe stores it, not Brazos,
 and you can remove it at any time in Payment methods. If you are paid as a
 Worker, Stripe collects the details it needs to pay you (such as your identity
 and bank account) in its own onboarding; Brazos keeps only a reference to that
-payout account and whether it can receive money.
+payout account and whether it can receive money. When you set up payouts, the
+app asks for an email address and passes it to Stripe as the contact email
+for your payout account.
 
 After a payment is released, Brazos emails a receipt to the Customer and the
 Worker, where the account has an email address.

@@ -68,7 +68,7 @@ test('A12 · the Terms promise no mute tool and no payments test mode, the draft
   assert.doesNotMatch(terms, /Working draft/i);
   const index = read('lib/legal/index.ts');
   assert.match(index, /export const TERMS_VERSION = '2026-11-11';/);
-  assert.match(index, /export const PRIVACY_VERSION = '2026-11-11';/);
+  assert.match(index, /export const PRIVACY_VERSION = '2026-11-13';/);
 });
 
 test('A13 · the one agreement checkbox also confirms 18+, and the e2e flow still finds it', () => {
