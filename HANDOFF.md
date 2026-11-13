@@ -13,12 +13,23 @@ memory `brazos-directing-prompt-and-guide`. To the owner: his steps in the chat,
 empty Supabase project that changes only by one GitHub button. Test money only (Stripe not live). No LLC
 yet. The repo stays public. The old production project is never contacted (the owner paused it).
 
-**Production set-up: the button passed (2026-11-13); build 11 points at production; sign-in works.**
+**Production works end to end in test money (2026-11-13): sign-in, payout set-up, a payment.**
+- Owner's test on build 11: a second account (a rented Twilio number, added by the owner) set up
+  payouts through Stripe's test onboarding; the client paid $53.75 (Stripe "Brazos production" test
+  payments: Succeeded, `pi_3UbR7d3EJxHAJMVZ1bcm7CyN`); the webhook delivery `payment_intent.succeeded`
+  got HTTP 200 `{"ok":true}` (read in the owner's Chrome). Not tested yet: start, complete, release.
+- Bug the owner saw: the payout return page showed HTML as text. Fixed in `b850a4b` (a 302 to
+  `brazos://payouts?from=…`, no page); run 43504460817 PASS, 21 rows, new row "connect-return sends the
+  browser back to the app: HTTP 302". Not yet seen on a phone.
+- Twilio: the Individual Primary Compliance Profile is approved (error 21608 gone). The optional secret
+  `PRODUCTION_TEST_OTP` (owner's value, never seen) gives one test sign-in number; each press sets it
+  for 7 more days (now until 2026-11-20).
+- Each press says "Stripe test webhook: made anew" (runs 43498591852 and 43504460817): not checked why
+  it is not kept.
 - New Supabase project `brazos-production`, ref `agjwgvclzvjmpqhjutpd` (us-east-1), made by the owner.
 - Stripe sandbox "Brazos production" (`acct_1UbCNU3EJxHAJMVZ`): Connect platform profile complete, the
-  liability acknowledgement shows "Completed November 11, 2026". Not proven: a worker's payout set-up
-  there (the profile says liability "Stripe"; the code sends `losses_collector: 'application'`).
-- Twilio: the account has credit; the Verify service "Brazos" (SMS + email) existed and is reused.
+  liability acknowledgement shows "Completed November 11, 2026"; a worker's payout set-up works there.
+- Twilio: account `AC…9497` (paid, the one production uses); the Verify service "Brazos" is reused.
 - GitHub environment "Production": reviewer `mahmudur-2`, branch `mainexpo`, 7 secrets present. A custom
   rule `TestSprite` was on; the owner turned it off (the rules API now lists no custom rule).
 - **Run 43435759116 (at `78571b9`): "PRODUCTION: PASS", all 20 rows.** The owner made and pasted the
@@ -30,23 +41,11 @@ yet. The repo stays public. The old production project is never contacted (the o
   connect-status HTTP 401, stripe-webhook HTTP 400 (each the function's own answer); the timers reach
   send-push, process-settlements and send-receipts (HTTP 200); phone sign-in through Twilio Verify,
   email sign-in off.
-- Not proven by the button: a real sign-in, a job or a payment on production.
-- expo.dev, step G done (2026-11-13). `production` holds `EXPO_PUBLIC_SUPABASE_URL` =
-  `https://agjwgvclzvjmpqhjutpd.supabase.co`, `EXPO_PUBLIC_SUPABASE_KEY` (owner's paste,
-  `sb_publishable_`) and `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` (owner's paste). The owner first pasted
-  the Stripe key into `preview`; the chat moved that variable to `production` (`eas env:update
-  --variable-environment preview --environment production`) and the owner pasted the staging key into
-  `preview` again. Checked by counts of the account id inside each key, no value printed:
-  `production` = sandbox "Brazos production" (`acct_1UbCNU3EJxHAJMVZ`), `preview` = "Brazos sandbox"
-  (`acct_1U2Ol543w4QKhn3t`), no `pk_live`. NOT checkable without a sign-in: that the Supabase key
-  belongs to `brazos-production` (a `sb_publishable_` key holds no ref).
-- Build gate (reader, `node --test tests/buildGate.test.mjs` 21/21): it stops a wrong URL ref and a
-  legacy JWT key of another project; it does NOT catch a `sb_publishable_` key of another project and
-  never checks the Stripe key. The first production sign-in is the proof for the Supabase key.
-- **First production build and sign-in (2026-11-13):** the owner ran `npm run release:production`;
-  build 11 (1.0.0) reached TestFlight. His first try failed (Twilio 21608, Blocked 1); he added his
-  number as a Twilio verified caller ID and then signed in (his word; the earlier log already showed
-  the request reached `agjwgvclzvjmpqhjutpd` and made his user, so the Supabase key is right).
+- expo.dev `production` holds the production Supabase URL, its `sb_publishable_` key and the Stripe
+  "Brazos production" publishable key (owner's pastes; Stripe checked by account-id counts, no value
+  printed; `preview` keeps "Brazos sandbox"). The sign-in on build 11 proved the Supabase key. The
+  build gate does not catch a `sb_publishable_` key of another project and never checks Stripe keys.
+- Build 11 (1.0.0) = the owner's `npm run release:production`, in TestFlight.
 - The `production` and `testflight` profiles both build variant `production` (bundle
   `app.brazos.mobile`, App Store Connect app `6832193439`): a production build lands in the same
   TestFlight app as the staging builds; build 10 stays installable there for staging.
@@ -73,11 +72,8 @@ needed on a device. All rows and proof: `docs/lean/AUDIT-LEDGER.md`, `docs/lean/
 
 ## Blocked
 
-**1. Twilio Primary Compliance Profile is the owner's** (identity form, Twilio reviews it). Until it is
-approved, Twilio sends codes only to "verified caller IDs" (error 21608, read in the production auth
-log 2026-11-13 19:12 UTC; the account `AC…9497` is paid, "Active", $20.00, and is the one production
-uses). Form: Twilio console, Trust Hub, compliance profiles, primary. List expo.dev names without
-values: `npx eas env:list <env> --format long | grep -iE '^\s*(Name|Environments)'`.
+**1. Owner, after his tests:** release the rented Twilio number (about $1.15 a month), and delete the
+GitHub secret `PRODUCTION_TEST_OTP` if no test sign-in number is wanted after 2026-11-20.
 
 **2. Open flaw, the owner has not decided:** a phone user gets no email receipts
 (`supabase/functions/send-receipts/index.ts:109`: sign-in email only).
@@ -91,9 +87,10 @@ in App Store Connect (O2). The sign-in codes come from Twilio Verify.
 
 ## Next
 
-1. **A job and a test payment on production:** needs a second account (a client cannot bid on its
-   own job, baseline migration), so a second phone number, added as a verified caller ID until
-   Blocked 1 is approved. The Production button is needed again only after a new migration or function change. A new chat asks
+1. **Finish the production test** (owner's phones): the worker starts and completes the job, the
+   client releases the money; a new payout set-up should now open the app ("Open in BRAZOS?"). Then
+   remove the test job "TEST job delete later" by an allowed path only. The Production button is
+   needed again only after a new migration or function change. A new chat asks
    the owner first, reads the plan, and approves only when it shows nothing unexpected. Read results:
    `gh run view <id> -R mahmudur-2/Brazos --json status,conclusion,jobs`, `--log-failed` after the
    end, `gh api repos/mahmudur-2/Brazos/actions/runs/<id>/approvals`. No push to `mainexpo` while a
@@ -107,8 +104,8 @@ in App Store Connect (O2). The sign-in codes come from Twilio Verify.
    B11 texts, and a build with payments `disabled` cannot take bids; the money marks (overdue after 2
    business days, nothing automatic after a card dispute, the 7-day "held long" mark,
    `payment_attention`) and his three answers (`record_settlement_sent`, `settlement_send_reopen`,
-   `resolve_tip`); the Earnings texts of B21 and B23; E5 is Home only; no test sign-in number on
-   production; before 2027 staging needs the new key in its Vault and an app build with the publishable
+   `resolve_tip`); the Earnings texts of B21 and B23; E5 is Home only; the optional test sign-in number on
+   production (App Review needs its own sign-in path); before 2027 staging needs the new key in its Vault and an app build with the publishable
    key; Dependabot shows 9 alerts in build tools (N6); Terms §4 against the no-show waiver (N3); the
    deny-lines step in `.claude/settings.json`.
 4. **A phone run, if needed** (one at a time, about 2 hours, no database or function push meanwhile):
@@ -140,6 +137,8 @@ in App Store Connect (O2). The sign-in codes come from Twilio Verify.
   Stripe secret, the webhook, the timer key and the sign-in settings. Undo of a migration is a NEW
   migration, never `git revert`. The simplest full undo while the project is empty of users: the owner
   deletes the project `brazos-production` and makes a new one (new ref in `scripts/supabase-ref.mjs`).
+- `b850a4b` (connect-return 302): `git revert b850a4b`, push, one Production press (the old page
+  shows as text again).
 - `fb4700b` (Email field + `connect-onboarding`): `git revert fb4700b`, push, then
   `eas update:roll-back-to-embedded` with the owner's yes. Payout set-up then fails again.
 - Staging has every migration of the lean run; `60d77fe` took `bids`, `direct_threads` and
