@@ -18,6 +18,10 @@ Production takes test money only (D-20261111-3).
    - If not: wait 5 minutes, then reload the page.
 4. Click Project Settings, General. Copy the Project ID (20 small letters). This is the ref.
 5. Click your account picture, Account preferences, Access Tokens, Generate new token. Name it `production button`. Copy it.
+   - A new token is scoped (it gets only the access that you select). Resource access: Project, `brazos-production` only. Set these 10 rows, and no other:
+     Read-write: Project Settings, Auth Config, Edge Functions, Edge Function Secrets.
+     Read: API Keys, API Key Secrets, Data API Config, Database Config, Connection Pooling, Storage Config.
+   - A token cannot be changed after you make it. If a row is missing, make a new token and delete the old one. Run 43369079390 stopped with HTTP 403 at "Function secret STRIPE_SECRET_KEY" because the row Edge Function Secrets was missing.
    - You see: a token that starts with `sbp_`.
 
 ## C. Stripe (test mode only)
@@ -32,7 +36,7 @@ Production takes test money only (D-20261111-3).
 
 9. Use a funded Twilio account. A trial account sends codes only to numbers you verified.
 10. On the Console home page, copy the Account SID and the Auth Token.
-11. Click Verify, Services, Create new. Name it `Brazos`. Copy the Service SID (it starts with `VA`).
+11. Click Verify, Services, Create new. Name it `Brazos`. Copy the Service SID (it starts with `VA`). If a service `Brazos` exists already, use it; do not make a second one.
 
 ## E. GitHub: the approval rule and the secrets
 
@@ -43,6 +47,7 @@ Production takes test money only (D-20261111-3).
     - Prevent self-review: off. You start the run and approve it yourself.
     - Allow administrators to bypass configured protection rules: off.
     - Deployment branches and tags: Selected branches and tags. Add `mainexpo`.
+    - Custom rules (for example `TestSprite`): all off. A custom rule lets another company's app hold or pass a production step. On 2026-11-13 `TestSprite` was on; the owner turned it off.
     - You see: "1 protection rule" or more under the environment name.
 15. In the same environment, click Add environment secret seven times. Use these names exactly:
 
