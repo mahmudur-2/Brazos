@@ -94,7 +94,7 @@ export function paymentCaption(facts: PaymentCaptionFacts, viewer: MoneyViewer):
       if (facts.refundQueued) {
         if (facts.feeKept) {
           return customer
-            ? `Partly refunded — the cancellation fee goes to ${name ?? 'your worker'}`
+            ? `Refund on its way — the cancellation fee goes to ${name ?? 'your worker'}`
             : 'Cancellation fee — on its way to you';
         }
         return customer ? 'Refund on its way — back on your card in a few days' : 'Refund on its way to the customer';

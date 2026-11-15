@@ -1,7 +1,9 @@
 -- 333_notifications_failed.sql — ledger B17, "notifications never 'failed'"
 -- (20261112000300_notifications_failed.sql): claim_notification_batch() now ends a pending row that
 -- has used its five attempts as 'failed', with 'retries exhausted' when it carries no error, instead
--- of leaving it pending for ever. Everything else about the claim is unchanged.
+-- of leaving it pending for ever. Everything else about the claim is unchanged. Since
+-- 20261115000400 (A14) a claim leases its rows for 10 minutes (send_after), and a row is ended only
+-- once its lease ran out.
 --
 -- THE FIXTURE: one recipient and five outbox rows written by the runner, dated in 2000 so they come
 -- first in the claim's created_at order whatever else is pending. Assertions read only these rows,
@@ -11,7 +13,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(10);
+select plan(11);
 
 select tests.create_user('b17.recipient@brazos.test', 'Rita Recipient') as rcpt \gset
 
@@ -41,9 +43,15 @@ select is((select status || ' / ' || attempts from public.notification_outbox wh
 insert into claimed select 2, c.type from public.claim_notification_batch(100) c where c.recipient_id = :'rcpt';
 select is((select count(*) from claimed where round = 2), 0::bigint,
   'B17: the next claim hands out nothing for this recipient');
+select is((select status || ' / ' || attempts from public.notification_outbox where dedupe_key = 'b17:last_try'),
+  'pending / 5',
+  'B17, A14: … and the row whose fifth attempt is still out keeps its lease: still pending, not failed under the sender');
+-- A14 (20261115000400): the lease ran out and the sender never answered.
+update public.notification_outbox set send_after = now() - interval '1 minute' where dedupe_key = 'b17:last_try';
+insert into claimed select 3, c.type from public.claim_notification_batch(100) c where c.recipient_id = :'rcpt';
 select is((select status || ' / ' || last_error from public.notification_outbox where dedupe_key = 'b17:last_try'),
   'failed / retries exhausted',
-  'B17: … and the row whose fifth attempt failed is now failed');
+  'B17: … once its lease ran out with no answer, the next claim ends it failed');
 
 select is((select string_agg(status || ':' || attempts, ',' order by dedupe_key) from public.notification_outbox
             where dedupe_key in ('b17:sent', 'b17:skipped')),

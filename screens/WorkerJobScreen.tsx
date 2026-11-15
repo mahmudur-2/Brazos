@@ -65,6 +65,7 @@ import {
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { paymentsMode } from '../lib/adapters/payments';
 import { noShowConfirm, paymentEyebrow, workerCancelConfirm } from '../lib/moneyCopy';
+import { workerReceivesCents } from '../lib/earningsMath';
 import { noShowReportable } from '../lib/paymentRules';
 import {
   brazosFeeCents,
@@ -663,7 +664,7 @@ export function WorkerJobScreen() {
         {/* R6c (D7): the figure a worker reads as "yours" is the take —
             amount_cents − platform_fee_cents through the one helper. */}
         <MoneyText
-          cents={workerTakeCents(payment)}
+          cents={workerReceivesCents({ ...payment, job_status: job.status }, workerTakeCents)}
           state={payment.status}
           releaseRequested={isReleaseRequested(payment)}
           issueOpen={issueOpen}

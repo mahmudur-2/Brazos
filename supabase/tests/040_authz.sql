@@ -1004,7 +1004,7 @@ select ok(has_function_privilege('service_role', 'public.claim_notification_batc
 -- control is service_role's privilege, the proof is the stranger's refusal.
 select ok(has_function_privilege('service_role', 'public.apply_payment_event(text)', 'EXECUTE'), 'service_role may execute apply_payment_event (positive control)');
 select ok(has_function_privilege('service_role', 'public.attach_provider_ref(uuid, text)', 'EXECUTE'), 'service_role may execute attach_provider_ref (positive control)');
-select ok(has_function_privilege('service_role', 'public.set_payouts_enabled(text, boolean)', 'EXECUTE'), 'service_role may execute set_payouts_enabled (positive control)');
+select ok(has_function_privilege('service_role', 'public.set_payouts_status(uuid, text)', 'EXECUTE'), 'service_role may execute set_payouts_status (positive control; set_payouts_enabled was dropped by 20261115000300)');
 select ok(has_function_privilege('service_role', 'public.resolve_job_dispute(uuid, text, text)', 'EXECUTE'), 'service_role may execute resolve_job_dispute (positive control)');
 select ok(has_function_privilege('service_role', 'public.expire_unfunded_payments()', 'EXECUTE'), 'service_role may execute expire_unfunded_payments (positive control)');
 select ok(has_function_privilege('service_role', 'public.auto_release_due_payments()', 'EXECUTE'), 'service_role may execute auto_release_due_payments (positive control)');
@@ -1013,7 +1013,7 @@ select throws_ok($$ select * from public.claim_notification_batch(1) $$, '42501'
 select throws_ok($$ select public.resolve_notification(gen_random_uuid(), 'sent') $$, '42501', 'permission denied for function resolve_notification', 'stranger: cannot resolve queue rows (service_role only)');
 select throws_ok($$ select public.apply_payment_event('authz-forged') $$, '42501', 'permission denied for function apply_payment_event', 'stranger: cannot apply a provider event (service_role only)');
 select throws_ok($$ select public.attach_provider_ref(gen_random_uuid(), 'pi_forged') $$, '42501', 'permission denied for function attach_provider_ref', 'stranger: cannot attach a provider reference (service_role only)');
-select throws_ok($$ select public.set_payouts_enabled('acct_forged', true) $$, '42501', 'permission denied for function set_payouts_enabled', 'stranger: cannot flip payouts_enabled (service_role only)');
+select throws_ok($$ select public.set_payouts_status(gen_random_uuid(), 'enabled') $$, '42501', 'permission denied for function set_payouts_status', 'stranger: cannot flip payouts_enabled (service_role only)');
 select throws_ok($$ select public.resolve_job_dispute((select v from fx where k = 'j_done'), 'worker', 'forged') $$, '42501', 'permission denied for function resolve_job_dispute', 'stranger: cannot resolve an issue report (service_role only)');
 select throws_ok($$ select public.expire_unfunded_payments() $$, '42501', 'permission denied for function expire_unfunded_payments', 'stranger: cannot expire unfunded payments (service_role only)');
 select throws_ok($$ select public.auto_release_due_payments() $$, '42501', 'permission denied for function auto_release_due_payments', 'stranger: cannot run the auto-release clock (service_role only)');

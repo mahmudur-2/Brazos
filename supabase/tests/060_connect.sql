@@ -387,8 +387,8 @@ select ok(
   like '%''none''%''action_needed''%''under_review''%''enabled''%',
   '5: with a check constraint over exactly the four app-facing states'
 );
-select has_function('public', 'set_payouts_enabled', array['text', 'boolean'],
-  '5: R5''s set_payouts_enabled(text, boolean) still exists, untouched');
+select hasnt_function('public', 'set_payouts_enabled', array['text', 'boolean'],
+  '5: R5''s set_payouts_enabled(text, boolean) is dropped (20261115000300): nothing calls it');
 
 -- The catalog: EXECUTE on the three service functions, and on the one
 -- client function, by role.

@@ -189,13 +189,15 @@ test('no client-side jobs.status writer exists anywhere', () => {
   assert.match(jobs, /\.rpc\('transition_job_status'/);
 
   // The RPC the app depends on still exists and is still transactional: its
-  // newest definition (job completions) locks the row and checks the caller.
-  const completions = read('supabase/migrations/20260925000000_job_completions.sql');
-  const transition = completions.slice(completions.indexOf('create or replace function public.transition_job_status('));
+  // newest definition (pack 1, A6: the work-start money rule, restated from job
+  // completions) locks the row and checks the caller.
+  const newest = '20261115000200_work_start_money_rule.sql';
+  const definition = read(`supabase/migrations/${newest}`);
+  const transition = definition.slice(definition.indexOf('create or replace function public.transition_job_status('));
   assert.match(transition, /^create or replace function public\.transition_job_status\(/);
   assert.match(transition, /where id = p_job_id\s+for update;/i);
   assert.match(transition, /v_job\.assigned_worker_id is distinct from v_user/i);
-  const later = migrationFiles.filter((f) => f > '20260925000000_job_completions.sql');
+  const later = migrationFiles.filter((f) => f > newest);
   for (const f of later) {
     assert.doesNotMatch(read(`supabase/migrations/${f}`), /function public\.transition_job_status\(/i, `${f} redefines it`);
   }

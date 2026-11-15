@@ -75,8 +75,8 @@
 // an idempotent replay returns unchanged.)
 //
 // `useSavedCard: true` with `paymentMethodId` is Confirm on a one-tap hire:
-// the same intent the sheet would have used (created or reused under the same
-// idempotency key, with the same fields, so Checkout can still take the job
+// the same intent the sheet would have used (created under the same idempotency
+// key with the same fields, or resumed from the row's provider_ref, so Checkout can still take the job
 // over afterwards), confirmed off-session with THAT card — the one the app
 // named — once the provider says it is on this caller's customer. The
 // ledger decides nothing new: begin_job_payment() still decides, as the
@@ -293,53 +293,47 @@ Deno.serve(async (req) => {
       customerId = (await persisted.json()) as string;
     }
 
-    // --- 3. The ephemeral key ------------------------------------------------
-    // No idempotency key here on purpose: this key is short-lived and a replay
-    // must mint a fresh one, not return an expired one.
-    const ephemeral = await stripe(
-      '/v1/ephemeral_keys',
-      { customer: customerId },
-      undefined,
-      STRIPE_VERSION
-    );
-    if (!ephemeral.ok || typeof ephemeral.body.secret !== 'string') {
-      console.error(`create-payment: ephemeral key ${ephemeral.status}: ${JSON.stringify(ephemeral.body).slice(0, 300)}`);
-      return json({ error: 'The payment provider is unavailable right now.' }, 502);
-    }
-
-    // --- 4. The intent, for exactly what the ledger says ---------------------
+    // --- 3. The intent, for exactly what the ledger says ---------------------
     // metadata[payment_id] is load-bearing, not decoration: apply_payment_event
     // resolves an event to a ledger row by metadata.payment_id FIRST, and it is
     // what makes every later event for this charge findable.
-    const intent = await stripe(
-      '/v1/payment_intents',
-      {
-        amount: String(amount),
-        currency: 'usd',
-        customer: customerId,
-        'metadata[payment_id]': paymentId,
-      },
-      `brazos-intent-${paymentId}`
-    );
+    // A2: a row that already names its intent is resumed from the provider and
+    // never created again — the idempotency key lasts about 24 hours, and a POST
+    // after that minted a second intent the ledger never named. If that read
+    // fails, this request fails; it never falls back to a POST.
+    const storedRef = typeof payment.provider_ref === 'string' ? payment.provider_ref : '';
+    const intent = storedRef
+      ? await stripeGet(`/v1/payment_intents/${encodeURIComponent(storedRef)}`)
+      : await stripe(
+          '/v1/payment_intents',
+          {
+            amount: String(amount),
+            currency: 'usd',
+            customer: customerId,
+            'metadata[payment_id]': paymentId,
+          },
+          `brazos-intent-${paymentId}`
+        );
     if (!intent.ok || typeof intent.body.id !== 'string' || typeof intent.body.client_secret !== 'string') {
       console.error(`create-payment: intent ${intent.status}: ${JSON.stringify(intent.body).slice(0, 300)}`);
       return json({ error: 'The payment provider is unavailable right now.' }, 502);
     }
 
-    // --- 5. Record the intent on the ledger row ------------------------------
+    // --- 4. Record a new intent on the ledger row ----------------------------
     // attach_provider_ref only writes where provider_ref is still null, so a
     // retried call that got the same intent back cannot overwrite anything.
-    const attached = await serviceRpc('attach_provider_ref', {
-      p_payment_id: paymentId,
-      p_ref: intent.body.id,
-    });
-    if (!attached.ok) {
-      throw new Error(`attach_provider_ref failed: ${attached.status} ${(await attached.text()).slice(0, 200)}`);
+    if (!storedRef) {
+      const attached = await serviceRpc('attach_provider_ref', {
+        p_payment_id: paymentId,
+        p_ref: intent.body.id,
+      });
+      if (!attached.ok) {
+        throw new Error(`attach_provider_ref failed: ${attached.status} ${(await attached.text()).slice(0, 200)}`);
+      }
     }
-    // The ledger's own intent when it already names one (attach_provider_ref never overwrites).
-    const intentId = typeof payment.provider_ref === 'string' && payment.provider_ref ? payment.provider_ref : intent.body.id;
+    const intentId = intent.body.id;
 
-    // --- 6. Idea 20: the opt-in, and Confirm with the saved card -------------
+    // --- 5. Idea 20: the opt-in, and Confirm with the saved card -------------
     if (saveCard !== null && !useSavedCard) {
       // Applied every time, both ways: an empty string clears it when the customer turned it off.
       const wanted = saveCard ? 'off_session' : '';
@@ -410,6 +404,20 @@ Deno.serve(async (req) => {
       // Anything else is the provider's. When the outcome is unknown, the app watches the ledger.
       const ambiguous = confirmed.status >= 500 || failure?.code === 'payment_intent_unexpected_state';
       return json({ error: 'The payment provider is unavailable right now.', ambiguous }, 502);
+    }
+
+    // --- 7. The ephemeral key, for the sheet alone ---------------------------
+    // No idempotency key here on purpose: this key is short-lived and a replay
+    // must mint a fresh one, not return an expired one.
+    const ephemeral = await stripe(
+      '/v1/ephemeral_keys',
+      { customer: customerId },
+      undefined,
+      STRIPE_VERSION
+    );
+    if (!ephemeral.ok || typeof ephemeral.body.secret !== 'string') {
+      console.error(`create-payment: ephemeral key ${ephemeral.status}: ${JSON.stringify(ephemeral.body).slice(0, 300)}`);
+      return json({ error: 'The payment provider is unavailable right now.' }, 502);
     }
 
     // Only what the client needs. Never the API key, never the whole intent,

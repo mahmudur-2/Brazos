@@ -35,7 +35,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(78);
+select plan(79);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -575,11 +575,20 @@ select is((select status::text || '/' || (received_cents = charge_amount_cents -
   'held/true/charged a different amount than this payment; nothing is sent until a person decides',
   'M1 (B17): a charge for another amount is recorded with a reason');
 select tests.authenticate_as(:'worker');
+select throws_ok(format('select public.transition_job_status(%L, %L)', :'jm', 'in_progress'), 'P0001',
+  'This job''s payment is on hold, so the work can''t start yet.',
+  'M1b (A6, 20261115000200): the work cannot start on a charge for another amount');
+-- SURGERY: a row whose work started before 20261115000200 had the gate. received_cents is cleared
+-- to pass the start, and the charge's amount is restored once the release is requested.
+select tests.clear_auth();
+update public.payments set received_cents = null where id = :'pm';
+select tests.authenticate_as(:'worker');
 select public.transition_job_status(:'jm', 'in_progress');
 select public.transition_job_status(:'jm', 'completed', '["https://example.com/mc-done.jpg"]'::jsonb);
 select tests.authenticate_as(:'customer');
 select public.release_job_payment(:'jm');
 select tests.clear_auth();
+update public.payments set received_cents = charge_amount_cents - 1 where id = :'pm';
 select is(tests.mc_in('transfers_due', :'pm'), 0::bigint, 'M2 (B17): it is never transferred');
 select ok(tests.mc_reasons(:'pm') like '%transfer: charged a different amount than this payment%', 'M3 (rule 4): listed');
 

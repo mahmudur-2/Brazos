@@ -1359,8 +1359,8 @@ export function ClientJobDetailScreen() {
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>{paymentEyebrow()}</Text>
                 <MoneyText cents={customerChargeCents(payment)} state={payment.status} />
                 <Text style={styles.paymentNote}>
-                  Your payment didn’t go through in time. Nothing was charged.
-                  Try again in a moment.
+                  The time to pay ran out, and the app hasn’t seen a payment confirm.
+                  Tap Check again in a moment.
                 </Text>
                 <Button
                   title="Check again"

@@ -549,9 +549,7 @@ export function CheckoutScreen() {
                   content: (
                     <View style={styles.paymentState}>
                       <Text style={styles.explainText}>
-                        The payment was taken, but the app hasn’t seen it
-                        confirm yet. Check back shortly — once it confirms, the
-                        funds show as held here and on the job.
+                        The app hasn’t seen your payment confirm yet. Check back shortly.
                       </Text>
                     </View>
                   ),
@@ -565,8 +563,8 @@ export function CheckoutScreen() {
                   content: (
                     <View style={styles.paymentState}>
                       <Text style={styles.explainText}>
-                        Your payment didn’t go through in time. Nothing was
-                        charged. Tap Check again below in a moment.
+                        The time to pay ran out, and the app hasn’t seen a
+                        payment confirm. Check back shortly.
                       </Text>
                     </View>
                   ),

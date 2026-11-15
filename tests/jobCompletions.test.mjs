@@ -171,7 +171,10 @@ test('6 · Earnings buckets and rows read the take through the helper, bucketed 
 test('7 · the worker’s job card shows the take, and the three-line breakdown off the row’s columns once the charge landed', () => {
   // C4: the caption's facts ride along (approval, issue, payout setup) — the figure is the take.
   // Final sweep: the cancellation facts ride along too (tests/cancelledMoney.test.mjs).
-  assert.match(worker, /<MoneyText\s+cents=\{workerTakeCents\(payment\)\}\s+state=\{payment\.status\}\s+releaseRequested=\{isReleaseRequested\(payment\)\}\s+issueOpen=\{issueOpen\}\s+waitingOnPayoutSetup=\{waitingOnSetup\}\s+refundQueued=\{isRefundQueued\(payment\)\}\s+feeKept=\{isCancellationFeeKept\(payment\)\}\s+\/>/);
+  // Pack 1, A10: the figure is what the worker receives (lib/earningsMath.ts) — the fee alone on a
+  // late cancellation, nothing on a full refund, the take otherwise — beside the captions that say so.
+  assert.match(worker, /^import \{ workerReceivesCents \} from '\.\.\/lib\/earningsMath';$/m);
+  assert.match(worker, /<MoneyText\s+cents=\{workerReceivesCents\(\{ \.\.\.payment, job_status: job\.status \}, workerTakeCents\)\}\s+state=\{payment\.status\}\s+releaseRequested=\{isReleaseRequested\(payment\)\}\s+issueOpen=\{issueOpen\}\s+waitingOnPayoutSetup=\{waitingOnSetup\}\s+refundQueued=\{isRefundQueued\(payment\)\}\s+feeKept=\{isCancellationFeeKept\(payment\)\}\s+\/>/);
   assert.doesNotMatch(worker, /cents=\{payment\.amount_cents\}/);
   // Stripe only, and only on a held / released / paid_out row — never unfunded, and (final
   // sweep) never on a held row whose refund is queued: a cancelled job's money is going home.

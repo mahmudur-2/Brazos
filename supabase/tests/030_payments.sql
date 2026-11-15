@@ -334,10 +334,15 @@ select ok((select status = 'held' and released_at is null and transfer_ref is nu
   '6: the reversal: status held, released_at null, transfer_ref null, release_requested_at PRESERVED, transfer_reversed_at set');
 select is((select count(*) from public.transfers_due where id = :'p1'), 0::bigint, '6: the parked row is ABSENT from transfers_due');
 select tests.authenticate_as(:'customer');
-select ok((select p.release_requested_at = :'p1_rr'::timestamptz and p.transfer_reversed_at is not null and p.status = 'held'
-           from public.release_job_payment(:'j1') p),
-  '6: the customer''s second release call changes nothing on a parked row');
+-- A4 (20261115000100): the returned row carries the party columns only, so the park
+-- (transfer_reversed_at, a server column) is read from the table after the call.
+select (select p.release_requested_at = :'p1_rr'::timestamptz and p.status = 'held'
+          from public.release_job_payment(:'j1') p) as p1_second_release \gset
 select tests.clear_auth();
+select ok(:'p1_second_release'::boolean
+          and (select release_requested_at = :'p1_rr'::timestamptz and transfer_reversed_at is not null and status = 'held'
+                 from public.payments where id = :'p1'),
+  '6: the customer''s second release call changes nothing on a parked row');
 select ok((select p.transfer_reversed_at is null and p.transfer_attempts = 1 and p.release_requested_at is not null
              and p.release_reason = 'dispute_resolved' and p.transfer_cents = 4625 and p.refund_cents = 0 and p.status = 'held'
            from public.resolve_job_dispute(:'j1', 'worker', 'reversal reviewed: pay the worker') p),
@@ -906,7 +911,7 @@ select throws_ok($$ select count(*) from public.transfers_due $$, '42501', 'perm
 select throws_ok($$ select count(*) from public.refunds_due $$, '42501', 'permission denied for view refunds_due', '14: the refund queue is not readable by a client');
 select throws_ok($$ select public.apply_payment_event('evt_j1_succeeded') $$, '42501', 'permission denied for function apply_payment_event', '14: authenticated cannot execute apply_payment_event');
 select throws_ok($$ select public.attach_provider_ref((select v from fx where k = 'p1'), 'pi_forged') $$, '42501', 'permission denied for function attach_provider_ref', '14: authenticated cannot execute attach_provider_ref');
-select throws_ok($$ select public.set_payouts_enabled('acct_forged', true) $$, '42501', 'permission denied for function set_payouts_enabled', '14: authenticated cannot execute set_payouts_enabled');
+select throws_ok($$ select public.set_payouts_status(gen_random_uuid(), 'enabled') $$, '42501', 'permission denied for function set_payouts_status', '14: authenticated cannot execute set_payouts_status');
 select throws_ok($$ select public.resolve_job_dispute((select v from fx where k = 'j20'), 'worker', 'forged') $$, '42501', 'permission denied for function resolve_job_dispute', '14: authenticated cannot execute resolve_job_dispute');
 select throws_ok($$ select public.expire_unfunded_payments() $$, '42501', 'permission denied for function expire_unfunded_payments', '14: authenticated cannot execute expire_unfunded_payments');
 select throws_ok($$ select public.auto_release_due_payments() $$, '42501', 'permission denied for function auto_release_due_payments', '14: authenticated cannot execute auto_release_due_payments');

@@ -75,9 +75,11 @@ export type Payment = {
    *  it. A tip is held once its card is charged and released only when its
    *  transfer lands, like a job payment (B1, 20261111000000). Null until then. */
   released_at: string | null;
-  /** 'approved' = the customer approved the work; 'auto_approved' = the 72h
-   *  on-read clock ran out (phase51). Null for tips and unreleased rows. */
-  release_reason: 'approved' | 'auto_approved' | null;
+  /** Why the release was asked for, written with release_requested_at: 'approved' = the
+   *  customer approved the work; 'auto_approved' = auto_release_due_payments (scheduled every
+   *  10 minutes) found the review window over; 'cancellation_fee' = a late cancellation's fee;
+   *  'dispute_resolved' = a dispute's decision. Null for tips and rows with no release asked. */
+  release_reason: 'approved' | 'auto_approved' | 'cancellation_fee' | 'dispute_resolved' | null;
   /** Reserved: the ledger stops at released (payout.paid is unhandled), so
    *  nothing writes this today. */
   paid_out_at: string | null;
@@ -229,10 +231,10 @@ export async function fetchJobPayment(jobId: string) {
 }
 
 /**
- * The same active job_payment row, read through job_payment_state() so the
- * 72h auto-release clock is checked on the way (phase51's on-read pattern —
- * there is no cron). The lifecycle surfaces use THIS; fetchJobPayment stays
- * for reads where running the clock would be surprising.
+ * The same active job_payment row, read through job_payment_state(), which
+ * returns it with the server-only columns empty. It runs no release clock:
+ * auto_release_due_payments is scheduled every 10 minutes
+ * (20261112000100_schedules_loud.sql). The lifecycle surfaces use THIS.
  */
 export async function fetchJobPaymentState(jobId: string) {
   const { data, error } = await supabase.rpc('job_payment_state', {
@@ -259,10 +261,9 @@ export type PaymentStatusSummary = Pick<Payment, 'status' | 'release_requested_a
  * filters as fetchJobPayment; RLS scopes rows to payer/payee, and every job
  * the hub lists has the viewer as one of the two, so nothing extra leaks.
  *
- * This is a plain table read: it does NOT run phase51's on-read release
- * clock (that is job_payment_state(), one job per call — N round trips for a
- * list). A stripe row buckets as closed once release_requested_at is set
- * (D23).
+ * This is a plain table read, one query for the whole list
+ * (job_payment_state() is one job per call). A stripe row buckets as closed
+ * once release_requested_at is set (D23).
  */
 export async function fetchJobPaymentStatusesByJobIds(jobIds: string[]) {
   if (jobIds.length === 0) {

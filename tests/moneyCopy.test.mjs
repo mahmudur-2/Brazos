@@ -98,7 +98,7 @@ test('C4 · the table says the right thing for the states that matter most', () 
   assert.equal(paymentCaption({ status: 'held', refundQueued: true, issueOpen: true }, 'customer'), 'Refund on its way — back on your card in a few days');
   assert.equal(
     paymentCaption({ status: 'held', refundQueued: true, feeKept: true, releaseRequested: true, counterpartFirstName: 'Sam' }, 'customer'),
-    'Partly refunded — the cancellation fee goes to Sam'
+    'Refund on its way — the cancellation fee goes to Sam'
   );
   assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true, releaseRequested: true }, 'worker'), 'Cancellation fee — on its way to you');
   // Off a held row the facts say nothing: a settled refund keeps its own words.

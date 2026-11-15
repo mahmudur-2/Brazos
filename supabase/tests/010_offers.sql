@@ -155,12 +155,11 @@ select is(
       and (p.proname ilike '%release%payment%' or p.proname ilike '%payout%' or p.proname ilike '%cash_out%')
       -- The stripe release pair (release_job_payment, auto_release_due_payments)
       -- and the functions that only read/record the payout state and move no
-      -- money (set_payouts_enabled, my_payouts_status, set_payouts_status).
+      -- money (my_payouts_status, set_payouts_status).
       -- The sandbox pair and my_payouts_enabled were dropped by
       -- 20261108000000_lean_v1.sql. The scan itself is unchanged.
       -- B11: worker_payouts_ready only reads payouts_enabled for the offer gate.
       and p.proname not in ('release_job_payment', 'auto_release_due_payments',
-                            'set_payouts_enabled',
                             'my_payouts_status', 'set_payouts_status',
                             'worker_payouts_ready')),
   '',

@@ -374,3 +374,21 @@ test('[static] C1 · every stage surface reads its words from lib/jobLifecycle.t
     assert.match(read(file), /jobPillLabel\(/, `${file} labels its job pill through jobPillLabel()`);
   }
 });
+
+test('A18 · the app’s release_reason type is exactly the newest payments_release_reason_known list', () => {
+  // Pack 1: the type said 'approved' | 'auto_approved' while the database also writes the
+  // cancellation fee's and a dispute's release. The newest migration that sets the check wins.
+  const files = readdirSync(join(root, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql')).sort();
+  let list = null;
+  for (const file of files) {
+    const sql = read(join('supabase', 'migrations', file));
+    for (const m of sql.matchAll(/add constraint payments_release_reason_known\s+check \(release_reason is null or release_reason in \(([^)]*)\)\)/gi)) {
+      list = m[1];
+    }
+  }
+  assert.ok(list, 'the check is found in the migrations');
+  const known = sortedSet([...list.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]));
+  const union = read('lib/payments.ts').match(/^\s*release_reason: ((?:'[a-z_]+' \| )+)null;$/m);
+  assert.ok(union, 'lib/payments.ts types release_reason as string literals and null');
+  assert.deepEqual(sortedSet([...union[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1])), known);
+});

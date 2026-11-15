@@ -95,16 +95,12 @@ const DISABLED_MESSAGE =
 
 /**
  * The card path (R6a). When the native module is absent (a binary predating
- * it, or web), EVERY method refuses with D4's one honest sentence — this
+ * it, or web), both checkout methods refuse with D4's one honest sentence — this
  * build cannot take card payments yet; update the app — and CheckoutScreen
- * shows that sentence as its screen state.
+ * shows that sentence as its screen state. Release is a database call and
+ * never needs the card SDK (pack 1, A15).
  */
 function createStripePaymentProvider(): PaymentProvider {
-  const unavailable = (): PaymentResult => ({
-    data: null,
-    error: { message: STRIPE_UNAVAILABLE_MESSAGE },
-  });
-
   return {
     getMode: () => 'stripe',
     beginJobCheckout: async (jobId, options) => {
@@ -112,7 +108,6 @@ function createStripePaymentProvider(): PaymentProvider {
       return createPaymentSession(jobId, { saveCard: options?.saveCard === true });
     },
     releaseJobPayment: async (jobId) => {
-      if (!stripeReady()) return unavailable();
       const { data, error } = await supabase.rpc('release_job_payment', { p_job_id: jobId });
       if (error) return { data: null, error: { message: error.message } };
       return { data: (data ?? null) as Payment | null, error: null };

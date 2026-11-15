@@ -324,12 +324,14 @@ test('[static] the adapter selects two ways, and the stripe provider refuses whe
   assert.match(adapter, /rpc\('release_job_payment', \{ p_job_id: jobId \}\)/);
   // D3 (R6c): a card tip is beginTipCheckout + the sheet, never the tip RPC from the client.
   assert.doesNotMatch(adapter, /begin_tip_payment/);
-  // The SDK-absent / key-absent refusal guards every stripe method.
+  // The SDK-absent / key-absent refusal guards both checkout methods. Pack 1, A15: release is a
+  // database call, not a card one, so it never waits on the card SDK.
   const stripeProvider = adapter.slice(
     adapter.indexOf('function createStripePaymentProvider'),
     adapter.indexOf('function createDisabledPaymentProvider')
   );
-  assert.equal((stripeProvider.match(/stripeReady\(\)/g) ?? []).length, 3, 'all three stripe methods consult stripeReady()');
+  assert.equal((stripeProvider.match(/stripeReady\(\)/g) ?? []).length, 2, 'both checkout methods consult stripeReady(); release does not');
+  assert.match(stripeProvider, /releaseJobPayment: async \(jobId\) => \{\s*const \{ data, error \} = await supabase\.rpc\('release_job_payment'/);
   // The disabled provider still refuses everything.
   assert.match(adapter, /releaseJobPayment: refuse/);
 });
@@ -381,7 +383,15 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
   const timeoutBlock = src.slice(src.indexOf("phase === 'timeout'\n            ? ["), src.indexOf("stripe && windowClosed"));
   assert.ok(timeoutBlock.length > 0, 'the timeout section exists');
   assert.doesNotMatch(timeoutBlock, /\bfail/i);
-  assert.match(timeoutBlock, /hasn’t seen it\s+confirm yet/);
+  // Pack 1, A11: the card also shows after an outcome nobody knows (an ambiguous saved-card
+  // answer), so it never says the payment was taken.
+  assert.match(timeoutBlock, /The app hasn’t seen your payment\s+confirm yet\. Check back shortly\./);
+  assert.doesNotMatch(timeoutBlock, /was taken|show as held/);
+  // Pack 1, A11: the closed window names neither outcome — a late success can still land.
+  const closedBlock = src.slice(src.indexOf('stripe && windowClosed'), src.indexOf('What you’re protecting'));
+  assert.ok(closedBlock.length > 0, 'the closed-window section exists');
+  assert.match(closedBlock, /The time to pay ran out, and the app hasn’t seen a\s+payment confirm\. Check back shortly\./);
+  assert.doesNotMatch(closedBlock, /Nothing was charged/);
   assert.match(code, /phase === 'timeout' \|\| windowClosed \? \(\s*<Button title="Check again"/);
   // D13 / D22: the all-in total is the headline — the row's charge_amount_cents
   // or the quote's total_cents — and the bare agreed price is never the total.
@@ -412,7 +422,7 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
   // The stripe copy never says paid, and the sheet's success is never "held".
   const stripeCopy = [
     'Your card is charged the all-in total now, through the secure payment sheet.',
-    'The payment was taken, but the app hasn’t seen it',
+    'The app hasn’t seen your payment confirm yet.',
     'Nothing is held for this job.',
   ];
   for (const sentence of stripeCopy) assert.ok(src.includes(sentence), `missing: ${sentence}`);
@@ -495,7 +505,10 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   const closedCard = code.slice(closedAt, code.indexOf(') : payment ? (', closedAt));
   // FIX-RUN B5: the closed window reads as a payment that didn't go through in time.
   assert.match(closedCard, />\{paymentEyebrow\(\)\}</);
-  assert.match(closedCard, /Your payment didn’t go through in time\. Nothing was charged\./);
+  // Pack 1, A11: the row is unfunded, not voided — a late success can still land (held, or
+  // refunded once the row is voided), so the card never says nothing was charged.
+  assert.match(closedCard, /The time to pay ran out, and the app hasn’t seen a payment confirm\.\s+Tap Check again in a moment\./);
+  assert.doesNotMatch(closedCard, /Nothing was charged/);
   assert.match(closedCard, /title="Check again"/);
   assert.doesNotMatch(closedCard, /navigate\('Checkout'/);
   // D15: the checkout CTA is behind the kill switch.

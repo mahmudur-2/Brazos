@@ -3487,6 +3487,67 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      payment_for_party: {
+        Args: { p: Database["public"]["Tables"]["payments"]["Row"] }
+        Returns: {
+          amount_cents: number
+          authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_cents: number | null
+          chargeback_ref: string | null
+          created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
+          held_at: string | null
+          id: string
+          job_id: string
+          kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
+          offer_id: string | null
+          paid_out_at: string | null
+          payee_id: string
+          payer_id: string
+          platform_fee_cents: number
+          provider: string
+          provider_ref: string | null
+          received_cents: number | null
+          refund_attempts: number
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
+          refund_sent_at: string | null
+          refund_sent_attempt: number | null
+          refund_stopped_at: string | null
+          refunded_cents: number | null
+          release_reason: string | null
+          release_requested_at: string | null
+          released_at: string | null
+          status: Database["public"]["Enums"]["payment_status"]
+          stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
+          transfer_sent_at: string | null
+          transfer_sent_attempt: number | null
+          transfer_stopped_at: string | null
+          updated_at: string
+          worker_fee_bps: number | null
+        }
+        SetofOptions: {
+          from: "payments"
+          to: "payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      payment_money_clear: {
+        Args: { p: Database["public"]["Tables"]["payments"]["Row"] }
+        Returns: boolean
+      }
       payment_record_reversal: {
         Args: {
           p_amount_cents: number
@@ -3502,6 +3563,10 @@ export type Database = {
       }
       payment_refund_held_by_dispute: {
         Args: { p_payment_id: string }
+        Returns: boolean
+      }
+      payment_transfer_unconfirmed: {
+        Args: { p: Database["public"]["Tables"]["payments"]["Row"] }
         Returns: boolean
       }
       pg_function_present: {
@@ -3903,10 +3968,6 @@ export type Database = {
       set_payment_customer: {
         Args: { p_customer_id: string; p_user_id: string }
         Returns: string
-      }
-      set_payouts_enabled: {
-        Args: { p_enabled: boolean; p_stripe_account_id: string }
-        Returns: boolean
       }
       set_payouts_status: {
         Args: { p_status: string; p_user_id: string }
