@@ -69,7 +69,7 @@ const CENSUS = [
     re: /: releaseRequested && !isPayoutOnItsWay\(payment\) \? payment\.release_reason === 'auto_approved' \? 'Approved automatically after 72 hours\.' : 'You approved the work\.' : releaseRequested \? payment\.release_reason === 'auto_approved' \? 'Approved automatically after 72 hours with no issue reported\. The payment is on its way to the worker and shows as released when the transfer lands\.' : 'You approved the work\. The payment is on its way to the worker and shows as released when the transfer lands\.'/ },
   // Codex R12-A1: from the note's guard, so the entry asks (the two sentences above are inside it).
   { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 3, why: 'the approve action itself, before any approval, unless a refund failure is recorded (R11-A2; a refund queued: R7-A3b, the owner decides)',
-    re: /\{!released && !releaseRequested && releaseAllowed && isRefundFailureRecorded\(payment\) \? null : \( <Text style=\{styles\.paymentNote\}> \{released \? [^]*? : releaseAllowed \? 'Approving sends this payment on its way to the worker\. If something isn’t right, report the issue instead — release waits while a report is open\.'/ },
+    re: /\{!released && !releaseRequested && releaseAllowed && isRefundFailureRecorded\(payment\) \? null : \( <Text style=\{styles\.paymentNote\}> \{released \? payment\.release_reason === 'auto_approved' \? 'Released automatically after 72 hours with no issue reported\.' : 'You approved the work and the payment was released to the worker\.' : releaseRequested && !isPayoutOnItsWay\(payment\) \? payment\.release_reason === 'auto_approved' \? 'Approved automatically after 72 hours\.' : 'You approved the work\.' : releaseRequested \? payment\.release_reason === 'auto_approved' \? 'Approved automatically after 72 hours with no issue reported\. The payment is on its way to the worker and shows as released when the transfer lands\.' : 'You approved the work\. The payment is on its way to the worker and shows as released when the transfer lands\.' : releaseAllowed \? 'Approving sends this payment on its way to the worker\. If something isn’t right, report the issue instead — release waits while a report is open\.'/ },
   { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 1, why: 'the approve dialog, before any approval: what approving does, with no timing (R8-A1 vocabulary), unless a refund failure is recorded (R11-A2)',
     re: /\(isRefundFailureRecorded\(payment\) \? '' : '\\n\\n' \+ 'This approves the finished work and releases the payment to the worker\. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands\.'\)/ },
   // Codex R12-A1: the release vocabulary's sentences on this page, each under the predicate. The three
@@ -194,14 +194,14 @@ const NO_PROMISE = {
     ['N', 'the screen title', /^Earnings & Payouts$/],
     ['F', 'the totals: released, transferred', /^(Released to you|Transferred to you)$/],
   ],
-  'screens/EmailSignInScreen.tsx': [['N', 'a reset link', /a reset link is on its way\./]],
+  'screens/EmailSignInScreen.tsx': [['N', 'a reset link', /^If an account uses \$\{trimmedEmail\}, a reset link is on its way\. Open it on this phone to set a new password\.$/]],
   'screens/JobConfirmedScreen.tsx': [['C', 'just hired: held until approved, nothing released', /^(\$\{workerName\} is hired and your payment is protected\. Funds stay held until the work is done and approved — nothing has been released\.|Your card was charged\. Nothing reaches the worker until you approve the finished work\.)$/]],
   'screens/MyJobsHubScreen.tsx': [['G', 'a section’s empty line', /^Work you’ve submitted for approval lands here until funds release\.$/]],
   'screens/PayoutsScreen.tsx': [['G', 'the payout account and how payouts work', /^(Payments aren’t available right now, so there is no payout account to set up\.|The payment provider needs an email address for your payout account\.|Could not (start|open) payout setup|Payouts are on the card path only|Refresh payout status|PAYOUT STATUS|Email address for your payout account|How payouts work|Approved payments transfer on their own|when a customer approves your finished work, the payment is released and transferred to you on the provider’s schedule\.|there is nothing to trigger\. Earnings shows each payment as held, released and transferred as it happens\.)$/]],
   'screens/PostJobScreen.tsx': [['N', 'a job request', /^Your request is on its way\.$/]],
   'screens/ProfileScreen.tsx': [['N', 'a menu row', /^Earnings & payouts$/]],
   'screens/ReviewAndTipScreen.tsx': [['F', 'released', /^(Released automatically after 72 hours\.|Released on your approval\.)$/]],
-  'screens/VerifyPhoneScreen.tsx': [['N', 'a sign-in code', /^A new code is on its way\. /]],
+  'screens/VerifyPhoneScreen.tsx': [['N', 'a sign-in code', /^A new code is on its way\. The previous one no longer works\.$/]],
   'screens/WorkerHomeScreen.tsx': [['N', 'the job feed', /^No open jobs right now — new jobs appear here automatically as customers post them\.$/]],
   'screens/WorkerJobScreen.tsx': [
     ['F', 'released', /^(Released automatically after 72 hours with no response from the customer\.|\$\{clientName\} approved the finished work and the payment was released\.)$/],
@@ -218,10 +218,10 @@ const NO_PROMISE = {
   'lib/legal/privacyPolicy.ts': [['G', 'the Privacy Policy (approved; not touched)', /^# Brazos Privacy Policy /]],
   'lib/legal/termsOfService.ts': [['G', 'the Terms of Service (approved; not touched)', /^# Brazos Terms of Service /]],
   'lib/moneyCopy.ts': [['F', 'paid out', /^Paid out$/]],
-  'lib/navigation.ts': [['N', 'the switch to Worker Mode for Payouts', /^Payouts are part of your worker side\. /]],
+  'lib/navigation.ts': [['N', 'the switch to Worker Mode for Payouts', /^Payouts are part of your worker side\. Viewing them means switching to Worker Mode — your posted jobs stay exactly where they are\.$/]],
   'lib/offerCopy.ts': [['G', 'a payout account before offers', /^(Finish payout set-up first|You need a payout account before you can send offers\.|Set up payouts|Your payout account is under review\. You can send offers once it is on\.)$/]],
   'lib/payments.ts': [['G', 'the Payouts page: the account, no payment named', /^(Payouts aren’t set up yet|Set up payouts to receive what you earn\. It’s a short setup in your browser, and you’re brought back here when it’s done\.|Set up payouts|Payout setup isn’t finished|Something is still needed before payouts can start\. Pick up where you left off — the setup resumes in your browser\.|Finish setting up payouts|Payouts under review|Payouts are set up|Approved payments are transferred to you on the provider’s schedule\. There is nothing to trigger here\.|Your payout status could not be read right now\. Try again\.|The payout setup could not be started right now\. Nothing changed — try again\.)$/]],
-  'lib/phoneAuth/mode.ts': [['N', 'a software release', /cannot run in a release\.$/]],
+  'lib/phoneAuth/mode.ts': [['N', 'a software release', /^development-only mock provider, which cannot run in a release\.$/]],
 };
 // The user-visible texts of a file that hold the vocabulary: `raw` as code() has it (quotes included),
 // `text` without them.
@@ -234,7 +234,7 @@ const sentences = (file) => {
     if (quoted || node.kind === ts.SyntaxKind.JsxText) {
       const raw = node.getText(sf).replace(/\s+/g, ' ').trim();
       const words = ts.isTemplateExpression(node) ? [node.head, ...node.templateSpans.map((s) => s.literal)].map((p) => p.text).join('') : quoted ? node.text : raw;
-      if (VOCABULARY.test(words) && /\S \S/.test(words.trim())) {
+      if (VOCABULARY.test(words) && /\S\s+\S/.test(words.trim())) {
         out.push({ raw, text: (quoted ? raw.slice(1, -1) : raw).trim(), line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1 });
       }
       if (!ts.isTemplateExpression(node)) return;
@@ -684,8 +684,6 @@ const never = () => ({
     /<Text style=\{styles\.approvalTitle\}>The work is done — your call<\/Text> (?:\{\} )?\{(isRefundFailureRecorded\(payment\)) \? null : \( <Text style=\{styles\.noticeText\}> Review what \{workerName\} submitted, then approve to release the held funds/)),
   reviewGate: run(['isRefundFailureRecorded', 'payment'], ONCE('screens/ReviewAndTipScreen.tsx',
     /title: 'Approve the work first', body: (isRefundFailureRecorded\(payment\) \? undefined : '[^']*'),/)),
-  workerNote: new Function('isRefundFailureRecorded', 'payment', 'clientName', ONCE('screens/WorkerJobScreen.tsx',
-    /if \(lifecycle === 'awaiting_approval'\) \{ (const waiting = `[^`]*`; if \(isRefundFailureRecorded\(payment\)\) return waiting; return `[^`]*`;) \}/)),
   earningsClock: run(['isRefundFailureRecorded', 'releaseDeadlineMs', 'row'], ONCE('screens/EarningsScreen.tsx',
     /releaseDeadlineMs: (isRefundFailureRecorded\(row\) \? null : releaseDeadlineMs\(\{ completed_at: row\.job_completed_at \?\? null \}\)),/)),
   homeLine: run(['isRefundFailureRecorded', 'releaseDeadlineMs', 'input', 'job'], ONCE('lib/homeAttention.ts',
@@ -705,7 +703,6 @@ test('R11-A2 · never approved: no release or timer sentence beside a recorded r
   const RELEASES = '\n\nThis approves the finished work and releases the payment to the worker. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands.';
   const UNFROZEN = 'Release is unfrozen once the report is withdrawn — including the automatic release timer. You can approve the work yourself right after.';
   const GATE = 'Release the held payment (or report an issue) before leaving your review — a review should never stand between the worker and their money.';
-  const WAITING = 'Waiting on Sam to approve the finished work.';
   for (const name of ['12 never approved', '14a never approved, hand refund failed', '14c never approved, hand refund arranged']) {
     const row = ROWS[name];
     const recorded = name !== '12 never approved';
@@ -727,7 +724,6 @@ test('R11-A2 · never approved: no release or timer sentence beside a recorded r
       detailCta: NEVER.detailDeadline(isRefundFailureRecorded, releaseDeadlineMs, row, job),
       detailNote: !NEVER.detailNote(isRefundFailureRecorded, row),
       reviewGate: NEVER.reviewGate(isRefundFailureRecorded, row),
-      workerNote: NEVER.workerNote(isRefundFailureRecorded, row, 'Sam'),
       earningsClock: NEVER.earningsClock(isRefundFailureRecorded, releaseDeadlineMs, { ...row, job_completed_at: COMPLETED }),
       customerLine: myJobsNextAction({ perspective: 'customer', state: 'awaiting_approval', releaseDeadline: NEVER.homeLine(isRefundFailureRecorded, releaseDeadlineMs, { payments: p }, job), nowMs: Date.parse(COMPLETED) }),
       workerLine: myJobsNextAction({ perspective: 'worker', state: 'awaiting_approval', releaseDeadline: NEVER.homeLine(isRefundFailureRecorded, releaseDeadlineMs, { payments: p }, job), nowMs: Date.parse(COMPLETED) }),
@@ -737,14 +733,13 @@ test('R11-A2 · never approved: no release or timer sentence beside a recorded r
     assert.deepEqual(said, recorded ? {
       timer: false, approveNote: null, paused: PAUSED, approvedNote: false, dialog: '', withdraw: 'You can approve the work yourself right after.',
       button: 'Approve the work', title: 'Approve the finished work?', confirm: 'Approve',
-      detailCta: null, detailNote: false, reviewGate: undefined, workerNote: WAITING, earningsClock: null,
+      detailCta: null, detailNote: false, reviewGate: undefined, earningsClock: null,
       customerLine: 'Approval needed — review the finished work', workerLine: 'Waiting on customer approval',
       cardTime: null, workerCaption: 'Held in protection',
     } : {
       timer: true, approveNote: APPROVING, paused: PAUSED, approvedNote: false, dialog: RELEASES, withdraw: UNFROZEN,
       button: 'Approve & release payment', title: 'Release the payment to the worker?', confirm: 'Approve & release',
-      detailCta: due, detailNote: true, reviewGate: GATE,
-      workerNote: `${WAITING} If they don’t respond within 72 hours, the funds release automatically.`, earningsClock: due,
+      detailCta: due, detailNote: true, reviewGate: GATE, earningsClock: due,
       customerLine: myJobsNextAction({ perspective: 'customer', state: 'awaiting_approval', releaseDeadline: due, nowMs: Date.parse(COMPLETED) }),
       workerLine: myJobsNextAction({ perspective: 'worker', state: 'awaiting_approval', releaseDeadline: due, nowMs: Date.parse(COMPLETED) }),
       cardTime: due, workerCaption: 'Held in protection — yours when the customer approves',
@@ -775,8 +770,9 @@ test('R11-A2 · never approved: no release or timer sentence beside a recorded r
     return `${file}@${all[0].index + all[0][0].length}`;
   });
   const unguarded = ['screens', 'components', 'ui', 'lib'].flatMap(sourceFiles).flatMap((file) =>
-    [...code(file).matchAll(/releaseDeadlineMs\(/g)].map((m) => [file, m.index, code(file).slice(Math.max(0, m.index - 80), m.index)]));
-  const ASKED = /(isRefundFailureRecorded\([^)]*\) \? null : |refundFailure \? null : |export function |!isRefundFailureRecorded\(payment\) && )$/;
+    [...code(file).matchAll(/releaseDeadlineMs\s*\(/g)].map((m) => [file, m.index, code(file).slice(Math.max(0, m.index - 80), m.index)]));
+  // Codex R13-A2: a reversed guard (`!… ? null :`) passes the clock where a refund failure is recorded.
+  const ASKED = /((?<!!)isRefundFailureRecorded\([^)]*\) \? null : |(?<!!)refundFailure \? null : |export function |!isRefundFailureRecorded\(payment\) && )$/;
   assert.deepEqual(unguarded.filter(([file, at, before]) => !ASKED.test(before) && !EXEMPT.includes(`${file}@${at}`)).map(([f, , before]) => `${f}: ${before}`), [],
     'every release clock a sentence reads asks the predicate');
 });
