@@ -16,7 +16,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(39);
+select plan(42);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -294,8 +294,19 @@ select tests.pw_hand_refund_failed('evt_pw_rf13c', tests.pw_pid(:'j13c'), 300) a
 select (public.resolve_refund_failure(tests.pw_pid(:'j13c'), 'refunded by hand in the dashboard')).id as ar13c \gset
 insert into rowsx values ('13c hand refund failed, part, then arranged', tests.pw_pid(:'j13c'), false);
 
+-- 14. Codex R11-A2: never approved (completed, held), a hand refund in Stripe of the whole charge failed
+--     and its charge.refunded never came (refund_cents 0); 14c: then the owner records it arranged. Their
+--     approval, after S10, is accepted and queues a transfer that waits for a person.
+select tests.pw_job('PW never approved, hand refund failed', 'completed') as j14 \gset
+select tests.pw_hand_refund_failed('evt_pw_rf14', tests.pw_pid(:'j14'), null) as rf14 \gset
+insert into rowsx values ('14a never approved, hand refund failed', tests.pw_pid(:'j14'), false);
+select tests.pw_job('PW never approved, hand refund arranged', 'completed') as j14c \gset
+select tests.pw_hand_refund_failed('evt_pw_rf14c', tests.pw_pid(:'j14c'), null) as rf14c \gset
+select (public.resolve_refund_failure(tests.pw_pid(:'j14c'), 'refunded by bank transfer')).id as ar14c \gset
+insert into rowsx values ('14c never approved, hand refund arranged', tests.pw_pid(:'j14c'), false);
+
 -- ---------------------------------------------------------------------------
--- The fact, row by row (23 rows).
+-- The fact, row by row (25 rows).
 -- ---------------------------------------------------------------------------
 select diag(name || ': ' || tests.pw_show(pid)) from rowsx order by name;
 
@@ -361,6 +372,24 @@ select tests.clear_auth();
 select is((select public.payment_payout_on_its_way(p) from public.payments p where p.id = (select pid from rowsx where name like '02 %')),
           (select public.payment_payout_on_its_way(p) from public.payments p where p.id = (select pid from rowsx where name like '01 %')),
   'S10: waiting on the setup and transferring read the same to the customer');
+
+-- R11-A2: approval stays available on 14a and 14c (the customer approves the work; the owner decides the
+-- money): accepted, the transfer queued, nothing due, no payout on its way, and payment_attention says a
+-- person decides. Row 12, the control: the same approval is due and on its way.
+select tests.authenticate_as(:'customer');
+select (public.release_job_payment(:'j12')).release_reason as ap12,
+       (public.release_job_payment(:'j14')).release_reason as ap14,
+       (public.release_job_payment(:'j14c')).release_reason as ap14c \gset
+select tests.clear_auth();
+select is((select string_agg(format('%s %s/%s/%s/%s/%s', split_part(x.name, ' ', 1), p.release_reason, p.transfer_cents,
+                                    exists (select 1 from public.transfers_due d where d.id = p.id),
+                                    public.payment_payout_on_its_way(p),
+                                    (select count(*) from public.payment_attention a where a.payment_id = p.id
+                                       and a.reason = 'transfer is more than is left after refunds: a person decides')),
+                             ', ' order by x.name)
+             from rowsx x join public.payments p on p.id = x.pid where x.name ~ '^(12|14a|14c) '),
+  '12 approved/4625/t/t/0, 14a approved/4625/f/f/1, 14c approved/4625/f/f/1',
+  'R11-A2: approving a never-approved row whose hand refund failed (14a) or was arranged (14c) is accepted and queues the transfer, but nothing is due, no payout is on its way and payment_attention says a person decides; the same approval of row 12 is due and on its way');
 
 -- ---------------------------------------------------------------------------
 -- The invariant: the fact is transfers_due, except a begun transfer whose attempt closed.

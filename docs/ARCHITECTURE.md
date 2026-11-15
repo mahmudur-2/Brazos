@@ -567,8 +567,11 @@ own message, 401 no session, 409 no amount yet, 429 past the hourly limit, 502 S
 `metadata[payment_id]` (without it the event matches no row). One attempt = one key:
 `tr:<payment id>:<attempt>` and `rf:<payment id>:<attempt>`. Before each send
 `settlement_send_begin` asks the database, and every answer is written back at once
-(`record_settlement_sent` on a 2xx with an id, `record_settlement_result` otherwise). A key first
-used 23 hours ago is no longer offered; the row shows in `payment_attention` for the owner.
+(`record_settlement_sent` on a 2xx with an id, `record_settlement_result` otherwise). A refund
+answered failed or canceled is first stored in `payment_events` as a `refund.failed` event named
+`process-settlements:<refund id>` and applied by `apply_payment_event()`, before the attempt stops.
+A key first used 23 hours ago is no longer offered; the row shows in `payment_attention` for the
+owner.
 
 ## Staging pipeline
 

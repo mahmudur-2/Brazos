@@ -17,7 +17,7 @@ import { fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
 import { workerReceivesCents } from '../lib/earningsMath';
 import { earningsRowMeta } from '../lib/earningsCopy';
 import { isPayoutOnItsWay } from '../lib/paymentRules';
-import { releaseAtLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
+import { isRefundFailureRecorded, releaseAtLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
 import { formatBudget } from '../lib/jobs';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import { formatTimeAgo } from '../lib/time';
@@ -184,9 +184,10 @@ export function EarningsScreen() {
                                     refund_cents: row.refund_cents,
                                     transfer_cents: row.transfer_cents,
                                     job_status: row.job_status,
-                                    releaseDeadlineMs: releaseDeadlineMs({
-                                      completed_at: row.job_completed_at ?? null,
-                                    }),
+                                    // Codex R11-A2: a refund of it failed: no release clock.
+                                    releaseDeadlineMs: isRefundFailureRecorded(row)
+                                      ? null
+                                      : releaseDeadlineMs({ completed_at: row.job_completed_at ?? null }),
                                     waitingOnPayoutSetup: payoutSetupNotice(payouts, [row]) !== null,
                                     payoutOnItsWay: isPayoutOnItsWay(row),
                                   },

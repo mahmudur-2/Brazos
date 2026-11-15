@@ -88,6 +88,7 @@ import {
   STAGE_TRACK,
   deriveJobLifecycle,
   isLiveJob,
+  isRefundFailureRecorded,
   jobPillLabel,
   nextWorkerStep,
   trackStepIndex,
@@ -731,7 +732,10 @@ export function WorkerJobScreen() {
                 : `${clientName} approved the finished work.`;
             }
             if (lifecycle === 'awaiting_approval') {
-              return `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically.`;
+              // Codex R11-A2: a refund of it failed: neither approval nor the clock sends the payout.
+              const waiting = `Waiting on ${clientName} to approve the finished work.`;
+              if (isRefundFailureRecorded(payment)) return waiting;
+              return `${waiting} If they don’t respond within 72 hours, the funds release automatically.`;
             }
             if (isHeld(payment)) {
               return `${clientName} placed the funds in protection. They’re released only after the finished work is approved.`;

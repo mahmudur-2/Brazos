@@ -192,7 +192,7 @@ test('10 · every verdict has the same shape', () => {
 // ---------------------------------------------------------------------------
 test('11 · each pass begins before it posts and writes back after, with the attempt it read', () => {
   const src = readFileSync(new URL('../supabase/functions/process-settlements/index.ts', import.meta.url), 'utf8');
-  assert.match(src, /^import \{ KEY_UNKNOWN_STATUSES, settlementKey, settlementVerdict \} from '\.\/classify\.mjs';$/m);
+  assert.match(src, /^import \{ KEY_UNKNOWN_STATUSES, refundFailedEvent, settlementKey, settlementVerdict \} from '\.\/classify\.mjs';$/m);
   const one = src.indexOf('// Pass one:');
   const two = src.indexOf('// Pass two:');
   const serve = src.indexOf('Deno.serve(');

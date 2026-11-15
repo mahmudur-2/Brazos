@@ -277,10 +277,12 @@ export function postedCardLive(input: {
   paymentStatus: string | null | undefined;
   workerName: string | null | undefined;
   nowMs: number;
+  /** Codex R11-A2: isRefundFailureRecorded (lib/jobLifecycle.ts) on the job's payment: no release time. */
+  refundFailure?: boolean;
 }): { live: LiveJobStatus | null; chatLabel: string; moneyNote: 'held' | undefined } {
-  const { job, state, paymentStatus, workerName, nowMs } = input;
+  const { job, state, paymentStatus, workerName, nowMs, refundFailure } = input;
   const live = job.assigned_worker_id
-    ? liveJobStatus({ state, job, releaseDeadline: releaseDeadlineMs(job), surface: 'card', nowMs })
+    ? liveJobStatus({ state, job, releaseDeadline: refundFailure ? null : releaseDeadlineMs(job), surface: 'card', nowMs })
     : null;
   const first = firstNameOf(workerName);
   return {

@@ -1,5 +1,6 @@
 import {
   deriveJobLifecycle,
+  isRefundFailureRecorded,
   myJobsNextAction,
   releaseDeadlineMs,
   type JobLifecycleState,
@@ -155,7 +156,7 @@ function rankJobs(
           state,
           bidCount: job.bid_count,
           reviewedByMe,
-          releaseDeadline: releaseDeadlineMs(job),
+          releaseDeadline: isRefundFailureRecorded(input.payments[job.id]) ? null : releaseDeadlineMs(job),
           nowMs,
         }),
       },

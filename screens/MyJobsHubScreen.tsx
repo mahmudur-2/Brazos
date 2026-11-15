@@ -28,6 +28,7 @@ import {
 import {
   deriveJobLifecycle,
   deriveMyJobsTab,
+  isRefundFailureRecorded,
   jobPillLabel,
   myJobsNextAction,
   releaseDeadlineMs,
@@ -402,7 +403,7 @@ export function MyJobsHubScreen() {
                         perspective: 'worker',
                         state: lifecycleOf(job),
                         reviewedByMe: reviewedJobIds.has(job.id),
-                        releaseDeadline: releaseDeadlineMs(job),
+                        releaseDeadline: isRefundFailureRecorded(payments[job.id]) ? null : releaseDeadlineMs(job),
                         nowMs,
                       })}
                       onPress={() =>
@@ -434,6 +435,7 @@ export function MyJobsHubScreen() {
                       paymentStatus: payments[job.id]?.status,
                       workerName: job.assigned_worker_id ? names[job.assigned_worker_id] : null,
                       nowMs,
+                      refundFailure: isRefundFailureRecorded(payments[job.id]),
                     });
                     return (
                       <HubCard
@@ -457,7 +459,7 @@ export function MyJobsHubScreen() {
                           state,
                           bidCount: job.bid_count,
                           reviewedByMe: reviewedJobIds.has(job.id),
-                          releaseDeadline: releaseDeadlineMs(job),
+                          releaseDeadline: isRefundFailureRecorded(payments[job.id]) ? null : releaseDeadlineMs(job),
                           nowMs,
                         })}
                         onPress={() =>

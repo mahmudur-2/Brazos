@@ -35,6 +35,7 @@ import {
   isRefundFailed,
   isRefundQueued,
 } from '../lib/paymentRules';
+import { isRefundFailureRecorded } from '../lib/jobLifecycle';
 import { firstNameOf } from '../lib/liveJobStatus';
 import {
   classifyTipPoll,
@@ -385,7 +386,8 @@ export function ReviewAndTipScreen() {
             ? {
                 kind: 'empty' as const,
                 title: 'Approve the work first',
-                body: 'Release the held payment (or report an issue) before leaving your review — a review should never stand between the worker and their money.',
+                // Codex R11-A2: a refund of it failed: approval releases nothing; the title and the button alone.
+                body: isRefundFailureRecorded(payment) ? undefined : 'Release the held payment (or report an issue) before leaving your review — a review should never stand between the worker and their money.',
                 actionLabel: 'Go to approval',
                 onAction: () => navigation.replace('ApproveOrDispute', { job }),
               }

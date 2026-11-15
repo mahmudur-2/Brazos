@@ -79,6 +79,20 @@ export function releaseDeadlineMs(job: { completed_at?: string | null }): number
   return Number.isFinite(completed) ? completed + AUTO_RELEASE_HOURS * 3_600_000 : null;
 }
 
+/**
+ * Codex R11-A2: a refund of this payment failed, arranged since or not. The database then holds back
+ * the whole charge (payment_refund_reserved_cents: any payment_refund_failures row), so neither the
+ * approval nor the clock above sends the payout: a person decides. The same set as that row (its only
+ * insert raises refund_failed_at, its only update moves it to refund_arranged_at, nothing clears
+ * either). Every sentence that says approval or the clock releases the payment asks this and says
+ * less. Here, not in lib/paymentRules.ts, so lib/homeAttention.ts and lib/liveJobStatus.ts can ask it.
+ */
+export function isRefundFailureRecorded(
+  payment: Pick<Payment, 'refund_failed_at' | 'refund_arranged_at'> | null | undefined
+): boolean {
+  return payment?.refund_failed_at != null || payment?.refund_arranged_at != null;
+}
+
 export function deriveJobLifecycle(
   { job, payment, hasOpenDispute = false }: JobLifecycleInput,
   // shortcut: no longer read (the client-side 72h release mirror is gone); kept so the

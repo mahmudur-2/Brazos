@@ -320,7 +320,10 @@ export async function fetchJobPaymentState(jobId: string) {
  * plus (D23) whether release was requested and which provider wrote the row,
  * so an approved stripe job buckets as closed rather than review.
  */
-export type PaymentStatusSummary = Pick<Payment, 'status' | 'release_requested_at' | 'provider'>;
+export type PaymentStatusSummary = Pick<
+  Payment,
+  'status' | 'release_requested_at' | 'provider' | 'refund_failed_at' | 'refund_arranged_at'
+>;
 
 /**
  * The active job_payment STATUS for each of a list of jobs, in one query —
@@ -339,7 +342,7 @@ export async function fetchJobPaymentStatusesByJobIds(jobIds: string[]) {
 
   const { data, error } = await supabase
     .from('payments')
-    .select('job_id, status, release_requested_at, provider')
+    .select('job_id, status, release_requested_at, provider, refund_failed_at, refund_arranged_at')
     .in('job_id', jobIds)
     .eq('kind', 'job_payment')
     .not('status', 'in', '(failed,voided)');
@@ -350,11 +353,16 @@ export async function fetchJobPaymentStatusesByJobIds(jobIds: string[]) {
     status: PaymentStatus;
     release_requested_at: string | null;
     provider: string;
+    refund_failed_at: string | null;
+    refund_arranged_at: string | null;
   }[]) {
     byJob[row.job_id] = {
       status: row.status,
       release_requested_at: row.release_requested_at ?? null,
       provider: row.provider,
+      // Codex R11-A2: the release sentences ask isRefundFailureRecorded (lib/jobLifecycle.ts).
+      refund_failed_at: row.refund_failed_at ?? null,
+      refund_arranged_at: row.refund_arranged_at ?? null,
     };
   }
   return { data: byJob, error };

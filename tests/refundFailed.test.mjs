@@ -116,7 +116,9 @@ test('P3 · the caption: refunded another way, for the customer only; a new fail
     assert.equal(paymentCaption({ status, refundArranged: true }, 'customer'), ARRANGED_CAPTION, `${status}: the customer`);
     assert.equal(paymentCaption({ status, refundFailed: true }, 'customer'), FAILED_CAPTION, `${status}: the failure`);
     const worker = paymentCaption({ status, refundArranged: true }, 'worker');
-    assert.equal(worker, paymentCaption({ status }, 'worker'), `${status}: the worker reads their own sentence`);
+    // Codex R11-A2: on a held row never approved, approval sends the worker nothing: the first words alone.
+    const own = status === 'held' ? 'Held in protection' : paymentCaption({ status }, 'worker');
+    assert.equal(worker, own, `${status}: the worker reads their own sentence`);
     assert.notEqual(worker, ARRANGED_CAPTION);
     assert.notEqual(paymentCaption({ status, refundFailed: true }, 'worker'), FAILED_CAPTION, `${status}: the worker never reads the failure`);
   }

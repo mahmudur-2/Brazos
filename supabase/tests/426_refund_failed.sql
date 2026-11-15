@@ -28,7 +28,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(89);
+select plan(95);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -505,6 +505,92 @@ select is(tests.rf_try(format($q$select (select (public.payment_refund_reserved_
             || '/' || (select count(*) from public.payment_attention a where a.payment_id = %1$L and a.what = 'transfer')::text$q$, :'po')),
   'ok: true/false/1',
   'G12 (R10-A2): failed refunds summing past the integer range: the reservation is the charge, and transfers_due and payment_attention read without error');
+
+-- G13-G17. Codex R11-A1: the app's own refund answered failed (or canceled) at once, through the drain's
+-- write-back (process-settlements: refundFailedEvent, then apply_payment_event, then the stop). The
+-- event is stored as the drain stores it: the id process-settlements:<refund id> (no Stripe event id has
+-- that form) and the payload { id, type, data: { object } }, nothing else (rf_drain_shape below). The
+-- webhook is withheld (G13), then delivered (G14), then delivered again after the owner records the
+-- arrangement (G15); the webhook first (G16); a cancel (G17).
+create or replace function tests.rf_drain_shape(p_id text) returns text language sql as $$
+  select (select string_agg(k, ',' order by k) from jsonb_object_keys(e.payload) k)
+         || '|' || (select string_agg(k, ',' order by k) from jsonb_object_keys(e.payload -> 'data') k)
+         || '|' || (e.payload ->> 'id' = e.id and e.payload ->> 'type' = e.type and e.type = 'refund.failed'
+                    and jsonb_typeof(e.payload -> 'data' -> 'object') = 'object' and e.account_id is null)::text
+    from public.payment_events e where e.id = p_id
+$$;
+select tests.rf_job('RF R11 the drain sees the failure', 'held', :'setupw') as jd \gset
+select tests.rf_late_cancel(:'jd', :'setupw') as pd \gset
+select tests.set_payouts(:'setupw', 'action_needed');
+select refund_attempts as d_att, refund_cents as d_cents from public.payments where id = :'pd' \gset
+select public.settlement_send_begin(:'pd', 'refund', :d_att, :d_cents) as d_begun \gset
+select tests.rf_failed('process-settlements:re_rf_r11_d', null, :'pd', 're_rf_r11_d', :d_cents) ->> 'payment_id' as d_applied \gset
+select tests.set_payouts(:'setupw', 'enabled');
+-- Write 4 done, write 5 (the stop) not yet: already the end state for the money.
+select is(exists (select 1 from public.refunds_due r where r.id = :'pd')::text
+          || '/' || exists (select 1 from public.transfers_due t where t.id = :'pd')::text
+          || '/' || public.settlement_send_begin(:'pd', 'refund', :d_att, :d_cents)::text
+          || '/' || (select public.settlement_send_begin(p.id, 'transfer', p.transfer_attempts, p.transfer_cents) from public.payments p where p.id = :'pd')::text
+          || '/' || tests.rf_lines(:'pd', 'refund re_rf_r11_d failed at the provider%')
+          || '/' || (select count(*) from public.payment_attention a where a.payment_id = :'pd' and a.what = 'refund'),
+  'false/false/false/false/1/1',
+  'G13 (R11-A1, the event applied, the stop not yet written): in neither queue, settlement_send_begin refuses the refund and the transfer, the failure line, and no other refund line (none tells the owner to send it again)');
+select public.record_settlement_result(:'pd', 'refund', :d_att, 'stop', '200 re_rf_r11_d failed: the provider made no refund') as d_stopped \gset
+select is(:'d_begun' || '/' || (:'d_applied' = :'pd')::text || '/' || :'d_stopped'
+          || '/' || tests.rf_failures(:'pd') || '/' || tests.rf_flag(:'pd') || '/' || tests.rf_state(:'pd')
+          || '/' || exists (select 1 from public.refunds_due r where r.id = :'pd')::text
+          || '/' || tests.rf_hold(:'pd')
+          || '/' || tests.rf_lines(:'pd', 'refund re_rf_r11_d failed at the provider%')
+          || '/' || tests.rf_lines(:'pd', 'transfer is more than is left after refunds: a person decides')
+          || '/' || tests.rf_drain_shape('process-settlements:re_rf_r11_d'),
+  't/true/t/ok: re_rf_r11_d:3875:expired_or_canceled_card:waiting/true/held/0/re_rf_r11_d/false/5375/false/false/false/false/1/1/data,id,type|object|true',
+  'G13 (R11-A1): the drain''s write-back of a refund answered failed, the webhook withheld: one failure row, the flag, the refund id kept, in neither refunds_due nor transfers_due, the whole charge held back, no payout on its way, the drain cannot begin the fee, payment_attention lists the failure and the transfer, and the event has the drain''s shape');
+select tests.rf_failed('evt_rf_r11_d', 1800000800, :'pd', 're_rf_r11_d', :d_cents) ->> 'ok' as d_hook \gset
+select is(:'d_hook' || '/' || tests.rf_try(format('select count(*)::text from public.payment_refund_failures where payment_id = %L', :'pd'))
+          || '/' || tests.rf_flag(:'pd') || '/' || tests.rf_state(:'pd') || '/' || tests.rf_hold(:'pd'),
+  'true/ok: 1/true/held/0/re_rf_r11_d/5375/false/false/false/false',
+  'G14 (R11-A1): the webhook''s refund.failed for the same refund, delivered after the drain''s: applied, no second row, the refund id kept, the whole charge still held');
+select (public.resolve_refund_failure(:'pd', 'Refunded 38.75 by bank transfer.')).id as d_res \gset
+select tests.rf_failed('evt_rf_r11_d_again', 1800000900, :'pd', 're_rf_r11_d', :d_cents) ->> 'ok' as d_hook2 \gset
+select is(:'d_hook2' || '/' || tests.rf_flag(:'pd') || '/' || tests.rf_failures(:'pd') || '/' || tests.rf_hold(:'pd'),
+  'true/false/ok: re_rf_r11_d:3875:expired_or_canceled_card:arranged: Refunded 38.75 by bank transfer./5375/false/false/false/false',
+  'G15 (R11-A1): after resolve_refund_failure, another delivery of that refund''s failure raises nothing again: no flag, one arranged row, the whole charge still held');
+-- G16. The webhook first: its refund.failed is applied before the drain's write-back of the same refund.
+-- The drain's event then adds no row and its apply still names the payment, so the attempt stops.
+select tests.rf_job('RF R11 the webhook first', 'held', :'setupw') as jw \gset
+select tests.rf_late_cancel(:'jw', :'setupw') as pw \gset
+select tests.set_payouts(:'setupw', 'action_needed');
+select refund_attempts as w_att, refund_cents as w_cents from public.payments where id = :'pw' \gset
+select public.settlement_send_begin(:'pw', 'refund', :w_att, :w_cents) as w_begun \gset
+select tests.rf_failed('evt_rf_r11_w', 1800001000, :'pw', 're_rf_r11_w', :w_cents) ->> 'ok' as w_hook \gset
+select tests.rf_failed('process-settlements:re_rf_r11_w', null, :'pw', 're_rf_r11_w', :w_cents) ->> 'payment_id' as w_applied \gset
+select public.record_settlement_result(:'pw', 'refund', :w_att, 'stop', '200 re_rf_r11_w failed: the provider made no refund') as w_stopped \gset
+select tests.set_payouts(:'setupw', 'enabled');
+select is(:'w_begun' || '/' || :'w_hook' || '/' || (:'w_applied' = :'pw')::text || '/' || :'w_stopped'
+          || '/' || tests.rf_failures(:'pw') || '/' || tests.rf_flag(:'pw') || '/' || tests.rf_state(:'pw')
+          || '/' || exists (select 1 from public.refunds_due r where r.id = :'pw')::text
+          || '/' || tests.rf_hold(:'pw')
+          || '/' || tests.rf_drain_shape('process-settlements:re_rf_r11_w'),
+  't/true/true/t/ok: re_rf_r11_w:3875:expired_or_canceled_card:waiting/true/held/0/re_rf_r11_w/false/5375/false/false/false/false/data,id,type|object|true',
+  'G16 (R11-A1): the webhook''s refund.failed first, then the drain''s write-back of the same refund: one row, the refund id kept, the drain''s apply names the payment and the attempt stops, the whole charge held');
+-- G17. Canceled: the provider answered the drain's refund canceled, with no failure_reason. Recorded the
+-- same way (a cancellation is a type of refund failure); the operator line says no reason given.
+select tests.rf_job('RF R11 the drain sees a cancel', 'held', :'setupw') as jc \gset
+select tests.rf_late_cancel(:'jc', :'setupw') as pc \gset
+select tests.set_payouts(:'setupw', 'action_needed');
+select refund_attempts as c_att, refund_cents as c_cents from public.payments where id = :'pc' \gset
+select public.settlement_send_begin(:'pc', 'refund', :c_att, :c_cents) as c_begun \gset
+select tests.rf_event('process-settlements:re_rf_r11_c', 'refund.failed', null, jsonb_build_object('id', 're_rf_r11_c', 'object', 'refund', 'amount', :c_cents, 'status', 'canceled', 'payment_intent', (select provider_ref from public.payments where id = :'pc'), 'metadata', jsonb_build_object('payment_id', :'pc'))) ->> 'payment_id' as c_applied \gset
+select public.record_settlement_result(:'pc', 'refund', :c_att, 'stop', '200 re_rf_r11_c canceled: the provider made no refund') as c_stopped \gset
+select tests.set_payouts(:'setupw', 'enabled');
+select is(:'c_begun' || '/' || (:'c_applied' = :'pc')::text || '/' || :'c_stopped'
+          || '/' || tests.rf_failures(:'pc') || '/' || tests.rf_flag(:'pc') || '/' || tests.rf_state(:'pc')
+          || '/' || exists (select 1 from public.refunds_due r where r.id = :'pc')::text
+          || '/' || tests.rf_hold(:'pc')
+          || '/' || tests.rf_lines(:'pc', 'refund re_rf_r11_c failed at the provider (no reason given)%')
+          || '/' || tests.rf_drain_shape('process-settlements:re_rf_r11_c'),
+  't/true/t/ok: re_rf_r11_c:3875:null:waiting/true/held/0/re_rf_r11_c/false/5375/false/false/false/false/1/data,id,type|object|true',
+  'G17 (R11-A1): the drain''s refund answered canceled, no failure_reason: recorded as a failure the same way, the operator line says no reason given, the whole charge held, and the event has the drain''s shape');
 
 -- ---------------------------------------------------------------------------
 -- H. Codex R5-A3, R6-A1: refund.failed writes refund_ref only for the app's own refund (its

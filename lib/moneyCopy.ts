@@ -133,6 +133,8 @@ export function paymentCaption(facts: PaymentCaptionFacts, viewer: MoneyViewer):
         if (customer) return `Approved — on its way to ${name ?? 'your worker'}`;
         return facts.waitingOnPayoutSetup ? 'Approved — waiting on your payout setup' : 'Approved — on its way to you';
       }
+      // Codex R11-A2: a refund of it failed (the customer read that above): approval sends the worker nothing.
+      if (!customer && (facts.refundFailed || facts.refundArranged)) return HELD_IN_PROTECTION;
       return customer
         ? `${HELD_IN_PROTECTION} — released when you approve`
         : `${HELD_IN_PROTECTION} — yours when the customer approves`;

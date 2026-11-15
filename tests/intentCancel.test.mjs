@@ -145,3 +145,147 @@ test('F2 (ii) · the cancel pass runs after both money passes', () => {
   assert.ok(at('transfers = await runTransfers();') < at('refunds = await runRefunds();'));
   assert.ok(at('refunds = await runRefunds();') < at('intents = await runIntentCancels();'));
 });
+
+// ---------------------------------------------------------------------------
+// Codex R11-A1: a refund the provider answers failed or canceled at once is a failure the drain has
+// seen, so it is recorded at once and by the webhook's one rule: the drain hands the provider's Refund
+// to the event path (refundFailedEvent, classify.mjs), stores it in payment_events, applies it with
+// apply_payment_event, and only then stops the attempt. The database side is
+// supabase/tests/426_refund_failed.sql G13 to G17. The same handler as above, one refunds_ready row.
+// ---------------------------------------------------------------------------
+const { refundFailedEvent, settlementVerdict } = classify;
+const PAY = '3f2b6c1e-9a4d-4e7b-8c21-5d0f7a9b1c33';
+const REFUND_ROW = { id: PAY, provider_ref: 'pi_r11', refund_cents: 3875, refund_attempts: 2 };
+const refund = (status) => ({
+  id: 're_r11', object: 'refund', amount: 3875, payment_intent: 'pi_r11', status,
+  failure_reason: 'expired_or_canceled_card', metadata: { payment_id: PAY },
+});
+
+/** One drain run with one refunds_ready row. `provider` is { status, body } or 'throw'; insert a status or 'throw'; apply a body, a status or 'throw'. */
+async function runRefund({ provider, insert = 201, apply = { ok: true, payment_id: PAY } }) {
+  const calls = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const call = { url: String(url), method: init.method ?? 'GET', headers: init.headers ?? {}, body: init.body ?? '' };
+    calls.push(call);
+    const at = call.url;
+    if (call.method === 'HEAD') return new Response(null, { status: 200, headers: { 'content-range': '*/0' } });
+    if (at.startsWith(`${DB}/transfers_ready?`) || at.startsWith(`${DB}/intents_to_cancel?`)) return Response.json([]);
+    if (at.startsWith(`${DB}/refunds_ready?`)) return Response.json([REFUND_ROW]);
+    if (at === `${DB}/rpc/settlement_send_begin`) return Response.json(true);
+    if (at === `${DB}/rpc/record_settlement_result` || at === `${DB}/rpc/record_settlement_sent`) return Response.json(true);
+    if (at === `${STRIPE}/v1/refunds`) {
+      if (provider === 'throw') throw new Error('network down');
+      return Response.json(provider.body, { status: provider.status });
+    }
+    if (at === `${DB}/payment_events`) {
+      if (insert === 'throw') throw new Error('database down');
+      return new Response(insert === 409 ? '{"code":"23505"}' : null, { status: insert });
+    }
+    if (at === `${DB}/rpc/apply_payment_event`) {
+      if (apply === 'throw') throw new Error('database down');
+      return typeof apply === 'number' ? new Response('apply down', { status: apply }) : Response.json(apply);
+    }
+    return new Response('unexpected', { status: 599 });
+  };
+  const log = console.error;
+  console.error = () => {};
+  try {
+    const res = await handler(new Request('http://edge.test/process-settlements', { method: 'POST', headers: { Authorization: 'Bearer service' } }));
+    return { json: await res.json(), calls };
+  } finally {
+    console.error = log;
+    globalThis.fetch = original;
+  }
+}
+
+/** The writes and the provider call, in order, by name. */
+const writes = (calls) => calls
+  .filter((c) => c.method === 'POST')
+  .map((c) => (c.url.startsWith(`${STRIPE}/`) ? `stripe ${c.url.slice(STRIPE.length)}` : c.url.slice(DB.length + 1)));
+const bodyOf = (calls, path) => calls.filter((c) => c.url === `${DB}/${path}`).map((c) => JSON.parse(c.body));
+
+test('R11-A1 · the classifier: only a refund answered 2xx failed or canceled becomes a refund.failed event, the Refund unchanged', () => {
+  for (const status of ['failed', 'canceled']) {
+    const body = refund(status);
+    const event = refundFailedEvent('refund', { status: 200, body });
+    assert.deepEqual(event, {
+      id: 'process-settlements:re_r11',
+      type: 'refund.failed',
+      payload: { id: 'process-settlements:re_r11', type: 'refund.failed', data: { object: body } },
+    }, `${status}: the provider's Refund is the event's object, and the payload has no other field`);
+    assert.equal(event.payload.data.object, body, `${status}: the same object, not a copy`);
+    assert.doesNotMatch(event.id, /^evt_/, `${status}: never a Stripe event id`);
+    assert.equal(settlementVerdict('refund', { status: 200, body }).next, 'stop', `${status}: and the attempt still stops`);
+  }
+  // Controls: every other answer is not a failure the provider reported.
+  for (const [label, kind, outcome] of [
+    ['pending', 'refund', { status: 200, body: refund('pending') }],
+    ['succeeded', 'refund', { status: 200, body: refund('succeeded') }],
+    ['no status', 'refund', { status: 200, body: refund(undefined) }],
+    ['no amount', 'refund', { status: 200, body: { ...refund('failed'), amount: 0 } }],
+    ['not a refund id', 'refund', { status: 200, body: { ...refund('failed'), id: 'tr_r11' } }],
+    ['a stop code on a 4xx', 'refund', { status: 400, body: { error: { code: 'charge_disputed', message: 'disputed' } } }],
+    ['a 5xx', 'refund', { status: 500, body: {} }],
+    ['a throw', 'refund', { threw: new Error('network down') }],
+    ['a transfer', 'transfer', { status: 200, body: { id: 'tr_r11', amount: 3875, status: 'failed' } }],
+  ]) {
+    assert.equal(refundFailedEvent(kind, outcome), null, `${label}: no event`);
+  }
+});
+
+test('R11-A1 · the drain: begin, refund, the failure stored and applied, then the stop', async () => {
+  for (const status of ['failed', 'canceled']) {
+    const r = await runRefund({ provider: { status: 200, body: refund(status) } });
+    assert.deepEqual(writes(r.calls), [
+      'rpc/settlement_send_begin', 'stripe /v1/refunds', 'payment_events', 'rpc/apply_payment_event', 'rpc/record_settlement_result',
+    ], `${status}: the failure is recorded before the attempt stops`);
+    const stored = r.calls.find((c) => c.url === `${DB}/payment_events`);
+    assert.equal(stored.headers.Prefer, 'return=minimal', `${status}: the webhook's insert`);
+    assert.deepEqual(JSON.parse(stored.body), {
+      id: 'process-settlements:re_r11', type: 'refund.failed', account_id: null,
+      payload: { id: 'process-settlements:re_r11', type: 'refund.failed', data: { object: refund(status) } },
+    }, `${status}: the provider's Refund, as answered`);
+    assert.deepEqual(bodyOf(r.calls, 'rpc/apply_payment_event'), [{ p_event_id: 'process-settlements:re_r11' }]);
+    assert.deepEqual(bodyOf(r.calls, 'rpc/record_settlement_result'), [{
+      p_payment_id: PAY, p_kind: 'refund', p_attempt: 2, p_next: 'stop', p_error: `200 re_r11 ${status}: the provider made no refund`,
+    }], `${status}: then the stop, as before`);
+    assert.deepEqual(r.json.refunds, { attempted: 1, succeeded: 0, deferred: 0, failed: 1, defects: 0, blocked: 0 });
+  }
+  // Already stored (a replay of the same answer): 409 is not an error, the event is applied anyway.
+  const again = await runRefund({ provider: { status: 200, body: refund('failed') }, insert: 409 });
+  assert.deepEqual(writes(again.calls).slice(2), ['payment_events', 'rpc/apply_payment_event', 'rpc/record_settlement_result']);
+  assert.equal(again.json.refunds.failed, 1);
+});
+
+test('R11-A1 · the drain: a failure not recorded is not stopped: the same key next tick, a defect now', async () => {
+  for (const [label, world] of [
+    ['the insert failed', { insert: 500 }],
+    ['the insert threw', { insert: 'throw' }],
+    ['apply answered 500', { apply: 500 }],
+    ['apply threw', { apply: 'throw' }],
+    ['apply failed (ok false)', { apply: { ok: false, error: 'apply failed' } }],
+    ['the event matched no payment', { apply: { ok: true, payment_id: null } }],
+    ['the event matched another payment', { apply: { ok: true, payment_id: '00000000-0000-4000-8000-000000000000' } }],
+  ]) {
+    const r = await runRefund({ provider: { status: 200, body: refund('failed') }, ...world });
+    const done = writes(r.calls);
+    assert.equal(done.includes('rpc/record_settlement_result'), false, `${label}: no stop`);
+    assert.equal(done.includes('rpc/record_settlement_sent'), false, `${label}: nothing written back as sent`);
+    assert.equal(done.includes('rpc/apply_payment_event'), !String(world.insert ?? '').match(/500|throw/), `${label}: applied only once stored`);
+    assert.deepEqual(r.json.refunds, { attempted: 1, succeeded: 0, deferred: 1, failed: 0, defects: 1, blocked: 0 }, label);
+  }
+});
+
+test('R11-A1 · the drain (controls): no other answer stores an event', async () => {
+  const pending = await runRefund({ provider: { status: 200, body: refund('pending') } });
+  assert.deepEqual(writes(pending.calls), ['rpc/settlement_send_begin', 'stripe /v1/refunds', 'rpc/record_settlement_sent'], 'pending: written back as sent');
+  const disputed = await runRefund({ provider: { status: 400, body: { error: { code: 'charge_disputed', message: 'disputed' } } } });
+  assert.deepEqual(writes(disputed.calls), ['rpc/settlement_send_begin', 'stripe /v1/refunds', 'rpc/record_settlement_result'], 'a 4xx stop code: the stop alone');
+  assert.equal(bodyOf(disputed.calls, 'rpc/record_settlement_result')[0].p_next, 'stop');
+  const unknown = await runRefund({ provider: { status: 500, body: {} } });
+  assert.deepEqual(writes(unknown.calls), ['rpc/settlement_send_begin', 'stripe /v1/refunds', 'rpc/record_settlement_result'], 'a 5xx: the same key, no event');
+  assert.equal(bodyOf(unknown.calls, 'rpc/record_settlement_result')[0].p_next, 'same_key');
+  const threw = await runRefund({ provider: 'throw' });
+  assert.equal(writes(threw.calls).includes('payment_events'), false, 'a throw: no event');
+});

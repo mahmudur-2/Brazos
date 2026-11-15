@@ -38,7 +38,7 @@ import {
 import { NotificationBell } from '../components/NotificationBell';
 import { alertAsync } from '../lib/dialog';
 import { ATTENTION_CAP, attentionItems } from '../lib/homeAttention';
-import { deriveJobLifecycle, jobPillLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
+import { deriveJobLifecycle, isRefundFailureRecorded, jobPillLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
 import { firstNameOf, liveJobStatus, pickLiveBarItem, postedCardLive } from '../lib/liveJobStatus';
 import { navigateAcrossTabs } from '../lib/navigationRef';
 import { openOwnJob } from '../lib/ownJobCard';
@@ -512,6 +512,7 @@ export function HomeScreen() {
       paymentStatus: payments[job.id]?.status,
       workerName: job.assigned_worker_id ? names[job.assigned_worker_id] : null,
       nowMs,
+      refundFailure: isRefundFailureRecorded(payments[job.id]),
     });
   const openChat = (job: Job) => navigateAcrossTabs('MyJobs', 'Chat', { jobId: job.id });
 

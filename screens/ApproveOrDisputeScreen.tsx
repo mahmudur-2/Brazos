@@ -47,7 +47,7 @@ import {
 } from '../lib/disputes';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { completionPhotosOf, completionVideosOf, formatBudget } from '../lib/jobs';
-import { releaseAtLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
+import { isRefundFailureRecorded, releaseAtLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import {
   EYEBROW_TYPE,
@@ -369,35 +369,38 @@ export function ApproveOrDisputeScreen() {
               refundArranged={isRefundArranged(payment)}
               payoutOnItsWay={isPayoutOnItsWay(payment)}
             />
-            {held && releaseDeadlineMs(job) != null ? (
+            {held && !isRefundFailureRecorded(payment) && releaseDeadlineMs(job) != null ? (
               <Text style={styles.paymentNote}>
                 Releases automatically{' '}
                 {releaseAtLabel(releaseDeadlineMs(job) as number, Date.now())} if you do
                 nothing.
               </Text>
             ) : null}
-            <Text style={styles.paymentNote}>
-              {released
-                ? payment.release_reason === 'auto_approved'
-                  ? 'Released automatically after 72 hours with no issue reported.'
-                  : 'You approved the work and the payment was released to the worker.'
-                : releaseRequested && !isPayoutOnItsWay(payment)
-                  ? // Codex R5-A5, R7-A3, R8-A1: approved, but the payout is not on its way (a refund, an issue
-                    // reported after the timer, a reversed transfer, a card dispute): the approval alone.
-                    payment.release_reason === 'auto_approved'
-                    ? 'Approved automatically after 72 hours.'
-                    : 'You approved the work.'
-                : releaseRequested
+            {/* Codex R11-A2: before approval, a refund of it failed: approving sends nothing; no note. */}
+            {!released && !releaseRequested && releaseAllowed && isRefundFailureRecorded(payment) ? null : (
+              <Text style={styles.paymentNote}>
+                {released
                   ? payment.release_reason === 'auto_approved'
-                    ? // C4: requested is not released — the word waits for the transfer.
-                      'Approved automatically after 72 hours with no issue reported. The payment is on its way to the worker and shows as released when the transfer lands.'
-                    : 'You approved the work. The payment is on its way to the worker and shows as released when the transfer lands.'
-                  : releaseAllowed
-                    ? // Tier A (C3, D23): approving REQUESTS the release; the
-                      // transfer lands later, so the payment is "on its way".
-                      'Approving sends this payment on its way to the worker. If something isn’t right, report the issue instead — release waits while a report is open.'
-                    : 'Payments are paused right now, so approval is unavailable for the moment. If something isn’t right, you can still report the issue.'}
-            </Text>
+                    ? 'Released automatically after 72 hours with no issue reported.'
+                    : 'You approved the work and the payment was released to the worker.'
+                  : releaseRequested && !isPayoutOnItsWay(payment)
+                    ? // Codex R5-A5, R7-A3, R8-A1: approved, but the payout is not on its way (a refund, an issue
+                      // reported after the timer, a reversed transfer, a card dispute): the approval alone.
+                      payment.release_reason === 'auto_approved'
+                      ? 'Approved automatically after 72 hours.'
+                      : 'You approved the work.'
+                  : releaseRequested
+                    ? payment.release_reason === 'auto_approved'
+                      ? // C4: requested is not released — the word waits for the transfer.
+                        'Approved automatically after 72 hours with no issue reported. The payment is on its way to the worker and shows as released when the transfer lands.'
+                      : 'You approved the work. The payment is on its way to the worker and shows as released when the transfer lands.'
+                    : releaseAllowed
+                      ? // Tier A (C3, D23): approving REQUESTS the release; the
+                        // transfer lands later, so the payment is "on its way".
+                        'Approving sends this payment on its way to the worker. If something isn’t right, report the issue instead — release waits while a report is open.'
+                      : 'Payments are paused right now, so approval is unavailable for the moment. If something isn’t right, you can still report the issue.'}
+              </Text>
+            )}
           </View>
         ) : canFundNow ? (
           // AUD-P1-02: this used to be a dead end ("nothing to release") for
@@ -521,8 +524,12 @@ export function ApproveOrDisputeScreen() {
         visible={confirmApprove}
         title="Release the payment to the worker?"
         message={
-          `Your card was charged ${formatBudget(payment ? customerChargeCents(payment) : null)} at checkout, including the protection fee — nothing more is charged.\n\n` +
-          'This approves the finished work and releases the payment to the worker. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands.'
+          `Your card was charged ${formatBudget(payment ? customerChargeCents(payment) : null)} at checkout, including the protection fee — nothing more is charged.` +
+          // Codex R11-A2: a refund of it failed: the charge alone.
+          (isRefundFailureRecorded(payment)
+            ? ''
+            : '\n\n' +
+              'This approves the finished work and releases the payment to the worker. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands.')
         }
         confirmText="Approve & release"
         cancelText="Not yet"
@@ -534,7 +541,13 @@ export function ApproveOrDisputeScreen() {
       <ConfirmDialog
         visible={confirmWithdraw}
         title="Withdraw your issue report?"
-        message="Release is unfrozen once the report is withdrawn — including the automatic release timer. You can approve the work yourself right after."
+        message={
+          // Codex R11-A2: a refund of it failed: nothing is released either way; the second sentence alone.
+          (isRefundFailureRecorded(payment)
+            ? ''
+            : 'Release is unfrozen once the report is withdrawn — including the automatic release timer. ') +
+          'You can approve the work yourself right after.'
+        }
         confirmText="Withdraw report"
         cancelText="Keep it open"
         loading={withdrawing}

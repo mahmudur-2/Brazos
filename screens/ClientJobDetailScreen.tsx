@@ -94,6 +94,7 @@ import {
   deriveJobLifecycle,
   jobPillLabel,
   releaseAtLabel,
+  isRefundFailureRecorded,
   releaseDeadlineMs,
   trackStepIndex,
 } from '../lib/jobLifecycle';
@@ -577,7 +578,8 @@ export function ClientJobDetailScreen() {
   // for, pinned in a bar under the scroll instead of at the end of it — derived
   // from the same lifecycle the hub's next-action line reads, so the sentence on
   // the hub card and the button here always agree. Null = nothing to decide.
-  const approvalDeadline = releaseDeadlineMs(job);
+  // Codex R11-A2: no release time once a refund of the payment failed (the button's shorter label).
+  const approvalDeadline = isRefundFailureRecorded(payment) ? null : releaseDeadlineMs(job);
   const primaryAction: { label: string; onPress: () => void } | null = (() => {
     if (statusReadError) return null;
     if (canAccept) {
@@ -1562,11 +1564,14 @@ export function ClientJobDetailScreen() {
                 ) : lifecycle === 'awaiting_approval' ? (
                   <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
                     <Text style={styles.approvalTitle}>The work is done — your call</Text>
-                    <Text style={styles.noticeText}>
-                      Review what {workerName} submitted, then approve to release
-                      the held funds or report an issue. With no response, the
-                      funds release automatically after 72 hours.
-                    </Text>
+                    {/* Codex R11-A2: a refund of it failed: approval releases nothing; no release sentence. */}
+                    {isRefundFailureRecorded(payment) ? null : (
+                      <Text style={styles.noticeText}>
+                        Review what {workerName} submitted, then approve to release
+                        the held funds or report an issue. With no response, the
+                        funds release automatically after 72 hours.
+                      </Text>
+                    )}
                     <Button
                       title="Report an issue"
                       variant="secondary"

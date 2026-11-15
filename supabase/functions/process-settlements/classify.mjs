@@ -46,6 +46,10 @@
 // PATHS READ: status, body.id, body.amount, body.status (a refund only: failed
 // or canceled stops the row), body.error.code, body.error.type,
 // body.error.message, and the thrown value's message. Nothing here is logged.
+//
+// THE FAILED REFUND (Codex R11-A1). A refund answered 2xx as failed or
+// canceled is also handed back whole as a refund.failed event
+// (refundFailedEvent), which the drain stores and applies like the webhook.
 // ============================================================================
 
 /** Provider error codes that mean "not yet", never "wrong". */
@@ -173,6 +177,23 @@ export function settlementVerdict(kind, outcome) {
     return verdict('refused', 'stop', false, code, message);
   }
   return verdict('refused', 'new_key', DEFERRED_CODES.includes(code), code, message);
+}
+
+/**
+ * Codex R11-A1: a refund the provider answered 2xx as failed or canceled (the verdict's F2 branch,
+ * the only refusal on a 2xx) is a failure the drain has seen. This is the stored event the drain
+ * hands to apply_payment_event, so the webhook's refund.failed rule alone records it, at once: one
+ * payment_refund_failures row per refund id, refund_failed_at for a new id, refund_ref by the
+ * own-refund rule. The provider's Refund is the event's object, unchanged; the id names the drain
+ * and the refund, and no Stripe event id has that form (Stripe's begin evt_). null for every other
+ * answer. A cancellation is a type of refund failure (docs.stripe.com/refunds): recorded the same way.
+ * @returns {{ id: string, type: 'refund.failed', payload: object } | null}
+ */
+export function refundFailedEvent(kind, outcome) {
+  if (kind !== 'refund' || settlementVerdict(kind, outcome).result !== 'refused') return null;
+  if (!(outcome.status >= 200 && outcome.status < 300)) return null;
+  const id = `process-settlements:${outcome.body.id}`;
+  return { id, type: 'refund.failed', payload: { id, type: 'refund.failed', data: { object: outcome.body } } };
 }
 
 /**

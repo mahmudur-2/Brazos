@@ -70,7 +70,8 @@ test('perspective is ModeContext, and worker mode has no posting affordance', ()
 test('every card carries a derived next-action as its primary label', () => {
   // Jobs derive through the one lifecycle helper, with the release deadline.
   assert.match(hubCode, /nextAction=\{myJobsNextAction\(\{/);
-  assert.match(hubCode, /releaseDeadline: releaseDeadlineMs\(job\)/);
+  // Codex R11-A2: no release time once a refund of the payment failed.
+  assert.match(hubCode, /releaseDeadline: isRefundFailureRecorded\(payments\[job\.id\]\) \? null : releaseDeadlineMs\(job\)/);
   // Bids derive from offer facts in exactly one local helper.
   assert.match(hubCode, /function bidNextAction\(/);
   assert.match(hubCode, /nextAction=\{bidNextAction\(/);

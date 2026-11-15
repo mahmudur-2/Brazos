@@ -40,7 +40,10 @@
 //                 so the row leaves its queue without waiting for the webhook
 //                 (apply_payment_event records the same object idempotently);
 //        refused  record_settlement_result 'new_key': the next tick sends a new
-//                 attempt (or 'stop' for a refund that cannot fix itself);
+//                 attempt (or 'stop' for a refund that cannot fix itself; a
+//                 refund answered failed or canceled is first stored and
+//                 applied as the refund.failed it is, refundFailedEvent, so
+//                 the webhook's rule records the failure at once: R11-A1);
 //        unknown  record_settlement_result 'same_key': the next tick sends the
 //                 same key; after 23 hours the queue no longer offers the row
 //                 and it shows in payment_attention for the owner.
@@ -68,13 +71,15 @@
 // Service role only, checked before anything else runs. Both queues are views
 // granted to service_role alone — authenticated and anon are revoked — so the
 // GRANTs are the real defence and the check below is the first line of it,
-// exactly as in send-push. Its four writes — settlement_send_begin,
-// record_settlement_sent, record_settlement_result, record_intent_cancel — are
-// service_role-only RPCs that record what happened and can never move money.
+// exactly as in send-push. Its writes — settlement_send_begin,
+// record_settlement_sent, record_settlement_result, record_intent_cancel, and
+// a failed refund's event through the webhook's own payment_events insert and
+// apply_payment_event — are service_role-only and record what happened; none
+// can move money.
 // ============================================================================
 
 import { notConfigured, requireServiceRole, SECRET_KEY, serviceHeaders } from '../_shared/serviceAuth.ts';
-import { KEY_UNKNOWN_STATUSES, settlementKey, settlementVerdict } from './classify.mjs';
+import { KEY_UNKNOWN_STATUSES, refundFailedEvent, settlementKey, settlementVerdict } from './classify.mjs';
 
 const STRIPE_API = 'https://api.stripe.com';
 
@@ -252,6 +257,33 @@ function beginSend(kind: Kind, paymentId: string, attempt: number, amount: numbe
 }
 
 /**
+ * Codex R11-A1: a refund the provider answered failed, stored and applied as the refund.failed it is,
+ * through the webhook's own two steps (a 409 means already stored: apply anyway). true only when the
+ * database applied it to this payment. Never throws.
+ */
+async function recordRefundFailure(event: { id: string; type: string; payload: Record<string, unknown> }, paymentId: string, label: string): Promise<boolean> {
+  try {
+    const stored = await fetch(`${SUPABASE_URL}/rest/v1/payment_events`, {
+      method: 'POST',
+      headers: { ...serviceHeaders(), Prefer: 'return=minimal' },
+      body: JSON.stringify({ id: event.id, type: event.type, account_id: null, payload: event.payload }),
+    });
+    if (!stored.ok && stored.status !== 409) {
+      console.error(`process-settlements: payment_events insert for ${label} failed ${stored.status}: ${(await stored.text()).slice(0, 300)}`);
+      return false;
+    }
+    const applied = await serviceRpc('apply_payment_event', { p_event_id: event.id });
+    const answer = applied.ok ? ((await applied.json().catch(() => null)) as { ok?: boolean; payment_id?: string | null } | null) : null;
+    if (answer?.ok === true && answer.payment_id === paymentId) return true;
+    console.error(`process-settlements: apply_payment_event for ${label} did not record the failed refund (${applied.status})`);
+    return false;
+  } catch (err) {
+    console.error(`process-settlements: the failed refund of ${label} could not be recorded:`, err);
+    return false;
+  }
+}
+
+/**
  * Step 3 of a row: the verdict on the answer, tallied and written back at
  * once. The single implementation of the rule for both queues.
  */
@@ -271,6 +303,15 @@ async function settle(counts: Tally, kind: Kind, paymentId: string, attempt: num
       return;
     }
     counts.succeeded++;
+    return;
+  }
+  // R11-A1: a refund answered failed is recorded as the failure it is before the attempt stops. Not
+  // recorded: an unknown, as a failed write-back above (the same key next tick; the provider replays
+  // this answer, and a stored event is applied once).
+  const failed = refundFailedEvent(kind, outcome);
+  if (failed !== null && !(await recordRefundFailure(failed, paymentId, label))) {
+    counts.deferred++;
+    counts.defects++;
     return;
   }
   if (verdict.deferred) counts.deferred++;

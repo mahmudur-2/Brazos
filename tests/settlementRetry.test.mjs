@@ -274,7 +274,7 @@ test('13 · the drain (raw text): refunds_due select names refund_attempts, both
 
   // The classifier is the sibling this file executes, imported by relative
   // path, and it is what decides the next step.
-  assert.match(src, /^import \{ KEY_UNKNOWN_STATUSES, settlementKey, settlementVerdict \} from '\.\/classify\.mjs';$/m, 'classify.mjs is imported by relative path');
+  assert.match(src, /^import \{ KEY_UNKNOWN_STATUSES, refundFailedEvent, settlementKey, settlementVerdict \} from '\.\/classify\.mjs';$/m, 'classify.mjs is imported by relative path');
   assert.equal(src.match(/^import .* from '\.\/classify\.mjs';$/gm).length, 1, 'in one import');
   assert.match(src, /const verdict = settlementVerdict\(kind, outcome\);/, 'and its verdict is the one the drain acts on');
   assert.match(src, /p_next: verdict\.next, p_error: verdict\.message/, 'the next step comes from the verdict, never from the drain');
