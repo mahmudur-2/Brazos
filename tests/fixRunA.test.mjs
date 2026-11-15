@@ -17,11 +17,12 @@ const code = (path) => flat(stripComments(read(path)));
 
 test('A10 · "payout on its way" says what it waits for; the tip opens once the payment reaches the worker; the worker is nudged at the hire', () => {
   // A10a: the tip waits for the transfer, and the screen says why — and names the wait when it is
-  // the worker's own payout setup.
+  // the worker's own payout setup. Pack 1, Codex R6-A3: the second sentence is not said beside a
+  // failed or arranged refund (tests/refundFailed.test.mjs, R6-A3); its words are unchanged.
   const review = code('screens/ReviewAndTipScreen.tsx');
   assert.match(
     review,
-    /: !released \? \( <Text style=\{styles\.cardNote\}> A tip can be added once the job payment reaches \{workerName \?\? 'the worker'\}\. Yours is approved and on its way — if they haven’t set up payouts yet, it lands the moment they do\. <\/Text> \)/
+    /: !released \? \( <Text style=\{styles\.cardNote\}> A tip can be added once the job payment reaches \{workerName \?\? 'the worker'\}\. \{!isRefundFailed\(payment\) && !isRefundArranged\(payment\) \? ' Yours is approved and on its way — if they haven’t set up payouts yet, it lands the moment they do\.' : null\} <\/Text> \)/
   );
   assert.doesNotMatch(review, /The job payment releases first/);
 

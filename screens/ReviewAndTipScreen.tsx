@@ -627,10 +627,12 @@ export function ReviewAndTipScreen() {
                   // until the transfer lands. A10a (2026-10-03): the tip opens
                   // once the payment reaches the worker, and the screen says
                   // why — and what the wait is, when it is their payout setup.
+                  // Codex R6-A3: the payout sentence never beside a failed or arranged refund.
                   <Text style={styles.cardNote}>
                     A tip can be added once the job payment reaches {workerName ?? 'the worker'}.
-                    Yours is approved and on its way — if they haven’t set up payouts yet, it
-                    lands the moment they do.
+                    {!isRefundFailed(payment) && !isRefundArranged(payment)
+                      ? ' Yours is approved and on its way — if they haven’t set up payouts yet, it lands the moment they do.'
+                      : null}
                   </Text>
                 ) : !stripeReady() ? (
                   <Text style={styles.cardNote}>{STRIPE_UNAVAILABLE_MESSAGE}</Text>

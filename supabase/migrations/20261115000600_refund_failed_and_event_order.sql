@@ -34,9 +34,10 @@
 --     owner records the arrangement (resolve_refund_failure). The parties may read it (the
 --     customer's card says the refund did not go through); a column grant like the other 26.
 --   - apply_payment_event: refund.failed changes no status and no refunded total; a failed refund
---     with no recorded ref stays recorded when the app's current refund attempt began (R5-A3), so
---     the app never sends that refund again and it cannot be reopened. A failed refund the app
---     never began (a hand refund) leaves refund_ref empty, so a refund queued later is listed for a
+--     with no recorded ref stays recorded only when it is the app's own refund of the current attempt:
+--     that attempt began and the refund carries this payment's metadata.payment_id (R5-A3, R6-A1), so
+--     the app never sends that refund again and it cannot be reopened. Any other failed refund (a
+--     hand refund, an older attempt) leaves refund_ref empty, so the refund owed is listed for a
 --     person (refunds_due sends nothing on a row with a failure). charge.refunded no longer writes
 --     refund_ref (R5-A3): refunds.data[0] is the newest refund, a hand one too; the refunded total
 --     and the status already stop a second refund.
@@ -294,9 +295,12 @@ begin
         -- R5-A3: charge.refunded never writes it (refunds.data[0] is the newest refund, a hand one too).
         refund_ref   = case
                             -- F2: a failed refund with no recorded ref must not pass the reopen checks,
-                            -- R5-A3: when the app's current refund attempt began; a hand refund's
-                            -- failure leaves it empty, so a refund queued later is listed for a person.
+                            -- R5-A3, R6-A1: only for the app's own refund of the current attempt: that
+                            -- attempt began, and the refund carries this payment's metadata.payment_id
+                            -- (the drain's label; v_pid is null without it). Any other failure (a hand
+                            -- refund, an older attempt) leaves it empty, so the refund owed is listed for a person.
                             when v_type = 'refund.failed' and v_payment.refund_sent_attempt = v_payment.refund_attempts
+                             and v_pid = v_payment.id
                             then coalesce(refund_ref, v_obj ->> 'id')
                             else refund_ref end,
         -- B16: the charge's running refunded total, never lowered by an older event.
@@ -345,7 +349,7 @@ end $$;
 revoke all on function public.apply_payment_event(text) from public, anon, authenticated;
 grant execute on function public.apply_payment_event(text) to service_role;
 comment on function public.apply_payment_event(text) is
-  'service_role only: applies one stored provider event to its payments row, idempotently. R5b (E-6): a payment_intent.succeeded on a voided or failed row queues a full refund (refund_reason funded_after_void). B1: a payment_intent.succeeded on an unfunded tip holds it and queues the whole tip for transfer when amount_received equals charge_amount_cents. 20261112010200: received_cents, refunded_cents and chargeback_cents record the provider''s facts; a job payment charged a different amount stays held with last_error; transfers are recorded once in payment_transfers (payment_record_transfer / payment_record_reversal); a card dispute clears its block only when won or when an inquiry closes (warning_closed), lost refunds the row, any other closing status keeps the block for a person; payment_intent.payment_failed changes nothing. 20261115000600: every rule reads only this event and durable rows, never another event''s payload; the refund status follows the greatest refunded total and refunded stays refunded; payment_disputes keeps one row per dispute id (created adds it once, closed records its status, the last delivered wins, but lost stays lost) and the money stays blocked while any dispute of the payment is neither won nor warning_closed; refund.failed records the failed refund once per refund id in payment_refund_failures, raises refund_failed_at for a new one, keeps the failed refund in refund_ref when none was recorded and the app''s current refund attempt began (R5-A3), and changes no status and no refunded total; charge.refunded never writes refund_ref (R5-A3).';
+  'service_role only: applies one stored provider event to its payments row, idempotently. R5b (E-6): a payment_intent.succeeded on a voided or failed row queues a full refund (refund_reason funded_after_void). B1: a payment_intent.succeeded on an unfunded tip holds it and queues the whole tip for transfer when amount_received equals charge_amount_cents. 20261112010200: received_cents, refunded_cents and chargeback_cents record the provider''s facts; a job payment charged a different amount stays held with last_error; transfers are recorded once in payment_transfers (payment_record_transfer / payment_record_reversal); a card dispute clears its block only when won or when an inquiry closes (warning_closed), lost refunds the row, any other closing status keeps the block for a person; payment_intent.payment_failed changes nothing. 20261115000600: every rule reads only this event and durable rows, never another event''s payload; the refund status follows the greatest refunded total and refunded stays refunded; payment_disputes keeps one row per dispute id (created adds it once, closed records its status, the last delivered wins, but lost stays lost) and the money stays blocked while any dispute of the payment is neither won nor warning_closed; refund.failed records the failed refund once per refund id in payment_refund_failures, raises refund_failed_at for a new one, keeps the failed refund in refund_ref when none was recorded, only for the app''s own refund of the current attempt: that attempt began and the refund carries this payment''s metadata.payment_id (R5-A3, R6-A1), and changes no status and no refunded total; charge.refunded never writes refund_ref (R5-A3).';
 
 -- ---------------------------------------------------------------------------
 -- 3. resolve_refund_failure(uuid, text): the owner's record that the failed refunds of a payment
@@ -467,7 +471,7 @@ create or replace view public.payment_attention as
              then 'refund is more than is left after the transfer: a person decides'
            -- R5-A3: refunds_due (20261115000700) sends nothing on a row with a refund failure.
            when exists (select 1 from public.payment_refund_failures f where f.payment_id = rw.id)
-             then 'a refund on this charge failed before: check how it was arranged, refund what is still owed by hand in Stripe, then record_settlement_sent'
+             then 'a refund on this charge failed before: look at the refunds on this charge in Stripe first (one that the app sent can be there), check how the failed one was arranged, refund only what is still owed by hand, then record_settlement_sent'
            when not rw.ready then 'no payment intent to refund against'
            else 'retrying: ' || coalesce(rw.last_error, '')
          end,

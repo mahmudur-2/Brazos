@@ -237,11 +237,12 @@ export async function fetchJobPayment(jobId: string) {
 }
 
 /**
- * Codex R5-A4: the job's newest failed or voided row of this kind whose refund failed at the
- * provider or was then made another way (a late charge on a voided row is refunded in full,
+ * Codex R5-A4: the job's failed or voided row of this kind whose refund failed at the provider
+ * or was then made another way (a late charge on a voided row is refunded in full,
  * funded_after_void, and that refund can fail). fetchJobPayment and fetchJobTip read only the
  * active row, so without this read the customer never sees it. Same RLS and columns as those
- * reads; at most one row, so it never competes with the active-row selection.
+ * reads; at most one row, so it never competes with the active-row selection. Codex R6-A2: a
+ * failure still open (refund_failed_at set) comes before arranged history, then the newest.
  */
 export async function fetchJobRefundIssue(jobId: string, kind: 'job_payment' | 'tip' = 'job_payment') {
   const { data, error } = await supabase
@@ -251,6 +252,7 @@ export async function fetchJobRefundIssue(jobId: string, kind: 'job_payment' | '
     .eq('kind', kind)
     .in('status', ['failed', 'voided'])
     .or('refund_failed_at.not.is.null,refund_arranged_at.not.is.null')
+    .order('refund_failed_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();

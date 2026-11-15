@@ -194,13 +194,24 @@ test('R4-A5, P3 · [static] every customer card passes both facts; the worker ca
   assert.match(tipNote, /^const tipDoneNote = \(\(\) => \{ if \(!tip\) return null; const where = isRefundFailed\(tip\) \|\| isRefundArranged\(tip\) \? null : isHeld\(tip\)/);
 });
 
-test('R5-A4 · [static] a failed or arranged refund on a failed or voided row reaches the customer', () => {
-  // The read: the same table, RLS and columns as the active-row reads; one row, the newest.
+test('R5-A4, R6-A2 · [static] a failed or arranged refund on a failed or voided row reaches the customer', async () => {
+  // The read: the same table, RLS and columns as the active-row reads; one row. Codex R6-A2: a
+  // failure still open (refund_failed_at set) before arranged history, then the newest, so an older
+  // open failure beside a newer arranged row is the one shown (rows: 426 I3, I4).
   const lib = code('lib/payments.ts');
   assert.match(
     lib,
-    /export async function fetchJobRefundIssue\(jobId: string, kind: 'job_payment' \| 'tip' = 'job_payment'\) \{ const \{ data, error \} = await supabase \.from\('payments'\) \.select\(PAYMENT_COLUMNS\) \.eq\('job_id', jobId\) \.eq\('kind', kind\) \.in\('status', \['failed', 'voided'\]\) \.or\('refund_failed_at\.not\.is\.null,refund_arranged_at\.not\.is\.null'\) \.order\('created_at', \{ ascending: false \}\) \.limit\(1\) \.maybeSingle\(\); return \{ data: data as Payment \| null, error \}; \}/
+    /export async function fetchJobRefundIssue\(jobId: string, kind: 'job_payment' \| 'tip' = 'job_payment'\) \{ const \{ data, error \} = await supabase \.from\('payments'\) \.select\(PAYMENT_COLUMNS\) \.eq\('job_id', jobId\) \.eq\('kind', kind\) \.in\('status', \['failed', 'voided'\]\) \.or\('refund_failed_at\.not\.is\.null,refund_arranged_at\.not\.is\.null'\) \.order\('refund_failed_at', \{ ascending: false, nullsFirst: false \}\) \.order\('created_at', \{ ascending: false \}\) \.limit\(1\) \.maybeSingle\(\); return \{ data: data as Payment \| null, error \}; \}/
   );
+  // Executed: the installed client sends those two orders in that sequence, open failures first
+  // (desc, nulls last); no request is made.
+  const { createClient } = await import('@supabase/supabase-js');
+  const offline = createClient('http://127.0.0.1:1', 'offline', { auth: { persistSession: false, autoRefreshToken: false } });
+  const query = offline.from('payments').select('id')
+    .order('refund_failed_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .limit(1);
+  assert.equal(query.url.searchParams.get('order'), 'refund_failed_at.desc.nullslast,created_at.desc');
   // Control: the active-row reads keep their filter, so checkout and the tip flow still see one live row.
   for (const name of ['fetchJobPayment', 'fetchJobTip']) {
     const body = lib.slice(lib.indexOf(`export async function ${name}(`), lib.indexOf('export ', lib.indexOf(`export async function ${name}(`) + 1));
@@ -256,4 +267,25 @@ test('R5-A5 · [static] no "on its way to the worker" beside a failed or arrange
     `Approved automatically after 72 hours.${ON_ITS_WAY}`,
     `Approved on your say-so.${ON_ITS_WAY}`,
   ], 'control: without a refund issue the sentences are as before');
+});
+
+test('R6-A3 · the tip card’s payout sentence is never beside a failed or arranged refund; the first sentence stays (A10a)', () => {
+  const PAYOUT = 'Yours is approved and on its way — if they haven’t set up payouts yet, it lands the moment they do.';
+  const review = code('screens/ReviewAndTipScreen.tsx');
+  const branch = review.match(
+    /\) : !released \? \( <Text style=\{styles\.cardNote\}> A tip can be added once the job payment reaches \{workerName \?\? 'the worker'\}\. \{([^?{}]+) \? ' ([^']*)' : null\} <\/Text> \) : !stripeReady\(\) \? \(/
+  );
+  assert.ok(branch, 'the !released branch: the first sentence always, then the payout sentence behind a guard');
+  assert.equal(branch[1].trim(), '!isRefundFailed(payment) && !isRefundArranged(payment)', 'the R5-A5 rule');
+  assert.equal(branch[2], PAYOUT, 'the owner’s words (A10a), unchanged');
+  assert.equal((review.match(/Yours is approved and on its way/g) ?? []).length, 1, 'said in this branch only');
+  // Executed: the guard as written, on the rows Codex names (held, approval time set, nothing transferred).
+  const shown = new Function('isRefundFailed', 'isRefundArranged', 'payment', `return ${branch[1]};`);
+  const approved = { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 0, refund_cents: 5375 };
+  assert.equal(shown(isRefundFailed, isRefundArranged, { ...approved, refund_failed_at: '2026-11-15T11:00:00Z', refund_arranged_at: null }), false,
+    'refund failed: no payout sentence');
+  assert.equal(shown(isRefundFailed, isRefundArranged, { ...approved, refund_failed_at: null, refund_arranged_at: '2026-11-15T12:00:00Z' }), false,
+    'refund arranged: no payout sentence');
+  assert.equal(shown(isRefundFailed, isRefundArranged, { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 4975 }), true,
+    'control: approved, no refund issue: the sentence as before');
 });

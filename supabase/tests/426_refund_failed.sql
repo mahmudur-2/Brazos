@@ -5,7 +5,10 @@
 -- R3-A4, R3-A5 (refunds) and R3-A7 (by design); after round 4: R4-A3 (G, the failed refunds join the
 -- transfer reservation, payment_refund_reserved_cents) and P3 (refund_arranged_at: C3b, C7, F7); after
 -- round 5: R5-A3 (H, refund_ref only for the app's begun attempt, and no refund sent by itself on a
--- row with a refund failure; J) and R5-A4 (I, the customer's read of a voided row's failed refund).
+-- row with a refund failure; J) and R5-A4 (I, the customer's read of a voided row's failed refund);
+-- after round 6: R6-A1 (H15-H18, refund_ref only for the app's own refund of the current attempt;
+-- the "failed before" line says to look at the charge's refunds first) and R6-A2 (I3, I4, an open
+-- failure is read before arranged history).
 --
 -- THE PROVIDER'S FACTS (docs.stripe.com/refunds, "Failed refunds"): the Refund's status becomes
 -- failed with a failure_reason, refund.failed is sent, the money returns to the platform's balance,
@@ -21,7 +24,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(71);
+select plan(77);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -402,7 +405,8 @@ select is(left(:'l_res', 4) || (select (refund_failed_at is null)::text || '/' |
   'ok: true/true/true', 'G7: resolve_refund_failure records the arrangement, and the fee transfer is still due');
 
 -- ---------------------------------------------------------------------------
--- H. Codex R5-A3: refund.failed writes refund_ref only when the app's current refund attempt began.
+-- H. Codex R5-A3, R6-A1: refund.failed writes refund_ref only for the app's own refund (its
+--    metadata.payment_id) of the current attempt (that attempt began).
 --    (i) The app's own refund, its answer lost, then failed: its id is kept, so it is never reopened
 --        or sent again, whatever refund_cents holds.
 --    (ii) A refund the app never sent (a hand refund) fails: refund_ref stays empty, and a refund any
@@ -461,7 +465,7 @@ end $$;
 -- In refunds_due / its line for a person.
 create or replace function tests.rf_later(p_pid uuid) returns text language sql as $$
   select exists (select 1 from public.refunds_due r where r.id = p_pid)::text || '/'
-         || tests.rf_lines(p_pid, 'a refund on this charge failed before: check how it was arranged, refund what is still owed by hand in Stripe, then record_settlement_sent')
+         || tests.rf_lines(p_pid, 'a refund on this charge failed before: look at the refunds on this charge in Stripe first (one that the app sent can be there), check how the failed one was arranged, refund only what is still owed by hand, then record_settlement_sent')
 $$;
 
 create or replace function tests.rf_arrange(p_pid uuid) returns text language sql as $$
@@ -593,6 +597,45 @@ select is(tests.rf_state(:'pk9') || '/' || (select refund_sent_attempt::text || 
 select tests.rf_arrange(:'pk9') as k9r \gset
 select is(:'k9r' || tests.rf_later(:'pk9'), 'ok: false/1', 'H14: and still listed after the arrangement');
 
+-- Codex R6-A1: the current attempt began and its answer was lost; then a smaller refund made by hand
+-- (no metadata) fails. Written into refund_ref, it would hide the refund still owed from every queue
+-- and line once arranged, and refuse the app's own refund id.
+select tests.rf_job('RF own lost, hand fails', 'held') as jk10 \gset
+select tests.rf_pid(:'jk10') as pk10 \gset
+select tests.rf_cancel(:'jk10');
+select tests.rf_sent_lost(:'pk10') as k10s \gset
+select tests.rf_failed('evt_rf_k10_fail', 1800000100, :'pk10', 're_rf_k10_hand', 2000, false);
+select is(:'k10s' || '/' || tests.rf_state(:'pk10') || '/' || tests.rf_later(:'pk10')
+          || '/' || tests.rf_lines(:'pk10', 'refund re_rf_k10_hand failed at the provider%'),
+  'true/true/held/0/null/false/1/1',
+  'H15 (R6-A1): the app''s refund began, a smaller hand refund fails: refund_ref stays empty and the refund owed is listed for a person');
+select tests.rf_arrange(:'pk10') as k10r \gset
+select is(:'k10r' || coalesce((select refund_ref from public.payments where id = :'pk10'), 'null') || '/' || tests.rf_later(:'pk10'),
+  'ok: null/false/1', 'H16 (R6-A1): the owner arranges only that failure: the refund owed is still listed and nothing sends it');
+select tests.rf_try(format('select public.record_settlement_sent(%L, %L, %L, %s)::text', :'pk10', 'refund', 're_rf_k10_own',
+                           (select refund_cents from public.payments where id = :'pk10'))) as k10o \gset
+select is(:'k10o' || '/' || tests.rf_state(:'pk10') || '/' || tests.rf_lines(:'pk10', 'refund sent, not yet confirmed by charge.refunded')
+          || '/' || tests.rf_later(:'pk10'),
+  'ok: true/held/0/re_rf_k10_own/1/false/0', 'H17 (R6-A1): the app''s own refund id is then recorded, listed as sent and not yet confirmed');
+
+-- R6-A1, the attempt condition beside the label: attempt 0 stopped, the owner reopened, a decision for
+-- the worker set the refund to 0; then attempt 0's own refund (with metadata) fails late. Kept out of
+-- refund_ref, the owner can still decide for the customer, and the refund owed is listed for a person.
+select tests.rf_job('RF reopened, late own failure', 'approved') as jk11 \gset
+select tests.rf_pid(:'jk11') as pk11 \gset
+select charge_amount_cents as ck11 from public.payments where id = :'pk11' \gset
+select tests.rf_decide(:'jk11', 'customer') as k11a \gset
+select public.settlement_send_begin(:'pk11', 'refund', 0, (select refund_cents from public.payments where id = :'pk11')) as k11b \gset
+select public.record_settlement_result(:'pk11', 'refund', 0, 'stop', 'refund: an answer that needs a person') as k11s \gset
+select tests.rf_reopen(:'pk11') as k11o \gset
+select tests.rf_decide(:'jk11', 'worker') as k11w \gset
+select tests.rf_failed('evt_rf_k11_fail', 1800000100, :'pk11', 're_rf_k11_own0', :ck11);
+select tests.rf_decide(:'jk11', 'customer') as k11c \gset
+select is(:'k11a' || '/' || :'k11o' || '/' || :'k11w' || '/' || :'k11c' || '/'
+          || coalesce((select refund_ref from public.payments where id = :'pk11'), 'null') || '/' || tests.rf_later(:'pk11'),
+  'ok: ' || :ck11 || '/ok: true/ok: 0/ok: ' || :ck11 || '/null/false/1',
+  'H18 (R6-A1): a late failure of an older attempt''s own refund leaves refund_ref empty: the owner can still decide for the customer, and it is listed');
+
 -- ---------------------------------------------------------------------------
 -- I. Codex R5-A4: a failed refund on a voided row reaches the customer. The read is
 --    lib/payments.ts fetchJobRefundIssue, made as the customer under RLS and the column grant.
@@ -627,6 +670,47 @@ select is((select p.status::text || '/' || (p.refund_failed_at is not null)::tex
               and (p.refund_failed_at is not null or p.refund_arranged_at is not null)
             order by p.created_at desc limit 1),
   'voided/false/true', 'I2: after the owner records the arrangement, the customer reads that it was arranged');
+select tests.clear_auth();
+
+-- Codex R6-A2: two replaced tips of one job, both charged late, both refunds failed; the owner
+-- arranged the newer one only. lib/payments.ts fetchJobRefundIssue orders refund_failed_at desc
+-- nulls last, then created_at desc (tests/refundFailed.test.mjs pins it); read as the customer.
+select tests.rf_job('RF two tips', 'released') as jt \gset
+select tests.authenticate_as(:'customer');
+select (public.begin_tip_payment(:'jt', 1000)).id as ta \gset
+select tests.clear_auth();
+select public.attach_provider_ref(:'ta', 'pi_rf_ta');
+select tests.authenticate_as(:'customer');
+select (public.begin_tip_payment(:'jt', 1500)).id as tb \gset
+select tests.clear_auth();
+select public.attach_provider_ref(:'tb', 'pi_rf_tb');
+select tests.authenticate_as(:'customer');
+select (public.begin_tip_payment(:'jt', 2000)).id as tc \gset
+select tests.clear_auth();
+-- SURGERY: one transaction has one now(); the first tip becomes the older row.
+update public.payments set created_at = created_at - interval '1 hour' where id = :'ta';
+select tests.rf_event('evt_rf_ta_paid', 'payment_intent.succeeded', 1800000200, jsonb_build_object(
+  'id', 'pi_rf_ta', 'object', 'payment_intent', 'amount_received', (select charge_amount_cents from public.payments where id = :'ta'),
+  'metadata', jsonb_build_object('payment_id', :'ta')));
+select tests.rf_event('evt_rf_tb_paid', 'payment_intent.succeeded', 1800000200, jsonb_build_object(
+  'id', 'pi_rf_tb', 'object', 'payment_intent', 'amount_received', (select charge_amount_cents from public.payments where id = :'tb'),
+  'metadata', jsonb_build_object('payment_id', :'tb')));
+select tests.rf_failed('evt_rf_ta_fail', 1800000300, :'ta', 're_rf_ta', (select refund_cents from public.payments where id = :'ta'));
+select tests.rf_failed('evt_rf_tb_fail', 1800000300, :'tb', 're_rf_tb', (select refund_cents from public.payments where id = :'tb'));
+select tests.rf_try(format('select (public.resolve_refund_failure(%L, %L)).id::text', :'tb', 'Refunded by bank transfer.')) as tbr \gset
+select tests.authenticate_as(:'customer');
+select is((select p.id::text || '/' || (p.refund_failed_at is not null)::text
+             from public.payments p
+            where p.job_id = :'jt' and p.kind = 'tip' and p.status in ('failed', 'voided')
+              and (p.refund_failed_at is not null or p.refund_arranged_at is not null)
+            order by p.refund_failed_at desc nulls last, p.created_at desc limit 1),
+  :'ta' || '/true', 'I3 (R6-A2): the older tip whose refund failure is still open is read, not the newer arranged one');
+select is((select p.id::text || '/' || (p.refund_arranged_at is not null)::text
+             from public.payments p
+            where p.job_id = :'jt' and p.kind = 'tip' and p.status in ('failed', 'voided')
+              and (p.refund_failed_at is not null or p.refund_arranged_at is not null)
+            order by p.created_at desc limit 1),
+  :'tb' || '/true', 'I4 (R6-A2, control): newest first alone reads the arranged tip and hides the open failure');
 select tests.clear_auth();
 
 -- ---------------------------------------------------------------------------

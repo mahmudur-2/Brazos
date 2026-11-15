@@ -348,7 +348,8 @@ money; a later failure of another refund id raises it again.
 The drain sends no refund on a payment with a recorded refund failure, arranged or not. A refund
 asked later on it (a cancellation, a decision, a ban) shows in `payment_attention` as "a refund on
 this charge failed before": refund what is still owed by hand in Stripe, then
-`record_settlement_sent`.
+`record_settlement_sent`. Before a refund by hand, look at the charge's refunds in Stripe: a refund
+that the app sent has `payment_id` in its metadata.
 
 While a refund the app sent may be out, `resolve_job_dispute` and `resolve_tip` refuse a decision
 that changes the refund amount ("A refund to the customer was sent or may have been sent. …").
