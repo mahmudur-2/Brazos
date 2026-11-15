@@ -52,6 +52,7 @@ import {
   canOfferJobFunding,
   fetchCancelTerms,
   fetchJobPaymentState,
+  fetchJobRefundIssue,
   isCancellationFeeKept,
   isHeld,
   isRefundQueued,
@@ -173,6 +174,8 @@ export function ClientJobDetailScreen() {
   // The job's ledger row. Loaded on focus so returning from Checkout
   // immediately reflects its state truthfully.
   const [payment, setPayment] = useState<Payment | null>(null);
+  // Codex R5-A4: an older failed or voided row whose refund failed or was arranged (fetchJobRefundIssue).
+  const [refundIssue, setRefundIssue] = useState<Payment | null>(null);
   // The open issue report, if any (phase51) — it freezes release and reroutes
   // the completed-job section to the approval surface.
   const [openDispute, setOpenDispute] = useState<JobDispute | null>(null);
@@ -447,6 +450,7 @@ export function ClientJobDetailScreen() {
     setAvatarUri(null);
     setWorkerError(null);
     setPayment(null);
+    setRefundIssue(null);
     setOpenDispute(null);
     setStatusReadError(false);
     setPaymentRead(false);
@@ -463,16 +467,17 @@ export function ClientJobDetailScreen() {
       // (20261003000100) and cancel_job() directs it — so the read runs there too and the
       // card below shows what happened to the payment. Only an open post has nothing to read.
       if (job.status === 'open') return;
-      Promise.all([fetchJobPaymentState(job.id), fetchOpenJobDispute(job.id)]).then(
-        ([paymentResult, disputeResult]) => {
+      Promise.all([fetchJobPaymentState(job.id), fetchOpenJobDispute(job.id), fetchJobRefundIssue(job.id)]).then(
+        ([paymentResult, disputeResult, issueResult]) => {
           if (!active) return;
           if (!paymentResult.error) setPayment(paymentResult.data);
           if (!disputeResult.error) setOpenDispute(disputeResult.data);
+          if (!issueResult.error) setRefundIssue(issueResult.data);
           // Idea 14: the checkout intent waits for a ledger actually read.
-          if (!paymentResult.error && !disputeResult.error) setPaymentRead(true);
-          // Either read failing marks the pair failed: both feed the same
+          if (!paymentResult.error && !disputeResult.error && !issueResult.error) setPaymentRead(true);
+          // Any read failing marks them all failed: they feed the same
           // lifecycle answer, and a retry re-runs them together.
-          setStatusReadError(!!(paymentResult.error || disputeResult.error));
+          setStatusReadError(!!(paymentResult.error || disputeResult.error || issueResult.error));
         }
       );
       return () => {
@@ -751,29 +756,33 @@ export function ClientJobDetailScreen() {
   // fee beside it — reads through the one predicate pair in lib/paymentRules.ts
   // and the glossary's own sentences, never "held in protection" on a job
   // that is over.
-  const cancelledMoneyNote = (() => {
-    if (!payment) return null;
+  // Codex R5-A4: with no active row, a cancelled job shows the voided row whose refund failed or
+  // was arranged (a late charge refunded in full), so the customer is never told nothing happened.
+  const cancelledPayment = payment ?? refundIssue;
+  const moneyNoteFor = (row: Payment | null) => {
+    if (!row) return null;
     // Pack 1, F2: the refund failed at the provider: never "goes back to your card".
-    if (isRefundFailed(payment)) {
-      return isCancellationFeeKept(payment)
+    if (isRefundFailed(row)) {
+      return isCancellationFeeKept(row)
         ? `The cancellation fee goes to ${workerFirstName}. The refund of the rest to your card didn’t go through; Brazos will arrange it another way.`
         : 'The refund to your card didn’t go through. Brazos will arrange it another way.';
     }
     // P3: the owner made that refund another way; never "went back to your card".
-    if (isRefundArranged(payment)) {
+    if (isRefundArranged(row)) {
       return 'The refund to your card didn’t go through, so Brazos refunded you another way.';
     }
-    if (isCancellationFeeKept(payment)) {
+    if (isCancellationFeeKept(row)) {
       return `The cancellation fee goes to ${workerFirstName}; the rest goes back to your card — usually within 5–10 business days.`;
     }
-    if (isRefundQueued(payment)) {
+    if (isRefundQueued(row)) {
       return 'It goes back to your card — usually within 5–10 business days.';
     }
-    if (payment.status === 'refunded' || payment.status === 'partially_refunded') {
+    if (row.status === 'refunded' || row.status === 'partially_refunded') {
       return 'It went back to your card.';
     }
     return null;
-  })();
+  };
+  const cancelledMoneyNote = moneyNoteFor(cancelledPayment);
 
   // The hero's bid count: shown as it changes, and spoken on iOS (E4) where the live region is not.
   const bidCountLine =
@@ -1168,7 +1177,9 @@ export function ClientJobDetailScreen() {
                     <Text style={styles.cancelledText}>
                       {payment
                         ? 'The job remains here for your records; what happened to the payment is below.'
-                        : 'No further action is needed. The job remains here for your records.'}
+                        : refundIssue
+                          ? 'The job remains here for your records.'
+                          : 'No further action is needed. The job remains here for your records.'}
                     </Text>
                   </View>
                 </Card>
@@ -1176,7 +1187,7 @@ export function ClientJobDetailScreen() {
                     ban or the cancellation queued, in the glossary's own words. */}
                 {statusReadError ? (
                   statusReadBanner
-                ) : payment ? (
+                ) : cancelledPayment ? (
                   <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
                     <View style={styles.paymentShield}>
                       <Ionicons name="shield-outline" size={22} color={colors.mark} />
@@ -1185,15 +1196,17 @@ export function ClientJobDetailScreen() {
                       {paymentEyebrow()}
                     </Text>
                     <MoneyText
-                      cents={customerChargeCents(payment)}
-                      state={payment.status}
-                      refundQueued={isRefundQueued(payment)}
-                      feeKept={isCancellationFeeKept(payment)}
-                      refundFailed={isRefundFailed(payment)}
-                      refundArranged={isRefundArranged(payment)}
+                      cents={customerChargeCents(cancelledPayment)}
+                      state={cancelledPayment.status}
+                      refundQueued={isRefundQueued(cancelledPayment)}
+                      feeKept={isCancellationFeeKept(cancelledPayment)}
+                      refundFailed={isRefundFailed(cancelledPayment)}
+                      refundArranged={isRefundArranged(cancelledPayment)}
                       counterpartFirstName={workerFirstName}
                     />
                     {cancelledMoneyNote ? <Text style={styles.paymentNote}>{cancelledMoneyNote}</Text> : null}
+                    {/* R5-A4: beside an active row, the older row's failed or arranged refund too. */}
+                    {payment && refundIssue ? <Text style={styles.paymentNote}>{moneyNoteFor(refundIssue)}</Text> : null}
                   </Card>
                 ) : null}
               </>
@@ -1413,8 +1426,9 @@ export function ClientJobDetailScreen() {
                 {/* A10 (2026-10-03): "on its way" says what it waits for. The transfer lands only
                     once the worker's payout account is enabled; until then the row stays here
                     with release requested, and the worker's own job screen nudges them to set
-                    it up. Card path only. */}
-                {stripe && releaseRequested ? (
+                    it up. Card path only. Codex R5-A5: never beside a failed or arranged refund of
+                    this payment. */}
+                {stripe && releaseRequested && !isRefundFailed(payment) && !isRefundArranged(payment) ? (
                   <Text style={styles.paymentNote}>
                     The payment reaches {workerFirstName} once their payout account is ready — it
                     shows as released when the transfer lands. If they haven’t set up payouts yet,
@@ -1423,6 +1437,9 @@ export function ClientJobDetailScreen() {
                 ) : null}
               </Card>
             ) : null}
+            {/* Codex R5-A4: an older row of this job (replaced, then charged late) whose refund
+                failed or was arranged, in the cancelled card's own sentences. */}
+            {refundIssue ? <Text style={styles.paymentNote}>{moneyNoteFor(refundIssue)}</Text> : null}
 
             {/* Before/after: the client's own posting photos next to what the
                 worker submitted on completion. Rendered as soon as the worker

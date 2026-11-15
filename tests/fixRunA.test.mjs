@@ -27,9 +27,10 @@ test('A10 · "payout on its way" says what it waits for; the tip opens once the 
 
   // The customer's job page: the eyebrow stays, and a note under the figure says what "on its
   // way" waits for — card path only (the sandbox releases on approval), never a "paid" claim. Pack 1, Codex R3-A8:
-  // the card also carries the refund facts (refundQueued, refundFailed; P3 refundArranged).
+  // the card also carries the refund facts (refundQueued, refundFailed; P3 refundArranged). Codex R5-A5:
+  // the note is not shown beside a failed or arranged refund of this payment.
   const detail = code('screens/ClientJobDetailScreen.tsx');
-  assert.match(detail, /\{paymentEyebrow\(\)\} <\/Text> <MoneyText cents=\{customerChargeCents\(payment\)\} state=\{payment\.status\} refundQueued=\{isRefundQueued\(payment\)\} refundFailed=\{isRefundFailed\(payment\)\} refundArranged=\{isRefundArranged\(payment\)\} releaseRequested=\{releaseRequested\} issueOpen=\{!!openDispute\} counterpartFirstName=\{workerFirstName\} \/> (?:\{\} )?\{stripe && releaseRequested \? \( <Text style=\{styles\.paymentNote\}> The payment reaches \{workerFirstName\} once their payout account is ready — it shows as released when the transfer lands\. If they haven’t set up payouts yet, their job screen asks them to\. <\/Text> \) : null\}/);
+  assert.match(detail, /\{paymentEyebrow\(\)\} <\/Text> <MoneyText cents=\{customerChargeCents\(payment\)\} state=\{payment\.status\} refundQueued=\{isRefundQueued\(payment\)\} refundFailed=\{isRefundFailed\(payment\)\} refundArranged=\{isRefundArranged\(payment\)\} releaseRequested=\{releaseRequested\} issueOpen=\{!!openDispute\} counterpartFirstName=\{workerFirstName\} \/> (?:\{\} )?\{stripe && releaseRequested && !isRefundFailed\(payment\) && !isRefundArranged\(payment\) \? \( <Text style=\{styles\.paymentNote\}> The payment reaches \{workerFirstName\} once their payout account is ready — it shows as released when the transfer lands\. If they haven’t set up payouts yet, their job screen asks them to\. <\/Text> \) : null\}/);
   assert.doesNotMatch(detail, /paymentsMode !== 'sandbox'/, 'stripe is never locked out by a sandbox-only gate (D18)');
 
   // The worker's job page: a nudge to set up payouts from the hire onwards, before any payment
@@ -83,9 +84,10 @@ test('A11 · a ban queues the refund it strands, and the customer\'s job page sh
   );
   assert.match(sql, /raise exception 'Only admins may ban users';/, 'the admin gate stays');
   assert.match(sql, /revoke all on function public\.ban_user\(uuid, uuid\) from public, anon;\s*grant execute on function public\.ban_user\(uuid, uuid\) to authenticated;/);
-  // The client: a cancelled job keeps reading its payment, so the refund shows.
+  // The client: a cancelled job keeps reading its payment, so the refund shows. Pack 1, Codex R5-A4:
+  // the same read also fetches a failed or voided row with a refund issue (fetchJobRefundIssue).
   const detail = code('screens/ClientJobDetailScreen.tsx');
-  assert.match(detail, /let active = true; if \(job\.status === 'open'\) return; Promise\.all\(\[fetchJobPaymentState\(job\.id\), fetchOpenJobDispute\(job\.id\)\]\)/);
+  assert.match(detail, /let active = true; if \(job\.status === 'open'\) return; Promise\.all\(\[fetchJobPaymentState\(job\.id\), fetchOpenJobDispute\(job\.id\), fetchJobRefundIssue\(job\.id\)\]\)/);
   assert.doesNotMatch(detail, /job\.status === 'open' \|\| job\.status === 'cancelled'/);
 });
 

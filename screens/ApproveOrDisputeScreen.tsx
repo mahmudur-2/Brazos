@@ -367,6 +367,11 @@ export function ApproveOrDisputeScreen() {
                 ? payment.release_reason === 'auto_approved'
                   ? 'Released automatically after 72 hours with no issue reported.'
                   : 'You approved the work and the payment was released to the worker.'
+                : releaseRequested && (isRefundFailed(payment) || isRefundArranged(payment))
+                  ? // Codex R5-A5: never "on its way" beside a failed or arranged refund of this payment.
+                    payment.release_reason === 'auto_approved'
+                    ? 'Approved automatically after 72 hours with no issue reported.'
+                    : 'You approved the work.'
                 : releaseRequested
                   ? payment.release_reason === 'auto_approved'
                     ? // C4: requested is not released — the word waits for the transfer.

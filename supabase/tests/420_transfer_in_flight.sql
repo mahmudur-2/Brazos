@@ -1,8 +1,10 @@
 -- 420_transfer_in_flight.sql — pack 1, A1: a transfer whose send began and whose result is not
 -- recorded is money on its way to the worker. Proves 20261115000000_transfer_in_flight.sql
 -- (payment_transfer_unconfirmed; open_job_dispute, resolve_job_dispute and resolve_tip refuse while it
--- holds), the reservation in refunds_due (20261115000200_work_start_money_rule.sql), and (§W, Codex
--- R4-A4) resolve_job_dispute's refusal to decide for the worker over a refund recorded or begun.
+-- holds), the reservation in refunds_due (20261115000200_work_start_money_rule.sql), (§W, Codex
+-- R4-A4) resolve_job_dispute's refusal to decide for the worker over a refund recorded or begun, and
+-- (§X, Codex R5-A1, R5-A3) the amount named at send-begin, the one rule for a decision that changes
+-- a refund the app sent or may have sent, and the refund lines a refunded total covers.
 --
 -- THE ORDER. The race is two committed calls in the wrong order: settlement_send_begin commits, the
 -- provider's answer is lost, then the dispute or the refund decision runs. Each call here reads what
@@ -17,7 +19,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(81);
+select plan(113);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -110,7 +112,7 @@ select ok(to_regprocedure('public.payment_transfer_unconfirmed(public.payments)'
 select tests.if_job('IF approved', 'released') as ja \gset
 select id as pa from public.payments where job_id = :'ja' and kind = 'job_payment' \gset
 select is(tests.if_unconfirmed(:'pa'), 'ok: false', 'A1: approved, not yet sent: nothing is on its way');
-select is(public.settlement_send_begin(:'pa', 'transfer', 0), true, 'A2: the drain begins the send (attempt 0)');
+select is(public.settlement_send_begin(:'pa', 'transfer', 0, (select transfer_cents from public.payments where id = :'pa')), true, 'A2: the drain begins the send (attempt 0)');
 select is(public.record_settlement_result(:'pa', 'transfer', 0, 'same_key', 'no answer: timeout'), true,
   'A3: the answer is lost: same key next tick');
 select is(tests.if_unconfirmed(:'pa'), 'ok: true', 'A4: the transfer is now on its way, result unknown');
@@ -138,7 +140,7 @@ select is(tests.if_unconfirmed(:'pa'), 'ok: false', 'A12: recorded: nothing is u
 -- ---------------------------------------------------------------------------
 select tests.if_job('IF reopened', 'released') as jb \gset
 select id as pb from public.payments where job_id = :'jb' and kind = 'job_payment' \gset
-select public.settlement_send_begin(:'pb', 'transfer', 0) as begun_b \gset
+select public.settlement_send_begin(:'pb', 'transfer', 0, (select transfer_cents from public.payments where id = :'pb')) as begun_b \gset
 select public.record_settlement_result(:'pb', 'transfer', 0, 'same_key', 'no answer') as lost_b \gset
 update public.payments set transfer_sent_at = now() - interval '24 hours' where id = :'pb';
 select is(public.settlement_send_reopen(:'pb', 'transfer'), true, 'B1: 23 hours passed; the owner reopens the transfer');
@@ -154,7 +156,7 @@ select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).refun
 select tests.if_job('IF control', 'released') as jc \gset
 select id as pc from public.payments where job_id = :'jc' and kind = 'job_payment' \gset
 select is(tests.if_dispute(:'jc'), 'ok: open', 'C1: no send begun: the dispute opens as today');
-select is(public.settlement_send_begin(:'pc', 'transfer', 0), false, 'C2: the other order: an open dispute keeps the drain from sending');
+select is(public.settlement_send_begin(:'pc', 'transfer', 0, (select transfer_cents from public.payments where id = :'pc')), false, 'C2: the other order: an open dispute keeps the drain from sending');
 select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).refund_cents::text', :'jc', 'customer')),
   'ok: ' || (select charge_amount_cents from public.payments where id = :'pc')::text,
   'C3: and it resolves for the customer as today');
@@ -175,7 +177,7 @@ select public.attach_provider_ref(:'tip', 'pi_if_tip_0001');
 select tests.if_event('evt_if_ts_' || :'tip', 'payment_intent.succeeded', jsonb_build_object(
   'id', 'pi_if_tip_0001', 'amount_received', (select charge_amount_cents from public.payments where id = :'tip'),
   'metadata', jsonb_build_object('payment_id', :'tip'))) as ts \gset
-select is(public.settlement_send_begin(:'tip', 'transfer', 0), true, 'T1: the tip''s transfer send begins');
+select is(public.settlement_send_begin(:'tip', 'transfer', 0, (select transfer_cents from public.payments where id = :'tip')), true, 'T1: the tip''s transfer send begins');
 select is(tests.if_try(format('select (public.resolve_tip(%L, %L)).refund_cents::text', :'tip', 'refund')),
   'error: A transfer to the worker was sent and its result is not recorded yet: record it or reopen it first.',
   'T2: the owner cannot refund a tip whose transfer may already be with the worker');
@@ -193,14 +195,14 @@ select ok((select transfer_cents > 0 and refund_cents = charge_amount_cents - tr
 select ok(exists (select 1 from public.transfers_ready where id = :'pf1') and exists (select 1 from public.refunds_ready where id = :'pf1'),
   'F2: both are queued');
 -- Order 1: the transfer first, its answer not back yet.
-select is(public.settlement_send_begin(:'pf1', 'transfer', 0), true, 'F3: order 1: the fee transfer send begins');
+select is(public.settlement_send_begin(:'pf1', 'transfer', 0, (select transfer_cents from public.payments where id = :'pf1')), true, 'F3: order 1: the fee transfer send begins');
 select ok(exists (select 1 from public.refunds_ready where id = :'pf1'),
   'F4: the refund still goes: the charge less the fee on its way is exactly what is left');
 update public.payments set refund_cents = refund_cents + 1 where id = :'pf1';
 select ok(not exists (select 1 from public.refunds_due where id = :'pf1'),
   'F5: one cent more than is left is held back while the fee transfer is unknown');
 update public.payments set refund_cents = refund_cents - 1 where id = :'pf1';
-select is(public.settlement_send_begin(:'pf1', 'refund', 0), true, 'F6: the refund send begins');
+select is(public.settlement_send_begin(:'pf1', 'refund', 0, (select refund_cents from public.payments where id = :'pf1')), true, 'F6: the refund send begins');
 select is(tests.if_record(:'pf1', 'refund', 're_if_f1_0001'), 'ok: true', 'F7: the refund is recorded');
 select is(tests.if_record(:'pf1', 'transfer', 'tr_if_f1_0001'), 'ok: true', 'F8: then the fee transfer''s answer is recorded');
 select is(tests.if_unconfirmed(:'pf1'), 'ok: false', 'F9: and nothing is unknown any more');
@@ -210,7 +212,7 @@ select id as pf2 from public.payments where job_id = :'jf2' and kind = 'job_paym
 select tests.authenticate_as(:'customer');
 select (public.cancel_job(:'jf2', 'customer_cancelled')).status as cancelled_f2 \gset
 select tests.clear_auth();
-select is(public.settlement_send_begin(:'pf2', 'refund', 0), true, 'F10: order 2: the refund send begins first');
+select is(public.settlement_send_begin(:'pf2', 'refund', 0, (select refund_cents from public.payments where id = :'pf2')), true, 'F10: order 2: the refund send begins first');
 select is(tests.if_record(:'pf2', 'refund', 're_if_f2_0001'), 'ok: true', 'F11: and is recorded');
 -- Codex R2 (420 gap): the refund's charge.refunded lands before the fee transfer goes.
 select tests.if_event('evt_if_f2_cr', 'charge.refunded', jsonb_build_object(
@@ -218,7 +220,7 @@ select tests.if_event('evt_if_f2_cr', 'charge.refunded', jsonb_build_object(
   'amount_refunded', (select refund_cents from public.payments where id = :'pf2'))) as f2cr \gset
 select is((select status::text || ' / ' || (refunded_cents = refund_cents)::text from public.payments where id = :'pf2'),
   'partially_refunded / true', 'F11b: charge.refunded lands: the rest is back with the customer, the row partly refunded');
-select is(public.settlement_send_begin(:'pf2', 'transfer', 0), true, 'F12: then the fee transfer send still begins');
+select is(public.settlement_send_begin(:'pf2', 'transfer', 0, (select transfer_cents from public.payments where id = :'pf2')), true, 'F12: then the fee transfer send still begins');
 select is(tests.if_record(:'pf2', 'transfer', 'tr_if_f2_0001'), 'ok: true', 'F13: and is recorded');
 select is((select status::text || ' / ' || coalesce(transfer_ref, 'null') from public.payments where id = :'pf2'),
   'partially_refunded / tr_if_f2_0001', 'F13b: the fee transfer leaves the row partly refunded, never released');
@@ -242,7 +244,7 @@ select public.attach_provider_ref(:'tipr', 'pi_if_tip_r1');
 select tests.if_event('evt_if_r1_ts', 'payment_intent.succeeded', jsonb_build_object(
   'id', 'pi_if_tip_r1', 'amount_received', (select charge_amount_cents from public.payments where id = :'tipr'),
   'metadata', jsonb_build_object('payment_id', :'tipr'))) as r1ts \gset
-select public.settlement_send_begin(:'tipr', 'transfer', 0) as r1b0 \gset
+select public.settlement_send_begin(:'tipr', 'transfer', 0, (select transfer_cents from public.payments where id = :'tipr')) as r1b0 \gset
 select tests.if_record(:'tipr', 'transfer', 'tr_if_r1_0001') as r1rec \gset
 select tests.if_event('evt_if_r1_full', 'transfer.reversed', jsonb_build_object(
   'id', 'tr_if_r1_0001', 'amount', (select transfer_cents from public.payments where id = :'tipr'),
@@ -252,7 +254,7 @@ select ok((select transfer_reversed_at is not null and status = 'held' from publ
   'R1: the full reversal parks the tip (its first full reversal is handled as before)');
 select is(tests.if_try(format('select (public.resolve_tip(%L, %L)).transfer_attempts::text', :'tipr', 'send')), 'ok: 1',
   'R1b: the owner sends the tip again: the park clears and the attempt counter moves on');
-select is(public.settlement_send_begin(:'tipr', 'transfer', 1), true, 'R2: the owner sends the tip again and the new attempt begins');
+select is(public.settlement_send_begin(:'tipr', 'transfer', 1, (select transfer_cents from public.payments where id = :'tipr')), true, 'R2: the owner sends the tip again and the new attempt begins');
 select is(tests.if_unconfirmed(:'tipr'), 'ok: true', 'R3: the new transfer is on its way, its answer not back');
 select tests.if_event('evt_if_r1_part', 'transfer.reversed', jsonb_build_object(
   'id', 'tr_if_r1_0001', 'amount', (select transfer_cents from public.payments where id = :'tipr'),
@@ -272,7 +274,7 @@ select ok(not exists (select 1 from public.refunds_due where id = :'tipr'), 'R7:
 -- R8-R14: a job payment, settled through resolve_job_dispute.
 select tests.if_job('IF job reversed twice', 'released') as jr2 \gset
 select id as pjr2 from public.payments where job_id = :'jr2' and kind = 'job_payment' \gset
-select public.settlement_send_begin(:'pjr2', 'transfer', 0) as r2b0 \gset
+select public.settlement_send_begin(:'pjr2', 'transfer', 0, (select transfer_cents from public.payments where id = :'pjr2')) as r2b0 \gset
 select tests.if_record(:'pjr2', 'transfer', 'tr_if_r2_0001') as r2rec \gset
 select tests.if_event('evt_if_r2_full', 'transfer.reversed', jsonb_build_object(
   'id', 'tr_if_r2_0001', 'amount', (select transfer_cents from public.payments where id = :'pjr2'),
@@ -282,7 +284,7 @@ select ok((select transfer_reversed_at is not null and status = 'held' from publ
   'R8: the full reversal parks the job payment');
 select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_attempts::text', :'jr2', 'worker')), 'ok: 1',
   'R8b: the owner resolves for the worker: the park clears and the attempt counter moves on');
-select is(public.settlement_send_begin(:'pjr2', 'transfer', 1), true, 'R9: the owner resolves for the worker and the new attempt begins');
+select is(public.settlement_send_begin(:'pjr2', 'transfer', 1, (select transfer_cents from public.payments where id = :'pjr2')), true, 'R9: the owner resolves for the worker and the new attempt begins');
 select is(tests.if_unconfirmed(:'pjr2'), 'ok: true', 'R10: the new transfer is on its way, its answer not back');
 select tests.if_event('evt_if_r2_part', 'transfer.reversed', jsonb_build_object(
   'id', 'tr_if_r2_0001', 'amount', (select transfer_cents from public.payments where id = :'pjr2'),
@@ -309,12 +311,12 @@ select tests.if_job('IF W recorded', 'released') as jw1 \gset
 select id as pw1 from public.payments where job_id = :'jw1' and kind = 'job_payment' \gset
 select tests.if_dispute(:'jw1') as w1d1 \gset
 select (public.resolve_job_dispute(:'jw1', 'customer')).refund_cents as w1rc \gset
-select public.settlement_send_begin(:'pw1', 'refund', 0) as w1b \gset
+select public.settlement_send_begin(:'pw1', 'refund', 0, (select refund_cents from public.payments where id = :'pw1')) as w1b \gset
 select is(tests.if_record(:'pw1', 'refund', 're_if_w1_0001'), 'ok: true',
   'W1: the full refund is sent and recorded; its charge.refunded has not come');
 select is(tests.if_dispute(:'jw1'), 'ok: open', 'W2: the customer opens a second issue');
 select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_cents::text', :'jw1', 'worker')),
-  'error: A refund to the customer was sent or may have been sent: a decision for the worker can no longer change it.',
+  'error: A refund to the customer was sent or may have been sent. A decision cannot change the refund amount until Stripe shows that amount as refunded. Look in Stripe: refund the difference by hand there, or use settlement_send_reopen if the refund does not exist. Then decide again.',
   'W3: the owner cannot decide it for the worker');
 select ok((select refund_cents = charge_amount_cents and coalesce(transfer_cents, 0) = 0 from public.payments where id = :'pw1')
           and not exists (select 1 from public.transfers_due where id = :'pw1'),
@@ -325,12 +327,12 @@ select tests.if_job('IF W lost', 'released') as jw2 \gset
 select id as pw2 from public.payments where job_id = :'jw2' and kind = 'job_payment' \gset
 select tests.if_dispute(:'jw2') as w2d1 \gset
 select (public.resolve_job_dispute(:'jw2', 'customer')).refund_cents as w2rc \gset
-select is(public.settlement_send_begin(:'pw2', 'refund', 0), true, 'W5: lost-response order: the refund send begins');
+select is(public.settlement_send_begin(:'pw2', 'refund', 0, (select refund_cents from public.payments where id = :'pw2')), true, 'W5: lost-response order: the refund send begins');
 select is(public.record_settlement_result(:'pw2', 'refund', 0, 'same_key', 'no answer: timeout'), true,
   'W6: and its answer is lost');
 select tests.if_dispute(:'jw2') as w2d2 \gset
 select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_cents::text', :'jw2', 'worker')),
-  'error: A refund to the customer was sent or may have been sent: a decision for the worker can no longer change it.',
+  'error: A refund to the customer was sent or may have been sent. A decision cannot change the refund amount until Stripe shows that amount as refunded. Look in Stripe: refund the difference by hand there, or use settlement_send_reopen if the refund does not exist. Then decide again.',
   'W7: a second issue cannot be decided for the worker');
 select ok((select refund_cents = charge_amount_cents and coalesce(transfer_cents, 0) = 0 from public.payments where id = :'pw2')
           and not exists (select 1 from public.transfers_due where id = :'pw2'),
@@ -383,7 +385,7 @@ select tests.if_event('evt_if_w5_cr1', 'charge.refunded', jsonb_build_object(
   'amount_refunded', 60, 'refunds', jsonb_build_object('data', jsonb_build_array(jsonb_build_object('id', 're_if_w5_hand'))))) as w5cr1 \gset
 select is((select status::text || ' / ' || refunded_cents::text || ' / ' || refund_cents::text || ' / ' || coalesce(refund_ref, 'null')
              from public.payments where id = :'pw5'),
-  'partially_refunded / 60 / 60 / re_if_w5_hand', 'W17: a hand refund of 60 cents, the payload lists it: refund_cents 60 and refund_ref recorded');
+  'partially_refunded / 60 / 60 / null', 'W17: a hand refund of 60 cents, the payload lists it: refund_cents 60, and refund_ref not taken from it (R5-A3)');
 select tests.if_dispute(:'jw5') as w5d1 \gset
 select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_cents::text', :'jw5', 'worker')),
   'ok: ' || (select (amount_cents - platform_fee_cents)::text from public.payments where id = :'pw5'),
@@ -422,7 +424,7 @@ select tests.if_job('IF W full landed', 'released') as jw7 \gset
 select id as pw7 from public.payments where job_id = :'jw7' and kind = 'job_payment' \gset
 select tests.if_dispute(:'jw7') as w7d1 \gset
 select (public.resolve_job_dispute(:'jw7', 'customer')).refund_cents as w7rc \gset
-select public.settlement_send_begin(:'pw7', 'refund', 0) as w7b \gset
+select public.settlement_send_begin(:'pw7', 'refund', 0, (select refund_cents from public.payments where id = :'pw7')) as w7b \gset
 select tests.if_record(:'pw7', 'refund', 're_if_w7_0001') as w7r \gset
 select tests.if_event('evt_if_w7_cr', 'charge.refunded', jsonb_build_object(
   'id', 'ch_if_w7', 'payment_intent', (select provider_ref from public.payments where id = :'pw7'),
@@ -435,6 +437,196 @@ select is(left(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).
   'ok: ', 'W26: a second issue decided for the worker passes');
 select ok(not exists (select 1 from public.transfers_due where id = :'pw7'),
   'W27: and no transfer is due for the payment: the refunded total holds the money');
+
+-- ---------------------------------------------------------------------------
+-- X. Codex R5-A1: a decision may not move an amount the drain is about to send or may have sent.
+--    Window 1: settlement_send_begin names the amount the drain read and refuses another one.
+--    Window 2: payment_refund_change_refused undoes a decision, in either direction, that changes a
+--    refund the app sent or may have sent until refunded_cents covers it. Codex R5-A3: a refund the
+--    refunded total covers is not listed, and charge.refunded never writes refund_ref.
+-- ---------------------------------------------------------------------------
+select 'error: A refund to the customer was sent or may have been sent. A decision cannot change the refund amount until Stripe shows that amount as refunded. Look in Stripe: refund the difference by hand there, or use settlement_send_reopen if the refund does not exist. Then decide again.' as refusal \gset
+
+create or replace function tests.if_refunded(p_id text, p_pid uuid, p_total integer, p_refund text) returns jsonb language sql as $$
+  select tests.if_event(p_id, 'charge.refunded', jsonb_build_object(
+    'id', 'ch_' || p_id, 'payment_intent', (select provider_ref from public.payments where id = p_pid),
+    'amount_refunded', p_total, 'refunds', jsonb_build_object('data', jsonb_build_array(jsonb_build_object('id', p_refund)))))
+$$;
+create or replace function tests.if_refund_lines(p_pid uuid) returns text language sql as $$
+  select coalesce(string_agg(a.reason, ' | ' order by a.reason), 'none')
+    from public.payment_attention a where a.payment_id = p_pid and a.what = 'refund'
+$$;
+create or replace function tests.if_refused(p_before jsonb, p_after integer) returns text language sql as $$
+  select public.payment_refund_change_refused(jsonb_populate_record(null::public.payments, p_before), p_after)::text
+$$;
+
+-- X1-X3: the old send-begin is gone; the new one and the rule are service_role only.
+select ok(to_regprocedure('public.settlement_send_begin(uuid,text,integer)') is null,
+  'X1: the 3-argument settlement_send_begin is dropped: no send begins without its amount');
+select is(has_function_privilege('anon', 'public.settlement_send_begin(uuid,text,integer,integer)', 'execute')::text
+          || '/' || has_function_privilege('authenticated', 'public.settlement_send_begin(uuid,text,integer,integer)', 'execute')::text
+          || '/' || has_function_privilege('service_role', 'public.settlement_send_begin(uuid,text,integer,integer)', 'execute')::text,
+  'false/false/true', 'X2: settlement_send_begin(uuid, text, integer, integer) is service_role only');
+select is(has_function_privilege('anon', 'public.payment_refund_change_refused(public.payments,integer)', 'execute')::text
+          || '/' || has_function_privilege('authenticated', 'public.payment_refund_change_refused(public.payments,integer)', 'execute')::text
+          || '/' || has_function_privilege('service_role', 'public.payment_refund_change_refused(public.payments,integer)', 'execute')::text,
+  'false/false/true', 'X3: payment_refund_change_refused is service_role only');
+
+-- X4-X6: window 1, transfer: a begin that names another amount than the row's is refused.
+select tests.if_job('IF X transfer amount', 'released') as jx0 \gset
+select id as px0 from public.payments where job_id = :'jx0' and kind = 'job_payment' \gset
+select is(public.settlement_send_begin(:'px0', 'transfer', 0, (select transfer_cents + 1 from public.payments where id = :'px0')), false,
+  'X4: a transfer begin with an amount one cent off the row''s is refused');
+select is((select transfer_sent_attempt from public.payments where id = :'px0'), null::integer,
+  'X5: and records no send as begun');
+select is(public.settlement_send_begin(:'px0', 'transfer', 0, (select transfer_cents from public.payments where id = :'px0')), true,
+  'X6: the row''s own amount begins');
+
+-- X7-X11: window 1, refund: the drain read 75 cents, then the owner decided for the customer before
+-- the send began. The begin with the amount read is refused; the next pass sends the new amount.
+select tests.if_job('IF X refund window', 'released') as jx1 \gset
+select id as px1 from public.payments where job_id = :'jx1' and kind = 'job_payment' \gset
+select tests.if_dispute(:'jx1') as x1d \gset
+-- SURGERY: a refund of 75 cents asked by an earlier decision (no RPC asks for that amount here).
+update public.payments set refund_cents = 75, transfer_cents = 0, refund_reason = 'dispute_refund' where id = :'px1';
+select ok(exists (select 1 from public.refunds_ready where id = :'px1' and refund_cents = 75),
+  'X7: the drain reads a refund of 75 cents from refunds_ready');
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).refund_cents::text', :'jx1', 'customer')),
+  'ok: ' || (select charge_amount_cents::text from public.payments where id = :'px1'),
+  'X8: before its send begins, the owner decides for the customer: the whole charge (nothing was sent, so it may change)');
+select is(public.settlement_send_begin(:'px1', 'refund', 0, 75), false,
+  'X9: the drain''s begin with the 75 cents it read is refused');
+select is((select refund_sent_attempt from public.payments where id = :'px1'), null::integer,
+  'X10: and records no send as begun');
+select is(public.settlement_send_begin(:'px1', 'refund', 0, (select refund_cents from public.payments where id = :'px1')), true,
+  'X11: the next pass reads the new amount and begins');
+
+-- X12-X15: window 2: the refund of 75 cents began and its answer is not back. A decision in either
+-- direction would change it: refused, and undone.
+select tests.if_job('IF X refund begun', 'released') as jx2 \gset
+select id as px2 from public.payments where job_id = :'jx2' and kind = 'job_payment' \gset
+select tests.if_dispute(:'jx2') as x2d \gset
+-- SURGERY: as above.
+update public.payments set refund_cents = 75, transfer_cents = 0, refund_reason = 'dispute_refund' where id = :'px2';
+select is(public.settlement_send_begin(:'px2', 'refund', 0, 75), true, 'X12: a refund of 75 cents begins; its answer is not back');
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).refund_cents::text', :'jx2', 'customer')),
+  :'refusal', 'X13: a decision for the customer (raising it to the whole charge) is refused');
+select is((select refund_cents from public.payments where id = :'px2')::text
+          || '/' || exists (select 1 from public.job_disputes where job_id = :'jx2' and status = 'open')::text,
+  '75/true', 'X14: the decision is undone: the refund stays 75 cents and the issue stays open');
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).refund_cents::text', :'jx2', 'worker')),
+  :'refusal', 'X15: a decision for the worker (lowering it to 0) is refused too');
+
+-- X16-X20: the refund of 75 cents is recorded and confirmed; the rest is refunded by hand in
+-- Stripe. Only then does the decision for the customer pass, and nothing more is sent or listed.
+select is(tests.if_record(:'px2', 'refund', 're_if_x2_0001'), 'ok: true', 'X16: the refund of 75 cents is recorded');
+select tests.if_refunded('evt_if_x2_cr1', :'px2', 75, 're_if_x2_0001') as x2cr1 \gset
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).refund_cents::text', :'jx2', 'customer')),
+  :'refusal', 'X17: its charge.refunded of 75 cents came: the decision for the whole charge is still refused (75 does not cover it)');
+select tests.if_refunded('evt_if_x2_cr2', :'px2', (select charge_amount_cents from public.payments where id = :'px2'), 're_if_x2_hand') as x2cr2 \gset
+select is((select status::text || ' / ' || (refunded_cents = charge_amount_cents)::text || ' / ' || refund_cents::text || ' / ' || refund_ref
+             from public.payments where id = :'px2'),
+  'refunded / true / 75 / re_if_x2_0001', 'X18: the owner refunds the rest by hand: the refunded total is the whole charge');
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).refund_cents::text', :'jx2', 'customer')),
+  'ok: ' || (select charge_amount_cents::text from public.payments where id = :'px2'),
+  'X19: then the decision for the customer passes: it only records what Stripe counts as refunded');
+select is(exists (select 1 from public.refunds_due where id = :'px2')::text || '/' || tests.if_refund_lines(:'px2')
+          || '/' || exists (select 1 from public.job_disputes where job_id = :'jx2' and status = 'open')::text,
+  'false/none/false', 'X20: nothing is sent again, no refund line is listed, and the issue is closed');
+
+-- X21-X22: the rule is null-safe: a null refund_cents (before or after) counts as 0 and cannot let a
+-- change pass.
+select is(tests.if_refused('{"refund_ref": "re_x", "refund_attempts": 0}', 75)
+          || '/' || tests.if_refused('{"refund_ref": "re_x", "refund_attempts": 0, "refund_cents": 75}', null)
+          || '/' || tests.if_refused('{"refund_attempts": 0, "refund_cents": 75}', 5375)
+          || '/' || tests.if_refused('{"refund_ref": "re_x", "refund_attempts": 0}', null),
+  'true/true/false/false',
+  'X21: refund recorded, null to 75: refused; 75 to null: refused; nothing sent: passes; null to null: no change');
+select is(tests.if_refused('{"refund_sent_attempt": 0, "refund_attempts": 0, "refund_cents": 75, "refunded_cents": 75}', 5375)
+          || '/' || tests.if_refused('{"refund_sent_attempt": 0, "refund_attempts": 0, "refund_cents": 75, "refunded_cents": 5375}', 5375)
+          || '/' || tests.if_refused('{"refund_sent_attempt": 0, "refund_attempts": 1, "refund_cents": 75}', 5375)
+          || '/' || public.payment_refund_change_refused(null::public.payments, 75)::text,
+  'true/false/false/false',
+  'X22: begun, 75 refunded, raised to 5375: refused; 5375 refunded: passes; an older attempt begun: passes; no row: false');
+
+-- X23-X24: resolve_tip reads the same rule. SURGERY: a held tip whose refund_ref the old refund.failed
+-- backfill wrote (pre-R5-A3: a hand refund that failed); nothing is refunded.
+select tests.if_job('IF X tip', 'released') as jxt \gset
+select id as pxtj from public.payments where job_id = :'jxt' and kind = 'job_payment' \gset
+select tests.if_event('evt_if_xt_tc_' || :'pxtj', 'transfer.created', jsonb_build_object(
+  'id', 'tr_if_xt_0001', 'amount', (select transfer_cents from public.payments where id = :'pxtj'),
+  'metadata', jsonb_build_object('payment_id', :'pxtj'))) as xttc \gset
+select tests.authenticate_as(:'customer');
+select (public.begin_tip_payment(:'jxt', 1000)).id as tipx \gset
+select tests.clear_auth();
+select public.attach_provider_ref(:'tipx', 'pi_if_tip_x001');
+select tests.if_event('evt_if_xt_ts', 'payment_intent.succeeded', jsonb_build_object(
+  'id', 'pi_if_tip_x001', 'amount_received', (select charge_amount_cents from public.payments where id = :'tipx'),
+  'metadata', jsonb_build_object('payment_id', :'tipx'))) as xtts \gset
+update public.payments set refund_ref = 're_if_xt_old' where id = :'tipx';
+select is(tests.if_try(format('select (public.resolve_tip(%L, %L)).refund_cents::text', :'tipx', 'refund')),
+  :'refusal', 'X23: resolve_tip refuses a refund decision over a recorded refund that no refunded total covers');
+select is((select coalesce(refund_cents, 0)::text || '/' || status::text from public.payments where id = :'tipx'),
+  '0/held', 'X24: and the tip is unchanged');
+
+-- X25-X33: Codex R5-A3.
+-- (a) A hand partial refund of 60 cents on rows that asked for none: finished, never listed.
+select tests.if_job('IF X3a released', 'released') as jxa1 \gset
+select id as pxa1 from public.payments where job_id = :'jxa1' and kind = 'job_payment' \gset
+select tests.if_refunded('evt_if_xa1', :'pxa1', 60, 're_if_xa1_hand') as xa1 \gset
+select is((select status::text || ' / ' || refunded_cents::text || ' / ' || refund_cents::text from public.payments where id = :'pxa1')
+          || ' / ' || exists (select 1 from public.refunds_due where id = :'pxa1')::text || ' / ' || tests.if_refund_lines(:'pxa1'),
+  'partially_refunded / 60 / 60 / false / none',
+  'X25: (a) a hand refund of 60 cents on an approved job: not sent again and no refund line (it is finished)');
+select tests.if_job('IF X3a held', 'started') as jxa2 \gset
+select id as pxa2 from public.payments where job_id = :'jxa2' and kind = 'job_payment' \gset
+select tests.if_refunded('evt_if_xa2', :'pxa2', 60, 're_if_xa2_hand') as xa2 \gset
+select is(exists (select 1 from public.refunds_due where id = :'pxa2')::text || ' / ' || tests.if_refund_lines(:'pxa2'),
+  'false / none', 'X26: (a) the same on a job still in progress');
+
+-- (b) The app's own refund whose answer was lost, then its charge.refunded: no second send, no line.
+select tests.if_job('IF X3b partial', 'released') as jxb1 \gset
+select id as pxb1 from public.payments where job_id = :'jxb1' and kind = 'job_payment' \gset
+-- SURGERY: an own refund of 75 cents asked.
+update public.payments set refund_cents = 75, refund_reason = 'dispute_refund' where id = :'pxb1';
+select public.settlement_send_begin(:'pxb1', 'refund', 0, 75) as xb1b \gset
+select public.record_settlement_result(:'pxb1', 'refund', 0, 'same_key', 'no answer: timeout') as xb1l \gset
+select tests.if_refunded('evt_if_xb1', :'pxb1', 75, 're_if_xb1_0001') as xb1 \gset
+select is((select status::text || ' / ' || refunded_cents::text || ' / ' || coalesce(refund_ref, 'null') from public.payments where id = :'pxb1')
+          || ' / ' || exists (select 1 from public.refunds_due where id = :'pxb1')::text || ' / ' || tests.if_refund_lines(:'pxb1'),
+  'partially_refunded / 75 / null / false / none',
+  'X27: (b) own refund of 75 cents, answer lost, then its charge.refunded: not sent again, no refund line');
+update public.payments set refund_sent_at = now() - interval '24 hours' where id = :'pxb1';
+select is(exists (select 1 from public.refunds_due where id = :'pxb1')::text || ' / ' || tests.if_refund_lines(:'pxb1'),
+  'false / none', 'X28: (b) and still none 24 hours after the send began');
+select tests.if_job('IF X3b full', 'released') as jxb2 \gset
+select id as pxb2 from public.payments where job_id = :'jxb2' and kind = 'job_payment' \gset
+select tests.if_dispute(:'jxb2') as xb2d \gset
+select (public.resolve_job_dispute(:'jxb2', 'customer')).refund_cents as xb2rc \gset
+select public.settlement_send_begin(:'pxb2', 'refund', 0, (select refund_cents from public.payments where id = :'pxb2')) as xb2b \gset
+select public.record_settlement_result(:'pxb2', 'refund', 0, 'same_key', 'no answer: timeout') as xb2l \gset
+select tests.if_refunded('evt_if_xb2', :'pxb2', (select charge_amount_cents from public.payments where id = :'pxb2'), 're_if_xb2_0001') as xb2 \gset
+update public.payments set refund_sent_at = now() - interval '24 hours' where id = :'pxb2';
+select is((select status::text from public.payments where id = :'pxb2')
+          || ' / ' || exists (select 1 from public.refunds_due where id = :'pxb2')::text || ' / ' || tests.if_refund_lines(:'pxb2'),
+  'refunded / false / none', 'X29: (b) the same for a full refund, 24 hours later');
+
+-- (c) A full refund asked and never sent, then a hand refund of 60 cents: listed for a person; a
+-- decision for the worker withdraws it and the transfer is due inside what is left.
+select tests.if_job('IF X3c', 'released') as jxc \gset
+select id as pxc from public.payments where job_id = :'jxc' and kind = 'job_payment' \gset
+select tests.if_dispute(:'jxc') as xcd1 \gset
+select (public.resolve_job_dispute(:'jxc', 'customer')).refund_cents as xcrc \gset
+select tests.if_refunded('evt_if_xc', :'pxc', 60, 're_if_xc_hand') as xc \gset
+select is(exists (select 1 from public.refunds_due where id = :'pxc')::text || ' / ' || tests.if_refund_lines(:'pxc'),
+  'false / a refund already landed on this charge: finish by hand in Stripe, then record_settlement_sent',
+  'X30: (c) the full refund is not sent on top of the 60 cents; it is listed for a person');
+select tests.if_dispute(:'jxc') as xcd2 \gset
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_cents::text', :'jxc', 'worker')),
+  'ok: ' || (select (amount_cents - platform_fee_cents)::text from public.payments where id = :'pxc'),
+  'X31: (c) a second issue decided for the worker passes: the app never sent a refund');
+select is(exists (select 1 from public.transfers_due where id = :'pxc')::text || ' / ' || tests.if_refund_lines(:'pxc'),
+  'true / none', 'X32: (c) the transfer is due inside the charge less the 60 cents, and no refund line is left');
 
 select * from finish();
 rollback;

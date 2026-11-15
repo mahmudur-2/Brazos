@@ -19,7 +19,8 @@
 --    stamps only the try, and the next run tries again. Moves no money.
 -- 4. payment_for_party, replaced from 20261115000100_payer_money_rpcs.sql: also empties
 --    intent_cancel_at and intent_cancel_tried_at. Same attributes and ACL (restated).
--- 5. refunds_due, restated unchanged so its p.* takes in this file's column and 20261115000600's.
+-- 5. refunds_due, restated so its p.* takes in this file's column and 20261115000600's, with one
+--    clause (R5-A3): a row on which a refund failed is never refunded by itself.
 --
 -- Additive under scripts/staging-scan.sh.
 
@@ -104,7 +105,10 @@ comment on function public.payment_for_party(public.payments) is
 -- 5. refunds_due, replaced from 20261115000200_work_start_money_rule.sql only so that p.* takes in
 --    refund_failed_at, refund_arranged_at, intent_cancel_at and intent_cancel_tried_at: its column list stays payments'
 --    own (supabase/tests/
---    070_settlement_retry.sql §6). Every clause, the order, the ACL and the comment as they were.
+--    070_settlement_retry.sql §6). Every clause, the order and the ACL as they were, plus one (R5-A3):
+--    no refund is sent on a row with a refund failure. The app's own failed refund is already out
+--    (refund_ref); any other failure (a hand refund, an older attempt) may have been arranged another
+--    way, so a refund queued later goes to a person (payment_attention), never twice to the customer.
 create or replace view public.refunds_due as
   select p.*
     from public.payments p
@@ -117,6 +121,8 @@ create or replace view public.refunds_due as
      and p.status in ('held', 'released', 'paid_out', 'voided', 'failed')
      -- B16: nothing refunded yet (a partial refund already landed needs a person).
      and coalesce(p.refunded_cents, 0) = 0
+     -- R5-A3: no refund failed on this charge (one that did may have been arranged another way).
+     and not exists (select 1 from public.payment_refund_failures f where f.payment_id = p.id)
      -- B13, B17 (A6): no card dispute holds the money, and the charge collected what the row says.
      and public.payment_money_clear(p)
      -- B18: never more than is left after what went to the worker.
@@ -131,6 +137,6 @@ create or replace view public.refunds_due as
 revoke all on table public.refunds_due from public, anon, authenticated;
 grant select on table public.refunds_due to service_role;
 comment on view public.refunds_due is
-  'stripe rows whose refund to the customer may be sent: refund_cents > 0 and no refund recorded yet; and (20261112010300) in an allow-listed state, nothing refunded yet, no card dispute, charged the row''s amount, refund_cents within what is left after live transfers (and, 20261115000200, after a transfer whose send began and whose result is not recorded), and the current attempt neither stopped nor past 23 hours. process-settlements refunds refund_cents against the charge with idempotency key rf:<id>:<refund_attempts>. Every row asked for and not here is in payment_attention.';
+  'stripe rows whose refund to the customer may be sent: refund_cents > 0 and no refund recorded yet; and (20261112010300) in an allow-listed state, nothing refunded yet, no refund failure recorded on the payment (20261115000700, R5-A3), no card dispute, charged the row''s amount, refund_cents within what is left after live transfers (and, 20261115000200, after a transfer whose send began and whose result is not recorded), and the current attempt neither stopped nor past 23 hours. process-settlements refunds refund_cents against the charge with idempotency key rf:<id>:<refund_attempts>. Every row asked for and not here is in payment_attention.';
 
 commit;

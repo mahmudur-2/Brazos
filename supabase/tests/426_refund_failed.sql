@@ -3,7 +3,9 @@
 -- 20261115000600_refund_failed_and_event_order.sql (payments.refund_failed_at, payment_refund_failures,
 -- apply_payment_event, resolve_refund_failure, payment_attention) after Codex round 3: R3-A1, R3-A3,
 -- R3-A4, R3-A5 (refunds) and R3-A7 (by design); after round 4: R4-A3 (G, the failed refunds join the
--- transfer reservation, payment_refund_reserved_cents) and P3 (refund_arranged_at: C3b, C7, F7).
+-- transfer reservation, payment_refund_reserved_cents) and P3 (refund_arranged_at: C3b, C7, F7); after
+-- round 5: R5-A3 (H, refund_ref only for the app's begun attempt, and no refund sent by itself on a
+-- row with a refund failure; J) and R5-A4 (I, the customer's read of a voided row's failed refund).
 --
 -- THE PROVIDER'S FACTS (docs.stripe.com/refunds, "Failed refunds"): the Refund's status becomes
 -- failed with a failure_reason, refund.failed is sent, the money returns to the platform's balance,
@@ -19,7 +21,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(53);
+select plan(71);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -189,11 +191,11 @@ select tests.clear_auth();
 
 -- R3-A1, R3-A3: the owner refunds by hand in Stripe; a late copy of the old failure erases nothing.
 select tests.rf_refunded('evt_rf_a_ref_hand', 1800000200, :'pa', :ca, 're_rf_a2');
-select is(tests.rf_state(:'pa'), 'refunded/' || :'ca' || '/re_rf_a2', 'A10: the owner''s replacement refund lands: refunded, its id recorded');
+select is(tests.rf_state(:'pa'), 'refunded/' || :'ca' || '/re_rf_a1', 'A10: the owner''s replacement refund lands: refunded; the app''s own refund id is not written over (R5-A3)');
 select coalesce(refund_failed_at::text, 'null') as rfa from public.payments where id = :'pa' \gset
 select tests.rf_failed('evt_rf_a_fail_late', null, :'pa', 're_rf_a1', :ca);
 select is(tests.rf_state(:'pa') || '/' || (select coalesce(refund_failed_at::text, 'null') from public.payments where id = :'pa'),
-  'refunded/' || :'ca' || '/re_rf_a2/' || :'rfa',
+  'refunded/' || :'ca' || '/re_rf_a1/' || :'rfa',
   'A11 (R3-A1, R3-A3): a late copy of the old failure, under another event id and with no created, erases nothing');
 select is(tests.rf_try(format('select count(*)::text from public.payment_refund_failures where payment_id = %L', :'pa')), 'ok: 1',
   'A12: … and adds no second failure');
@@ -215,7 +217,7 @@ select ok(:pruned >= 1
           and not exists (select 1 from public.payment_events e where e.payment_id = :'pa' and e.payload ? 'data'),
   'A17 (control): the prune emptied every event of the payment');
 select tests.rf_failed('evt_rf_a_fail_pruned', 1800000400, :'pa', 're_rf_a1', :ca);
-select is(tests.rf_flag(:'pa') || '/' || tests.rf_state(:'pa'), 'false/refunded/' || :'ca' || '/re_rf_a2',
+select is(tests.rf_flag(:'pa') || '/' || tests.rf_state(:'pa'), 'false/refunded/' || :'ca' || '/re_rf_a1',
   'A18 (R3-A5): after the prune, the same refund''s failure under a new event id raises nothing again');
 
 -- ---------------------------------------------------------------------------
@@ -225,7 +227,7 @@ select tests.rf_job('RF failure first', 'held') as jb \gset
 select tests.rf_pid(:'jb') as pb \gset
 select tests.rf_cancel(:'jb');
 select charge_amount_cents as cb from public.payments where id = :'pb' \gset
-select public.settlement_send_begin(:'pb', 'refund', 0);
+select public.settlement_send_begin(:'pb', 'refund', 0, (select refund_cents from public.payments where id = :'pb'));
 select public.record_settlement_result(:'pb', 'refund', 0, 'stop', 'refund re_rf_b1 failed');
 select tests.rf_failed('evt_rf_b_fail', 1800000100, :'pb', 're_rf_b1', :cb);
 select is(tests.rf_state(:'pb') || '/' || tests.rf_flag(:'pb'), 'held/0/re_rf_b1/true',
@@ -285,8 +287,8 @@ select tests.rf_refunded('evt_rf_d_ref', 1800000010, :'pd', :cd, 're_rf_d1');
 select count(*) from public.claim_receipt_batch(50);
 select tests.rf_failed('evt_rf_d_fail', 1800000100, :'pd', 're_rf_d1', :cd, false);
 select count(*) from public.claim_receipt_batch(50);
-select is(tests.rf_state(:'pd') || '/' || tests.rf_lines(:'pd', 'refund re_rf_d1 failed at the provider%'), 'refunded/' || :'cd' || '/re_rf_d1/1',
-  'D1: a hand refund (no metadata) fails: found by its payment_intent, listed, still refunded');
+select is(tests.rf_state(:'pd') || '/' || tests.rf_lines(:'pd', 'refund re_rf_d1 failed at the provider%'), 'refunded/' || :'cd' || '/null/1',
+  'D1: a hand refund (no metadata) fails: found by its payment_intent, listed, still refunded; no refund_ref, the app never sent one (R5-A3)');
 select is((select string_agg(r.status, ',' order by r.role) from public.receipt_outbox r where r.payment_id = :'pd'), 'skipped,skipped',
   'D2 (R3-A7, by design): the status never goes back to released, so its receipts stay skipped with it');
 
@@ -365,8 +367,10 @@ select is((select coalesce(refunded_cents, 0)::text || '/' || coalesce(refund_ce
           || '/' || tests.rf_lines(:'pg', 'transfer is more than is left after refunds: a person decides'),
   '0/0/0/1', 'G2: only a full refund.failed, refund totals empty: no transfer is due, and payment_attention says why');
 select tests.rf_try(format('select (public.resolve_refund_failure(%L, %L)).id::text', :'pg', 'Refunded by bank transfer.')) as g_res \gset
-select ok(not exists (select 1 from public.transfers_due t where t.id = :'pg'),
-  'G3: after resolve_refund_failure the arranged failure still holds the transfer back');
+select is(left(:'g_res', 4) || (select (refund_failed_at is null)::text || '/' || (refund_arranged_at is not null)::text from public.payments where id = :'pg')
+          || '/' || exists (select 1 from public.transfers_due t where t.id = :'pg')::text,
+  'ok: true/true/false',
+  'G3: resolve_refund_failure records the arrangement (refund_failed_at cleared, refund_arranged_at set), and the arranged failure still holds the transfer back');
 
 select tests.rf_job('RF approved, partial failures', 'approved') as jh \gset
 select tests.rf_pid(:'jh') as ph \gset
@@ -387,13 +391,259 @@ update public.payments
    set transfer_cents = 1000, refund_cents = :cl - 1000, release_reason = 'cancellation_fee',
        release_requested_at = now(), refund_reason = 'customer_cancelled_late'
  where id = :'pl';
-select public.settlement_send_begin(:'pl', 'refund', 0) as l_begun \gset
+select public.settlement_send_begin(:'pl', 'refund', 0, (select refund_cents from public.payments where id = :'pl')) as l_begun \gset
 select public.record_settlement_sent(:'pl', 'refund', 're_rf_l1', :cl - 1000) as l_sent \gset
 select tests.rf_failed('evt_rf_l_fail', 1800000100, :'pl', 're_rf_l1', :cl - 1000);
 select is(tests.rf_state(:'pl') || '/' || tests.rf_flag(:'pl') || '/' || (select count(*)::text from public.transfers_due t where t.id = :'pl'),
   'held/0/re_rf_l1/true/1', 'G6: late-cancellation control: the own refund failed, the fee transfer is still due');
 select tests.rf_try(format('select (public.resolve_refund_failure(%L, %L)).id::text', :'pl', 'Refunded by bank transfer.')) as l_res \gset
-select ok(exists (select 1 from public.transfers_due t where t.id = :'pl'), 'G7: and after resolve_refund_failure too');
+select is(left(:'l_res', 4) || (select (refund_failed_at is null)::text || '/' || (refund_arranged_at is not null)::text from public.payments where id = :'pl')
+          || '/' || exists (select 1 from public.transfers_due t where t.id = :'pl')::text,
+  'ok: true/true/true', 'G7: resolve_refund_failure records the arrangement, and the fee transfer is still due');
+
+-- ---------------------------------------------------------------------------
+-- H. Codex R5-A3: refund.failed writes refund_ref only when the app's current refund attempt began.
+--    (i) The app's own refund, its answer lost, then failed: its id is kept, so it is never reopened
+--        or sent again, whatever refund_cents holds.
+--    (ii) A refund the app never sent (a hand refund) fails: refund_ref stays empty, and a refund any
+--        writer queues later on that row is listed for a person, never sent by itself (refunds_due
+--        sends nothing on a row with a refund failure: it may have been arranged another way), also
+--        after the owner recorded the arrangement.
+-- ---------------------------------------------------------------------------
+-- Hire at $50 without funding. p_yesterday: yesterday's 9-12 arrival window (a no-show claim needs one).
+create or replace function tests.rf_hire(p_title text, p_yesterday boolean) returns uuid language plpgsql as $$
+declare
+  v_customer uuid := (select v from fx where k = 'customer');
+  v_worker   uuid := (select v from fx where k = 'worker');
+  v_job uuid;
+  v_offer uuid;
+begin
+  perform tests.clear_auth();
+  update public.rate_counters set hits = 0 where user_id in (v_customer, v_worker);
+  perform tests.authenticate_as(v_customer);
+  select (public.create_job(
+    p_title := p_title, p_description := 'Refund failure probe row, rolled back',
+    p_category := 'other', p_location := 'Probe Area',
+    p_budget_min_cents := 5000, p_budget_max_cents := 5000, p_address_line := '4 Proof Way',
+    p_scheduled_date := case when p_yesterday then (now() at time zone 'America/New_York')::date - 1 end,
+    p_arrival_start_hour := case when p_yesterday then 9::smallint end,
+    p_arrival_end_hour := case when p_yesterday then 12::smallint end
+  )).id into v_job;
+  perform tests.authenticate_as(v_worker);
+  v_offer := public.create_offer(p_amount_cents := 5000, p_job_id := v_job, p_message := 'Refund failure bid');
+  perform tests.authenticate_as(v_customer);
+  perform public.accept_offer(v_offer);
+  perform tests.clear_auth();
+  return v_job;
+end $$;
+
+create or replace function tests.rf_reopen(p_pid uuid) returns text language sql as $$
+  select tests.rf_try(format('select public.settlement_send_reopen(%L, %L)::text', p_pid, 'refund'))
+$$;
+
+-- The drain begins the current refund and its answer is lost.
+create or replace function tests.rf_sent_lost(p_pid uuid) returns text language plpgsql as $$
+declare v_begun boolean;
+begin
+  v_begun := public.settlement_send_begin(p_pid, 'refund', 0, (select refund_cents from public.payments where id = p_pid));
+  return v_begun::text || '/' || public.record_settlement_result(p_pid, 'refund', 0, 'same_key', 'no answer: timeout')::text;
+end $$;
+
+-- The customer opens an issue and the owner decides it.
+create or replace function tests.rf_decide(p_job uuid, p_side text) returns text language plpgsql as $$
+begin
+  perform tests.authenticate_as((select v from fx where k = 'customer'));
+  perform public.open_job_dispute(p_job, 'other');
+  perform tests.clear_auth();
+  return tests.rf_try(format('select (public.resolve_job_dispute(%L, %L)).refund_cents::text', p_job, p_side));
+end $$;
+
+-- In refunds_due / its line for a person.
+create or replace function tests.rf_later(p_pid uuid) returns text language sql as $$
+  select exists (select 1 from public.refunds_due r where r.id = p_pid)::text || '/'
+         || tests.rf_lines(p_pid, 'a refund on this charge failed before: check how it was arranged, refund what is still owed by hand in Stripe, then record_settlement_sent')
+$$;
+
+create or replace function tests.rf_arrange(p_pid uuid) returns text language sql as $$
+  select left(tests.rf_try(format('select (public.resolve_refund_failure(%L, %L)).id::text', p_pid, 'Paid back 20.00 by bank transfer.')), 4)
+$$;
+
+-- (i) refund_cents > 0: the worker cancels; the drain's refund begins, its answer is lost; it fails.
+select tests.rf_job('RF own lost', 'held') as jk1 \gset
+select tests.rf_pid(:'jk1') as pk1 \gset
+select tests.rf_cancel(:'jk1');
+select tests.rf_sent_lost(:'pk1') as k1s \gset
+select tests.rf_failed('evt_rf_k1_fail', 1800000100, :'pk1', 're_rf_k1_own', (select refund_cents from public.payments where id = :'pk1'));
+select is(:'k1s' || '/' || tests.rf_state(:'pk1') || '/' || tests.rf_reopen(:'pk1'),
+  'true/true/held/0/re_rf_k1_own/error: A refund is recorded for this payment; nothing to reopen',
+  'H1 (i): the app''s own refund, its answer lost, fails: its id is kept and it cannot be reopened');
+update public.payments set refund_sent_at = now() - interval '24 hours' where id = :'pk1';
+select is(tests.rf_reopen(:'pk1') || '/' || exists (select 1 from public.refunds_due r where r.id = :'pk1')::text,
+  'error: A refund is recorded for this payment; nothing to reopen/false',
+  'H2 (i): nor 24 hours after its send began, and nothing sends it again');
+
+-- (i) refund_cents 0: the refund landed, a second issue was decided for the worker, then it fails.
+select tests.rf_job('RF own zero', 'approved') as jk2 \gset
+select tests.rf_pid(:'jk2') as pk2 \gset
+select charge_amount_cents as ck2 from public.payments where id = :'pk2' \gset
+select tests.rf_decide(:'jk2', 'customer') as k2a \gset
+select tests.rf_sent_lost(:'pk2') as k2s \gset
+select tests.rf_refunded('evt_rf_k2_ref', 1800000050, :'pk2', :ck2, 're_rf_k2_own');
+select tests.rf_decide(:'jk2', 'worker') as k2b \gset
+select tests.rf_failed('evt_rf_k2_fail', 1800000100, :'pk2', 're_rf_k2_own', :ck2);
+select is(:'k2b' || '/' || tests.rf_state(:'pk2') || '/' || tests.rf_reopen(:'pk2') || '/' || exists (select 1 from public.refunds_due r where r.id = :'pk2')::text,
+  'ok: 0/refunded/' || :'ck2' || '/re_rf_k2_own/error: This payment never asked for a refund/false',
+  'H3 (i): the same on a row whose refund_cents a later decision set to 0: the id is kept, nothing reopens or sends it');
+
+-- (i) refund_cents null. SURGERY: no writer leaves a row whose refund began with refund_cents null.
+select tests.rf_job('RF own null', 'held') as jk3 \gset
+select tests.rf_pid(:'jk3') as pk3 \gset
+select tests.rf_cancel(:'jk3');
+select tests.rf_sent_lost(:'pk3') as k3s \gset
+update public.payments set refund_cents = null where id = :'pk3';
+select tests.rf_failed('evt_rf_k3_fail', 1800000100, :'pk3', 're_rf_k3_own', 1000);
+select is(tests.rf_state(:'pk3') || '/' || tests.rf_reopen(:'pk3'), 'held/0/re_rf_k3_own/error: This payment never asked for a refund',
+  'H4 (i): with refund_cents null the rule still reads the begun attempt: the id is kept');
+
+-- (ii) cancel_job, on a row that asked for no refund (refund_cents null).
+select tests.rf_job('RF hand then cancel', 'held') as jk4 \gset
+select tests.rf_pid(:'jk4') as pk4 \gset
+select tests.rf_failed('evt_rf_k4_fail', 1800000100, :'pk4', 're_rf_k4_hand', 2000, false);
+select is(tests.rf_state(:'pk4') || '/' || coalesce((select refund_cents::text from public.payments where id = :'pk4'), 'null'),
+  'held/0/null/null', 'H5 (ii): a hand refund the app never sent fails: refund_ref stays empty');
+select tests.rf_cancel(:'jk4');
+select is(tests.rf_later(:'pk4'), 'false/1', 'H6 (ii): the worker cancels: the full refund is not sent by itself; it is listed for a person');
+select tests.rf_arrange(:'pk4') as k4r \gset
+select is(:'k4r' || tests.rf_later(:'pk4') || '/' || tests.rf_lines(:'pk4', 'refund re_rf_k4_hand failed at the provider%'),
+  'ok: false/1/0', 'H7 (ii): the owner records the arrangement: the failure line goes, the refund asked is still listed');
+
+-- (ii) resolve_job_dispute, on a row a decision for the worker set to refund_cents 0; arranged first.
+select tests.rf_job('RF zero hand', 'approved') as jk5 \gset
+select tests.rf_pid(:'jk5') as pk5 \gset
+select tests.rf_decide(:'jk5', 'worker') as k5a \gset
+select tests.rf_failed('evt_rf_k5_fail', 1800000100, :'pk5', 're_rf_k5_hand', 2000, false);
+select tests.rf_arrange(:'pk5') as k5r \gset
+select tests.rf_decide(:'jk5', 'customer') as k5b \gset
+select is(:'k5a' || '/' || :'k5r' || :'k5b' || '/' || coalesce((select refund_ref from public.payments where id = :'pk5'), 'null') || '/' || tests.rf_later(:'pk5'),
+  'ok: 0/ok: ok: ' || (select charge_amount_cents::text from public.payments where id = :'pk5') || '/null/false/1',
+  'H8 (ii): refund_cents 0, a hand refund failed and arranged, then a decision for the customer: listed, not sent');
+
+-- (ii) the no-show trigger (job_disputes_refund_on_withdrawn); arranged first.
+select tests.rf_hire('RF no-show', true) as jk6 \gset
+select tests.test_fund_job(:'jk6') as pk6 \gset
+select tests.authenticate_as(:'worker');
+select public.mark_worker_arrival(:'jk6', 'arrived');
+select (public.cancel_job(:'jk6', 'customer_no_show')).status as k6c \gset
+select tests.clear_auth();
+select tests.rf_failed('evt_rf_k6_fail', 1800000100, :'pk6', 're_rf_k6_hand', 2000, false);
+select tests.rf_arrange(:'pk6') as k6r \gset
+select id as dk6 from public.job_disputes where job_id = :'jk6' \gset
+select tests.authenticate_as(:'worker');
+select (public.withdraw_job_dispute(:'dk6')).status as k6w \gset
+select tests.clear_auth();
+select is(:'k6r' || :'k6w' || '/' || (select refund_reason || '/' || (refund_cents = charge_amount_cents)::text from public.payments where id = :'pk6')
+          || '/' || tests.rf_later(:'pk6'),
+  'ok: withdrawn/no_show_withdrawn/true/false/1',
+  'H9 (ii): the no-show claim is withdrawn after a hand refund failed and was arranged: the full refund is listed, not sent');
+
+-- (ii) funded_after_void: the row was voided before it was paid; a hand refund of the late charge
+-- fails before the charge's payment_intent.succeeded is applied.
+select tests.rf_hire('RF voided', false) as jk7 \gset
+select tests.authenticate_as(:'customer');
+select (public.begin_job_payment(:'jk7')).id as pk7 \gset
+select tests.clear_auth();
+select public.attach_provider_ref(:'pk7', 'pi_rf_k7');
+select tests.rf_cancel(:'jk7');
+select tests.rf_failed('evt_rf_k7_fail', 1800000100, :'pk7', 're_rf_k7_hand', (select charge_amount_cents from public.payments where id = :'pk7'), false);
+select tests.rf_event('evt_rf_k7_paid', 'payment_intent.succeeded', 1800000200, jsonb_build_object(
+  'id', 'pi_rf_k7', 'object', 'payment_intent', 'amount_received', (select charge_amount_cents from public.payments where id = :'pk7'),
+  'metadata', jsonb_build_object('payment_id', :'pk7')));
+select is((select status::text || '/' || refund_reason || '/' || coalesce(refund_ref, 'null') from public.payments where id = :'pk7') || '/' || tests.rf_later(:'pk7'),
+  'voided/funded_after_void/null/false/1', 'H10 (ii): the late charge queues the full refund: listed, not sent');
+select tests.rf_arrange(:'pk7') as k7r \gset
+select is(:'k7r' || tests.rf_later(:'pk7'), 'ok: false/1', 'H11 (ii): and still listed after the arrangement');
+
+-- (ii) resolve_tip: a tip whose hand refund failed is refunded by the owner's decision (not refused).
+select tests.rf_job('RF tip', 'released') as jk8 \gset
+select tests.authenticate_as(:'customer');
+select (public.begin_tip_payment(:'jk8', 1000)).id as tk8 \gset
+select tests.clear_auth();
+select public.attach_provider_ref(:'tk8', 'pi_rf_k8_tip');
+select tests.rf_event('evt_rf_k8_paid', 'payment_intent.succeeded', 1800000020, jsonb_build_object(
+  'id', 'pi_rf_k8_tip', 'object', 'payment_intent', 'amount_received', (select charge_amount_cents from public.payments where id = :'tk8'),
+  'metadata', jsonb_build_object('payment_id', :'tk8')));
+select tests.rf_failed('evt_rf_k8_fail', 1800000100, :'tk8', 're_rf_k8_hand', (select charge_amount_cents from public.payments where id = :'tk8'), false);
+select tests.rf_try(format('select (public.resolve_tip(%L, %L)).refund_cents::text', :'tk8', 'refund')) as k8t \gset
+select is(:'k8t' || '/' || coalesce((select refund_ref from public.payments where id = :'tk8'), 'null') || '/' || tests.rf_later(:'tk8'),
+  'ok: ' || (select charge_amount_cents::text from public.payments where id = :'tk8') || '/null/false/1',
+  'H12 (ii): resolve_tip refunds a tip whose hand refund failed: the decision passes and the refund is listed, not sent');
+
+-- The other side of the rule: the app's attempt 0 was refused (new_key), then a hand refund fails.
+-- refund_ref stays empty because attempt 1 never began; written here, it would hide attempt 1 from
+-- every queue and line once the failure is arranged.
+select tests.rf_job('RF new key', 'held') as jk9 \gset
+select tests.rf_pid(:'jk9') as pk9 \gset
+select tests.rf_cancel(:'jk9');
+select public.settlement_send_begin(:'pk9', 'refund', 0, (select refund_cents from public.payments where id = :'pk9')) as k9b \gset
+select public.record_settlement_result(:'pk9', 'refund', 0, 'new_key', 'card_declined') as k9n \gset
+select tests.rf_failed('evt_rf_k9_fail', 1800000100, :'pk9', 're_rf_k9_hand', 1000, false);
+select is(tests.rf_state(:'pk9') || '/' || (select refund_sent_attempt::text || '/' || refund_attempts::text from public.payments where id = :'pk9')
+          || '/' || tests.rf_later(:'pk9'),
+  'held/0/null/0/1/false/1', 'H13: an older attempt began, not the current one: refund_ref stays empty and the current refund is listed for a person');
+select tests.rf_arrange(:'pk9') as k9r \gset
+select is(:'k9r' || tests.rf_later(:'pk9'), 'ok: false/1', 'H14: and still listed after the arrangement');
+
+-- ---------------------------------------------------------------------------
+-- I. Codex R5-A4: a failed refund on a voided row reaches the customer. The read is
+--    lib/payments.ts fetchJobRefundIssue, made as the customer under RLS and the column grant.
+-- ---------------------------------------------------------------------------
+select tests.rf_hire('RF voided, own refund', false) as ji \gset
+select tests.authenticate_as(:'customer');
+select (public.begin_job_payment(:'ji')).id as pi1 \gset
+select tests.clear_auth();
+select public.attach_provider_ref(:'pi1', 'pi_rf_i1');
+select tests.rf_cancel(:'ji');
+select tests.rf_event('evt_rf_i1_paid', 'payment_intent.succeeded', 1800000200, jsonb_build_object(
+  'id', 'pi_rf_i1', 'object', 'payment_intent', 'amount_received', (select charge_amount_cents from public.payments where id = :'pi1'),
+  'metadata', jsonb_build_object('payment_id', :'pi1')));
+select public.settlement_send_begin(:'pi1', 'refund', 0, (select refund_cents from public.payments where id = :'pi1')) as i1b \gset
+select public.record_settlement_sent(:'pi1', 'refund', 're_rf_i1', (select refund_cents from public.payments where id = :'pi1')) as i1s \gset
+select tests.rf_failed('evt_rf_i1_fail', 1800000300, :'pi1', 're_rf_i1', (select refund_cents from public.payments where id = :'pi1'));
+select tests.authenticate_as(:'customer');
+select is((select count(*)::integer from public.payments p where p.job_id = :'ji' and p.kind = 'job_payment' and p.status not in ('failed', 'voided')),
+  0, 'I0: the active-row read (fetchJobPayment) finds nothing: the row is voided');
+select is((select p.status::text || '/' || (p.refund_failed_at is not null)::text || '/' || (p.refund_arranged_at is not null)::text
+             from public.payments p
+            where p.job_id = :'ji' and p.kind = 'job_payment' and p.status in ('failed', 'voided')
+              and (p.refund_failed_at is not null or p.refund_arranged_at is not null)
+            order by p.created_at desc limit 1),
+  'voided/true/false', 'I1: the customer reads the failed refund of the voided row');
+select tests.clear_auth();
+select tests.rf_try(format('select (public.resolve_refund_failure(%L, %L)).id::text', :'pi1', 'Refunded by bank transfer.')) as i1r \gset
+select tests.authenticate_as(:'customer');
+select is((select p.status::text || '/' || (p.refund_failed_at is not null)::text || '/' || (p.refund_arranged_at is not null)::text
+             from public.payments p
+            where p.job_id = :'ji' and p.kind = 'job_payment' and p.status in ('failed', 'voided')
+              and (p.refund_failed_at is not null or p.refund_arranged_at is not null)
+            order by p.created_at desc limit 1),
+  'voided/false/true', 'I2: after the owner records the arrangement, the customer reads that it was arranged');
+select tests.clear_auth();
+
+-- ---------------------------------------------------------------------------
+-- J. (ii) ban_user, last: it cancels every job of the banned worker in this file.
+-- ---------------------------------------------------------------------------
+select tests.create_user('rf.admin@brazos.test', 'Ada Admin') as admin \gset
+update public.profiles set is_admin = true where id = :'admin';
+select tests.rf_job('RF banned', 'held') as jj \gset
+select tests.rf_pid(:'jj') as pj \gset
+select tests.rf_failed('evt_rf_j_fail', 1800000100, :'pj', 're_rf_j_hand', 2000, false);
+select tests.rf_arrange(:'pj') as jr \gset
+select tests.authenticate_as(:'admin');
+select public.ban_user(:'worker');
+select tests.clear_auth();
+select is(:'jr' || (select refund_reason || '/' || (refund_cents = charge_amount_cents)::text from public.payments where id = :'pj') || '/' || tests.rf_later(:'pj'),
+  'ok: account_suspended/true/false/1',
+  'J1 (ii): the admin bans the worker after a hand refund failed and was arranged: the full refund is listed, not sent');
 
 select * from finish();
 rollback;

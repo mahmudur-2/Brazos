@@ -185,7 +185,7 @@ end $$;
 create or replace function tests.mc_drain(p_pid uuid, p_kind text, p_script text, p_attempt integer default null)
 returns text language plpgsql as $$
 declare
-  v_new     boolean := to_regprocedure('public.settlement_send_begin(uuid,text,integer)') is not null;
+  v_new     boolean := to_regprocedure('public.settlement_send_begin(uuid,text,integer,integer)') is not null;
   v_row     public.payments;
   v_attempt integer;
   v_amount  integer;
@@ -215,7 +215,7 @@ begin
   if v_new then
     perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
     perform set_config('role', 'service_role', true);
-    v_ok := public.settlement_send_begin(p_pid, p_kind, v_attempt);
+    v_ok := public.settlement_send_begin(p_pid, p_kind, v_attempt, v_amount);
     perform set_config('role', 'none', true);
     perform set_config('request.jwt.claims', '', true);
     if v_ok is not true then return 'blocked'; end if;
@@ -318,6 +318,7 @@ begin
              and not exists (select 1 from public.transfers_ready r where r.id = p.id)
              and not exists (select 1 from public.payment_attention a where a.payment_id = p.id and a.what = 'transfer'))
          or (coalesce(p.refund_cents, 0) > 0 and p.refund_ref is null and p.status <> 'refunded'
+             and coalesce(p.refunded_cents, 0) < p.refund_cents   -- R5-A3: a refund the refunded total covers asks nothing
              and not exists (select 1 from public.refunds_ready r where r.id = p.id)
              and not exists (select 1 from public.payment_attention a where a.payment_id = p.id and a.what = 'refund')))
   $q$ into v;

@@ -76,10 +76,13 @@ test('[static] the predicates are re-exported, and both job screens and MoneyTex
   // The customer's page: the cancelled branch shows the money, and the failed-read banner reaches it.
   const detail = code('screens/ClientJobDetailScreen.tsx');
   const cancelled = detail.slice(detail.indexOf("job.status === 'cancelled' ?"));
-  assert.match(cancelled, /statusReadError \? \( statusReadBanner \) : payment \? \(/, 'a failed read on a cancelled job says so');
+  // Pack 1, Codex R5-A4: the card shows cancelledPayment, the active row or else a failed or voided
+  // row whose refund failed or was arranged (payment ?? refundIssue).
+  assert.match(cancelled, /statusReadError \? \( statusReadBanner \) : cancelledPayment \? \(/, 'a failed read on a cancelled job says so');
+  assert.match(detail, /const cancelledPayment = payment \?\? refundIssue;/);
   assert.match(
     cancelled,
-    /<MoneyText cents=\{customerChargeCents\(payment\)\} state=\{payment\.status\} refundQueued=\{isRefundQueued\(payment\)\} feeKept=\{isCancellationFeeKept\(payment\)\} refundFailed=\{isRefundFailed\(payment\)\} refundArranged=\{isRefundArranged\(payment\)\} counterpartFirstName=\{workerFirstName\} \/>/,
+    /<MoneyText cents=\{customerChargeCents\(cancelledPayment\)\} state=\{cancelledPayment\.status\} refundQueued=\{isRefundQueued\(cancelledPayment\)\} feeKept=\{isCancellationFeeKept\(cancelledPayment\)\} refundFailed=\{isRefundFailed\(cancelledPayment\)\} refundArranged=\{isRefundArranged\(cancelledPayment\)\} counterpartFirstName=\{workerFirstName\} \/>/,
     'the cancelled job shows its payment through the two facts (and, pack 1, the refund failure and its arrangement)'
   );
   assert.match(detail, /const statusReadBanner = \(/, 'one banner element, used on the live job and the cancelled one');

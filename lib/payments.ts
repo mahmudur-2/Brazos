@@ -237,6 +237,28 @@ export async function fetchJobPayment(jobId: string) {
 }
 
 /**
+ * Codex R5-A4: the job's newest failed or voided row of this kind whose refund failed at the
+ * provider or was then made another way (a late charge on a voided row is refunded in full,
+ * funded_after_void, and that refund can fail). fetchJobPayment and fetchJobTip read only the
+ * active row, so without this read the customer never sees it. Same RLS and columns as those
+ * reads; at most one row, so it never competes with the active-row selection.
+ */
+export async function fetchJobRefundIssue(jobId: string, kind: 'job_payment' | 'tip' = 'job_payment') {
+  const { data, error } = await supabase
+    .from('payments')
+    .select(PAYMENT_COLUMNS)
+    .eq('job_id', jobId)
+    .eq('kind', kind)
+    .in('status', ['failed', 'voided'])
+    .or('refund_failed_at.not.is.null,refund_arranged_at.not.is.null')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return { data: data as Payment | null, error };
+}
+
+/**
  * The same active job_payment row, read through job_payment_state(), which
  * returns it with the server-only columns empty. It runs no release clock:
  * auto_release_due_payments is scheduled every 10 minutes

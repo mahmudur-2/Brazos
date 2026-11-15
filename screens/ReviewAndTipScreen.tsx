@@ -32,6 +32,7 @@ import { firstNameOf } from '../lib/liveJobStatus';
 import {
   classifyTipPoll,
   fetchJobPaymentState,
+  fetchJobRefundIssue,
   fetchJobTip,
   isHeld,
   isReleased,
@@ -116,6 +117,8 @@ export function ReviewAndTipScreen() {
 
   const [payment, setPayment] = useState<Payment | null>(null);
   const [tip, setTip] = useState<Payment | null>(null);
+  // Codex R5-A4: a replaced tip (failed or voided) whose refund failed or was arranged.
+  const [tipIssue, setTipIssue] = useState<Payment | null>(null);
   const [loaded, setLoaded] = useState(false);
   // A failed payment read must BLOCK, not fall through: with payment=null the
   // approve gate below would wave a still-held job straight into the review
@@ -150,9 +153,10 @@ export function ReviewAndTipScreen() {
 
   const load = useCallback(async () => {
     setLoadError(null);
-    const [paymentRes, tipRes] = await Promise.all([
+    const [paymentRes, tipRes, tipIssueRes] = await Promise.all([
       fetchJobPaymentState(job.id),
       fetchJobTip(job.id),
+      fetchJobRefundIssue(job.id, 'tip'),
     ]);
     if (paymentRes.error) setLoadError(userMessage(paymentRes.error));
     else setPayment(paymentRes.data);
@@ -160,6 +164,10 @@ export function ReviewAndTipScreen() {
       const message = userMessage(tipRes.error);
       setLoadError((prev) => prev ?? message);
     } else setTip(tipRes.data);
+    if (tipIssueRes.error) {
+      const message = userMessage(tipIssueRes.error);
+      setLoadError((prev) => prev ?? message);
+    } else setTipIssue(tipIssueRes.data);
     setLoaded(true);
   }, [job.id]);
 
@@ -542,9 +550,14 @@ export function ReviewAndTipScreen() {
                     ? payment.release_reason === 'auto_approved'
                       ? 'Released automatically after 72 hours.'
                       : 'Released on your approval.'
-                    : payment.release_reason === 'auto_approved'
-                      ? 'Approved automatically after 72 hours. The payment is on its way to the worker and shows as released when the transfer lands.'
-                      : 'Approved on your say-so. The payment is on its way to the worker and shows as released when the transfer lands.'}
+                    : isRefundFailed(payment) || isRefundArranged(payment)
+                      ? // Codex R5-A5: never "on its way" beside a failed or arranged refund of this payment.
+                        payment.release_reason === 'auto_approved'
+                        ? 'Approved automatically after 72 hours.'
+                        : 'Approved on your say-so.'
+                      : payment.release_reason === 'auto_approved'
+                        ? 'Approved automatically after 72 hours. The payment is on its way to the worker and shows as released when the transfer lands.'
+                        : 'Approved on your say-so. The payment is on its way to the worker and shows as released when the transfer lands.'}
                 </Text>
               </View>
             ) : null}
@@ -568,6 +581,17 @@ export function ReviewAndTipScreen() {
 
             <View style={styles.tipCard}>
               <Text accessibilityRole="header" style={styles.sectionTitle}>Add a tip?</Text>
+              {/* Codex R5-A4: a replaced tip, charged late, whose refund failed or was arranged. */}
+              {tipIssue ? (
+                <MoneyText
+                  cents={tipIssue.amount_cents}
+                  state={tipIssue.status}
+                  tip
+                  refundFailed={isRefundFailed(tipIssue)}
+                  refundArranged={isRefundArranged(tipIssue)}
+                  counterpartFirstName={firstNameOf(workerName)}
+                />
+              ) : null}
               {tipDone && tip ? (
                 <>
                   <MoneyText

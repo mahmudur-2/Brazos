@@ -51,7 +51,9 @@ test('2 · JobConfirmed, ClientJobDetail and ApproveOrDispute show the customer 
   assert.match(approve, /`Approve & release payment`/);
   assert.match(approve, /`Your card was charged \$\{formatBudget\(payment \? customerChargeCents\(payment\) : null\)\} at checkout/);
   const detail = stripComments(read('screens/ClientJobDetailScreen.tsx'));
-  assert.equal((detail.match(/customerChargeCents\(payment\)/g) ?? []).length, 4, 'the protected, window-closed, approved and (final sweep) cancelled cards');
+  // Pack 1, Codex R5-A4: the cancelled card reads cancelledPayment (payment ?? refundIssue), still the charge.
+  assert.equal((detail.match(/customerChargeCents\(payment\)/g) ?? []).length, 3, 'the protected, window-closed and approved cards');
+  assert.equal((detail.match(/customerChargeCents\(cancelledPayment\)/g) ?? []).length, 1, 'the (final sweep) cancelled card');
 });
 
 test('3 · the worker-facing surfaces are untouched by this rule — they read the take (R6c)', () => {

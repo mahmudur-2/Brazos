@@ -202,12 +202,18 @@ test('11 · each pass begins before it posts and writes back after, with the att
     ['refund', src.slice(two, serve), "'/v1/refunds'"],
   ]) {
     const attempt = pass.indexOf(`const attempt = row.${kind}_attempts ?? 0;`);
-    const begin = pass.indexOf(`await beginSend('${kind}', row.id, attempt);`);
+    // Codex R5-A1: begin names the amount the POST sends; the database refuses another one.
+    const amount = pass.indexOf(`const amount = cents(row.${kind}_cents);`);
+    const begin = pass.indexOf(`await beginSend('${kind}', row.id, attempt, amount);`);
     const skip = pass.indexOf('if (!begun) {');
     const post = pass.indexOf(path);
+    const sent = pass.indexOf('amount: String(amount),');
     const key = pass.indexOf(`settlementKey('${kind}', row.id, attempt)`);
     const settle = pass.indexOf(`await settle(counts, '${kind}', row.id, attempt, outcome);`);
     assert.ok(attempt > -1 && begin > attempt, `${kind}: the attempt is read, then begin`);
+    assert.ok(amount > -1 && begin > amount, `${kind}: the amount is read, then begin names it`);
+    assert.ok(sent > post, `${kind}: the POST sends that same amount`);
+    assert.equal(pass.split('const amount =').length - 1, 1, `${kind}: one amount per row`);
     assert.ok(skip > begin && post > skip, `${kind}: a false begin skips the row before the POST`);
     assert.ok(key > post, `${kind}: the POST carries the attempt's key`);
     assert.ok(settle > key, `${kind}: the answer is written back after the POST`);
@@ -215,7 +221,8 @@ test('11 · each pass begins before it posts and writes back after, with the att
     assert.equal(pass.split(path).length - 1, 1, `${kind}: one POST per row`);
     assert.match(pass, /outcome = \{ threw: err \?\? 'unknown' \};/, `${kind}: a throw is an answer too`);
   }
-  assert.match(src, /'settlement_send_begin',\s*\{ p_payment_id: paymentId, p_kind: kind, p_attempt: attempt \}/);
+  assert.match(src, /function beginSend\(kind: Kind, paymentId: string, attempt: number, amount: number\)/);
+  assert.match(src, /'settlement_send_begin',\s*\{ p_payment_id: paymentId, p_kind: kind, p_attempt: attempt, p_amount_cents: amount \}/);
   assert.match(src, /'record_settlement_sent',\s*\{ p_payment_id: paymentId, p_kind: kind, p_ref: verdict\.ref, p_amount_cents: verdict\.amount \}/);
   assert.match(src, /'record_settlement_result',\s*\{ p_payment_id: paymentId, p_kind: kind, p_attempt: attempt, p_next: verdict\.next, p_error: verdict\.message \}/);
   const code = src.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');

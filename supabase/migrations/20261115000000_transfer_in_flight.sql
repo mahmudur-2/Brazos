@@ -18,12 +18,15 @@
 -- 2. open_job_dispute, resolve_job_dispute and resolve_tip refuse while it holds. Bodies verbatim
 --    from 20260901000000_baseline.sql, 20261108000000_lean_v1.sql and 20261112010500_resolve_tip.sql;
 --    each gains one check. Signatures, security, search_path and ACLs as they were.
---    R4-A4: resolve_job_dispute also refuses a decision for the worker while a refund the app
---    decided may be out and is not in a durable total yet: refund_cents above refunded_cents, and
---    its refund recorded (refund_ref) or its send begun. A decision for the worker lowers
---    refund_cents; a refund already landed (refunded_cents) bounds the transfer in transfers_due.
+--    R5-A1 (replaces R4-A4): resolve_job_dispute and resolve_tip refuse a decision, in either
+--    direction, that changes refund_cents while the app's own refund was sent or may have been sent
+--    (refund_ref, or the current attempt begun), unless refunded_cents already covers the old and the
+--    new amount: payment_refund_change_refused. The decision then only records money Stripe counts
+--    as refunded.
 -- 3. refunds_due reserves the same amount: 20261115000200_work_start_money_rule.sql.
 -- 4. payment_record_reversal ignores a reversal of a transfer already fully reversed (R2-A1).
+-- 5. (R5-A1) settlement_send_begin takes the amount the drain is about to send and returns false when
+--    it is not the row's amount under the lock. The 3-argument function is dropped.
 --
 -- Additive under scripts/staging-scan.sh. Proof: supabase/tests/420_transfer_in_flight.sql.
 
@@ -41,6 +44,22 @@ revoke all on function public.payment_transfer_unconfirmed(public.payments) from
 grant execute on function public.payment_transfer_unconfirmed(public.payments) to service_role;
 comment on function public.payment_transfer_unconfirmed(public.payments) is
   'A1: true when the current transfer attempt was begun (settlement_send_begin) and neither a transfer nor a reversal is recorded: the money may already be with the worker. Stopped attempts count. Ends with record_settlement_sent or settlement_send_reopen. Read by open_job_dispute, resolve_job_dispute, resolve_tip and refunds_due.';
+
+-- R5-A1: the one rule for a decision that changes refund_cents, in either direction.
+create or replace function public.payment_refund_change_refused(p_before public.payments, p_after_cents integer)
+returns boolean
+language sql immutable
+set search_path = public, pg_temp
+as $fn$
+  select coalesce((p_before.refund_ref is not null or p_before.refund_sent_attempt = p_before.refund_attempts)
+                  and coalesce(p_after_cents, 0) <> coalesce(p_before.refund_cents, 0)
+                  and coalesce(p_before.refunded_cents, 0) < greatest(coalesce(p_after_cents, 0), coalesce(p_before.refund_cents, 0)),
+                  false)
+$fn$;
+revoke all on function public.payment_refund_change_refused(public.payments, integer) from public, anon, authenticated;
+grant execute on function public.payment_refund_change_refused(public.payments, integer) to service_role;
+comment on function public.payment_refund_change_refused(public.payments, integer) is
+  'R5-A1: true when a decision would move refund_cents from p_before''s value to p_after_cents while the app''s own refund was sent or may have been sent (refund_ref, or refund_sent_attempt = refund_attempts) and refunded_cents does not cover both amounts. The guard protects only the window in which the app''s refund may be out and no durable total covers it; after that the reservation and the status hold the money. Read by resolve_job_dispute and resolve_tip.';
 
 create or replace function public.open_job_dispute(p_job_id uuid, p_reason text, p_details text default null)
 returns public.job_disputes
@@ -116,6 +135,7 @@ declare
   v_job        public.jobs;
   v_payment    public.payments;
   v_dispute    public.job_disputes;
+  v_before     public.payments;
   v_worker_won boolean;
   v_park       boolean;
   v_undirected boolean;
@@ -136,12 +156,7 @@ begin
   if public.payment_transfer_unconfirmed(v_payment) then
     raise exception 'A transfer to the worker was sent and its result is not recorded yet: record it or reopen it first.';
   end if;
-  -- R4-A4: refused only while a refund the app decided may be out and no durable total (refunded_cents)
-  -- covers it yet; after that the reservation and the status hold the money.
-  if v_worker_won and coalesce(v_payment.refund_cents, 0) > coalesce(v_payment.refunded_cents, 0)
-     and (v_payment.refund_ref is not null or v_payment.refund_sent_attempt = v_payment.refund_attempts) then
-    raise exception 'A refund to the customer was sent or may have been sent: a decision for the worker can no longer change it.';
-  end if;
+  v_before := v_payment;
 
   v_park := v_payment.id is not null and v_payment.transfer_reversed_at is not null;
   v_undirected := v_payment.id is not null and v_payment.status = 'held'
@@ -215,6 +230,10 @@ begin
     raise exception 'This job has nothing to resolve';
   end if;
 
+  -- R5-A1: the decision is undone when it changes a refund the app sent or may have sent.
+  if public.payment_refund_change_refused(v_before, v_payment.refund_cents) then
+    raise exception 'A refund to the customer was sent or may have been sent. A decision cannot change the refund amount until Stripe shows that amount as refunded. Look in Stripe: refund the difference by hand there, or use settlement_send_reopen if the refund does not exist. Then decide again.';
+  end if;
   return v_payment;
 end $fn$;
 revoke all on function public.resolve_job_dispute(uuid, text, text) from public, anon, authenticated;
@@ -224,7 +243,8 @@ create or replace function public.resolve_tip(p_payment_id uuid, p_outcome text)
 returns public.payments
 language plpgsql security definer set search_path = public, pg_temp as $fn$
 declare
-  v_tip public.payments;
+  v_tip    public.payments;
+  v_before public.payments;
 begin
   if p_outcome is null or p_outcome not in ('send', 'refund') then
     raise exception 'Unknown outcome: send or refund';
@@ -245,6 +265,7 @@ begin
     raise exception 'This tip was charged a different amount; settle it by hand in Stripe';
   end if;
   if coalesce(v_tip.refund_cents, 0) > 0 then raise exception 'A refund is already queued for this tip'; end if;
+  v_before := v_tip;
 
   if p_outcome = 'send' then
     if v_tip.transfer_reversed_at is null then raise exception 'Only a reversed tip can be sent again'; end if;
@@ -264,6 +285,10 @@ begin
       updated_at     = now()
     where id = p_payment_id
     returning * into v_tip;
+  end if;
+  -- R5-A1: the same rule as resolve_job_dispute.
+  if public.payment_refund_change_refused(v_before, v_tip.refund_cents) then
+    raise exception 'A refund to the customer was sent or may have been sent. A decision cannot change the refund amount until Stripe shows that amount as refunded. Look in Stripe: refund the difference by hand there, or use settlement_send_reopen if the refund does not exist. Then decide again.';
   end if;
   return v_tip;
 end $fn$;
@@ -338,5 +363,48 @@ end $fn$;
 revoke all on function public.payment_record_reversal(uuid, text, integer, integer) from public, anon, authenticated, service_role;
 comment on function public.payment_record_reversal(uuid, text, integer, integer) is
   'B16: records a provider reversal of one transfer (p_reversed_cents = the transfer''s amount_reversed; null = all of it). When no transfer of the payment is left live it parks the row exactly as transfer.reversed always did (status released -> held, released_at and transfer_ref null, transfer_reversed_at, last_error). When one is still live (a partial reversal, or one of two transfers) nothing is parked and last_error says a person decides. 20261115000000 (R2-A1): a reversal of a transfer already recorded as fully reversed changes nothing. Called by apply_payment_event only; no client grant.';
+
+-- 5. (R5-A1) settlement_send_begin, body from 20261112010300_settlement_guards.sql with the amount the
+--    drain is about to send: false when it is not the row's transfer_cents or refund_cents under the
+--    lock (a decision changed it after the queue was read). The 3-argument function is dropped so no
+--    caller can begin a send without naming its amount. Security, search_path and ACL as they were.
+drop function if exists public.settlement_send_begin(uuid, text, integer);
+create or replace function public.settlement_send_begin(p_payment_id uuid, p_kind text, p_attempt integer, p_amount_cents integer)
+returns boolean
+language plpgsql security definer set search_path = public, pg_temp as $fn$
+declare
+  v_pay public.payments;
+begin
+  if p_kind is distinct from 'transfer' and p_kind is distinct from 'refund' then
+    raise exception 'settlement_send_begin: unknown kind %; transfer or refund only', coalesce(p_kind, '<null>');
+  end if;
+  select * into v_pay from public.payments where id = p_payment_id for update;
+  if not found then return false; end if;
+
+  if p_kind = 'transfer' then
+    if p_attempt is distinct from v_pay.transfer_attempts then return false; end if;
+    if p_amount_cents is distinct from v_pay.transfer_cents then return false; end if;
+    if not exists (select 1 from public.transfers_ready r where r.id = p_payment_id) then return false; end if;
+    if v_pay.transfer_sent_attempt is distinct from v_pay.transfer_attempts then
+      update public.payments
+         set transfer_sent_attempt = transfer_attempts, transfer_sent_at = now()
+       where id = p_payment_id;
+    end if;
+  else
+    if p_attempt is distinct from v_pay.refund_attempts then return false; end if;
+    if p_amount_cents is distinct from v_pay.refund_cents then return false; end if;
+    if not exists (select 1 from public.refunds_ready r where r.id = p_payment_id) then return false; end if;
+    if v_pay.refund_sent_attempt is distinct from v_pay.refund_attempts then
+      update public.payments
+         set refund_sent_attempt = refund_attempts, refund_sent_at = now()
+       where id = p_payment_id;
+    end if;
+  end if;
+  return true;
+end $fn$;
+revoke all on function public.settlement_send_begin(uuid, text, integer, integer) from public, anon, authenticated;
+grant execute on function public.settlement_send_begin(uuid, text, integer, integer) to service_role;
+comment on function public.settlement_send_begin(uuid, text, integer, integer) is
+  'service_role only, step 1 of process-settlements per row: true when the row is still in transfers_ready / refunds_ready for exactly this attempt and p_amount_cents is the row''s transfer_cents (refund_cents) under the lock (R5-A1); on the attempt''s first use it records transfer_sent_attempt/at (refund_sent_attempt/at), which starts its 23-hour clock. false = do not send. Moves no money.';
 
 commit;

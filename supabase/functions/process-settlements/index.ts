@@ -30,8 +30,10 @@
 // that waited for its webhook could be paid twice. Each row now runs, in this
 // order and no other:
 //
-//   1. settlement_send_begin(id, kind, attempt): the database says whether this
-//      attempt may be sent now, and starts its 23-hour clock on first use.
+//   1. settlement_send_begin(id, kind, attempt, amount): the database says whether
+//      this attempt may be sent now, for exactly this amount (R5-A1: a decision that
+//      changed the amount after the queue was read is caught under the row's lock),
+//      and starts its 23-hour clock on first use.
 //   2. the POST, under settlementKey(kind, id, attempt) (classify.mjs).
 //   3. the write-back of settlementVerdict(kind, answer) (classify.mjs):
 //        sent     record_settlement_sent: the transfer or refund id and amount,
@@ -236,14 +238,15 @@ async function rpcBoolean(fn: string, args: Record<string, unknown>, label: stri
 }
 
 /**
- * Step 1 of a row: may this attempt be sent now? true = send; false = not now
- * (the row left the queue, the attempt moved on, or its 23 hours are over);
- * null = the begin itself failed, and nothing is sent.
+ * Step 1 of a row: may this attempt be sent now, for this amount? true = send;
+ * false = not now (the row left the queue, the attempt moved on, its 23 hours are
+ * over, or the amount is no longer the row's); null = the begin itself failed, and
+ * nothing is sent.
  */
-function beginSend(kind: Kind, paymentId: string, attempt: number): Promise<boolean | null> {
+function beginSend(kind: Kind, paymentId: string, attempt: number, amount: number): Promise<boolean | null> {
   return rpcBoolean(
     'settlement_send_begin',
-    { p_payment_id: paymentId, p_kind: kind, p_attempt: attempt },
+    { p_payment_id: paymentId, p_kind: kind, p_attempt: attempt, p_amount_cents: amount },
     `${kind} ${paymentId}`
   );
 }
@@ -344,7 +347,7 @@ async function runTransfers(): Promise<Tally> {
 
       // 1. BEGIN. The database checks the row is still ready for THIS attempt
       // and starts the attempt's 23-hour clock on its first use.
-      const begun = await beginSend('transfer', row.id, attempt);
+      const begun = await beginSend('transfer', row.id, attempt, amount);
       if (begun === null) {
         counts.defects++;
         continue;
@@ -412,7 +415,7 @@ async function runRefunds(): Promise<Tally> {
       }
 
       // 1. BEGIN, as in pass one.
-      const begun = await beginSend('refund', row.id, attempt);
+      const begun = await beginSend('refund', row.id, attempt, amount);
       if (begun === null) {
         counts.defects++;
         continue;

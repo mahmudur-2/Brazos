@@ -212,8 +212,8 @@ select is((select error from public.payment_events where id = 'evt_r5b_p1_refund
   '1: runner — with a null error: no collision inside apply''s exception block');
 select is((select status::text from public.payments where id = :'p1'), 'voided',
   '1: the old row is STILL voided, not refunded');
-select is((select refund_ref from public.payments where id = :'p1'), 're_r5b_p1',
-  '1: refund_ref is recorded');
+select is((select coalesce(refund_ref, 'null') || '/' || refunded_cents::text from public.payments where id = :'p1'), 'null/' || :p1_charge,
+  '1: the refunded total is recorded (R5-A3: refund_ref is never taken from charge.refunded)');
 select is((select refund_cents from public.payments where id = :'p1'), :p1_charge,
   '1: refund_cents is unchanged by the event');
 select ok(not exists (select 1 from public.refunds_due where id = :'p1'),

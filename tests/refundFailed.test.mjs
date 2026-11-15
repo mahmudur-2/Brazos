@@ -135,16 +135,18 @@ test('F2 · [static] the webhook subscribes refund.failed; MoneyText and the can
   const card = main.slice(0, main.indexOf('/>'));
   assert.match(card, /refundQueued=\{isRefundQueued\(payment\)\}/, 'the main card passes the queued refund');
   assert.match(card, /refundFailed=\{isRefundFailed\(payment\)\}/, 'the main card passes the failure');
-  const note = detail.slice(detail.indexOf('const cancelledMoneyNote = (() => {'));
-  const failedAt = note.indexOf('if (isRefundFailed(payment))');
-  assert.ok(failedAt > -1 && failedAt < note.indexOf('if (isCancellationFeeKept(payment))'), 'the failure is asked first');
+  // R5-A4: the note is a function of the row, so a failed or voided row's refund reads the same sentences.
+  assert.match(detail, /const cancelledMoneyNote = moneyNoteFor\(cancelledPayment\);/);
+  const note = detail.slice(detail.indexOf('const moneyNoteFor = (row: Payment | null) => {'));
+  const failedAt = note.indexOf('if (isRefundFailed(row))');
+  assert.ok(failedAt > -1 && failedAt < note.indexOf('if (isCancellationFeeKept(row))'), 'the failure is asked first');
   assert.match(note, /The cancellation fee goes to \$\{workerFirstName\}\. The refund of the rest to your card didn’t go through; Brazos will arrange it another way\./);
   assert.match(note, /'The refund to your card didn’t go through\. Brazos will arrange it another way\.'/);
   assert.match(read('lib/payments.ts'), /refund_failed_at\?: string \| null;/, 'the Payment type carries the column');
   // P3: the arranged sentence comes right after the failure, before every other refund sentence.
-  const arrangedAt = note.indexOf('if (isRefundArranged(payment))');
-  assert.ok(arrangedAt > failedAt && arrangedAt < note.indexOf('if (isCancellationFeeKept(payment))'), 'arranged is asked second');
-  assert.ok(note.slice(arrangedAt, note.indexOf('if (isCancellationFeeKept(payment))')).includes(`'${ARRANGED_NOTE}'`),
+  const arrangedAt = note.indexOf('if (isRefundArranged(row))');
+  assert.ok(arrangedAt > failedAt && arrangedAt < note.indexOf('if (isCancellationFeeKept(row))'), 'arranged is asked second');
+  assert.ok(note.slice(arrangedAt, note.indexOf('if (isCancellationFeeKept(row))')).includes(`'${ARRANGED_NOTE}'`),
     'the arranged note, word for word');
 });
 
@@ -156,18 +158,25 @@ test('R4-A5, P3 · [static] every customer card passes both facts; the worker ca
     for (let i = src.indexOf('<MoneyText'); i > -1; i = src.indexOf('<MoneyText', i + 1)) out.push(src.slice(i, src.indexOf('/>', i)));
     return out;
   };
+  // The row each card shows, in order, read off its cents. R5-A4: the cancelled card shows
+  // cancelledPayment (the active row, else a failed or voided row with a refund issue); the tip
+  // screen also shows a replaced tip (tipIssue).
   const customer = {
-    'screens/ClientJobDetailScreen.tsx': { refundFailed: 'payment', count: 4 },
-    'screens/ApproveOrDisputeScreen.tsx': { refundFailed: 'payment', count: 1 },
-    'screens/CheckoutScreen.tsx': { refundFailed: 'payment', count: 1 },
-    'screens/JobConfirmedScreen.tsx': { refundFailed: 'payment', count: 1 },
-    'screens/ReviewAndTipScreen.tsx': { refundFailed: null, count: 2 },
+    'screens/ClientJobDetailScreen.tsx': ['cancelledPayment', 'payment', 'payment', 'payment'],
+    'screens/ApproveOrDisputeScreen.tsx': ['payment'],
+    'screens/CheckoutScreen.tsx': ['payment'],
+    'screens/JobConfirmedScreen.tsx': ['payment'],
+    'screens/ReviewAndTipScreen.tsx': ['payment', 'tipIssue', 'tip'],
   };
-  for (const [path, want] of Object.entries(customer)) {
+  for (const [path, rows] of Object.entries(customer)) {
     const found = cards(path);
-    assert.equal(found.length, want.count, `${path}: ${want.count} MoneyText`);
-    for (const card of found) {
-      const row = want.refundFailed ?? (card.includes('tip.amount_cents') ? 'tip' : 'payment');
+    assert.equal(found.length, rows.length, `${path}: ${rows.length} MoneyText`);
+    for (const [i, card] of found.entries()) {
+      const shown = card.match(/^<MoneyText cents=\{(?:customerChargeCents\((\w+)\)|(\w+)\.amount_cents)\} state=\{(\w+)\.status\}/);
+      assert.ok(shown, `${path}: card ${i + 1} names its row`);
+      const row = shown[1] ?? shown[2];
+      assert.equal(row, rows[i], `${path}: card ${i + 1} shows ${rows[i]}`);
+      assert.equal(shown[3], row, `${path}: card ${i + 1} reads cents and state off one row`);
       assert.ok(card.includes(`refundFailed={isRefundFailed(${row})}`), `${path}: a card passes refundFailed (${row})`);
       assert.ok(card.includes(`refundArranged={isRefundArranged(${row})}`), `${path}: a card passes refundArranged (${row})`);
     }
@@ -183,4 +192,68 @@ test('R4-A5, P3 · [static] every customer card passes both facts; the worker ca
   const review = code('screens/ReviewAndTipScreen.tsx');
   const tipNote = review.slice(review.indexOf('const tipDoneNote = (() => {'));
   assert.match(tipNote, /^const tipDoneNote = \(\(\) => \{ if \(!tip\) return null; const where = isRefundFailed\(tip\) \|\| isRefundArranged\(tip\) \? null : isHeld\(tip\)/);
+});
+
+test('R5-A4 · [static] a failed or arranged refund on a failed or voided row reaches the customer', () => {
+  // The read: the same table, RLS and columns as the active-row reads; one row, the newest.
+  const lib = code('lib/payments.ts');
+  assert.match(
+    lib,
+    /export async function fetchJobRefundIssue\(jobId: string, kind: 'job_payment' \| 'tip' = 'job_payment'\) \{ const \{ data, error \} = await supabase \.from\('payments'\) \.select\(PAYMENT_COLUMNS\) \.eq\('job_id', jobId\) \.eq\('kind', kind\) \.in\('status', \['failed', 'voided'\]\) \.or\('refund_failed_at\.not\.is\.null,refund_arranged_at\.not\.is\.null'\) \.order\('created_at', \{ ascending: false \}\) \.limit\(1\) \.maybeSingle\(\); return \{ data: data as Payment \| null, error \}; \}/
+  );
+  // Control: the active-row reads keep their filter, so checkout and the tip flow still see one live row.
+  for (const name of ['fetchJobPayment', 'fetchJobTip']) {
+    const body = lib.slice(lib.indexOf(`export async function ${name}(`), lib.indexOf('export ', lib.indexOf(`export async function ${name}(`) + 1));
+    assert.ok(body.includes(".not('status', 'in', '(failed,voided)')"), `${name} still reads the active row only`);
+  }
+
+  // The job page: read beside the payment; a failed read is a failed status read; cleared on a new job.
+  const detail = code('screens/ClientJobDetailScreen.tsx');
+  assert.match(detail, /Promise\.all\(\[fetchJobPaymentState\(job\.id\), fetchOpenJobDispute\(job\.id\), fetchJobRefundIssue\(job\.id\)\]\)\.then\( \(\[paymentResult, disputeResult, issueResult\]\) => \{/);
+  assert.match(detail, /if \(!issueResult\.error\) setRefundIssue\(issueResult\.data\);/);
+  assert.match(detail, /if \(!paymentResult\.error && !disputeResult\.error && !issueResult\.error\) setPaymentRead\(true\);/);
+  assert.match(detail, /setStatusReadError\(!!\(paymentResult\.error \|\| disputeResult\.error \|\| issueResult\.error\)\);/);
+  assert.match(detail, /setRefundIssue\(null\); setOpenDispute\(null\); setStatusReadError\(false\); setPaymentRead\(false\); \}, \[job\.id\]\);/);
+  // The cancelled job: the row shown, and the sentence. No new sentence: "No further action is needed." is dropped.
+  assert.match(detail, /const cancelledPayment = payment \?\? refundIssue;/);
+  assert.match(detail, /\{payment \? 'The job remains here for your records; what happened to the payment is below\.' : refundIssue \? 'The job remains here for your records\.' : 'No further action is needed\. The job remains here for your records\.'\}/);
+  assert.match(detail, /statusReadBanner \) : cancelledPayment \? \( <Card /);
+  // Beside a replacement active row, in the same sentences: on the cancelled card, and under the live payment card.
+  assert.equal((detail.match(/<Text style=\{styles\.paymentNote\}>\{moneyNoteFor\(refundIssue\)\}<\/Text>/g) ?? []).length, 2);
+  assert.match(detail, /\{payment && refundIssue \? <Text style=\{styles\.paymentNote\}>\{moneyNoteFor\(refundIssue\)\}<\/Text> : null\} <\/Card> \) : null\}/);
+  assert.match(detail, /\{refundIssue \? <Text style=\{styles\.paymentNote\}>\{moneyNoteFor\(refundIssue\)\}<\/Text> : null\} \{\} \{\(hasBefore \|\| hasCompletionEvidence\)/);
+
+  // The tip screen: a replaced tip, read beside the live one; a failed read is a load error.
+  const review = code('screens/ReviewAndTipScreen.tsx');
+  assert.match(review, /await Promise\.all\(\[ fetchJobPaymentState\(job\.id\), fetchJobTip\(job\.id\), fetchJobRefundIssue\(job\.id, 'tip'\), \]\);/);
+  assert.match(review, /if \(tipIssueRes\.error\) \{ const message = userMessage\(tipIssueRes\.error\); setLoadError\(\(prev\) => prev \?\? message\); \} else setTipIssue\(tipIssueRes\.data\);/);
+  assert.match(review, /\{tipIssue \? \( <MoneyText cents=\{tipIssue\.amount_cents\} state=\{tipIssue\.status\} tip refundFailed=\{isRefundFailed\(tipIssue\)\} refundArranged=\{isRefundArranged\(tipIssue\)\} counterpartFirstName=\{firstNameOf\(workerName\)\} \/> \) : null\}/);
+});
+
+test('R5-A5 · [static] no "on its way to the worker" beside a failed or arranged refund; the approval sentences stay', () => {
+  const ON_ITS_WAY = ' The payment is on its way to the worker and shows as released when the transfer lands.';
+  const detail = code('screens/ClientJobDetailScreen.tsx');
+  assert.match(detail, /\{stripe && releaseRequested && !isRefundFailed\(payment\) && !isRefundArranged\(payment\) \? \( <Text style=\{styles\.paymentNote\}> The payment reaches/);
+  assert.equal((detail.match(/The payment reaches \{workerFirstName\} once their payout account is ready/g) ?? []).length, 1, 'one note, behind the guard');
+
+  // The refund branch comes before the approval sentences; a comment may sit after "?".
+  const approve = code('screens/ApproveOrDisputeScreen.tsx').match(
+    /releaseRequested && \(isRefundFailed\(payment\) \|\| isRefundArranged\(payment\)\) \? (?:\/\/[^']*)?payment\.release_reason === 'auto_approved' \? '([^']*)' : '([^']*)' : releaseRequested \? payment\.release_reason === 'auto_approved' \? (?:\/\/[^']*)?'([^']*)' : '([^']*)'/
+  );
+  assert.ok(approve, 'ApproveOrDispute: the refund branch, then the approval sentences');
+  assert.deepEqual(approve.slice(1, 3), ['Approved automatically after 72 hours with no issue reported.', 'You approved the work.']);
+  assert.deepEqual(approve.slice(3, 5), [
+    `Approved automatically after 72 hours with no issue reported.${ON_ITS_WAY}`,
+    `You approved the work.${ON_ITS_WAY}`,
+  ], 'control: without a refund issue the sentences are as before');
+
+  const review = code('screens/ReviewAndTipScreen.tsx').match(
+    /: isRefundFailed\(payment\) \|\| isRefundArranged\(payment\) \? (?:\/\/[^']*)?payment\.release_reason === 'auto_approved' \? '([^']*)' : '([^']*)' : payment\.release_reason === 'auto_approved' \? '([^']*)' : '([^']*)'/
+  );
+  assert.ok(review, 'ReviewAndTip: the refund branch, then the approval sentences');
+  assert.deepEqual(review.slice(1, 3), ['Approved automatically after 72 hours.', 'Approved on your say-so.']);
+  assert.deepEqual(review.slice(3, 5), [
+    `Approved automatically after 72 hours.${ON_ITS_WAY}`,
+    `Approved on your say-so.${ON_ITS_WAY}`,
+  ], 'control: without a refund issue the sentences are as before');
 });

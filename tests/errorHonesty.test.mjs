@@ -133,8 +133,8 @@ test('ClientJobDetailScreen passes unknown to the derivation and gates its money
   assert.match(src, /statusReadError \? null : payment \? \(/);
   assert.match(src, /Couldn’t load payment details/);
   assert.match(src, /setStatusReadAttempt\(\(attempt\) => attempt \+ 1\)/);
-  // The failed pair is recorded from either read's error.
-  assert.match(src, /setStatusReadError\(!!\(paymentResult\.error \|\| disputeResult\.error\)\)/);
+  // The failed reads are recorded from any read's error (pack 1, Codex R5-A4: the refund-issue read too).
+  assert.match(src, /setStatusReadError\(!!\(paymentResult\.error \|\| disputeResult\.error \|\| issueResult\.error\)\)/);
 });
 
 // ===========================================================================

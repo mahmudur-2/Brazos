@@ -495,8 +495,8 @@ select is((select status::text from public.job_offers where job_id = :'j4' and w
 select is(tests.r4_event('evt_j4_refund', 'charge.refunded', null,
   '{"id":"ch_j4","payment_intent":"pi_evt_j4","amount_refunded":5375,"refunds":{"data":[{"id":"re_j4"}]}}'::jsonb, false) ->> 'ok', 'true',
   '10: charge.refunded resolves the row by its intent id when the payload carries no metadata');
-select ok((select status = 'refunded' and refund_ref = 're_j4' and refund_cents = 5375 from public.payments where id = :'p4'),
-  '10: a full refund is terminal refunded, with refund_ref');
+select ok((select status = 'refunded' and refund_ref is null and refunded_cents = 5375 and refund_cents = 5375 from public.payments where id = :'p4'),
+  '10: a full refund is terminal refunded, with its refunded total (R5-A3: refund_ref is never taken from charge.refunded)');
 select is((select count(*) from public.refunds_due where id = :'p4'), 0::bigint, '10: a refunded row leaves refunds_due');
 
 -- J5: free within 15 minutes of acceptance, inside the window
@@ -532,8 +532,8 @@ select ok((select status = 'held' and transfer_ref = 'tr_j6' and released_at is 
 select is((select count(*) from public.transfers_due where id = :'p6'), 0::bigint, '10: the transferred fee leaves transfers_due');
 select is(tests.r4_event('evt_j6_refund', 'charge.refunded', :'p6'::text, '{"id":"ch_j6","amount_refunded":3875,"refunds":{"data":[{"id":"re_j6"}]}}'::jsonb) ->> 'ok', 'true',
   '10: charge.refunded lands second');
-select ok((select status = 'partially_refunded' and refund_ref = 're_j6' from public.payments where id = :'p6'),
-  '10: terminal status is partially_refunded for a fee cancellation when transfer.created came first');
+select ok((select status = 'partially_refunded' and refund_ref is null and refunded_cents = 3875 from public.payments where id = :'p6'),
+  '10: terminal status is partially_refunded for a fee cancellation when transfer.created came first (R5-A3: the refunded total, no refund_ref)');
 select is((select count(*) from public.refunds_due where id = :'p6'), 0::bigint, '10: the settled refund leaves refunds_due');
 
 -- J8: the fee never exceeds the agreed price; the protection fee still refunds

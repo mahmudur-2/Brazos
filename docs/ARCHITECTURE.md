@@ -345,6 +345,19 @@ select public.resolve_refund_failure('<payment id>', '<how it was arranged>');
 The note is kept on every waiting failure of the payment and `refund_failed_at` clears. It moves no
 money; a later failure of another refund id raises it again.
 
+The drain sends no refund on a payment with a recorded refund failure, arranged or not. A refund
+asked later on it (a cancellation, a decision, a ban) shows in `payment_attention` as "a refund on
+this charge failed before": refund what is still owed by hand in Stripe, then
+`record_settlement_sent`.
+
+While a refund the app sent may be out, `resolve_job_dispute` and `resolve_tip` refuse a decision
+that changes the refund amount ("A refund to the customer was sent or may have been sent. …").
+Look in Stripe first. To refund more, refund the difference by hand there, then decide again
+once the webhook has recorded it. To decide for the worker, remember that a refund already sent
+cannot be taken back. Once Stripe shows it as refunded, the decision passes, and
+`payment_attention` lists what is left to finish by hand. If the refund does not exist in Stripe,
+run `settlement_send_reopen`, then decide again.
+
 ## Messaging
 
 A message belongs to a job (`job_id`) or a direct thread (`direct_thread_id`), never both;

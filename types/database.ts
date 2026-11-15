@@ -3805,6 +3805,13 @@ export type Database = {
         Args: { p_amount_cents: number; p_payment_id: string; p_ref: string }
         Returns: boolean
       }
+      payment_refund_change_refused: {
+        Args: {
+          p_after_cents: number
+          p_before: Database["public"]["Tables"]["payments"]["Row"]
+        }
+        Returns: boolean
+      }
       payment_refund_held_by_dispute: {
         Args: { p_payment_id: string }
         Returns: boolean
@@ -4308,7 +4315,12 @@ export type Database = {
         Returns: boolean
       }
       settlement_send_begin: {
-        Args: { p_attempt: number; p_kind: string; p_payment_id: string }
+        Args: {
+          p_amount_cents: number
+          p_attempt: number
+          p_kind: string
+          p_payment_id: string
+        }
         Returns: boolean
       }
       settlement_send_reopen: {
