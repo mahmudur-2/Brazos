@@ -708,7 +708,10 @@ export function WorkerJobScreen() {
                 : `${clientName} approved the finished work and the payment was released.`;
             }
             if (lifecycle === 'disputed') {
-              return `${clientName} reported an issue, which holds the funds while it’s open. Sort it out together in chat — release resumes when the report is withdrawn or resolved.`;
+              // Codex R12-A1: a refund of it failed: withdrawing or resolving the report sends no payout.
+              const issue = `${clientName} reported an issue, which holds the funds while it’s open.`;
+              if (isRefundFailureRecorded(payment)) return issue;
+              return `${issue} Sort it out together in chat — release resumes when the report is withdrawn or resolved.`;
             }
             // Codex R7-A3: approved, then a refund directed to the customer (a decision keeps the approval
             // time). A never-approved row with a refund queued is R7-A3b, the owner's call: unchanged.

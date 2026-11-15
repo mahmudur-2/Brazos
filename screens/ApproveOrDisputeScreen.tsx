@@ -278,7 +278,8 @@ export function ApproveOrDisputeScreen() {
       ? 'Withdraw report'
       : held
         ? releaseAllowed
-          ? `Approve & release payment`
+          ? // Codex R12 (the owner's labels): a refund of it failed: approving releases nothing.
+            isRefundFailureRecorded(payment) ? 'Approve the work' : `Approve & release payment`
           : undefined
         : settled
           ? stripe
@@ -522,7 +523,7 @@ export function ApproveOrDisputeScreen() {
 
       <ConfirmDialog
         visible={confirmApprove}
-        title="Release the payment to the worker?"
+        title={isRefundFailureRecorded(payment) ? 'Approve the finished work?' : 'Release the payment to the worker?'}
         message={
           `Your card was charged ${formatBudget(payment ? customerChargeCents(payment) : null)} at checkout, including the protection fee — nothing more is charged.` +
           // Codex R11-A2: a refund of it failed: the charge alone.
@@ -531,7 +532,7 @@ export function ApproveOrDisputeScreen() {
             : '\n\n' +
               'This approves the finished work and releases the payment to the worker. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands.')
         }
-        confirmText="Approve & release"
+        confirmText={isRefundFailureRecorded(payment) ? 'Approve' : 'Approve & release'}
         cancelText="Not yet"
         loading={releasing}
         onConfirm={approveAndRelease}

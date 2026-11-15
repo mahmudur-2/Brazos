@@ -14,6 +14,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import ts from 'typescript';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
@@ -22,9 +23,9 @@ const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/[^\n]
 const code = (path) => strip(read(path)).replace(/\s+/g, ' ');
 
 const rules = await import(pathToFileURL(join(root, 'lib/paymentRules.ts')).href);
-const { isCancellationFeeKept, isPayoutOnItsWay, isRefundArranged, isRefundFailed, isRefundQueued, isReleased, isReleaseRequested } = rules;
+const { isCancellationFeeKept, isHeld, isPayoutOnItsWay, isRefundArranged, isRefundFailed, isRefundQueued, isReleased, isReleaseRequested } = rules;
 const { paymentCaption } = await import(pathToFileURL(join(root, 'lib/moneyCopy.ts')).href);
-const { isRefundFailureRecorded, myJobsNextAction, releaseDeadlineMs } = await import(pathToFileURL(join(root, 'lib/jobLifecycle.ts')).href);
+const { deriveJobLifecycle, isRefundFailureRecorded, myJobsNextAction, releaseDeadlineMs } = await import(pathToFileURL(join(root, 'lib/jobLifecycle.ts')).href);
 const { earningsRowMeta } = await import(pathToFileURL(join(root, 'lib/earningsCopy.ts')).href);
 const { workerReceivesCents } = await import(pathToFileURL(join(root, 'lib/earningsMath.ts')).href);
 
@@ -66,10 +67,29 @@ const CENSUS = [
     re: /A tip can be added once the job payment reaches \{workerName \?\? 'the worker'\}\. \{isPayoutOnItsWay\(payment\) \? ' Yours is approved and on its way — if they haven’t set up payouts yet, it lands the moment they do\.' : null\}/ },
   { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 2, why: `${UNDER_RULE} (the first sentence alone otherwise: a refund, an issue after the timer, a reversed transfer, a card dispute)`,
     re: /: releaseRequested && !isPayoutOnItsWay\(payment\) \? payment\.release_reason === 'auto_approved' \? 'Approved automatically after 72 hours\.' : 'You approved the work\.' : releaseRequested \? payment\.release_reason === 'auto_approved' \? 'Approved automatically after 72 hours with no issue reported\. The payment is on its way to the worker and shows as released when the transfer lands\.' : 'You approved the work\. The payment is on its way to the worker and shows as released when the transfer lands\.'/ },
-  { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 1, why: 'the approve action itself, before any approval, unless a refund failure is recorded (R11-A2; a refund queued: R7-A3b, the owner decides)',
-    re: /: releaseAllowed \? 'Approving sends this payment on its way to the worker\. If something isn’t right, report the issue instead — release waits while a report is open\.'/ },
+  // Codex R12-A1: from the note's guard, so the entry asks (the two sentences above are inside it).
+  { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 3, why: 'the approve action itself, before any approval, unless a refund failure is recorded (R11-A2; a refund queued: R7-A3b, the owner decides)',
+    re: /\{!released && !releaseRequested && releaseAllowed && isRefundFailureRecorded\(payment\) \? null : \( <Text style=\{styles\.paymentNote\}> \{released \? [^]*? : releaseAllowed \? 'Approving sends this payment on its way to the worker\. If something isn’t right, report the issue instead — release waits while a report is open\.'/ },
   { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 1, why: 'the approve dialog, before any approval: what approving does, with no timing (R8-A1 vocabulary), unless a refund failure is recorded (R11-A2)',
-    re: /'This approves the finished work and releases the payment to the worker\. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands\.'/ },
+    re: /\(isRefundFailureRecorded\(payment\) \? '' : '\\n\\n' \+ 'This approves the finished work and releases the payment to the worker\. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands\.'\)/ },
+  // Codex R12-A1: the release vocabulary's sentences on this page, each under the predicate. The three
+  // labels are the owner's (Phase 15): the shorter words where a refund failure is recorded.
+  { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 0, why: 'the timer, unless a refund failure is recorded (R11-A2)',
+    re: /\{held && !isRefundFailureRecorded\(payment\) && releaseDeadlineMs\(job\) != null \? \( <Text style=\{styles\.paymentNote\}> Releases automatically\{' '\} \{releaseAtLabel\(releaseDeadlineMs\(job\) as number, Date\.now\(\)\)\} if you do nothing\. <\/Text> \) : null\}/ },
+  { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 0, why: 'the approve button',
+    re: /\? releaseAllowed \? isRefundFailureRecorded\(payment\) \? 'Approve the work' : `Approve & release payment` : undefined/ },
+  { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 0, why: 'the approve dialog’s title',
+    re: /title=\{isRefundFailureRecorded\(payment\) \? 'Approve the finished work\?' : 'Release the payment to the worker\?'\}/ },
+  { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 0, why: 'the approve dialog’s confirm button',
+    re: /confirmText=\{isRefundFailureRecorded\(payment\) \? 'Approve' : 'Approve & release'\}/ },
+  { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 0, why: 'the withdraw dialog: the second sentence alone where a refund failure is recorded (R11-A2)',
+    re: /message=\{ \(isRefundFailureRecorded\(payment\) \? '' : 'Release is unfrozen once the report is withdrawn — including the automatic release timer\. '\) \+ 'You can approve the work yourself right after\.' \}/ },
+  { file: 'screens/ClientJobDetailScreen.tsx', hits: 0, why: 'the pinned button’s time: approvalDeadline asks the predicate (never().detailDeadline)',
+    re: /approvalDeadline != null \? `Review & approve · releases \$\{releaseAtLabel\(approvalDeadline, Date\.now\(\)\)\}` : 'Review & approve the work',/ },
+  { file: 'screens/ClientJobDetailScreen.tsx', hits: 0, why: 'the approval note, unless a refund failure is recorded (R11-A2)',
+    re: /\{isRefundFailureRecorded\(payment\) \? null : \( <Text style=\{styles\.noticeText\}> Review what \{workerName\} submitted, then approve to release the held funds or report an issue\. With no response, the funds release automatically after 72 hours\. <\/Text> \)\}/ },
+  { file: 'screens/ReviewAndTipScreen.tsx', hits: 0, why: 'the review gate, unless a refund failure is recorded (R11-A2)',
+    re: /body: isRefundFailureRecorded\(payment\) \? undefined : 'Release the held payment \(or report an issue\) before leaving your review — a review should never stand between the worker and their money\.',/ },
   { file: 'screens/ClientJobDetailScreen.tsx', hits: 1, why: UNDER_RULE,
     re: /\{stripe && isPayoutOnItsWay\(payment\) \? \( <Text style=\{styles\.paymentNote\}> The payment reaches \{workerFirstName\} once their payout account is ready — it shows as released when the transfer lands\. If they haven’t set up payouts yet, their job screen asks them to\. <\/Text> \) : null\}/ },
   { file: 'screens/ClientJobDetailScreen.tsx', hits: 2, why: `${UNDER_RULE} (no card otherwise; the pinned "Leave a review" stays)`,
@@ -81,6 +101,12 @@ const CENSUS = [
     re: /if \(isCancellationFeeKept\(payment\)\) \{ return isPayoutOnItsWay\(payment\) \|\| !!payment\.released_at \? `This job was cancelled late\. The cancellation fee is on its way to you; the rest goes back to \$\{clientName\}\.` : 'This job was cancelled late\.'; \}/ },
   { file: 'screens/WorkerJobScreen.tsx', hits: 4, why: `${UNDER_RULE} (a refund queued says the payment goes back first; the approval alone after)`,
     re: /if \(isReleaseRequested\(payment\) && isRefundQueued\(payment\) && !isCancellationFeeKept\(payment\)\) \{ return `\$\{clientName\}’s payment goes back to them\.`; \} if \(isPayoutOnItsWay\(payment\) && waitingOnSetup\) \{ return payment\.release_reason === 'auto_approved' \? `Approved automatically after 72 hours with no response from \$\{clientName\}\. \$\{PAYOUT_SETUP_NOTICE\}` : `\$\{clientName\} approved the finished work\. \$\{PAYOUT_SETUP_NOTICE\}`; \} if \(isPayoutOnItsWay\(payment\)\) \{ return payment\.release_reason === 'auto_approved' \? `Approved automatically after 72 hours with no response from \$\{clientName\}\. Your payout is on its way and shows as released when the transfer lands\.` : `\$\{clientName\} approved the finished work\. Your payout is on its way and shows as released when the transfer lands\.`; \} if \(isReleaseRequested\(payment\)\) \{ return payment\.release_reason === 'auto_approved' \? `Approved automatically after 72 hours with no response from \$\{clientName\}\.` : `\$\{clientName\} approved the finished work\.`; \}/ },
+  { file: 'screens/WorkerJobScreen.tsx', hits: 0, why: 'an open issue: the first sentence alone where a refund failure is recorded (R12-A1)',
+    re: /if \(lifecycle === 'disputed'\) \{ const issue = `\$\{clientName\} reported an issue, which holds the funds while it’s open\.`; if \(isRefundFailureRecorded\(payment\)\) return issue; return `\$\{issue\} Sort it out together in chat — release resumes when the report is withdrawn or resolved\.`; \}/ },
+  { file: 'screens/WorkerJobScreen.tsx', hits: 0, why: 'waiting on approval: the first sentence alone where a refund failure is recorded (R11-A2)',
+    re: /if \(lifecycle === 'awaiting_approval'\) \{ const waiting = `Waiting on \$\{clientName\} to approve the finished work\.`; if \(isRefundFailureRecorded\(payment\)\) return waiting; return `\$\{waiting\} If they don’t respond within 72 hours, the funds release automatically\.`; \}/ },
+  { file: 'screens/WorkerJobScreen.tsx', hits: 0, why: 'the payout nudge’s only use (components/PayoutNudge.tsx), under payoutSetupNotice',
+    re: /\{waitingOnSetup \? \( <View style=\{styles\.payoutNudge\}> <PayoutNudge / },
   { file: 'screens/WorkerJobScreen.tsx', hits: 2, why: 'a live job (assigned or in progress) with no approved payment waiting: the ask at the hire',
     re: /\{live && paymentsMode === 'stripe' && payouts !== null && payouts !== 'enabled' && !waitingOnSetup \? \( <Pressable onPress=\{\(\) => navigateAcrossTabs\('Profile', 'Payouts', \{\}\)\} style=\{\(\{ pressed \}\) => \[styles\.linkRow, pressed && styles\.pressed\]\} accessibilityRole="button" accessibilityLabel="Set up payouts" accessibilityHint="Opens Payouts so the payment can reach you" > <Ionicons name="wallet-outline" size=\{20\} color=\{colors\.emerald\} \/> <Text style=\{styles\.linkRowText\}>Set up payouts so the payment can reach you<\/Text>/ },
   { file: 'screens/WorkerHomeScreen.tsx', hits: 3, why: 'payoutWaitCents sums only the rows payoutSetupNotice names (pinned below)',
@@ -89,14 +115,14 @@ const CENSUS = [
     re: /label="TRANSFERRED" icon="arrow-up-circle-outline" cents=\{s\.transferredCents\} note="Transferred to you"/ },
   { file: 'screens/PayoutsScreen.tsx', hits: 2, why: ABOUT,
     re: /strong="Approved payments transfer on their own" text="when a customer approves your finished work, the payment is released and transferred to you on the provider’s schedule\."/ },
-  { file: 'components/PayoutNudge.tsx', hits: 2, why: 'shown only where payoutSetupNotice says so (pinned below)',
+  { file: 'components/PayoutNudge.tsx', hits: 2, why: 'shown only where payoutSetupNotice says so (pinned below)', via: /<PayoutNudge\b/,
     re: /accessibilityLabel=\{`Set up payouts to receive \$\{amount\}`\} > <Ionicons name="wallet-outline" size=\{18\} color=\{colors\.mark\} \/> <Text style=\{styles\.text\} numberOfLines=\{1\}> Set up payouts to receive / },
   // The copy modules.
   { file: 'lib/payments.ts', hits: 1, why: 'the Payouts page for a worker with no payout account: about the account, no payment named',
     re: /body: 'Set up payouts to receive what you earn\./ },
   { file: 'lib/payments.ts', hits: 1, why: `the Payouts page for an enabled account: ${ABOUT}`,
     re: /body: 'Approved payments are transferred to you on the provider’s schedule\. There is nothing to trigger here\.'/ },
-  { file: 'lib/payments.ts', hits: 2, why: 'the setup sentence itself',
+  { file: 'lib/payments.ts', hits: 2, why: 'the setup sentence itself', via: /(?<!import \{[^}]*)\bPAYOUT_SETUP_NOTICE\b(?! =)/,
     re: /export const PAYOUT_SETUP_NOTICE = 'An approved payment is waiting on your payout setup before it can be sent to you\.';/ },
   { file: 'lib/payments.ts', hits: 1, why: `${UNDER_RULE}: the database's fact on the row (executed below)`,
     re: /return rows\.some\(\(row\) => row\.payoutOnItsWay === true\) \? PAYOUT_SETUP_NOTICE : null;/ },
@@ -114,6 +140,16 @@ const CENSUS = [
   { file: 'lib/earningsCopy.ts', hits: 2, why: `${UNDER_RULE} (payoutOnItsWay, asked by the caller: pinned below)`,
     re: /if \(row\.release_requested_at\) \{ if \(!row\.payoutOnItsWay\) return 'Held — not sent yet'; return row\.waitingOnPayoutSetup \? 'Approved — waiting on your payout setup' : 'Approved — payout on its way'; \}/ },
   { file: 'lib/earningsCopy.ts', hits: 1, why: 'released: the transfer landed', re: /return `\$\{base\} — on its way to your bank`;/ },
+  // Codex R12-A1: the clock's sentences. The time is the caller's argument, null where a refund failure
+  // is recorded: every releaseDeadlineMs( call asks the predicate (the clock scan in R11-A2's test).
+  { file: 'lib/earningsCopy.ts', hits: 0, why: 'the Earnings clock: no deadline, no time',
+    re: /const deadline = row\.releaseDeadlineMs; if \(deadline == null\) return 'Held in protection'; if \(deadline > nowMs\) \{ return `Held in protection — releases \$\{f\.countdown\(deadline, nowMs\)\} unless approved first`; \} return 'Held in protection — automatic release is due';/ },
+  { file: 'lib/jobLifecycle.ts', hits: 0, why: 'the hub lines: no deadline, no time',
+    re: /case 'awaiting_approval': if \(perspective === 'customer'\) \{ return releasesAt \? `Approval needed — releases \$\{releasesAt\}` : 'Approval needed — review the finished work'; \} return releasesAt \? `Waiting on approval — releases \$\{releasesAt\}` : 'Waiting on customer approval';/ },
+  { file: 'lib/liveJobStatus.ts', hits: 0, why: 'the card’s detail: no deadline, no time',
+    re: /: releasesAt \? `approve, or it releases \$\{releasesAt\}` : 'approve the work',/ },
+  { file: 'lib/moneyCopy.ts', hits: 0, why: 'held before approval: the worker’s line asks both refund facts here; the customer’s failure captions open the function (executed: rows 14a, 14c)',
+    re: /if \(!customer && \(facts\.refundFailed \|\| facts\.refundArranged\)\) return HELD_IN_PROTECTION; return customer \? `\$\{HELD_IN_PROTECTION\} — released when you approve` : `\$\{HELD_IN_PROTECTION\} — yours when the customer approves`;/ },
   // Not money.
   { file: 'screens/EmailSignInScreen.tsx', hits: 1, why: 'a reset link', re: /a reset link is on its way\./ },
   { file: 'screens/PostJobScreen.tsx', hits: 1, why: 'a job request', re: /'Your request is on its way\.'/ },
@@ -127,13 +163,96 @@ const sourceFiles = (dir) =>
     return /\.(ts|tsx)$/.test(name) ? [relative(root, path).replace(/\\/g, '/')] : [];
   });
 
-test('R7-A3, R8-A1 · [static] census: every payout sentence in the app source is listed under its guard', () => {
+// Codex R12-A1: the release vocabulary. Every user-visible text in the four folders (a string, a template
+// by its literal parts, JSX text: read by the TypeScript parser; one word alone, an import or a type is not
+// a sentence) that holds one of these words has a class. P promises that an approval, the clock, a
+// withdrawal or a resolution releases or pays THIS payment: it lies in a census entry whose match ASKS (the
+// predicate, the payout fact, or a name built from them and pinned elsewhere: approvalDeadline in
+// never().detailDeadline; waitingOnSetup and payoutWaitCents from payoutSetupNotice, the fact; releasesAt
+// and deadline from the caller's clock, which the clock scan holds to the predicate), or every use of it
+// does (`via`). Every other text is on NO_PROMISE with its class and why: C a condition or a refusal, F a
+// fact about the past, G how payouts work with no payment named, N not a release or a payout of a payment.
+const VOCABULARY = /\b(?:releas(?:e|es|ed|ing)|resum(?:e|es|ed)|unfrozen|frozen|on its way|yours when|72 hours|automatic(?:ally)?|payouts?|paid out|transfer(?:s|red)?|reaches)\b/i;
+const ASKS = /isRefundFailureRecorded\(|isPayoutOnItsWay\(|\.payoutOnItsWay\b|facts\.refundFailed \|\| facts\.refundArranged|approvalDeadline != null|\{waitingOnSetup \?|payoutWaitCents != null|releasesAt \?|deadline == null/;
+const NO_PROMISE = {
+  'screens/ApproveOrDisputeScreen.tsx': [
+    ['F', 'the release answer: nothing was released', /^(The payment was not released|We checked again: the funds are still held and nothing was released\. Check your connection and try again\.|Could not release the payment|\$\{userMessage\(result\.error, 'Check your connection and try again\.'\)\}\\n\\nThe funds are exactly where they were — nothing was released\.)$/],
+    ['C', 'the release answer lost: approving again releases nothing twice', /^(We couldn’t confirm the release|We couldn’t reach Brazos to check whether the payment was released\. Check your connection, then pull to refresh before you decide\. Approving again is safe — a payment is released only once\.)$/],
+    ['C', 'an open issue (the customer): the payment stays held while it is open', /^The payment stays held while this report is open — including the automatic release timer\. Brazos will look at it and reply by email within 2 business days\. Withdraw it below if things get sorted out\.$/],
+    ['C', 'no protected payment: nothing to release until checkout finishes (no refund of it can have failed)', /^(The payment is authorized — not charged — but checkout never finished, so there is nothing to release yet\. Finish checkout to protect the funds; approval releases them afterwards\.|This job finished without a protected payment, so there is nothing to release yet — the worker can’t be paid until the payment is protected and then released\.|This job finished without a protected payment, so there is nothing to release — you can still review the work from the job screen\.)$/],
+  ],
+  'screens/CheckoutScreen.tsx': [
+    ['C', 'before the charge: released only after approval or the clock (no refund of it can have failed)', /^(happens only after you approve the completed work — or automatically 72 hours after completion if you don’t respond\. Reporting an issue holds the funds instead\.|\$\{cardLabel\(savedCard\)\} is charged the all-in total now\. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done\.|Your card is charged the all-in total now, through the secure payment sheet\. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done\.)$/],
+  ],
+  'screens/ClientJobDetailScreen.tsx': [
+    ['C', 'no protected payment: the worker is paid only once it is protected and released', /^The work is finished, but the worker can’t be paid until the payment is protected and then released\.$/],
+    ['F', 'released', /^Payment released$/],
+  ],
+  'screens/CompareBidsScreen.tsx': [['G', 'a protection tile: evidence before release', /^Before release$/]],
+  'screens/DeleteAccountScreen.tsx': [['G', 'the payout account outlives the account', /^Your payout account stays open until every payment still owed to you has reached it — nothing you earned is lost with the account\.$/]],
+  'screens/EarningsScreen.tsx': [
+    ['N', 'the screen title', /^Earnings & Payouts$/],
+    ['F', 'the totals: released, transferred', /^(Released to you|Transferred to you)$/],
+  ],
+  'screens/EmailSignInScreen.tsx': [['N', 'a reset link', /a reset link is on its way\./]],
+  'screens/JobConfirmedScreen.tsx': [['C', 'just hired: held until approved, nothing released', /^(\$\{workerName\} is hired and your payment is protected\. Funds stay held until the work is done and approved — nothing has been released\.|Your card was charged\. Nothing reaches the worker until you approve the finished work\.)$/]],
+  'screens/MyJobsHubScreen.tsx': [['G', 'a section’s empty line', /^Work you’ve submitted for approval lands here until funds release\.$/]],
+  'screens/PayoutsScreen.tsx': [['G', 'the payout account and how payouts work', /^(Payments aren’t available right now, so there is no payout account to set up\.|The payment provider needs an email address for your payout account\.|Could not (start|open) payout setup|Payouts are on the card path only|Refresh payout status|PAYOUT STATUS|Email address for your payout account|How payouts work|Approved payments transfer on their own|when a customer approves your finished work, the payment is released and transferred to you on the provider’s schedule\.|there is nothing to trigger\. Earnings shows each payment as held, released and transferred as it happens\.)$/]],
+  'screens/PostJobScreen.tsx': [['N', 'a job request', /^Your request is on its way\.$/]],
+  'screens/ProfileScreen.tsx': [['N', 'a menu row', /^Earnings & payouts$/]],
+  'screens/ReviewAndTipScreen.tsx': [['F', 'released', /^(Released automatically after 72 hours\.|Released on your approval\.)$/]],
+  'screens/VerifyPhoneScreen.tsx': [['N', 'a sign-in code', /^A new code is on its way\. /]],
+  'screens/WorkerHomeScreen.tsx': [['N', 'the job feed', /^No open jobs right now — new jobs appear here automatically as customers post them\.$/]],
+  'screens/WorkerJobScreen.tsx': [
+    ['F', 'released', /^(Released automatically after 72 hours with no response from the customer\.|\$\{clientName\} approved the finished work and the payment was released\.)$/],
+    ['C', 'held: released only after approval (Phase 14: unchanged)', /^\$\{clientName\} placed the funds in protection\. They’re released only after the finished work is approved\.$/],
+    ['C', 'a live job: the payment reaches the worker only through a payout account', /^(Set up payouts|Opens Payouts so the payment can reach you|Set up payouts so the payment can reach you)$/],
+  ],
+  'screens/WorkerResultsScreen.tsx': [['N', 'the job feed', /^(Nothing open nearby right now — new jobs appear automatically as customers post them\.|New jobs appear here automatically as customers post them\.)$/]],
+  'components/DraftCard.tsx': [['N', 'a draft job', /^(Resumes your unpublished job|Resume where you left off — workers can’t see it until you publish\.)$/]],
+  'lib/earningsCopy.ts': [
+    ['N', 'a refund going home', /^Refund on its way to the customer$/],
+    ['F', 'released or transferred', /^(Released \(auto\) \$\{when\}|Released \$\{when\}|\$\{base\} — on its way to your bank|Transferred \$\{row\.paid_out_at \? f\.timeAgo\(row\.paid_out_at\) : ''\})$/],
+  ],
+  'lib/jobLifecycle.ts': [['C', 'an open issue: release is frozen while it is open', /^Issue reported — release is frozen$/]],
+  'lib/legal/privacyPolicy.ts': [['G', 'the Privacy Policy (approved; not touched)', /^# Brazos Privacy Policy /]],
+  'lib/legal/termsOfService.ts': [['G', 'the Terms of Service (approved; not touched)', /^# Brazos Terms of Service /]],
+  'lib/moneyCopy.ts': [['F', 'paid out', /^Paid out$/]],
+  'lib/navigation.ts': [['N', 'the switch to Worker Mode for Payouts', /^Payouts are part of your worker side\. /]],
+  'lib/offerCopy.ts': [['G', 'a payout account before offers', /^(Finish payout set-up first|You need a payout account before you can send offers\.|Set up payouts|Your payout account is under review\. You can send offers once it is on\.)$/]],
+  'lib/payments.ts': [['G', 'the Payouts page: the account, no payment named', /^(Payouts aren’t set up yet|Set up payouts to receive what you earn\. It’s a short setup in your browser, and you’re brought back here when it’s done\.|Set up payouts|Payout setup isn’t finished|Something is still needed before payouts can start\. Pick up where you left off — the setup resumes in your browser\.|Finish setting up payouts|Payouts under review|Payouts are set up|Approved payments are transferred to you on the provider’s schedule\. There is nothing to trigger here\.|Your payout status could not be read right now\. Try again\.|The payout setup could not be started right now\. Nothing changed — try again\.)$/]],
+  'lib/phoneAuth/mode.ts': [['N', 'a software release', /cannot run in a release\.$/]],
+};
+// The user-visible texts of a file that hold the vocabulary: `raw` as code() has it (quotes included),
+// `text` without them.
+const sentences = (file) => {
+  const sf = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const out = [];
+  const visit = (node) => {
+    const quoted = ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node);
+    if (quoted && (ts.isImportDeclaration(node.parent) || ts.isExportDeclaration(node.parent) || ts.isLiteralTypeNode(node.parent))) return;
+    if (quoted || node.kind === ts.SyntaxKind.JsxText) {
+      const raw = node.getText(sf).replace(/\s+/g, ' ').trim();
+      const words = ts.isTemplateExpression(node) ? [node.head, ...node.templateSpans.map((s) => s.literal)].map((p) => p.text).join('') : quoted ? node.text : raw;
+      if (VOCABULARY.test(words) && /\S \S/.test(words.trim())) {
+        out.push({ raw, text: (quoted ? raw.slice(1, -1) : raw).trim(), line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1 });
+      }
+      if (!ts.isTemplateExpression(node)) return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return out;
+};
+
+test('R7-A3, R8-A1, R12-A1 · [static] census: every payout sentence, and every sentence of the release vocabulary, is listed under its guard or its class', () => {
   const files = ['screens', 'components', 'ui', 'lib'].flatMap(sourceFiles);
   const unlisted = [];
   const broken = [];
+  const ranges = {};
   for (const file of files) {
     const src = code(file);
-    const ranges = [];
+    ranges[file] = [];
     for (const entry of CENSUS.filter((e) => e.file === file)) {
       const all = [...src.matchAll(new RegExp(entry.re.source, 'g'))];
       const inside = all.length === 1 ? (all[0][0].match(PROMISE) ?? []).length : -1;
@@ -141,17 +260,45 @@ test('R7-A3, R8-A1 · [static] census: every payout sentence in the app source i
         broken.push(`${file}: the entry "${entry.why}" matches ${all.length} time(s), ${inside} phrase(s) (expected once, ${entry.hits})`);
         continue;
       }
-      ranges.push([all[0].index, all[0].index + all[0][0].length]);
+      ranges[file].push({ a: all[0].index, b: all[0].index + all[0][0].length, entry, asks: ASKS.test(all[0][0]) });
     }
     for (const hit of src.matchAll(PROMISE)) {
-      if (!ranges.some(([a, b]) => hit.index >= a && hit.index < b)) {
+      if (!ranges[file].some(({ a, b }) => hit.index >= a && hit.index < b)) {
         unlisted.push(`${file}: "${src.slice(Math.max(0, hit.index - 90), hit.index + 40)}"`);
       }
     }
   }
-  // Both lists in one message, so a red run names every guard that is missing and every sentence outside.
-  assert.deepEqual({ broken, unlisted }, { broken: [], unlisted: [] }, 'a payout sentence outside the census (put it under isPayoutOnItsWay, then list it)');
+  // Codex R12-A1: an entry shown through a name (a component, a constant) asks where every use of the name asks.
+  const within = (file, at, ok) => ranges[file].some((r) => at >= r.a && at < r.b && ok(r));
+  for (const range of Object.values(ranges).flat().filter((r) => r.entry.via)) {
+    const uses = files.flatMap((file) => [...code(file).matchAll(new RegExp(range.entry.via.source, 'g'))].map((m) => [file, m.index]));
+    range.asks = uses.length > 0 && uses.every(([file, at]) => within(file, at, (r) => r.asks && !r.entry.via));
+  }
+  // Codex R12-A1: each sentence of the vocabulary is on NO_PROMISE, or every place it stands asks.
+  const unasked = [];
+  const used = new Set();
+  for (const file of files) {
+    const src = code(file);
+    for (const { raw, text, line } of sentences(file)) {
+      const said = (NO_PROMISE[file] ?? []).find(([, , re]) => re.test(text));
+      if (said) {
+        used.add(said);
+        continue;
+      }
+      const at = [];
+      for (let i = src.indexOf(raw); i > -1; i = src.indexOf(raw, i + 1)) at.push(i);
+      if (at.length === 0 || !at.every((i) => within(file, i, (r) => r.asks))) unasked.push(`${file}:${line}: "${text.slice(0, 140)}"`);
+    }
+  }
+  const stale = Object.entries(NO_PROMISE).flatMap(([file, list]) => list.filter((item) => !used.has(item)).map(([cls, why]) => `${file}: ${cls}, ${why}`));
+  // The lists in one message, so a red run names every guard that is missing and every sentence outside.
+  assert.deepEqual({ broken, unlisted, unasked, stale }, { broken: [], unlisted: [], unasked: [], stale: [] },
+    'a payout or release sentence outside the census (put a promise under the predicate or the payout fact, then list it; anything else on NO_PROMISE with its class)');
   for (const entry of CENSUS) assert.ok(files.includes(entry.file), `${entry.file} is scanned`);
+  for (const [file, list] of Object.entries(NO_PROMISE)) {
+    assert.ok(files.includes(file), `${file} is scanned`);
+    for (const [cls, why] of list) assert.match(cls, /^[CFGN]$/, `${file}: ${why}`);
+  }
 });
 
 test('R7-A3, R8-A1 · [static] the callers ask the one rule: the fact reaches every caption, the Earnings line and the nudges', () => {
@@ -526,6 +673,11 @@ const never = () => ({
     /nothing more is charged\.` \+ \((isRefundFailureRecorded\(payment\) \? '' : '\\n\\n' \+ '[^']*')\)/)),
   withdraw: run(['isRefundFailureRecorded', 'payment'], ONCE('screens/ApproveOrDisputeScreen.tsx',
     /message=\{ (\(isRefundFailureRecorded\(payment\) \? '' : '[^']*'\) \+ '[^']*') \}/)),
+  // Phase 15: the owner's three shorter labels, where a refund failure is recorded.
+  button: run(['isRefundFailureRecorded', 'payment'], ONCE('screens/ApproveOrDisputeScreen.tsx',
+    /\? releaseAllowed \? (isRefundFailureRecorded\(payment\) \? '[^']*' : `[^`]*`) : undefined/)),
+  title: run(['isRefundFailureRecorded', 'payment'], ONCE('screens/ApproveOrDisputeScreen.tsx', /title=\{(isRefundFailureRecorded\(payment\) \? '[^']*' : '[^']*')\}/)),
+  confirm: run(['isRefundFailureRecorded', 'payment'], ONCE('screens/ApproveOrDisputeScreen.tsx', /confirmText=\{(isRefundFailureRecorded\(payment\) \? '[^']*' : '[^']*')\}/)),
   detailDeadline: run(['isRefundFailureRecorded', 'releaseDeadlineMs', 'payment', 'job'], ONCE('screens/ClientJobDetailScreen.tsx',
     /const approvalDeadline = (isRefundFailureRecorded\(payment\) \? null : releaseDeadlineMs\(job\));/)),
   detailNote: run(['isRefundFailureRecorded', 'payment'], ONCE('screens/ClientJobDetailScreen.tsx',
@@ -569,6 +721,9 @@ test('R11-A2 · never approved: no release or timer sentence beside a recorded r
       approvedNote: NEVER.noteHidden(false, true, true, isRefundFailureRecorded, row) || NEVER.noteHidden(true, false, true, isRefundFailureRecorded, row),
       dialog: NEVER.dialog(isRefundFailureRecorded, row),
       withdraw: NEVER.withdraw(isRefundFailureRecorded, row),
+      button: NEVER.button(isRefundFailureRecorded, row),
+      title: NEVER.title(isRefundFailureRecorded, row),
+      confirm: NEVER.confirm(isRefundFailureRecorded, row),
       detailCta: NEVER.detailDeadline(isRefundFailureRecorded, releaseDeadlineMs, row, job),
       detailNote: !NEVER.detailNote(isRefundFailureRecorded, row),
       reviewGate: NEVER.reviewGate(isRefundFailureRecorded, row),
@@ -581,11 +736,13 @@ test('R11-A2 · never approved: no release or timer sentence beside a recorded r
     };
     assert.deepEqual(said, recorded ? {
       timer: false, approveNote: null, paused: PAUSED, approvedNote: false, dialog: '', withdraw: 'You can approve the work yourself right after.',
+      button: 'Approve the work', title: 'Approve the finished work?', confirm: 'Approve',
       detailCta: null, detailNote: false, reviewGate: undefined, workerNote: WAITING, earningsClock: null,
       customerLine: 'Approval needed — review the finished work', workerLine: 'Waiting on customer approval',
       cardTime: null, workerCaption: 'Held in protection',
     } : {
       timer: true, approveNote: APPROVING, paused: PAUSED, approvedNote: false, dialog: RELEASES, withdraw: UNFROZEN,
+      button: 'Approve & release payment', title: 'Release the payment to the worker?', confirm: 'Approve & release',
       detailCta: due, detailNote: true, reviewGate: GATE,
       workerNote: `${WAITING} If they don’t respond within 72 hours, the funds release automatically.`, earningsClock: due,
       customerLine: myJobsNextAction({ perspective: 'customer', state: 'awaiting_approval', releaseDeadline: due, nowMs: Date.parse(COMPLETED) }),
@@ -606,12 +763,52 @@ test('R11-A2 · never approved: no release or timer sentence beside a recorded r
   for (const file of ['screens/MyJobsHubScreen.tsx', 'screens/HomeScreen.tsx']) {
     assert.match(code(file), /postedCardLive\(\{ job, state(?:: lifecycleOf\(job\))?, paymentStatus: payments\[job\.id\]\?\.status, workerName: [^}]*nowMs, refundFailure: isRefundFailureRecorded\(payments\[job\.id\]\), \}\)/, `${file}: the card asks it`);
   }
-  // No other caller names the clock without asking (HomeScreen's live bar says "check the work", no time).
-  const unguarded = ['screens', 'components', 'lib'].flatMap(sourceFiles).flatMap((file) =>
-    [...code(file).matchAll(/releaseDeadlineMs\(/g)].map((m) => [file, code(file).slice(Math.max(0, m.index - 80), m.index)]));
-  const ASKED = /(isRefundFailureRecorded\([^)]*\) \? null : |refundFailure \? null : |export function |!isRefundFailureRecorded\(payment\) && |releaseAtLabel\()$/;
-  assert.deepEqual(unguarded.filter(([file, before]) => !ASKED.test(before) && !(file === 'screens/HomeScreen.tsx' && before.endsWith('releaseDeadline: '))).map(([f]) => f), [],
+  // No other caller names the clock without asking. Codex R12-A2: ui/ too, and the two that ask elsewhere
+  // are exempt only where they stand (each pinned once; the call right after the pin): the approval page's
+  // time inside the timer's own guard, and HomeScreen's live bar, whose surface 'bar' says "check the work".
+  const EXEMPT = [
+    ['screens/ApproveOrDisputeScreen.tsx', /\{held && !isRefundFailureRecorded\(payment\) && releaseDeadlineMs\(job\) != null \? \( <Text style=\{styles\.paymentNote\}> Releases automatically\{' '\} \{releaseAtLabel\((?=releaseDeadlineMs\(job\) as number, Date\.now\(\)\)\} if you do nothing\. <\/Text> \) : null\})/],
+    ['screens/HomeScreen.tsx', /const status = liveJobStatus\(\{ state: pick\.state, job: pick\.job, releaseDeadline: (?=releaseDeadlineMs\(pick\.job\), surface: 'bar', nowMs, \}\);)/],
+  ].map(([file, re]) => {
+    const all = [...code(file).matchAll(new RegExp(re.source, 'g'))];
+    assert.equal(all.length, 1, `${file}: the exempt clock, once`);
+    return `${file}@${all[0].index + all[0][0].length}`;
+  });
+  const unguarded = ['screens', 'components', 'ui', 'lib'].flatMap(sourceFiles).flatMap((file) =>
+    [...code(file).matchAll(/releaseDeadlineMs\(/g)].map((m) => [file, m.index, code(file).slice(Math.max(0, m.index - 80), m.index)]));
+  const ASKED = /(isRefundFailureRecorded\([^)]*\) \? null : |refundFailure \? null : |export function |!isRefundFailureRecorded\(payment\) && )$/;
+  assert.deepEqual(unguarded.filter(([file, at, before]) => !ASKED.test(before) && !EXEMPT.includes(`${file}@${at}`)).map(([f, , before]) => `${f}: ${before}`), [],
     'every release clock a sentence reads asks the predicate');
+});
+
+// Codex R12-A1: the worker's whole payment note, as written (the open issue is one of its branches).
+const workerMessage = () => new Function('deriveJobLifecycle', 'isCancellationFeeKept', 'isPayoutOnItsWay', 'isRefundQueued', 'isReleased', 'isReleaseRequested',
+  'isRefundFailureRecorded', 'isHeld', 'PAYOUT_SETUP_NOTICE', 'waitingOnSetup', 'job', 'payment', 'issueOpen', 'clientName', ONCE('screens/WorkerJobScreen.tsx',
+    /<Text style=\{styles\.paymentNote\}> \{\(\(\) => \{ (const lifecycle = deriveJobLifecycle\(\{ job, payment, hasOpenDispute: issueOpen \}\);[^]*?) \}\)\(\)\}/));
+
+// Codex R12-A1: rows 14a and 14c with an open issue, before and after the approval (as 460 answers it: the
+// transfer queued, the fact false), read the issue alone: withdrawing or resolving releases nothing. Row 12,
+// the control, reads that release resumes (after its approval with the issue open: Failure A, the fact false).
+test('R12-A1 · the worker’s note, an issue open or not, before and after approval: never that release resumes beside a recorded refund failure', () => {
+  const note = workerMessage();
+  const message = (row, issueOpen) => note(deriveJobLifecycle, isCancellationFeeKept, isPayoutOnItsWay, isRefundQueued, isReleased, isReleaseRequested,
+    isRefundFailureRecorded, isHeld, PAYOUT_SETUP_NOTICE, payoutSetupNotice('enabled', [row]) !== null, { status: 'completed' }, row, issueOpen, 'Sam');
+  const ISSUE = 'Sam reported an issue, which holds the funds while it’s open.';
+  for (const name of ['12 never approved', '14a never approved, hand refund failed', '14c never approved, hand refund arranged']) {
+    const recorded = name !== '12 never approved';
+    const before = ROWS[name];
+    const after = (issueOpen) => ({ ...before, release_requested_at: AT, release_reason: 'approved', transfer_cents: 4625, payoutOnItsWay: !recorded && !issueOpen });
+    assert.deepEqual({
+      issueBefore: message(before, true), issueAfter: message(after(true), true), before: message(before, false), after: message(after(false), false),
+    }, recorded ? {
+      issueBefore: ISSUE, issueAfter: ISSUE, before: 'Waiting on Sam to approve the finished work.', after: 'Sam approved the finished work.',
+    } : {
+      issueBefore: `${ISSUE} Sort it out together in chat — release resumes when the report is withdrawn or resolved.`,
+      issueAfter: `${ISSUE} Sort it out together in chat — release resumes when the report is withdrawn or resolved.`,
+      before: 'Waiting on Sam to approve the finished work. If they don’t respond within 72 hours, the funds release automatically.',
+      after: 'Sam approved the finished work. Your payout is on its way and shows as released when the transfer lands.',
+    }, name);
+  }
 });
 
 test('R11-A2 · the hub read carries both refund facts, so the hub and Home can ask', async () => {

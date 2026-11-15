@@ -16,7 +16,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(42);
+select plan(43);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -390,6 +390,26 @@ select is((select string_agg(format('%s %s/%s/%s/%s/%s', split_part(x.name, ' ',
              from rowsx x join public.payments p on p.id = x.pid where x.name ~ '^(12|14a|14c) '),
   '12 approved/4625/t/t/0, 14a approved/4625/f/f/1, 14c approved/4625/f/f/1',
   'R11-A2: approving a never-approved row whose hand refund failed (14a) or was arranged (14c) is accepted and queues the transfer, but nothing is due, no payout is on its way and payment_attention says a person decides; the same approval of row 12 is due and on its way');
+
+-- R12-A1: a row like 14a whose customer opens an issue, withdraws it, then approves. Withdrawing changes
+-- the issue, not the failure record, which still holds the whole charge: not due, no payout on its way,
+-- and payment_attention says a person decides.
+select tests.pw_job('PW never approved, hand refund failed, issue withdrawn', 'completed') as j14w \gset
+select tests.pw_hand_refund_failed('evt_pw_rf14w', tests.pw_pid(:'j14w'), null) as rf14w \gset
+select tests.authenticate_as(:'customer');
+select (public.open_job_dispute(:'j14w', 'other')).id as d14w \gset
+select (public.withdraw_job_dispute(:'d14w')).status as w14w \gset
+select (public.release_job_payment(:'j14w')).release_reason as ap14w \gset
+select tests.clear_auth();
+select is((select format('%s/%s/%s/%s/%s/%s/%s', d.status, p.refund_failed_at is not null, p.release_reason, p.transfer_cents,
+                         exists (select 1 from public.transfers_due t where t.id = p.id),
+                         public.payment_payout_on_its_way(p),
+                         (select count(*) from public.payment_attention a where a.payment_id = p.id
+                            and a.reason = 'transfer is more than is left after refunds: a person decides'))
+             from public.payments p join public.job_disputes d on d.payment_id = p.id
+            where p.id = tests.pw_pid(:'j14w')),
+  'withdrawn/t/approved/4625/f/f/1',
+  'R12-A1: a never-approved row whose hand refund failed, its issue opened and withdrawn, then approved: the failure stands, the transfer is queued, but nothing is due, no payout is on its way and payment_attention says a person decides');
 
 -- ---------------------------------------------------------------------------
 -- The invariant: the fact is transfers_due, except a begun transfer whose attempt closed.

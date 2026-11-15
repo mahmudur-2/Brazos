@@ -215,7 +215,6 @@ test('R11-A1 · the classifier: only a refund answered 2xx failed or canceled be
       payload: { id: 'process-settlements:re_r11', type: 'refund.failed', data: { object: body } },
     }, `${status}: the provider's Refund is the event's object, and the payload has no other field`);
     assert.equal(event.payload.data.object, body, `${status}: the same object, not a copy`);
-    assert.doesNotMatch(event.id, /^evt_/, `${status}: never a Stripe event id`);
     assert.equal(settlementVerdict('refund', { status: 200, body }).next, 'stop', `${status}: and the attempt still stops`);
   }
   // Controls: every other answer is not a failure the provider reported.

@@ -465,7 +465,8 @@ test('[static] a held row with release_requested_at cannot bounce between Review
   assert.match(approve, /fetchRemoteConfig\(\)\.then\(\(config\) => \{\s*if \(active\) setPaymentsEnabled\(config\.paymentsEnabled\);/);
   assert.match(review, /fetchRemoteConfig\(\)\.then\(\(config\) => \{\s*if \(active\) setPaymentsEnabled\(config\.paymentsEnabled\);/);
   assert.match(approve, /const releaseAllowed = paymentsMode !== 'disabled' && paymentsEnabled;/);
-  assert.match(approve, /held\s*\?\s*releaseAllowed\s*\?\s*`Approve & release/);
+  // Codex R12: a payment with a recorded refund failure reads the owner's shorter label (tests/payoutPromise.test.mjs).
+  assert.match(approve, /held\s*\?\s*releaseAllowed\s*\?\s*isRefundFailureRecorded\(payment\) \? 'Approve the work' : `Approve & release/);
   // D3 (R6c): stripe mode shows the CARD tip controls behind the kill switch
   // and the release gate, and keeps the review section.
   assert.match(review, /\) : stripe \? \([\s\S]{0,400}!paymentsEnabled \?/);
