@@ -771,7 +771,8 @@ export function ClientJobDetailScreen() {
     if (!row) return null;
     // Pack 1, F2: the refund failed at the provider: never "goes back to your card".
     if (isRefundFailed(row)) {
-      return isCancellationFeeKept(row)
+      // G1-2: only a queued refund is "the refund of the rest" (a partly refunded fee row's rest landed).
+      return isRefundQueued(row) && isCancellationFeeKept(row)
         ? `The cancellation fee goes to ${workerFirstName}. The refund of the rest to your card didn’t go through; Brazos will arrange it another way.`
         : 'The refund to your card didn’t go through. Brazos will arrange it another way.';
     }

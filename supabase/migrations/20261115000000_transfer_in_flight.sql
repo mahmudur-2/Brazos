@@ -183,7 +183,7 @@ begin
       if v_payment.chargeback_at is not null then
         raise exception 'This payment is under review by the card issuer and cannot be released';
       end if;
-      -- The normal release; a reversal park is cleared here and ONLY here,
+      -- The normal release; a reversal park is cleared here and in the late-cancel fee branch below,
       -- incrementing transfer_attempts so R5's idempotency key changes.
       update public.payments
          set release_reason = 'dispute_resolved', release_requested_at = v_now,
@@ -214,6 +214,16 @@ begin
                updated_at = v_now
          where id = v_payment.id returning * into v_payment;
       end if;
+    elsif v_worker_won and v_park and v_payment.release_reason = 'cancellation_fee'
+          and coalesce(v_payment.transfer_cents, 0) > 0 then
+      -- G1-1: a late-cancel fee whose transfer was reversed: sent again by the completed branch's rule.
+      if v_payment.chargeback_at is not null then
+        raise exception 'This payment is under review by the card issuer and cannot be released';
+      end if;
+      update public.payments
+         set release_requested_at = v_now, transfer_attempts = transfer_attempts + 1,
+             transfer_reversed_at = null, updated_at = v_now
+       where id = v_payment.id returning * into v_payment;
     else
       -- Cancelled, payment still held, no open claim (withdrawn or never
       -- opened): the customer's favour only.

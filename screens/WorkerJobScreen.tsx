@@ -743,7 +743,13 @@ export function WorkerJobScreen() {
             if (isHeld(payment)) {
               return `${clientName} placed the funds in protection. They’re released only after the finished work is approved.`;
             }
-            return 'The customer hasn’t paid yet. Nothing is held for this job.';
+            // G1-4: refunded after the work: the money went home. The unpaid sentence only where
+            // nothing was charged (an allow-list; 'pending' is the enum's legacy label, outside
+            // PaymentStatus); any other status (partly refunded, unknown) says nothing here.
+            if (payment.status === 'refunded') return `${clientName}’s payment goes back to them.`;
+            return ['unfunded', 'pending', 'authorized', 'failed', 'voided'].includes(payment.status)
+              ? 'The customer hasn’t paid yet. Nothing is held for this job.'
+              : null;
           })()}
         </Text>
         {/* #63 (M-14) — one tap to Payouts, where the setup is (it was three). */}

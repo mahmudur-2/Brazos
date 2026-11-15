@@ -604,8 +604,8 @@ test('R8-A1 · the screens’ notes: Failure A, Failure B, a card dispute and th
   ]) {
     assert.equal(NOTES.workerFee(isCancellationFeeKept, isPayoutOnItsWay, ROWS[name], 'Sam'), expected, name);
   }
-  // F2b: the rest refunded (partially_refunded) is not the kept-fee shape; the next sentence describes it, as before.
-  assert.equal(NOTES.workerFee(isCancellationFeeKept, isPayoutOnItsWay, ROWS['F2b fee waiting on payout setup, the rest refunded'], 'Sam'), undefined);
+  // F2b (G1-2): the rest refunded (partially_refunded) is still the kept-fee shape: the fee promised under the fact.
+  assert.equal(NOTES.workerFee(isCancellationFeeKept, isPayoutOnItsWay, ROWS['F2b fee waiting on payout setup, the rest refunded'], 'Sam'), LONG);
 });
 
 test('R8-A1 · the fetchers: the fact beside the row; a failed or missing read says less and never blocks the row', async () => {
@@ -714,8 +714,6 @@ test('R11-A2 · never approved: no release or timer sentence beside a recorded r
       timer: NEVER.timer(true, isRefundFailureRecorded, releaseDeadlineMs, row, job),
       approveNote: NEVER.noteHidden(false, false, true, isRefundFailureRecorded, row) ? null : NEVER.approveNote(true),
       paused: NEVER.noteHidden(false, false, false, isRefundFailureRecorded, row) ? null : NEVER.approveNote(false),
-      // After approval the note is never hidden (its approved sentences are R8-A1's).
-      approvedNote: NEVER.noteHidden(false, true, true, isRefundFailureRecorded, row) || NEVER.noteHidden(true, false, true, isRefundFailureRecorded, row),
       dialog: NEVER.dialog(isRefundFailureRecorded, row),
       withdraw: NEVER.withdraw(isRefundFailureRecorded, row),
       button: NEVER.button(isRefundFailureRecorded, row),
@@ -731,13 +729,13 @@ test('R11-A2 · never approved: no release or timer sentence beside a recorded r
       workerCaption: workerCaption(row, 'enabled'),
     };
     assert.deepEqual(said, recorded ? {
-      timer: false, approveNote: null, paused: PAUSED, approvedNote: false, dialog: '', withdraw: 'You can approve the work yourself right after.',
+      timer: false, approveNote: null, paused: PAUSED, dialog: '', withdraw: 'You can approve the work yourself right after.',
       button: 'Approve the work', title: 'Approve the finished work?', confirm: 'Approve',
       detailCta: null, detailNote: false, reviewGate: undefined, earningsClock: null,
       customerLine: 'Approval needed — review the finished work', workerLine: 'Waiting on customer approval',
       cardTime: null, workerCaption: 'Held in protection',
     } : {
-      timer: true, approveNote: APPROVING, paused: PAUSED, approvedNote: false, dialog: RELEASES, withdraw: UNFROZEN,
+      timer: true, approveNote: APPROVING, paused: PAUSED, dialog: RELEASES, withdraw: UNFROZEN,
       button: 'Approve & release payment', title: 'Release the payment to the worker?', confirm: 'Approve & release',
       detailCta: due, detailNote: true, reviewGate: GATE, earningsClock: due,
       customerLine: myJobsNextAction({ perspective: 'customer', state: 'awaiting_approval', releaseDeadline: due, nowMs: Date.parse(COMPLETED) }),
@@ -805,6 +803,54 @@ test('R12-A1 · the worker’s note, an issue open or not, before and after appr
       after: 'Sam approved the finished work. Your payout is on its way and shows as released when the transfer lands.',
     }, name);
   }
+});
+
+// G1-2 and G1-4: the worker's whole note and the customer's cancelled-money note, as written.
+const message = (row, jobStatus) => workerMessage()(deriveJobLifecycle, isCancellationFeeKept, isPayoutOnItsWay, isRefundQueued, isReleased, isReleaseRequested,
+  isRefundFailureRecorded, isHeld, PAYOUT_SETUP_NOTICE, payoutSetupNotice('enabled', [row]) !== null, { status: jobStatus }, row, false, 'Sam');
+const moneyNoteFor = () => new Function('isRefundFailed', 'isRefundArranged', 'isCancellationFeeKept', 'isRefundQueued', 'workerFirstName', 'row', ONCE('screens/ClientJobDetailScreen.tsx',
+  /const moneyNoteFor = \(row: Payment \| null\) => \{ ([^]*?) \}; const cancelledMoneyNote/));
+
+test('G1-2 · a late-cancel fee after the rest’s refund landed: still the fee to both parties; every held row as before', () => {
+  const note = moneyNoteFor();
+  const customer = (row) => note(isRefundFailed, isRefundArranged, isCancellationFeeKept, isRefundQueued, 'Sam', row);
+  const LONG = 'This job was cancelled late. The cancellation fee is on its way to you; the rest goes back to Sam.';
+  const FEE_REST = 'The cancellation fee goes to Sam; the rest goes back to your card — usually within 5–10 business days.';
+  const LANDED = { ...FEE, status: 'partially_refunded' };
+  for (const [name, row, worker] of [
+    ['fee on its way', { ...LANDED, payoutOnItsWay: true }, LONG],
+    ['fee sent', { ...LANDED, released_at: AT, payoutOnItsWay: false }, LONG],
+    ['fee blocked', { ...LANDED, payoutOnItsWay: false }, 'This job was cancelled late.'],
+  ]) {
+    assert.equal(isCancellationFeeKept(row), true, `${name}: the fee is kept`);
+    assert.equal(message(row, 'cancelled'), worker, `${name}: the worker`);
+    assert.equal(customer(row), FEE_REST, `${name}: the customer`);
+  }
+  // The failed-refund note keeps today's result: on a partly refunded row the rest already landed.
+  assert.equal(customer({ ...LANDED, refund_failed_at: AT, payoutOnItsWay: false }), 'The refund to your card didn’t go through. Brazos will arrange it another way.');
+  assert.equal(customer(ROWS['F6 fee, the refund of the rest failed']),
+    'The cancellation fee goes to Sam. The refund of the rest to your card didn’t go through; Brazos will arrange it another way.');
+  // A customer decision (transfer 0) or a partly refunded job payment is no fee.
+  assert.equal(isCancellationFeeKept({ ...LANDED, transfer_cents: 0 }), false, 'decided for the customer');
+  assert.equal(isCancellationFeeKept({ ...JOB, status: 'partially_refunded' }), false, 'a job payment partly refunded');
+  // Every other status: the old rule, exactly.
+  for (const status of ['unfunded', 'pending', 'authorized', 'held', 'released', 'paid_out', 'failed', 'voided', 'refunded']) {
+    for (const row of [...Object.values(ROWS), FEE, JOB]) {
+      const r = { ...row, status };
+      assert.equal(isCancellationFeeKept(r), isRefundQueued(r) && (r.transfer_cents ?? 0) > 0, `${status}: as before`);
+    }
+  }
+});
+
+test('G1-4 · the worker’s note on a completed job: “hasn’t paid yet” only where nothing was charged', () => {
+  const W25 = { ...JOB, status: 'refunded', refund_cents: 5375, transfer_cents: 0, payoutOnItsWay: false };
+  assert.equal(message(W25, 'completed'), 'Sam’s payment goes back to them.', 'W25: refunded in full');
+  assert.equal(message({ ...JOB, status: 'partially_refunded', refund_cents: 0, payoutOnItsWay: false }, 'completed'), null, 'partly refunded, no payout fact: nothing');
+  const UNPAID = { ...JOB, release_requested_at: null, release_reason: null, transfer_cents: 0, payoutOnItsWay: false };
+  for (const status of ['unfunded', 'pending', 'authorized', 'failed', 'voided']) {
+    assert.equal(message({ ...UNPAID, status }, 'assigned'), 'The customer hasn’t paid yet. Nothing is held for this job.', `${status}: as before`);
+  }
+  assert.equal(message({ ...UNPAID, status: 'unknown' }, 'assigned'), null, 'an unknown status says nothing');
 });
 
 test('R11-A2 · the hub read carries both refund facts, so the hub and Home can ask', async () => {

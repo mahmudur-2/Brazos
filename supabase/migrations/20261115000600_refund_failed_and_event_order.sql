@@ -414,6 +414,8 @@ comment on function public.payment_refund_reserved_cents(public.payments) is
 --    confirmed" line leaves out a failed refund. R4-A3: "more than is left after refunds" reads
 --    payment_refund_reserved_cents, as transfers_due does. R5-A3: a refund asked is not listed once
 --    refunded_cents covers it (the two exclusions below mirror it). Same columns and ACL (restated).
+--    G1-1: a reversed transfer is named first (a closed attempt stays closed after a reversal).
+--    G1-6: "more than is left after the transfer" also subtracts an unconfirmed transfer, as refunds_due does.
 -- ---------------------------------------------------------------------------
 create or replace view public.payment_attention as
   with tw as (
@@ -430,7 +432,8 @@ create or replace view public.payment_attention as
     -- Refunds asked for and not recorded.
     select p.*,
            exists (select 1 from public.refunds_ready r where r.id = p.id) as ready,
-           public.settlement_attempt_closed(p.refund_attempts, p.refund_sent_attempt, p.refund_sent_at, p.refund_stopped_at) as closed
+           public.settlement_attempt_closed(p.refund_attempts, p.refund_sent_attempt, p.refund_sent_at, p.refund_stopped_at) as closed,
+           public.payment_transfer_unconfirmed(p) as unconfirmed
       from public.payments p
      where p.provider = 'stripe' and coalesce(p.refund_cents, 0) > 0
        and p.refund_ref is null and p.status <> 'refunded'
@@ -438,11 +441,11 @@ create or replace view public.payment_attention as
   )
   select tw.id as payment_id, tw.job_id, 'transfer'::text as what,
          case
+           when tw.transfer_reversed_at is not null then 'reversed at the provider: resolve_job_dispute (job payment) or resolve_tip (tip) decides'
            when tw.closed and tw.transfer_stopped_at is not null and tw.transfer_sent_attempt = tw.transfer_attempts
              then 'stopped: the last answer needs a person. Look in Stripe for metadata payment_id, then record_settlement_sent or settlement_send_reopen'
            when tw.closed
              then 'no answer for 23 hours under the same key. Look in Stripe for metadata payment_id, then record_settlement_sent or settlement_send_reopen'
-           when tw.transfer_reversed_at is not null then 'reversed at the provider: resolve_job_dispute (job payment) or resolve_tip (tip) decides'
            when tw.chargeback_at is not null then 'card dispute open: no transfer while the card network holds the money'
            when exists (select 1 from public.job_disputes d where d.job_id = tw.job_id and d.status = 'open')
              then 'open issue report: resolve_job_dispute decides'
@@ -477,6 +480,7 @@ create or replace view public.payment_attention as
            when rw.status not in ('held', 'released', 'paid_out', 'voided', 'failed') then 'payment is ' || rw.status::text || ': a person decides'
            when rw.refund_cents > rw.charge_amount_cents
                   - (select coalesce(sum(x.amount_cents - x.reversed_cents), 0) from public.payment_transfers x where x.payment_id = rw.id)
+                  - (case when rw.unconfirmed then coalesce(rw.transfer_cents, 0) else 0 end)
              then 'refund is more than is left after the transfer: a person decides'
            -- R5-A3: refunds_due (20261115000700) sends nothing on a row with a refund failure.
            when exists (select 1 from public.payment_refund_failures f where f.payment_id = rw.id)

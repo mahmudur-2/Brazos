@@ -56,10 +56,15 @@ export function isRefundQueued(
  * `refund_cents` and `transfer_cents`, with release_requested_at for the fee's
  * transfer). isReleaseRequested is true on that row too, so a caller asks this
  * FIRST — the fee is not an approval of finished work.
+ * G1-2: once the rest's refund lands the row is `partially_refunded` and no refund is queued; the
+ * fee is still the worker's, so that row asks the durable fact (as lib/earningsCopy.ts does).
  */
 export function isCancellationFeeKept(
-  payment: Pick<Payment, 'status'> & { refund_cents?: number | null; transfer_cents?: number | null }
+  payment: Pick<Payment, 'status'> & { refund_cents?: number | null; transfer_cents?: number | null; release_reason?: string | null }
 ): boolean {
+  if (payment.status === 'partially_refunded') {
+    return payment.release_reason === 'cancellation_fee' && (payment.transfer_cents ?? 0) > 0;
+  }
   return isRefundQueued(payment) && (payment.transfer_cents ?? 0) > 0;
 }
 
