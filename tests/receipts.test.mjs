@@ -189,9 +189,60 @@ test('[static] the function: service role only, skipped and logged without the k
 
 // Codex R2-A2: a payment no longer released when the sender reads it (a reversal after the claim)
 // leaves its receipt pending under the lease, never failed; 440_outbox_claim_lease.sql §7 proves the
-// claim takes it again after the release.
-const RECEIPT_WAITS_ON_RELEASE =
-  /if \(!details\) \{[^}]*\}\s*(?:\/\/[^\n]*\n\s*)*if \(!details\.released_at\) \{\s*console\.log\([^;]*\);\s*return 'pending';\s*\}/;
-test('[static] a payment not released when the sender reads it waits; it is never resolved', () => {
-  assert.match(read('supabase/functions/send-receipts/index.ts'), RECEIPT_WAITS_ON_RELEASE);
+// claim takes it again after the release. Codex R3: the decision is EXECUTED, not matched as text: the
+// handler's own body runs under node (intentCancel.test.mjs's way): its imports are swapped for stubs
+// (receipt.mjs's real exports among them), its types stripped, Deno.serve hands over the handler, and
+// a fake fetch answers the database, the auth API and the email service. Test values only.
+test('a payment not released when the sender reads it waits: no email request and no resolve call', async () => {
+  const { stripTypeScriptTypes } = await import('node:module');
+  const source = read('supabase/functions/send-receipts/index.ts').replace(/\r\n/g, '\n');
+  globalThis.__rcStubs = {
+    buildReceipt, cardLabel, notConfigured: () => null, requireServiceRole: () => null,
+    SECRET_KEY: 'service-for-the-test', serviceHeaders: () => ({ 'Content-Type': 'application/json' }),
+  };
+  const js = stripTypeScriptTypes(
+    source.replace(/^import \{([^}]*)\} from '([^']+)';$/gm, (_, names) => `const {${names}} = globalThis.__rcStubs;`), { mode: 'strip' });
+  const ENV = { SUPABASE_URL: 'http://supabase.test', RESEND_API_KEY: 'resend-for-the-test', RECEIPT_FROM: 'Brazos <receipts@brazos.test>' };
+  let handler = null;
+  globalThis.Deno = { env: { get: (name) => ENV[name] }, serve: (h) => { handler = h; } };
+  await import('data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64'));
+
+  const DB = `${ENV.SUPABASE_URL}/rest/v1/rpc`;
+  const run = async (details) => {
+    const calls = [];
+    const original = globalThis.fetch;
+    const log = console.log;
+    globalThis.fetch = async (url) => {
+      const at = String(url);
+      calls.push(at);
+      if (at === `${DB}/claim_receipt_batch`) {
+        const first = calls.filter((c) => c === at).length === 1;
+        return Response.json(first ? [{ id: 'rc-1', payment_id: 'pay-1', job_id: 'job-1', recipient_id: 'u-1', role: 'worker', attempts: 1 }] : []);
+      }
+      if (at === `${DB}/receipt_details`) return Response.json(details);
+      if (at === `${DB}/resolve_receipt`) return new Response(null, { status: 204 });
+      if (at.startsWith(`${ENV.SUPABASE_URL}/auth/v1/admin/users/`)) return Response.json({ email: 'worker@brazos.test' });
+      if (at === 'https://api.resend.com/emails') return Response.json({ id: 'em-1' });
+      return new Response('unexpected', { status: 599 });
+    };
+    console.log = () => {};
+    try {
+      const res = await handler(new Request('http://edge.test/send-receipts', { method: 'POST' }));
+      return { json: await res.json(), calls };
+    } finally {
+      console.log = log;
+      globalThis.fetch = original;
+    }
+  };
+  const count = (calls, at) => calls.filter((c) => c === at).length;
+
+  const waiting = await run({ ...DETAILS, released_at: null });
+  assert.equal(count(waiting.calls, 'https://api.resend.com/emails'), 0, 'no email request');
+  assert.equal(count(waiting.calls, `${DB}/resolve_receipt`), 0, 'no resolve call: the row stays under its lease');
+  assert.deepEqual([waiting.json.claimed, waiting.json.pending, waiting.json.sent], [1, 1, 0]);
+
+  const released = await run(DETAILS);
+  assert.equal(count(released.calls, 'https://api.resend.com/emails'), 1, 'control: a released payment sends one email');
+  assert.equal(count(released.calls, `${DB}/resolve_receipt`), 1, 'control: and resolves its row');
+  assert.equal(released.json.sent, 1);
 });

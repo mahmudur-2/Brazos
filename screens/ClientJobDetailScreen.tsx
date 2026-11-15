@@ -1387,6 +1387,8 @@ export function ClientJobDetailScreen() {
                 <MoneyText
                   cents={customerChargeCents(payment)}
                   state={payment.status}
+                  refundQueued={isRefundQueued(payment)}
+                  refundFailed={isRefundFailed(payment)}
                   releaseRequested={releaseRequested}
                   issueOpen={!!openDispute}
                   counterpartFirstName={workerFirstName}

@@ -130,7 +130,7 @@ insert into fx values ('j1', :'j1'), ('p1', :'p1');
 -- 1. B17: a party reads the 26 columns the app reads (and, F2, refund_failed_at), and none of the others.
 -- ---------------------------------------------------------------------------
 select is((select count(*)::integer from pg_attribute a where a.attrelid = 'public.payments'::regclass and a.attnum > 0 and not a.attisdropped),
-  48, '1a: payments has 48 columns: 27 for the parties (F2 added refund_failed_at), 21 for the server (F2 added intent_cancel_at)');
+  49, '1a: payments has 49 columns: 27 for the parties (F2 added refund_failed_at), 22 for the server (F2 added intent_cancel_at and intent_cancel_tried_at)');
 select tests.authenticate_as(:'customer');
 select lives_ok($$ select id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider,
   provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at,
@@ -141,8 +141,8 @@ select is((select count(*) from public.payments where job_id = :'j1'), 1::bigint
 select throws_ok($$ select transfer_ref from public.payments $$, '42501', null::text, '1d: the payer cannot read the provider''s transfer id');
 select throws_ok($$ select last_error from public.payments $$, '42501', null::text, '1e: … nor last_error');
 select tests.clear_auth();
-select is(tests.mg_hidden_refused(:'customer'), 21, '1f: the payer is refused all 21 server columns');
-select is(tests.mg_hidden_refused(:'worker'), 21, '1g: the payee too');
+select is(tests.mg_hidden_refused(:'customer'), 22, '1f: the payer is refused all 22 server columns');
+select is(tests.mg_hidden_refused(:'worker'), 22, '1g: the payee too');
 select tests.authenticate_as(:'worker');
 select lives_ok($$ select id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider,
   provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at,

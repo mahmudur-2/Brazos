@@ -1,7 +1,8 @@
 -- 430_payment_party_shape.sql — pack 1, A4 and A2 (deadline): the payer's money RPCs return only the
--- 26 columns a party may read, and a checkout past its funding window is never resumed. Proves
+-- 27 columns a party may read, and a checkout past its funding window is never resumed. Proves
 -- 20261115000100_payer_money_rpcs.sql (payment_for_party; job_payment_state, begin_job_payment,
--- begin_tip_payment, release_job_payment).
+-- begin_tip_payment, release_job_payment). Codex R3-A9: refund_failed_at (20261115000600) is one of
+-- the 27, read by both parties.
 --
 -- THE CAST: a customer, a worker with an enabled payout account, the runner (RLS bypassed;
 -- fixtures and the webhook's stand-in). Everything rolls back.
@@ -10,7 +11,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(15);
+select plan(17);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -27,15 +28,16 @@ create or replace function tests.ps_server(p_row jsonb) returns text language sq
     from jsonb_each(p_row - array['id', 'job_id', 'offer_id', 'payer_id', 'payee_id', 'kind', 'amount_cents',
            'platform_fee_cents', 'provider', 'provider_ref', 'status', 'authorized_at', 'held_at', 'released_at',
            'release_reason', 'paid_out_at', 'created_at', 'updated_at', 'charge_amount_cents', 'customer_fee_cents',
-           'tax_cents', 'funding_due_at', 'release_requested_at', 'transfer_cents', 'refund_cents', 'refund_reason']) e
+           'tax_cents', 'funding_due_at', 'release_requested_at', 'transfer_cents', 'refund_cents', 'refund_reason',
+           'refund_failed_at']) e
    where e.value <> 'null'::jsonb) end
 $$;
 
--- The customer's call p_sql (returning one payments row), as jsonb.
-create or replace function tests.ps_call(p_sql text) returns jsonb language plpgsql as $$
+-- A party's call p_sql (returning one payments row), as jsonb. p_as: 'customer' or 'worker'.
+create or replace function tests.ps_call(p_sql text, p_as text default 'customer') returns jsonb language plpgsql as $$
 declare v_out jsonb;
 begin
-  perform tests.authenticate_as((select fx.v from fx where fx.k = 'customer'));
+  perform tests.authenticate_as((select fx.v from fx where fx.k = p_as));
   execute format('select to_jsonb(r) from (%s) r', p_sql) into v_out;
   perform tests.clear_auth();
   return v_out;
@@ -133,6 +135,30 @@ select tests.ps_call(format('select * from public.begin_tip_payment(%L, 1000)', 
 select isnt((:'t1c'::jsonb) ->> 'id', (:'t1'::jsonb) ->> 'id', '4d: past funding_due_at a fresh tip row is given');
 select is((select status::text || '/' || coalesce(last_error, 'null') from public.payments where id = ((:'t1'::jsonb) ->> 'id')::uuid),
   'voided/funding window expired', '4e: and the overdue tip row is voided with its reason');
+
+-- ---------------------------------------------------------------------------
+-- 5. R3-A9: a refund that failed at the provider: both parties read its time, and no server column.
+-- ---------------------------------------------------------------------------
+select tests.ps_hire('PS refund failed') as j5 \gset
+select tests.test_fund_job(:'j5') as p5 \gset
+select tests.authenticate_as(:'worker');
+select public.transition_job_status(:'j5', 'in_progress');
+select public.transition_job_status(:'j5', 'completed', '["https://example.com/ps-done.jpg"]'::jsonb);
+select tests.authenticate_as(:'customer');
+select (public.open_job_dispute(:'j5', 'other')).status as d5 \gset
+select tests.clear_auth();
+select (public.resolve_job_dispute(:'j5', 'customer', 'Probe: resolved for the customer.')).refund_cents as rc5 \gset
+select public.record_settlement_sent(:'p5', 'refund', 're_ps_5', :rc5);
+select tests.ps_event('evt_ps_rf_' || :'p5', 'refund.failed', jsonb_build_object(
+  'id', 're_ps_5', 'object', 'refund', 'amount', :rc5, 'status', 'failed', 'failure_reason', 'expired_or_canceled_card',
+  'payment_intent', (select provider_ref from public.payments where id = :'p5'),
+  'metadata', jsonb_build_object('payment_id', :'p5'))) as rf5 \gset
+select tests.ps_call(format('select * from public.job_payment_state(%L)', :'j5')) as s5c \gset
+select tests.ps_call(format('select * from public.job_payment_state(%L)', :'j5'), 'worker') as s5w \gset
+select is(tests.ps_server(:'s5c') || '/' || ((:'s5c'::jsonb) ->> 'refund_failed_at' is not null)::text, '/true',
+  '5a: the customer reads the failure''s time, and no server column');
+select is(tests.ps_server(:'s5w') || '/' || ((:'s5w'::jsonb) ->> 'refund_failed_at' is not null)::text, '/true',
+  '5b: the worker too');
 
 select * from finish();
 rollback;

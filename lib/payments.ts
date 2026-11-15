@@ -107,7 +107,8 @@ export type Payment = {
   refund_cents?: number | null;
   refund_reason?: string | null;
   /** Pack 1, F2: when the provider failed a refund of this row (refund.failed); cleared when the
-   *  owner sends a new one. Read through job_payment_state. */
+   *  owner records that it was arranged another way (resolve_refund_failure). Read through
+   *  job_payment_state. */
   refund_failed_at?: string | null;
 };
 

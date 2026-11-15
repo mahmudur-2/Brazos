@@ -2,7 +2,9 @@
 // never held and received nothing (the intents_to_cancel view, supabase/tests/450_intent_cancel_queue.sql),
 // and stamps the row through record_intent_cancel on a final answer only: a 2xx, or a 4xx about the
 // intent itself (already canceled, not cancelable, missing). A 5xx, a throw, or a status that says
-// nothing about the intent (401, 403, 409, 429) writes nothing and the next run tries again.
+// nothing about the intent (401, 403, 409, 429) leaves the final stamp empty and the next run tries
+// again; Codex R3-A6: such a row is moved to the back of the queue (record_intent_cancel with
+// p_final false), so 25 unanswered rows never starve the newer ones.
 // Deno cannot run here, so the handler's own body is executed under node (createPaymentResume.test.mjs's
 // way): its imports are swapped for stubs (classify.mjs's real exports among them), its types stripped,
 // Deno.serve hands over the handler, and a fake fetch answers the database and the provider.
@@ -68,7 +70,9 @@ async function run(rows, answers, { recordAnswer = () => Response.json(true) } =
   }
 }
 
-const stamped = (calls) => calls.filter((c) => c.url === `${DB}/rpc/record_intent_cancel`).map((c) => JSON.parse(c.body).p_payment_id);
+const records = (calls) => calls.filter((c) => c.url === `${DB}/rpc/record_intent_cancel`).map((c) => JSON.parse(c.body));
+const stamped = (calls) => records(calls).filter((b) => b.p_final !== false).map((b) => b.p_payment_id);
+const moved = (calls) => records(calls).filter((b) => b.p_final === false).map((b) => b.p_payment_id);
 const cancels = (calls) => calls.filter((c) => c.url.startsWith(`${STRIPE}/v1/payment_intents/`));
 
 test('0 · the harness: the handler was served', () => {
@@ -101,6 +105,21 @@ test('F2 (ii) · a final answer is stamped; anything else writes nothing and wai
   assert.deepEqual(stamped(r.calls), ['pay-pi_ok', 'pay-pi_state', 'pay-pi_missing'], 'only 2xx and a 4xx about the intent are stamped');
   assert.deepEqual(r.json.intents, { attempted: 9, succeeded: 3, deferred: 6, failed: 0, defects: 0, blocked: 0 });
   assert.equal(r.json.ok, true);
+});
+
+test('R3-A6 · a deferred answer moves its row to the back of the queue; the final stamp stays empty', async () => {
+  const answers = { pi_ok: 200, pi_500: 500, pi_throw: 'throw', pi_429: 429, pi_409: 409 };
+  const rows = Object.keys(answers).map((ref) => ({ id: `pay-${ref}`, provider_ref: ref }));
+  const r = await run(rows, answers);
+  assert.deepEqual(moved(r.calls), ['pay-pi_500', 'pay-pi_throw', 'pay-pi_429', 'pay-pi_409'], 'every deferred row, once');
+  assert.deepEqual(stamped(r.calls), ['pay-pi_ok'], 'only the final answer is stamped');
+  assert.ok(records(r.calls).every((b) => typeof b.p_final === 'boolean'), 'each record says which it is');
+  // Each move follows that row's own cancel.
+  const order = r.calls.map((c) => (c.url.startsWith(`${STRIPE}/`) ? `cancel ${c.url.split('/')[5]}` : c.url === `${DB}/rpc/record_intent_cancel` ? `record ${JSON.parse(c.body).p_payment_id}` : null)).filter(Boolean);
+  for (const ref of ['pi_500', 'pi_429', 'pi_409']) {
+    assert.equal(order[order.indexOf(`cancel ${ref}`) + 1], `record pay-${ref}`, `${ref}: moved right after its cancel`);
+  }
+  assert.deepEqual(r.json.intents, { attempted: 5, succeeded: 1, deferred: 4, failed: 0, defects: 0, blocked: 0 });
 });
 
 test('F2 (ii) · a stamp that cannot be written is a defect, and the next run asks again', async () => {

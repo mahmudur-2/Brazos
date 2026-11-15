@@ -1,7 +1,8 @@
 -- 450_intent_cancel_queue.sql — pack 1, F2 (ii): the provider's PaymentIntent of a voided row that was
 -- never held and received nothing is cancelled by process-settlements, once. Proves
--- 20261115000700_intent_cancel.sql (payments.intent_cancel_at, intents_to_cancel,
--- record_intent_cancel, payment_for_party).
+-- 20261115000700_intent_cancel.sql (payments.intent_cancel_at and intent_cancel_tried_at,
+-- intents_to_cancel, record_intent_cancel, payment_for_party). Codex R3-A6: a deferred answer moves
+-- the row to the back of the queue, so 25 unanswered rows never starve the 26th.
 --
 -- THE CAST: a customer, a worker with an enabled payout account, the runner (RLS bypassed; the
 -- drain's and the webhook's stand-in). Everything rolls back.
@@ -10,7 +11,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(19);
+select plan(26);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -156,16 +157,62 @@ select ok(not has_table_privilege('anon', 'public.intents_to_cancel', 'SELECT')
           and not has_table_privilege('authenticated', 'public.intents_to_cancel', 'SELECT')
           and has_table_privilege('service_role', 'public.intents_to_cancel', 'SELECT'),
   '4a: intents_to_cancel: service_role only');
-select ok(not has_function_privilege('anon', 'public.record_intent_cancel(uuid)', 'EXECUTE')
-          and not has_function_privilege('authenticated', 'public.record_intent_cancel(uuid)', 'EXECUTE')
-          and has_function_privilege('service_role', 'public.record_intent_cancel(uuid)', 'EXECUTE'),
-  '4b: record_intent_cancel: service_role only');
-select is((select p.prosecdef::text || ' ' || array_to_string(p.proconfig, ',') from pg_proc p
-            where p.oid = 'public.record_intent_cancel(uuid)'::regprocedure),
-  'true search_path=public, pg_temp', '4c: security definer with the fixed search_path');
+select is(tests.ic_try($q$select (not has_function_privilege('anon', 'public.record_intent_cancel(uuid, boolean)', 'EXECUTE')
+          and not has_function_privilege('authenticated', 'public.record_intent_cancel(uuid, boolean)', 'EXECUTE')
+          and has_function_privilege('service_role', 'public.record_intent_cancel(uuid, boolean)', 'EXECUTE')
+          and (select count(*) from pg_proc where proname = 'record_intent_cancel' and pronamespace = 'public'::regnamespace) = 1)::text$q$),
+  'ok: true', '4b: record_intent_cancel(uuid, boolean): service_role only, and the one definition');
+select is(tests.ic_try($q$select p.prosecdef::text || ' ' || array_to_string(p.proconfig, ',') from pg_proc p
+            where p.oid = 'public.record_intent_cancel(uuid, boolean)'::regprocedure$q$),
+  'ok: true search_path=public, pg_temp', '4c: security definer with the fixed search_path');
 select ok(not has_column_privilege('authenticated', 'public.payments', 'intent_cancel_at', 'SELECT')
           and (select (public.payment_for_party(p)).intent_cancel_at is null from public.payments p where p.id = :'p3'),
   '4d: the parties never read intent_cancel_at: no column grant, and payment_for_party empties it');
+select is(tests.ic_try(format($q$select (not has_column_privilege('authenticated', 'public.payments', 'intent_cancel_tried_at', 'SELECT')
+          and (select (public.payment_for_party(p)).intent_cancel_tried_at is null from public.payments p where p.id = %L))::text$q$, :'p3')),
+  'ok: true', '4e: … nor intent_cancel_tried_at');
+
+-- ---------------------------------------------------------------------------
+-- 5. R3-A6: 25 deferred answers move their rows to the back; the 26th row is asked next.
+-- ---------------------------------------------------------------------------
+-- Fixture: 26 copies of a queued voided row (p2), the oldest of the queue (every stored column copied;
+-- the generated ones follow).
+insert into fx values ('p2', :'p2');
+do $$
+declare v_cols text;
+begin
+  select string_agg(quote_ident(a.attname), ', ' order by a.attnum) into v_cols
+    from pg_attribute a
+   where a.attrelid = 'public.payments'::regclass and a.attnum > 0 and not a.attisdropped and a.attgenerated = ''
+     and a.attname not in ('id', 'provider_ref', 'stripe_payment_intent_id', 'created_at');
+  execute format($q$
+    insert into public.payments (id, provider_ref, stripe_payment_intent_id, created_at, %1$s)
+    select gen_random_uuid(), 'pi_ic_q' || lpad(g::text, 2, '0'),
+           case when p.stripe_payment_intent_id is null then null else 'pi_ic_q' || lpad(g::text, 2, '0') end,
+           timestamptz '2001-01-01 00:00:00+00' + make_interval(mins => g), %1$s
+      from public.payments p cross join generate_series(1, 26) g
+     where p.id = %2$L$q$, v_cols, (select v from fx where k = 'p2'));
+end $$;
+select is((select string_agg(x.provider_ref, ',') from (select q.provider_ref from public.intents_to_cancel q limit 26) x),
+  (select string_agg('pi_ic_q' || lpad(g::text, 2, '0'), ',' order by g) from generate_series(1, 26) g),
+  '5a (control): the 26 rows lead the queue, oldest first');
+-- The drain's run: the first 25 rows (its limit) answer nothing final.
+select count(*) filter (where x.r = 'ok: true') as moved
+  from (select tests.ic_try(format('select public.record_intent_cancel(%L, false)::text', q.id)) as r
+          from (select q.id from public.intents_to_cancel q limit 25) q) x \gset
+select is(:moved::integer, 25, '5b: the 25 deferred answers are recorded');
+select is((select q.provider_ref from public.intents_to_cancel q limit 1), 'pi_ic_q26', '5c: the 26th row comes first now');
+select is((select string_agg(x.provider_ref, ',')
+             from (select q.provider_ref from public.intents_to_cancel q
+                   offset (select count(*) - 25 from public.intents_to_cancel)) x),
+  (select string_agg('pi_ic_q' || lpad(g::text, 2, '0'), ',' order by g) from generate_series(1, 25) g),
+  '5d: the 25 stay queued, at the back, in their old order');
+select is(tests.ic_try($q$select (bool_and(p.intent_cancel_at is null and p.intent_cancel_tried_at is not null))::text
+                            from public.payments p where p.provider_ref like 'pi_ic_q%' and p.provider_ref <> 'pi_ic_q26'$q$),
+  'ok: true', '5e: a deferred answer stamps the try, never the final answer');
+select is(tests.ic_try(format('select public.record_intent_cancel(%L)::text',
+                              (select q.id from public.intents_to_cancel q limit 1))), 'ok: true',
+  '5f (control): a final answer for the 26th is stamped as before (p_final defaults to true)');
 
 select * from finish();
 rollback;

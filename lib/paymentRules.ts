@@ -64,14 +64,16 @@ export function isCancellationFeeKept(
 }
 
 /**
- * Pack 1, F2: the queued refund reached the provider and failed (refund.failed): the money is
- * back with Brazos, not on its way to the card. Only the held shape asks it; every other status
- * speaks for itself.
+ * Pack 1, F2: a refund of this payment reached the provider and failed (refund.failed): the money
+ * is back with Brazos, not on its way to the card. The status does not say it (a failed refund
+ * changes no status, Codex R3-A1), so this asks only whether a refund was asked and the failure is
+ * still waiting; refund_failed_at clears when the owner records how it was arranged
+ * (resolve_refund_failure).
  */
 export function isRefundFailed(
   payment: Pick<Payment, 'status'> & { refund_cents?: number | null; refund_failed_at?: string | null }
 ): boolean {
-  return isRefundQueued(payment) && payment.refund_failed_at != null;
+  return (payment.refund_cents ?? 0) > 0 && payment.refund_failed_at != null;
 }
 
 /**

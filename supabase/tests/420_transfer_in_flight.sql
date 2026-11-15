@@ -16,7 +16,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(52);
+select plan(54);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -249,7 +249,8 @@ select tests.if_event('evt_if_r1_full', 'transfer.reversed', jsonb_build_object(
   'metadata', jsonb_build_object('payment_id', :'tipr'))) as r1full \gset
 select ok((select transfer_reversed_at is not null and status = 'held' from public.payments where id = :'tipr'),
   'R1: the full reversal parks the tip (its first full reversal is handled as before)');
-select tests.if_try(format('select (public.resolve_tip(%L, %L)).transfer_attempts::text', :'tipr', 'send')) as r1send \gset
+select is(tests.if_try(format('select (public.resolve_tip(%L, %L)).transfer_attempts::text', :'tipr', 'send')), 'ok: 1',
+  'R1b: the owner sends the tip again: the park clears and the attempt counter moves on');
 select is(public.settlement_send_begin(:'tipr', 'transfer', 1), true, 'R2: the owner sends the tip again and the new attempt begins');
 select is(tests.if_unconfirmed(:'tipr'), 'ok: true', 'R3: the new transfer is on its way, its answer not back');
 select tests.if_event('evt_if_r1_part', 'transfer.reversed', jsonb_build_object(
@@ -262,7 +263,10 @@ select is(tests.if_unconfirmed(:'tipr'), 'ok: true', 'R5: the new transfer is st
 select is(tests.if_try(format('select (public.resolve_tip(%L, %L)).refund_cents::text', :'tipr', 'refund')),
   'error: A transfer to the worker was sent and its result is not recorded yet: record it or reopen it first.',
   'R6: the owner cannot refund the tip on top of it');
-select ok(not exists (select 1 from public.refunds_due where id = :'tipr'), 'R7: and no refund of the tip is due');
+-- Codex R3: a refund really queued beside it (the row resolve_tip's refund would have written), so
+-- the check below can fail: only the reservation for the transfer on its way keeps it out.
+update public.payments set refund_cents = charge_amount_cents, refund_reason = 'dispute_refund' where id = :'tipr';
+select ok(not exists (select 1 from public.refunds_due where id = :'tipr'), 'R7: and a refund queued beside it is not due');
 
 -- R8-R14: a job payment, settled through resolve_job_dispute.
 select tests.if_job('IF job reversed twice', 'released') as jr2 \gset
@@ -275,7 +279,8 @@ select tests.if_event('evt_if_r2_full', 'transfer.reversed', jsonb_build_object(
   'metadata', jsonb_build_object('payment_id', :'pjr2'))) as r2full \gset
 select ok((select transfer_reversed_at is not null and status = 'held' from public.payments where id = :'pjr2'),
   'R8: the full reversal parks the job payment');
-select tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_attempts::text', :'jr2', 'worker')) as r2send \gset
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_attempts::text', :'jr2', 'worker')), 'ok: 1',
+  'R8b: the owner resolves for the worker: the park clears and the attempt counter moves on');
 select is(public.settlement_send_begin(:'pjr2', 'transfer', 1), true, 'R9: the owner resolves for the worker and the new attempt begins');
 select is(tests.if_unconfirmed(:'pjr2'), 'ok: true', 'R10: the new transfer is on its way, its answer not back');
 select tests.if_event('evt_if_r2_part', 'transfer.reversed', jsonb_build_object(
@@ -288,7 +293,9 @@ select is(tests.if_unconfirmed(:'pjr2'), 'ok: true', 'R12: the new transfer is s
 select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).refund_cents::text', :'jr2', 'customer')),
   'error: A transfer to the worker was sent and its result is not recorded yet: record it or reopen it first.',
   'R13: the owner cannot refund the customer on top of it');
-select ok(not exists (select 1 from public.refunds_due where id = :'pjr2'), 'R14: and no refund of the payment is due');
+-- Codex R3: the same, with a refund really queued beside it.
+update public.payments set refund_cents = charge_amount_cents, refund_reason = 'dispute_refund' where id = :'pjr2';
+select ok(not exists (select 1 from public.refunds_due where id = :'pjr2'), 'R14: and a refund queued beside it is not due');
 
 select * from finish();
 rollback;

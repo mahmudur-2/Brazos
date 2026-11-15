@@ -330,6 +330,21 @@ once the worker's payout account is enabled.
    warranted, a hand refund or transfer in Stripe's dashboard (the webhook records it). Once
    `job_disputes.status` is `resolved`, both parties can review and the customer can tip.
 
+### Failed refunds
+
+A refund the provider fails (`refund.failed`) puts the money back in the Stripe balance; nothing
+retries it and no status moves. `payment_attention` lists one line per failed refund
+(`payment_refund_failures`), and the customer's card reads "Refund didn’t go through — Brazos will
+arrange it". Arrange the refund another way (a new refund by hand in Stripe's dashboard, a bank
+transfer), then record how:
+
+```sql
+select public.resolve_refund_failure('<payment id>', '<how it was arranged>');
+```
+
+The note is kept on every waiting failure of the payment and `refund_failed_at` clears. It moves no
+money; a later failure of another refund id raises it again.
+
 ## Messaging
 
 A message belongs to a job (`job_id`) or a direct thread (`direct_thread_id`), never both;

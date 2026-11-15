@@ -49,9 +49,10 @@
 // PASS THREE (pack 1, F2 ii) moves no money: it cancels the PaymentIntent of
 // each row in intents_to_cancel (voided, never held, nothing received) and
 // stamps the row through record_intent_cancel on a final answer only — a 2xx,
-// or a 4xx about the intent itself. A 5xx, a throw, or 401/403/409/429 writes
-// nothing and the next tick asks again. A cancel carries no idempotency key: a
-// second cancel is answered "already canceled", which is final.
+// or a 4xx about the intent itself. A 5xx, a throw, or 401/403/409/429 is not
+// final: record_intent_cancel with p_final false moves the row to the back of
+// the queue (Codex R3-A6) and the next tick asks again. A cancel carries no
+// idempotency key: a second cancel is answered "already canceled", which is final.
 //
 // THE TRANSFER MUST CARRY metadata[payment_id]. apply_payment_event() resolves
 // an event to a ledger row by metadata.payment_id first, then by provider_ref
@@ -71,8 +72,7 @@
 // ============================================================================
 
 import { notConfigured, requireServiceRole, SECRET_KEY, serviceHeaders } from '../_shared/serviceAuth.ts';
-import { settlementKey, settlementVerdict } from './classify.mjs';
-import { KEY_UNKNOWN_STATUSES } from './classify.mjs';
+import { KEY_UNKNOWN_STATUSES, settlementKey, settlementVerdict } from './classify.mjs';
 
 const STRIPE_API = 'https://api.stripe.com';
 
@@ -475,12 +475,14 @@ async function runIntentCancels(): Promise<Tally> {
       console.error(`process-settlements: intent cancel for payment ${row.id} threw:`, err);
     }
     if (!intentAnswered(status)) {
-      // Not final: nothing is written and the next tick asks again.
+      // Not final: the row goes to the back of the queue (R3-A6), so rows that keep failing never
+      // hold the others out of QUEUE_LIMIT, and the next tick asks again.
       counts.deferred++;
       console.error(`process-settlements: intent cancel for payment ${row.id} answered ${status || 'nothing'}; asked again next tick`);
+      await rpcBoolean('record_intent_cancel', { p_payment_id: row.id, p_final: false }, `intent cancel ${row.id} deferred`);
       continue;
     }
-    const recorded = await rpcBoolean('record_intent_cancel', { p_payment_id: row.id }, `intent cancel ${row.id}`);
+    const recorded = await rpcBoolean('record_intent_cancel', { p_payment_id: row.id, p_final: true }, `intent cancel ${row.id}`);
     if (recorded === null) counts.defects++;
     else counts.succeeded++;
   }

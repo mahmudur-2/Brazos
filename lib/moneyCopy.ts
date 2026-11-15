@@ -60,7 +60,11 @@ export type PaymentCaptionFacts = {
   refundQueued?: boolean;
   /** With refundQueued: a late cancellation kept a fee for the worker (isCancellationFeeKept). */
   feeKept?: boolean;
-  /** With refundQueued: the provider failed the refund (isRefundFailed). */
+  /**
+   * The provider failed a refund of this payment and it is not arranged yet (isRefundFailed). The
+   * status does not move (Codex R3-A1), so the customer reads it on a held, refunded or partly
+   * refunded row alike.
+   */
   refundFailed?: boolean;
   /** The row is a tip, not the job's payment. */
   tip?: boolean;
@@ -84,6 +88,11 @@ export function paymentCaption(facts: PaymentCaptionFacts, viewer: MoneyViewer):
       return customer ? `Tip sent to ${name ?? 'your worker'}` : 'Tip received';
     }
   }
+  // F2: the refund failed at the provider, whatever the status says; the worker's own sentences stay true.
+  if (facts.refundFailed && customer
+      && (facts.status === 'held' || facts.status === 'refunded' || facts.status === 'partially_refunded')) {
+    return 'Refund didn’t go through — Brazos will arrange it';
+  }
   switch (facts.status) {
     case 'unfunded':
       return customer ? 'Not paid yet' : 'Waiting on the customer’s payment';
@@ -94,8 +103,6 @@ export function paymentCaption(facts: PaymentCaptionFacts, viewer: MoneyViewer):
       // going home, never protection and never an approval — the late-cancel
       // fee sets release_requested_at too, which is why this is checked first.
       if (facts.refundQueued) {
-        // F2: the refund failed at the provider; the worker's own sentences stay true.
-        if (facts.refundFailed && customer) return 'Refund didn’t go through — Brazos will arrange it';
         if (facts.feeKept) {
           return customer
             ? `Refund on its way — the cancellation fee goes to ${name ?? 'your worker'}`
