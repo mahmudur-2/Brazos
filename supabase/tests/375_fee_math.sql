@@ -1,7 +1,8 @@
 -- 375_fee_math.sql — lean B5 (money rule 5): fee math is exact in whole cents up to the $100,000
 -- ceiling. Proves 20261112010000_fee_math_numeric.sql.
 --
--- The fee schedule in force locally is the seeded one (7.5% each side, worker minimum $1.00, tip
+-- The fee schedule in force locally is the seeded one (7.5% each side, worker minimum $1.00 until
+-- 20261115000800 added a row with none, tip
 -- customer fee 7.5%, tax 0, cancellation 20% floored at $15 and capped at $35, tips capped at 50%
 -- of the job and at $1,000). Before the fix each product was int4 * int4 and overflowed:
 --   quote_job_price        from 2,863,312 cents ($28,633.12; * 750)
@@ -81,12 +82,12 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- Q. quote_job_price: (price, customer fee, tax, total, worker fee, worker receives).
 -- ---------------------------------------------------------------------------
-select is(tests.fm_try('select row(q.*)::text from public.quote_job_price(1) q'), '(1,0,0,1,1,0)',
-  'Q1: 1 cent: no customer fee, the worker fee capped at the price');
-select is(tests.fm_try('select row(q.*)::text from public.quote_job_price(20) q'), '(20,2,0,22,20,0)',
-  'Q2: 20 cents: 1.5 rounds half away from zero to 2, as before');
-select is(tests.fm_try('select row(q.*)::text from public.quote_job_price(1000) q'), '(1000,75,0,1075,100,900)',
-  'Q3: $10: the $1 worker minimum');
+select is(tests.fm_try('select row(q.*)::text from public.quote_job_price(1) q'), '(1,0,0,1,0,1)',
+  'Q1: 1 cent: no fee on either side (no worker minimum since 20261115000800)');
+select is(tests.fm_try('select row(q.*)::text from public.quote_job_price(20) q'), '(20,2,0,22,2,18)',
+  'Q2: 20 cents: 1.5 rounds half away from zero to 2 on both sides, as before');
+select is(tests.fm_try('select row(q.*)::text from public.quote_job_price(1000) q'), '(1000,75,0,1075,75,925)',
+  'Q3: $10: 7.5% on the worker side too, no $1 minimum (20261115000800)');
 select is(tests.fm_try('select row(q.*)::text from public.quote_job_price(5000) q'), '(5000,375,0,5375,375,4625)',
   'Q4: $50');
 select is(tests.fm_try('select row(q.*)::text from public.quote_job_price(12345) q'), '(12345,926,0,13271,926,11419)',

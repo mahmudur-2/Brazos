@@ -46,6 +46,13 @@
 // A write-back that fails is an unknown: the next tick sends the same key and
 // the provider replays its first answer.
 //
+// PASS THREE (pack 1, F2 ii) moves no money: it cancels the PaymentIntent of
+// each row in intents_to_cancel (voided, never held, nothing received) and
+// stamps the row through record_intent_cancel on a final answer only — a 2xx,
+// or a 4xx about the intent itself. A 5xx, a throw, or 401/403/409/429 writes
+// nothing and the next tick asks again. A cancel carries no idempotency key: a
+// second cancel is answered "already canceled", which is final.
+//
 // THE TRANSFER MUST CARRY metadata[payment_id]. apply_payment_event() resolves
 // an event to a ledger row by metadata.payment_id first, then by provider_ref
 // for payment_intent.* and charge.* events — there is no fallback for a
@@ -58,13 +65,14 @@
 // Service role only, checked before anything else runs. Both queues are views
 // granted to service_role alone — authenticated and anon are revoked — so the
 // GRANTs are the real defence and the check below is the first line of it,
-// exactly as in send-push. Its three writes — settlement_send_begin,
-// record_settlement_sent, record_settlement_result — are service_role-only
-// RPCs that record what happened and can never move money.
+// exactly as in send-push. Its four writes — settlement_send_begin,
+// record_settlement_sent, record_settlement_result, record_intent_cancel — are
+// service_role-only RPCs that record what happened and can never move money.
 // ============================================================================
 
 import { notConfigured, requireServiceRole, SECRET_KEY, serviceHeaders } from '../_shared/serviceAuth.ts';
 import { settlementKey, settlementVerdict } from './classify.mjs';
+import { KEY_UNKNOWN_STATUSES } from './classify.mjs';
 
 const STRIPE_API = 'https://api.stripe.com';
 
@@ -90,6 +98,11 @@ type RefundRow = {
   provider_ref: string | null;
   refund_cents: number | null;
   refund_attempts: number | null;
+};
+
+type CancelRow = {
+  id: string;
+  provider_ref: string | null;
 };
 
 type Kind = 'transfer' | 'refund';
@@ -183,14 +196,14 @@ async function serviceRpc(fn: string, args: Record<string, unknown>): Promise<Re
 async function stripe(
   path: string,
   fields: Record<string, string>,
-  idempotencyKey: string
+  idempotencyKey: string | null
 ): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
   const res = await fetch(`${STRIPE_API}${path}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Idempotency-Key': idempotencyKey,
+      ...(idempotencyKey === null ? {} : { 'Idempotency-Key': idempotencyKey }),
     },
     body: new URLSearchParams(fields).toString(),
   });
@@ -431,6 +444,50 @@ async function runRefunds(): Promise<Tally> {
   return counts;
 }
 
+// ---------------------------------------------------------------------------
+// Pass three: the payment intent of a voided row, cancelled. No money moves.
+// ---------------------------------------------------------------------------
+/** A final answer about the intent: a 2xx, or a 4xx that is about the intent itself. */
+function intentAnswered(status: number): boolean {
+  if (status >= 200 && status < 300) return true;
+  return status >= 400 && status < 500 && !KEY_UNKNOWN_STATUSES.includes(status);
+}
+
+async function runIntentCancels(): Promise<Tally> {
+  const counts = tally();
+  const rows = await getRows<CancelRow>(`intents_to_cancel?select=id,provider_ref&limit=${QUEUE_LIMIT}`);
+
+  for (const row of rows) {
+    if (!row.provider_ref) {
+      counts.defects++;
+      continue;
+    }
+    counts.attempted++;
+    let status = 0;
+    try {
+      const result = await stripe(
+        `/v1/payment_intents/${encodeURIComponent(row.provider_ref)}/cancel`,
+        { cancellation_reason: 'abandoned' },
+        null
+      );
+      status = result.status;
+    } catch (err) {
+      console.error(`process-settlements: intent cancel for payment ${row.id} threw:`, err);
+    }
+    if (!intentAnswered(status)) {
+      // Not final: nothing is written and the next tick asks again.
+      counts.deferred++;
+      console.error(`process-settlements: intent cancel for payment ${row.id} answered ${status || 'nothing'}; asked again next tick`);
+      continue;
+    }
+    const recorded = await rpcBoolean('record_intent_cancel', { p_payment_id: row.id }, `intent cancel ${row.id}`);
+    if (recorded === null) counts.defects++;
+    else counts.succeeded++;
+  }
+
+  return counts;
+}
+
 Deno.serve(async (req) => {
   const unset = notConfigured('process-settlements', { SUPABASE_URL, SECRET_KEY, STRIPE_SECRET_KEY });
   if (unset) return unset;
@@ -441,7 +498,7 @@ Deno.serve(async (req) => {
   const refused = requireServiceRole(req);
   if (refused) return refused;
 
-  // Transfers first, then refunds. Each pass is independent: a pass that throws
+  // Transfers first, then refunds, then intent cancels. Each pass is independent: a pass that throws
   // outright still leaves the other's counts in the summary, because the
   // summary is what the operator reads when something looks wrong. Its shape
   // is { attempted, succeeded, deferred, failed, defects, blocked } per pass
@@ -464,11 +521,20 @@ Deno.serve(async (req) => {
     console.error('process-settlements: refunds pass failed', err);
   }
 
+  let intents = tally();
+  try {
+    intents = await runIntentCancels();
+  } catch (err) {
+    errors.push(`intents: ${err instanceof Error ? err.message : String(err)}`);
+    console.error('process-settlements: intent cancel pass failed', err);
+  }
+
   return json({
     ok: errors.length === 0,
     limit: QUEUE_LIMIT,
     transfers,
     refunds,
+    intents,
     ...(errors.length > 0 ? { errors } : {}),
   });
 });

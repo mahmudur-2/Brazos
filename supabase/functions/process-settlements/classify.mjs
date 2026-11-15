@@ -43,7 +43,8 @@
 // and nothing is wrong (balance_insufficient, every unknown that keeps its
 // key); failed = a refusal that will repeat until a person acts, or a stop.
 //
-// PATHS READ: status, body.id, body.amount, body.error.code, body.error.type,
+// PATHS READ: status, body.id, body.amount, body.status (a refund only: failed
+// or canceled stops the row), body.error.code, body.error.type,
 // body.error.message, and the thrown value's message. Nothing here is logged.
 // ============================================================================
 
@@ -64,8 +65,8 @@ const KINDS = Object.freeze({
   refund: Object.freeze({ key: 'rf', ids: Object.freeze(['re_', 'pyr_']) }),
 });
 
-/** Statuses that never prove anything about the key. */
-const KEY_UNKNOWN_STATUSES = Object.freeze([401, 403, 409, 429]);
+/** Statuses that never prove anything about the key (nor, for a cancel, about the intent). */
+export const KEY_UNKNOWN_STATUSES = Object.freeze([401, 403, 409, 429]);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -142,6 +143,10 @@ export function settlementVerdict(kind, outcome) {
     const ref = isObject(body) && typeof body.id === 'string' ? body.id : null;
     const amount = isObject(body) && Number.isInteger(body.amount) && body.amount > 0 ? body.amount : null;
     if (ref !== null && amount !== null && KINDS[kind].ids.some((prefix) => ref.startsWith(prefix))) {
+      // F2: a refund the provider answered as failed or canceled made no refund: stop, so it shows.
+      if (kind === 'refund' && (body.status === 'failed' || body.status === 'canceled')) {
+        return verdict('refused', 'stop', false, null, `${http} ${ref} ${body.status}: the provider made no refund`);
+      }
       return verdict('sent', 'write_back', false, null, `${http} ${ref}`, ref, amount);
     }
     return verdict('unknown', 'same_key', true, null, `${http}: no ${kind} id and amount in the answer`);

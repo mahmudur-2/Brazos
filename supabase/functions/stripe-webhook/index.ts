@@ -50,7 +50,7 @@
 // ---------------------------------------------------------------------------
 // THE EVENT SET MIRRORS THE REGISTERED DESTINATION
 // ---------------------------------------------------------------------------
-// The destination is subscribed to exactly these seven types. This constant
+// The destination is subscribed to exactly these eight types. This constant
 // and that subscription MUST CHANGE TOGETHER: a type added there and not here
 // is answered 200 and dropped on the floor; a type added here and not there
 // never arrives.
@@ -68,6 +68,8 @@ const HANDLED_EVENTS = new Set([
   'payment_intent.succeeded',
   'payment_intent.canceled',
   'charge.refunded',
+  // Pack 1, F2: a refund the provider failed (20261115000600_refund_failed_and_event_order.sql).
+  'refund.failed',
   'charge.dispute.created',
   'charge.dispute.closed',
   'transfer.created',

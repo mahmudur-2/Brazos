@@ -661,8 +661,9 @@ export function WorkerJobScreen() {
           <ReleasedTick paymentId={payment.id} releasedAt={payment.released_at} color={isDark ? colors.gold : colors.emerald} size={18} />
         ) : null}
         </View>
-        {/* R6c (D7): the figure a worker reads as "yours" is the take —
-            amount_cents − platform_fee_cents through the one helper. */}
+        {/* B23: the figure a worker reads as "yours" is what the row puts in their hands
+            (workerReceivesCents): the take on a live job, the cancellation fee or nothing on a
+            row sent home. */}
         <MoneyText
           cents={workerReceivesCents({ ...payment, job_status: job.status }, workerTakeCents)}
           state={payment.status}

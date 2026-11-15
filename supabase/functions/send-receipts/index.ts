@@ -150,6 +150,12 @@ async function sendOne(row: ReceiptRow): Promise<Status> {
     await resolve(row, 'failed', 'the payment is gone');
     return 'failed';
   }
+  // Codex R2-A2: the transfer was reversed after the claim, so the payment is not released now. Not a
+  // broken receipt: it is left under its lease, unresolved, and claimed again once it is released.
+  if (!details.released_at) {
+    console.log(`[send-receipts] ${row.id}: waiting — the payment is not released any more`);
+    return 'pending';
+  }
 
   const to = RECEIPT_TEST_TO || (await recipientEmail(row.recipient_id));
   if (!to) {

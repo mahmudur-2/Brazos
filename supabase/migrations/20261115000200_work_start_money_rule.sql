@@ -13,7 +13,8 @@
 -- 1. payment_money_clear(payments): no card dispute holds the charge, and the charge collected what
 --    the row says. The two B13/B17 clauses of both queues, in one place.
 -- 2. transfers_due and refunds_due: those clauses become the helper call. refunds_due also reserves
---    transfer_cents while payment_transfer_unconfirmed holds (20261115000000). Every other clause,
+--    transfer_cents while payment_transfer_unconfirmed holds (20261115000000), and drops its
+--    status <> 'refunded', which the allow-list already implies (Codex R2). Every other clause,
 --    the column list (p.*: payments is unchanged), the order and the ACL are as in
 --    20261112010300_settlement_guards.sql. transfers_ready and refunds_ready select over them and need
 --    no restatement.
@@ -75,7 +76,6 @@ create or replace view public.refunds_due as
      and p.refund_ref is null
      -- DIVERGENCE (safety): a row already refunded without a recorded ref
      -- (a hand refund in the dashboard) is not refunded twice.
-     and p.status <> 'refunded'
      -- B16: allow-list of the states a refund is sent from.
      and p.status in ('held', 'released', 'paid_out', 'voided', 'failed')
      -- B16: nothing refunded yet (a partial refund already landed needs a person).
@@ -138,7 +138,6 @@ begin
     if not exists (
       select 1 from public.payments p
       where p.job_id = p_job_id and p.kind = 'job_payment'
-        and p.status not in ('failed', 'voided')
         and p.status = 'held'
     ) then
       raise exception 'The customer hasn''t protected the payment yet. You''ll get a notification the moment it''s held.';

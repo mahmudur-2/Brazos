@@ -10,7 +10,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(14);
+select plan(15);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -19,14 +19,16 @@ select tests.create_user('ps.customer@brazos.test', 'Pia Customer') as customer 
 select tests.create_user('ps.worker@brazos.test',   'Pol Worker')   as worker   \gset
 insert into fx values ('customer', :'customer'), ('worker', :'worker');
 
--- The server columns of a returned row that are not empty, sorted; '' when none.
+-- The server columns of a returned row that are not empty, sorted; '' when none. Codex R2: 'no row'
+-- when the call returned nothing (null, or a row with no id), so a missing result fails a shape check.
 create or replace function tests.ps_server(p_row jsonb) returns text language sql as $$
+  select case when p_row ->> 'id' is null then 'no row' else (
   select coalesce(string_agg(e.key, ',' order by e.key), '')
     from jsonb_each(p_row - array['id', 'job_id', 'offer_id', 'payer_id', 'payee_id', 'kind', 'amount_cents',
            'platform_fee_cents', 'provider', 'provider_ref', 'status', 'authorized_at', 'held_at', 'released_at',
            'release_reason', 'paid_out_at', 'created_at', 'updated_at', 'charge_amount_cents', 'customer_fee_cents',
            'tax_cents', 'funding_due_at', 'release_requested_at', 'transfer_cents', 'refund_cents', 'refund_reason']) e
-   where e.value <> 'null'::jsonb
+   where e.value <> 'null'::jsonb) end
 $$;
 
 -- The customer's call p_sql (returning one payments row), as jsonb.
@@ -78,6 +80,8 @@ select ok(to_regprocedure('public.payment_for_party(public.payments)') is not nu
           and not has_function_privilege('authenticated', 'public.payment_for_party(public.payments)', 'EXECUTE')
           and not has_function_privilege('anon', 'public.payment_for_party(public.payments)', 'EXECUTE'),
   '0a: payment_for_party(payments) exists and no client role may execute it');
+select is(tests.ps_server(null) || ' / ' || tests.ps_server(jsonb_build_object('id', null, 'status', null)), 'no row / no row',
+  '0b: a missing result (null, or a row of nulls) fails every shape check below');
 
 -- ---------------------------------------------------------------------------
 -- 1. begin_job_payment: a new row, then the same row resumed.

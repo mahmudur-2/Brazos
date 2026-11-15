@@ -60,6 +60,8 @@ export type PaymentCaptionFacts = {
   refundQueued?: boolean;
   /** With refundQueued: a late cancellation kept a fee for the worker (isCancellationFeeKept). */
   feeKept?: boolean;
+  /** With refundQueued: the provider failed the refund (isRefundFailed). */
+  refundFailed?: boolean;
   /** The row is a tip, not the job's payment. */
   tip?: boolean;
   /** The other person's first name, when the screen has it. */
@@ -92,6 +94,8 @@ export function paymentCaption(facts: PaymentCaptionFacts, viewer: MoneyViewer):
       // going home, never protection and never an approval — the late-cancel
       // fee sets release_requested_at too, which is why this is checked first.
       if (facts.refundQueued) {
+        // F2: the refund failed at the provider; the worker's own sentences stay true.
+        if (facts.refundFailed && customer) return 'Refund didn’t go through — Brazos will arrange it';
         if (facts.feeKept) {
           return customer
             ? `Refund on its way — the cancellation fee goes to ${name ?? 'your worker'}`

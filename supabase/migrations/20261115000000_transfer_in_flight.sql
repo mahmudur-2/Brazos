@@ -19,6 +19,7 @@
 --    from 20260901000000_baseline.sql, 20261108000000_lean_v1.sql and 20261112010500_resolve_tip.sql;
 --    each gains one check. Signatures, security, search_path and ACLs as they were.
 -- 3. refunds_due reserves the same amount: 20261115000200_work_start_money_rule.sql.
+-- 4. payment_record_reversal ignores a reversal of a transfer already fully reversed (R2-A1).
 --
 -- Additive under scripts/staging-scan.sh. Proof: supabase/tests/420_transfer_in_flight.sql.
 
@@ -258,5 +259,74 @@ begin
 end $fn$;
 revoke all on function public.resolve_tip(uuid, text) from public, anon, authenticated;
 grant execute on function public.resolve_tip(uuid, text) to service_role;
+
+-- 4. (Codex R2-A1) payment_record_reversal, body verbatim from 20261112010100_money_facts.sql with one
+--    line: a reversal event of a transfer already recorded as fully reversed changes nothing. An older
+--    event arriving after the payment was sent again would otherwise park it a second time and hide
+--    the new transfer from payment_transfer_unconfirmed. Signature, security, search_path, ACL as they were.
+create or replace function public.payment_record_reversal(p_payment_id uuid, p_ref text, p_amount_cents integer, p_reversed_cents integer)
+returns void
+language plpgsql security definer set search_path = public, pg_temp as $fn$
+declare
+  v_pay    public.payments;
+  v_t      public.payment_transfers;
+  v_amount integer;
+  v_live   text;
+begin
+  select * into v_pay from public.payments where id = p_payment_id for update;
+  if not found then raise exception 'Payment not found'; end if;
+
+  if p_ref is not null and btrim(p_ref) <> '' then
+    select * into v_t from public.payment_transfers where transfer_ref = p_ref for update;
+    if found and v_t.payment_id <> p_payment_id then
+      raise exception 'Transfer % is recorded on another payment', p_ref;
+    end if;
+    if found then
+      if v_t.reversed_cents >= v_t.amount_cents then return; end if;
+      update public.payment_transfers
+         set reversed_cents = greatest(reversed_cents, least(coalesce(p_reversed_cents, amount_cents), amount_cents)),
+             updated_at = now()
+       where transfer_ref = p_ref
+      returning * into v_t;
+    else
+      v_amount := coalesce(nullif(p_amount_cents, 0), v_pay.transfer_cents);
+      if coalesce(v_amount, 0) > 0 then
+        insert into public.payment_transfers (transfer_ref, payment_id, amount_cents, reversed_cents)
+        values (p_ref, p_payment_id, v_amount, least(coalesce(p_reversed_cents, v_amount), v_amount))
+        returning * into v_t;
+      end if;
+    end if;
+  end if;
+
+  select t.transfer_ref into v_live
+    from public.payment_transfers t
+   where t.payment_id = p_payment_id and t.reversed_cents < t.amount_cents
+   order by (t.transfer_ref = v_pay.transfer_ref) desc, t.created_at
+   limit 1;
+
+  if v_live is null then
+    -- No transfer is left live: the D11 park, as transfer.reversed always did.
+    -- release_requested_at is preserved; only resolve_job_dispute or resolve_tip clears the park.
+    update public.payments set
+      status       = (case when status = 'released' then 'held' else status end)::public.payment_status,
+      released_at  = null,
+      transfer_ref = null,
+      transfer_reversed_at = now(),
+      last_error   = 'transfer reversed at the provider',
+      updated_at   = now()
+    where id = p_payment_id;
+  else
+    -- A part of a transfer, or one of two transfers, was reversed: money is still with the
+    -- worker. No park; a person decides (payment_attention).
+    update public.payments set
+      transfer_ref = v_live,
+      last_error   = left('transfer ' || coalesce(p_ref, '?') || ' reversed in part or alone at the provider; a person decides', 500),
+      updated_at   = now()
+    where id = p_payment_id;
+  end if;
+end $fn$;
+revoke all on function public.payment_record_reversal(uuid, text, integer, integer) from public, anon, authenticated, service_role;
+comment on function public.payment_record_reversal(uuid, text, integer, integer) is
+  'B16: records a provider reversal of one transfer (p_reversed_cents = the transfer''s amount_reversed; null = all of it). When no transfer of the payment is left live it parks the row exactly as transfer.reversed always did (status released -> held, released_at and transfer_ref null, transfer_reversed_at, last_error). When one is still live (a partial reversal, or one of two transfers) nothing is parked and last_error says a person decides. 20261115000000 (R2-A1): a reversal of a transfer already recorded as fully reversed changes nothing. Called by apply_payment_event only; no client grant.';
 
 commit;

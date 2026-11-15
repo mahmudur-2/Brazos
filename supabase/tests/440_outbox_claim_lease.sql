@@ -15,7 +15,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(16);
+select plan(26);
 
 select tests.create_user('ol.customer@brazos.test', 'Ola Customer') as customer \gset
 select tests.create_user('ol.worker@brazos.test',   'Oli Worker')   as worker   \gset
@@ -136,6 +136,50 @@ select is((select send_after from public.notification_outbox where id = :'n1'), 
   '6b: and leased for 10 minutes');
 select is((select count(*) from public.claim_notification_batch(100) c where c.outbox_id = :'n1'), 0::bigint,
   '6c: an overlapping run does not claim it again');
+
+-- ---------------------------------------------------------------------------
+-- 7. Codex R2-A2: reversed in full after the claim. The sender then reads no release time and leaves
+--    the receipt pending under its lease, unresolved (send-receipts/index.ts; tests/receipts.test.mjs).
+--    The claim takes it again once the payment is released again.
+-- ---------------------------------------------------------------------------
+select tests.ol_payment('OL reversed after claim', :'customer', :'worker') as p6 \gset
+select job_id as j6 from public.payments where id = :'p6' \gset
+select public.payment_record_transfer(:'p6', 'tr_ol_p6a', 4625) as t6a \gset
+insert into ol_claim select 7, c.id, c.payment_id, c.next_attempt_at from public.claim_receipt_batch(20) c;
+select is((select count(*) from ol_claim where round = 7 and payment_id = :'p6'), 2::bigint,
+  '7a: the release''s two receipts are claimed');
+select public.payment_record_reversal(:'p6', 'tr_ol_p6a', 4625, 4625);
+select is(public.receipt_details(:'p6') ->> 'released_at', null,
+  '7b: reversed before the sender reads it: the details carry no release time');
+update public.receipt_outbox set next_attempt_at = now() - interval '1 minute' where payment_id = :'p6';
+insert into ol_claim select 8, c.id, c.payment_id, c.next_attempt_at from public.claim_receipt_batch(20) c;
+select is((select count(*) from ol_claim where round = 8 and payment_id = :'p6'), 0::bigint,
+  '7c: the lease is over: not claimed while the payment is held');
+select is((select string_agg(distinct status || '/' || attempts, ',') from public.receipt_outbox where payment_id = :'p6'),
+  'pending/1', '7d: still pending with one attempt used, neither failed nor skipped');
+select tests.ol_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_attempts::text', :'j6', 'worker')) as r6 \gset
+select public.payment_record_transfer(:'p6', 'tr_ol_p6b', 4625) as t6b \gset
+select is((select status::text from public.payments where id = :'p6'), 'released',
+  '7e: resolved for the worker and the replacement transfer recorded: released again');
+insert into ol_claim select 9, c.id, c.payment_id, c.next_attempt_at from public.claim_receipt_batch(20) c;
+select is((select count(*) from ol_claim where round = 9 and payment_id = :'p6'), 2::bigint,
+  '7f: both receipts are claimed again');
+select is((select string_agg(distinct attempts::text, ',') from public.receipt_outbox where payment_id = :'p6'), '2',
+  '7g: on their second attempt');
+select isnt(public.receipt_details(:'p6') ->> 'released_at', null, '7h: and the details carry the release time');
+
+-- ---------------------------------------------------------------------------
+-- 8. A crashed run: claimed and never resolved. After the lease the next claim takes it again.
+-- ---------------------------------------------------------------------------
+select tests.ol_payment('OL crashed run', :'customer', :'worker') as p7 \gset
+select public.payment_record_transfer(:'p7', 'tr_ol_p7', 4625) as t7 \gset
+insert into ol_claim select 10, c.id, c.payment_id, c.next_attempt_at from public.claim_receipt_batch(20) c;
+select is((select count(*) from ol_claim where round = 10 and payment_id = :'p7'), 2::bigint, '8a: both receipts are claimed');
+update public.receipt_outbox set next_attempt_at = now() - interval '1 minute' where payment_id = :'p7';
+insert into ol_claim select 11, c.id, c.payment_id, c.next_attempt_at from public.claim_receipt_batch(20) c;
+select is((select count(*)::text || ' / ' || string_agg(distinct r.attempts::text, ',')
+             from ol_claim c join public.receipt_outbox r on r.id = c.id where c.round = 11 and c.payment_id = :'p7'),
+  '2 / 2', '8b: the lease over, both are claimed again, attempts = 2');
 
 select * from finish();
 rollback;

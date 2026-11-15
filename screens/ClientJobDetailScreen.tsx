@@ -61,7 +61,7 @@ import {
   type JobPriceQuote,
   type Payment,
 } from '../lib/payments';
-import { customerCancelPreview, customerChargeCents } from '../lib/paymentRules';
+import { customerCancelPreview, customerChargeCents, isRefundFailed } from '../lib/paymentRules';
 import { paymentsMode } from '../lib/adapters/payments';
 import { customerCancelConfirm, paymentEyebrow } from '../lib/moneyCopy';
 import { cardLabel, listSavedCards, type SavedCard } from '../lib/paymentMethods';
@@ -753,6 +753,12 @@ export function ClientJobDetailScreen() {
   // that is over.
   const cancelledMoneyNote = (() => {
     if (!payment) return null;
+    // Pack 1, F2: the refund failed at the provider: never "goes back to your card".
+    if (isRefundFailed(payment)) {
+      return isCancellationFeeKept(payment)
+        ? `The cancellation fee goes to ${workerFirstName}. The refund of the rest to your card didn’t go through; Brazos will arrange it another way.`
+        : 'The refund to your card didn’t go through. Brazos will arrange it another way.';
+    }
     if (isCancellationFeeKept(payment)) {
       return `The cancellation fee goes to ${workerFirstName}; the rest goes back to your card — usually within 5–10 business days.`;
     }
@@ -1179,6 +1185,7 @@ export function ClientJobDetailScreen() {
                       state={payment.status}
                       refundQueued={isRefundQueued(payment)}
                       feeKept={isCancellationFeeKept(payment)}
+                      refundFailed={isRefundFailed(payment)}
                       counterpartFirstName={workerFirstName}
                     />
                     {cancelledMoneyNote ? <Text style={styles.paymentNote}>{cancelledMoneyNote}</Text> : null}

@@ -162,3 +162,24 @@ test('A2 · Confirm with a saved card mints no ephemeral key (only the sheet use
   assert.equal(ephemerals(resumed.calls).length, 0, 'no /v1/ephemeral_keys');
   assert.ok(resumed.calls.some((c) => c.url === `${STRIPE}/v1/payment_intents/pi_stored/confirm`), 'the stored intent is confirmed');
 });
+
+// Codex R2 (gap): a stored intent the provider already settled, challenged or cancelled, resumed on
+// the SHEET path. Today the function does not read its status there (index.ts:337-345, 425-429): it
+// hands back the same four fields as for a payable intent, and the sheet on the device decides.
+// Pinned as it is. A terminal branch in the saved-card path's shape ({ paymentId, confirmed }) would
+// be refused by the app's validateCheckoutResponse with "Nothing was charged", a wrong sentence for a
+// succeeded intent, so none is built: open.
+test('A2 (pinned, open) · a stored intent that succeeded, needs the bank, or was cancelled: the sheet path hands back its secret as it is', async () => {
+  const payment = { ...PAYMENT, provider_ref: 'pi_stored' };
+  for (const status of ['succeeded', 'requires_action', 'canceled']) {
+    const r = await run({ payment, stored: { id: 'pi_stored', client_secret: 'pi_stored_secret', status } });
+    assert.equal(r.status, 200, `${status}: 200`);
+    assert.deepEqual(r.json, { paymentId: 'pay-1', customerId: 'cus_test', clientSecret: 'pi_stored_secret', ephemeralKeySecret: 'ek_test' },
+      `${status}: the sheet's four fields, the stored intent's own secret`);
+    assert.equal(creates(r.calls).length, 0, `${status}: never a second intent`);
+    assert.equal(attaches(r.calls).length, 0, `${status}: nothing attached`);
+    assert.equal(r.calls.filter((c) => c.url.endsWith('/confirm')).length, 0, `${status}: nothing confirmed by the server`);
+    assert.equal(r.calls.filter((c) => c.url === `${STRIPE}/v1/payment_intents/pi_stored` && c.method === 'POST').length, 0,
+      `${status}: no update without saveCard`);
+  }
+});

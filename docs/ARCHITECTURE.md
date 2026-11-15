@@ -213,9 +213,9 @@ runs only when the build declares `stripe` and carries the publishable key; anyt
 no code behind the resolver that could reach any other provider. TestFlight builds use Stripe
 test-mode keys.
 
-**Fees.** `fee_schedule` rows hold the rates: 750 bps customer, 750 bps worker with a $1.00
-worker-side minimum, tips carry the customer side only and the worker keeps 100% of every tip, tax
-0. A rate change is a new row with a future `effective_from`, never an UPDATE. `quote_job_price()`
+**Fees.** `fee_schedule` rows hold the rates: 750 bps customer, 750 bps worker with no worker-side
+minimum since 2026-11-15 (`20261115000800`; a hire before it keeps the $1.00 its agreement froze),
+tips carry the customer side only and the worker keeps 100% of every tip, tax 0. A rate change is a new row with a future `effective_from`, never an UPDATE. `quote_job_price()`
 is the only fee arithmetic (the client has no fee constant), and `charge_amount_cents` is the price
 on every customer surface; the total never rises between the offer card and checkout.
 `job_agreements` snapshots the terms at accept and is immutable.

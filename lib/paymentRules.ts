@@ -64,6 +64,17 @@ export function isCancellationFeeKept(
 }
 
 /**
+ * Pack 1, F2: the queued refund reached the provider and failed (refund.failed): the money is
+ * back with Brazos, not on its way to the card. Only the held shape asks it; every other status
+ * speaks for itself.
+ */
+export function isRefundFailed(
+  payment: Pick<Payment, 'status'> & { refund_cents?: number | null; refund_failed_at?: string | null }
+): boolean {
+  return isRefundQueued(payment) && payment.refund_failed_at != null;
+}
+
+/**
  * Whether the funding CTA (Checkout) may be offered for this job — THE one
  * derivation for every surface that can show it (AUD-P1-02; the lifecycle
  * derivation drifted into a duplicate once already, so this predicate exists

@@ -186,3 +186,12 @@ test('[static] the function: service role only, skipped and logged without the k
   assert.match(fn, /if \(!RECEIPT_FROM_SET && !RECEIPT_TEST_TO\) \{/);
   assert.match(read('supabase/tests/190_receipts.sql'), /select plan\(23\);/);
 });
+
+// Codex R2-A2: a payment no longer released when the sender reads it (a reversal after the claim)
+// leaves its receipt pending under the lease, never failed; 440_outbox_claim_lease.sql §7 proves the
+// claim takes it again after the release.
+const RECEIPT_WAITS_ON_RELEASE =
+  /if \(!details\) \{[^}]*\}\s*(?:\/\/[^\n]*\n\s*)*if \(!details\.released_at\) \{\s*console\.log\([^;]*\);\s*return 'pending';\s*\}/;
+test('[static] a payment not released when the sender reads it waits; it is never resolved', () => {
+  assert.match(read('supabase/functions/send-receipts/index.ts'), RECEIPT_WAITS_ON_RELEASE);
+});

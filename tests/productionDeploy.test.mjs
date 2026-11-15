@@ -433,7 +433,7 @@ test('the webhook events and api_version come from the functions, and the functi
   const source = readFileSync(join(ROOT, 'supabase/functions/stripe-webhook/index.ts'), 'utf8');
   const handled = [...source.match(/HANDLED_EVENTS = new Set\(\[([\s\S]*?)\]\)/)[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
   assert.deepEqual(events, handled);
-  assert.equal(events.length, 7);
+  assert.equal(events.length, 8);
   // Every Stripe version literal in every function equals the one the webhook is made with.
   const literals = [];
   for (const name of readdirSync(join(ROOT, 'supabase/functions'))) {

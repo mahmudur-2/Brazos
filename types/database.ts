@@ -439,6 +439,13 @@ export type Database = {
             foreignKeyName: "job_disputes_payment_id_fkey"
             columns: ["payment_id"]
             isOneToOne: false
+            referencedRelation: "intents_to_cancel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_disputes_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
             referencedRelation: "payment_money"
             referencedColumns: ["payment_id"]
           },
@@ -1238,6 +1245,13 @@ export type Database = {
             foreignKeyName: "payment_events_payment_id_fkey"
             columns: ["payment_id"]
             isOneToOne: false
+            referencedRelation: "intents_to_cancel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_events_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
             referencedRelation: "payment_money"
             referencedColumns: ["payment_id"]
           },
@@ -1308,6 +1322,13 @@ export type Database = {
             foreignKeyName: "payment_transfers_payment_id_fkey"
             columns: ["payment_id"]
             isOneToOne: false
+            referencedRelation: "intents_to_cancel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_transfers_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
             referencedRelation: "payment_money"
             referencedColumns: ["payment_id"]
           },
@@ -1362,6 +1383,7 @@ export type Database = {
           funding_due_at: string | null
           held_at: string | null
           id: string
+          intent_cancel_at: string | null
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
           last_error: string | null
@@ -1375,6 +1397,7 @@ export type Database = {
           received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
+          refund_failed_at: string | null
           refund_reason: string | null
           refund_ref: string | null
           refund_sent_at: string | null
@@ -1410,6 +1433,7 @@ export type Database = {
           funding_due_at?: string | null
           held_at?: string | null
           id?: string
+          intent_cancel_at?: string | null
           job_id: string
           kind?: Database["public"]["Enums"]["payment_kind"]
           last_error?: string | null
@@ -1423,6 +1447,7 @@ export type Database = {
           received_cents?: number | null
           refund_attempts?: number
           refund_cents?: number | null
+          refund_failed_at?: string | null
           refund_reason?: string | null
           refund_ref?: string | null
           refund_sent_at?: string | null
@@ -1458,6 +1483,7 @@ export type Database = {
           funding_due_at?: string | null
           held_at?: string | null
           id?: string
+          intent_cancel_at?: string | null
           job_id?: string
           kind?: Database["public"]["Enums"]["payment_kind"]
           last_error?: string | null
@@ -1471,6 +1497,7 @@ export type Database = {
           received_cents?: number | null
           refund_attempts?: number
           refund_cents?: number | null
+          refund_failed_at?: string | null
           refund_reason?: string | null
           refund_ref?: string | null
           refund_sent_at?: string | null
@@ -1721,6 +1748,13 @@ export type Database = {
             foreignKeyName: "receipt_outbox_payment_id_fkey"
             columns: ["payment_id"]
             isOneToOne: false
+            referencedRelation: "intents_to_cancel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipt_outbox_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
             referencedRelation: "payment_money"
             referencedColumns: ["payment_id"]
           },
@@ -1956,6 +1990,21 @@ export type Database = {
         }
         Relationships: []
       }
+      intents_to_cancel: {
+        Row: {
+          id: string | null
+          provider_ref: string | null
+        }
+        Insert: {
+          id?: string | null
+          provider_ref?: string | null
+        }
+        Update: {
+          id?: string | null
+          provider_ref?: string | null
+        }
+        Relationships: []
+      }
       payment_attention: {
         Row: {
           cents: number | null
@@ -2008,6 +2057,7 @@ export type Database = {
           funding_due_at: string | null
           held_at: string | null
           id: string | null
+          intent_cancel_at: string | null
           job_id: string | null
           kind: Database["public"]["Enums"]["payment_kind"] | null
           last_error: string | null
@@ -2021,6 +2071,7 @@ export type Database = {
           received_cents: number | null
           refund_attempts: number | null
           refund_cents: number | null
+          refund_failed_at: string | null
           refund_reason: string | null
           refund_ref: string | null
           refund_sent_at: string | null
@@ -2056,6 +2107,7 @@ export type Database = {
           funding_due_at?: string | null
           held_at?: string | null
           id?: string | null
+          intent_cancel_at?: string | null
           job_id?: string | null
           kind?: Database["public"]["Enums"]["payment_kind"] | null
           last_error?: string | null
@@ -2069,6 +2121,7 @@ export type Database = {
           received_cents?: number | null
           refund_attempts?: number | null
           refund_cents?: number | null
+          refund_failed_at?: string | null
           refund_reason?: string | null
           refund_ref?: string | null
           refund_sent_at?: string | null
@@ -2104,6 +2157,7 @@ export type Database = {
           funding_due_at?: string | null
           held_at?: string | null
           id?: string | null
+          intent_cancel_at?: string | null
           job_id?: string | null
           kind?: Database["public"]["Enums"]["payment_kind"] | null
           last_error?: string | null
@@ -2117,6 +2171,7 @@ export type Database = {
           received_cents?: number | null
           refund_attempts?: number | null
           refund_cents?: number | null
+          refund_failed_at?: string | null
           refund_reason?: string | null
           refund_ref?: string | null
           refund_sent_at?: string | null
@@ -2754,6 +2809,7 @@ export type Database = {
           funding_due_at: string | null
           held_at: string | null
           id: string
+          intent_cancel_at: string | null
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
           last_error: string | null
@@ -2767,6 +2823,7 @@ export type Database = {
           received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
+          refund_failed_at: string | null
           refund_reason: string | null
           refund_ref: string | null
           refund_sent_at: string | null
@@ -2811,6 +2868,7 @@ export type Database = {
           funding_due_at: string | null
           held_at: string | null
           id: string
+          intent_cancel_at: string | null
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
           last_error: string | null
@@ -2824,6 +2882,7 @@ export type Database = {
           received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
+          refund_failed_at: string | null
           refund_reason: string | null
           refund_ref: string | null
           refund_sent_at: string | null
@@ -3155,6 +3214,7 @@ export type Database = {
           funding_due_at: string | null
           held_at: string | null
           id: string
+          intent_cancel_at: string | null
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
           last_error: string | null
@@ -3168,6 +3228,7 @@ export type Database = {
           received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
+          refund_failed_at: string | null
           refund_reason: string | null
           refund_ref: string | null
           refund_sent_at: string | null
@@ -3278,6 +3339,7 @@ export type Database = {
           funding_due_at: string | null
           held_at: string | null
           id: string
+          intent_cancel_at: string | null
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
           last_error: string | null
@@ -3291,6 +3353,7 @@ export type Database = {
           received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
+          refund_failed_at: string | null
           refund_reason: string | null
           refund_ref: string | null
           refund_sent_at: string | null
@@ -3502,6 +3565,7 @@ export type Database = {
           funding_due_at: string | null
           held_at: string | null
           id: string
+          intent_cancel_at: string | null
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
           last_error: string | null
@@ -3515,6 +3579,7 @@ export type Database = {
           received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
+          refund_failed_at: string | null
           refund_reason: string | null
           refund_ref: string | null
           refund_sent_at: string | null
@@ -3657,6 +3722,7 @@ export type Database = {
         Returns: boolean
       }
       receipt_details: { Args: { p_payment_id: string }; Returns: Json }
+      record_intent_cancel: { Args: { p_payment_id: string }; Returns: boolean }
       record_settlement_attempt: {
         Args: {
           p_error: string
@@ -3704,6 +3770,7 @@ export type Database = {
           funding_due_at: string | null
           held_at: string | null
           id: string
+          intent_cancel_at: string | null
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
           last_error: string | null
@@ -3717,6 +3784,7 @@ export type Database = {
           received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
+          refund_failed_at: string | null
           refund_reason: string | null
           refund_ref: string | null
           refund_sent_at: string | null
@@ -3810,6 +3878,7 @@ export type Database = {
           funding_due_at: string | null
           held_at: string | null
           id: string
+          intent_cancel_at: string | null
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
           last_error: string | null
@@ -3823,6 +3892,7 @@ export type Database = {
           received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
+          refund_failed_at: string | null
           refund_reason: string | null
           refund_ref: string | null
           refund_sent_at: string | null
@@ -3880,6 +3950,7 @@ export type Database = {
           funding_due_at: string | null
           held_at: string | null
           id: string
+          intent_cancel_at: string | null
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
           last_error: string | null
@@ -3893,6 +3964,7 @@ export type Database = {
           received_cents: number | null
           refund_attempts: number
           refund_cents: number | null
+          refund_failed_at: string | null
           refund_reason: string | null
           refund_ref: string | null
           refund_sent_at: string | null

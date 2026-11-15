@@ -182,7 +182,6 @@ begin
          last_error = 'quiet hours: stale by morning'
    where o.status = 'pending'
      and o.category = 'nearby_jobs'
-     and o.send_after is not null
      and o.send_after <= now()
      and not exists (
        select 1

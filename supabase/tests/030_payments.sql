@@ -823,10 +823,10 @@ select ok((select job_price_cents = 10000 and customer_fee_cents = 750 and tax_c
   '7: $100 quotes as $107.50 all-in, $92.50 to the worker');
 select ok((select customer_fee_cents = 375 and total_cents = 5375 and worker_fee_cents = 375 and worker_receives_cents = 4625 from public.quote_job_price(5000)),
   '7: $50 quotes as $53.75 all-in, $46.25 to the worker (the J1 charge)');
-select ok((select customer_fee_cents = 8 and total_cents = 108 and worker_fee_cents = 100 and worker_receives_cents = 0 from public.quote_job_price(100)),
-  '7: $1 rounds the customer fee to $0.08 and the worker-side minimum of $1.00 takes the whole price');
-select ok((select customer_fee_cents = 0 and total_cents = 1 and worker_fee_cents = 1 and worker_receives_cents = 0 from public.quote_job_price(1)),
-  '7: one cent: no customer fee, the worker fee never exceeds the price');
+select ok((select customer_fee_cents = 8 and total_cents = 108 and worker_fee_cents = 8 and worker_receives_cents = 92 from public.quote_job_price(100)),
+  '7: $1 rounds both fees to $0.08: no worker-side minimum since 20261115000800');
+select ok((select customer_fee_cents = 0 and total_cents = 1 and worker_fee_cents = 0 and worker_receives_cents = 1 from public.quote_job_price(1)),
+  '7: one cent: no fee on either side, the cent is the worker''s');
 select ok((select customer_fee_cents = 75 and total_cents = 1075 from public.quote_job_price(1000)), '7: $10 quotes as $10.75 (the J8 charge)');
 select ok((select bool_and(p.charge_amount_cents = p.amount_cents + p.customer_fee_cents + p.tax_cents) from public.payments p where p.provider = 'stripe' and p.payer_id = :'customer'),
   '7: charge_amount_cents equals amount + customer fee + tax on every stripe row this file funded');

@@ -16,7 +16,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(36);
+select plan(52);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -211,8 +211,84 @@ select (public.cancel_job(:'jf2', 'customer_cancelled')).status as cancelled_f2 
 select tests.clear_auth();
 select is(public.settlement_send_begin(:'pf2', 'refund', 0), true, 'F10: order 2: the refund send begins first');
 select is(tests.if_record(:'pf2', 'refund', 're_if_f2_0001'), 'ok: true', 'F11: and is recorded');
+-- Codex R2 (420 gap): the refund's charge.refunded lands before the fee transfer goes.
+select tests.if_event('evt_if_f2_cr', 'charge.refunded', jsonb_build_object(
+  'id', 'ch_if_f2', 'payment_intent', (select provider_ref from public.payments where id = :'pf2'),
+  'amount_refunded', (select refund_cents from public.payments where id = :'pf2'))) as f2cr \gset
+select is((select status::text || ' / ' || (refunded_cents = refund_cents)::text from public.payments where id = :'pf2'),
+  'partially_refunded / true', 'F11b: charge.refunded lands: the rest is back with the customer, the row partly refunded');
 select is(public.settlement_send_begin(:'pf2', 'transfer', 0), true, 'F12: then the fee transfer send still begins');
 select is(tests.if_record(:'pf2', 'transfer', 'tr_if_f2_0001'), 'ok: true', 'F13: and is recorded');
+select is((select status::text || ' / ' || coalesce(transfer_ref, 'null') from public.payments where id = :'pf2'),
+  'partially_refunded / tr_if_f2_0001', 'F13b: the fee transfer leaves the row partly refunded, never released');
+
+-- ---------------------------------------------------------------------------
+-- R. Codex R2-A1: an older reversal event of a transfer already recorded as fully reversed arrives
+--    after the payment was sent again. It must not park the row a second time: that would hide the
+--    new transfer, whose answer is not back yet, and let a full refund through on top of it.
+--    Stripe's amount_reversed is the transfer's running total: 400 is an older event than the full one.
+-- ---------------------------------------------------------------------------
+-- R1-R7: a 1,000-cent tip, settled through resolve_tip.
+select tests.if_job('IF tip reversed twice', 'released') as jr1 \gset
+select id as pjr1 from public.payments where job_id = :'jr1' and kind = 'job_payment' \gset
+select tests.if_event('evt_if_r1_tc_' || :'pjr1', 'transfer.created', jsonb_build_object(
+  'id', 'tr_if_r1_job', 'amount', (select transfer_cents from public.payments where id = :'pjr1'),
+  'metadata', jsonb_build_object('payment_id', :'pjr1'))) as r1tc \gset
+select tests.authenticate_as(:'customer');
+select (public.begin_tip_payment(:'jr1', 1000)).id as tipr \gset
+select tests.clear_auth();
+select public.attach_provider_ref(:'tipr', 'pi_if_tip_r1');
+select tests.if_event('evt_if_r1_ts', 'payment_intent.succeeded', jsonb_build_object(
+  'id', 'pi_if_tip_r1', 'amount_received', (select charge_amount_cents from public.payments where id = :'tipr'),
+  'metadata', jsonb_build_object('payment_id', :'tipr'))) as r1ts \gset
+select public.settlement_send_begin(:'tipr', 'transfer', 0) as r1b0 \gset
+select tests.if_record(:'tipr', 'transfer', 'tr_if_r1_0001') as r1rec \gset
+select tests.if_event('evt_if_r1_full', 'transfer.reversed', jsonb_build_object(
+  'id', 'tr_if_r1_0001', 'amount', (select transfer_cents from public.payments where id = :'tipr'),
+  'amount_reversed', (select transfer_cents from public.payments where id = :'tipr'), 'reversed', true,
+  'metadata', jsonb_build_object('payment_id', :'tipr'))) as r1full \gset
+select ok((select transfer_reversed_at is not null and status = 'held' from public.payments where id = :'tipr'),
+  'R1: the full reversal parks the tip (its first full reversal is handled as before)');
+select tests.if_try(format('select (public.resolve_tip(%L, %L)).transfer_attempts::text', :'tipr', 'send')) as r1send \gset
+select is(public.settlement_send_begin(:'tipr', 'transfer', 1), true, 'R2: the owner sends the tip again and the new attempt begins');
+select is(tests.if_unconfirmed(:'tipr'), 'ok: true', 'R3: the new transfer is on its way, its answer not back');
+select tests.if_event('evt_if_r1_part', 'transfer.reversed', jsonb_build_object(
+  'id', 'tr_if_r1_0001', 'amount', (select transfer_cents from public.payments where id = :'tipr'),
+  'amount_reversed', 400, 'reversed', false,
+  'metadata', jsonb_build_object('payment_id', :'tipr'))) as r1part \gset
+select is((select transfer_reversed_at from public.payments where id = :'tipr'), null::timestamptz,
+  'R4: the older partial event of the old transfer does not park the tip again');
+select is(tests.if_unconfirmed(:'tipr'), 'ok: true', 'R5: the new transfer is still on its way');
+select is(tests.if_try(format('select (public.resolve_tip(%L, %L)).refund_cents::text', :'tipr', 'refund')),
+  'error: A transfer to the worker was sent and its result is not recorded yet: record it or reopen it first.',
+  'R6: the owner cannot refund the tip on top of it');
+select ok(not exists (select 1 from public.refunds_due where id = :'tipr'), 'R7: and no refund of the tip is due');
+
+-- R8-R14: a job payment, settled through resolve_job_dispute.
+select tests.if_job('IF job reversed twice', 'released') as jr2 \gset
+select id as pjr2 from public.payments where job_id = :'jr2' and kind = 'job_payment' \gset
+select public.settlement_send_begin(:'pjr2', 'transfer', 0) as r2b0 \gset
+select tests.if_record(:'pjr2', 'transfer', 'tr_if_r2_0001') as r2rec \gset
+select tests.if_event('evt_if_r2_full', 'transfer.reversed', jsonb_build_object(
+  'id', 'tr_if_r2_0001', 'amount', (select transfer_cents from public.payments where id = :'pjr2'),
+  'amount_reversed', (select transfer_cents from public.payments where id = :'pjr2'), 'reversed', true,
+  'metadata', jsonb_build_object('payment_id', :'pjr2'))) as r2full \gset
+select ok((select transfer_reversed_at is not null and status = 'held' from public.payments where id = :'pjr2'),
+  'R8: the full reversal parks the job payment');
+select tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_attempts::text', :'jr2', 'worker')) as r2send \gset
+select is(public.settlement_send_begin(:'pjr2', 'transfer', 1), true, 'R9: the owner resolves for the worker and the new attempt begins');
+select is(tests.if_unconfirmed(:'pjr2'), 'ok: true', 'R10: the new transfer is on its way, its answer not back');
+select tests.if_event('evt_if_r2_part', 'transfer.reversed', jsonb_build_object(
+  'id', 'tr_if_r2_0001', 'amount', (select transfer_cents from public.payments where id = :'pjr2'),
+  'amount_reversed', 400, 'reversed', false,
+  'metadata', jsonb_build_object('payment_id', :'pjr2'))) as r2part \gset
+select is((select transfer_reversed_at from public.payments where id = :'pjr2'), null::timestamptz,
+  'R11: the older partial event of the old transfer does not park the payment again');
+select is(tests.if_unconfirmed(:'pjr2'), 'ok: true', 'R12: the new transfer is still on its way');
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).refund_cents::text', :'jr2', 'customer')),
+  'error: A transfer to the worker was sent and its result is not recorded yet: record it or reopen it first.',
+  'R13: the owner cannot refund the customer on top of it');
+select ok(not exists (select 1 from public.refunds_due where id = :'pjr2'), 'R14: and no refund of the payment is due');
 
 select * from finish();
 rollback;
