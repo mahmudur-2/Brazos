@@ -1377,6 +1377,7 @@ export type Database = {
           failed_at: string
           failure_reason: string | null
           payment_id: string
+          recorded_ref: boolean
           refund_ref: string
         }
         Insert: {
@@ -1386,6 +1387,7 @@ export type Database = {
           failed_at?: string
           failure_reason?: string | null
           payment_id: string
+          recorded_ref?: boolean
           refund_ref: string
         }
         Update: {
@@ -1395,6 +1397,7 @@ export type Database = {
           failed_at?: string
           failure_reason?: string | null
           payment_id?: string
+          recorded_ref?: boolean
           refund_ref?: string
         }
         Relationships: [

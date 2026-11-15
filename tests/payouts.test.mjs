@@ -144,12 +144,10 @@ test('3 · the cheap read: my_payouts_status() on the provider boundary, validat
     data: null,
     error: { message: PAYOUTS_STATUS_UNREADABLE },
   });
-  // And the module this file executes keeps its contract: no payout RPC. Codex R8-A1: its one read
-  // with "payout" in the name is my_payouts_on_their_way (a read of ids, it moves nothing), so the
-  // module's RPCs are now an allow-list, and the name rule holds for every other call.
+  // And the module this file executes keeps its contract: its RPCs are an allow-list, so no call that
+  // moves money can be added (Codex R8-A1: my_payouts_on_their_way reads ids and moves nothing).
   const rpcs = [...js.matchAll(/\.rpc\(['"]([^'"]+)['"]/g)].map((m) => m[1]).sort();
   assert.deepEqual(rpcs, ['job_payment_state', 'my_payouts_on_their_way', 'quote_job_price']);
-  assert.doesNotMatch(js.replace(".rpc('my_payouts_on_their_way')", ''), /\.rpc\(['"][^'"]*(release|payout|cash_out|capture)/i);
 });
 
 test('4 · the connect responses are validated field by field — a guessed link or an unknown state is an error', () => {

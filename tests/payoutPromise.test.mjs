@@ -438,8 +438,10 @@ test('R8-A1 · the screens’ notes: Failure A, Failure B, a card dispute and th
     }, name);
   }
   const worker = code('screens/WorkerJobScreen.tsx');
-  assert.ok(worker.indexOf("if (lifecycle === 'disputed') {") < worker.indexOf('if (isPayoutOnItsWay(payment) && waitingOnSetup) {'),
-    'the worker reads the open issue before any payout sentence');
+  const disputedAt = worker.indexOf("if (lifecycle === 'disputed') {");
+  const payoutAt = worker.indexOf('if (isPayoutOnItsWay(payment) && waitingOnSetup) {');
+  assert.ok(disputedAt >= 0 && payoutAt >= 0, 'both branches are in WorkerJobScreen.tsx');
+  assert.ok(disputedAt < payoutAt, 'the worker reads the open issue before any payout sentence');
   // The tip: on its way under the fact; the reversed tip says nothing about where it is.
   assert.equal(NOTES.tipLine(isRefundFailed, isRefundArranged, isPayoutOnItsWay, isReleased, ROWS['04 queued tip'], 'Sam'),
     'Your tip is on its way to Sam on top of the job payment.');

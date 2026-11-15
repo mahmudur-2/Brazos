@@ -11,7 +11,9 @@
 -- failure is read before arranged history); after round 7: R7-A1 (H19-H23, an event finds its payment by
 -- Stripe's own link to the intent, never by a label naming another payment) and R7-A2 (H17b, H17c, and
 -- INV: no refund owed is missing from both refunds_due and payment_attention); after round 8: H17d (the
--- same line on the late-cancellation shape, which ends at partially_refunded).
+-- same line on the late-cancellation shape, which ends at partially_refunded); after round 9: R9-A1
+-- (G8-G14, separate refunds are separate money: the failure of the payment's recorded refund stays
+-- inside the refund asked, every other failure is added on top, payment_refund_failures.recorded_ref).
 --
 -- THE PROVIDER'S FACTS (docs.stripe.com/refunds, "Failed refunds"): the Refund's status becomes
 -- failed with a failure_reason, refund.failed is sent, the money returns to the platform's balance,
@@ -27,7 +29,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(87);
+select plan(94);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -57,11 +59,12 @@ begin
 end $$;
 
 -- Hire at $50. p_stage: 'held' (funded), 'approved' (worked and approved, not yet transferred) or
--- 'released' (worked, approved, transferred). Returns the job id.
-create or replace function tests.rf_job(p_title text, p_stage text) returns uuid language plpgsql as $$
+-- 'released' (worked, approved, transferred). p_worker: the hired worker (null: the cast's worker).
+-- Returns the job id.
+create or replace function tests.rf_job(p_title text, p_stage text, p_worker uuid default null) returns uuid language plpgsql as $$
 declare
   v_customer uuid := (select v from fx where k = 'customer');
-  v_worker   uuid := (select v from fx where k = 'worker');
+  v_worker   uuid := coalesce(p_worker, (select v from fx where k = 'worker'));
   v_job uuid;
   v_offer uuid;
   v_pid uuid;
@@ -368,8 +371,11 @@ select is((select string_agg(p.proname, ',' order by p.proname) from pg_proc p
 
 -- ---------------------------------------------------------------------------
 -- G. Codex R4-A3: a failed refund whose charge.refunded never came still keeps its amount from the
---    worker. The reservation is the greatest of refunded_cents, refund_cents and the sum of the
---    payment's failures (arranged or not), never one added on top of another.
+--    worker. R9-A1: separate refunds are separate money. The reservation is the greatest of
+--    refunded_cents, refund_cents and the failure of the payment's recorded refund (recorded_ref),
+--    plus every other failure (arranged or not), never more than the charge. G8-G11: Codex's sequence
+--    (the app's refund landed, then a hand refund failed before its charge.refunded). G12-G14: the
+--    stated bounds, which err high, and the owner's way out of them.
 -- ---------------------------------------------------------------------------
 select is(tests.rf_try($q$select (has_function_privilege('service_role', 'public.payment_refund_reserved_cents(public.payments)', 'EXECUTE')
           and not has_function_privilege('authenticated', 'public.payment_refund_reserved_cents(public.payments)', 'EXECUTE')
@@ -421,6 +427,102 @@ select tests.rf_try(format('select (public.resolve_refund_failure(%L, %L)).id::t
 select is(left(:'l_res', 4) || (select (refund_failed_at is null)::text || '/' || (refund_arranged_at is not null)::text from public.payments where id = :'pl')
           || '/' || exists (select 1 from public.transfers_due t where t.id = :'pl')::text,
   'ok: true/true/true', 'G7: resolve_refund_failure records the arrangement, and the fee transfer is still due');
+
+-- R9-A1. The worker starts, the customer cancels late: 1,500 fee to the worker, 3,875 back to the
+-- card, of a 5,375 charge. Returns the payment id.
+create or replace function tests.rf_late_cancel(p_job uuid, p_worker uuid) returns uuid language plpgsql as $$
+begin
+  perform tests.authenticate_as(p_worker);
+  perform public.transition_job_status(p_job, 'in_progress');
+  perform tests.authenticate_as((select v from fx where k = 'customer'));
+  perform public.cancel_job(p_job, 'customer_cancelled');
+  perform tests.clear_auth();
+  return tests.rf_pid(p_job);
+end $$;
+
+-- What holds the transfer back / in transfers_due / the payout fact the parties read / whether the
+-- drain could begin the transfer now (it records an attempt only when it can).
+create or replace function tests.rf_hold(p_pid uuid) returns text language sql as $$
+  select public.payment_refund_reserved_cents(p)::text
+         || '/' || exists (select 1 from public.transfers_due t where t.id = p.id)::text
+         || '/' || public.payment_payout_on_its_way(p)::text
+         || '/' || public.settlement_send_begin(p.id, 'transfer', p.transfer_attempts, p.transfer_cents)::text
+    from public.payments p where p.id = p_pid
+$$;
+
+-- Codex's sequence, with a worker of its own whose payout account is not ready while the app's
+-- refund lands (so the fee cannot go out before the hand refund fails).
+select tests.create_user('rf.setup@brazos.test', 'Sid Worker') as setupw \gset
+select tests.rf_job('RF R9 late cancel, hand refund failed', 'held', :'setupw') as jr \gset
+select tests.rf_late_cancel(:'jr', :'setupw') as pr \gset
+select tests.set_payouts(:'setupw', 'action_needed');
+select public.settlement_send_begin(:'pr', 'refund', (select refund_attempts from public.payments where id = :'pr'),
+                                    (select refund_cents from public.payments where id = :'pr')) as r_begun \gset
+select public.record_settlement_sent(:'pr', 'refund', 're_rf_r9_app', 3875) as r_sent \gset
+select tests.rf_refunded('evt_rf_r9_r1', 1800000100, :'pr', 3875, 're_rf_r9_app');
+select is((select status::text || '/' || refund_cents::text || '/' || transfer_cents::text || '/' || charge_amount_cents::text
+             from public.payments where id = :'pr')
+          || '/' || exists (select 1 from public.transfers_due t where t.id = :'pr')::text,
+  'partially_refunded/3875/1500/5375/true',
+  'G8 (control): of a 5,375 charge the app''s 3,875 refund landed; the 1,500 fee is due');
+-- A hand refund of the other 1,500 (no metadata) fails before its charge.refunded; then the
+-- worker's payout account is enabled.
+select tests.rf_failed('evt_rf_r9_f1', 1800000200, :'pr', 're_rf_r9_hand', 1500, false);
+select tests.set_payouts(:'setupw', 'enabled');
+select is(tests.rf_hold(:'pr') || '/' || tests.rf_lines(:'pr', 'transfer is more than is left after refunds: a person decides'),
+  '5375/false/false/false/1',
+  'G9 (R9-A1): the app''s 3,875 refund landed and a hand 1,500 refund failed: 3,875 + 1,500 = 5,375 is held back, so the 1,500 fee is not due, no payout is on its way, the drain cannot begin it, and payment_attention says why');
+select tests.rf_try(format('select (public.resolve_refund_failure(%L, %L)).id::text', :'pr', 'Refunded 15.00 by bank transfer.')) as r_res \gset
+select is(left(:'r_res', 4) || (select (refund_failed_at is null)::text from public.payments where id = :'pr') || '/' || tests.rf_hold(:'pr'),
+  'ok: true/5375/false/false/false',
+  'G10 (R9-A1): resolve_refund_failure records how the 1,500 was refunded; the arranged failure still holds back 3,875 + 1,500 = 5,375, and the fee still waits');
+-- The hand refund's own charge.refunded arrives late: the total is 3,875 + 1,500.
+select tests.rf_refunded('evt_rf_r9_r2', 1800000300, :'pr', 5375, 're_rf_r9_hand');
+select is(tests.rf_state(:'pr') || '/' || tests.rf_hold(:'pr'),
+  'refunded/5375/re_rf_r9_app/5375/false/false/false',
+  'G11 (control): the late charge.refunded totals 5,375 (3,875 + 1,500): the row is refunded and nothing goes to the worker');
+
+-- Stated bound 1: the app's own 3,875 refund begun, its answer lost, then it fails: refund.failed
+-- keeps its id (00600, the label of the current attempt), but it was not the recorded refund when it
+-- failed, so it is counted on top. The fee waits for the owner.
+select tests.rf_job('RF R9 own refund, answer lost', 'held') as jr2 \gset
+select tests.rf_late_cancel(:'jr2', :'worker') as pr2 \gset
+select public.settlement_send_begin(:'pr2', 'refund', (select refund_attempts from public.payments where id = :'pr2'),
+                                    (select refund_cents from public.payments where id = :'pr2')) as r2_begun \gset
+select tests.rf_failed('evt_rf_r9_f2', 1800000400, :'pr2', 're_rf_r9_l', 3875);
+select is(tests.rf_state(:'pr2') || '/' || tests.rf_hold(:'pr2'),
+  'held/0/re_rf_r9_l/5375/false/false/false',
+  'G12 (R9-A1, stated bound): the app''s own 3,875 refund, its answer lost, failed: not the recorded refund when it failed, so it is counted on top (the whole 5,375) and the 1,500 fee waits');
+
+-- The app's 3,875 refund begun, its answer lost; a hand refund of 1,500 that a person labelled with
+-- this payment's id fails first: its id becomes refund_ref (the label path), yet it is a separate refund.
+select tests.rf_job('RF R9 labelled hand refund failed', 'held') as jr3 \gset
+select tests.rf_late_cancel(:'jr3', :'worker') as pr3 \gset
+select public.settlement_send_begin(:'pr3', 'refund', (select refund_attempts from public.payments where id = :'pr3'),
+                                    (select refund_cents from public.payments where id = :'pr3')) as r3_begun \gset
+select tests.rf_failed('evt_rf_r9_f3', 1800000500, :'pr3', 're_rf_r9_x_hand', 1500);
+select is(tests.rf_state(:'pr3') || '/' || tests.rf_hold(:'pr3'),
+  'held/0/re_rf_r9_x_hand/5375/false/false/false',
+  'G13 (R9-A1): the app''s 3,875 refund in flight and a labelled hand 1,500 refund failed (its id now refund_ref): 3,875 + 1,500 = 5,375 held back, the 1,500 fee waits');
+
+-- Stated bound 2: a hand refund of 500 seen in charge.refunded, then failed, is counted twice.
+select tests.rf_job('RF R9 hand refund seen, then failed', 'approved') as jr4 \gset
+select tests.rf_pid(:'jr4') as pr4 \gset
+select tests.rf_refunded('evt_rf_r9_r4', 1800000600, :'pr4', 500, 're_rf_r9_c');
+select tests.rf_failed('evt_rf_r9_f4', 1800000610, :'pr4', 're_rf_r9_c', 500, false);
+select public.payment_refund_reserved_cents(p)::text
+       || '/' || exists (select 1 from public.transfers_due t where t.id = p.id)::text
+       || '/' || tests.rf_lines(p.id, 'transfer is more than is left after refunds: a person decides')::text as r4_before
+  from public.payments p where p.id = :'pr4' \gset
+-- The owner's way out: a transfer made by hand in Stripe, recorded.
+select public.record_settlement_sent(:'pr4', 'transfer', 'tr_rf_r9_hand',
+                                     (select transfer_cents from public.payments where id = :'pr4'))::text as r4_rec \gset
+select is(:'r4_before' || ' then ' || :'r4_rec'
+          || '/' || (select coalesce(transfer_ref, 'null') from public.payments where id = :'pr4')
+          || '/' || exists (select 1 from public.transfers_due t where t.id = :'pr4')::text
+          || '/' || (select count(*)::text from public.payment_attention a where a.payment_id = :'pr4' and a.what = 'transfer'),
+  '1000/false/1 then true/tr_rf_r9_hand/false/0',
+  'G14 (R9-A1, stated bound): a hand 500 refund seen, then failed, holds back 1,000 and payment_attention says "more than is left after refunds"; the owner''s transfer made by hand, recorded with record_settlement_sent, takes the row out of transfers_due and removes its transfer line');
 
 -- ---------------------------------------------------------------------------
 -- H. Codex R5-A3, R6-A1: refund.failed writes refund_ref only for the app's own refund (its
