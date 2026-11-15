@@ -41,6 +41,10 @@
 --     person (refunds_due sends nothing on a row with a failure). charge.refunded no longer writes
 --     refund_ref (R5-A3): refunds.data[0] is the newest refund, a hand one too; the refunded total
 --     and the status already stop a second refund.
+--   - apply_payment_event, R7-A1: an event finds its payment by Stripe's own link to the intent (a
+--     PaymentIntent's id; the payment_intent of a Charge, a Dispute or a Refund), never by its
+--     metadata.payment_id, which a hand edit in Stripe can change. The label finds only a Transfer,
+--     which has no such link, and marks the app's own refund above (compared as text, never cast).
 --   - resolve_refund_failure(uuid, text): the owner's record of how the refund was arranged.
 --   - payments.refund_arranged_at (P3): set by resolve_refund_failure in the same update that clears
 --     refund_failed_at, so the customer's card says the refund was made another way. Nothing else
@@ -51,7 +55,8 @@
 --   - payment_attention: one line per failed refund until it is arranged, and the "refund sent,
 --     not yet confirmed" line leaves out a failed refund. R5-A3: a refund asked is no longer listed
 --     once the refunded total covers it, and a refund asked on a row with a refund failure (which
---     refunds_due, 20261115000700, no longer sends) is listed for a person.
+--     refunds_due, 20261115000700, no longer sends) is listed for a person. R7-A2: the "sent, not
+--     yet confirmed" line stays until the refunded total covers the refund asked, the same rule.
 --
 -- Additive under scripts/staging-scan.sh.
 
@@ -128,7 +133,7 @@ on conflict (dispute_ref) do nothing;
 
 -- ---------------------------------------------------------------------------
 -- 2. apply_payment_event(text), replaced whole from 20261112010200_apply_payment_event.sql. Same
---    signature, security attributes and ACL (restated). Changes are marked A5 or F2.
+--    signature, security attributes and ACL (restated). Changes are marked A5, F2 or R7-A1.
 -- ---------------------------------------------------------------------------
 create or replace function public.apply_payment_event(p_event_id text) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $$
@@ -155,19 +160,22 @@ begin
   begin
     v_obj := v_ev.payload -> 'data' -> 'object';
 
-    -- Resolve the ledger row. metadata.payment_id FIRST: matching by
-    -- (job, kind) breaks the moment a job has more than one money object.
-    v_pid := nullif(v_obj -> 'metadata' ->> 'payment_id', '')::uuid;
-    if v_pid is not null then
-      select * into v_payment from public.payments where id = v_pid for update;
-    elsif v_type like 'payment_intent.%' then
+    -- Resolve the ledger row. R7-A1: by Stripe's own link to the intent whenever the object has one
+    -- (a PaymentIntent's id; the payment_intent of a Charge, a Dispute or a Refund), which no hand
+    -- edit changes; a row names its intent (attach_provider_ref) before the intent can be paid.
+    -- metadata.payment_id, which can be edited by hand in Stripe, resolves only a Transfer, which
+    -- has no such link. Matching by (job, kind) would break once a job has two money objects.
+    if v_type like 'payment_intent.%' then
       select * into v_payment from public.payments
        where provider = 'stripe' and provider_ref = v_obj ->> 'id' for update;
     elsif v_type like 'charge.%' or v_type like 'refund.%' then
-      -- F2: a Refund names its payment_intent like a Charge does (a refund made by hand in the
-      -- dashboard carries no metadata).
       select * into v_payment from public.payments
        where provider = 'stripe' and provider_ref = v_obj ->> 'payment_intent' for update;
+    else
+      v_pid := nullif(v_obj -> 'metadata' ->> 'payment_id', '')::uuid;
+      if v_pid is not null then
+        select * into v_payment from public.payments where id = v_pid for update;
+      end if;
     end if;
 
     if v_payment.id is not null and v_type = 'transfer.created' then
@@ -297,10 +305,10 @@ begin
                             -- F2: a failed refund with no recorded ref must not pass the reopen checks,
                             -- R5-A3, R6-A1: only for the app's own refund of the current attempt: that
                             -- attempt began, and the refund carries this payment's metadata.payment_id
-                            -- (the drain's label; v_pid is null without it). Any other failure (a hand
+                            -- (the drain's label, read as text: never a cast that can fail). Any other failure (a hand
                             -- refund, an older attempt) leaves it empty, so the refund owed is listed for a person.
                             when v_type = 'refund.failed' and v_payment.refund_sent_attempt = v_payment.refund_attempts
-                             and v_pid = v_payment.id
+                             and v_obj -> 'metadata' ->> 'payment_id' = v_payment.id::text
                             then coalesce(refund_ref, v_obj ->> 'id')
                             else refund_ref end,
         -- B16: the charge's running refunded total, never lowered by an older event.
@@ -349,7 +357,7 @@ end $$;
 revoke all on function public.apply_payment_event(text) from public, anon, authenticated;
 grant execute on function public.apply_payment_event(text) to service_role;
 comment on function public.apply_payment_event(text) is
-  'service_role only: applies one stored provider event to its payments row, idempotently. R5b (E-6): a payment_intent.succeeded on a voided or failed row queues a full refund (refund_reason funded_after_void). B1: a payment_intent.succeeded on an unfunded tip holds it and queues the whole tip for transfer when amount_received equals charge_amount_cents. 20261112010200: received_cents, refunded_cents and chargeback_cents record the provider''s facts; a job payment charged a different amount stays held with last_error; transfers are recorded once in payment_transfers (payment_record_transfer / payment_record_reversal); a card dispute clears its block only when won or when an inquiry closes (warning_closed), lost refunds the row, any other closing status keeps the block for a person; payment_intent.payment_failed changes nothing. 20261115000600: every rule reads only this event and durable rows, never another event''s payload; the refund status follows the greatest refunded total and refunded stays refunded; payment_disputes keeps one row per dispute id (created adds it once, closed records its status, the last delivered wins, but lost stays lost) and the money stays blocked while any dispute of the payment is neither won nor warning_closed; refund.failed records the failed refund once per refund id in payment_refund_failures, raises refund_failed_at for a new one, keeps the failed refund in refund_ref when none was recorded, only for the app''s own refund of the current attempt: that attempt began and the refund carries this payment''s metadata.payment_id (R5-A3, R6-A1), and changes no status and no refunded total; charge.refunded never writes refund_ref (R5-A3).';
+  'service_role only: applies one stored provider event to its payments row, idempotently. R5b (E-6): a payment_intent.succeeded on a voided or failed row queues a full refund (refund_reason funded_after_void). B1: a payment_intent.succeeded on an unfunded tip holds it and queues the whole tip for transfer when amount_received equals charge_amount_cents. 20261112010200: received_cents, refunded_cents and chargeback_cents record the provider''s facts; a job payment charged a different amount stays held with last_error; transfers are recorded once in payment_transfers (payment_record_transfer / payment_record_reversal); a card dispute clears its block only when won or when an inquiry closes (warning_closed), lost refunds the row, any other closing status keeps the block for a person; payment_intent.payment_failed changes nothing. 20261115000600: every rule reads only this event and durable rows, never another event''s payload; an intent, charge, dispute or refund event finds its row by the intent id (provider_ref), a transfer event by metadata.payment_id (R7-A1); the refund status follows the greatest refunded total and refunded stays refunded; payment_disputes keeps one row per dispute id (created adds it once, closed records its status, the last delivered wins, but lost stays lost) and the money stays blocked while any dispute of the payment is neither won nor warning_closed; refund.failed records the failed refund once per refund id in payment_refund_failures, raises refund_failed_at for a new one, keeps the failed refund in refund_ref when none was recorded, only for the app''s own refund of the current attempt: that attempt began and the refund carries this payment''s metadata.payment_id (R5-A3, R6-A1), and changes no status and no refunded total; charge.refunded never writes refund_ref (R5-A3).';
 
 -- ---------------------------------------------------------------------------
 -- 3. resolve_refund_failure(uuid, text): the owner's record that the failed refunds of a payment
@@ -482,12 +490,13 @@ create or replace view public.payment_attention as
     from rw
    where not rw.ready or rw.last_error is not null
   union all
-  -- A refund sent and not yet confirmed by charge.refunded (F2: and not failed).
+  -- A refund sent and not yet confirmed by charge.refunded (F2: and not failed). R7-A2: until the
+  -- refunded total covers the refund asked, the rule of rw (a smaller total, a hand refund's, does not).
   select p.id, p.job_id, 'refund', 'refund sent, not yet confirmed by charge.refunded',
          p.updated_at, p.updated_at < now() - interval '1 day', p.refund_cents, p.refund_ref
     from public.payments p
-   where p.provider = 'stripe' and p.refund_ref is not null and coalesce(p.refunded_cents, 0) = 0
-     and p.status not in ('refunded', 'partially_refunded')
+   where p.provider = 'stripe' and p.refund_ref is not null and p.status <> 'refunded'
+     and coalesce(p.refunded_cents, 0) < p.refund_cents
      and not exists (select 1 from public.payment_refund_failures f where f.refund_ref = p.refund_ref)
   union all
   -- F2: each refund the provider failed, until the owner records how it was arranged. Nothing

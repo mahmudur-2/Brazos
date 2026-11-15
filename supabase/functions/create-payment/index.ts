@@ -294,9 +294,10 @@ Deno.serve(async (req) => {
     }
 
     // --- 3. The intent, for exactly what the ledger says ---------------------
-    // metadata[payment_id] is load-bearing, not decoration: apply_payment_event
-    // resolves an event to a ledger row by metadata.payment_id FIRST, and it is
-    // what makes every later event for this charge findable.
+    // metadata[payment_id] names the ledger row for a person reading Stripe.
+    // apply_payment_event finds an intent, charge or refund event by the intent
+    // id (provider_ref, attached below before the client secret leaves), never
+    // by a label (R7-A1); a label finds only a transfer, and marks the app's own refund.
     // A2: a row that already names its intent is resumed from the provider and
     // never created again — the idempotency key lasts about 24 hours, and a POST
     // after that minted a second intent the ledger never named. If that read

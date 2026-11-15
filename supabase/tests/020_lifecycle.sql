@@ -222,6 +222,7 @@ select tests.authenticate_as(:'customer');
 select (public.begin_tip_payment(:'job1', 500)).id as tip1 \gset
 insert into fx values ('tip1', :'tip1');
 select tests.clear_auth();
+select public.attach_provider_ref(:'tip1', 'pi_lc_tip1');
 select tests.lc_event('payment_intent.succeeded', :'tip1', 'pi_lc_tip1');
 select ok((select kind = 'tip' and status = 'held' and amount_cents = 500 and held_at is not null
                   and release_requested_at is not null and transfer_cents = 500 and released_at is null and transfer_ref is null

@@ -22,7 +22,7 @@ test('A10 · "payout on its way" says what it waits for; the tip opens once the 
   const review = code('screens/ReviewAndTipScreen.tsx');
   assert.match(
     review,
-    /: !released \? \( <Text style=\{styles\.cardNote\}> A tip can be added once the job payment reaches \{workerName \?\? 'the worker'\}\. \{!isRefundFailed\(payment\) && !isRefundArranged\(payment\) \? ' Yours is approved and on its way — if they haven’t set up payouts yet, it lands the moment they do\.' : null\} <\/Text> \)/
+    /: !released \? \( <Text style=\{styles\.cardNote\}> A tip can be added once the job payment reaches \{workerName \?\? 'the worker'\}\. \{isPayoutOnItsWay\(payment\) \? ' Yours is approved and on its way — if they haven’t set up payouts yet, it lands the moment they do\.' : null\} <\/Text> \)/
   );
   assert.doesNotMatch(review, /The job payment releases first/);
 
@@ -31,7 +31,7 @@ test('A10 · "payout on its way" says what it waits for; the tip opens once the 
   // the card also carries the refund facts (refundQueued, refundFailed; P3 refundArranged). Codex R5-A5:
   // the note is not shown beside a failed or arranged refund of this payment.
   const detail = code('screens/ClientJobDetailScreen.tsx');
-  assert.match(detail, /\{paymentEyebrow\(\)\} <\/Text> <MoneyText cents=\{customerChargeCents\(payment\)\} state=\{payment\.status\} refundQueued=\{isRefundQueued\(payment\)\} refundFailed=\{isRefundFailed\(payment\)\} refundArranged=\{isRefundArranged\(payment\)\} releaseRequested=\{releaseRequested\} issueOpen=\{!!openDispute\} counterpartFirstName=\{workerFirstName\} \/> (?:\{\} )?\{stripe && releaseRequested && !isRefundFailed\(payment\) && !isRefundArranged\(payment\) \? \( <Text style=\{styles\.paymentNote\}> The payment reaches \{workerFirstName\} once their payout account is ready — it shows as released when the transfer lands\. If they haven’t set up payouts yet, their job screen asks them to\. <\/Text> \) : null\}/);
+  assert.match(detail, /\{paymentEyebrow\(\)\} <\/Text> <MoneyText cents=\{customerChargeCents\(payment\)\} state=\{payment\.status\} refundQueued=\{isRefundQueued\(payment\)\} refundFailed=\{isRefundFailed\(payment\)\} refundArranged=\{isRefundArranged\(payment\)\} releaseRequested=\{releaseRequested\} issueOpen=\{!!openDispute\} counterpartFirstName=\{workerFirstName\} \/> (?:\{\} )?\{stripe && isPayoutOnItsWay\(payment\) \? \( <Text style=\{styles\.paymentNote\}> The payment reaches \{workerFirstName\} once their payout account is ready — it shows as released when the transfer lands\. If they haven’t set up payouts yet, their job screen asks them to\. <\/Text> \) : null\}/);
   assert.doesNotMatch(detail, /paymentsMode !== 'sandbox'/, 'stripe is never locked out by a sandbox-only gate (D18)');
 
   // The worker's job page: a nudge to set up payouts from the hire onwards, before any payment

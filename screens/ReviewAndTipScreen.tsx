@@ -27,14 +27,20 @@ import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
 import { paymentEyebrow } from '../lib/moneyCopy';
-import { customerChargeCents, isRefundArranged, isRefundFailed } from '../lib/paymentRules';
+import {
+  customerChargeCents,
+  isCancellationFeeKept,
+  isPayoutOnItsWay,
+  isRefundArranged,
+  isRefundFailed,
+  isRefundQueued,
+} from '../lib/paymentRules';
 import { firstNameOf } from '../lib/liveJobStatus';
 import {
   classifyTipPoll,
   fetchJobPaymentState,
   fetchJobRefundIssue,
   fetchJobTip,
-  isHeld,
   isReleased,
   isReleaseRequested,
   type Payment,
@@ -478,9 +484,10 @@ export function ReviewAndTipScreen() {
   const tipDoneNote = (() => {
     if (!tip) return null;
     // R4-A5, P3: a failed or arranged refund of the tip: never "on its way" or "went to" the worker.
+    // Codex R7-A3: "on its way" asks the one payout rule (a refund queued, or a tip not queued, says nothing).
     const where = isRefundFailed(tip) || isRefundArranged(tip)
       ? null
-      : isHeld(tip)
+      : isPayoutOnItsWay(tip)
         ? `Your tip is on its way to ${workerName ?? 'the worker'} on top of the job payment.`
         : isReleased(tip)
           ? `Your tip went to ${workerName ?? 'the worker'} on top of the job payment.`
@@ -541,6 +548,8 @@ export function ReviewAndTipScreen() {
                   cents={customerChargeCents(payment)}
                   state={payment.status}
                   releaseRequested={!!payment.release_requested_at}
+                  refundQueued={isRefundQueued(payment)}
+                  feeKept={isCancellationFeeKept(payment)}
                   refundFailed={isRefundFailed(payment)}
                   refundArranged={isRefundArranged(payment)}
                   counterpartFirstName={firstNameOf(workerName)}
@@ -550,8 +559,8 @@ export function ReviewAndTipScreen() {
                     ? payment.release_reason === 'auto_approved'
                       ? 'Released automatically after 72 hours.'
                       : 'Released on your approval.'
-                    : isRefundFailed(payment) || isRefundArranged(payment)
-                      ? // Codex R5-A5: never "on its way" beside a failed or arranged refund of this payment.
+                    : !isPayoutOnItsWay(payment)
+                      ? // Codex R5-A5, R7-A3: never "on its way" beside a refund of this payment (queued, failed or arranged).
                         payment.release_reason === 'auto_approved'
                         ? 'Approved automatically after 72 hours.'
                         : 'Approved on your say-so.'
@@ -598,6 +607,7 @@ export function ReviewAndTipScreen() {
                     cents={tip.amount_cents}
                     state={tip.status}
                     tip
+                    refundQueued={isRefundQueued(tip)}
                     refundFailed={isRefundFailed(tip)}
                     refundArranged={isRefundArranged(tip)}
                     counterpartFirstName={firstNameOf(workerName)}
@@ -627,10 +637,10 @@ export function ReviewAndTipScreen() {
                   // until the transfer lands. A10a (2026-10-03): the tip opens
                   // once the payment reaches the worker, and the screen says
                   // why — and what the wait is, when it is their payout setup.
-                  // Codex R6-A3: the payout sentence never beside a failed or arranged refund.
+                  // Codex R6-A3, R7-A3: the payout sentence only under the one payout rule.
                   <Text style={styles.cardNote}>
                     A tip can be added once the job payment reaches {workerName ?? 'the worker'}.
-                    {!isRefundFailed(payment) && !isRefundArranged(payment)
+                    {isPayoutOnItsWay(payment)
                       ? ' Yours is approved and on its way — if they haven’t set up payouts yet, it lands the moment they do.'
                       : null}
                   </Text>

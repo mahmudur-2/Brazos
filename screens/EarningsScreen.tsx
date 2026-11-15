@@ -16,6 +16,7 @@ import { fetchMyPayoutsStatus } from '../lib/payments/stripe';
 import { fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
 import { workerReceivesCents } from '../lib/earningsMath';
 import { earningsRowMeta } from '../lib/earningsCopy';
+import { isPayoutOnItsWay } from '../lib/paymentRules';
 import { releaseAtLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
 import { formatBudget } from '../lib/jobs';
 import type { ProfileStackNavigation } from '../lib/navigation';
@@ -187,6 +188,7 @@ export function EarningsScreen() {
                                       completed_at: row.job_completed_at ?? null,
                                     }),
                                     waitingOnPayoutSetup: payoutSetupNotice(payouts, [row]) !== null,
+                                    payoutOnItsWay: isPayoutOnItsWay(row),
                                   },
                                   nowMs,
                                   { countdown: releaseAtLabel, timeAgo: formatTimeAgo }

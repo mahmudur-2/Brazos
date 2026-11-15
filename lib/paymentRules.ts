@@ -86,6 +86,24 @@ export function isRefundArranged(payment: {
 }
 
 /**
+ * Codex R7-A3: THE payout promise. A sentence that says the worker's payout is on its way (or waits
+ * only on their payout setup) asks this and nothing else: the row is approved (isReleaseRequested),
+ * no refund is directed to the customer (isRefundQueued: a decision can keep the approval time), and
+ * no refund of it failed or was arranged another way (say less when unsure). The late-cancel fee is
+ * the one payout said beside a refund, and it asks isCancellationFeeKept.
+ */
+export function isPayoutOnItsWay(
+  payment: Pick<Payment, 'status'> & {
+    release_requested_at?: string | null;
+    refund_cents?: number | null;
+    refund_failed_at?: string | null;
+    refund_arranged_at?: string | null;
+  }
+): boolean {
+  return isReleaseRequested(payment) && !isRefundQueued(payment) && !isRefundFailed(payment) && !isRefundArranged(payment);
+}
+
+/**
  * Whether the funding CTA (Checkout) may be offered for this job — THE one
  * derivation for every surface that can show it (AUD-P1-02; the lifecycle
  * derivation drifted into a duplicate once already, so this predicate exists

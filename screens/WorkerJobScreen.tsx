@@ -66,7 +66,7 @@ import { fetchProfileById, type Profile } from '../lib/profiles';
 import { paymentsMode } from '../lib/adapters/payments';
 import { noShowConfirm, paymentEyebrow, workerCancelConfirm } from '../lib/moneyCopy';
 import { workerReceivesCents } from '../lib/earningsMath';
-import { noShowReportable } from '../lib/paymentRules';
+import { isPayoutOnItsWay, isRefundArranged, isRefundFailed, noShowReportable } from '../lib/paymentRules';
 import {
   brazosFeeCents,
   fetchJobPaymentState,
@@ -670,6 +670,9 @@ export function WorkerJobScreen() {
           releaseRequested={isReleaseRequested(payment)}
           issueOpen={issueOpen}
           waitingOnPayoutSetup={waitingOnSetup}
+          // Codex R7-A3: no payout or refund promised beside a failed or arranged refund.
+          refundFailed={isRefundFailed(payment)}
+          refundArranged={isRefundArranged(payment)}
           // Final sweep: the cancellation shape outranks every held sentence
           // (lib/paymentRules.ts) — a cancelled job's row is money going home.
           refundQueued={isRefundQueued(payment)}
@@ -700,15 +703,26 @@ export function WorkerJobScreen() {
             if (lifecycle === 'disputed') {
               return `${clientName} reported an issue, which holds the funds while it’s open. Sort it out together in chat — release resumes when the report is withdrawn or resolved.`;
             }
-            if (isReleaseRequested(payment) && waitingOnSetup) {
+            // Codex R7-A3: approved, then a refund directed to the customer (a decision keeps the approval
+            // time). A never-approved row with a refund queued is R7-A3b, the owner's call: unchanged.
+            if (isReleaseRequested(payment) && isRefundQueued(payment) && !isCancellationFeeKept(payment)) {
+              return `${clientName}’s payment goes back to them.`;
+            }
+            if (isPayoutOnItsWay(payment) && waitingOnSetup) {
               return payment.release_reason === 'auto_approved'
                 ? `Approved automatically after 72 hours with no response from ${clientName}. ${PAYOUT_SETUP_NOTICE}`
                 : `${clientName} approved the finished work. ${PAYOUT_SETUP_NOTICE}`;
             }
-            if (isReleaseRequested(payment)) {
+            if (isPayoutOnItsWay(payment)) {
               return payment.release_reason === 'auto_approved'
                 ? `Approved automatically after 72 hours with no response from ${clientName}. Your payout is on its way and shows as released when the transfer lands.`
                 : `${clientName} approved the finished work. Your payout is on its way and shows as released when the transfer lands.`;
+            }
+            // Codex R7-A3: approved, but a refund of it failed or was arranged another way: the approval alone.
+            if (isReleaseRequested(payment)) {
+              return payment.release_reason === 'auto_approved'
+                ? `Approved automatically after 72 hours with no response from ${clientName}.`
+                : `${clientName} approved the finished work.`;
             }
             if (lifecycle === 'awaiting_approval') {
               return `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically.`;

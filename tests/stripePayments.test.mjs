@@ -484,7 +484,8 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   // the released card and before the legacy no-payment review.
   const completed = code.slice(code.indexOf("job.status === 'completed' ?"));
   const releasedAt = completed.indexOf('isReleased(payment) ? (');
-  const requestedAt = completed.indexOf('releaseRequested ? (');
+  // Codex R7-A3: the approved card asks the one payout rule (no card beside a refund).
+  const requestedAt = completed.indexOf('isPayoutOnItsWay(payment) ? (');
   const legacyAt = completed.indexOf('<ReviewSection');
   assert.ok(releasedAt > 0 && requestedAt > releasedAt && legacyAt > requestedAt);
   assert.match(completed, /Work approved — payout on its way/);

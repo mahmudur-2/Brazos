@@ -47,6 +47,9 @@ export type EarningsRowFacts = {
    *  answered for this row — the caller asks the ONE rule and hands the answer
    *  in, so this import-free module never restates it. */
   waitingOnPayoutSetup?: boolean;
+  /** Codex R7-A3: lib/paymentRules.ts isPayoutOnItsWay, asked by the caller the same way. Without it
+   *  an approved row says only that it is held and not sent. */
+  payoutOnItsWay?: boolean;
 };
 
 export type EarningsFormatters = {
@@ -79,7 +82,8 @@ export function earningsRowMeta(
     // B21: no one approves a tip and no release clock runs on it. A charged tip
     // is queued for transfer at once (release_requested_at, B1) and is on its
     // way until transfer.created releases it; one held without the queue waits.
-    if (!row.release_requested_at) return 'Held — not sent yet';
+    // Codex R7-A3: and one whose refund failed or was arranged (payoutOnItsWay).
+    if (!row.release_requested_at || !row.payoutOnItsWay) return 'Held — not sent yet';
     return row.waitingOnPayoutSetup ? 'Waiting on your payout setup' : 'On its way to you';
   }
 
@@ -89,6 +93,8 @@ export function earningsRowMeta(
     // #63 (M-14): approved, but nothing can be sent until the worker's payout
     // setup is done — so the line names their step, never "on its way".
     if (row.release_requested_at) {
+      // Codex R7-A3: a refund of it failed or was arranged another way, so no payout is promised.
+      if (!row.payoutOnItsWay) return 'Held — not sent yet';
       return row.waitingOnPayoutSetup ? 'Approved — waiting on your payout setup' : 'Approved — payout on its way';
     }
     const deadline = row.releaseDeadlineMs;

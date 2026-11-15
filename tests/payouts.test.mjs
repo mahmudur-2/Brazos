@@ -195,7 +195,7 @@ test('5 · the tip poll classifier (R6c D3, B1 rule 8): held is charged and rele
   );
 });
 
-test('[static] 5b · the tip card (B1 rule 8): "went to" only behind isReleased, "on its way" behind isHeld, and no word of sent or paid', () => {
+test('[static] 5b · the tip card (B1 rule 8): "went to" only behind isReleased, "on its way" behind isPayoutOnItsWay, and no word of sent or paid', () => {
   const src = read('screens/ReviewAndTipScreen.tsx');
   const start = src.indexOf('const tipDoneNote = (() => {');
   assert.notEqual(start, -1, 'the tip card computes its note in tipDoneNote');
@@ -203,7 +203,8 @@ test('[static] 5b · the tip card (B1 rule 8): "went to" only behind isReleased,
   assert.notEqual(end, -1, 'tipDoneNote closes');
   const note = src.slice(start, end);
 
-  assert.match(note, /isHeld\(tip\)\s*\?\s*`Your tip is on its way to /, 'a held tip is on its way');
+  // Codex R7-A3: held and queued for its transfer, with no refund queued, failed or arranged (isPayoutOnItsWay).
+  assert.match(note, /isPayoutOnItsWay\(tip\)\s*\?\s*`Your tip is on its way to /, 'a queued tip is on its way');
   assert.match(note, /:\s*isReleased\(tip\)\s*\?\s*`Your tip went to /, 'only a released tip went to the worker');
   assert.doesNotMatch(note, /\b(sent|paid|received)\b/i, 'the note never says sent, paid or received');
 

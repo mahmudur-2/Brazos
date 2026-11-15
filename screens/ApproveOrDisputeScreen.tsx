@@ -28,7 +28,14 @@ import {
   isReleaseRequested,
   type Payment,
 } from '../lib/payments';
-import { customerChargeCents, isRefundArranged, isRefundFailed } from '../lib/paymentRules';
+import {
+  customerChargeCents,
+  isCancellationFeeKept,
+  isPayoutOnItsWay,
+  isRefundArranged,
+  isRefundFailed,
+  isRefundQueued,
+} from '../lib/paymentRules';
 import {
   DISPUTE_REASONS,
   DISPUTE_REASON_LABELS,
@@ -352,6 +359,8 @@ export function ApproveOrDisputeScreen() {
               size="lg"
               releaseRequested={releaseRequested}
               issueOpen={dispute?.status === 'open'}
+              refundQueued={isRefundQueued(payment)}
+              feeKept={isCancellationFeeKept(payment)}
               refundFailed={isRefundFailed(payment)}
               refundArranged={isRefundArranged(payment)}
             />
@@ -367,10 +376,13 @@ export function ApproveOrDisputeScreen() {
                 ? payment.release_reason === 'auto_approved'
                   ? 'Released automatically after 72 hours with no issue reported.'
                   : 'You approved the work and the payment was released to the worker.'
-                : releaseRequested && (isRefundFailed(payment) || isRefundArranged(payment))
-                  ? // Codex R5-A5: never "on its way" beside a failed or arranged refund of this payment.
+                : releaseRequested && !isPayoutOnItsWay(payment)
+                  ? // Codex R5-A5, R7-A3: never "on its way" beside a refund of this payment (queued, failed or
+                    // arranged). A refund queued after the timer can follow an issue reported later.
                     payment.release_reason === 'auto_approved'
-                    ? 'Approved automatically after 72 hours with no issue reported.'
+                    ? isRefundQueued(payment)
+                      ? 'Approved automatically after 72 hours.'
+                      : 'Approved automatically after 72 hours with no issue reported.'
                     : 'You approved the work.'
                 : releaseRequested
                   ? payment.release_reason === 'auto_approved'

@@ -22,7 +22,7 @@ const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm,
 const code = (path) => strip(read(path)).replace(/\s+/g, ' ');
 
 const { paymentCaption } = await import(pathToFileURL(join(root, 'lib/moneyCopy.ts')).href);
-const { isRefundArranged, isRefundFailed } = await import(pathToFileURL(join(root, 'lib/paymentRules.ts')).href);
+const { isPayoutOnItsWay, isRefundArranged, isRefundFailed } = await import(pathToFileURL(join(root, 'lib/paymentRules.ts')).href);
 
 const FAILED_CAPTION = 'Refund didn’t go through — Brazos will arrange it';
 const ARRANGED_CAPTION = 'Refunded another way';
@@ -80,8 +80,9 @@ test('F2 · the caption: the customer is never told the money is on its way to t
     FAILED_CAPTION,
     'the fee variant too'
   );
-  // The worker's own money is not touched by the customer's refund: their sentences stay.
-  assert.equal(paymentCaption({ status: 'held', refundQueued: true, refundFailed: true }, 'worker'), 'Refund on its way to the customer');
+  // The worker's own money is not touched by the customer's refund: their fee sentence stays. Codex R7-A3:
+  // the worker is not told that a refund which failed is on its way to the customer (no caption).
+  assert.equal(paymentCaption({ status: 'held', refundQueued: true, refundFailed: true }, 'worker'), null);
   assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true, refundFailed: true }, 'worker'), 'Cancellation fee — on its way to you');
   // R3-A8: a refunded or partially_refunded row whose refund failed is never "Refunded" to the customer.
   assert.equal(paymentCaption({ status: 'refunded', refundFailed: true }, 'customer'), FAILED_CAPTION);
@@ -181,17 +182,24 @@ test('R4-A5, P3 · [static] every customer card passes both facts; the worker ca
       assert.ok(card.includes(`refundArranged={isRefundArranged(${row})}`), `${path}: a card passes refundArranged (${row})`);
     }
   }
-  const workerCards = cards('screens/WorkerJobScreen.tsx').concat(cards('screens/EarningsScreen.tsx'));
-  assert.ok(workerCards.length >= 2, 'the worker cards are found (WorkerJobScreen, EarningsScreen)');
-  for (const card of workerCards) {
-    assert.ok(!/refundFailed|refundArranged/.test(card), 'a worker card never carries the customer sentences');
+  // Codex R7-A3: the worker's job card passes both facts, so it promises no payout beside a failed or
+  // arranged refund (tests/payoutPromise.test.mjs); paymentCaption never gives the worker the customer's
+  // sentences (P3 above). The Earnings figure shows no caption and carries neither.
+  const workerCards = cards('screens/WorkerJobScreen.tsx');
+  assert.equal(workerCards.length, 1, 'the worker job card is found');
+  assert.ok(workerCards[0].includes('refundFailed={isRefundFailed(payment)}') && workerCards[0].includes('refundArranged={isRefundArranged(payment)}'),
+    'the worker job card passes both facts');
+  const earningsCards = cards('screens/EarningsScreen.tsx');
+  assert.ok(earningsCards.length >= 1, 'the Earnings figure is found');
+  for (const card of earningsCards) {
+    assert.ok(card.includes('captionHidden') && !/refundFailed|refundArranged/.test(card), 'the Earnings figure shows no caption');
   }
   const columns = read('lib/payments.ts').match(/const PAYMENT_COLUMNS =\s*'([^']+)'/)[1].split(', ');
   assert.ok(columns.includes('refund_failed_at') && columns.includes('refund_arranged_at'), 'PAYMENT_COLUMNS reads both columns');
   // The tip note never says the tip is on its way, or went, to the worker once its refund failed or was arranged.
   const review = code('screens/ReviewAndTipScreen.tsx');
   const tipNote = review.slice(review.indexOf('const tipDoneNote = (() => {'));
-  assert.match(tipNote, /^const tipDoneNote = \(\(\) => \{ if \(!tip\) return null; const where = isRefundFailed\(tip\) \|\| isRefundArranged\(tip\) \? null : isHeld\(tip\)/);
+  assert.match(tipNote, /^const tipDoneNote = \(\(\) => \{ if \(!tip\) return null; const where = isRefundFailed\(tip\) \|\| isRefundArranged\(tip\) \? null : isPayoutOnItsWay\(tip\)/);
 });
 
 test('R5-A4, R6-A2 · [static] a failed or arranged refund on a failed or voided row reaches the customer', async () => {
@@ -241,25 +249,26 @@ test('R5-A4, R6-A2 · [static] a failed or arranged refund on a failed or voided
   assert.match(review, /\{tipIssue \? \( <MoneyText cents=\{tipIssue\.amount_cents\} state=\{tipIssue\.status\} tip refundFailed=\{isRefundFailed\(tipIssue\)\} refundArranged=\{isRefundArranged\(tipIssue\)\} counterpartFirstName=\{firstNameOf\(workerName\)\} \/> \) : null\}/);
 });
 
-test('R5-A5 · [static] no "on its way to the worker" beside a failed or arranged refund; the approval sentences stay', () => {
+test('R5-A5, R7-A3 · [static] no "on its way to the worker" beside a refund (queued, failed or arranged); the approval sentences stay', () => {
   const ON_ITS_WAY = ' The payment is on its way to the worker and shows as released when the transfer lands.';
   const detail = code('screens/ClientJobDetailScreen.tsx');
-  assert.match(detail, /\{stripe && releaseRequested && !isRefundFailed\(payment\) && !isRefundArranged\(payment\) \? \( <Text style=\{styles\.paymentNote\}> The payment reaches/);
+  assert.match(detail, /\{stripe && isPayoutOnItsWay\(payment\) \? \( <Text style=\{styles\.paymentNote\}> The payment reaches/);
   assert.equal((detail.match(/The payment reaches \{workerFirstName\} once their payout account is ready/g) ?? []).length, 1, 'one note, behind the guard');
 
   // The refund branch comes before the approval sentences; a comment may sit after "?".
   const approve = code('screens/ApproveOrDisputeScreen.tsx').match(
-    /releaseRequested && \(isRefundFailed\(payment\) \|\| isRefundArranged\(payment\)\) \? (?:\/\/[^']*)?payment\.release_reason === 'auto_approved' \? '([^']*)' : '([^']*)' : releaseRequested \? payment\.release_reason === 'auto_approved' \? (?:\/\/[^']*)?'([^']*)' : '([^']*)'/
+    /releaseRequested && !isPayoutOnItsWay\(payment\) \? (?:\/\/[^']*)?payment\.release_reason === 'auto_approved' \? isRefundQueued\(payment\) \? '([^']*)' : '([^']*)' : '([^']*)' : releaseRequested \? payment\.release_reason === 'auto_approved' \? (?:\/\/[^']*)?'([^']*)' : '([^']*)'/
   );
   assert.ok(approve, 'ApproveOrDispute: the refund branch, then the approval sentences');
-  assert.deepEqual(approve.slice(1, 3), ['Approved automatically after 72 hours with no issue reported.', 'You approved the work.']);
-  assert.deepEqual(approve.slice(3, 5), [
+  // R7-A3: on a refund row an issue can have been reported after the timer: RT's existing first sentence.
+  assert.deepEqual(approve.slice(1, 4), ['Approved automatically after 72 hours.', 'Approved automatically after 72 hours with no issue reported.', 'You approved the work.']);
+  assert.deepEqual(approve.slice(4, 6), [
     `Approved automatically after 72 hours with no issue reported.${ON_ITS_WAY}`,
     `You approved the work.${ON_ITS_WAY}`,
   ], 'control: without a refund issue the sentences are as before');
 
   const review = code('screens/ReviewAndTipScreen.tsx').match(
-    /: isRefundFailed\(payment\) \|\| isRefundArranged\(payment\) \? (?:\/\/[^']*)?payment\.release_reason === 'auto_approved' \? '([^']*)' : '([^']*)' : payment\.release_reason === 'auto_approved' \? '([^']*)' : '([^']*)'/
+    /: !isPayoutOnItsWay\(payment\) \? (?:\/\/[^']*)?payment\.release_reason === 'auto_approved' \? '([^']*)' : '([^']*)' : payment\.release_reason === 'auto_approved' \? '([^']*)' : '([^']*)'/
   );
   assert.ok(review, 'ReviewAndTip: the refund branch, then the approval sentences');
   assert.deepEqual(review.slice(1, 3), ['Approved automatically after 72 hours.', 'Approved on your say-so.']);
@@ -269,23 +278,28 @@ test('R5-A5 · [static] no "on its way to the worker" beside a failed or arrange
   ], 'control: without a refund issue the sentences are as before');
 });
 
-test('R6-A3 · the tip card’s payout sentence is never beside a failed or arranged refund; the first sentence stays (A10a)', () => {
+test('R6-A3, R7-A3 · the tip card’s payout sentence only under the one payout rule; the first sentence stays (A10a)', () => {
   const PAYOUT = 'Yours is approved and on its way — if they haven’t set up payouts yet, it lands the moment they do.';
   const review = code('screens/ReviewAndTipScreen.tsx');
   const branch = review.match(
     /\) : !released \? \( <Text style=\{styles\.cardNote\}> A tip can be added once the job payment reaches \{workerName \?\? 'the worker'\}\. \{([^?{}]+) \? ' ([^']*)' : null\} <\/Text> \) : !stripeReady\(\) \? \(/
   );
   assert.ok(branch, 'the !released branch: the first sentence always, then the payout sentence behind a guard');
-  assert.equal(branch[1].trim(), '!isRefundFailed(payment) && !isRefundArranged(payment)', 'the R5-A5 rule');
+  assert.equal(branch[1].trim(), 'isPayoutOnItsWay(payment)', 'the one payout rule (R7-A3)');
   assert.equal(branch[2], PAYOUT, 'the owner’s words (A10a), unchanged');
   assert.equal((review.match(/Yours is approved and on its way/g) ?? []).length, 1, 'said in this branch only');
   // Executed: the guard as written, on the rows Codex names (held, approval time set, nothing transferred).
-  const shown = new Function('isRefundFailed', 'isRefundArranged', 'payment', `return ${branch[1]};`);
+  const shown = new Function('isPayoutOnItsWay', 'payment', `return ${branch[1]};`);
   const approved = { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 0, refund_cents: 5375 };
-  assert.equal(shown(isRefundFailed, isRefundArranged, { ...approved, refund_failed_at: '2026-11-15T11:00:00Z', refund_arranged_at: null }), false,
+  assert.equal(shown(isPayoutOnItsWay, { ...approved, refund_failed_at: '2026-11-15T11:00:00Z', refund_arranged_at: null }), false,
     'refund failed: no payout sentence');
-  assert.equal(shown(isRefundFailed, isRefundArranged, { ...approved, refund_failed_at: null, refund_arranged_at: '2026-11-15T12:00:00Z' }), false,
+  assert.equal(shown(isPayoutOnItsWay, { ...approved, refund_failed_at: null, refund_arranged_at: '2026-11-15T12:00:00Z' }), false,
     'refund arranged: no payout sentence');
-  assert.equal(shown(isRefundFailed, isRefundArranged, { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 4975 }), true,
+  // Codex R7-A3: the refund directed to the customer after the approval, both refund flags null.
+  assert.equal(shown(isPayoutOnItsWay, { ...approved, refund_failed_at: null, refund_arranged_at: null }), false,
+    'refund queued, nothing failed: no payout sentence');
+  assert.equal(shown(isPayoutOnItsWay, { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 4975, refund_cents: 0,
+    refund_failed_at: '2026-11-15T11:00:00Z' }), false, 'a hand refund failed, none queued: no payout sentence');
+  assert.equal(shown(isPayoutOnItsWay, { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 4975 }), true,
     'control: approved, no refund issue: the sentence as before');
 });

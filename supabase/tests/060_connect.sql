@@ -98,6 +98,11 @@ begin
   if p_with_metadata then
     v_obj := v_obj || jsonb_build_object('metadata', jsonb_build_object('payment_id', p_payment));
   end if;
+  -- R7-A1: a Charge, a Dispute and a Refund carry their payment_intent (Stripe always sends it), which
+  -- is how apply_payment_event finds the row; the row's own intent when a payload here leaves it out.
+  if (p_type like 'charge.%' or p_type like 'refund.%') and not v_obj ? 'payment_intent' then
+    v_obj := v_obj || jsonb_build_object('payment_intent', (select provider_ref from public.payments where id::text = p_payment));
+  end if;
   insert into public.payment_events (id, type, payload)
   values (p_id, p_type, jsonb_build_object('id', p_id, 'type', p_type, 'data', jsonb_build_object('object', v_obj)))
   on conflict (id) do nothing;

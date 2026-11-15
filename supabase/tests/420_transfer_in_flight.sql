@@ -19,7 +19,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(113);
+select plan(114);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -627,6 +627,19 @@ select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).trans
   'X31: (c) a second issue decided for the worker passes: the app never sent a refund');
 select is(exists (select 1 from public.transfers_due where id = :'pxc')::text || ' / ' || tests.if_refund_lines(:'pxc'),
   'true / none', 'X32: (c) the transfer is due inside the charge less the 60 cents, and no refund line is left');
+
+-- INV (Codex R7-A2), last: no refund still owed in this file is missing from both refunds_due and the
+-- refund lines of payment_attention. The one exception: the recorded refund itself failed and its
+-- arrangement covers the refund asked.
+select is((select count(*)::integer from public.payments p
+            where p.provider = 'stripe' and coalesce(p.refund_cents, 0) > 0 and p.status <> 'refunded'
+              and coalesce(p.refunded_cents, 0) < p.refund_cents
+              and not exists (select 1 from public.refunds_due r where r.id = p.id)
+              and not exists (select 1 from public.payment_attention a where a.payment_id = p.id and a.what = 'refund')
+              and not exists (select 1 from public.payment_refund_failures f
+                               where f.refund_ref = p.refund_ref and f.arranged_at is not null
+                                 and coalesce(f.amount_cents, p.charge_amount_cents) >= p.refund_cents)),
+  0, 'INV (R7-A2): every refund owed is in refunds_due or has a refund line in payment_attention');
 
 select * from finish();
 rollback;

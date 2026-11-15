@@ -97,7 +97,7 @@ test('a6 · every payment state gets its own sentence, and nothing else gets one
   // row stays held until the transfer lands, and it is not "held in
   // protection" any more — the customer's decision is made.
   assert.equal(
-    earningsRowMeta(facts({ release_requested_at: '2026-09-05T11:00:00Z' }), NOW, FAKE),
+    earningsRowMeta(facts({ release_requested_at: '2026-09-05T11:00:00Z', payoutOnItsWay: true }), NOW, FAKE),
     `Approved ${EM} payout on its way`
   );
   // Held with the release clock still running. The figure is the formatter's,
@@ -150,7 +150,7 @@ test('a6 · every payment state gets its own sentence, and nothing else gets one
 test('#63 · an approved payment waiting on the payout setup says so, and only then', async () => {
   assert.equal(
     earningsRowMeta(
-      facts({ provider: 'stripe', release_requested_at: '2026-09-05T11:00:00Z', waitingOnPayoutSetup: true }),
+      facts({ provider: 'stripe', release_requested_at: '2026-09-05T11:00:00Z', waitingOnPayoutSetup: true, payoutOnItsWay: true }),
       NOW,
       FAKE
     ),
@@ -159,7 +159,7 @@ test('#63 · an approved payment waiting on the payout setup says so, and only t
   // Enabled, unread or sandbox: today's sentence, unchanged.
   assert.equal(
     earningsRowMeta(
-      facts({ provider: 'stripe', release_requested_at: '2026-09-05T11:00:00Z', waitingOnPayoutSetup: false }),
+      facts({ provider: 'stripe', release_requested_at: '2026-09-05T11:00:00Z', waitingOnPayoutSetup: false, payoutOnItsWay: true }),
       NOW,
       FAKE
     ),
@@ -208,9 +208,9 @@ test('B21 · the read carries refund_cents and transfer_cents, so a refund-queue
 test('B21 · a tip row has its own sentence: on its way, never approved, no release clock', async () => {
   const tip = (over) => facts({ kind: 'tip', provider: 'stripe', ...over });
   const queued = '2026-09-05T11:00:00Z';
-  assert.equal(earningsRowMeta(tip({ release_requested_at: queued }), NOW, FAKE), 'On its way to you');
+  assert.equal(earningsRowMeta(tip({ release_requested_at: queued, payoutOnItsWay: true }), NOW, FAKE), 'On its way to you');
   assert.equal(
-    earningsRowMeta(tip({ release_requested_at: queued, waitingOnPayoutSetup: true }), NOW, FAKE),
+    earningsRowMeta(tip({ release_requested_at: queued, waitingOnPayoutSetup: true, payoutOnItsWay: true }), NOW, FAKE),
     'Waiting on your payout setup'
   );
   // Held but not queued (B1's amount lock): no clock, even when the job has one.
@@ -223,7 +223,7 @@ test('B21 · a tip row has its own sentence: on its way, never approved, no rele
     assert.doesNotMatch(earningsRowMeta(tip(over), NOW, FAKE), /Approved|Paid|protection/);
   }
   // A job payment keeps its sentence.
-  assert.equal(earningsRowMeta(facts({ release_requested_at: queued }), NOW, FAKE), `Approved ${EM} payout on its way`);
+  assert.equal(earningsRowMeta(facts({ release_requested_at: queued, payoutOnItsWay: true }), NOW, FAKE), `Approved ${EM} payout on its way`);
   // The screen hands the kind in.
   assert.match(await read('screens/EarningsScreen.tsx'), /kind: row\.kind,/);
 });

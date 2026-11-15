@@ -108,6 +108,11 @@ begin
   if p_with_metadata then
     v_obj := v_obj || jsonb_build_object('metadata', jsonb_build_object('payment_id', p_payment));
   end if;
+  -- R7-A1: a Charge, a Dispute and a Refund carry their payment_intent (Stripe always sends it), which
+  -- is how apply_payment_event finds the row; the row's own intent when a payload here leaves it out.
+  if (p_type like 'charge.%' or p_type like 'refund.%') and not v_obj ? 'payment_intent' then
+    v_obj := v_obj || jsonb_build_object('payment_intent', (select provider_ref from public.payments where id::text = p_payment));
+  end if;
   insert into public.payment_events (id, type, payload)
   values (p_id, p_type, jsonb_build_object('id', p_id, 'type', p_type, 'data', jsonb_build_object('object', v_obj)))
   on conflict (id) do nothing;
@@ -262,7 +267,7 @@ select is(public.apply_payment_event('evt_j1_succeeded') ->> 'already', 'true', 
 select is((select held_at from public.payments where id = :'p1'), :'p1_held'::timestamptz, '1: three applications of one event id moved the row exactly once');
 select ok((select processed_at is not null and attempts = 0 and error is null and payment_id = :'p1' from public.payment_events where id = 'evt_j1_succeeded'),
   '1: the processed event records its payment and no error');
-select is(tests.r4_event('evt_bad', 'payment_intent.succeeded', 'not-a-uuid', '{"id":"pi_bad"}'::jsonb) ->> 'ok', 'false',
+select is(tests.r4_event('evt_bad', 'transfer.created', 'not-a-uuid', '{"id":"tr_bad"}'::jsonb) ->> 'ok', 'false',
   '1: a bad payload returns ok:false rather than raising');
 select ok((select processed_at is null and attempts = 1 and error like '%invalid input syntax for type uuid%' from public.payment_events where id = 'evt_bad'),
   '1: the bad payload is recorded on the event — unprocessed, attempts 1, the error text');
@@ -363,6 +368,7 @@ insert into fx values ('j3', :'j3');
 select tests.authenticate_as(:'customer');
 select (public.begin_job_payment(:'j3')).id as p3a \gset
 select tests.clear_auth();
+select public.attach_provider_ref(:'p3a', 'pi_j3a');
 select is(tests.r4_event('evt_j3_cancel', 'payment_intent.canceled', :'p3a'::text, '{"id":"pi_j3a"}'::jsonb) ->> 'ok', 'true',
   '4: payment_intent.canceled applies to the unfunded row');
 select is((select status::text from public.payments where id = :'p3a'), 'voided', '4: the unfunded row is voided');
@@ -404,6 +410,7 @@ select throws_ok($$ select public.begin_tip_payment((select v from fx where k = 
   'P0001', 'Job not found', '5: the worker cannot tip themselves');
 select tests.clear_auth();
 select is((select status::text from public.payments where id = :'t3'), 'unfunded', '5: the tip is still unfunded before the provider event');
+select public.attach_provider_ref(:'t3', 'pi_t3');
 select is(tests.r4_event('evt_t3', 'payment_intent.succeeded', :'t3'::text, '{"id":"pi_t3"}'::jsonb) ->> 'ok', 'true', '5: payment_intent.succeeded applies to the tip');
 select ok((select status = 'held' and held_at is not null and release_requested_at is not null and transfer_cents = 2500
                   and released_at is null and transfer_ref is null from public.payments where id = :'t3'),

@@ -56,10 +56,10 @@
 // the queue (Codex R3-A6) and the next tick asks again. A cancel carries no
 // idempotency key: a second cancel is answered "already canceled", which is final.
 //
-// THE TRANSFER MUST CARRY metadata[payment_id]. apply_payment_event() resolves
-// an event to a ledger row by metadata.payment_id first, then by provider_ref
-// for payment_intent.* and charge.* events — there is no fallback for a
-// transfer.*. A transfer sent without it produces a transfer.created that
+// THE TRANSFER MUST CARRY metadata[payment_id]. apply_payment_event() finds an
+// intent, charge or refund event by the intent id (provider_ref), and a
+// transfer.* event by metadata.payment_id alone (R7-A1); a refund's label marks
+// the app's own refund. A transfer sent without it produces a transfer.created that
 // matches no row, is marked processed, and leaves the payment held forever.
 //
 // ---------------------------------------------------------------------------

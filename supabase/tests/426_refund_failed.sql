@@ -8,7 +8,9 @@
 -- row with a refund failure; J) and R5-A4 (I, the customer's read of a voided row's failed refund);
 -- after round 6: R6-A1 (H15-H18, refund_ref only for the app's own refund of the current attempt;
 -- the "failed before" line says to look at the charge's refunds first) and R6-A2 (I3, I4, an open
--- failure is read before arranged history).
+-- failure is read before arranged history); after round 7: R7-A1 (H19-H23, an event finds its payment by
+-- Stripe's own link to the intent, never by a label naming another payment) and R7-A2 (H17b, H17c, and
+-- INV: no refund owed is missing from both refunds_due and payment_attention).
 --
 -- THE PROVIDER'S FACTS (docs.stripe.com/refunds, "Failed refunds"): the Refund's status becomes
 -- failed with a failure_reason, refund.failed is sent, the money returns to the platform's balance,
@@ -24,7 +26,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(77);
+select plan(85);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -156,6 +158,21 @@ $$;
 
 create or replace function tests.rf_lines(p_pid uuid, p_like text) returns integer language sql as $$
   select count(*)::integer from public.payment_attention a where a.payment_id = p_pid and a.reason like p_like
+$$;
+
+-- INV (Codex R7-A2): the refunds still owed that nothing lists; the invariant is 0. Owed: refund_cents > 0,
+-- not refunded, and the refunded total does not cover it. Listed: in refunds_due (sent by itself) or a
+-- refund line of payment_attention (a person). The one exception: the recorded refund itself failed and
+-- its arrangement (resolve_refund_failure) covers the refund asked.
+create or replace function tests.rf_inv() returns integer language sql as $$
+  select count(*)::integer from public.payments p
+   where p.provider = 'stripe' and coalesce(p.refund_cents, 0) > 0 and p.status <> 'refunded'
+     and coalesce(p.refunded_cents, 0) < p.refund_cents
+     and not exists (select 1 from public.refunds_due r where r.id = p.id)
+     and not exists (select 1 from public.payment_attention a where a.payment_id = p.id and a.what = 'refund')
+     and not exists (select 1 from public.payment_refund_failures f
+                      where f.refund_ref = p.refund_ref and f.arranged_at is not null
+                        and coalesce(f.amount_cents, p.charge_amount_cents) >= p.refund_cents)
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -617,6 +634,17 @@ select tests.rf_try(format('select public.record_settlement_sent(%L, %L, %L, %s)
 select is(:'k10o' || '/' || tests.rf_state(:'pk10') || '/' || tests.rf_lines(:'pk10', 'refund sent, not yet confirmed by charge.refunded')
           || '/' || tests.rf_later(:'pk10'),
   'ok: true/held/0/re_rf_k10_own/1/false/0', 'H17 (R6-A1): the app''s own refund id is then recorded, listed as sent and not yet confirmed');
+-- Codex R7-A2: an older charge.refunded counted only the hand refund (2000, before it failed); the
+-- app's own refund is still not confirmed, so its line stays (and nothing owed is unlisted). A total
+-- that covers the refund asked clears it.
+select tests.rf_refunded('evt_rf_k10_ref1', 1800000150, :'pk10', 2000, 're_rf_k10_hand');
+select is(tests.rf_state(:'pk10') || '/' || tests.rf_lines(:'pk10', 'refund sent, not yet confirmed by charge.refunded')
+          || '/' || tests.rf_inv(),
+  'partially_refunded/2000/re_rf_k10_own/1/0', 'H17b (R7-A2): a smaller refunded total keeps the line of the app''s refund sent and not yet confirmed');
+select tests.rf_refunded('evt_rf_k10_ref2', 1800000200, :'pk10', (select refund_cents from public.payments where id = :'pk10'), 're_rf_k10_own');
+select is(tests.rf_state(:'pk10') || '/' || tests.rf_lines(:'pk10', 'refund sent, not yet confirmed by charge.refunded'),
+  'refunded/' || (select refund_cents::text from public.payments where id = :'pk10') || '/re_rf_k10_own/0',
+  'H17c (R7-A2): a refunded total that covers the refund asked clears the line');
 
 -- R6-A1, the attempt condition beside the label: attempt 0 stopped, the owner reopened, a decision for
 -- the worker set the refund to 0; then attempt 0's own refund (with metadata) fails late. Kept out of
@@ -635,6 +663,97 @@ select is(:'k11a' || '/' || :'k11o' || '/' || :'k11w' || '/' || :'k11c' || '/'
           || coalesce((select refund_ref from public.payments where id = :'pk11'), 'null') || '/' || tests.rf_later(:'pk11'),
   'ok: ' || :ck11 || '/ok: true/ok: 0/ok: ' || :ck11 || '/null/false/1',
   'H18 (R6-A1): a late failure of an older attempt''s own refund leaves refund_ref empty: the owner can still decide for the customer, and it is listed');
+
+-- Codex R7-A1: an event finds its payment by Stripe's own link to the intent (a Refund's, a Charge's or
+-- a Dispute's payment_intent; a PaymentIntent's id), never by metadata.payment_id, which a hand edit in
+-- Stripe can point at another payment. A's refund and B's both began and their answers were lost;
+-- A's refund fails carrying B's id.
+select tests.rf_job('RF label A', 'held') as jk12 \gset
+select tests.rf_pid(:'jk12') as pk12 \gset
+select tests.rf_cancel(:'jk12');
+select tests.rf_sent_lost(:'pk12') as k12s \gset
+select tests.rf_job('RF label B', 'held') as jk13 \gset
+select tests.rf_pid(:'jk13') as pk13 \gset
+select tests.rf_cancel(:'jk13');
+select tests.rf_sent_lost(:'pk13') as k13s \gset
+select refund_cents as ck12 from public.payments where id = :'pk12' \gset
+select tests.rf_event('evt_rf_k12_fail', 'refund.failed', 1800000100, jsonb_build_object(
+  'id', 're_rf_k12_own', 'object', 'refund', 'amount', :ck12,
+  'payment_intent', (select provider_ref from public.payments where id = :'pk12'),
+  'status', 'failed', 'failure_reason', 'expired_or_canceled_card',
+  'metadata', jsonb_build_object('payment_id', :'pk13')));
+select is(tests.rf_state(:'pk12') || '/' || tests.rf_flag(:'pk12') || '/' || tests.rf_failures(:'pk12') || '/' || tests.rf_later(:'pk12'),
+  'held/0/null/true/ok: re_rf_k12_own:' || :ck12 || ':expired_or_canceled_card:waiting/false/1',
+  'H19 (R7-A1): A''s refund fails labelled with B''s id: A records the failure, keeps refund_ref empty, sends nothing and is listed');
+select is(tests.rf_state(:'pk13') || '/' || tests.rf_flag(:'pk13') || '/' || tests.rf_failures(:'pk13') || '/'
+          || tests.rf_try(format('select public.record_settlement_sent(%L, %L, %L, %s)::text', :'pk13', 'refund', 're_rf_k13_own',
+                                 (select refund_cents from public.payments where id = :'pk13'))),
+  'held/0/null/false/ok: null/ok: true',
+  'H20 (R7-A1): B is untouched, and its own refund id is then recorded');
+
+-- A label that names no payment: a valid uuid, then not a uuid at all.
+select tests.rf_job('RF label none', 'held') as jk14 \gset
+select tests.rf_pid(:'jk14') as pk14 \gset
+select tests.rf_cancel(:'jk14');
+select tests.rf_event('evt_rf_k14_a', 'refund.failed', 1800000100, jsonb_build_object(
+  'id', 're_rf_k14_a', 'object', 'refund', 'amount', 1000,
+  'payment_intent', (select provider_ref from public.payments where id = :'pk14'),
+  'status', 'failed', 'failure_reason', 'expired_or_canceled_card',
+  'metadata', jsonb_build_object('payment_id', '00000000-0000-4000-8000-000000000d0d')));
+select tests.rf_event('evt_rf_k14_b', 'refund.failed', 1800000100, jsonb_build_object(
+  'id', 're_rf_k14_b', 'object', 'refund', 'amount', 1000,
+  'payment_intent', (select provider_ref from public.payments where id = :'pk14'),
+  'status', 'failed', 'failure_reason', 'expired_or_canceled_card',
+  'metadata', jsonb_build_object('payment_id', 'not-a-uuid')));
+select is(tests.rf_failures(:'pk14') || '/' || tests.rf_later(:'pk14') || '/'
+          || (select count(*)::text from public.payment_events
+               where id in ('evt_rf_k14_a', 'evt_rf_k14_b') and processed_at is not null and payment_id = :'pk14'),
+  'ok: re_rf_k14_a:1000:expired_or_canceled_card:waiting, re_rf_k14_b:1000:expired_or_canceled_card:waiting/false/1/2',
+  'H21 (R7-A1): a label naming no payment, or not a uuid: the refund''s own payment records the failure and is listed');
+
+-- The same for a Charge and a Dispute: C's charge.refunded carries D's id, D's dispute carries C's.
+select tests.rf_job('RF label C', 'held') as jk15 \gset
+select tests.rf_pid(:'jk15') as pk15 \gset
+select tests.rf_cancel(:'jk15');
+select public.settlement_send_begin(:'pk15', 'refund', 0, (select refund_cents from public.payments where id = :'pk15')) as k15b \gset
+select public.record_settlement_sent(:'pk15', 'refund', 're_rf_k15_own', (select refund_cents from public.payments where id = :'pk15')) as k15s \gset
+select tests.rf_job('RF label D', 'approved') as jk16 \gset
+select tests.rf_pid(:'jk16') as pk16 \gset
+select refund_cents as ck15 from public.payments where id = :'pk15' \gset
+select tests.rf_event('evt_rf_k15_ref', 'charge.refunded', 1800000100, jsonb_build_object(
+  'id', 'ch_rf_k15', 'object', 'charge',
+  'payment_intent', (select provider_ref from public.payments where id = :'pk15'),
+  'amount_refunded', :ck15,
+  'refunds', jsonb_build_object('data', jsonb_build_array(jsonb_build_object('id', 're_rf_k15_own'))),
+  'metadata', jsonb_build_object('payment_id', :'pk16')));
+select tests.rf_event('evt_rf_k16_dsp', 'charge.dispute.created', 1800000100, jsonb_build_object(
+  'id', 'dp_rf_k16', 'object', 'dispute', 'status', 'needs_response',
+  'amount', (select charge_amount_cents from public.payments where id = :'pk16'),
+  'payment_intent', (select provider_ref from public.payments where id = :'pk16'),
+  'metadata', jsonb_build_object('payment_id', :'pk15')));
+select is(tests.rf_state(:'pk15') || '/' || (select (chargeback_at is not null)::text from public.payments where id = :'pk15') || '/'
+          || tests.rf_state(:'pk16') || '/' || (select coalesce(refund_cents, 0)::text || '/' || (chargeback_at is not null)::text
+                                                   from public.payments where id = :'pk16') || '/'
+          || exists (select 1 from public.transfers_due t where t.id = :'pk16')::text,
+  'refunded/' || :ck15 || '/re_rf_k15_own/false/held/0/null/0/true/false',
+  'H22 (R7-A1): a Charge and a Dispute labelled with another payment''s id reach their own payments; the disputed one sends no transfer');
+
+-- And a PaymentIntent: E's payment_intent.succeeded carries F's id.
+select tests.rf_hire('RF label E', false) as jk17 \gset
+select tests.authenticate_as(:'customer');
+select (public.begin_job_payment(:'jk17')).id as pk17 \gset
+select tests.clear_auth();
+select public.attach_provider_ref(:'pk17', 'pi_rf_k17');
+select tests.rf_hire('RF label F', false) as jk18 \gset
+select tests.authenticate_as(:'customer');
+select (public.begin_job_payment(:'jk18')).id as pk18 \gset
+select tests.clear_auth();
+select public.attach_provider_ref(:'pk18', 'pi_rf_k18');
+select tests.rf_event('evt_rf_k17_paid', 'payment_intent.succeeded', 1800000100, jsonb_build_object(
+  'id', 'pi_rf_k17', 'object', 'payment_intent', 'amount_received', (select charge_amount_cents from public.payments where id = :'pk17'),
+  'metadata', jsonb_build_object('payment_id', :'pk18')));
+select is(tests.rf_state(:'pk17') || '/' || tests.rf_state(:'pk18'), 'held/0/null/unfunded/0/null',
+  'H23 (R7-A1): a PaymentIntent labelled with another payment''s id funds its own payment, never the other');
 
 -- ---------------------------------------------------------------------------
 -- I. Codex R5-A4: a failed refund on a voided row reaches the customer. The read is
@@ -728,6 +847,12 @@ select tests.clear_auth();
 select is(:'jr' || (select refund_reason || '/' || (refund_cents = charge_amount_cents)::text from public.payments where id = :'pj') || '/' || tests.rf_later(:'pj'),
   'ok: account_suspended/true/false/1',
   'J1 (ii): the admin bans the worker after a hand refund failed and was arranged: the full refund is listed, not sent');
+
+-- ---------------------------------------------------------------------------
+-- INV. Codex R7-A2, the class of R5-A3, R6-A1 and R7-A2, last: no refund still owed in this file is
+-- missing from both refunds_due and the refund lines of payment_attention (tests.rf_inv).
+-- ---------------------------------------------------------------------------
+select is(tests.rf_inv(), 0, 'INV (R7-A2): every refund owed is in refunds_due or has a refund line in payment_attention');
 
 select * from finish();
 rollback;

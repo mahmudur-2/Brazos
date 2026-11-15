@@ -453,11 +453,19 @@ export const PAYOUT_SETUP_NOTICE =
 
 export function payoutSetupNotice(
   status: PayoutsStatus | null,
-  rows: ReadonlyArray<Pick<Payment, 'provider' | 'status' | 'release_requested_at'>>
+  rows: ReadonlyArray<
+    Pick<Payment, 'provider' | 'status' | 'release_requested_at' | 'refund_cents' | 'transfer_cents' | 'refund_failed_at' | 'refund_arranged_at'>
+  >
 ): string | null {
   if (status === null || status === 'enabled') return null;
+  // Codex R7-A3: lib/paymentRules.ts isPayoutOnItsWay, or the late-cancel fee (isReleaseRequested and
+  // isCancellationFeeKept), spelled out for the same reason; tests/payoutPromise.test.mjs holds the pair.
   const waiting = rows.some(
-    (row) => row.provider === 'stripe' && row.status === 'held' && !!row.release_requested_at
+    (row) =>
+      row.provider === 'stripe' && row.status === 'held' && !!row.release_requested_at &&
+      ((row.refund_cents ?? 0) > 0
+        ? (row.transfer_cents ?? 0) > 0
+        : row.refund_failed_at == null && row.refund_arranged_at == null)
   );
   return waiting ? PAYOUT_SETUP_NOTICE : null;
 }

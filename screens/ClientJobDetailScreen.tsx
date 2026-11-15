@@ -62,7 +62,13 @@ import {
   type JobPriceQuote,
   type Payment,
 } from '../lib/payments';
-import { customerCancelPreview, customerChargeCents, isRefundArranged, isRefundFailed } from '../lib/paymentRules';
+import {
+  customerCancelPreview,
+  customerChargeCents,
+  isPayoutOnItsWay,
+  isRefundArranged,
+  isRefundFailed,
+} from '../lib/paymentRules';
 import { paymentsMode } from '../lib/adapters/payments';
 import { customerCancelConfirm, paymentEyebrow } from '../lib/moneyCopy';
 import { cardLabel, listSavedCards, type SavedCard } from '../lib/paymentMethods';
@@ -1426,9 +1432,9 @@ export function ClientJobDetailScreen() {
                 {/* A10 (2026-10-03): "on its way" says what it waits for. The transfer lands only
                     once the worker's payout account is enabled; until then the row stays here
                     with release requested, and the worker's own job screen nudges them to set
-                    it up. Card path only. Codex R5-A5: never beside a failed or arranged refund of
-                    this payment. */}
-                {stripe && releaseRequested && !isRefundFailed(payment) && !isRefundArranged(payment) ? (
+                    it up. Card path only. Codex R5-A5, R7-A3: only under the one payout rule (never
+                    beside a refund of this payment, queued, failed or arranged). */}
+                {stripe && isPayoutOnItsWay(payment) ? (
                   <Text style={styles.paymentNote}>
                     The payment reaches {workerFirstName} once their payout account is ready — it
                     shows as released when the transfer lands. If they haven’t set up payouts yet,
@@ -1580,10 +1586,11 @@ export function ClientJobDetailScreen() {
                         : `Settled. Leave ${workerFirstName} a review or a tip.`}
                     </Text>
                   </Card>
-                ) : releaseRequested ? (
+                ) : isPayoutOnItsWay(payment) ? (
                   // D23: approved, payout pending. The decision is made; the
                   // review is offered now, and the money copy says on its way
-                  // — never released until the transfer lands.
+                  // — never released until the transfer lands. Codex R7-A3: no
+                  // card beside a refund; the pinned "Leave a review" stays.
                   <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
                     <Text style={styles.approvalTitle}>Work approved — payout on its way</Text>
                     <Text style={styles.noticeText}>
