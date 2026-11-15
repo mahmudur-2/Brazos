@@ -1,6 +1,6 @@
 import { env } from '../../config/env';
 import { supabase } from '../supabase';
-import type { Payment } from '../payments';
+import type { Payment, PaymentColumns } from '../payments';
 import {
   createPaymentSession,
   stripePublishableKey,
@@ -110,7 +110,8 @@ function createStripePaymentProvider(): PaymentProvider {
     releaseJobPayment: async (jobId) => {
       const { data, error } = await supabase.rpc('release_job_payment', { p_job_id: jobId });
       if (error) return { data: null, error: { message: error.message } };
-      return { data: (data ?? null) as Payment | null, error: null };
+      // Codex R8-A1: the release answer carries no payout fact (the screen reads the row again).
+      return { data: data ? { ...(data as PaymentColumns), payoutOnItsWay: false } : null, error: null };
     },
     // R6c (D3): no client ceiling check here on purpose — the tip RPC's own
     // sentences (the job-specific dollar ceiling among them) are the ones the

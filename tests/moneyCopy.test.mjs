@@ -39,17 +39,19 @@ test('C4 · the glossary: one fee name, one held state, one action, one eyebrow'
 });
 
 test('C4 · every state × viewer has a caption, and none says paid or received before release', () => {
+  // Codex R8-A1: an approval, a held tip and a kept fee promise the payout only under the database's
+  // fact (payoutOnItsWay), so those variants carry it; without it they say less (below).
   const variants = [
     {},
-    { releaseRequested: true },
-    { releaseRequested: true, waitingOnPayoutSetup: true },
+    { releaseRequested: true, payoutOnItsWay: true },
+    { releaseRequested: true, waitingOnPayoutSetup: true, payoutOnItsWay: true },
     { issueOpen: true },
-    { tip: true },
+    { tip: true, payoutOnItsWay: true },
     { counterpartFirstName: 'Sam' },
     // The cancellation shape (final sweep): a refund queued, with or without the late-cancel fee.
     { refundQueued: true },
-    { refundQueued: true, feeKept: true },
-    { refundQueued: true, feeKept: true, releaseRequested: true, counterpartFirstName: 'Sam' },
+    { refundQueued: true, feeKept: true, payoutOnItsWay: true },
+    { refundQueued: true, feeKept: true, releaseRequested: true, counterpartFirstName: 'Sam', payoutOnItsWay: true },
   ];
   for (const status of STATUSES) {
     for (const viewer of ['customer', 'worker']) {
@@ -65,31 +67,45 @@ test('C4 · every state × viewer has a caption, and none says paid or received 
   }
   // An unknown status gets no caption — allow-listed, never guessed.
   assert.equal(paymentCaption({ status: 'mystery' }, 'customer'), null);
+  // Codex R8-A1: the same held rows without the fact say less, never paid or received.
+  for (const viewer of ['customer', 'worker']) {
+    for (const extra of [{ releaseRequested: true }, { releaseRequested: true, waitingOnPayoutSetup: true }, { tip: true }]) {
+      assert.equal(paymentCaption({ status: 'held', ...extra }, viewer), null, `held/${viewer} ${JSON.stringify(extra)} without the fact`);
+    }
+  }
+  assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true }, 'worker'), null, 'the kept fee, not on its way and not sent');
 });
 
 test('C4 · the table says the right thing for the states that matter most', () => {
   assert.equal(paymentCaption({ status: 'held' }, 'customer'), 'Held in protection — released when you approve');
   assert.equal(paymentCaption({ status: 'held' }, 'worker'), 'Held in protection — yours when the customer approves');
-  // D23: approval outranks the protection sentence, and the dispute sentence.
-  assert.equal(paymentCaption({ status: 'held', releaseRequested: true, counterpartFirstName: 'Sam' }, 'customer'), 'Approved — on its way to Sam');
-  assert.equal(paymentCaption({ status: 'held', releaseRequested: true }, 'customer'), 'Approved — on its way to your worker');
-  assert.equal(paymentCaption({ status: 'held', releaseRequested: true }, 'worker'), 'Approved — on its way to you');
-  assert.equal(paymentCaption({ status: 'held', releaseRequested: true, waitingOnPayoutSetup: true }, 'worker'), 'Approved — waiting on your payout setup');
+  // D23: approval outranks the protection sentence. Codex R8-A1: the payout under the database's fact
+  // only, and an open issue first (an issue reported after the timer's approval).
+  assert.equal(paymentCaption({ status: 'held', releaseRequested: true, payoutOnItsWay: true, counterpartFirstName: 'Sam' }, 'customer'), 'Approved — on its way to Sam');
+  assert.equal(paymentCaption({ status: 'held', releaseRequested: true, payoutOnItsWay: true }, 'customer'), 'Approved — on its way to your worker');
+  assert.equal(paymentCaption({ status: 'held', releaseRequested: true, payoutOnItsWay: true }, 'worker'), 'Approved — on its way to you');
+  assert.equal(paymentCaption({ status: 'held', releaseRequested: true, waitingOnPayoutSetup: true, payoutOnItsWay: true }, 'worker'), 'Approved — waiting on your payout setup');
+  assert.equal(paymentCaption({ status: 'held', releaseRequested: true }, 'customer'), null, 'R8-A1: approved, not on its way: no caption');
+  assert.equal(paymentCaption({ status: 'held', releaseRequested: true }, 'worker'), null, 'R8-A1: approved, not on its way: no caption');
   assert.equal(paymentCaption({ status: 'held', issueOpen: true }, 'customer'), 'Held — you reported an issue');
   assert.equal(paymentCaption({ status: 'held', issueOpen: true }, 'worker'), 'Held — the customer reported an issue');
+  assert.equal(paymentCaption({ status: 'held', issueOpen: true, releaseRequested: true }, 'customer'), 'Held — you reported an issue', 'R8-A1: the issue before the approval');
+  assert.equal(paymentCaption({ status: 'held', issueOpen: true, releaseRequested: true }, 'worker'), 'Held — the customer reported an issue', 'R8-A1: the issue before the approval');
   // Settled: the customer's figure is their charge, the worker's their take.
   assert.equal(paymentCaption({ status: 'released' }, 'customer'), 'Paid');
   assert.equal(paymentCaption({ status: 'released' }, 'worker'), 'You received');
   // Tips. B1: a held tip was charged and is queued for its transfer; it reads "on its way" until
   // transfer.created releases it.
-  assert.equal(paymentCaption({ status: 'held', tip: true, counterpartFirstName: 'Sam' }, 'customer'), 'Tip on its way to Sam');
-  assert.equal(paymentCaption({ status: 'held', tip: true }, 'customer'), 'Tip on its way to your worker');
-  assert.equal(paymentCaption({ status: 'held', tip: true }, 'worker'), 'Tip from the customer — on its way');
-  assert.equal(paymentCaption({ status: 'held', tip: true, counterpartFirstName: 'Sam' }, 'worker'), 'Tip from Sam — on its way');
+  // Codex R8-A1: under the database's fact (a reversed tip is held again and not on its way).
+  assert.equal(paymentCaption({ status: 'held', tip: true, payoutOnItsWay: true, counterpartFirstName: 'Sam' }, 'customer'), 'Tip on its way to Sam');
+  assert.equal(paymentCaption({ status: 'held', tip: true, payoutOnItsWay: true }, 'customer'), 'Tip on its way to your worker');
+  assert.equal(paymentCaption({ status: 'held', tip: true, payoutOnItsWay: true }, 'worker'), 'Tip from the customer — on its way');
+  assert.equal(paymentCaption({ status: 'held', tip: true, payoutOnItsWay: true, counterpartFirstName: 'Sam' }, 'worker'), 'Tip from Sam — on its way');
+  assert.equal(paymentCaption({ status: 'held', tip: true, counterpartFirstName: 'Sam' }, 'customer'), null, 'R8-A1: a held tip not on its way');
   assert.equal(paymentCaption({ status: 'released', tip: true, counterpartFirstName: 'Sam' }, 'customer'), 'Tip sent to Sam');
   assert.equal(paymentCaption({ status: 'released', tip: true }, 'worker'), 'Tip received');
   // A whitespace name falls back rather than printing "to  ".
-  assert.equal(paymentCaption({ status: 'held', releaseRequested: true, counterpartFirstName: '  ' }, 'customer'), 'Approved — on its way to your worker');
+  assert.equal(paymentCaption({ status: 'held', releaseRequested: true, payoutOnItsWay: true, counterpartFirstName: '  ' }, 'customer'), 'Approved — on its way to your worker');
   // The cancellation shape (final sweep): a refund queued on a held row is money going home — it
   // outranks the protection sentence, the issue sentence AND the approval one (the late-cancel fee
   // sets release_requested_at too, and a fee is not an approval of finished work).
@@ -100,7 +116,10 @@ test('C4 · the table says the right thing for the states that matter most', () 
     paymentCaption({ status: 'held', refundQueued: true, feeKept: true, releaseRequested: true, counterpartFirstName: 'Sam' }, 'customer'),
     'Refund on its way — the cancellation fee goes to Sam'
   );
-  assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true, releaseRequested: true }, 'worker'), 'Cancellation fee — on its way to you');
+  // Codex R8-A1: the worker's fee under the fact, or once its transfer was sent (feeSent: released_at).
+  assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true, releaseRequested: true, payoutOnItsWay: true }, 'worker'), 'Cancellation fee — on its way to you');
+  assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true, releaseRequested: true, feeSent: true }, 'worker'), 'Cancellation fee — on its way to you');
+  assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true, releaseRequested: true }, 'worker'), null, 'R8-A1: the fee neither on its way nor sent');
   // Off a held row the facts say nothing: a settled refund keeps its own words.
   assert.equal(paymentCaption({ status: 'refunded', refundQueued: true }, 'customer'), 'Refunded');
 });
@@ -117,7 +136,8 @@ test('B1 rule 8 · a held tip reads "on its way" and never says sent, received o
   ];
   for (const viewer of ['customer', 'worker']) {
     for (const extra of variants) {
-      const line = paymentCaption({ status: 'held', tip: true, ...extra }, viewer);
+      // Codex R8-A1: the charged tip queued for its transfer is on its way under the database's fact.
+      const line = paymentCaption({ status: 'held', tip: true, payoutOnItsWay: true, ...extra }, viewer);
       const label = `held tip/${viewer} ${JSON.stringify(extra)}: ${line}`;
       assert.equal(typeof line, 'string', `${label} has a caption`);
       assert.doesNotMatch(line, /sent|received|paid/i, `${label} must not say sent, received or paid before the tip is released`);

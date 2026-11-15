@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { workerTakeCents, type Payment } from './payments';
+import { fetchPayoutsOnTheirWay, withPayoutFact, workerTakeCents, type PaymentColumns } from './payments';
 import { deriveEarnings, type EarningsRow } from './earningsMath';
 
 export { deriveEarnings } from './earningsMath';
@@ -35,18 +35,22 @@ const EARNING_STATUSES = ['held', 'released', 'paid_out', 'partially_refunded'] 
  * one more column.
  */
 export async function fetchMyEarnings(userId: string) {
-  const { data, error } = await supabase
-    .from('payments')
-    .select(
-      'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at, release_requested_at, refund_cents, transfer_cents, refund_failed_at, refund_arranged_at'
-    )
-    .eq('payee_id', userId)
-    .in('status', [...EARNING_STATUSES])
-    .order('created_at', { ascending: false });
+  // Codex R8-A1: the payout fact beside the rows, in parallel (lib/payments.ts withPayoutFact).
+  const [{ data, error }, onTheirWay] = await Promise.all([
+    supabase
+      .from('payments')
+      .select(
+        'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at, release_requested_at, refund_cents, transfer_cents, refund_failed_at, refund_arranged_at'
+      )
+      .eq('payee_id', userId)
+      .in('status', [...EARNING_STATUSES])
+      .order('created_at', { ascending: false }),
+    fetchPayoutsOnTheirWay(),
+  ]);
 
   if (error) return { data: null, error };
 
-  const payments = (data ?? []) as Payment[];
+  const payments = ((data ?? []) as PaymentColumns[]).map((p) => withPayoutFact(p, onTheirWay));
   const jobIds = [...new Set(payments.map((p) => p.job_id))];
   const jobs = new Map<string, { title: string; completed_at: string | null; status: string | null }>();
   if (jobIds.length > 0) {

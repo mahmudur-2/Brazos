@@ -244,6 +244,8 @@ export function ApproveOrDisputeScreen() {
     setReporting(false);
     setReason(null);
     setDetails('');
+    // Codex R8-A1: the report changes the payout fact; read the payment again.
+    void load();
   }
 
   async function withdrawReport() {
@@ -259,6 +261,8 @@ export function ApproveOrDisputeScreen() {
       return;
     }
     setDispute(data && data.status === 'open' ? data : null);
+    // Codex R8-A1: so does withdrawing it.
+    void load();
   }
 
   // 2026-09-26 (the refresh, audit M-6): the charge includes the protection fee,
@@ -363,6 +367,7 @@ export function ApproveOrDisputeScreen() {
               feeKept={isCancellationFeeKept(payment)}
               refundFailed={isRefundFailed(payment)}
               refundArranged={isRefundArranged(payment)}
+              payoutOnItsWay={isPayoutOnItsWay(payment)}
             />
             {held && releaseDeadlineMs(job) != null ? (
               <Text style={styles.paymentNote}>
@@ -377,12 +382,10 @@ export function ApproveOrDisputeScreen() {
                   ? 'Released automatically after 72 hours with no issue reported.'
                   : 'You approved the work and the payment was released to the worker.'
                 : releaseRequested && !isPayoutOnItsWay(payment)
-                  ? // Codex R5-A5, R7-A3: never "on its way" beside a refund of this payment (queued, failed or
-                    // arranged). A refund queued after the timer can follow an issue reported later.
+                  ? // Codex R5-A5, R7-A3, R8-A1: approved, but the payout is not on its way (a refund, an issue
+                    // reported after the timer, a reversed transfer, a card dispute): the approval alone.
                     payment.release_reason === 'auto_approved'
-                    ? isRefundQueued(payment)
-                      ? 'Approved automatically after 72 hours.'
-                      : 'Approved automatically after 72 hours with no issue reported.'
+                    ? 'Approved automatically after 72 hours.'
                     : 'You approved the work.'
                 : releaseRequested
                   ? payment.release_reason === 'auto_approved'

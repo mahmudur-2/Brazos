@@ -112,7 +112,14 @@ export type Payment = {
   refund_failed_at?: string | null;
   /** Pack 1, P3: when the owner recorded that arrangement (resolve_refund_failure). */
   refund_arranged_at?: string | null;
+  /** Codex R8-A1: not a column. The database's answer (my_payouts_on_their_way) that the worker's
+   *  payout of this row is on its way, put on the row by the read that fetched it (withPayoutFact);
+   *  a read that does not ask writes false. lib/paymentRules.ts isPayoutOnItsWay reads it. */
+  payoutOnItsWay: boolean;
 };
+
+/** A payments row as the database returns it, before the payout fact is put on it. */
+export type PaymentColumns = Omit<Payment, 'payoutOnItsWay'>;
 
 /**
  * R6c (D7): THE one place the worker's take is derived from a ledger row —
@@ -233,7 +240,8 @@ export async function fetchJobPayment(jobId: string) {
     .not('status', 'in', '(failed,voided)')
     .maybeSingle();
 
-  return { data: data as Payment | null, error };
+  // Codex R8-A1: the checkout reads do not ask the payout fact; no payout sentence reads this row.
+  return { data: data ? { ...(data as PaymentColumns), payoutOnItsWay: false } : null, error };
 }
 
 /**
@@ -257,7 +265,34 @@ export async function fetchJobRefundIssue(jobId: string, kind: 'job_payment' | '
     .limit(1)
     .maybeSingle();
 
-  return { data: data as Payment | null, error };
+  // Codex R8-A1: a failed or voided row is never on its way.
+  return { data: data ? { ...(data as PaymentColumns), payoutOnItsWay: false } : null, error };
+}
+
+/**
+ * Codex R8-A1: THE payout fact, from the database: the ids of the caller's own payments whose payout
+ * is on its way (my_payouts_on_their_way: in transfers_due, or a transfer whose send began and whose
+ * result is not recorded). A failed read, or a database without the function, is an empty set: say
+ * less, never block the row it sits beside.
+ */
+export async function fetchPayoutsOnTheirWay(): Promise<ReadonlySet<string>> {
+  try {
+    const { data, error } = await supabase.rpc('my_payouts_on_their_way');
+    if (error || !Array.isArray(data)) return new Set();
+    return new Set(data.filter((id): id is string => typeof id === 'string'));
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Codex R8-A1: the fact on the row it was read beside. The row and the fact are two reads, so the fact
+ * holds only on a row that was approved when it was read: every row the database names carries
+ * release_requested_at, and an approval landing between the two reads must not show "on its way"
+ * beside a row that still reads as unapproved.
+ */
+export function withPayoutFact<R extends PaymentColumns>(row: R, onTheirWay: ReadonlySet<string>): R & { payoutOnItsWay: boolean } {
+  return { ...row, payoutOnItsWay: onTheirWay.has(row.id) && !!row.release_requested_at };
 }
 
 /**
@@ -267,15 +302,17 @@ export async function fetchJobRefundIssue(jobId: string, kind: 'job_payment' | '
  * (20261112000100_schedules_loud.sql). The lifecycle surfaces use THIS.
  */
 export async function fetchJobPaymentState(jobId: string) {
-  const { data, error } = await supabase.rpc('job_payment_state', {
-    p_job_id: jobId,
-  });
+  // Codex R8-A1: the payout fact beside the row, in parallel.
+  const [{ data, error }, onTheirWay] = await Promise.all([
+    supabase.rpc('job_payment_state', { p_job_id: jobId }),
+    fetchPayoutsOnTheirWay(),
+  ]);
 
   // The RPC returns NULL (not an error) when checkout never ran. PostgREST
   // serialises that as a row of nulls or nothing depending on version, so
   // key off the id.
-  const row = (data ?? null) as Payment | null;
-  return { data: row && row.id ? row : null, error };
+  const row = (data ?? null) as PaymentColumns | null;
+  return { data: row && row.id ? withPayoutFact(row, onTheirWay) : null, error };
 }
 
 /**
@@ -362,15 +399,19 @@ export function classifyTipPoll({
  * the job payment: only the two parties can see it.
  */
 export async function fetchJobTip(jobId: string) {
-  const { data, error } = await supabase
-    .from('payments')
-    .select(PAYMENT_COLUMNS)
-    .eq('job_id', jobId)
-    .eq('kind', 'tip')
-    .not('status', 'in', '(failed,voided)')
-    .maybeSingle();
+  // Codex R8-A1: the payout fact beside the row, in parallel.
+  const [{ data, error }, onTheirWay] = await Promise.all([
+    supabase
+      .from('payments')
+      .select(PAYMENT_COLUMNS)
+      .eq('job_id', jobId)
+      .eq('kind', 'tip')
+      .not('status', 'in', '(failed,voided)')
+      .maybeSingle(),
+    fetchPayoutsOnTheirWay(),
+  ]);
 
-  return { data: data as Payment | null, error };
+  return { data: data ? withPayoutFact(data as PaymentColumns, onTheirWay) : null, error };
 }
 
 // ---------------------------------------------------------------------------
@@ -437,37 +478,23 @@ export function payoutsCta(status: PayoutsStatus): PayoutsView {
 
 /**
  * n4b (2026-09-05): the one sentence Payouts says when an APPROVED payment is
- * waiting on the worker's own setup. From the worker's side, "approved and
- * not yet sent" is a stripe row still `held` with `release_requested_at` set
- * — lib/paymentRules.ts isReleaseRequested (D23), spelled out here the way
- * lib/jobLifecycle.ts spells it, because this module re-exports that
- * predicate without binding it and the node harnesses that execute this file
- * rewrite its one paymentRules import specifier — and process-settlements sends
- * nothing to a payee whose payment_accounts.payouts_enabled is false, which
- * is every status but 'enabled'. Never "paid", never "released": the
- * transfer has not landed. A null status is unknown, and unknown says
- * nothing.
+ * waiting on the worker's own setup. Codex R8-A1: a payment whose payout is on
+ * its way (the database's fact, payoutOnItsWay — lib/paymentRules.ts
+ * isPayoutOnItsWay reads the same field; this module re-exports the rules
+ * without binding them) — and process-settlements sends nothing to a payee
+ * whose payment_accounts.payouts_enabled is false, which is every status but
+ * 'enabled'. Never "paid", never "released": the transfer has not landed. A
+ * null status is unknown, and unknown says nothing.
  */
 export const PAYOUT_SETUP_NOTICE =
   'An approved payment is waiting on your payout setup before it can be sent to you.';
 
 export function payoutSetupNotice(
   status: PayoutsStatus | null,
-  rows: ReadonlyArray<
-    Pick<Payment, 'provider' | 'status' | 'release_requested_at' | 'refund_cents' | 'transfer_cents' | 'refund_failed_at' | 'refund_arranged_at'>
-  >
+  rows: ReadonlyArray<Pick<Payment, 'payoutOnItsWay'>>
 ): string | null {
   if (status === null || status === 'enabled') return null;
-  // Codex R7-A3: lib/paymentRules.ts isPayoutOnItsWay, or the late-cancel fee (isReleaseRequested and
-  // isCancellationFeeKept), spelled out for the same reason; tests/payoutPromise.test.mjs holds the pair.
-  const waiting = rows.some(
-    (row) =>
-      row.provider === 'stripe' && row.status === 'held' && !!row.release_requested_at &&
-      ((row.refund_cents ?? 0) > 0
-        ? (row.transfer_cents ?? 0) > 0
-        : row.refund_failed_at == null && row.refund_arranged_at == null)
-  );
-  return waiting ? PAYOUT_SETUP_NOTICE : null;
+  return rows.some((row) => row.payoutOnItsWay === true) ? PAYOUT_SETUP_NOTICE : null;
 }
 
 export const PAYOUTS_STATUS_UNREADABLE = 'Your payout status could not be read right now. Try again.';

@@ -23,13 +23,19 @@
 --    hold back (20261115000600 adds the failed refunds to it).
 -- 3. transition_job_status: the start gate also requires payment_money_clear. Body verbatim from
 --    20260925000000_job_completions.sql otherwise; signature, security, search_path and ACL as they were.
+-- 4. Codex R8-A1: payment_payout_on_its_way(payments) and my_payouts_on_their_way(). The app said
+--    "on its way" from the columns it can read, and an open issue after the approval, a reversed
+--    transfer or a card dispute look the same there. The fact is now the database's: the row is in
+--    transfers_due (read as it is, no clause copied), or a transfer whose send began and whose result
+--    is not recorded (payment_transfer_unconfirmed) on a row the charge still sits on. The app reads
+--    only the ids of the caller's own payments for which it holds (lib/payments.ts).
 --
 -- THE CANCELLATION FEE (a fee transfer and a partial refund queued together) still goes in either
 -- order: the refund is charge - fee, and while the fee transfer is unknown the limit is
 -- charge - 0 - fee. Proof: supabase/tests/420_transfer_in_flight.sql §F.
 --
--- Additive under scripts/staging-scan.sh. Proof: supabase/tests/435_work_start_money_rule.sql and
--- supabase/tests/420_transfer_in_flight.sql.
+-- Additive under scripts/staging-scan.sh. Proof: supabase/tests/435_work_start_money_rule.sql,
+-- supabase/tests/420_transfer_in_flight.sql and supabase/tests/460_payout_on_its_way.sql.
 
 begin;
 
@@ -110,6 +116,36 @@ revoke all on table public.refunds_due from public, anon, authenticated;
 grant select on table public.refunds_due to service_role;
 comment on view public.refunds_due is
   'stripe rows whose refund to the customer may be sent: refund_cents > 0 and no refund recorded yet; and (20261112010300) in an allow-listed state, nothing refunded yet, no card dispute, charged the row''s amount, refund_cents within what is left after live transfers (and, 20261115000200, after a transfer whose send began and whose result is not recorded), and the current attempt neither stopped nor past 23 hours. process-settlements refunds refund_cents against the charge with idempotency key rf:<id>:<refund_attempts>. Every row asked for and not here is in payment_attention.';
+
+-- Codex R8-A1: THE payout fact. transfers_due is read as it is; the second arm is a send that began
+-- and whose result is unknown (the money may have left), on a row the charge still sits on.
+create or replace function public.payment_payout_on_its_way(p public.payments)
+returns boolean
+language sql stable
+set search_path = public, pg_temp
+as $fn$
+  select exists (select 1 from public.transfers_due d where d.id = p.id)
+      or (public.payment_transfer_unconfirmed(p) and p.status in ('held', 'partially_refunded'))
+$fn$;
+revoke all on function public.payment_payout_on_its_way(public.payments) from public, anon, authenticated;
+grant execute on function public.payment_payout_on_its_way(public.payments) to service_role;
+comment on function public.payment_payout_on_its_way(public.payments) is
+  'Codex R8-A1: the worker''s payout of this row is on its way: the row is in transfers_due (the queue as it is, no clause restated), or a transfer whose send began and whose result is not recorded (payment_transfer_unconfirmed) while the row is held or partially_refunded. A stopped or expired attempt still counts until the owner records or reopens it. Read by my_payouts_on_their_way. service_role only.';
+
+create or replace function public.my_payouts_on_their_way()
+returns setof uuid
+language sql stable security definer
+set search_path = public, pg_temp
+as $fn$
+  select p.id
+    from public.payments p
+   where (p.payer_id = auth.uid() or p.payee_id = auth.uid())
+     and public.payment_payout_on_its_way(p)
+$fn$;
+revoke all on function public.my_payouts_on_their_way() from public, anon, service_role;
+grant execute on function public.my_payouts_on_their_way() to authenticated;
+comment on function public.my_payouts_on_their_way() is
+  'Codex R8-A1: the ids of the caller''s own payments (payer or payee, the rule of the RLS policy "parties view own payments") whose payout is on its way (payment_payout_on_its_way). Nothing else leaves: no reason, no other column, no other user''s row. lib/payments.ts fetchPayoutsOnTheirWay puts the answer on each row it reads; a failed read says less. authenticated only.';
 
 create or replace function public.transition_job_status(p_job_id uuid, p_status text, p_completion_photos jsonb default null, p_completion_videos jsonb default null)
 returns public.jobs

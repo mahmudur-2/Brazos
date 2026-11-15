@@ -1427,6 +1427,7 @@ export function ClientJobDetailScreen() {
                   refundArranged={isRefundArranged(payment)}
                   releaseRequested={releaseRequested}
                   issueOpen={!!openDispute}
+                  payoutOnItsWay={isPayoutOnItsWay(payment)}
                   counterpartFirstName={workerFirstName}
                 />
                 {/* A10 (2026-10-03): "on its way" says what it waits for. The transfer lands only

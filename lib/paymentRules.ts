@@ -86,21 +86,15 @@ export function isRefundArranged(payment: {
 }
 
 /**
- * Codex R7-A3: THE payout promise. A sentence that says the worker's payout is on its way (or waits
- * only on their payout setup) asks this and nothing else: the row is approved (isReleaseRequested),
- * no refund is directed to the customer (isRefundQueued: a decision can keep the approval time), and
- * no refund of it failed or was arranged another way (say less when unsure). The late-cancel fee is
- * the one payout said beside a refund, and it asks isCancellationFeeKept.
+ * Codex R7-A3, R8-A1: THE payout promise. A sentence that says the worker's payout is on its way (or
+ * waits only on their payout setup) asks this and nothing else. It is the database's fact
+ * (my_payouts_on_their_way: the row is in transfers_due, or a transfer whose send began has no
+ * recorded result), put on the row by the read that fetched it (lib/payments.ts withPayoutFact). The
+ * columns the app reads cannot tell an open issue, a reversed transfer or a card dispute from a
+ * normal approval, so nothing here derives it from them.
  */
-export function isPayoutOnItsWay(
-  payment: Pick<Payment, 'status'> & {
-    release_requested_at?: string | null;
-    refund_cents?: number | null;
-    refund_failed_at?: string | null;
-    refund_arranged_at?: string | null;
-  }
-): boolean {
-  return isReleaseRequested(payment) && !isRefundQueued(payment) && !isRefundFailed(payment) && !isRefundArranged(payment);
+export function isPayoutOnItsWay(payment: Pick<Payment, 'payoutOnItsWay'>): boolean {
+  return payment.payoutOnItsWay === true;
 }
 
 /**

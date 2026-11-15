@@ -3678,6 +3678,7 @@ export type Database = {
         Returns: boolean
       }
       money_label: { Args: { p_cents: number }; Returns: string }
+      my_payouts_on_their_way: { Args: never; Returns: string[] }
       my_payouts_status: { Args: never; Returns: string }
       my_pending_offers: {
         Args: never
@@ -3789,6 +3790,10 @@ export type Database = {
         }
       }
       payment_money_clear: {
+        Args: { p: Database["public"]["Tables"]["payments"]["Row"] }
+        Returns: boolean
+      }
+      payment_payout_on_its_way: {
         Args: { p: Database["public"]["Tables"]["payments"]["Row"] }
         Returns: boolean
       }

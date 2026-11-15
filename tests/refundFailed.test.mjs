@@ -82,8 +82,11 @@ test('F2 · the caption: the customer is never told the money is on its way to t
   );
   // The worker's own money is not touched by the customer's refund: their fee sentence stays. Codex R7-A3:
   // the worker is not told that a refund which failed is on its way to the customer (no caption).
+  // Codex R8-A1: the fee sentence under the database's fact (a fee whose refund failed is still in
+  // transfers_due: 460 F6), and none without it.
   assert.equal(paymentCaption({ status: 'held', refundQueued: true, refundFailed: true }, 'worker'), null);
-  assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true, refundFailed: true }, 'worker'), 'Cancellation fee — on its way to you');
+  assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true, refundFailed: true, payoutOnItsWay: true }, 'worker'), 'Cancellation fee — on its way to you');
+  assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true, refundFailed: true }, 'worker'), null);
   // R3-A8: a refunded or partially_refunded row whose refund failed is never "Refunded" to the customer.
   assert.equal(paymentCaption({ status: 'refunded', refundFailed: true }, 'customer'), FAILED_CAPTION);
   assert.equal(paymentCaption({ status: 'partially_refunded', refundFailed: true }, 'customer'), FAILED_CAPTION);
@@ -101,8 +104,11 @@ test('F2 · the caption: the customer is never told the money is on its way to t
     assert.equal(paymentCaption({ status, tip: true, refundFailed: true, counterpartFirstName: 'Sam' }, 'customer'), FAILED_CAPTION,
       `a ${status} tip`);
   }
-  assert.equal(paymentCaption({ status: 'held', tip: true, refundFailed: true, counterpartFirstName: 'Ann' }, 'worker'), 'Tip from Ann — on its way');
-  assert.equal(paymentCaption({ status: 'held', tip: true, counterpartFirstName: 'Sam' }, 'customer'), 'Tip on its way to Sam', 'control');
+  // Codex R8-A1: the worker's tip sentence under the database's fact (a failed refund of part of the
+  // tip leaves the transfer due, as 460 row 13a), and none without it.
+  assert.equal(paymentCaption({ status: 'held', tip: true, refundFailed: true, payoutOnItsWay: true, counterpartFirstName: 'Ann' }, 'worker'), 'Tip from Ann — on its way');
+  assert.equal(paymentCaption({ status: 'held', tip: true, refundFailed: true, counterpartFirstName: 'Ann' }, 'worker'), null);
+  assert.equal(paymentCaption({ status: 'held', tip: true, payoutOnItsWay: true, counterpartFirstName: 'Sam' }, 'customer'), 'Tip on its way to Sam', 'control');
 });
 
 test('P3 · the caption: refunded another way, for the customer only; a new failure wins', () => {
@@ -127,7 +133,8 @@ test('F2 · [static] the webhook subscribes refund.failed; MoneyText and the can
   assert.ok(handled.includes('refund.failed'), 'refund.failed is subscribed');
 
   const money = code('ui/primitives/MoneyText.tsx');
-  assert.match(money, /waitingOnPayoutSetup, refundFailed, refundArranged, refundQueued, feeKept, tip, counterpartFirstName \}, perspective/);
+  // Codex R8-A1: the fee's sent fact and the payout fact ride beside feeKept.
+  assert.match(money, /waitingOnPayoutSetup, refundFailed, refundArranged, refundQueued, feeKept, feeSent, payoutOnItsWay, tip, counterpartFirstName \}, perspective/);
 
   const detail = code('screens/ClientJobDetailScreen.tsx');
   // R3-A8: the main payment card (a job that is not cancelled, a refund resolved for the customer)
@@ -209,8 +216,9 @@ test('R5-A4, R6-A2 · [static] a failed or arranged refund on a failed or voided
   const lib = code('lib/payments.ts');
   assert.match(
     lib,
-    /export async function fetchJobRefundIssue\(jobId: string, kind: 'job_payment' \| 'tip' = 'job_payment'\) \{ const \{ data, error \} = await supabase \.from\('payments'\) \.select\(PAYMENT_COLUMNS\) \.eq\('job_id', jobId\) \.eq\('kind', kind\) \.in\('status', \['failed', 'voided'\]\) \.or\('refund_failed_at\.not\.is\.null,refund_arranged_at\.not\.is\.null'\) \.order\('refund_failed_at', \{ ascending: false, nullsFirst: false \}\) \.order\('created_at', \{ ascending: false \}\) \.limit\(1\) \.maybeSingle\(\); return \{ data: data as Payment \| null, error \}; \}/
+    /export async function fetchJobRefundIssue\(jobId: string, kind: 'job_payment' \| 'tip' = 'job_payment'\) \{ const \{ data, error \} = await supabase \.from\('payments'\) \.select\(PAYMENT_COLUMNS\) \.eq\('job_id', jobId\) \.eq\('kind', kind\) \.in\('status', \['failed', 'voided'\]\) \.or\('refund_failed_at\.not\.is\.null,refund_arranged_at\.not\.is\.null'\) \.order\('refund_failed_at', \{ ascending: false, nullsFirst: false \}\) \.order\('created_at', \{ ascending: false \}\) \.limit\(1\) \.maybeSingle\(\); return \{ data: data \? \{ \.\.\.\(data as PaymentColumns\), payoutOnItsWay: false \} : null, error \}; \}/
   );
+  // Codex R8-A1: a failed or voided row is never on its way: the read writes the fact false in plain sight.
   // Executed: the installed client sends those two orders in that sequence, open failures first
   // (desc, nulls last); no request is made.
   const { createClient } = await import('@supabase/supabase-js');
@@ -257,12 +265,13 @@ test('R5-A5, R7-A3 · [static] no "on its way to the worker" beside a refund (qu
 
   // The refund branch comes before the approval sentences; a comment may sit after "?".
   const approve = code('screens/ApproveOrDisputeScreen.tsx').match(
-    /releaseRequested && !isPayoutOnItsWay\(payment\) \? (?:\/\/[^']*)?payment\.release_reason === 'auto_approved' \? isRefundQueued\(payment\) \? '([^']*)' : '([^']*)' : '([^']*)' : releaseRequested \? payment\.release_reason === 'auto_approved' \? (?:\/\/[^']*)?'([^']*)' : '([^']*)'/
+    /releaseRequested && !isPayoutOnItsWay\(payment\) \? (?:\/\/[^']*)?payment\.release_reason === 'auto_approved' \? '([^']*)' : '([^']*)' : releaseRequested \? payment\.release_reason === 'auto_approved' \? (?:\/\/[^']*)?'([^']*)' : '([^']*)'/
   );
   assert.ok(approve, 'ApproveOrDispute: the refund branch, then the approval sentences');
   // R7-A3: on a refund row an issue can have been reported after the timer: RT's existing first sentence.
-  assert.deepEqual(approve.slice(1, 4), ['Approved automatically after 72 hours.', 'Approved automatically after 72 hours with no issue reported.', 'You approved the work.']);
-  assert.deepEqual(approve.slice(4, 6), [
+  // Codex R8-A1: so on every row not on its way (an issue after the timer is Failure A, refund or not).
+  assert.deepEqual(approve.slice(1, 3), ['Approved automatically after 72 hours.', 'You approved the work.']);
+  assert.deepEqual(approve.slice(3, 5), [
     `Approved automatically after 72 hours with no issue reported.${ON_ITS_WAY}`,
     `You approved the work.${ON_ITS_WAY}`,
   ], 'control: without a refund issue the sentences are as before');
@@ -289,17 +298,24 @@ test('R6-A3, R7-A3 · the tip card’s payout sentence only under the one payout
   assert.equal(branch[2], PAYOUT, 'the owner’s words (A10a), unchanged');
   assert.equal((review.match(/Yours is approved and on its way/g) ?? []).length, 1, 'said in this branch only');
   // Executed: the guard as written, on the rows Codex names (held, approval time set, nothing transferred).
+  // Codex R8-A1: each row carries the fact as the database answers it (supabase/tests/460_payout_on_its_way.sql).
   const shown = new Function('isPayoutOnItsWay', 'payment', `return ${branch[1]};`);
   const approved = { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 0, refund_cents: 5375 };
-  assert.equal(shown(isPayoutOnItsWay, { ...approved, refund_failed_at: '2026-11-15T11:00:00Z', refund_arranged_at: null }), false,
+  assert.equal(shown(isPayoutOnItsWay, { ...approved, refund_failed_at: '2026-11-15T11:00:00Z', refund_arranged_at: null, payoutOnItsWay: false }), false,
     'refund failed: no payout sentence');
-  assert.equal(shown(isPayoutOnItsWay, { ...approved, refund_failed_at: null, refund_arranged_at: '2026-11-15T12:00:00Z' }), false,
+  assert.equal(shown(isPayoutOnItsWay, { ...approved, refund_failed_at: null, refund_arranged_at: '2026-11-15T12:00:00Z', payoutOnItsWay: false }), false,
     'refund arranged: no payout sentence');
-  // Codex R7-A3: the refund directed to the customer after the approval, both refund flags null.
-  assert.equal(shown(isPayoutOnItsWay, { ...approved, refund_failed_at: null, refund_arranged_at: null }), false,
+  // Codex R7-A3: the refund directed to the customer after the approval, both refund flags null (460 row 11).
+  assert.equal(shown(isPayoutOnItsWay, { ...approved, refund_failed_at: null, refund_arranged_at: null, payoutOnItsWay: false }), false,
     'refund queued, nothing failed: no payout sentence');
-  assert.equal(shown(isPayoutOnItsWay, { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 4975, refund_cents: 0,
-    refund_failed_at: '2026-11-15T11:00:00Z' }), false, 'a hand refund failed, none queued: no payout sentence');
-  assert.equal(shown(isPayoutOnItsWay, { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 4975 }), true,
+  // Codex R8-A1 (D6): a hand refund that failed follows the database: of the whole charge, nothing is
+  // left for the worker (460 row 13b); of part of it, the transfer still fits and is due (460 row 13a).
+  const handFailed = { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 4975, refund_cents: 0, refund_failed_at: '2026-11-15T11:00:00Z' };
+  assert.equal(shown(isPayoutOnItsWay, { ...handFailed, payoutOnItsWay: false }), false, 'a hand refund of the whole charge failed: no payout sentence');
+  assert.equal(shown(isPayoutOnItsWay, { ...handFailed, payoutOnItsWay: true }), true, 'a hand refund of part of the charge failed: the transfer is due (D6)');
+  assert.equal(shown(isPayoutOnItsWay, { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 4975, payoutOnItsWay: true }), true,
     'control: approved, no refund issue: the sentence as before');
+  // Codex R8-A1: the same columns without the fact (an issue after the timer, a reversed transfer, a card dispute).
+  assert.equal(shown(isPayoutOnItsWay, { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 4975, payoutOnItsWay: false }), false,
+    'approved, the database says not on its way: no payout sentence');
 });

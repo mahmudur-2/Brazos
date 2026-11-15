@@ -10,7 +10,8 @@
 -- the "failed before" line says to look at the charge's refunds first) and R6-A2 (I3, I4, an open
 -- failure is read before arranged history); after round 7: R7-A1 (H19-H23, an event finds its payment by
 -- Stripe's own link to the intent, never by a label naming another payment) and R7-A2 (H17b, H17c, and
--- INV: no refund owed is missing from both refunds_due and payment_attention).
+-- INV: no refund owed is missing from both refunds_due and payment_attention); after round 8: H17d (the
+-- same line on the late-cancellation shape, which ends at partially_refunded).
 --
 -- THE PROVIDER'S FACTS (docs.stripe.com/refunds, "Failed refunds"): the Refund's status becomes
 -- failed with a failure_reason, refund.failed is sent, the money returns to the platform's balance,
@@ -26,7 +27,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(85);
+select plan(87);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -645,6 +646,22 @@ select tests.rf_refunded('evt_rf_k10_ref2', 1800000200, :'pk10', (select refund_
 select is(tests.rf_state(:'pk10') || '/' || tests.rf_lines(:'pk10', 'refund sent, not yet confirmed by charge.refunded'),
   'refunded/' || (select refund_cents::text from public.payments where id = :'pk10') || '/re_rf_k10_own/0',
   'H17c (R7-A2): a refunded total that covers the refund asked clears the line');
+-- Codex R8: the late-cancellation shape. The fee stays on the charge, so a refunded total that covers
+-- the refund asked ends at partially_refunded, never refunded; the line clears there too.
+select tests.rf_job('RF late cancel, own refund lands', 'held') as jk17d \gset
+select tests.rf_pid(:'jk17d') as pk17d \gset
+select charge_amount_cents as ck17d from public.payments where id = :'pk17d' \gset
+update public.payments
+   set transfer_cents = 1000, refund_cents = :ck17d - 1000, release_reason = 'cancellation_fee',
+       release_requested_at = now(), refund_reason = 'customer_cancelled_late'
+ where id = :'pk17d';
+select public.record_settlement_sent(:'pk17d', 'refund', 're_rf_k17d', :ck17d - 1000);
+select is(tests.rf_lines(:'pk17d', 'refund sent, not yet confirmed by charge.refunded'), 1,
+  'H17d (R8): the late-cancel refund recorded as sent: listed as sent and not yet confirmed');
+select tests.rf_refunded('evt_rf_k17d_ref', 1800000200, :'pk17d', :ck17d - 1000, 're_rf_k17d');
+select is(tests.rf_state(:'pk17d') || '/' || tests.rf_lines(:'pk17d', 'refund sent, not yet confirmed by charge.refunded'),
+  'partially_refunded/' || (:ck17d - 1000) || '/re_rf_k17d/0',
+  'H17d (R8): its refunded total covers the refund asked at partially_refunded: the line clears');
 
 -- R6-A1, the attempt condition beside the label: attempt 0 stopped, the owner reopened, a decision for
 -- the worker set the refund to 0; then attempt 0's own refund (with metadata) fails late. Kept out of

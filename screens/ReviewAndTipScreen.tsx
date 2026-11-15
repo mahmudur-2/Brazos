@@ -552,6 +552,7 @@ export function ReviewAndTipScreen() {
                   feeKept={isCancellationFeeKept(payment)}
                   refundFailed={isRefundFailed(payment)}
                   refundArranged={isRefundArranged(payment)}
+                  payoutOnItsWay={isPayoutOnItsWay(payment)}
                   counterpartFirstName={firstNameOf(workerName)}
                 />
                 <Text style={styles.cardNote}>
@@ -610,6 +611,7 @@ export function ReviewAndTipScreen() {
                     refundQueued={isRefundQueued(tip)}
                     refundFailed={isRefundFailed(tip)}
                     refundArranged={isRefundArranged(tip)}
+                    payoutOnItsWay={isPayoutOnItsWay(tip)}
                     counterpartFirstName={firstNameOf(workerName)}
                   />
                   {tipDoneNote ? <Text style={styles.cardNote}>{tipDoneNote}</Text> : null}

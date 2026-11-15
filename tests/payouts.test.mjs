@@ -144,8 +144,12 @@ test('3 · the cheap read: my_payouts_status() on the provider boundary, validat
     data: null,
     error: { message: PAYOUTS_STATUS_UNREADABLE },
   });
-  // And the module this file executes keeps its contract: no payout RPC.
-  assert.doesNotMatch(js, /\.rpc\(['"][^'"]*(release|payout|cash_out|capture)/i);
+  // And the module this file executes keeps its contract: no payout RPC. Codex R8-A1: its one read
+  // with "payout" in the name is my_payouts_on_their_way (a read of ids, it moves nothing), so the
+  // module's RPCs are now an allow-list, and the name rule holds for every other call.
+  const rpcs = [...js.matchAll(/\.rpc\(['"]([^'"]+)['"]/g)].map((m) => m[1]).sort();
+  assert.deepEqual(rpcs, ['job_payment_state', 'my_payouts_on_their_way', 'quote_job_price']);
+  assert.doesNotMatch(js.replace(".rpc('my_payouts_on_their_way')", ''), /\.rpc\(['"][^'"]*(release|payout|cash_out|capture)/i);
 });
 
 test('4 · the connect responses are validated field by field — a guessed link or an unknown state is an error', () => {
@@ -451,9 +455,11 @@ test('[static] 8 · the route is registered on the shared profile stack and type
 // ---------------------------------------------------------------------------
 
 test('12 · payoutSetupNotice (n4b): the sentence only when payouts are not enabled AND an approved stripe row is still waiting on its transfer', () => {
-  const waiting = { provider: 'stripe', status: 'held', release_requested_at: '2026-09-05T00:40:39Z' };
-  const merelyHeld = { provider: 'stripe', status: 'held', release_requested_at: null };
-  const sandbox = { ...waiting, provider: 'sandbox' };
+  // Codex R8-A1: "still waiting on its transfer" is the database's fact (my_payouts_on_their_way); the
+  // rows carry what it answers: an approved stripe row in the queue yes, a merely held or sandbox row no.
+  const waiting = { provider: 'stripe', status: 'held', release_requested_at: '2026-09-05T00:40:39Z', payoutOnItsWay: true };
+  const merelyHeld = { provider: 'stripe', status: 'held', release_requested_at: null, payoutOnItsWay: false };
+  const sandbox = { ...waiting, provider: 'sandbox', payoutOnItsWay: false };
 
   assert.equal(payoutSetupNotice('enabled', [waiting]), null, 'enabled: the drain will send it; nothing to say');
   assert.equal(payoutSetupNotice('none', []), null, 'no rows: nothing is waiting');

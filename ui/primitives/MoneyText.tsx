@@ -53,6 +53,10 @@ type MoneyTextProps = {
   refundQueued?: boolean;
   /** With refundQueued: a late cancellation kept a fee for the worker (isCancellationFeeKept). */
   feeKept?: boolean;
+  /** With feeKept: the fee's transfer was sent (released_at set on the held row). */
+  feeSent?: boolean;
+  /** Codex R8-A1: the payout of this row is on its way (lib/paymentRules.ts isPayoutOnItsWay). */
+  payoutOnItsWay?: boolean;
   /** The provider failed a refund of this row, not arranged yet (lib/paymentRules.ts isRefundFailed). */
   refundFailed?: boolean;
   /** P3: that failed refund was made another way, no failure since (lib/paymentRules.ts isRefundArranged). */
@@ -73,6 +77,8 @@ export function MoneyText({
   waitingOnPayoutSetup,
   refundQueued,
   feeKept,
+  feeSent,
+  payoutOnItsWay,
   refundFailed,
   refundArranged,
   tip,
@@ -89,7 +95,7 @@ export function MoneyText({
     state && !SETTLED.includes(state) ? colors.muted : colors.money;
   const caption = state
     ? paymentCaption(
-        { status: state, releaseRequested, issueOpen, waitingOnPayoutSetup, refundFailed, refundArranged, refundQueued, feeKept, tip, counterpartFirstName },
+        { status: state, releaseRequested, issueOpen, waitingOnPayoutSetup, refundFailed, refundArranged, refundQueued, feeKept, feeSent, payoutOnItsWay, tip, counterpartFirstName },
         perspective
       )
     : null;

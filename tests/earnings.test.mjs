@@ -270,14 +270,17 @@ test('B23 · each cancelled-job case shows what the worker receives, on rows bui
   const rows = Object.fromEntries(Object.entries(B23_CASES).map(([k, r]) => [k, pick(r, 'cancelled')]));
   // The sentences: where the money goes, never the job-payment words.
   assert.equal(earningsRowMeta(b23Facts(rows.A), NOW, FAKE), 'Refund on its way to the customer');
-  assert.equal(earningsRowMeta(b23Facts(rows.B), NOW, FAKE), `Cancellation fee ${EM} on its way to you`);
+  // Codex R8-A1: a fee not sent yet is promised under the database's fact (payoutOnItsWay), as the
+  // queued fee (B) and the fee whose refund landed first (D2) are in supabase/tests/460.
+  assert.equal(earningsRowMeta(b23Facts(rows.B, { payoutOnItsWay: true }), NOW, FAKE), `Cancellation fee ${EM} on its way to you`);
   assert.equal(
-    earningsRowMeta(b23Facts(rows.B, { waitingOnPayoutSetup: true }), NOW, FAKE),
+    earningsRowMeta(b23Facts(rows.B, { waitingOnPayoutSetup: true, payoutOnItsWay: true }), NOW, FAKE),
     `Cancellation fee ${EM} waiting on your payout setup`
   );
+  assert.equal(earningsRowMeta(b23Facts(rows.B), NOW, FAKE), `Held ${EM} not sent yet`, 'R8-A1: the fee not on its way (a card dispute, a reversal)');
   assert.equal(earningsRowMeta(b23Facts(rows.C), NOW, FAKE), `Cancellation fee ${EM} sent to your payout account`);
   assert.equal(earningsRowMeta(b23Facts(rows.D), NOW, FAKE), `Cancellation fee ${EM} sent to your payout account`);
-  assert.equal(earningsRowMeta(b23Facts(rows.D2), NOW, FAKE), `Cancellation fee ${EM} on its way to you`);
+  assert.equal(earningsRowMeta(b23Facts(rows.D2, { payoutOnItsWay: true }), NOW, FAKE), `Cancellation fee ${EM} on its way to you`);
   assert.equal(earningsRowMeta(b23Facts(rows.E), NOW, FAKE), `Held ${EM} waiting on a decision`);
   for (const r of Object.values(rows)) {
     assert.doesNotMatch(earningsRowMeta(b23Facts(r), NOW, FAKE), /Approved|protection|Released|\bpaid\b/);

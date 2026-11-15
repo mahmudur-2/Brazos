@@ -677,6 +677,9 @@ export function WorkerJobScreen() {
           // (lib/paymentRules.ts) — a cancelled job's row is money going home.
           refundQueued={isRefundQueued(payment)}
           feeKept={isCancellationFeeKept(payment)}
+          // Codex R8-A1: the payout and the fee are promised under the fact; a fee sent says so.
+          payoutOnItsWay={isPayoutOnItsWay(payment)}
+          feeSent={!!payment.released_at}
         />
         <Text style={styles.paymentNote}>
           {(() => {
@@ -688,7 +691,10 @@ export function WorkerJobScreen() {
             // none of the live sentences below may describe it.
             if (lifecycle === 'cancelled') {
               if (isCancellationFeeKept(payment)) {
-                return `This job was cancelled late. The cancellation fee is on its way to you; the rest goes back to ${clientName}.`;
+                // Codex R8-A1: the fee is promised under the fact, or once its transfer was sent.
+                return isPayoutOnItsWay(payment) || !!payment.released_at
+                  ? `This job was cancelled late. The cancellation fee is on its way to you; the rest goes back to ${clientName}.`
+                  : 'This job was cancelled late.';
               }
               if (isRefundQueued(payment) || payment.status === 'refunded' || payment.status === 'partially_refunded') {
                 return `This job was cancelled. ${clientName}’s payment goes back to them.`;
@@ -738,8 +744,9 @@ export function WorkerJobScreen() {
           <View style={styles.payoutNudge}>
             <PayoutNudge
               // Final sweep: on a late cancellation the money still travelling is the fee
-              // (transfer_cents), never the whole take.
-              cents={isCancellationFeeKept(payment) ? payment.transfer_cents ?? 0 : workerTakeCents(payment)}
+              // (transfer_cents), never the whole take. Codex R8-A1: the card's own figure
+              // (workerReceivesCents), so a fee row whose refund landed (partially_refunded) names the fee.
+              cents={workerReceivesCents({ ...payment, job_status: job.status }, workerTakeCents)}
               onPress={() => navigateAcrossTabs('Profile', 'Payouts', {})}
             />
           </View>

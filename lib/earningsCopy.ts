@@ -47,8 +47,8 @@ export type EarningsRowFacts = {
    *  answered for this row — the caller asks the ONE rule and hands the answer
    *  in, so this import-free module never restates it. */
   waitingOnPayoutSetup?: boolean;
-  /** Codex R7-A3: lib/paymentRules.ts isPayoutOnItsWay, asked by the caller the same way. Without it
-   *  an approved row says only that it is held and not sent. */
+  /** Codex R7-A3, R8-A1: lib/paymentRules.ts isPayoutOnItsWay (the database's fact), asked by the caller
+   *  the same way. Without it an approved row, a tip or a kept fee says only that it is held and not sent. */
   payoutOnItsWay?: boolean;
 };
 
@@ -69,6 +69,8 @@ export function earningsRowMeta(
   if (refunded || row.job_status === 'cancelled') {
     if (row.release_reason === 'cancellation_fee' && (row.transfer_cents ?? 0) > 0) {
       if (row.released_at) return 'Cancellation fee — sent to your payout account';
+      // Codex R8-A1: the fee is promised under the fact (a reversed fee or a card dispute is not on its way).
+      if (!row.payoutOnItsWay) return 'Held — not sent yet';
       return row.waitingOnPayoutSetup
         ? 'Cancellation fee — waiting on your payout setup'
         : 'Cancellation fee — on its way to you';

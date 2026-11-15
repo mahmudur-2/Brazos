@@ -71,7 +71,8 @@ test('[static] the predicates are re-exported, and both job screens and MoneyTex
   assert.match(read('lib/payments.ts'), /export \{[^}]*isCancellationFeeKept[^}]*isRefundQueued[^}]*\} from '\.\/paymentRules';/s);
 
   const money = code('ui/primitives/MoneyText.tsx');
-  assert.match(money, /refundQueued, feeKept, tip, counterpartFirstName \}, perspective/);
+  // Codex R8-A1: the fee's sent fact and the payout fact ride beside feeKept.
+  assert.match(money, /refundQueued, feeKept, feeSent, payoutOnItsWay, tip, counterpartFirstName \}, perspective/);
 
   // The customer's page: the cancelled branch shows the money, and the failed-read banner reaches it.
   const detail = code('screens/ClientJobDetailScreen.tsx');
@@ -91,7 +92,8 @@ test('[static] the predicates are re-exported, and both job screens and MoneyTex
   // The worker's page: the facts reach the caption, the note names the cancellation first, and
   // neither the gold eyebrow nor the "held" breakdown describes a refund going home.
   const worker = code('screens/WorkerJobScreen.tsx');
-  assert.match(worker, /refundQueued=\{isRefundQueued\(payment\)\} feeKept=\{isCancellationFeeKept\(payment\)\} \/>/);
+  // Codex R8-A1: then the payout fact and the fee's sent fact.
+  assert.match(worker, /refundQueued=\{isRefundQueued\(payment\)\} feeKept=\{isCancellationFeeKept\(payment\)\} payoutOnItsWay=\{isPayoutOnItsWay\(payment\)\} feeSent=\{!!payment\.released_at\} \/>/);
   const note = worker.slice(worker.indexOf("if (lifecycle === 'cancelled') {"));
   assert.ok(note.indexOf('isCancellationFeeKept(payment)') < note.indexOf('isReleased(payment)'), 'the cancelled branch comes before every live sentence');
   assert.match(note, /This job was cancelled late\. The cancellation fee is on its way to you; the rest goes back to \$\{clientName\}\./);
@@ -99,5 +101,12 @@ test('[static] the predicates are re-exported, and both job screens and MoneyTex
   assert.match(worker, /isHeld\(payment\) && !isRefundQueued\(payment\) && !isReleaseRequested\(payment\) && !isReleased\(payment\) && styles\.eyebrowGold/);
   assert.match(worker, /\(\(isHeld\(payment\) && !isRefundQueued\(payment\)\) \|\| isReleased\(payment\)\)/);
   // The payout nudge names what still travels: the fee on a late cancellation, the take otherwise.
-  assert.match(worker, /<PayoutNudge cents=\{isCancellationFeeKept\(payment\) \? payment\.transfer_cents \?\? 0 : workerTakeCents\(payment\)\}/);
+  // Codex R8-A1: through the card's own figure (workerReceivesCents), so a fee row whose refund landed
+  // (partially_refunded) names the fee too; executed in tests/earnings.test.mjs.
+  assert.match(worker, /<PayoutNudge cents=\{workerReceivesCents\(\{ \.\.\.payment, job_status: job\.status \}, workerTakeCents\)\}/);
+  assert.equal(
+    (worker.match(/workerReceivesCents\(\{ \.\.\.payment, job_status: job\.status \}, workerTakeCents\)/g) ?? []).length,
+    2,
+    'the card figure and the nudge: one expression'
+  );
 });

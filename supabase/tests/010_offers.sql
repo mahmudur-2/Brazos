@@ -159,9 +159,12 @@ select is(
       -- The sandbox pair and my_payouts_enabled were dropped by
       -- 20261108000000_lean_v1.sql. The scan itself is unchanged.
       -- B11: worker_payouts_ready only reads payouts_enabled for the offer gate.
+      -- Codex R8-A1: payment_payout_on_its_way and my_payouts_on_their_way only read
+      -- whether a payout is on its way (460_payout_on_its_way.sql); they move nothing.
       and p.proname not in ('release_job_payment', 'auto_release_due_payments',
                             'my_payouts_status', 'set_payouts_status',
-                            'worker_payouts_ready')),
+                            'worker_payouts_ready',
+                            'payment_payout_on_its_way', 'my_payouts_on_their_way')),
   '',
   'G: the only functions that can move money past held are the sanctioned stripe release pair');
 

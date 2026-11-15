@@ -60,6 +60,13 @@ export type PaymentCaptionFacts = {
   refundQueued?: boolean;
   /** With refundQueued: a late cancellation kept a fee for the worker (isCancellationFeeKept). */
   feeKept?: boolean;
+  /** With feeKept: the fee's transfer was sent (released_at set on the held row; a full reversal clears it). */
+  feeSent?: boolean;
+  /**
+   * Codex R8-A1: the database's fact that the worker's payout of this row is on its way
+   * (lib/paymentRules.ts isPayoutOnItsWay). Every sentence that promises the payout asks it.
+   */
+  payoutOnItsWay?: boolean;
   /**
    * The provider failed a refund of this payment and it is not arranged yet (isRefundFailed). The
    * status does not move (Codex R3-A1), so the customer reads it first, whatever the status says,
@@ -89,8 +96,11 @@ export function paymentCaption(facts: PaymentCaptionFacts, viewer: MoneyViewer):
   // Codex R7-A3: a tip whose refund is queued is money going home: the refund sentences below.
   if (facts.tip && !facts.refundQueued) {
     // B1: a held tip is charged and already queued for transfer to the worker;
-    // it reads "on its way" until transfer.created releases it.
-    if (facts.status === 'held') return customer ? `Tip on its way to ${name ?? 'your worker'}` : `Tip from ${name ?? 'the customer'} — on its way`;
+    // it reads "on its way" until transfer.created releases it. Codex R8-A1: only under the fact.
+    if (facts.status === 'held') {
+      if (!facts.payoutOnItsWay) return null;
+      return customer ? `Tip on its way to ${name ?? 'your worker'}` : `Tip from ${name ?? 'the customer'} — on its way`;
+    }
     if (facts.status === 'released' || facts.status === 'paid_out') {
       return customer ? `Tip sent to ${name ?? 'your worker'}` : 'Tip received';
     }
@@ -106,23 +116,23 @@ export function paymentCaption(facts: PaymentCaptionFacts, viewer: MoneyViewer):
       // fee sets release_requested_at too, which is why this is checked first.
       if (facts.refundQueued) {
         if (facts.feeKept) {
-          return customer
-            ? `Refund on its way — the cancellation fee goes to ${name ?? 'your worker'}`
-            : 'Cancellation fee — on its way to you';
+          if (customer) return `Refund on its way — the cancellation fee goes to ${name ?? 'your worker'}`;
+          // Codex R8-A1: the fee is promised under the fact, or once its transfer was sent.
+          return facts.payoutOnItsWay || facts.feeSent ? 'Cancellation fee — on its way to you' : null;
         }
         // Codex R7-A3: the worker is never told a failed or arranged refund is on its way.
         if (!customer && (facts.refundFailed || facts.refundArranged)) return null;
         return customer ? 'Refund on its way — back on your card in a few days' : 'Refund on its way to the customer';
       }
+      // Codex R8-A1: an open issue holds the payment, approved or not.
+      if (facts.issueOpen) return customer ? 'Held — you reported an issue' : 'Held — the customer reported an issue';
       // D23 next: approval is a decision already made, so the protection
-      // sentence never describes that row.
+      // sentence never describes that row. Codex R8-A1: the payout only under the fact.
       if (facts.releaseRequested) {
+        if (!facts.payoutOnItsWay) return null;
         if (customer) return `Approved — on its way to ${name ?? 'your worker'}`;
-        // Codex R7-A3 (isPayoutOnItsWay): no payout promised beside a failed or arranged refund.
-        if (facts.refundFailed || facts.refundArranged) return null;
         return facts.waitingOnPayoutSetup ? 'Approved — waiting on your payout setup' : 'Approved — on its way to you';
       }
-      if (facts.issueOpen) return customer ? 'Held — you reported an issue' : 'Held — the customer reported an issue';
       return customer
         ? `${HELD_IN_PROTECTION} — released when you approve`
         : `${HELD_IN_PROTECTION} — yours when the customer approves`;
