@@ -18,6 +18,10 @@
 -- 2. open_job_dispute, resolve_job_dispute and resolve_tip refuse while it holds. Bodies verbatim
 --    from 20260901000000_baseline.sql, 20261108000000_lean_v1.sql and 20261112010500_resolve_tip.sql;
 --    each gains one check. Signatures, security, search_path and ACLs as they were.
+--    R4-A4: resolve_job_dispute also refuses a decision for the worker while a refund the app
+--    decided may be out and is not in a durable total yet: refund_cents above refunded_cents, and
+--    its refund recorded (refund_ref) or its send begun. A decision for the worker lowers
+--    refund_cents; a refund already landed (refunded_cents) bounds the transfer in transfers_due.
 -- 3. refunds_due reserves the same amount: 20261115000200_work_start_money_rule.sql.
 -- 4. payment_record_reversal ignores a reversal of a transfer already fully reversed (R2-A1).
 --
@@ -131,6 +135,12 @@ begin
    where job_id = p_job_id and status = 'open' for update;
   if public.payment_transfer_unconfirmed(v_payment) then
     raise exception 'A transfer to the worker was sent and its result is not recorded yet: record it or reopen it first.';
+  end if;
+  -- R4-A4: refused only while a refund the app decided may be out and no durable total (refunded_cents)
+  -- covers it yet; after that the reservation and the status hold the money.
+  if v_worker_won and coalesce(v_payment.refund_cents, 0) > coalesce(v_payment.refunded_cents, 0)
+     and (v_payment.refund_ref is not null or v_payment.refund_sent_attempt = v_payment.refund_attempts) then
+    raise exception 'A refund to the customer was sent or may have been sent: a decision for the worker can no longer change it.';
   end if;
 
   v_park := v_payment.id is not null and v_payment.transfer_reversed_at is not null;

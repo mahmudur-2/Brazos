@@ -61,7 +61,7 @@ import {
   type JobPriceQuote,
   type Payment,
 } from '../lib/payments';
-import { customerCancelPreview, customerChargeCents, isRefundFailed } from '../lib/paymentRules';
+import { customerCancelPreview, customerChargeCents, isRefundArranged, isRefundFailed } from '../lib/paymentRules';
 import { paymentsMode } from '../lib/adapters/payments';
 import { customerCancelConfirm, paymentEyebrow } from '../lib/moneyCopy';
 import { cardLabel, listSavedCards, type SavedCard } from '../lib/paymentMethods';
@@ -759,6 +759,10 @@ export function ClientJobDetailScreen() {
         ? `The cancellation fee goes to ${workerFirstName}. The refund of the rest to your card didn’t go through; Brazos will arrange it another way.`
         : 'The refund to your card didn’t go through. Brazos will arrange it another way.';
     }
+    // P3: the owner made that refund another way; never "went back to your card".
+    if (isRefundArranged(payment)) {
+      return 'The refund to your card didn’t go through, so Brazos refunded you another way.';
+    }
     if (isCancellationFeeKept(payment)) {
       return `The cancellation fee goes to ${workerFirstName}; the rest goes back to your card — usually within 5–10 business days.`;
     }
@@ -1186,6 +1190,7 @@ export function ClientJobDetailScreen() {
                       refundQueued={isRefundQueued(payment)}
                       feeKept={isCancellationFeeKept(payment)}
                       refundFailed={isRefundFailed(payment)}
+                      refundArranged={isRefundArranged(payment)}
                       counterpartFirstName={workerFirstName}
                     />
                     {cancelledMoneyNote ? <Text style={styles.paymentNote}>{cancelledMoneyNote}</Text> : null}
@@ -1346,7 +1351,13 @@ export function ClientJobDetailScreen() {
                 {/* Tier A (C2, D-4): the customer's held figure is the row's
                     charge_amount_cents — the agreed price is said beside the
                     title; this is what the card was charged. */}
-                <MoneyText cents={customerChargeCents(payment)} state={payment.status} size="lg" />
+                <MoneyText
+                  cents={customerChargeCents(payment)}
+                  state={payment.status}
+                  size="lg"
+                  refundFailed={isRefundFailed(payment)}
+                  refundArranged={isRefundArranged(payment)}
+                />
                 {/* 2026-09-26 (audit M-6): one money block, both figures named —
                     what the card paid (the charge, above) and the agreed price
                     it protects. */}
@@ -1364,7 +1375,12 @@ export function ClientJobDetailScreen() {
                   <Ionicons name="shield-outline" size={22} color={colors.mark} />
                 </View>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>{paymentEyebrow()}</Text>
-                <MoneyText cents={customerChargeCents(payment)} state={payment.status} />
+                <MoneyText
+                  cents={customerChargeCents(payment)}
+                  state={payment.status}
+                  refundFailed={isRefundFailed(payment)}
+                  refundArranged={isRefundArranged(payment)}
+                />
                 <Text style={styles.paymentNote}>
                   The time to pay ran out, and the app hasn’t seen a payment confirm.
                   Tap Check again in a moment.
@@ -1389,6 +1405,7 @@ export function ClientJobDetailScreen() {
                   state={payment.status}
                   refundQueued={isRefundQueued(payment)}
                   refundFailed={isRefundFailed(payment)}
+                  refundArranged={isRefundArranged(payment)}
                   releaseRequested={releaseRequested}
                   issueOpen={!!openDispute}
                   counterpartFirstName={workerFirstName}

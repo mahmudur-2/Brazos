@@ -28,7 +28,7 @@ import {
   isReleaseRequested,
   type Payment,
 } from '../lib/payments';
-import { customerChargeCents } from '../lib/paymentRules';
+import { customerChargeCents, isRefundArranged, isRefundFailed } from '../lib/paymentRules';
 import {
   DISPUTE_REASONS,
   DISPUTE_REASON_LABELS,
@@ -352,6 +352,8 @@ export function ApproveOrDisputeScreen() {
               size="lg"
               releaseRequested={releaseRequested}
               issueOpen={dispute?.status === 'open'}
+              refundFailed={isRefundFailed(payment)}
+              refundArranged={isRefundArranged(payment)}
             />
             {held && releaseDeadlineMs(job) != null ? (
               <Text style={styles.paymentNote}>

@@ -99,10 +99,10 @@ begin
 end $fn$;
 revoke all on function public.payment_for_party(public.payments) from public, anon, authenticated, service_role;
 comment on function public.payment_for_party(public.payments) is
-  'B17, A4: the payments row with the 22 columns a party may not read set to null; the 27 the parties read (the 26 the app selects, and refund_failed_at, 20261115000600) are untouched. Every payer RPC that returns a payments row returns it through this function. No client grant.';
+  'B17, A4: the payments row with the 22 columns a party may not read set to null; the 28 the parties read (the 26 of 20261112010800''s column grant, and refund_failed_at and refund_arranged_at, 20261115000600) are untouched. Every payer RPC that returns a payments row returns it through this function. No client grant.';
 
 -- 5. refunds_due, replaced from 20261115000200_work_start_money_rule.sql only so that p.* takes in
---    refund_failed_at, intent_cancel_at and intent_cancel_tried_at: its column list stays payments'
+--    refund_failed_at, refund_arranged_at, intent_cancel_at and intent_cancel_tried_at: its column list stays payments'
 --    own (supabase/tests/
 --    070_settlement_retry.sql §6). Every clause, the order, the ACL and the comment as they were.
 create or replace view public.refunds_due as

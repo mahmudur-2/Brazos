@@ -108,8 +108,10 @@ export type Payment = {
   refund_reason?: string | null;
   /** Pack 1, F2: when the provider failed a refund of this row (refund.failed); cleared when the
    *  owner records that it was arranged another way (resolve_refund_failure). Read through
-   *  job_payment_state. */
+   *  job_payment_state and PAYMENT_COLUMNS. */
   refund_failed_at?: string | null;
+  /** Pack 1, P3: when the owner recorded that arrangement (resolve_refund_failure). */
+  refund_arranged_at?: string | null;
 };
 
 /**
@@ -164,7 +166,7 @@ export function brazosFeeCents(
  */
 
 const PAYMENT_COLUMNS =
-  'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at, charge_amount_cents, customer_fee_cents, tax_cents, funding_due_at, release_requested_at, transfer_cents, refund_cents, refund_reason';
+  'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at, charge_amount_cents, customer_fee_cents, tax_cents, funding_due_at, release_requested_at, transfer_cents, refund_cents, refund_reason, refund_failed_at, refund_arranged_at';
 
 /**
  * quote_job_price(p_amount_cents)'s row — the ONLY price arithmetic in the

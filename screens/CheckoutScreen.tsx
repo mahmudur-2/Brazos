@@ -14,7 +14,7 @@ import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
 import { CANCELLATION_DISCLOSURE, FEE_NAME, PAY_AND_PROTECT, PAYMENT_HELD_NOT_INSURANCE } from '../lib/moneyCopy';
-import { customerChargeCents } from '../lib/paymentRules';
+import { customerChargeCents, isRefundArranged, isRefundFailed } from '../lib/paymentRules';
 import {
   canOfferJobFunding,
   fetchJobPayment,
@@ -693,7 +693,13 @@ export function CheckoutScreen() {
                   title: 'Current payment state',
                   content: (
                     <View style={styles.paymentState}>
-                      <MoneyText cents={customerChargeCents(payment)} state={payment.status} size="lg" />
+                      <MoneyText
+                        cents={customerChargeCents(payment)}
+                        state={payment.status}
+                        size="lg"
+                        refundFailed={isRefundFailed(payment)}
+                        refundArranged={isRefundArranged(payment)}
+                      />
                     </View>
                   ),
                 },

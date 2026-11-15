@@ -66,14 +66,23 @@ export function isCancellationFeeKept(
 /**
  * Pack 1, F2: a refund of this payment reached the provider and failed (refund.failed): the money
  * is back with Brazos, not on its way to the card. The status does not say it (a failed refund
- * changes no status, Codex R3-A1), so this asks only whether a refund was asked and the failure is
- * still waiting; refund_failed_at clears when the owner records how it was arranged
- * (resolve_refund_failure).
+ * changes no status, Codex R3-A1), so this asks only whether the failure is still waiting (R4-A5:
+ * any failed refund, whatever refund_cents says); refund_failed_at clears when the owner records
+ * how it was arranged (resolve_refund_failure).
  */
-export function isRefundFailed(
-  payment: Pick<Payment, 'status'> & { refund_cents?: number | null; refund_failed_at?: string | null }
-): boolean {
-  return (payment.refund_cents ?? 0) > 0 && payment.refund_failed_at != null;
+export function isRefundFailed(payment: { refund_failed_at?: string | null }): boolean {
+  return payment.refund_failed_at != null;
+}
+
+/**
+ * Pack 1, P3: the owner recorded that the failed refund was made another way (resolve_refund_failure
+ * stamps refund_arranged_at), and no failure has come since. A new failure wins (isRefundFailed).
+ */
+export function isRefundArranged(payment: {
+  refund_failed_at?: string | null;
+  refund_arranged_at?: string | null;
+}): boolean {
+  return payment.refund_failed_at == null && payment.refund_arranged_at != null;
 }
 
 /**

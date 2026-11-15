@@ -243,6 +243,11 @@ test('12 · the column grant covers every payment select of the app and of build
   const granted = new Set(columnsOf(grant[1]));
   assert.equal(granted.size, 26, 'twenty-six columns');
   assert.match(migration, /revoke select on table public\.payments from authenticated;/, 'the whole-table grant is withdrawn first');
+  // Pack 1: 20261115000600 grants the two refund facts the app also reads (refund_failed_at, refund_arranged_at).
+  const later = readFileSync(new URL('../supabase/migrations/20261115000600_refund_failed_and_event_order.sql', import.meta.url), 'utf8');
+  const laterGrants = [...later.matchAll(/grant select \(([^)]*)\) on public\.payments to authenticated;/g)].flatMap((m) => columnsOf(m[1]));
+  assert.deepEqual(laterGrants, ['refund_failed_at', 'refund_arranged_at'], 'the two later column grants are found');
+  for (const column of laterGrants) granted.add(column);
 
   const selects = [];
   const payments = readFileSync(new URL('../lib/payments.ts', import.meta.url), 'utf8');

@@ -101,7 +101,7 @@ begin
          'platform_fee_cents', 'provider', 'provider_ref', 'status', 'authorized_at', 'held_at', 'released_at',
          'release_reason', 'paid_out_at', 'created_at', 'updated_at', 'charge_amount_cents', 'customer_fee_cents',
          'tax_cents', 'funding_due_at', 'release_requested_at', 'transfer_cents', 'refund_cents', 'refund_reason',
-         'refund_failed_at'])
+         'refund_failed_at', 'refund_arranged_at'])
   loop
     begin
       execute format('select %I from public.payments limit 1', v_col);
@@ -127,15 +127,15 @@ select id as p1 from public.payments where job_id = :'j1' and kind = 'job_paymen
 insert into fx values ('j1', :'j1'), ('p1', :'p1');
 
 -- ---------------------------------------------------------------------------
--- 1. B17: a party reads the 26 columns the app reads (and, F2, refund_failed_at), and none of the others.
+-- 1. B17: a party reads the 26 columns of the grant (and, F2, refund_failed_at and refund_arranged_at), and none of the others.
 -- ---------------------------------------------------------------------------
 select is((select count(*)::integer from pg_attribute a where a.attrelid = 'public.payments'::regclass and a.attnum > 0 and not a.attisdropped),
-  49, '1a: payments has 49 columns: 27 for the parties (F2 added refund_failed_at), 22 for the server (F2 added intent_cancel_at and intent_cancel_tried_at)');
+  50, '1a: payments has 50 columns: 28 for the parties (F2 added refund_failed_at, P3 refund_arranged_at), 22 for the server (F2 added intent_cancel_at and intent_cancel_tried_at)');
 select tests.authenticate_as(:'customer');
 select lives_ok($$ select id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider,
   provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at,
   charge_amount_cents, customer_fee_cents, tax_cents, funding_due_at, release_requested_at, transfer_cents, refund_cents,
-  refund_reason from public.payments where job_id = (select v from fx where k = 'j1') $$,
+  refund_reason, refund_failed_at, refund_arranged_at from public.payments where job_id = (select v from fx where k = 'j1') $$,
   '1b: the payer reads every column the app selects (lib/payments.ts PAYMENT_COLUMNS)');
 select is((select count(*) from public.payments where job_id = :'j1'), 1::bigint, '1c: count(*) still works, and RLS still shows the payer its row');
 select throws_ok($$ select transfer_ref from public.payments $$, '42501', null::text, '1d: the payer cannot read the provider''s transfer id');
@@ -152,7 +152,7 @@ select is((select to_jsonb(s) - array['id', 'job_id', 'offer_id', 'payer_id', 'p
              'platform_fee_cents', 'provider', 'provider_ref', 'status', 'authorized_at', 'held_at', 'released_at',
              'release_reason', 'paid_out_at', 'created_at', 'updated_at', 'charge_amount_cents', 'customer_fee_cents',
              'tax_cents', 'funding_due_at', 'release_requested_at', 'transfer_cents', 'refund_cents', 'refund_reason',
-             'refund_failed_at']
+             'refund_failed_at', 'refund_arranged_at']
            from public.job_payment_state(:'j1') s),
   (select jsonb_object_agg(a.attname, null) from pg_attribute a
     where a.attrelid = 'public.payments'::regclass and a.attnum > 0 and not a.attisdropped
@@ -160,7 +160,7 @@ select is((select to_jsonb(s) - array['id', 'job_id', 'offer_id', 'payer_id', 'p
         'platform_fee_cents', 'provider', 'provider_ref', 'status', 'authorized_at', 'held_at', 'released_at',
         'release_reason', 'paid_out_at', 'created_at', 'updated_at', 'charge_amount_cents', 'customer_fee_cents',
         'tax_cents', 'funding_due_at', 'release_requested_at', 'transfer_cents', 'refund_cents', 'refund_reason',
-        'refund_failed_at'])),
+        'refund_failed_at', 'refund_arranged_at'])),
   '1i: job_payment_state() returns every server column empty');
 select is((select status::text from public.job_payment_state(:'j1')), 'released', '1j: … and the columns the app reads as they are');
 select tests.clear_auth();

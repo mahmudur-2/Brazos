@@ -62,10 +62,12 @@ export type PaymentCaptionFacts = {
   feeKept?: boolean;
   /**
    * The provider failed a refund of this payment and it is not arranged yet (isRefundFailed). The
-   * status does not move (Codex R3-A1), so the customer reads it on a held, refunded or partly
-   * refunded row alike.
+   * status does not move (Codex R3-A1), so the customer reads it first, whatever the status says,
+   * on a job payment or a tip alike (R4-A5).
    */
   refundFailed?: boolean;
+  /** P3: the owner made that failed refund another way, and no failure came since (isRefundArranged). */
+  refundArranged?: boolean;
   /** The row is a tip, not the job's payment. */
   tip?: boolean;
   /** The other person's first name, when the screen has it. */
@@ -80,6 +82,10 @@ export type PaymentCaptionFacts = {
 export function paymentCaption(facts: PaymentCaptionFacts, viewer: MoneyViewer): string | null {
   const name = facts.counterpartFirstName?.trim() || null;
   const customer = viewer === 'customer';
+  // F2 (R4-A5), P3: a failed refund, then its arrangement, before every tip and status sentence;
+  // the customer's only: the worker's own sentences stay true. A new failure wins.
+  if (customer && facts.refundFailed) return 'Refund didn’t go through — Brazos will arrange it';
+  if (customer && facts.refundArranged) return 'Refunded another way';
   if (facts.tip) {
     // B1: a held tip is charged and already queued for transfer to the worker;
     // it reads "on its way" until transfer.created releases it.
@@ -87,11 +93,6 @@ export function paymentCaption(facts: PaymentCaptionFacts, viewer: MoneyViewer):
     if (facts.status === 'released' || facts.status === 'paid_out') {
       return customer ? `Tip sent to ${name ?? 'your worker'}` : 'Tip received';
     }
-  }
-  // F2: the refund failed at the provider, whatever the status says; the worker's own sentences stay true.
-  if (facts.refundFailed && customer
-      && (facts.status === 'held' || facts.status === 'refunded' || facts.status === 'partially_refunded')) {
-    return 'Refund didn’t go through — Brazos will arrange it';
   }
   switch (facts.status) {
     case 'unfunded':

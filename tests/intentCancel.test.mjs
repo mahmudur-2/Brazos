@@ -127,6 +127,13 @@ test('F2 (ii) · a stamp that cannot be written is a defect, and the next run as
   assert.deepEqual(r.json.intents, { attempted: 1, succeeded: 0, deferred: 0, failed: 0, defects: 1, blocked: 0 });
 });
 
+test('R4-A6 · a deferred answer whose move cannot be written is a defect too, and nothing is stamped', async () => {
+  const r = await run([{ id: 'pay-1', provider_ref: 'pi_500' }], { pi_500: 500 }, { recordAnswer: () => new Response('no', { status: 500 }) });
+  assert.deepEqual(moved(r.calls), ['pay-1'], 'the move was asked once');
+  assert.deepEqual(stamped(r.calls), [], 'no final stamp');
+  assert.deepEqual(r.json.intents, { attempted: 1, succeeded: 0, deferred: 1, failed: 0, defects: 1, blocked: 0 });
+});
+
 test('F2 (ii) · a row without an intent is never sent', async () => {
   const r = await run([{ id: 'pay-1', provider_ref: null }], {});
   assert.equal(cancels(r.calls).length, 0);

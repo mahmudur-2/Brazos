@@ -1553,6 +1553,7 @@ export type Database = {
           provider: string
           provider_ref: string | null
           received_cents: number | null
+          refund_arranged_at: string | null
           refund_attempts: number
           refund_cents: number | null
           refund_failed_at: string | null
@@ -1604,6 +1605,7 @@ export type Database = {
           provider?: string
           provider_ref?: string | null
           received_cents?: number | null
+          refund_arranged_at?: string | null
           refund_attempts?: number
           refund_cents?: number | null
           refund_failed_at?: string | null
@@ -1655,6 +1657,7 @@ export type Database = {
           provider?: string
           provider_ref?: string | null
           received_cents?: number | null
+          refund_arranged_at?: string | null
           refund_attempts?: number
           refund_cents?: number | null
           refund_failed_at?: string | null
@@ -2230,6 +2233,7 @@ export type Database = {
           provider: string | null
           provider_ref: string | null
           received_cents: number | null
+          refund_arranged_at: string | null
           refund_attempts: number | null
           refund_cents: number | null
           refund_failed_at: string | null
@@ -2281,6 +2285,7 @@ export type Database = {
           provider?: string | null
           provider_ref?: string | null
           received_cents?: number | null
+          refund_arranged_at?: string | null
           refund_attempts?: number | null
           refund_cents?: number | null
           refund_failed_at?: string | null
@@ -2332,6 +2337,7 @@ export type Database = {
           provider?: string | null
           provider_ref?: string | null
           received_cents?: number | null
+          refund_arranged_at?: string | null
           refund_attempts?: number | null
           refund_cents?: number | null
           refund_failed_at?: string | null
@@ -2985,6 +2991,7 @@ export type Database = {
           provider: string
           provider_ref: string | null
           received_cents: number | null
+          refund_arranged_at: string | null
           refund_attempts: number
           refund_cents: number | null
           refund_failed_at: string | null
@@ -3045,6 +3052,7 @@ export type Database = {
           provider: string
           provider_ref: string | null
           received_cents: number | null
+          refund_arranged_at: string | null
           refund_attempts: number
           refund_cents: number | null
           refund_failed_at: string | null
@@ -3392,6 +3400,7 @@ export type Database = {
           provider: string
           provider_ref: string | null
           received_cents: number | null
+          refund_arranged_at: string | null
           refund_attempts: number
           refund_cents: number | null
           refund_failed_at: string | null
@@ -3518,6 +3527,7 @@ export type Database = {
           provider: string
           provider_ref: string | null
           received_cents: number | null
+          refund_arranged_at: string | null
           refund_attempts: number
           refund_cents: number | null
           refund_failed_at: string | null
@@ -3745,6 +3755,7 @@ export type Database = {
           provider: string
           provider_ref: string | null
           received_cents: number | null
+          refund_arranged_at: string | null
           refund_attempts: number
           refund_cents: number | null
           refund_failed_at: string | null
@@ -3797,6 +3808,10 @@ export type Database = {
       payment_refund_held_by_dispute: {
         Args: { p_payment_id: string }
         Returns: boolean
+      }
+      payment_refund_reserved_cents: {
+        Args: { p: Database["public"]["Tables"]["payments"]["Row"] }
+        Returns: number
       }
       payment_transfer_unconfirmed: {
         Args: { p: Database["public"]["Tables"]["payments"]["Row"] }
@@ -3954,6 +3969,7 @@ export type Database = {
           provider: string
           provider_ref: string | null
           received_cents: number | null
+          refund_arranged_at: string | null
           refund_attempts: number
           refund_cents: number | null
           refund_failed_at: string | null
@@ -4063,6 +4079,7 @@ export type Database = {
           provider: string
           provider_ref: string | null
           received_cents: number | null
+          refund_arranged_at: string | null
           refund_attempts: number
           refund_cents: number | null
           refund_failed_at: string | null
@@ -4136,6 +4153,7 @@ export type Database = {
           provider: string
           provider_ref: string | null
           received_cents: number | null
+          refund_arranged_at: string | null
           refund_attempts: number
           refund_cents: number | null
           refund_failed_at: string | null
@@ -4196,6 +4214,7 @@ export type Database = {
           provider: string
           provider_ref: string | null
           received_cents: number | null
+          refund_arranged_at: string | null
           refund_attempts: number
           refund_cents: number | null
           refund_failed_at: string | null

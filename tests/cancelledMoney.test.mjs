@@ -79,8 +79,8 @@ test('[static] the predicates are re-exported, and both job screens and MoneyTex
   assert.match(cancelled, /statusReadError \? \( statusReadBanner \) : payment \? \(/, 'a failed read on a cancelled job says so');
   assert.match(
     cancelled,
-    /<MoneyText cents=\{customerChargeCents\(payment\)\} state=\{payment\.status\} refundQueued=\{isRefundQueued\(payment\)\} feeKept=\{isCancellationFeeKept\(payment\)\} refundFailed=\{isRefundFailed\(payment\)\} counterpartFirstName=\{workerFirstName\} \/>/,
-    'the cancelled job shows its payment through the two facts'
+    /<MoneyText cents=\{customerChargeCents\(payment\)\} state=\{payment\.status\} refundQueued=\{isRefundQueued\(payment\)\} feeKept=\{isCancellationFeeKept\(payment\)\} refundFailed=\{isRefundFailed\(payment\)\} refundArranged=\{isRefundArranged\(payment\)\} counterpartFirstName=\{workerFirstName\} \/>/,
+    'the cancelled job shows its payment through the two facts (and, pack 1, the refund failure and its arrangement)'
   );
   assert.match(detail, /const statusReadBanner = \(/, 'one banner element, used on the live job and the cancelled one');
   assert.equal((detail.match(/statusReadBanner/g) ?? []).length, 3, 'defined once, rendered twice');

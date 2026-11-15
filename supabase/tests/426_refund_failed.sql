@@ -2,7 +2,8 @@
 -- durable fact and a person, never a state the system repairs. Proves
 -- 20261115000600_refund_failed_and_event_order.sql (payments.refund_failed_at, payment_refund_failures,
 -- apply_payment_event, resolve_refund_failure, payment_attention) after Codex round 3: R3-A1, R3-A3,
--- R3-A4, R3-A5 (refunds) and R3-A7 (by design).
+-- R3-A4, R3-A5 (refunds) and R3-A7 (by design); after round 4: R4-A3 (G, the failed refunds join the
+-- transfer reservation, payment_refund_reserved_cents) and P3 (refund_arranged_at: C3b, C7, F7).
 --
 -- THE PROVIDER'S FACTS (docs.stripe.com/refunds, "Failed refunds"): the Refund's status becomes
 -- failed with a failure_reason, refund.failed is sent, the money returns to the platform's balance,
@@ -18,7 +19,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(42);
+select plan(53);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -47,7 +48,8 @@ begin
   return public.apply_payment_event(p_id);
 end $$;
 
--- Hire at $50. p_stage: 'held' (funded) or 'released' (worked, approved, transferred). Returns the job id.
+-- Hire at $50. p_stage: 'held' (funded), 'approved' (worked and approved, not yet transferred) or
+-- 'released' (worked, approved, transferred). Returns the job id.
 create or replace function tests.rf_job(p_title text, p_stage text) returns uuid language plpgsql as $$
 declare
   v_customer uuid := (select v from fx where k = 'customer');
@@ -70,13 +72,15 @@ begin
   perform public.accept_offer(v_offer);
   perform tests.clear_auth();
   v_pid := tests.test_fund_job(v_job);
-  if p_stage = 'released' then
+  if p_stage in ('approved', 'released') then
     perform tests.authenticate_as(v_worker);
     perform public.transition_job_status(v_job, 'in_progress');
     perform public.transition_job_status(v_job, 'completed', '["https://example.com/rf-done.jpg"]'::jsonb);
     perform tests.authenticate_as(v_customer);
     perform public.release_job_payment(v_job);
     perform tests.clear_auth();
+  end if;
+  if p_stage = 'released' then
     perform tests.rf_event('evt_rf_tc_' || v_pid, 'transfer.created', 1800000000, jsonb_build_object(
       'id', 'tr_rf_' || left(md5(v_pid::text), 12), 'object', 'transfer',
       'amount', (select transfer_cents from public.payments where id = v_pid),
@@ -258,6 +262,8 @@ select is(tests.rf_state(:'pc') || '/' || (select (released_at is not null)::tex
 select is(tests.rf_lines(:'pc', 'refund re_rf_c_ failed at the provider%'), 2, 'C2: one line per failed refund');
 select is(tests.rf_try(format('select (public.resolve_refund_failure(%L, %L)).id::text', :'pc', 'Paid back by bank transfer.')),
   'ok: ' || :'pc', 'C3: one record covers every waiting failure of the payment');
+select is((select (refund_arranged_at is not null)::text || '/' || (refund_failed_at is null)::text from public.payments where id = :'pc'),
+  'true/true', 'C3b (P3): the record stamps refund_arranged_at in the update that clears refund_failed_at');
 select is(tests.rf_failures(:'pc'), 'ok: re_rf_c1:' || (:cc - 1000) || ':expired_or_canceled_card:arranged: Paid back by bank transfer., '
                                  || 're_rf_c2:500:expired_or_canceled_card:arranged: Paid back by bank transfer.',
   'C4: … each with the note');
@@ -266,6 +272,8 @@ select is(tests.rf_flag(:'pc'), 'false', 'C5: after the record, a repeat of a kn
 select tests.rf_failed('evt_rf_c_fail3', 1800000400, :'pc', 're_rf_c3', 250, false);
 select is(tests.rf_flag(:'pc') || '/' || tests.rf_lines(:'pc', 'refund re_rf_c3 failed at the provider%'), 'true/1',
   'C6: another refund''s failure raises it again, listed once');
+select is((select (refund_arranged_at is not null)::text from public.payments where id = :'pc'), 'true',
+  'C7 (P3): the earlier arrangement''s stamp stays; the new failure wins on the customer''s card (lib/paymentRules.ts)');
 
 -- ---------------------------------------------------------------------------
 -- D. A released payment refunded by hand in the dashboard (no metadata); that refund fails.
@@ -331,6 +339,61 @@ select is(tests.rf_try($q$select ((select bool_and(c.relrowsecurity) from pg_cla
           and not has_table_privilege('service_role', 'public.payment_refund_failures', 'INSERT, UPDATE, DELETE')
           and not has_table_privilege('service_role', 'public.payment_disputes', 'INSERT, UPDATE, DELETE'))::text$q$),
   'ok: true', 'F6: both tables: RLS on and no policy, read by service_role only, written only through the functions');
+select is((select string_agg(p.proname, ',' order by p.proname) from pg_proc p
+            where p.pronamespace = 'public'::regnamespace and p.prosrc ilike '%refund_arranged_at%'),
+  'resolve_refund_failure', 'F7 (P3): no function but resolve_refund_failure names refund_arranged_at');
+
+-- ---------------------------------------------------------------------------
+-- G. Codex R4-A3: a failed refund whose charge.refunded never came still keeps its amount from the
+--    worker. The reservation is the greatest of refunded_cents, refund_cents and the sum of the
+--    payment's failures (arranged or not), never one added on top of another.
+-- ---------------------------------------------------------------------------
+select is(tests.rf_try($q$select (has_function_privilege('service_role', 'public.payment_refund_reserved_cents(public.payments)', 'EXECUTE')
+          and not has_function_privilege('authenticated', 'public.payment_refund_reserved_cents(public.payments)', 'EXECUTE')
+          and not has_function_privilege('anon', 'public.payment_refund_reserved_cents(public.payments)', 'EXECUTE'))::text
+          || ' ' || (select array_to_string(p.proconfig, ',') from pg_proc p
+                      where p.oid = 'public.payment_refund_reserved_cents(public.payments)'::regprocedure)$q$),
+  'ok: true search_path=public, pg_temp', 'G0: payment_refund_reserved_cents: service_role only, the fixed search_path');
+select tests.rf_job('RF approved, full failure', 'approved') as jg \gset
+select tests.rf_pid(:'jg') as pg \gset
+select charge_amount_cents as cg from public.payments where id = :'pg' \gset
+select ok(exists (select 1 from public.transfers_due t where t.id = :'pg'), 'G1 (control): approved, nothing refunded: the transfer is due');
+-- A refund made by hand in the dashboard (no metadata) fails; its charge.refunded never comes.
+select tests.rf_failed('evt_rf_g_fail', 1800000100, :'pg', 're_rf_g1', :cg, false);
+select is((select coalesce(refunded_cents, 0)::text || '/' || coalesce(refund_cents, 0)::text from public.payments where id = :'pg')
+          || '/' || (select count(*)::text from public.transfers_due t where t.id = :'pg')
+          || '/' || tests.rf_lines(:'pg', 'transfer is more than is left after refunds: a person decides'),
+  '0/0/0/1', 'G2: only a full refund.failed, refund totals empty: no transfer is due, and payment_attention says why');
+select tests.rf_try(format('select (public.resolve_refund_failure(%L, %L)).id::text', :'pg', 'Refunded by bank transfer.')) as g_res \gset
+select ok(not exists (select 1 from public.transfers_due t where t.id = :'pg'),
+  'G3: after resolve_refund_failure the arranged failure still holds the transfer back');
+
+select tests.rf_job('RF approved, partial failures', 'approved') as jh \gset
+select tests.rf_pid(:'jh') as ph \gset
+select (charge_amount_cents - transfer_cents) as room from public.payments where id = :'ph' \gset
+select tests.rf_failed('evt_rf_h_fail1', 1800000100, :'ph', 're_rf_h1', :room, false);
+select ok(exists (select 1 from public.transfers_due t where t.id = :'ph'),
+  'G4: a partial failure that leaves exactly the transfer: still due');
+select tests.rf_failed('evt_rf_h_fail2', 1800000110, :'ph', 're_rf_h2', 1, false);
+select ok(not exists (select 1 from public.transfers_due t where t.id = :'ph'),
+  'G5: a second refund id fails for one cent: the failures add up and the transfer is no longer due');
+
+-- The late-cancellation control: the fee transfer (1,000) and the rest refunded; the rest's own refund
+-- fails and its charge.refunded never comes. Its failure is inside refund_cents: the fee still goes.
+select tests.rf_job('RF late cancel, refund failed', 'held') as jl \gset
+select tests.rf_pid(:'jl') as pl \gset
+select charge_amount_cents as cl from public.payments where id = :'pl' \gset
+update public.payments
+   set transfer_cents = 1000, refund_cents = :cl - 1000, release_reason = 'cancellation_fee',
+       release_requested_at = now(), refund_reason = 'customer_cancelled_late'
+ where id = :'pl';
+select public.settlement_send_begin(:'pl', 'refund', 0) as l_begun \gset
+select public.record_settlement_sent(:'pl', 'refund', 're_rf_l1', :cl - 1000) as l_sent \gset
+select tests.rf_failed('evt_rf_l_fail', 1800000100, :'pl', 're_rf_l1', :cl - 1000);
+select is(tests.rf_state(:'pl') || '/' || tests.rf_flag(:'pl') || '/' || (select count(*)::text from public.transfers_due t where t.id = :'pl'),
+  'held/0/re_rf_l1/true/1', 'G6: late-cancellation control: the own refund failed, the fee transfer is still due');
+select tests.rf_try(format('select (public.resolve_refund_failure(%L, %L)).id::text', :'pl', 'Refunded by bank transfer.')) as l_res \gset
+select ok(exists (select 1 from public.transfers_due t where t.id = :'pl'), 'G7: and after resolve_refund_failure too');
 
 select * from finish();
 rollback;

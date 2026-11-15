@@ -18,6 +18,9 @@
 --    the column list (p.*: payments is unchanged), the order and the ACL are as in
 --    20261112010300_settlement_guards.sql. transfers_ready and refunds_ready select over them and need
 --    no restatement.
+--    R4-A3: transfers_due's "never more than is left after refunds" reads
+--    payment_refund_reserved_cents(payments), the one place that says how much of a charge refunds
+--    hold back (20261115000600 adds the failed refunds to it).
 -- 3. transition_job_status: the start gate also requires payment_money_clear. Body verbatim from
 --    20260925000000_job_completions.sql otherwise; signature, security, search_path and ACL as they were.
 --
@@ -42,6 +45,18 @@ grant execute on function public.payment_money_clear(public.payments) to service
 comment on function public.payment_money_clear(public.payments) is
   'A6: no card dispute holds the charge (B13) and the charge collected what the row says (B17). Work starts, and either queue sends, only while this holds. Read by transition_job_status, transfers_due and refunds_due.';
 
+create or replace function public.payment_refund_reserved_cents(p public.payments)
+returns integer
+language sql stable
+set search_path = public, pg_temp
+as $fn$
+  select greatest(coalesce(p.refunded_cents, 0), coalesce(p.refund_cents, 0))
+$fn$;
+revoke all on function public.payment_refund_reserved_cents(public.payments) from public, anon, authenticated;
+grant execute on function public.payment_refund_reserved_cents(public.payments) to service_role;
+comment on function public.payment_refund_reserved_cents(public.payments) is
+  'R4-A3: how much of the charge refunds hold back from the worker: the greatest of the refunded total and the refund asked for. No transfer is due above charge minus this. 20261115000600 adds the failed refunds. Read by transfers_due and payment_attention.';
+
 create or replace view public.transfers_due as
   select p.*
     from public.payments p
@@ -58,7 +73,7 @@ create or replace view public.transfers_due as
      -- B13, B17 (A6): no card dispute holds the money, and the charge collected what the row says.
      and public.payment_money_clear(p)
      -- B18: never more than is left after refunds, asked for or landed.
-     and p.transfer_cents <= p.charge_amount_cents - greatest(coalesce(p.refunded_cents, 0), coalesce(p.refund_cents, 0))
+     and p.transfer_cents <= p.charge_amount_cents - public.payment_refund_reserved_cents(p)
      -- B16: no live transfer is recorded for this payment.
      and not exists (select 1 from public.payment_transfers t
                       where t.payment_id = p.id and t.reversed_cents < t.amount_cents)

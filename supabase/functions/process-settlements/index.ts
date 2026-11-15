@@ -479,7 +479,9 @@ async function runIntentCancels(): Promise<Tally> {
       // hold the others out of QUEUE_LIMIT, and the next tick asks again.
       counts.deferred++;
       console.error(`process-settlements: intent cancel for payment ${row.id} answered ${status || 'nothing'}; asked again next tick`);
-      await rpcBoolean('record_intent_cancel', { p_payment_id: row.id, p_final: false }, `intent cancel ${row.id} deferred`);
+      // R4-A6: a recorder that did not answer is a defect here too (the row is not moved back).
+      const moved = await rpcBoolean('record_intent_cancel', { p_payment_id: row.id, p_final: false }, `intent cancel ${row.id} deferred`);
+      if (moved === null) counts.defects++;
       continue;
     }
     const recorded = await rpcBoolean('record_intent_cancel', { p_payment_id: row.id, p_final: true }, `intent cancel ${row.id}`);

@@ -5,7 +5,8 @@
 -- event is sent twice, under two event ids, as a provider retry or a second endpoint would.
 -- Codex round 3: the money stays blocked while any dispute of the payment is open (R3-A2), a
 -- dispute closed twice never lets money leave after a lost, and the rules still hold after the
--- 90-day prune empties the payloads (R3-A5).
+-- 90-day prune empties the payloads (R3-A5). Codex round 4 (R4-A2): a dispute recorded as lost stays
+-- lost, and refunded stays refunded on a later partial charge.refunded (5e-5i).
 --
 -- THE CAST: a customer, a worker with an enabled payout account, the runner (RLS bypassed; the
 -- webhook's stand-in). Everything rolls back.
@@ -14,7 +15,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(26);
+select plan(31);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -180,8 +181,8 @@ select is((select string_agg((p.chargeback_at is not null)::text, ',' order by p
   'true,true,true', '4e: chargeback_at stays set on all three while D2 is open');
 
 -- ---------------------------------------------------------------------------
--- 5. One dispute closed twice: the last closing status recorded wins, and after a lost nothing
---    leaves, in either order (refunded is never written back).
+-- 5. One dispute closed twice: the last closing status recorded wins, except that lost stays lost,
+--    and after a lost nothing leaves, in any order (refunded is never written back).
 -- ---------------------------------------------------------------------------
 select tests.eo_asked('EO lost then won') as r1 \gset
 select tests.eo_dispute('evt_eo_r1_new', 'charge.dispute.created', 1800000600, :'r1', 'dp_eo_r1', 'needs_response');
@@ -195,6 +196,39 @@ select tests.eo_dispute('evt_eo_r2_won', 'charge.dispute.closed', 1800000700, :'
 select is(tests.eo_queues(:'r2'), 'true/true/held', '5c (control): won: the money is free again');
 select tests.eo_dispute('evt_eo_r2_lost', 'charge.dispute.closed', 1800000800, :'r2', 'dp_eo_r2', 'lost');
 select is(tests.eo_queues(:'r2'), 'false/false/refunded', '5d: a late lost of the same dispute: refunded, both queues empty');
+-- R4-A2: lost, then a stale won, then a partial refund; and lost, then a partial refund, then a stale won.
+select tests.eo_asked('EO lost, stale won, partial') as r3 \gset
+select tests.eo_dispute('evt_eo_r3_new', 'charge.dispute.created', 1800000600, :'r3', 'dp_eo_r3', 'needs_response');
+select tests.eo_dispute('evt_eo_r3_lost', 'charge.dispute.closed', 1800000700, :'r3', 'dp_eo_r3', 'lost');
+select tests.eo_dispute('evt_eo_r3_won', 'charge.dispute.closed', 1800000650, :'r3', 'dp_eo_r3', 'won');
+select tests.eo_refunded('evt_eo_r3_part', 1800000900, :'r3', 1000);
+select is(tests.eo_queues(:'r3') || '/' || (select (chargeback_at is not null)::text from public.payments where id = :'r3'),
+  'false/false/refunded/true', '5e (R4-A2): lost, a stale won, a partial refund: still refunded, still blocked, nothing sent');
+select tests.eo_asked('EO lost, partial, stale won') as r4 \gset
+select tests.eo_dispute('evt_eo_r4_new', 'charge.dispute.created', 1800000600, :'r4', 'dp_eo_r4', 'needs_response');
+select tests.eo_dispute('evt_eo_r4_lost', 'charge.dispute.closed', 1800000700, :'r4', 'dp_eo_r4', 'lost');
+select tests.eo_refunded('evt_eo_r4_part', 1800000900, :'r4', 1000);
+select tests.eo_dispute('evt_eo_r4_won', 'charge.dispute.closed', 1800000650, :'r4', 'dp_eo_r4', 'won');
+select is(tests.eo_queues(:'r4') || '/' || (select (chargeback_at is not null)::text from public.payments where id = :'r4'),
+  'false/false/refunded/true', '5f (R4-A2): lost, a partial refund, a stale won: the same end');
+select tests.eo_dispute('evt_eo_r3_won_again', 'charge.dispute.closed', 1800000650, :'r3', 'dp_eo_r3', 'won');
+select tests.eo_refunded('evt_eo_r3_part_again', 1800000900, :'r3', 1000);
+select tests.eo_dispute('evt_eo_r4_won_again', 'charge.dispute.closed', 1800000650, :'r4', 'dp_eo_r4', 'won');
+select is(tests.eo_queues(:'r3') || ' ' || tests.eo_queues(:'r4')
+          || ' ' || (select string_agg(d.status, ',' order by d.dispute_ref) from public.payment_disputes d where d.payment_id in (:'r3', :'r4')),
+  'false/false/refunded false/false/refunded lost,lost', '5g: the same events again under new ids: nothing moves, both disputes still lost');
+-- A voided row paid after its void (refund_reason funded_after_void): the refund it queues waits
+-- behind a dispute, and a stale won after a lost never lets it go on top of the chargeback.
+select tests.eo_held('EO voided, lost, stale won') as r5 \gset
+update public.payments
+   set status = 'voided', refund_cents = charge_amount_cents, refund_reason = 'funded_after_void'
+ where id = :'r5';
+select is(tests.eo_queues(:'r5'), 'false/true/voided', '5h (control): the funded_after_void refund is due');
+select tests.eo_dispute('evt_eo_r5_new', 'charge.dispute.created', 1800000600, :'r5', 'dp_eo_r5', 'needs_response');
+select tests.eo_dispute('evt_eo_r5_lost', 'charge.dispute.closed', 1800000700, :'r5', 'dp_eo_r5', 'lost');
+select tests.eo_dispute('evt_eo_r5_won', 'charge.dispute.closed', 1800000650, :'r5', 'dp_eo_r5', 'won');
+select is(tests.eo_queues(:'r5') || '/' || (select (chargeback_at is not null)::text from public.payments where id = :'r5'),
+  'false/false/voided/true', '5i (R4-A2): created, lost, a stale won: the refund stays held back behind the lost dispute');
 
 -- ---------------------------------------------------------------------------
 -- 6. R3-A5: the 90-day prune empties the payloads; later events under new ids still meet the facts.

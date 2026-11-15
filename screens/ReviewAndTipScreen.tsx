@@ -27,7 +27,7 @@ import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
 import { paymentEyebrow } from '../lib/moneyCopy';
-import { customerChargeCents } from '../lib/paymentRules';
+import { customerChargeCents, isRefundArranged, isRefundFailed } from '../lib/paymentRules';
 import { firstNameOf } from '../lib/liveJobStatus';
 import {
   classifyTipPoll,
@@ -469,11 +469,14 @@ export function ReviewAndTipScreen() {
   // row is past unfunded.
   const tipDoneNote = (() => {
     if (!tip) return null;
-    const where = isHeld(tip)
-      ? `Your tip is on its way to ${workerName ?? 'the worker'} on top of the job payment.`
-      : isReleased(tip)
-        ? `Your tip went to ${workerName ?? 'the worker'} on top of the job payment.`
-        : null;
+    // R4-A5, P3: a failed or arranged refund of the tip: never "on its way" or "went to" the worker.
+    const where = isRefundFailed(tip) || isRefundArranged(tip)
+      ? null
+      : isHeld(tip)
+        ? `Your tip is on its way to ${workerName ?? 'the worker'} on top of the job payment.`
+        : isReleased(tip)
+          ? `Your tip went to ${workerName ?? 'the worker'} on top of the job payment.`
+          : null;
     const charged =
       tip.charge_amount_cents == null
         ? null
@@ -530,6 +533,8 @@ export function ReviewAndTipScreen() {
                   cents={customerChargeCents(payment)}
                   state={payment.status}
                   releaseRequested={!!payment.release_requested_at}
+                  refundFailed={isRefundFailed(payment)}
+                  refundArranged={isRefundArranged(payment)}
                   counterpartFirstName={firstNameOf(workerName)}
                 />
                 <Text style={styles.cardNote}>
@@ -565,7 +570,14 @@ export function ReviewAndTipScreen() {
               <Text accessibilityRole="header" style={styles.sectionTitle}>Add a tip?</Text>
               {tipDone && tip ? (
                 <>
-                  <MoneyText cents={tip.amount_cents} state={tip.status} tip counterpartFirstName={firstNameOf(workerName)} />
+                  <MoneyText
+                    cents={tip.amount_cents}
+                    state={tip.status}
+                    tip
+                    refundFailed={isRefundFailed(tip)}
+                    refundArranged={isRefundArranged(tip)}
+                    counterpartFirstName={firstNameOf(workerName)}
+                  />
                   {tipDoneNote ? <Text style={styles.cardNote}>{tipDoneNote}</Text> : null}
                 </>
               ) : paymentsMode === 'disabled' ? (

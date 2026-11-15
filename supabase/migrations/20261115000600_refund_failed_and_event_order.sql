@@ -11,6 +11,13 @@
 -- payment_disputes keeps one row per dispute id: a created event adds a dispute once and never
 -- reopens it, a closed event records its status (the last one delivered wins), and the money stays
 -- blocked while any dispute of the payment is neither won nor closed as an inquiry (warning_closed).
+-- R4-A2: two facts never move back. A dispute recorded as lost stays lost (a later close of the
+-- same id changes nothing; a person decides), and a refunded row stays refunded on charge.refunded,
+-- as voided and failed do (a lost dispute writes refunded with no refunded total).
+-- R4-A1: payment_disputes starts with the disputes the payments rows already record. The code before
+-- (20261112010200) kept one dispute per row: chargeback_at while it blocked, chargeback_ref, and
+-- chargeback_cents for a formal dispute (none for an inquiry; lost always kept one). Each such row
+-- becomes one dispute row, so the next dispute event recomputes the same block, ref and amount.
 --
 -- refund.failed. The provider can fail a refund after it reported it: the Refund's status becomes
 -- failed with a failure_reason, refund.failed is sent, the money goes back to the platform's balance,
@@ -25,6 +32,12 @@
 --   - apply_payment_event: refund.failed changes no status and no refunded total; a failed refund
 --     with no recorded ref stays recorded, so refunds_due never sends it again.
 --   - resolve_refund_failure(uuid, text): the owner's record of how the refund was arranged.
+--   - payments.refund_arranged_at (P3): set by resolve_refund_failure in the same update that clears
+--     refund_failed_at, so the customer's card says the refund was made another way. Nothing else
+--     writes it; it moves no money and no queue reads it. The parties may read it.
+--   - payment_refund_reserved_cents (R4-A3, from 20261115000200): the failed refunds join what
+--     refunds hold back from the worker, arranged or not, so a failed refund whose charge.refunded
+--     never came still keeps its amount from the transfer.
 --   - payment_attention: one line per failed refund until it is arranged, and the "refund sent,
 --     not yet confirmed" line leaves out a failed refund.
 --
@@ -39,6 +52,11 @@ alter table public.payments add column if not exists refund_failed_at timestampt
 grant select (refund_failed_at) on public.payments to authenticated;
 comment on column public.payments.refund_failed_at is
   'When a refund of this payment failed at the provider and is not yet arranged another way. Set by apply_payment_event (a refund.failed for a refund id not seen before), cleared by resolve_refund_failure. The parties may read it.';
+
+alter table public.payments add column if not exists refund_arranged_at timestamptz;
+grant select (refund_arranged_at) on public.payments to authenticated;
+comment on column public.payments.refund_arranged_at is
+  'P3: when the owner last recorded that the failed refunds of this payment were arranged another way. Set only by resolve_refund_failure, in the update that clears refund_failed_at. It moves no money and no queue reads it. The parties may read it.';
 
 create table if not exists public.payment_refund_failures (
   refund_ref     text primary key,
@@ -69,7 +87,24 @@ alter table public.payment_disputes enable row level security;
 revoke all on table public.payment_disputes from public, anon, authenticated, service_role;
 grant select on table public.payment_disputes to service_role;
 comment on table public.payment_disputes is
-  'One row per card dispute (or inquiry) of a payment, keyed by the Dispute id. charge.dispute.created adds it once and never reopens it; charge.dispute.closed records its status (the last one delivered wins). The money stays blocked while any dispute of the payment is neither won nor warning_closed. Written only by apply_payment_event; service_role reads it.';
+  'One row per card dispute (or inquiry) of a payment, keyed by the Dispute id. charge.dispute.created adds it once and never reopens it; charge.dispute.closed records its status (the last one delivered wins, but lost stays lost). The money stays blocked while any dispute of the payment is neither won nor warning_closed. Written only by apply_payment_event; service_role reads it.';
+
+-- R4-A1: the disputes the rows already record. A row still blocked keeps its block: an inquiry (no
+-- amount) as warning_needs_response, a dispute on a row whose money went back (lost wrote refunded,
+-- or left voided or failed) as lost, any other as needs_response. A row whose block was cleared (won
+-- or warning_closed) keeps only its ref, as a closed won dispute. A block with no ref gets one built
+-- from the payment id.
+insert into public.payment_disputes (dispute_ref, payment_id, amount_cents, status, opened_at, closed_at)
+select coalesce(p.chargeback_ref, 'imported:' || p.id::text), p.id, p.chargeback_cents,
+       case when p.chargeback_at is null then 'won'
+            when p.chargeback_cents is null then 'warning_needs_response'
+            when p.status in ('refunded', 'partially_refunded', 'voided', 'failed') then 'lost'
+            else 'needs_response' end,
+       coalesce(p.chargeback_at, p.updated_at),
+       case when p.chargeback_at is null then p.updated_at end
+  from public.payments p
+ where p.chargeback_at is not null or p.chargeback_ref is not null
+on conflict (dispute_ref) do nothing;
 
 -- ---------------------------------------------------------------------------
 -- 2. apply_payment_event(text), replaced whole from 20261112010200_apply_payment_event.sql. Same
@@ -141,8 +176,8 @@ begin
       end if;
 
       -- A5: one row per dispute id. A created event adds it once and never reopens it; a closed
-      -- event records its status (the last one delivered wins: refunded, written by lost, is never
-      -- written back, so no order lets money leave after a lost).
+      -- event records its status, the last one delivered wins, except that a dispute recorded as
+      -- lost stays lost (R4-A2: a later close of the same id changes nothing; a person decides).
       if v_type = 'charge.dispute.created' then
         insert into public.payment_disputes (dispute_ref, payment_id, amount_cents, status)
         values (v_obj ->> 'id', v_payment.id, nullif(v_obj ->> 'amount', '')::integer, coalesce(v_dispute, 'unknown'))
@@ -151,7 +186,7 @@ begin
         insert into public.payment_disputes as d (dispute_ref, payment_id, amount_cents, status, closed_at)
         values (v_obj ->> 'id', v_payment.id, nullif(v_obj ->> 'amount', '')::integer, coalesce(v_dispute, 'unknown'), now())
         on conflict (dispute_ref) do update
-          set status       = excluded.status,
+          set status       = case when d.status = 'lost' then d.status else excluded.status end,
               closed_at    = coalesce(d.closed_at, excluded.closed_at),
               amount_cents = coalesce(excluded.amount_cents, d.amount_cents);
       end if;
@@ -186,8 +221,9 @@ begin
             -- longer the job's live row, and refunded would collide with the
             -- live one on payments_one_active_per_job_kind.
             -- A5: the greatest refunded total recorded, never this event's alone.
+            -- R4-A2: refunded stays refunded (a lost dispute writes it with no refunded total).
             (case when v_refunded is null then status
-                  when status in ('voided', 'failed') then status
+                  when status in ('voided', 'failed', 'refunded') then status
                   when greatest(coalesce(refunded_cents, 0), v_refunded) >= charge_amount_cents then 'refunded'
                   else 'partially_refunded' end)
           -- F2: refund.failed has no arm: a person arranges the refund (payment_refund_failures).
@@ -287,7 +323,7 @@ end $$;
 revoke all on function public.apply_payment_event(text) from public, anon, authenticated;
 grant execute on function public.apply_payment_event(text) to service_role;
 comment on function public.apply_payment_event(text) is
-  'service_role only: applies one stored provider event to its payments row, idempotently. R5b (E-6): a payment_intent.succeeded on a voided or failed row queues a full refund (refund_reason funded_after_void). B1: a payment_intent.succeeded on an unfunded tip holds it and queues the whole tip for transfer when amount_received equals charge_amount_cents. 20261112010200: received_cents, refunded_cents and chargeback_cents record the provider''s facts; a job payment charged a different amount stays held with last_error; transfers are recorded once in payment_transfers (payment_record_transfer / payment_record_reversal); a card dispute clears its block only when won or when an inquiry closes (warning_closed), lost refunds the row, any other closing status keeps the block for a person; payment_intent.payment_failed changes nothing. 20261115000600: every rule reads only this event and durable rows, never another event''s payload; the refund status follows the greatest refunded total; payment_disputes keeps one row per dispute id (created adds it once, closed records its status, the last delivered wins) and the money stays blocked while any dispute of the payment is neither won nor warning_closed; refund.failed records the failed refund once per refund id in payment_refund_failures, raises refund_failed_at for a new one, keeps the failed refund in refund_ref when none was recorded, and changes no status and no refunded total.';
+  'service_role only: applies one stored provider event to its payments row, idempotently. R5b (E-6): a payment_intent.succeeded on a voided or failed row queues a full refund (refund_reason funded_after_void). B1: a payment_intent.succeeded on an unfunded tip holds it and queues the whole tip for transfer when amount_received equals charge_amount_cents. 20261112010200: received_cents, refunded_cents and chargeback_cents record the provider''s facts; a job payment charged a different amount stays held with last_error; transfers are recorded once in payment_transfers (payment_record_transfer / payment_record_reversal); a card dispute clears its block only when won or when an inquiry closes (warning_closed), lost refunds the row, any other closing status keeps the block for a person; payment_intent.payment_failed changes nothing. 20261115000600: every rule reads only this event and durable rows, never another event''s payload; the refund status follows the greatest refunded total and refunded stays refunded; payment_disputes keeps one row per dispute id (created adds it once, closed records its status, the last delivered wins, but lost stays lost) and the money stays blocked while any dispute of the payment is neither won nor warning_closed; refund.failed records the failed refund once per refund id in payment_refund_failures, raises refund_failed_at for a new one, keeps the failed refund in refund_ref when none was recorded, and changes no status and no refunded total.';
 
 -- ---------------------------------------------------------------------------
 -- 3. resolve_refund_failure(uuid, text): the owner's record that the failed refunds of a payment
@@ -308,7 +344,7 @@ begin
      set arranged_at = now(), arranged_note = btrim(p_note)
    where payment_id = p_payment_id and arranged_at is null;
   if not found then raise exception 'This payment has no failed refund waiting'; end if;
-  update public.payments set refund_failed_at = null, updated_at = now()
+  update public.payments set refund_failed_at = null, refund_arranged_at = now(), updated_at = now()
    where id = p_payment_id
   returning * into v_pay;
   return v_pay;
@@ -316,19 +352,40 @@ end $fn$;
 revoke all on function public.resolve_refund_failure(uuid, text) from public, anon, authenticated;
 grant execute on function public.resolve_refund_failure(uuid, text) to service_role;
 comment on function public.resolve_refund_failure(uuid, text) is
-  'service_role only: the owner records how the failed refunds of a payment were arranged another way (p_note, required). Every failure of the payment still waiting gets arranged_at and the note; refund_failed_at clears. Refused when the note is empty, the payment is unknown, or nothing is waiting. Moves no money and changes no status; a later refund.failed for a refund id not recorded before raises it again.';
+  'service_role only: the owner records how the failed refunds of a payment were arranged another way (p_note, required). Every failure of the payment still waiting gets arranged_at and the note; refund_failed_at clears and refund_arranged_at is stamped (P3), in one update. Refused when the note is empty, the payment is unknown, or nothing is waiting. Moves no money and changes no status; a later refund.failed for a refund id not recorded before raises it again.';
+
+-- ---------------------------------------------------------------------------
+-- 3a. payment_refund_reserved_cents(payments), replaced from 20261115000200 (R4-A3): the failed
+--     refunds join the reservation. Same signature, search_path and ACL (restated).
+-- ---------------------------------------------------------------------------
+-- Bound: a failure of the row's own refund is already inside refund_cents; a failed refund on top of an own refund is under-counted only if its charge.refunded never arrives.
+create or replace function public.payment_refund_reserved_cents(p public.payments)
+returns integer
+language sql stable
+set search_path = public, pg_temp
+as $fn$
+  select greatest(coalesce(p.refunded_cents, 0), coalesce(p.refund_cents, 0),
+                  coalesce((select sum(coalesce(f.amount_cents, p.charge_amount_cents))::integer
+                              from public.payment_refund_failures f where f.payment_id = p.id), 0))
+$fn$;
+revoke all on function public.payment_refund_reserved_cents(public.payments) from public, anon, authenticated;
+grant execute on function public.payment_refund_reserved_cents(public.payments) to service_role;
+comment on function public.payment_refund_reserved_cents(public.payments) is
+  'R4-A3: how much of the charge refunds hold back from the worker: the greatest of the refunded total, the refund asked for and the sum of the payment''s failed refunds (arranged or not; one with no amount counts as the whole charge). No transfer is due above charge minus this. Read by transfers_due and payment_attention.';
 
 -- ---------------------------------------------------------------------------
 -- 4. payment_attention, replaced whole from 20261112010400_payment_attention.sql. F2: one line
 --    per failed refund until it is arranged (resolve_refund_failure), and the "refund sent, not yet
---    confirmed" line leaves out a failed refund. Same columns and ACL (restated).
+--    confirmed" line leaves out a failed refund. R4-A3: "more than is left after refunds" reads
+--    payment_refund_reserved_cents, as transfers_due does. Same columns and ACL (restated).
 -- ---------------------------------------------------------------------------
 create or replace view public.payment_attention as
   with tw as (
     -- Transfers asked for and not recorded.
     select p.*,
            exists (select 1 from public.transfers_ready r where r.id = p.id) as ready,
-           public.settlement_attempt_closed(p.transfer_attempts, p.transfer_sent_attempt, p.transfer_sent_at, p.transfer_stopped_at) as closed
+           public.settlement_attempt_closed(p.transfer_attempts, p.transfer_sent_attempt, p.transfer_sent_at, p.transfer_stopped_at) as closed,
+           public.payment_refund_reserved_cents(p) as reserved
       from public.payments p
      where p.provider = 'stripe' and p.release_requested_at is not null
        and coalesce(p.transfer_cents, 0) > 0 and p.transfer_ref is null
@@ -357,7 +414,7 @@ create or replace view public.payment_attention as
            when tw.status not in ('held', 'partially_refunded') then 'payment is ' || tw.status::text || ': a person decides'
            when exists (select 1 from public.payment_transfers x where x.payment_id = tw.id and x.reversed_cents < x.amount_cents)
              then 'a transfer is already recorded for this payment'
-           when tw.transfer_cents > tw.charge_amount_cents - greatest(coalesce(tw.refunded_cents, 0), coalesce(tw.refund_cents, 0))
+           when tw.transfer_cents > tw.charge_amount_cents - tw.reserved
              then 'transfer is more than is left after refunds: a person decides'
            when not tw.ready then 'the worker has no enabled payout account yet'
            else 'retrying: ' || coalesce(tw.last_error, '')

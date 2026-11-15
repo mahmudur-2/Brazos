@@ -1,7 +1,8 @@
 -- 420_transfer_in_flight.sql — pack 1, A1: a transfer whose send began and whose result is not
 -- recorded is money on its way to the worker. Proves 20261115000000_transfer_in_flight.sql
 -- (payment_transfer_unconfirmed; open_job_dispute, resolve_job_dispute and resolve_tip refuse while it
--- holds) and the reservation in refunds_due (20261115000200_work_start_money_rule.sql).
+-- holds), the reservation in refunds_due (20261115000200_work_start_money_rule.sql), and (§W, Codex
+-- R4-A4) resolve_job_dispute's refusal to decide for the worker over a refund recorded or begun.
 --
 -- THE ORDER. The race is two committed calls in the wrong order: settlement_send_begin commits, the
 -- provider's answer is lost, then the dispute or the refund decision runs. Each call here reads what
@@ -16,7 +17,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(54);
+select plan(81);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -296,6 +297,144 @@ select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).refun
 -- Codex R3: the same, with a refund really queued beside it.
 update public.payments set refund_cents = charge_amount_cents, refund_reason = 'dispute_refund' where id = :'pjr2';
 select ok(not exists (select 1 from public.refunds_due where id = :'pjr2'), 'R14: and a refund queued beside it is not due');
+
+-- ---------------------------------------------------------------------------
+-- W. Codex R4-A4: a decision for the worker is refused only while a refund the app decided may be
+--    out and no durable total (refunded_cents) covers it yet. A refund already landed bounds the
+--    transfer in transfers_due on its own, so that decision still works (W12-W27).
+-- ---------------------------------------------------------------------------
+-- W1-W4: the recorded-refund order. An issue resolves for the customer, the full refund is sent and
+-- recorded, its charge.refunded has not come; a second issue is decided for the worker.
+select tests.if_job('IF W recorded', 'released') as jw1 \gset
+select id as pw1 from public.payments where job_id = :'jw1' and kind = 'job_payment' \gset
+select tests.if_dispute(:'jw1') as w1d1 \gset
+select (public.resolve_job_dispute(:'jw1', 'customer')).refund_cents as w1rc \gset
+select public.settlement_send_begin(:'pw1', 'refund', 0) as w1b \gset
+select is(tests.if_record(:'pw1', 'refund', 're_if_w1_0001'), 'ok: true',
+  'W1: the full refund is sent and recorded; its charge.refunded has not come');
+select is(tests.if_dispute(:'jw1'), 'ok: open', 'W2: the customer opens a second issue');
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_cents::text', :'jw1', 'worker')),
+  'error: A refund to the customer was sent or may have been sent: a decision for the worker can no longer change it.',
+  'W3: the owner cannot decide it for the worker');
+select ok((select refund_cents = charge_amount_cents and coalesce(transfer_cents, 0) = 0 from public.payments where id = :'pw1')
+          and not exists (select 1 from public.transfers_due where id = :'pw1'),
+  'W4: the refund stays as asked and no transfer is due');
+
+-- W5-W8: the lost-response order: the refund's send began and its answer was lost.
+select tests.if_job('IF W lost', 'released') as jw2 \gset
+select id as pw2 from public.payments where job_id = :'jw2' and kind = 'job_payment' \gset
+select tests.if_dispute(:'jw2') as w2d1 \gset
+select (public.resolve_job_dispute(:'jw2', 'customer')).refund_cents as w2rc \gset
+select is(public.settlement_send_begin(:'pw2', 'refund', 0), true, 'W5: lost-response order: the refund send begins');
+select is(public.record_settlement_result(:'pw2', 'refund', 0, 'same_key', 'no answer: timeout'), true,
+  'W6: and its answer is lost');
+select tests.if_dispute(:'jw2') as w2d2 \gset
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_cents::text', :'jw2', 'worker')),
+  'error: A refund to the customer was sent or may have been sent: a decision for the worker can no longer change it.',
+  'W7: a second issue cannot be decided for the worker');
+select ok((select refund_cents = charge_amount_cents and coalesce(transfer_cents, 0) = 0 from public.payments where id = :'pw2')
+          and not exists (select 1 from public.transfers_due where id = :'pw2'),
+  'W8: the refund stays as asked and no transfer is due');
+
+-- W9-W11: control: a refund decided and never sent can still change.
+select tests.if_job('IF W unsent', 'released') as jw3 \gset
+select id as pw3 from public.payments where job_id = :'jw3' and kind = 'job_payment' \gset
+select tests.if_dispute(:'jw3') as w3d1 \gset
+select (public.resolve_job_dispute(:'jw3', 'customer')).refund_cents as w3rc \gset
+select ok(exists (select 1 from public.refunds_due where id = :'pw3'), 'W9: control: the refund is queued, its send not begun');
+select tests.if_dispute(:'jw3') as w3d2 \gset
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).refund_cents::text', :'jw3', 'worker')), 'ok: 0',
+  'W10: the owner decides the second issue for the worker: the unsent refund is withdrawn');
+select ok(exists (select 1 from public.transfers_due where id = :'pw3') and not exists (select 1 from public.refunds_due where id = :'pw3'),
+  'W11: the transfer is due and the refund is not');
+
+-- W12-W16: control: a partial refund recorded (refunded_cents 60, refund_cents 0: an earlier issue
+-- was decided for the worker, then 60 cents were refunded by hand), an issue opened later and decided
+-- for the worker. The transfer is due only inside the charge less what was refunded.
+select tests.if_job('IF W partial', 'released') as jw4 \gset
+select id as pw4 from public.payments where job_id = :'jw4' and kind = 'job_payment' \gset
+select tests.if_dispute(:'jw4') as w4d1 \gset
+select (public.resolve_job_dispute(:'jw4', 'worker')).refund_cents as w4rc \gset
+select tests.if_event('evt_if_w4_cr1', 'charge.refunded', jsonb_build_object(
+  'id', 'ch_if_w4', 'payment_intent', (select provider_ref from public.payments where id = :'pw4'),
+  'amount_refunded', 60)) as w4cr1 \gset
+select is((select status::text || ' / ' || refunded_cents::text || ' / ' || coalesce(refund_cents, 0)::text
+             from public.payments where id = :'pw4'),
+  'partially_refunded / 60 / 0', 'W12: partial-refund control: 60 cents refunded and recorded, no refund asked by the app (refund_cents 0)');
+select is(tests.if_dispute(:'jw4'), 'ok: open', 'W13: the customer opens an issue later');
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_cents::text', :'jw4', 'worker')),
+  'ok: ' || (select (amount_cents - platform_fee_cents)::text from public.payments where id = :'pw4'),
+  'W14: the owner decides it for the worker');
+select ok(exists (select 1 from public.transfers_due where id = :'pw4'),
+  'W15: the transfer is due: it fits inside the charge less the 60 cents refunded');
+select tests.if_event('evt_if_w4_cr2', 'charge.refunded', jsonb_build_object(
+  'id', 'ch_if_w4', 'payment_intent', (select provider_ref from public.payments where id = :'pw4'),
+  'amount_refunded', (select charge_amount_cents - transfer_cents + 1 from public.payments where id = :'pw4'))) as w4cr2 \gset
+select ok(not exists (select 1 from public.transfers_due where id = :'pw4'),
+  'W16: and it is not due once the refunded total leaves one cent less than the transfer');
+
+-- W17-W24: a partial refund made by hand on a row with no refund asked (refund_cents null): its
+-- charge.refunded writes refund_cents 60 (A5), with refund_ref when the payload lists the refund
+-- and without it when it does not. Either shape: the decision for the worker works, inside the bound.
+select tests.if_job('IF W hand with id', 'released') as jw5 \gset
+select id as pw5 from public.payments where job_id = :'jw5' and kind = 'job_payment' \gset
+select tests.if_event('evt_if_w5_cr1', 'charge.refunded', jsonb_build_object(
+  'id', 'ch_if_w5', 'payment_intent', (select provider_ref from public.payments where id = :'pw5'),
+  'amount_refunded', 60, 'refunds', jsonb_build_object('data', jsonb_build_array(jsonb_build_object('id', 're_if_w5_hand'))))) as w5cr1 \gset
+select is((select status::text || ' / ' || refunded_cents::text || ' / ' || refund_cents::text || ' / ' || coalesce(refund_ref, 'null')
+             from public.payments where id = :'pw5'),
+  'partially_refunded / 60 / 60 / re_if_w5_hand', 'W17: a hand refund of 60 cents, the payload lists it: refund_cents 60 and refund_ref recorded');
+select tests.if_dispute(:'jw5') as w5d1 \gset
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_cents::text', :'jw5', 'worker')),
+  'ok: ' || (select (amount_cents - platform_fee_cents)::text from public.payments where id = :'pw5'),
+  'W18: an issue opened later is decided for the worker');
+select ok(exists (select 1 from public.transfers_due where id = :'pw5'),
+  'W19: the transfer is due: it fits inside the charge less the 60 cents refunded');
+select tests.if_event('evt_if_w5_cr2', 'charge.refunded', jsonb_build_object(
+  'id', 'ch_if_w5', 'payment_intent', (select provider_ref from public.payments where id = :'pw5'),
+  'amount_refunded', (select charge_amount_cents - transfer_cents + 1 from public.payments where id = :'pw5'))) as w5cr2 \gset
+select ok(not exists (select 1 from public.transfers_due where id = :'pw5'),
+  'W20: and it is not due once the refunded total leaves one cent less than the transfer');
+
+select tests.if_job('IF W hand no id', 'released') as jw6 \gset
+select id as pw6 from public.payments where job_id = :'jw6' and kind = 'job_payment' \gset
+select tests.if_event('evt_if_w6_cr1', 'charge.refunded', jsonb_build_object(
+  'id', 'ch_if_w6', 'payment_intent', (select provider_ref from public.payments where id = :'pw6'),
+  'amount_refunded', 60)) as w6cr1 \gset
+select is((select status::text || ' / ' || refunded_cents::text || ' / ' || refund_cents::text || ' / ' || coalesce(refund_ref, 'null')
+             from public.payments where id = :'pw6'),
+  'partially_refunded / 60 / 60 / null', 'W21: the same hand refund, the payload lists no refund: no refund_ref');
+select tests.if_dispute(:'jw6') as w6d1 \gset
+select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_cents::text', :'jw6', 'worker')),
+  'ok: ' || (select (amount_cents - platform_fee_cents)::text from public.payments where id = :'pw6'),
+  'W22: the same decision for the worker works');
+select ok(exists (select 1 from public.transfers_due where id = :'pw6'),
+  'W23: the transfer is due inside the bound');
+select tests.if_event('evt_if_w6_cr2', 'charge.refunded', jsonb_build_object(
+  'id', 'ch_if_w6', 'payment_intent', (select provider_ref from public.payments where id = :'pw6'),
+  'amount_refunded', (select charge_amount_cents - transfer_cents + 1 from public.payments where id = :'pw6'))) as w6cr2 \gset
+select ok(not exists (select 1 from public.transfers_due where id = :'pw6'),
+  'W24: and not due past it');
+
+-- W25-W27: the app's full refund sent, recorded, and its charge.refunded come (refunded_cents = the
+-- charge): a later decision for the worker passes, and no transfer becomes due (the d9982fd behaviour).
+select tests.if_job('IF W full landed', 'released') as jw7 \gset
+select id as pw7 from public.payments where job_id = :'jw7' and kind = 'job_payment' \gset
+select tests.if_dispute(:'jw7') as w7d1 \gset
+select (public.resolve_job_dispute(:'jw7', 'customer')).refund_cents as w7rc \gset
+select public.settlement_send_begin(:'pw7', 'refund', 0) as w7b \gset
+select tests.if_record(:'pw7', 'refund', 're_if_w7_0001') as w7r \gset
+select tests.if_event('evt_if_w7_cr', 'charge.refunded', jsonb_build_object(
+  'id', 'ch_if_w7', 'payment_intent', (select provider_ref from public.payments where id = :'pw7'),
+  'amount_refunded', (select charge_amount_cents from public.payments where id = :'pw7'))) as w7cr \gset
+select is((select status::text || ' / ' || (refunded_cents = charge_amount_cents)::text || ' / ' || (refund_ref is not null)::text
+             from public.payments where id = :'pw7'),
+  'refunded / true / true', 'W25: the full refund is sent, recorded and its charge.refunded has come');
+select tests.if_dispute(:'jw7') as w7d2 \gset
+select is(left(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_cents::text', :'jw7', 'worker')), 4),
+  'ok: ', 'W26: a second issue decided for the worker passes');
+select ok(not exists (select 1 from public.transfers_due where id = :'pw7'),
+  'W27: and no transfer is due for the payment: the refunded total holds the money');
 
 select * from finish();
 rollback;

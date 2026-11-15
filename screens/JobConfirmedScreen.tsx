@@ -7,7 +7,7 @@ import { MoneyText } from '../ui/primitives/MoneyText';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { fetchJobPayment, isHeld, type Payment } from '../lib/payments';
-import { customerChargeCents } from '../lib/paymentRules';
+import { customerChargeCents, isRefundArranged, isRefundFailed } from '../lib/paymentRules';
 import { invalidateJobs } from '../lib/queryClient';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { arrivalWindowLabel } from '../lib/jobs';
@@ -131,7 +131,13 @@ export function JobConfirmedScreen() {
                 charge_amount_cents — what the card was charged. */}
             {/* C8: the caption under the figure says the state once — no pill
                 beside it repeating "held in protection". */}
-            <MoneyText cents={customerChargeCents(payment)} state={payment.status} size="lg" />
+            <MoneyText
+              cents={customerChargeCents(payment)}
+              state={payment.status}
+              size="lg"
+              refundFailed={isRefundFailed(payment)}
+              refundArranged={isRefundArranged(payment)}
+            />
             {/* The money fact — the row reads held, which is the only state
                 this screen renders over. */}
             <Text style={styles.paymentNote}>

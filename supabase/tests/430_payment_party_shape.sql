@@ -1,8 +1,8 @@
 -- 430_payment_party_shape.sql — pack 1, A4 and A2 (deadline): the payer's money RPCs return only the
--- 27 columns a party may read, and a checkout past its funding window is never resumed. Proves
+-- 28 columns a party may read, and a checkout past its funding window is never resumed. Proves
 -- 20261115000100_payer_money_rpcs.sql (payment_for_party; job_payment_state, begin_job_payment,
 -- begin_tip_payment, release_job_payment). Codex R3-A9: refund_failed_at (20261115000600) is one of
--- the 27, read by both parties.
+-- the 28, read by both parties; P3: refund_arranged_at (20261115000600) too.
 --
 -- THE CAST: a customer, a worker with an enabled payout account, the runner (RLS bypassed;
 -- fixtures and the webhook's stand-in). Everything rolls back.
@@ -11,7 +11,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(17);
+select plan(18);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -29,7 +29,7 @@ create or replace function tests.ps_server(p_row jsonb) returns text language sq
            'platform_fee_cents', 'provider', 'provider_ref', 'status', 'authorized_at', 'held_at', 'released_at',
            'release_reason', 'paid_out_at', 'created_at', 'updated_at', 'charge_amount_cents', 'customer_fee_cents',
            'tax_cents', 'funding_due_at', 'release_requested_at', 'transfer_cents', 'refund_cents', 'refund_reason',
-           'refund_failed_at']) e
+           'refund_failed_at', 'refund_arranged_at']) e
    where e.value <> 'null'::jsonb) end
 $$;
 
@@ -159,6 +159,11 @@ select is(tests.ps_server(:'s5c') || '/' || ((:'s5c'::jsonb) ->> 'refund_failed_
   '5a: the customer reads the failure''s time, and no server column');
 select is(tests.ps_server(:'s5w') || '/' || ((:'s5w'::jsonb) ->> 'refund_failed_at' is not null)::text, '/true',
   '5b: the worker too');
+select public.resolve_refund_failure(:'p5', 'Probe: refunded by hand in Stripe.');
+select tests.ps_call(format('select * from public.job_payment_state(%L)', :'j5')) as s5r \gset
+select is(tests.ps_server(:'s5r') || '/' || ((:'s5r'::jsonb) ->> 'refund_arranged_at' is not null)::text
+          || '/' || ((:'s5r'::jsonb) ->> 'refund_failed_at' is null)::text, '/true/true',
+  '5c: P3: after the owner records the arrangement the customer reads its time, the failure is gone, and no server column');
 
 select * from finish();
 rollback;

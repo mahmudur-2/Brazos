@@ -55,6 +55,8 @@ type MoneyTextProps = {
   feeKept?: boolean;
   /** The provider failed a refund of this row, not arranged yet (lib/paymentRules.ts isRefundFailed). */
   refundFailed?: boolean;
+  /** P3: that failed refund was made another way, no failure since (lib/paymentRules.ts isRefundArranged). */
+  refundArranged?: boolean;
   /** This row is a tip. */
   tip?: boolean;
   /** The other person's first name, for "on its way to Sam". */
@@ -72,6 +74,7 @@ export function MoneyText({
   refundQueued,
   feeKept,
   refundFailed,
+  refundArranged,
   tip,
   counterpartFirstName,
 }: MoneyTextProps) {
@@ -86,7 +89,7 @@ export function MoneyText({
     state && !SETTLED.includes(state) ? colors.muted : colors.money;
   const caption = state
     ? paymentCaption(
-        { status: state, releaseRequested, issueOpen, waitingOnPayoutSetup, refundFailed, refundQueued, feeKept, tip, counterpartFirstName },
+        { status: state, releaseRequested, issueOpen, waitingOnPayoutSetup, refundFailed, refundArranged, refundQueued, feeKept, tip, counterpartFirstName },
         perspective
       )
     : null;
