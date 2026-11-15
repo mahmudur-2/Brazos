@@ -345,7 +345,10 @@ select public.resolve_refund_failure('<payment id>', '<how it was arranged>');
 The note is kept on every waiting failure of the payment and `refund_failed_at` clears. It moves no
 money; a later failure of another refund id raises it again.
 
-The drain sends no refund on a payment with a recorded refund failure, arranged or not. A refund
+The drain starts no refund and no new transfer on a payment with a recorded refund failure,
+arranged or not (a transfer it began before the failure is not taken back); to pay the worker,
+transfer by hand in Stripe, then record it with
+`record_settlement_sent('<payment id>', 'transfer', '<tr_ id>', <cents>)`. A refund
 asked later on it (a cancellation, a decision, a ban) shows in `payment_attention` as "a refund on
 this charge failed before": refund what is still owed by hand in Stripe, then
 `record_settlement_sent`. Before a refund by hand, look at the charge's refunds in Stripe: a refund

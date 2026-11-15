@@ -82,8 +82,8 @@ test('F2 · the caption: the customer is never told the money is on its way to t
   );
   // The worker's own money is not touched by the customer's refund: their fee sentence stays. Codex R7-A3:
   // the worker is not told that a refund which failed is on its way to the customer (no caption).
-  // Codex R8-A1: the fee sentence under the database's fact (a fee whose refund failed is still in
-  // transfers_due: 460 F6), and none without it.
+  // Codex R8-A1: the fee sentence under the database's fact, and none without it. R10: a fee whose
+  // refund failed waits for a person (460 F6); the fact stays only for a transfer already begun.
   assert.equal(paymentCaption({ status: 'held', refundQueued: true, refundFailed: true }, 'worker'), null);
   assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true, refundFailed: true, payoutOnItsWay: true }, 'worker'), 'Cancellation fee — on its way to you');
   assert.equal(paymentCaption({ status: 'held', refundQueued: true, feeKept: true, refundFailed: true }, 'worker'), null);
@@ -308,11 +308,11 @@ test('R6-A3, R7-A3 · the tip card’s payout sentence only under the one payout
   // Codex R7-A3: the refund directed to the customer after the approval, both refund flags null (460 row 11).
   assert.equal(shown(isPayoutOnItsWay, { ...approved, refund_failed_at: null, refund_arranged_at: null, payoutOnItsWay: false }), false,
     'refund queued, nothing failed: no payout sentence');
-  // Codex R8-A1 (D6): a hand refund that failed follows the database: of the whole charge, nothing is
-  // left for the worker (460 row 13b); of part of it, the transfer still fits and is due (460 row 13a).
+  // Codex R8-A1 (D6): a hand refund that failed follows the database. R10: of any part of the charge,
+  // the transfer waits for a person (460 row 13a); the fact stays only for a transfer already begun.
   const handFailed = { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 4975, refund_cents: 0, refund_failed_at: '2026-11-15T11:00:00Z' };
   assert.equal(shown(isPayoutOnItsWay, { ...handFailed, payoutOnItsWay: false }), false, 'a hand refund of the whole charge failed: no payout sentence');
-  assert.equal(shown(isPayoutOnItsWay, { ...handFailed, payoutOnItsWay: true }), true, 'a hand refund of part of the charge failed: the transfer is due (D6)');
+  assert.equal(shown(isPayoutOnItsWay, { ...handFailed, payoutOnItsWay: true }), true, 'a hand refund failed after the transfer began: the sentence follows the fact (D6)');
   assert.equal(shown(isPayoutOnItsWay, { status: 'held', release_requested_at: '2026-11-15T10:00:00Z', transfer_cents: 4975, payoutOnItsWay: true }), true,
     'control: approved, no refund issue: the sentence as before');
   // Codex R8-A1: the same columns without the fact (an issue after the timer, a reversed transfer, a card dispute).

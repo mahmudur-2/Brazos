@@ -16,7 +16,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(41);
+select plan(39);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -260,7 +260,7 @@ select tests.pw_transfer_sent(tests.pw_pid(:'jf5'), 'tr_pw_f5');
 select tests.pw_reversed('evt_pw_rvf5', tests.pw_pid(:'jf5'), 'tr_pw_f5') as rvf5 \gset
 insert into rowsx values ('F5 fee reversed after the send', tests.pw_pid(:'jf5'), false);
 
--- F6. The fee, the refund of the rest sent by the app and failed at the provider: the fee still fits.
+-- F6. The fee, the refund of the rest sent by the app and failed at the provider: the fee waits (R10).
 select tests.pw_job('PW fee refund failed', 'started') as jf6 \gset
 select tests.pw_cancel_late(:'jf6');
 select public.record_settlement_sent(tests.pw_pid(:'jf6'), 'refund', 're_pw_f6',
@@ -270,7 +270,7 @@ select tests.pw_event('evt_pw_f6_fail', 'refund.failed', jsonb_build_object(
   'amount', (select refund_cents from public.payments where id = tests.pw_pid(:'jf6')),
   'payment_intent', (select provider_ref from public.payments where id = tests.pw_pid(:'jf6')),
   'metadata', jsonb_build_object('payment_id', tests.pw_pid(:'jf6')))) as ff6 \gset
-insert into rowsx values ('F6 fee, the refund of the rest failed', tests.pw_pid(:'jf6'), true);
+insert into rowsx values ('F6 fee, the refund of the rest failed', tests.pw_pid(:'jf6'), false);
 
 -- 11. A refund queued with no fee: approved, an issue, decided for the customer (Codex R7's row).
 select tests.pw_job('PW refund queued', 'approved') as j11 \gset
@@ -284,26 +284,18 @@ insert into rowsx values ('11 refund queued, no fee', tests.pw_pid(:'j11'), fals
 select tests.pw_job('PW never approved', 'completed') as j12 \gset
 insert into rowsx values ('12 never approved', tests.pw_pid(:'j12'), false);
 
--- 13. A hand refund in Stripe failed on an approved row: part of the charge (the transfer still fits)
---     and the whole charge (nothing is left for the worker); 13c/13d: then the owner records them
---     arranged (resolve_refund_failure).
+-- 13. A hand refund in Stripe of part of the charge failed on an approved row; 13c: then the owner
+--     records it arranged (resolve_refund_failure). R10: either way the transfer waits for a person.
 select tests.pw_job('PW hand refund part', 'approved') as j13 \gset
 select tests.pw_hand_refund_failed('evt_pw_rf13', tests.pw_pid(:'j13'), 300) as rf13 \gset
-insert into rowsx values ('13a hand refund failed, part of the charge', tests.pw_pid(:'j13'), true);
-select tests.pw_job('PW hand refund whole', 'approved') as j13b \gset
-select tests.pw_hand_refund_failed('evt_pw_rf13b', tests.pw_pid(:'j13b'), null) as rf13b \gset
-insert into rowsx values ('13b hand refund failed, the whole charge', tests.pw_pid(:'j13b'), false);
+insert into rowsx values ('13a hand refund failed, part of the charge', tests.pw_pid(:'j13'), false);
 select tests.pw_job('PW hand refund part arranged', 'approved') as j13c \gset
 select tests.pw_hand_refund_failed('evt_pw_rf13c', tests.pw_pid(:'j13c'), 300) as rf13c \gset
 select (public.resolve_refund_failure(tests.pw_pid(:'j13c'), 'refunded by hand in the dashboard')).id as ar13c \gset
-insert into rowsx values ('13c hand refund failed, part, then arranged', tests.pw_pid(:'j13c'), true);
-select tests.pw_job('PW hand refund whole arranged', 'approved') as j13d \gset
-select tests.pw_hand_refund_failed('evt_pw_rf13d', tests.pw_pid(:'j13d'), null) as rf13d \gset
-select (public.resolve_refund_failure(tests.pw_pid(:'j13d'), 'refunded by hand in the dashboard')).id as ar13d \gset
-insert into rowsx values ('13d hand refund failed, the whole charge, then arranged', tests.pw_pid(:'j13d'), false);
+insert into rowsx values ('13c hand refund failed, part, then arranged', tests.pw_pid(:'j13c'), false);
 
 -- ---------------------------------------------------------------------------
--- The fact, row by row (25 rows).
+-- The fact, row by row (23 rows).
 -- ---------------------------------------------------------------------------
 select diag(name || ': ' || tests.pw_show(pid)) from rowsx order by name;
 

@@ -249,15 +249,13 @@ const ROWS = {
   '10 released': { ...RELEASED, payoutOnItsWay: false },
   '11 refund queued, no fee': { ...JOB, refund_cents: 5375, transfer_cents: 0, payoutOnItsWay: false },
   '12 never approved': { ...JOB, release_requested_at: null, release_reason: null, transfer_cents: 0, payoutOnItsWay: false },
-  '13a hand refund failed, part of the charge': { ...JOB, refund_failed_at: AT, payoutOnItsWay: true },
-  '13b hand refund failed, the whole charge': { ...JOB, refund_failed_at: AT, payoutOnItsWay: false },
-  '13c hand refund failed, part, then arranged': { ...JOB, refund_arranged_at: AT, payoutOnItsWay: true },
-  '13d hand refund failed, the whole charge, then arranged': { ...JOB, refund_arranged_at: AT, payoutOnItsWay: false },
+  '13a hand refund failed, part of the charge': { ...JOB, refund_failed_at: AT, payoutOnItsWay: false },
+  '13c hand refund failed, part, then arranged': { ...JOB, refund_arranged_at: AT, payoutOnItsWay: false },
   'F2 fee waiting on payout setup': { ...FEE, payoutOnItsWay: true, setup: 'action_needed' },
   'F2b fee waiting on payout setup, the rest refunded': { ...FEE, status: 'partially_refunded', payoutOnItsWay: true, setup: 'action_needed' },
   'F4 fee, card dispute before the send': { ...FEE, payoutOnItsWay: false },
   'F5 fee reversed after the send': { ...FEE, payoutOnItsWay: false },
-  'F6 fee, the refund of the rest failed': { ...FEE, refund_failed_at: AT, payoutOnItsWay: true },
+  'F6 fee, the refund of the rest failed': { ...FEE, refund_failed_at: AT, payoutOnItsWay: false },
 };
 // The app's columns of a row (what tests.pw_app compares): the fact is not one of them.
 const cols = ({ payoutOnItsWay, issueOpen, setup, ...row }) => JSON.stringify(row);
@@ -311,15 +309,13 @@ const SHOWN = {
   '10 released': ['Paid', 'You received', 'You received', 'Released 2 h ago — on its way to your bank', 'Released 2 h ago — on its way to your bank', false],
   '11 refund queued, no fee': ['Refund on its way — back on your card in a few days', 'Refund on its way to the customer', 'Refund on its way to the customer', 'Refund on its way to the customer', 'Refund on its way to the customer', false],
   '12 never approved': ['Held in protection — released when you approve', 'Held in protection — yours when the customer approves', 'Held in protection — yours when the customer approves', 'Held in protection', 'Held in protection', false],
-  '13a hand refund failed, part of the charge': [FAILED, 'Approved — on its way to you', 'Approved — waiting on your payout setup', 'Approved — payout on its way', 'Approved — waiting on your payout setup', true],
-  '13b hand refund failed, the whole charge': [FAILED, null, null, 'Held — not sent yet', 'Held — not sent yet', false],
-  '13c hand refund failed, part, then arranged': [ARRANGED, 'Approved — on its way to you', 'Approved — waiting on your payout setup', 'Approved — payout on its way', 'Approved — waiting on your payout setup', true],
-  '13d hand refund failed, the whole charge, then arranged': [ARRANGED, null, null, 'Held — not sent yet', 'Held — not sent yet', false],
+  '13a hand refund failed, part of the charge': [FAILED, null, null, 'Held — not sent yet', 'Held — not sent yet', false],
+  '13c hand refund failed, part, then arranged': [ARRANGED, null, null, 'Held — not sent yet', 'Held — not sent yet', false],
   'F2 fee waiting on payout setup': ['Refund on its way — the cancellation fee goes to Sam', 'Cancellation fee — on its way to you', 'Cancellation fee — on its way to you', 'Cancellation fee — on its way to you', 'Cancellation fee — waiting on your payout setup', true],
   'F2b fee waiting on payout setup, the rest refunded': ['Partly refunded', 'Partly refunded to the customer', 'Partly refunded to the customer', 'Cancellation fee — on its way to you', 'Cancellation fee — waiting on your payout setup', true],
   'F4 fee, card dispute before the send': ['Refund on its way — the cancellation fee goes to Sam', null, null, 'Held — not sent yet', 'Held — not sent yet', false],
   'F5 fee reversed after the send': ['Refund on its way — the cancellation fee goes to Sam', null, null, 'Held — not sent yet', 'Held — not sent yet', false],
-  'F6 fee, the refund of the rest failed': [FAILED, 'Cancellation fee — on its way to you', 'Cancellation fee — on its way to you', 'Cancellation fee — on its way to you', 'Cancellation fee — waiting on your payout setup', true],
+  'F6 fee, the refund of the rest failed': [FAILED, null, null, 'Held — not sent yet', 'Held — not sent yet', false],
 };
 
 test('R8-A1 · the rows: the app columns cannot tell them apart; the fact the database answers does', () => {
@@ -431,7 +427,7 @@ test('R8-A1 · the screens’ notes: Failure A, Failure B, a card dispute and th
     approve: 'Approved automatically after 72 hours.', review: 'Approved automatically after 72 hours.', tipCard: null,
     detailNote: null, detailCard: null, workerLive: 'Approved automatically after 72 hours with no response from Sam.',
   });
-  for (const name of ['06 transfer reversed (Failure B)', '07 card dispute open', '13b hand refund failed, the whole charge']) {
+  for (const name of ['06 transfer reversed (Failure B)', '07 card dispute open', '13a hand refund failed, part of the charge']) {
     assert.deepEqual(notesFor(ROWS[name]), {
       approve: 'You approved the work.', review: 'Approved on your say-so.', tipCard: null, detailNote: null, detailCard: null,
       workerLive: 'Sam approved the finished work.',
@@ -450,7 +446,7 @@ test('R8-A1 · the screens’ notes: Failure A, Failure B, a card dispute and th
   const LONG = 'This job was cancelled late. The cancellation fee is on its way to you; the rest goes back to Sam.';
   for (const [name, expected] of [
     ['03 late-cancel fee queued (F1)', LONG], ['F2 fee waiting on payout setup', LONG], ['09c fee sent and recorded, refund still queued (F3)', LONG],
-    ['F6 fee, the refund of the rest failed', LONG],
+    ['F6 fee, the refund of the rest failed', 'This job was cancelled late.'],
     ['F4 fee, card dispute before the send', 'This job was cancelled late.'], ['F5 fee reversed after the send', 'This job was cancelled late.'],
   ]) {
     assert.equal(NOTES.workerFee(isCancellationFeeKept, isPayoutOnItsWay, ROWS[name], 'Sam'), expected, name);
