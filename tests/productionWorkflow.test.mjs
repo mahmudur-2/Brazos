@@ -151,15 +151,24 @@ test('every run block starts with set -euo pipefail', () => {
   }
 });
 
-test('a job holding a secret never installs packages or runs code from node_modules', () => {
-  for (const name of SECRET_JOBS) {
-    const runs = steps(P[name]).map(runText).filter(Boolean).join('\n');
-    assert.doesNotMatch(runs, /\bnpm\b/, `${name} runs npm`);
-    assert.doesNotMatch(runs, /node_modules/, `${name} touches node_modules`);
-    assert.doesNotMatch(P[name], /cache: npm/, `${name} restores an npm cache`);
-    for (const npx of runs.match(/\bnpx\b[^\n]*/g) ?? []) {
-      assert.match(npx, /^npx --yes supabase@2\.116\.0 /, `${name}: an unpinned npx call: ${npx}`);
-    }
+const S = jobs(STAGING);
+const CLI_FETCH = 'node scripts/production-deploy.mjs cli-fetch "$RUNNER_TEMP/supabase-cli"';
+const CLI = '"$RUNNER_TEMP/supabase-cli/supabase" ';
+
+test('a job holding a secret never installs packages, runs code from node_modules or lets npx fetch the CLI', () => {
+  const secretJobs = { plan: P.plan, apply: P.apply, 'staging migrate': S.migrate, 'staging deploy': S.deploy };
+  for (const [name, job] of Object.entries(secretJobs)) {
+    const runs = steps(job).map(runText);
+    const all = runs.filter(Boolean).join('\n');
+    assert.doesNotMatch(all, /\bnpm\b|\bnpx\b|supabase@/, `${name} runs npm or npx`);
+    assert.doesNotMatch(all, /node_modules/, `${name} touches node_modules`);
+    assert.doesNotMatch(job, /cache: npm/, `${name} restores an npm cache`);
+    // R6-d: the CLI runs only from the bytes package-lock.json pins, checked (sha512) before its first use.
+    const fetchAt = runs.findIndex((run) => run?.includes(CLI_FETCH));
+    const firstUse = runs.findIndex((run) => run?.includes(CLI));
+    assert.ok(fetchAt >= 0, `${name}: no cli-fetch step`);
+    assert.equal(stepId(steps(job)[fetchAt]), 'cli', `${name}: the cli-fetch step is not id cli`);
+    assert.ok(firstUse > fetchAt, `${name}: the CLI runs before cli-fetch checked it`);
   }
 });
 
@@ -182,13 +191,14 @@ test('the local job builds the fingerprint without any secret and hands it over 
 const ids = (job) => steps(job).map(stepId);
 
 test('plan reads and changes nothing; apply applies only after the plan check', () => {
-  assert.deepEqual(ids(P.plan).filter(Boolean), ['guards', 'status', 'keys', 'link', 'list', 'plan', 'summary']);
+  assert.deepEqual(ids(P.plan).filter(Boolean), ['guards', 'status', 'keys', 'cli', 'link', 'list', 'plan', 'summary']);
   assert.doesNotMatch(P.plan, /db push|functions deploy|production-deploy\.mjs (secrets|webhook|vault|auth)\b/);
   assert.deepEqual(ids(P.apply).filter(Boolean), [
     'download',
     'guards',
     'status',
     'keys',
+    'cli',
     'link',
     'list_before',
     'check',
@@ -245,11 +255,9 @@ test('no project ref is written into the workflow; it arrives as a secret', () =
   }
 });
 
-const S = jobs(STAGING);
-
 test('staging proves the same tools first: a secretless local job and a prove report', () => {
   assert.deepEqual(Object.keys(S), ['verify', 'migrate', 'deploy', 'local', 'prove']);
-  assert.match(S.migrate, /npx --yes supabase@2\.116\.0 db push/, 'the migrate job keeps applying');
+  assert.ok(S.migrate.includes(`${CLI}db push`), 'the migrate job keeps applying');
   assert.doesNotMatch(S.local, /secrets\.|environment:/);
   assert.match(S.prove, /^ {4}needs: \[migrate, local\]$/m);
   assert.match(S.prove, /^ {4}environment: staging$/m);

@@ -9,6 +9,7 @@
  *   guards                       branch, the seven secrets, the refs, sk_test_, the approval rule
  *   status                       the project is running
  *   keys                         the server key in use and the legacy keys (types only, never values)
+ *   cli-fetch <folder>           the Supabase CLI for Linux, only from the bytes package-lock.json pins (sha512)
  *   plan <migration list>        what apply will do, written to the run summary; changes nothing
  *   check <migration list>       the plan is unchanged since the owner approved it
  *   secrets                      the function secret STRIPE_SECRET_KEY
@@ -31,13 +32,16 @@
  * or a response body.
  *
  * DEPENDENCY-FREE ON PURPOSE. The jobs that hold production secrets never run npm ci or code from
- * node_modules, so this file imports Node built-ins and repository files only.
+ * node_modules, so this file imports Node built-ins and repository files only. The Supabase CLI
+ * those jobs run comes from cli-fetch, checked against package-lock.json before its first use; npx
+ * would fetch it by version alone and run whatever the registry hands back.
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, readdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 import { RETIRED_PRODUCTION_REF, STAGING_REF } from './supabase-ref.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -730,6 +734,69 @@ async function fingerprint(io, file) {
   note(io, 'every section matches the local build');
 }
 
+// ---- the Supabase CLI ----------------------------------------------------------------------------
+
+const CLI_PACKAGE = 'node_modules/@supabase/cli-linux-x64';
+const CLI_NOT_RUN = 'so the CLI was not run and nothing was changed.';
+
+/** The regular files directly under package/bin/ of an npm tarball, by name. Pure. */
+export function tarballBin(tgz) {
+  const tar = gunzipSync(tgz);
+  const files = {};
+  let at = 0;
+  while (at + 512 <= tar.length) {
+    const header = tar.subarray(at, at + 512);
+    if (header.every((byte) => byte === 0)) break;
+    const field = (from, to) => header.toString('utf8', from, to).replace(/\0[\s\S]*$/, '');
+    const size = parseInt(field(124, 136).trim(), 8);
+    if (!Number.isSafeInteger(size)) break;
+    const type = field(156, 157);
+    const bin = /^package\/bin\/(\w[\w.-]*)$/.exec(field(0, 100));
+    if (bin && (type === '0' || type === '')) files[bin[1]] = tar.subarray(at + 512, at + 512 + size);
+    at += 512 + Math.ceil(size / 512) * 512;
+  }
+  return files;
+}
+
+async function cliFetch(io, folder) {
+  if (!folder) stop('cli-fetch needs the folder to put the Supabase CLI in.');
+  let entry = null;
+  try {
+    entry = JSON.parse(readFileSync(path.join(io.cwd, 'package-lock.json'), 'utf8')).packages?.[CLI_PACKAGE] ?? null;
+  } catch {
+    entry = null;
+  }
+  const sha512 = /^sha512-([A-Za-z0-9+/]{86}==)$/.exec(entry?.integrity ?? '')?.[1];
+  if (!sha512 || !/^https:\/\/registry\.npmjs\.org\//.test(entry.resolved ?? '') || !entry.version) {
+    stop(`The Supabase CLI for Linux is not pinned in package-lock.json (an npm registry URL and a sha512 checksum), ${CLI_NOT_RUN}`);
+  }
+  let tgz = null;
+  try {
+    const res = await io.fetch(entry.resolved);
+    if (res.ok) tgz = Buffer.from(await res.arrayBuffer());
+  } catch {
+    tgz = null;
+  }
+  if (!tgz) stop(`The Supabase CLI could not be downloaded from npm, ${CLI_NOT_RUN} Running again is safe.`);
+  if (createHash('sha512').update(tgz).digest('base64') !== sha512) {
+    stop(`The Supabase CLI downloaded from npm does not match the sha512 checksum in package-lock.json, ${CLI_NOT_RUN}`);
+  }
+  const files = tarballBin(tgz);
+  if (!files.supabase) stop(`The Supabase CLI package holds no bin/supabase, ${CLI_NOT_RUN}`);
+  const dir = path.resolve(io.cwd, folder);
+  mkdirSync(dir, { recursive: true });
+  for (const [name, bytes] of Object.entries(files)) {
+    writeFileSync(path.join(dir, name), bytes);
+    chmodSync(path.join(dir, name), 0o755);
+  }
+  const child = io.spawn(path.join(dir, 'supabase'), ['--version'], { encoding: 'utf8' });
+  if (child.status !== 0 || !String(child.stdout ?? '').split(/\s+/).includes(entry.version)) {
+    stop(`The Supabase CLI did not report version ${entry.version}, so no CLI command reached the project and nothing was changed.`);
+  }
+  io.log(`Supabase CLI ${entry.version}: the download matches the sha512 checksum in package-lock.json.`);
+  note(io, `Supabase CLI ${entry.version}, sha512 matches package-lock.json`);
+}
+
 // ---- the table -----------------------------------------------------------------------------------
 
 const ROWS = Object.freeze({
@@ -737,6 +804,7 @@ const ROWS = Object.freeze({
     ['guards', 'Safety checks'],
     ['status', 'Project is running'],
     ['keys', 'Project keys'],
+    ['cli', 'Supabase CLI matches package-lock.json'],
     ['link', 'Link the project'],
     ['list', 'Read the migration list'],
     ['plan', 'Plan and safety scan'],
@@ -746,6 +814,7 @@ const ROWS = Object.freeze({
     ['guards', 'Safety checks'],
     ['status', 'Project is running'],
     ['keys', 'Project keys'],
+    ['cli', 'Supabase CLI matches package-lock.json'],
     ['link', 'Link the project'],
     ['list_before', 'Read the migration list'],
     ['check', 'Plan unchanged since your approval'],
@@ -831,6 +900,7 @@ const COMMANDS = Object.freeze({
   guards,
   status,
   keys,
+  'cli-fetch': cliFetch,
   plan,
   check,
   secrets,

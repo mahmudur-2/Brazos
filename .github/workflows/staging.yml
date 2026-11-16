@@ -136,15 +136,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      # The CLI comes from npm, pinned to the exact version the operator runs
-      # locally — no third-party action installs it. A setup action is a
+      # No npm cache in a job that holds secrets.
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+
+      # The CLI comes from npm, the exact bytes package-lock.json pins: their
+      # sha512 is checked before it first runs (npx would fetch it by version
+      # alone). No third-party action installs it. A setup action is a
       # mutable dependency that would receive this job's database credentials,
       # and ci.yml's own note explains why a mutable reference is not
       # acceptable even where no credential is in reach.
+      - name: Supabase CLI matches package-lock.json
+        id: cli
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs cli-fetch "$RUNNER_TEMP/supabase-cli"
+
       - name: Link the staging project
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 link --project-ref "$SUPABASE_PROJECT_REF"
+          "$RUNNER_TEMP/supabase-cli/supabase" link --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -154,7 +167,7 @@ jobs:
       - name: List migrations (before)
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 migration list
+          "$RUNNER_TEMP/supabase-cli/supabase" migration list
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -197,7 +210,7 @@ jobs:
           # pipe, and `|| status=$?` catches it instead of letting `set -e`
           # unwind before it can be reported.
           status=0
-          resolved="$(npx --yes supabase@2.116.0 migration list \
+          resolved="$("$RUNNER_TEMP/supabase-cli/supabase" migration list \
             | bash scripts/staging-scan.sh --pending-files -)" || status=$?
 
           if [ "$status" -ne 0 ]; then
@@ -230,7 +243,7 @@ jobs:
       - name: Apply pending migrations
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 db push
+          "$RUNNER_TEMP/supabase-cli/supabase" db push
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -241,7 +254,7 @@ jobs:
       - name: List migrations (after)
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 migration list
+          "$RUNNER_TEMP/supabase-cli/supabase" migration list
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -266,6 +279,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+
+      # The same checked CLI as the migrate job.
+      - name: Supabase CLI matches package-lock.json
+        id: cli
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs cli-fetch "$RUNNER_TEMP/supabase-cli"
+
       # EVERY function is deployed, not only the changed ones. Deployment is
       # idempotent, and a uniform deploy re-asserts what supabase/config.toml
       # says about each function — which matters because a dashboard toggle can
@@ -287,7 +312,7 @@ jobs:
       - name: Deploy every edge function
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 functions deploy --project-ref "$SUPABASE_PROJECT_REF"
+          "$RUNNER_TEMP/supabase-cli/supabase" functions deploy --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -297,7 +322,7 @@ jobs:
       - name: List deployed functions
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 functions list --project-ref "$SUPABASE_PROJECT_REF"
+          "$RUNNER_TEMP/supabase-cli/supabase" functions list --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}

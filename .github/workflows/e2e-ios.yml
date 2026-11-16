@@ -2,8 +2,10 @@ name: e2e iOS
 
 # The Maestro flows in .maestro/ on an iOS simulator, on a free GitHub macOS
 # runner. The app binary is the latest finished EAS `e2e-test` simulator build
-# (or the one named by build_id). This workflow never starts an EAS build:
-# builds are metered quota, and one per push would be unbounded.
+# (or the one named by build_id). Builds are metered quota, so this workflow
+# starts one only when the dispatch sets build_this_commit: one build of this
+# commit, which the flows then test. The run summary says whether the app under
+# test was made from the commit the run tests.
 
 on:
   workflow_dispatch:
@@ -11,6 +13,11 @@ on:
       build_id:
         description: EAS build id to test (empty = latest finished e2e-test build)
         type: string
+        required: false
+      build_this_commit:
+        description: Make one e2e-test build of this commit first and test it (one metered EAS build)
+        type: boolean
+        default: false
         required: false
 
 permissions:
@@ -21,8 +28,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Only when build_this_commit is set: off by default, so no build and no cost.
+  build:
+    name: Build this commit (one metered EAS build)
+    if: inputs.build_this_commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      build_id: ${{ steps.build.outputs.build_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # eas-cli reads the project id from app.config.ts, which needs the deps.
+      - name: Install dependencies
+        run: npm ci
+
+      # eas build waits for the build to finish (its default); --json prints it as an array.
+      - name: Build the e2e-test simulator app of this commit
+        id: build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes eas-cli@27.7.0 build --platform ios --profile e2e-test --non-interactive --json > "$RUNNER_TEMP/build.json"
+          id=$(node -e '
+            const b = [].concat(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")))[0];
+            if (!b || !b.id) throw new Error("EAS returned no build id");
+            console.log(b.id);
+          ' "$RUNNER_TEMP/build.json")
+          echo "build_id=$id" >> "$GITHUB_OUTPUT"
+
   maestro:
     name: Maestro flows on the iOS simulator
+    # Runs after the build job, or without it when build_this_commit is off; never after a failed build.
+    needs: build
+    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
     runs-on: macos-15
     # Run 24 (2026-11-09): 01-03 green, 04 running, cut at 45 minutes. On the public-repo Macs a
     # flow takes 7-11 minutes, plus about 10 for setup and the driver: ten flows need ~2 hours.
@@ -46,8 +94,9 @@ jobs:
       - name: Download the simulator build
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          # Passed through env, never spliced into the script (injection).
-          BUILD_ID: ${{ inputs.build_id }}
+          # Passed through env, never spliced into the script (injection). The build
+          # this run made comes first, then the dispatch's build_id.
+          BUILD_ID: ${{ needs.build.outputs.build_id || inputs.build_id }}
         run: |
           meta="$RUNNER_TEMP/build.json"
           if [ -n "$BUILD_ID" ]; then
@@ -55,16 +104,8 @@ jobs:
           else
             npx --yes eas-cli@27.7.0 build:list --platform ios --profile e2e-test --status finished --limit 1 --json --non-interactive > "$meta"
           fi
-          # build:list prints an array, build:view one object.
-          url=$(node -e '
-            const b = [].concat(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")))[0];
-            const url = b && b.artifacts && b.artifacts.applicationArchiveUrl;
-            if (!b || b.status !== "FINISHED" || !b.isForIosSimulator || !url) {
-              throw new Error("no finished iOS simulator build with an app archive");
-            }
-            console.error(`build ${b.id} (${b.buildProfile}, ${b.gitCommitHash})`);
-            console.log(url);
-          ' "$meta")
+          # Checks the build, writes the App-under-test line to the run summary, prints the archive URL.
+          url=$(node scripts/e2e-build.mjs "$meta")
           archive="$RUNNER_TEMP/app-archive"
           dir="$RUNNER_TEMP/e2e-app"
           rm -rf "$dir" && mkdir "$dir"

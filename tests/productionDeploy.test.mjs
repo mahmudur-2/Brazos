@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 import {
   DRAINS,
   REQUIRED_SECRETS,
@@ -19,6 +21,7 @@ import {
   planCode,
   run,
   summarize,
+  tarballBin,
   webhookAction,
   webhookContract,
 } from '../scripts/production-deploy.mjs';
@@ -91,6 +94,8 @@ function world(over = {}) {
     vaultMissing: 'drain_notification_outbox: vault secrets missing',
     fingerprintStatus: 0,
     spawned: [],
+    cliTarball: null,
+    cliVersion: '2.116.0',
     ...over,
   };
   return w;
@@ -198,6 +203,11 @@ function fakeFetch(w) {
       }
       return respond(404, {});
     }
+    if (u.host === 'registry.npmjs.org') {
+      const tgz = w.cliTarball;
+      if (!tgz) return respond(404, {});
+      return { status: 200, ok: true, headers: { get: () => null }, arrayBuffer: async () => tgz.buffer.slice(tgz.byteOffset, tgz.byteOffset + tgz.byteLength) };
+    }
     throw new Error(`the fake has no host ${u.host}`);
   };
 }
@@ -235,6 +245,7 @@ function setup(w, env = {}, cwd = ROOT) {
     spawn: (cmd, args, opts) => {
       if (cmd === 'bash') return spawnSync(cmd, args, opts);
       w.spawned.push({ cmd, args, env: opts.env });
+      if (args[0] === '--version') return { status: 0, stdout: `${w.cliVersion}\n`, stderr: '' };
       return { status: w.fingerprintStatus, stdout: w.fingerprintStatus === 0 ? 'functions  PASS\n' : 'functions  FAIL\n', stderr: '' };
     },
     cwd,
@@ -746,10 +757,119 @@ test('fingerprint: the proof tool gets the project URL and the server key, and n
   rmSync(dir, { recursive: true, force: true });
 });
 
+// ---- the Supabase CLI (R6-d) ------------------------------------------------------------------------
+
+/** A gzipped ustar archive of [name, bytes, type] entries, the shape npm pack writes. */
+function tgzOf(entries) {
+  const blocks = [];
+  for (const [name, data, type = '0'] of entries) {
+    const header = Buffer.alloc(512);
+    header.write(name, 0, 100, 'utf8');
+    header.write('0000755\0', 100);
+    header.write(`${data.length.toString(8).padStart(11, '0')}\0`, 124);
+    header.write(type, 156);
+    header.write('ustar\0', 257);
+    blocks.push(header, data, Buffer.alloc((512 - (data.length % 512)) % 512));
+  }
+  blocks.push(Buffer.alloc(1024));
+  return gzipSync(Buffer.concat(blocks));
+}
+
+const CLI_BIN = Buffer.from('#!/bin/sh\necho 2.116.0\n');
+const CLI_GO = Buffer.alloc(700, 7); // more than one block: the walk must step over the padding
+const CLI_TGZ = tgzOf([
+  ['package/package.json', Buffer.from('{"name":"@supabase/cli-linux-x64"}')],
+  ['package/bin/', Buffer.alloc(0), '5'],
+  ['PaxHeader/supabase', Buffer.from('30 path=package/bin/supabase\n'), 'x'],
+  ['package/bin/supabase', CLI_BIN],
+  ['package/bin/supabase-go', CLI_GO],
+  ['package/README.md', Buffer.from('readme')],
+]);
+const CLI_URL = 'https://registry.npmjs.org/@supabase/cli-linux-x64/-/cli-linux-x64-2.116.0.tgz';
+
+/** A folder holding a package-lock.json that pins `tgz` the way npm does. */
+function cliLockDir(tgz, over = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'brazos-cli-'));
+  const entry = { version: '2.116.0', resolved: CLI_URL, integrity: `sha512-${createHash('sha512').update(tgz).digest('base64')}`, ...over };
+  writeFileSync(join(dir, 'package-lock.json'), JSON.stringify({ packages: { 'node_modules/@supabase/cli-linux-x64': entry } }));
+  return dir;
+}
+
+test('tarballBin: the regular files under package/bin/ of an npm tarball, and nothing else', () => {
+  const files = tarballBin(CLI_TGZ);
+  assert.deepEqual(Object.keys(files).sort(), ['supabase', 'supabase-go']);
+  assert.ok(Buffer.from(files.supabase).equals(CLI_BIN));
+  assert.ok(Buffer.from(files['supabase-go']).equals(CLI_GO));
+  assert.deepEqual(tarballBin(tgzOf([['package/bin/.hidden', CLI_BIN], ['package/bin/a/b', CLI_BIN], ['other/bin/supabase', CLI_BIN]])), {});
+});
+
+test('cli-fetch: the CLI runs only from bytes whose sha512 matches package-lock.json', async () => {
+  const dir = cliLockDir(CLI_TGZ);
+  const w = world({ cliTarball: CLI_TGZ });
+  const ok = await cmd(w, ['cli-fetch', 'cli'], {}, dir);
+  assert.equal(ok.code, 0, ok.log.join('\n'));
+  assert.ok(readFileSync(join(dir, 'cli', 'supabase')).equals(CLI_BIN));
+  assert.ok(readFileSync(join(dir, 'cli', 'supabase-go')).equals(CLI_GO));
+  if (process.platform !== 'win32') assert.equal(statSync(join(dir, 'cli', 'supabase')).mode & 0o777, 0o755);
+  assert.deepEqual(w.spawned.map((s) => [s.cmd, s.args]), [[join(dir, 'cli', 'supabase'), ['--version']]]);
+  assert.deepEqual(w.timeline.filter((e) => e.kind === 'request').map((e) => e.url), [CLI_URL]);
+  assert.equal(ok.outputs().note, 'Supabase CLI 2.116.0, sha512 matches package-lock.json');
+
+  // Other bytes than the lockfile pins: nothing is written and nothing runs.
+  const tampered = world({ cliTarball: tgzOf([['package/bin/supabase', Buffer.from('#!/bin/sh\nevil\n')]]) });
+  const bad = await cmd(tampered, ['cli-fetch', 'cli'], {}, cliLockDir(CLI_TGZ));
+  assert.equal(bad.code, 1);
+  assert.equal(
+    bad.outputs().reason,
+    'The Supabase CLI downloaded from npm does not match the sha512 checksum in package-lock.json, so the CLI was not run and nothing was changed.'
+  );
+  assert.equal(existsSync(join(bad.io.cwd, 'cli')), false);
+  assert.deepEqual(tampered.spawned, []);
+
+  const missing = world({ cliTarball: null });
+  const gone = await cmd(missing, ['cli-fetch', 'cli'], {}, cliLockDir(CLI_TGZ));
+  assert.equal(gone.code, 1);
+  assert.equal(gone.outputs().reason, 'The Supabase CLI could not be downloaded from npm, so the CLI was not run and nothing was changed. Running again is safe.');
+  assert.deepEqual(missing.spawned, []);
+
+  for (const over of [{ integrity: 'sha1-abc=' }, { resolved: 'https://example.com/cli.tgz' }, { version: '' }]) {
+    const unpinned = world({ cliTarball: CLI_TGZ });
+    const r = await cmd(unpinned, ['cli-fetch', 'cli'], {}, cliLockDir(CLI_TGZ, over));
+    assert.equal(r.code, 1, JSON.stringify(over));
+    assert.equal(
+      r.outputs().reason,
+      'The Supabase CLI for Linux is not pinned in package-lock.json (an npm registry URL and a sha512 checksum), so the CLI was not run and nothing was changed.'
+    );
+    assert.deepEqual(unpinned.timeline.filter((e) => e.kind === 'request'), [], 'nothing is downloaded');
+  }
+
+  const noBinTgz = tgzOf([['package/package.json', Buffer.from('{}')]]);
+  const noBin = await cmd(world({ cliTarball: noBinTgz }), ['cli-fetch', 'cli'], {}, cliLockDir(noBinTgz));
+  assert.equal(noBin.code, 1);
+  assert.equal(noBin.outputs().reason, 'The Supabase CLI package holds no bin/supabase, so the CLI was not run and nothing was changed.');
+
+  const older = await cmd(world({ cliTarball: CLI_TGZ, cliVersion: '2.115.0' }), ['cli-fetch', 'cli'], {}, cliLockDir(CLI_TGZ));
+  assert.equal(older.code, 1);
+  assert.equal(older.outputs().reason, 'The Supabase CLI did not report version 2.116.0, so no CLI command reached the project and nothing was changed.');
+
+  const noFolder = await cmd(world({ cliTarball: CLI_TGZ }), ['cli-fetch'], {}, cliLockDir(CLI_TGZ));
+  assert.equal(noFolder.code, 1);
+  assert.equal(noFolder.outputs().reason, 'cli-fetch needs the folder to put the Supabase CLI in.');
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('package-lock.json pins the Linux CLI the button runs: the supabase package’s version, from npm, by sha512', () => {
+  const lock = JSON.parse(readFileSync(join(ROOT, 'package-lock.json'), 'utf8'));
+  const entry = lock.packages['node_modules/@supabase/cli-linux-x64'];
+  assert.equal(entry.version, lock.packages['node_modules/supabase'].version);
+  assert.equal(entry.resolved, `https://registry.npmjs.org/@supabase/cli-linux-x64/-/cli-linux-x64-${entry.version}.tgz`);
+  assert.match(entry.integrity, /^sha512-[A-Za-z0-9+/]{86}==$/);
+});
+
 test('the table: one row per check, a reason per FAIL, a check that did not run is a FAIL', () => {
   const pass = { outcome: 'success', outputs: {} };
   const all = Object.fromEntries(
-    ['guards', 'status', 'keys', 'link', 'list', 'plan'].map((id) => [id, id === 'keys' ? { ...pass, outputs: { note: 'server key: secret; legacy keys: no' } } : pass])
+    ['guards', 'status', 'keys', 'cli', 'link', 'list', 'plan'].map((id) => [id, id === 'keys' ? { ...pass, outputs: { note: 'server key: secret; legacy keys: no' } } : pass])
   );
   const ok = summarize('plan', all);
   assert.equal(ok.ok, true);

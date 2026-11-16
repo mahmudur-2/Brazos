@@ -94,13 +94,13 @@ A chat never runs a production step; these are parked steps for the owner. The u
 Connect is also an owner step.
 
 1. `npm run verify` is green on `mainexpo`.
-2. `npm run release:testflight` (= `npx eas-cli@latest build --platform ios --profile testflight`,
+2. `npm run release:testflight` (= `npx eas-cli@27.7.0 build --platform ios --profile testflight`,
    no auto-submit). The `testflight` profile has store distribution, `autoIncrement` and the
    `preview` EAS environment (staging Supabase), which must hold
    `EXPO_PUBLIC_PAYMENTS_MODE=stripe`, the Stripe publishable test key,
    `EXPO_PUBLIC_PHONE_AUTH_MODE=supabase`, the Sentry DSN, and the Supabase URL and key.
    `release:production` is the old production line and is not used for v1.
-3. `npx eas-cli@latest submit --platform ios --profile testflight --latest`, run by the owner.
+3. `npx eas-cli@27.7.0 submit --platform ios --profile testflight --latest`, run by the owner.
 4. In App Store Connect, add the build to the internal testers group. Apple's two-factor sign-in is
    the owner's.
 5. Install from TestFlight on a phone and walk the loop (section 5 below) before inviting anyone.

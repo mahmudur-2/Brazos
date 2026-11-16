@@ -30,7 +30,8 @@ name: Production
 #   * plan and apply run in the `production` environment, whose required
 #     reviewer is the owner; the first guard stops when that rule is missing.
 #   * Least permissions. GitHub's own actions only, pinned by full SHA at the
-#     SHAs staging.yml uses; the Supabase CLI through the same pinned npx.
+#     SHAs staging.yml uses; the Supabase CLI only from the bytes
+#     package-lock.json pins (sha512), checked before its first use.
 #   * Secrets reach a step through env: only, never inside run text.
 #   * The guards refuse the staging project, the retired production project,
 #     and any Stripe key that is not sk_test_: test money only.
@@ -200,11 +201,19 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
+      # The CLI only from the bytes package-lock.json pins: their sha512 is
+      # checked before it first runs. npx would fetch it by version alone.
+      - name: Supabase CLI matches package-lock.json
+        id: cli
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs cli-fetch "$RUNNER_TEMP/supabase-cli"
+
       - name: Link the production project
         id: link
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 link --project-ref "$SUPABASE_PROJECT_REF"
+          "$RUNNER_TEMP/supabase-cli/supabase" link --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -214,7 +223,7 @@ jobs:
         id: list
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 migration list | tee "$RUNNER_TEMP/migrations.txt"
+          "$RUNNER_TEMP/supabase-cli/supabase" migration list | tee "$RUNNER_TEMP/migrations.txt"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -302,11 +311,17 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
+      - name: Supabase CLI matches package-lock.json
+        id: cli
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs cli-fetch "$RUNNER_TEMP/supabase-cli"
+
       - name: Link the production project
         id: link
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 link --project-ref "$SUPABASE_PROJECT_REF"
+          "$RUNNER_TEMP/supabase-cli/supabase" link --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -316,7 +331,7 @@ jobs:
         id: list_before
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 migration list | tee "$RUNNER_TEMP/migrations.txt"
+          "$RUNNER_TEMP/supabase-cli/supabase" migration list | tee "$RUNNER_TEMP/migrations.txt"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -337,7 +352,7 @@ jobs:
         id: push
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 db push
+          "$RUNNER_TEMP/supabase-cli/supabase" db push
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -347,7 +362,7 @@ jobs:
         id: list_after
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 migration list
+          "$RUNNER_TEMP/supabase-cli/supabase" migration list
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -371,7 +386,7 @@ jobs:
         id: deploy
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 functions deploy --project-ref "$SUPABASE_PROJECT_REF"
+          "$RUNNER_TEMP/supabase-cli/supabase" functions deploy --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -380,7 +395,7 @@ jobs:
         id: functions_list
         run: |
           set -euo pipefail
-          npx --yes supabase@2.116.0 functions list --project-ref "$SUPABASE_PROJECT_REF"
+          "$RUNNER_TEMP/supabase-cli/supabase" functions list --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}

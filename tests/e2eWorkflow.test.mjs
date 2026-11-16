@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
+import { buildLine } from '../scripts/e2e-build.mjs';
 
 /**
  * The e2e iOS workflow: Maestro flows on a GitHub macOS runner against an EAS
- * simulator build that already exists. It may never start a build (quota),
- * never submit, never reach Supabase, and consume only the five secrets below.
+ * simulator build. It starts a build (metered quota) only when the dispatch sets
+ * build_this_commit, never submits, never reaches Supabase, and consumes only the
+ * secrets below. The run summary says whether the app was made from this commit.
  */
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -62,11 +66,70 @@ test('e2e iOS reads only the Expo token, the four Maestro test-account secrets a
   assert.match(code, /^permissions:\n  contents: read\n(?!  )/m, 'permissions must be contents: read only');
 });
 
-test('e2e iOS never builds, submits or reaches Supabase', () => {
+/** One job's block (two-space indent under jobs:), comments removed. */
+const job = (name) => code.match(new RegExp(`^  ${name}:\\n((?: {4}.*\\n|[ \\t]*\\n)*)`, 'm'))?.[1] ?? '';
+
+test('e2e iOS builds only when build_this_commit is set, only the e2e-test app, and never submits or reaches Supabase', () => {
   assert.doesNotMatch(code, /supabase\.co/i);
-  // build:list and build:view only read; any other EAS build or submit verb is quota or a release.
-  assert.doesNotMatch(code, /\beas(?:-cli(?:@\S+)?)?\s+(?:build(?!:(?:list|view)\b)|submit|workflow:run)/);
+  // build:list and build:view only read; any other EAS build verb is metered quota.
+  const builds = [...code.matchAll(/\beas(?:-cli(?:@\S+)?)?\s+(?:build(?!:(?:list|view)\b)|workflow:run)[^\n]*/g)].map((m) => m[0]);
+  assert.deepEqual(builds, ['eas-cli@27.7.0 build --platform ios --profile e2e-test --non-interactive --json > "$RUNNER_TEMP/build.json"']);
+  assert.ok(job('build').includes(builds[0]), 'the build runs in the build job');
+  assert.match(job('build'), /^ {4}if: inputs\.build_this_commit$/m);
+  assert.match(code, /^ {6}build_this_commit:\n(?: {8}.*\n)*? {8}type: boolean\n(?: {8}.*\n)*? {8}default: false\n/m);
   assert.doesNotMatch(code, /\bsubmit\b/);
+});
+
+test('e2e iOS tests the build it just made, and runs no flow when that build failed', () => {
+  const maestro = job('maestro');
+  assert.match(maestro, /^ {4}needs: build$/m);
+  assert.match(maestro, /^ {4}if: \$\{\{ !cancelled\(\) && \(needs\.build\.result == 'success' \|\| needs\.build\.result == 'skipped'\) \}\}$/m);
+  assert.match(maestro, /^ {10}BUILD_ID: \$\{\{ needs\.build\.outputs\.build_id \|\| inputs\.build_id \}\}$/m);
+  assert.match(job('build'), /^ {6}build_id: \$\{\{ steps\.build\.outputs\.build_id \}\}$/m);
+  assert.match(maestro, /url=\$\(node scripts\/e2e-build\.mjs "\$meta"\)/);
+});
+
+const SHA = '0123456789abcdef0123456789abcdef01234567';
+const OLD = 'fedcba9876543210fedcba9876543210fedcba98';
+
+test('the summary line says whether the app under test was made from the commit this run tests', () => {
+  assert.equal(
+    buildLine({ id: 'b-1', gitCommitHash: SHA }, SHA),
+    `App under test: EAS build b-1, made from commit ${SHA}. This run tests commit ${SHA}: the same commit.`
+  );
+  assert.equal(
+    buildLine({ id: 'b-1', gitCommitHash: OLD }, SHA),
+    `App under test: EAS build b-1, made from commit ${OLD}. This run tests commit ${SHA}: NOT the same commit, so the flows test an older app.`
+  );
+  // A short hash is not the commit: no guess.
+  assert.match(buildLine({ id: 'b-1', gitCommitHash: SHA.slice(0, 7) }, SHA), /: NOT the same commit, /);
+  for (const gitCommitHash of [undefined, null, '']) {
+    assert.equal(
+      buildLine({ id: 'b-1', gitCommitHash }, SHA),
+      `App under test: EAS build b-1; EAS did not report the commit it was made from. This run tests commit ${SHA}; the two cannot be compared.`
+    );
+  }
+});
+
+test('e2e-build.mjs prints the archive URL, writes the line to the run summary, and stops on an unfinished build', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'brazos-e2e-'));
+  const summary = join(dir, 'summary');
+  writeFileSync(summary, '');
+  const build = { id: 'b-1', status: 'FINISHED', isForIosSimulator: true, gitCommitHash: SHA, artifacts: { applicationArchiveUrl: 'https://example.com/app.tar.gz' } };
+  const runWith = (answer) => {
+    const meta = join(dir, 'build.json');
+    writeFileSync(meta, JSON.stringify(answer));
+    return spawnSync(process.execPath, [join(root, 'scripts/e2e-build.mjs'), meta], {
+      encoding: 'utf8',
+      env: { PATH: process.env.PATH, GITHUB_SHA: SHA, GITHUB_STEP_SUMMARY: summary },
+    });
+  };
+  const listed = runWith([build]);
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.equal(listed.stdout, 'https://example.com/app.tar.gz\n');
+  assert.equal(readFileSync(summary, 'utf8'), `${buildLine(build, SHA)}\n\n`);
+  assert.equal(runWith({ ...build, status: 'ERRORED' }).status, 1);
+  assert.equal(runWith([]).status, 1);
 });
 
 test('e2e iOS runs every flow and always keeps the results', () => {
