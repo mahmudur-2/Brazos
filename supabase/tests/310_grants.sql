@@ -7,7 +7,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(31);
+select plan(33);
 
 -- ---------------------------------------------------------------------------
 -- §1. Grants (B1).
@@ -100,6 +100,27 @@ select ok(has_function_privilege('authenticated', 'public.is_profile_active(uuid
   'B1: authenticated may still run is_profile_active');
 select ok(has_table_privilege('authenticated', 'public.jobs', 'SELECT') and has_table_privilege('authenticated', 'public.messages', 'INSERT'),
   'B1: authenticated keeps the reads and writes RLS governs (jobs SELECT, messages INSERT)');
+-- 20261116000000_access_allow_list.sql: the allow-list itself. Every table-level right authenticated
+-- holds on a public relation, so a right added later fails here until someone adds it on purpose.
+select is(
+  (select string_agg(c.relname || ':' || p.privs, '; ' order by c.relname)
+     from pg_class c join pg_namespace n on n.oid = c.relnamespace,
+          lateral (select string_agg(x.priv, ',' order by x.priv) as privs
+                     from unnest(array['DELETE', 'INSERT', 'SELECT', 'UPDATE']) x(priv)
+                    where has_table_privilege('authenticated', c.oid, x.priv)) p
+    where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm', 'f') and p.privs is not null),
+  'app_config:SELECT; bids:SELECT; blocks:DELETE,INSERT,SELECT; conversations:SELECT; direct_threads:SELECT; '
+  || 'job_agreements:SELECT; job_completions:SELECT; job_disputes:SELECT; job_locations:SELECT; job_offers:SELECT; '
+  || 'jobs:DELETE,SELECT; legal_acceptances:SELECT; message_reads:INSERT,SELECT,UPDATE; messages:INSERT,SELECT; '
+  || 'notification_outbox:SELECT; notification_prefs:INSERT,SELECT,UPDATE; push_tokens:SELECT,UPDATE; '
+  || 'reports:SELECT,UPDATE; reviews:SELECT; worker_services:DELETE,INSERT,SELECT,UPDATE',
+  'B1: authenticated holds exactly these table rights (20261116000000 took every right no app call uses)');
+select is(
+  (select string_agg(a.attname, ',' order by a.attnum) from pg_attribute a
+    where a.attrelid = 'public.reports'::regclass and a.attnum > 0 and not a.attisdropped
+      and has_column_privilege('authenticated', a.attrelid, a.attnum, 'INSERT')),
+  'reporter_id,reported_id,job_id,reason,description,subject_kind,subject_id',
+  'B11: a report is inserted with the seven columns createReport sends; status, created_at and id stay the database''s');
 
 -- Behaviour, not only the catalog.
 select tests.create_user('grants.trunc@brazos.test') as member \gset
