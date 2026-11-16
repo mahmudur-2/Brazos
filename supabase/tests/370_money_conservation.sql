@@ -275,12 +275,13 @@ create or replace function tests.mc_made(p_pid uuid, p_kind text default 'transf
   select count(*) from mc_book where payment_id = p_pid and kind = p_kind and made
 $$;
 
--- Every payment_attention line of a payment ("what: reason", sorted), or why there is none.
+-- Every payment_attention line of a payment ("what: code: detail", sorted), or why there is none.
+-- attention_plain: reason is the plain sentence; the old reason text starts detail, word for word.
 create or replace function tests.mc_reasons(p_pid uuid) returns text language plpgsql as $$
 declare v text;
 begin
   if to_regclass('public.payment_attention') is null then return '<no payment_attention view>'; end if;
-  execute 'select string_agg(what || '': '' || reason, '' | '' order by what, reason) from public.payment_attention where payment_id = $1'
+  execute 'select string_agg(what || '': '' || code || '': '' || detail, '' | '' order by what, code, detail) from public.payment_attention where payment_id = $1'
     into v using p_pid;
   return coalesce(v, '<none>');
 end $$;
@@ -385,7 +386,7 @@ select tests.mc_age(:'pc', interval '25 hours');
 select is(tests.mc_in('transfers_ready', :'pc'), 0::bigint, 'C3 (B16): 23 hours after the key''s first use the row is not ready');
 select is(tests.mc_drain(:'pc', 'transfer', 'ok') || '/' || tests.mc_made(:'pc'), 'not ready/1',
   'C4 (B16, rule 1): a day of silence never sends a second transfer once the provider has forgotten the key');
-select ok(tests.mc_reasons(:'pc') like '%transfer: no answer for 23 hours under the same key%',
+select ok(tests.mc_reasons(:'pc') like '%transfer: transfer_no_answer: no answer for 23 hours under the same key%',
   'C5 (rule 4): the row shows in payment_attention');
 select is(tests.mc_try(format('select public.record_settlement_sent(%L, %L, %L, %s)', :'pc', 'transfer',
             (select ref from mc_book where payment_id = :'pc' and made order by n limit 1), (select transfer_cents from public.payments where id = :'pc'))),
@@ -404,7 +405,7 @@ update public.payments set transfer_cents = transfer_cents - 100 where id = :'pd
 select is(tests.mc_drain(:'pd', 'transfer', 'ok'), 'stop', 'D1 (B16): 400 idempotency_error stops the row');
 select is(tests.mc_drain(:'pd', 'transfer', 'ok') || '/' || tests.mc_made(:'pd'), 'not ready/1',
   'D2 (B16, rule 1): no new key follows an idempotency error: still one transfer');
-select ok(tests.mc_reasons(:'pd') like '%transfer: stopped: the last answer needs a person%', 'D3 (rule 4): listed as stopped');
+select ok(tests.mc_reasons(:'pd') like '%transfer: transfer_stopped: stopped: the last answer needs a person%', 'D3 (rule 4): listed as stopped');
 
 -- ---------------------------------------------------------------------------
 -- §E. The owner's "it does not exist": a new attempt, one transfer; the refusals.
@@ -465,10 +466,10 @@ select tests.mc_released('MC-H refund after transfer') as ph \gset
 select tests.mc_drain(:'ph', 'transfer', 'ok');
 update public.payments set refund_cents = charge_amount_cents, refund_reason = 'dispute_refund' where id = :'ph';  -- SURGERY
 select is(tests.mc_in('refunds_due', :'ph'), 0::bigint, 'H1 (B18): a full refund after a transfer is not queued');
-select ok(tests.mc_reasons(:'ph') like '%refund: refund is more than is left after the transfer%', 'H2 (rule 4): it is listed');
+select ok(tests.mc_reasons(:'ph') like '%refund: refund_more_than_left: refund is more than is left after the transfer%', 'H2 (rule 4): it is listed');
 update public.payments set refund_cents = charge_amount_cents - transfer_cents where id = :'ph';                    -- SURGERY
 select is(tests.mc_drain(:'ph', 'refund', 'ok'), 'sent', 'H3: a refund of what is left is sent');
-select ok(tests.mc_reasons(:'ph') like '%refund: refund sent, not yet confirmed by charge.refunded%',
+select ok(tests.mc_reasons(:'ph') like '%refund: refund_unconfirmed: refund sent, not yet confirmed by charge.refunded%',
   'H4 (rule 4): a refund sent and not confirmed is listed');
 select tests.mc_charge_event('evt_mc_h_cr', 'charge.refunded', :'ph', jsonb_build_object(
   'id', 'ch_mc_h', 'amount_refunded', (select refund_cents from public.payments where id = :'ph'),
@@ -485,14 +486,14 @@ select tests.mc_charge_event('evt_mc_i_cr', 'charge.refunded', :'pi9', jsonb_bui
   'id', 'ch_mc_i', 'amount_refunded', (select charge_amount_cents from public.payments where id = :'pi9'),
   'refunds', jsonb_build_object('data', jsonb_build_array(jsonb_build_object('id', 're_mc_i_hand')))));
 select is(tests.mc_in('transfers_due', :'pi9'), 0::bigint, 'I1 (B18): a charge refunded in full is never transferred');
-select ok(tests.mc_reasons(:'pi9') like '%transfer: payment is refunded: a person decides%', 'I2 (rule 4): listed');
+select ok(tests.mc_reasons(:'pi9') like '%transfer: status_unusual: payment is refunded: a person decides%', 'I2 (rule 4): listed');
 
 select tests.mc_released('MC-J partial') as pj \gset
 select tests.mc_charge_event('evt_mc_j_cr', 'charge.refunded', :'pj', jsonb_build_object(
   'id', 'ch_mc_j', 'amount_refunded', 1000,
   'refunds', jsonb_build_object('data', jsonb_build_array(jsonb_build_object('id', 're_mc_j_hand')))));
 select is(tests.mc_in('transfers_due', :'pj'), 0::bigint, 'J1 (B18): a transfer larger than what is left after a refund is not sent');
-select ok(tests.mc_reasons(:'pj') like '%transfer: transfer is more than is left after refunds%', 'J2 (rule 4): listed');
+select ok(tests.mc_reasons(:'pj') like '%transfer: transfer_more_than_left: transfer is more than is left after refunds%', 'J2 (rule 4): listed');
 select tests.mc_charge_event('evt_mc_j_cr_old', 'charge.refunded', :'pj', jsonb_build_object('id', 'ch_mc_j', 'amount_refunded', 500));
 select is((select refunded_cents from public.payments where id = :'pj'), 1000, 'J3 (rule 3): an older charge.refunded never lowers the refunded total');
 
@@ -502,7 +503,7 @@ select is((select refunded_cents from public.payments where id = :'pj'), 1000, '
 select tests.mc_released('MC-K won') as pk1 \gset
 select tests.mc_dispute('evt_mc_k1_c', :'pk1', 'created', 'needs_response');
 select is(tests.mc_in('transfers_due', :'pk1'), 0::bigint, 'K1 (B13): no transfer while a card dispute is open');
-select ok(tests.mc_reasons(:'pk1') like '%transfer: card dispute open: no transfer%', 'K2 (rule 4): listed');
+select ok(tests.mc_reasons(:'pk1') like '%transfer: transfer_card_dispute: card dispute open: no transfer%', 'K2 (rule 4): listed');
 select tests.mc_dispute('evt_mc_k1_w', :'pk1', 'closed', 'won');
 select is((select (chargeback_at is null)::text || '/' || coalesce(chargeback_cents::text, 'null') from public.payments where id = :'pk1')
           || '/' || tests.mc_in('transfers_ready', :'pk1'),
@@ -520,7 +521,7 @@ select tests.mc_dispute('evt_mc_k3_c', :'pk3', 'created', 'warning_needs_respons
 select tests.mc_dispute('evt_mc_k3_x', :'pk3', 'closed', 'prevented');
 select is((select (chargeback_at is not null)::text || '/' || last_error from public.payments where id = :'pk3'),
   'true/card dispute closed as prevented; a person must decide', 'K6 (B13): prevented keeps the block, with a reason');
-select ok(tests.mc_reasons(:'pk3') like '%payment: card dispute still open or closed without proof the money stayed%',
+select ok(tests.mc_reasons(:'pk3') like '%payment: card_dispute_unclear: card dispute still open or closed without proof the money stayed%',
   'K7 (rule 4): listed, though the row asks for nothing');
 
 select tests.mc_released('MC-K lost after') as pk4 \gset
@@ -530,7 +531,7 @@ select tests.mc_dispute('evt_mc_k4_l', :'pk4', 'closed', 'lost');
 select is((select status::text || '/' || coalesce(refund_cents::text, 'null') || '/' || tests.mc_in('refunds_due', id)
              from public.payments where id = :'pk4'),
   'refunded/null/0', 'K8 (B13): lost after the transfer: refunded, and no refund is queued on top');
-select ok(tests.mc_reasons(:'pk4') like '%payment: money short%', 'K9 (B13, rule 4): the shortfall is listed');
+select ok(tests.mc_reasons(:'pk4') like '%payment: money_short: money short%', 'K9 (B13, rule 4): the shortfall is listed');
 select is((select short_cents from public.payment_money where payment_id = :'pk4'),
   (select transfer_cents from public.payments where id = :'pk4'), 'K10: short by exactly the transfer');
 
@@ -549,7 +550,7 @@ select tests.mc_event('evt_mc_l_r1', 'transfer.reversed', jsonb_build_object(
   'amount_reversed', 1000, 'reversed', false, 'metadata', jsonb_build_object('payment_id', :'pl')));
 select is((select status::text || '/' || (transfer_reversed_at is null)::text from public.payments where id = :'pl'),
   'released/true', 'L1 (B16): a partial reversal does not park the row');
-select ok(tests.mc_reasons(:'pl') like '%was reversed in part: a person decides%', 'L2 (rule 4): listed');
+select ok(tests.mc_reasons(:'pl') like '%transfer: transfer_partly_reversed: transfer % was reversed in part: a person decides%', 'L2 (rule 4): listed');
 select tests.mc_event('evt_mc_l_r2', 'transfer.reversed', jsonb_build_object(
   'id', (select ref from mc_book where payment_id = :'pl' and made order by n limit 1), 'amount', (select transfer_cents from public.payments where id = :'pl'),
   'amount_reversed', (select transfer_cents from public.payments where id = :'pl'), 'reversed', true,
@@ -591,7 +592,7 @@ select public.release_job_payment(:'jm');
 select tests.clear_auth();
 update public.payments set received_cents = charge_amount_cents - 1 where id = :'pm';
 select is(tests.mc_in('transfers_due', :'pm'), 0::bigint, 'M2 (B17): it is never transferred');
-select ok(tests.mc_reasons(:'pm') like '%transfer: charged a different amount than this payment%', 'M3 (rule 4): listed');
+select ok(tests.mc_reasons(:'pm') like '%transfer: amount_differs: charged a different amount than this payment%', 'M3 (rule 4): listed');
 
 select tests.mc_hire('MC-N declined') as jn \gset
 select tests.authenticate_as(:'customer');
@@ -627,7 +628,7 @@ select public.cancel_job((select job_id from public.payments where id = :'pr2'),
 select tests.clear_auth();
 select is(tests.mc_drain(:'pr2', 'refund', 'refused_stop') || '/' || tests.mc_in('refunds_ready', :'pr2'), 'stop/0',
   'R3: charge_already_refunded stops the refund');
-select ok(tests.mc_reasons(:'pr2') like '%refund: stopped: the last answer needs a person%', 'R4 (rule 4): listed');
+select ok(tests.mc_reasons(:'pr2') like '%refund: refund_stopped: stopped: the last answer needs a person%', 'R4 (rule 4): listed');
 
 -- ---------------------------------------------------------------------------
 -- §O. Addition 1 (named): THE LIFECYCLE REFUNDS NEVER SEND A ROW UNDER A CARD DISPUTE. cancel_job's
@@ -647,8 +648,8 @@ select is(jsonb_build_object(
     'refunds_queued', (select count(*) from public.payments where id in (:'po1', :'po2') and refund_cents = charge_amount_cents),
     'in_refunds_due', tests.mc_in('refunds_due', :'po1') + tests.mc_in('refunds_due', :'po2'),
     'in_transfers_due', tests.mc_in('transfers_due', :'po1') + tests.mc_in('transfers_due', :'po2'),
-    'listed', (tests.mc_reasons(:'po1') like '%refund: card dispute open: no refund%')
-              and (tests.mc_reasons(:'po2') like '%refund: card dispute open: no refund%')),
+    'listed', (tests.mc_reasons(:'po1') like '%refund: refund_card_dispute: card dispute open: no refund%')
+              and (tests.mc_reasons(:'po2') like '%refund: refund_card_dispute: card dispute open: no refund%')),
   jsonb_build_object('refunds_queued', 2, 'in_refunds_due', 0, 'in_transfers_due', 0, 'listed', true),
   'O1 (B13, addition 1): cancel_job''s free cancel and close_no_show_hires queue the refund, but a row under a card dispute is never sent and shows in payment_attention');
 
@@ -714,10 +715,10 @@ select tests.mc_age_agreement(:'pp2', interval '6 days');
 select tests.authenticate_as(:'worker');
 select public.transition_job_status((select job_id from public.payments where id = :'pp3'), 'in_progress');
 select tests.clear_auth();
-select ok(tests.mc_reasons(:'pp1') like '%payment: job still assigned more than 7 days after its date (or its hire)%',
+select ok(tests.mc_reasons(:'pp1') like '%payment: job_stuck: job still assigned more than 7 days after its date (or its hire)%',
   'P1 (addition 2): an assigned job with no date, hired 8 days ago, is listed');
 select is(tests.mc_reasons(:'pp2'), '<none>', 'P2: hired 6 days ago, it is not');
-select ok(tests.mc_reasons(:'pp3') like '%payment: job still in_progress more than 7 days after its date%',
+select ok(tests.mc_reasons(:'pp3') like '%payment: job_stuck: job still in_progress more than 7 days after its date%',
   'P3: a job in progress 9 days after its date is listed');
 
 -- ---------------------------------------------------------------------------

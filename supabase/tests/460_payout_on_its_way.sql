@@ -385,7 +385,7 @@ select is((select string_agg(format('%s %s/%s/%s/%s/%s', split_part(x.name, ' ',
                                     exists (select 1 from public.transfers_due d where d.id = p.id),
                                     public.payment_payout_on_its_way(p),
                                     (select count(*) from public.payment_attention a where a.payment_id = p.id
-                                       and a.reason = 'transfer is more than is left after refunds: a person decides')),
+                                       and a.code = 'transfer_more_than_left')),
                              ', ' order by x.name)
              from rowsx x join public.payments p on p.id = x.pid where x.name ~ '^(12|14a|14c) '),
   '12 approved/4625/t/t/0, 14a approved/4625/f/f/1, 14c approved/4625/f/f/1',
@@ -405,7 +405,7 @@ select is((select format('%s/%s/%s/%s/%s/%s/%s', d.status, p.refund_failed_at is
                          exists (select 1 from public.transfers_due t where t.id = p.id),
                          public.payment_payout_on_its_way(p),
                          (select count(*) from public.payment_attention a where a.payment_id = p.id
-                            and a.reason = 'transfer is more than is left after refunds: a person decides'))
+                            and a.code = 'transfer_more_than_left'))
              from public.payments p join public.job_disputes d on d.payment_id = p.id
             where p.id = tests.pw_pid(:'j14w')),
   'withdrawn/t/approved/4625/f/f/1',

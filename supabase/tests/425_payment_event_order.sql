@@ -133,7 +133,8 @@ select tests.eo_dispute('evt_eo_d1_new_a', 'charge.dispute.created', 1800000200,
 select is(tests.eo_dispute_state(:'p3'), 'dp_eo_1/false/null', '2b: its older dispute.created arrives after: still no block');
 select tests.eo_dispute('evt_eo_d1_new_b', 'charge.dispute.created', 1800000200, :'p3', 'dp_eo_1', 'needs_response');
 select is(tests.eo_dispute_state(:'p3'), 'dp_eo_1/false/null', '2c: the same older event under another id: still no block');
-select ok(not exists (select 1 from public.payment_attention a where a.payment_id = :'p3' and a.reason like 'card dispute%'),
+select ok(not exists (select 1 from public.payment_attention a where a.payment_id = :'p3'
+                        and a.code in ('transfer_card_dispute', 'refund_card_dispute', 'card_dispute_open', 'card_dispute_unclear', 'refund_failed_disputed')),
   '2d: and payment_attention lists no open card dispute for it');
 
 -- A warning_closed inquiry clears the same way.

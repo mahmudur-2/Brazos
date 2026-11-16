@@ -159,8 +159,11 @@ create or replace function tests.rf_failures(p_pid uuid) returns text language s
          from public.payment_refund_failures f where f.payment_id = %L$q$, p_pid))
 $$;
 
+-- attention_plain: a line is matched as "code: detail || reason" (reason is the plain sentence; the
+-- old reason text starts detail; the failed refunds of a payment are one line, A2-04).
 create or replace function tests.rf_lines(p_pid uuid, p_like text) returns integer language sql as $$
-  select count(*)::integer from public.payment_attention a where a.payment_id = p_pid and a.reason like p_like
+  select count(*)::integer from public.payment_attention a
+   where a.payment_id = p_pid and a.code || ': ' || coalesce(a.detail, '') || ' || ' || a.reason like p_like
 $$;
 
 -- INV (Codex R7-A2): the refunds still owed that nothing lists; the invariant is 0. Owed: refund_cents > 0,
@@ -200,7 +203,7 @@ select is(tests.rf_failures(:'pa'), 'ok: re_rf_a1:' || :'ca' || ':expired_or_can
 select ok(not exists (select 1 from public.refunds_due r where r.id = :'pa'), 'A4: nothing sends it again: the row is not in refunds_due');
 select is(tests.rf_try(format('select public.settlement_send_reopen(%L, %L)::text', :'pa', 'refund')),
   'error: A refund is recorded for this payment; nothing to reopen', 'A5: and nothing reopens it');
-select is(tests.rf_lines(:'pa', 'refund re_rf_a1 failed at the provider (expired_or_canceled_card): the money is back in the Stripe balance. Arrange the refund another way, then record it with resolve_refund_failure'),
+select is(tests.rf_lines(:'pa', 'refund_failed: refund re_rf_a1 failed at the provider (expired_or_canceled_card), ' || :ca || ' cents. Record how it was arranged with resolve_refund_failure% || Stripe could not return money to the customer''s card. The amount shown is what that refund tried to return, not always what the customer is still owed. Before you pay anything, check in Stripe for a later refund of this payment that went through, a card dispute, or a payment you already made to the customer. Pay only what is still owed, another way. Then mark it done here, also when nothing more was owed.'),
   1, 'A6: payment_attention lists it once, with what to do');
 select is(tests.rf_lines(:'pa', '%reopen%'), 0, 'A7: … and says nothing about a reopen');
 
@@ -230,7 +233,7 @@ select is(tests.rf_try(format('select coalesce((public.resolve_refund_failure(%L
   'ok: cleared', 'A14: resolve_refund_failure records the arrangement: refund_failed_at clears');
 select is(tests.rf_failures(:'pa'), 'ok: re_rf_a1:' || :'ca' || ':expired_or_canceled_card:arranged: Refunded again by hand in Stripe (re_rf_a2).',
   'A15: the failure row keeps the arrangement and its note');
-select is(tests.rf_lines(:'pa', 'refund % failed at the provider%'), 0, 'A16: … and payment_attention lists it no more');
+select is(tests.rf_lines(:'pa', 'refund_failed%: %refund % failed at the provider%'), 0, 'A16: … and payment_attention lists it no more');
 
 -- R3-A5: the 90-day prune empties the payloads; the same refund's failure under a new event id is
 -- still known.
@@ -258,7 +261,7 @@ select is(tests.rf_state(:'pb') || '/' || tests.rf_flag(:'pb'), 'held/0/re_rf_b1
 select is(tests.rf_try(format('select public.settlement_send_reopen(%L, %L)::text', :'pb', 'refund')),
   'error: A refund is recorded for this payment; nothing to reopen', 'B2: a failed refund with no ref of its own cannot be reopened');
 select ok(not exists (select 1 from public.refunds_due r where r.id = :'pb'), 'B3: … nor sent again');
-select is(tests.rf_lines(:'pb', 'refund sent, not yet confirmed%') || '/' || tests.rf_lines(:'pb', 'refund re_rf_b1 failed at the provider%'),
+select is(tests.rf_lines(:'pb', 'refund_unconfirmed: refund sent, not yet confirmed%') || '/' || tests.rf_lines(:'pb', 'refund_failed: refund re_rf_b1 failed at the provider%'),
   '0/1', 'B4: listed as failed, never as a refund on its way');
 select tests.rf_refunded('evt_rf_b_ref', 1800000010, :'pb', :cb, 're_rf_b1');
 select is(tests.rf_state(:'pb') || '/' || tests.rf_flag(:'pb'), 'refunded/' || :'cb' || '/re_rf_b1/true',
@@ -284,7 +287,10 @@ select tests.rf_failed('evt_rf_c_fail1', 1800000100, :'pc', 're_rf_c1', :cc - 10
 select tests.rf_failed('evt_rf_c_fail2', 1800000110, :'pc', 're_rf_c2', 500, false);
 select is(tests.rf_state(:'pc') || '/' || (select (released_at is not null)::text from public.payments where id = :'pc'),
   'partially_refunded/' || (:cc - 1000) || '/re_rf_c1/true', 'C1: two refunds fail: the status, the total and the fee''s transfer stay');
-select is(tests.rf_lines(:'pc', 'refund re_rf_c_ failed at the provider%'), 2, 'C2: one line per failed refund');
+select is(tests.rf_lines(:'pc', 'refund_failed_several: refund re_rf_c1 failed at the provider (expired_or_canceled_card), ' || (:cc - 1000) || ' cents; '
+                               || 'refund re_rf_c2 failed at the provider (expired_or_canceled_card), 500 cents. %')
+          || '/' || (select a.cents from public.payment_attention a where a.payment_id = :'pc' and a.code = 'refund_failed_several'),
+  '1/' || (:cc - 1000 + 500), 'C2 (A2-04): one line for the payment''s failed refunds, each named, with their sum and the sentence for more than one (one decision covers them all, C3)');
 select is(tests.rf_try(format('select (public.resolve_refund_failure(%L, %L)).id::text', :'pc', 'Paid back by bank transfer.')),
   'ok: ' || :'pc', 'C3: one record covers every waiting failure of the payment');
 select is((select (refund_arranged_at is not null)::text || '/' || (refund_failed_at is null)::text from public.payments where id = :'pc'),
@@ -295,7 +301,7 @@ select is(tests.rf_failures(:'pc'), 'ok: re_rf_c1:' || (:cc - 1000) || ':expired
 select tests.rf_failed('evt_rf_c_fail1_again', 1800000300, :'pc', 're_rf_c1', :cc - 1000);
 select is(tests.rf_flag(:'pc'), 'false', 'C5: after the record, a repeat of a known refund''s failure raises nothing');
 select tests.rf_failed('evt_rf_c_fail3', 1800000400, :'pc', 're_rf_c3', 250, false);
-select is(tests.rf_flag(:'pc') || '/' || tests.rf_lines(:'pc', 'refund re_rf_c3 failed at the provider%'), 'true/1',
+select is(tests.rf_flag(:'pc') || '/' || tests.rf_lines(:'pc', 'refund_failed: refund re_rf_c3 failed at the provider%'), 'true/1',
   'C6: another refund''s failure raises it again, listed once');
 select is((select (refund_arranged_at is not null)::text from public.payments where id = :'pc'), 'true',
   'C7 (P3): the earlier arrangement''s stamp stays; the new failure wins on the customer''s card (lib/paymentRules.ts)');
@@ -310,7 +316,7 @@ select tests.rf_refunded('evt_rf_d_ref', 1800000010, :'pd', :cd, 're_rf_d1');
 select count(*) from public.claim_receipt_batch(50);
 select tests.rf_failed('evt_rf_d_fail', 1800000100, :'pd', 're_rf_d1', :cd, false);
 select count(*) from public.claim_receipt_batch(50);
-select is(tests.rf_state(:'pd') || '/' || tests.rf_lines(:'pd', 'refund re_rf_d1 failed at the provider%'), 'refunded/' || :'cd' || '/null/1',
+select is(tests.rf_state(:'pd') || '/' || tests.rf_lines(:'pd', 'refund_failed: refund re_rf_d1 failed at the provider%'), 'refunded/' || :'cd' || '/null/1',
   'D1: a hand refund (no metadata) fails: found by its payment_intent, listed, still refunded; no refund_ref, the app never sent one (R5-A3)');
 select is((select string_agg(r.status, ',' order by r.role) from public.receipt_outbox r where r.payment_id = :'pd'), 'skipped,skipped',
   'D2 (R3-A7, by design): the status never goes back to released, so its receipts stay skipped with it');
@@ -331,7 +337,7 @@ select is(tests.rf_state(:'pe') || '/' || (select (chargeback_at is not null)::t
 select tests.rf_dispute('evt_rf_e_won', 'charge.dispute.closed', :'pe', 'dp_rf_e1', 'won');
 select is(tests.rf_state(:'pe') || '/' || (select (chargeback_at is not null)::text from public.payments where id = :'pe') || '/' || tests.rf_flag(:'pe'),
   'refunded/' || :'ce' || '/re_rf_e1/false/true', 'E2 (R3-A4): the dispute is won: the block clears and the failure is still shown');
-select is(tests.rf_lines(:'pe', 'refund re_rf_e1 failed at the provider%')
+select is(tests.rf_lines(:'pe', 'refund_failed: refund re_rf_e1 failed at the provider%')
           + (select count(*)::integer from public.refunds_due r where r.id = :'pe')
           + (select count(*)::integer from public.transfers_due t where t.id = :'pe'), 1,
   'E3: … listed for a person, and neither queue sends anything');
@@ -387,7 +393,7 @@ select ok(exists (select 1 from public.transfers_due t where t.id = :'pg'), 'G1 
 select tests.rf_failed('evt_rf_g_fail', 1800000100, :'pg', 're_rf_g1', :cg, false);
 select is((select coalesce(refunded_cents, 0)::text || '/' || coalesce(refund_cents, 0)::text from public.payments where id = :'pg')
           || '/' || (select count(*)::text from public.transfers_due t where t.id = :'pg')
-          || '/' || tests.rf_lines(:'pg', 'transfer is more than is left after refunds: a person decides'),
+          || '/' || tests.rf_lines(:'pg', 'transfer_more_than_left: transfer is more than is left after refunds: a person decides%'),
   '0/0/0/1', 'G2: only a full refund.failed, refund totals empty: no transfer is due, and payment_attention says why');
 select tests.rf_try(format('select (public.resolve_refund_failure(%L, %L)).id::text', :'pg', 'Refunded by bank transfer.')) as g_res \gset
 select is(left(:'g_res', 4) || (select (refund_failed_at is null)::text || '/' || (refund_arranged_at is not null)::text from public.payments where id = :'pg')
@@ -455,7 +461,7 @@ select tests.rf_failed('evt_rf_r10_f1', 1800000200, :'pr', 're_rf_r9_app', 3875)
 select tests.rf_try(format('select (public.resolve_refund_failure(%L, %L)).id::text', :'pr', 'Repaid 38.75 by bank transfer.')) as r_res \gset
 select tests.rf_refunded('evt_rf_r10_r1', 1800000300, :'pr', 1500, 're_rf_r10_hand1');
 select tests.set_payouts(:'setupw', 'enabled');
-select is(left(:'r_res', 4) || tests.rf_hold(:'pr') || '/' || tests.rf_lines(:'pr', 'transfer is more than is left after refunds: a person decides'),
+select is(left(:'r_res', 4) || tests.rf_hold(:'pr') || '/' || tests.rf_lines(:'pr', 'transfer_more_than_left: transfer is more than is left after refunds: a person decides%'),
   'ok: 5375/false/false/false/false/1',
   'G9 (R10-A1): the app''s 3,875 refund landed, failed and was repaid outside the charge; a hand 1,500 refund succeeded and the later total leaves the failed one out: the whole 5,375 is held back, the fee is in neither transfers_due nor transfers_ready, no payout is on its way, the drain cannot begin it, and payment_attention lists it');
 
@@ -482,7 +488,7 @@ select tests.rf_refunded('evt_rf_r9_r4', 1800000600, :'pr4', 500, 're_rf_r9_c');
 select tests.rf_failed('evt_rf_r9_f4', 1800000610, :'pr4', 're_rf_r9_c', 500, false);
 select public.payment_refund_reserved_cents(p)::text
        || '/' || exists (select 1 from public.transfers_due t where t.id = p.id)::text
-       || '/' || tests.rf_lines(p.id, 'transfer is more than is left after refunds: a person decides')::text as r4_before
+       || '/' || tests.rf_lines(p.id, 'transfer_more_than_left: transfer is more than is left after refunds: a person decides%')::text as r4_before
   from public.payments p where p.id = :'pr4' \gset
 -- The owner's way out: a transfer made by hand in Stripe, recorded.
 select public.record_settlement_sent(:'pr4', 'transfer', 'tr_rf_r9_hand',
@@ -531,7 +537,7 @@ select is(exists (select 1 from public.refunds_due r where r.id = :'pd')::text
           || '/' || exists (select 1 from public.transfers_due t where t.id = :'pd')::text
           || '/' || public.settlement_send_begin(:'pd', 'refund', :d_att, :d_cents)::text
           || '/' || (select public.settlement_send_begin(p.id, 'transfer', p.transfer_attempts, p.transfer_cents) from public.payments p where p.id = :'pd')::text
-          || '/' || tests.rf_lines(:'pd', 'refund re_rf_r11_d failed at the provider%')
+          || '/' || tests.rf_lines(:'pd', 'refund_failed: refund re_rf_r11_d failed at the provider%')
           || '/' || (select count(*) from public.payment_attention a where a.payment_id = :'pd' and a.what = 'refund'),
   'false/false/false/false/1/1',
   'G13 (R11-A1, the event applied, the stop not yet written): in neither queue, settlement_send_begin refuses the refund and the transfer, the failure line, and no other refund line (none tells the owner to send it again)');
@@ -540,8 +546,8 @@ select is(:'d_begun' || '/' || (:'d_applied' = :'pd')::text || '/' || :'d_stoppe
           || '/' || tests.rf_failures(:'pd') || '/' || tests.rf_flag(:'pd') || '/' || tests.rf_state(:'pd')
           || '/' || exists (select 1 from public.refunds_due r where r.id = :'pd')::text
           || '/' || tests.rf_hold(:'pd')
-          || '/' || tests.rf_lines(:'pd', 'refund re_rf_r11_d failed at the provider%')
-          || '/' || tests.rf_lines(:'pd', 'transfer is more than is left after refunds: a person decides')
+          || '/' || tests.rf_lines(:'pd', 'refund_failed: refund re_rf_r11_d failed at the provider%')
+          || '/' || tests.rf_lines(:'pd', 'transfer_more_than_left: transfer is more than is left after refunds: a person decides%')
           || '/' || tests.rf_drain_shape('process-settlements:re_rf_r11_d'),
   't/true/t/ok: re_rf_r11_d:3875:expired_or_canceled_card:waiting/true/held/0/re_rf_r11_d/false/5375/false/false/false/false/1/1/data,id,type|object|true',
   'G13 (R11-A1): the drain''s write-back of a refund answered failed, the webhook withheld: one failure row, the flag, the refund id kept, in neither refunds_due nor transfers_due, the whole charge held back, no payout on its way, the drain cannot begin the fee, payment_attention lists the failure and the transfer, and the event has the drain''s shape');
@@ -587,7 +593,7 @@ select is(:'c_begun' || '/' || (:'c_applied' = :'pc')::text || '/' || :'c_stoppe
           || '/' || tests.rf_failures(:'pc') || '/' || tests.rf_flag(:'pc') || '/' || tests.rf_state(:'pc')
           || '/' || exists (select 1 from public.refunds_due r where r.id = :'pc')::text
           || '/' || tests.rf_hold(:'pc')
-          || '/' || tests.rf_lines(:'pc', 'refund re_rf_r11_c failed at the provider (no reason given)%')
+          || '/' || tests.rf_lines(:'pc', 'refund_failed: refund re_rf_r11_c failed at the provider (no reason given)%')
           || '/' || tests.rf_drain_shape('process-settlements:re_rf_r11_c'),
   't/true/t/ok: re_rf_r11_c:3875:null:waiting/true/held/0/re_rf_r11_c/false/5375/false/false/false/false/1/data,id,type|object|true',
   'G17 (R11-A1): the drain''s refund answered canceled, no failure_reason: recorded as a failure the same way, the operator line says no reason given, the whole charge held, and the event has the drain''s shape');
@@ -653,7 +659,7 @@ end $$;
 -- In refunds_due / its line for a person.
 create or replace function tests.rf_later(p_pid uuid) returns text language sql as $$
   select exists (select 1 from public.refunds_due r where r.id = p_pid)::text || '/'
-         || tests.rf_lines(p_pid, 'a refund on this charge failed before: look at the refunds on this charge in Stripe first (one that the app sent can be there), check how the failed one was arranged, refund only what is still owed by hand, then record_settlement_sent')
+         || tests.rf_lines(p_pid, 'refund_failed_before: a refund on this charge failed before: look at the refunds on this charge in Stripe first (one that the app sent can be there), check how the failed one was arranged, refund only what is still owed by hand, then record_settlement_sent%')
 $$;
 
 create or replace function tests.rf_arrange(p_pid uuid) returns text language sql as $$
@@ -706,7 +712,7 @@ select is(tests.rf_state(:'pk4') || '/' || coalesce((select refund_cents::text f
 select tests.rf_cancel(:'jk4');
 select is(tests.rf_later(:'pk4'), 'false/1', 'H6 (ii): the worker cancels: the full refund is not sent by itself; it is listed for a person');
 select tests.rf_arrange(:'pk4') as k4r \gset
-select is(:'k4r' || tests.rf_later(:'pk4') || '/' || tests.rf_lines(:'pk4', 'refund re_rf_k4_hand failed at the provider%'),
+select is(:'k4r' || tests.rf_later(:'pk4') || '/' || tests.rf_lines(:'pk4', 'refund_failed: refund re_rf_k4_hand failed at the provider%'),
   'ok: false/1/0', 'H7 (ii): the owner records the arrangement: the failure line goes, the refund asked is still listed');
 
 -- (ii) resolve_job_dispute, on a row a decision for the worker set to refund_cents 0; arranged first.
@@ -794,7 +800,7 @@ select tests.rf_cancel(:'jk10');
 select tests.rf_sent_lost(:'pk10') as k10s \gset
 select tests.rf_failed('evt_rf_k10_fail', 1800000100, :'pk10', 're_rf_k10_hand', 2000, false);
 select is(:'k10s' || '/' || tests.rf_state(:'pk10') || '/' || tests.rf_later(:'pk10')
-          || '/' || tests.rf_lines(:'pk10', 'refund re_rf_k10_hand failed at the provider%'),
+          || '/' || tests.rf_lines(:'pk10', 'refund_failed: refund re_rf_k10_hand failed at the provider%'),
   'true/true/held/0/null/false/1/1',
   'H15 (R6-A1): the app''s refund began, a smaller hand refund fails: refund_ref stays empty and the refund owed is listed for a person');
 select tests.rf_arrange(:'pk10') as k10r \gset
@@ -802,18 +808,18 @@ select is(:'k10r' || coalesce((select refund_ref from public.payments where id =
   'ok: null/false/1', 'H16 (R6-A1): the owner arranges only that failure: the refund owed is still listed and nothing sends it');
 select tests.rf_try(format('select public.record_settlement_sent(%L, %L, %L, %s)::text', :'pk10', 'refund', 're_rf_k10_own',
                            (select refund_cents from public.payments where id = :'pk10'))) as k10o \gset
-select is(:'k10o' || '/' || tests.rf_state(:'pk10') || '/' || tests.rf_lines(:'pk10', 'refund sent, not yet confirmed by charge.refunded')
+select is(:'k10o' || '/' || tests.rf_state(:'pk10') || '/' || tests.rf_lines(:'pk10', 'refund_unconfirmed: refund sent, not yet confirmed by charge.refunded%')
           || '/' || tests.rf_later(:'pk10'),
   'ok: true/held/0/re_rf_k10_own/1/false/0', 'H17 (R6-A1): the app''s own refund id is then recorded, listed as sent and not yet confirmed');
 -- Codex R7-A2: an older charge.refunded counted only the hand refund (2000, before it failed); the
 -- app's own refund is still not confirmed, so its line stays (and nothing owed is unlisted). A total
 -- that covers the refund asked clears it.
 select tests.rf_refunded('evt_rf_k10_ref1', 1800000150, :'pk10', 2000, 're_rf_k10_hand');
-select is(tests.rf_state(:'pk10') || '/' || tests.rf_lines(:'pk10', 'refund sent, not yet confirmed by charge.refunded')
+select is(tests.rf_state(:'pk10') || '/' || tests.rf_lines(:'pk10', 'refund_unconfirmed: refund sent, not yet confirmed by charge.refunded%')
           || '/' || tests.rf_inv(),
   'partially_refunded/2000/re_rf_k10_own/1/0', 'H17b (R7-A2): a smaller refunded total keeps the line of the app''s refund sent and not yet confirmed');
 select tests.rf_refunded('evt_rf_k10_ref2', 1800000200, :'pk10', (select refund_cents from public.payments where id = :'pk10'), 're_rf_k10_own');
-select is(tests.rf_state(:'pk10') || '/' || tests.rf_lines(:'pk10', 'refund sent, not yet confirmed by charge.refunded'),
+select is(tests.rf_state(:'pk10') || '/' || tests.rf_lines(:'pk10', 'refund_unconfirmed: refund sent, not yet confirmed by charge.refunded%'),
   'refunded/' || (select refund_cents::text from public.payments where id = :'pk10') || '/re_rf_k10_own/0',
   'H17c (R7-A2): a refunded total that covers the refund asked clears the line');
 -- Codex R8: the late-cancellation shape. The fee stays on the charge, so a refunded total that covers
@@ -826,10 +832,10 @@ update public.payments
        release_requested_at = now(), refund_reason = 'customer_cancelled_late'
  where id = :'pk17d';
 select public.record_settlement_sent(:'pk17d', 'refund', 're_rf_k17d', :ck17d - 1000);
-select is(tests.rf_lines(:'pk17d', 'refund sent, not yet confirmed by charge.refunded'), 1,
+select is(tests.rf_lines(:'pk17d', 'refund_unconfirmed: refund sent, not yet confirmed by charge.refunded%'), 1,
   'H17d (R8): the late-cancel refund recorded as sent: listed as sent and not yet confirmed');
 select tests.rf_refunded('evt_rf_k17d_ref', 1800000200, :'pk17d', :ck17d - 1000, 're_rf_k17d');
-select is(tests.rf_state(:'pk17d') || '/' || tests.rf_lines(:'pk17d', 'refund sent, not yet confirmed by charge.refunded'),
+select is(tests.rf_state(:'pk17d') || '/' || tests.rf_lines(:'pk17d', 'refund_unconfirmed: refund sent, not yet confirmed by charge.refunded%'),
   'partially_refunded/' || (:ck17d - 1000) || '/re_rf_k17d/0',
   'H17d (R8): its refunded total covers the refund asked at partially_refunded: the line clears');
 

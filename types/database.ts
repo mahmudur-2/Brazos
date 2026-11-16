@@ -2084,6 +2084,33 @@ export type Database = {
           },
         ]
       }
+      timer_runs: {
+        Row: {
+          error: string | null
+          failed_at: string | null
+          failing_since: string | null
+          name: string
+          ok_at: string | null
+          stale_after: string
+        }
+        Insert: {
+          error?: string | null
+          failed_at?: string | null
+          failing_since?: string | null
+          name: string
+          ok_at?: string | null
+          stale_after?: string
+        }
+        Update: {
+          error?: string | null
+          failed_at?: string | null
+          failing_since?: string | null
+          name?: string
+          ok_at?: string | null
+          stale_after?: string
+        }
+        Relationships: []
+      }
       worker_services: {
         Row: {
           category: string
@@ -2171,11 +2198,14 @@ export type Database = {
       payment_attention: {
         Row: {
           cents: number | null
+          code: string | null
           detail: string | null
+          finish: string | null
           job_id: string | null
           overdue: boolean | null
           payment_id: string | null
           reason: string | null
+          ref: string | null
           since: string | null
           what: string | null
         }
@@ -3728,6 +3758,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      payment_attention_codes: {
+        Args: never
+        Returns: {
+          code: string
+          finish: string
+          reason: string
+        }[]
+      }
       payment_for_party: {
         Args: { p: Database["public"]["Tables"]["payments"]["Row"] }
         Returns: {
@@ -3948,6 +3986,10 @@ export type Database = {
           p_ref: string
         }
         Returns: boolean
+      }
+      record_timer_run: {
+        Args: { p_error?: string; p_name: string; p_stale_after?: string }
+        Returns: undefined
       }
       register_push_token: {
         Args: { p_platform?: string; p_token: string }

@@ -203,8 +203,8 @@ select ok(exists (select 1 from public.refunds_ready where id = :'pf1'),
 update public.payments set refund_cents = refund_cents + 1 where id = :'pf1';
 select ok(not exists (select 1 from public.refunds_due where id = :'pf1'),
   'F5: one cent more than is left is held back while the fee transfer is unknown');
-select is((select string_agg(reason, ' | ' order by reason) from public.payment_attention where payment_id = :'pf1' and what = 'refund'),
-  'refund is more than is left after the transfer: a person decides',
+select is((select string_agg(code, ' | ' order by code) from public.payment_attention where payment_id = :'pf1' and what = 'refund'),
+  'refund_more_than_left',
   'F5b (G1-6): and payment_attention names why: the unconfirmed fee transfer is counted, as refunds_due counts it');
 update public.payments set refund_cents = refund_cents - 1 where id = :'pf1';
 select is(public.settlement_send_begin(:'pf1', 'refund', 0, (select refund_cents from public.payments where id = :'pf1')), true, 'F6: the refund send begins');
@@ -275,8 +275,8 @@ select is(tests.if_try(format('select (public.resolve_tip(%L, %L)).refund_cents:
 -- the check below can fail: only the reservation for the transfer on its way keeps it out.
 update public.payments set refund_cents = charge_amount_cents, refund_reason = 'dispute_refund' where id = :'tipr';
 select ok(not exists (select 1 from public.refunds_due where id = :'tipr'), 'R7: and a refund queued beside it is not due');
-select is((select string_agg(reason, ' | ' order by reason) from public.payment_attention where payment_id = :'tipr' and what = 'refund'),
-  'refund is more than is left after the transfer: a person decides',
+select is((select string_agg(code, ' | ' order by code) from public.payment_attention where payment_id = :'tipr' and what = 'refund'),
+  'refund_more_than_left',
   'R7b (G1-6): and payment_attention names why: the tip transfer on its way is counted');
 
 -- R8-R14: a job payment, settled through resolve_job_dispute.
@@ -307,8 +307,8 @@ select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).refun
 -- Codex R3: the same, with a refund really queued beside it.
 update public.payments set refund_cents = charge_amount_cents, refund_reason = 'dispute_refund' where id = :'pjr2';
 select ok(not exists (select 1 from public.refunds_due where id = :'pjr2'), 'R14: and a refund queued beside it is not due');
-select is((select string_agg(reason, ' | ' order by reason) from public.payment_attention where payment_id = :'pjr2' and what = 'refund'),
-  'refund is more than is left after the transfer: a person decides',
+select is((select string_agg(code, ' | ' order by code) from public.payment_attention where payment_id = :'pjr2' and what = 'refund'),
+  'refund_more_than_left',
   'R14b (G1-6): and payment_attention names why: the job transfer on its way is counted');
 
 -- ---------------------------------------------------------------------------
@@ -464,7 +464,7 @@ create or replace function tests.if_refunded(p_id text, p_pid uuid, p_total inte
     'amount_refunded', p_total, 'refunds', jsonb_build_object('data', jsonb_build_array(jsonb_build_object('id', p_refund)))))
 $$;
 create or replace function tests.if_refund_lines(p_pid uuid) returns text language sql as $$
-  select coalesce(string_agg(a.reason, ' | ' order by a.reason), 'none')
+  select coalesce(string_agg(a.code, ' | ' order by a.code), 'none')
     from public.payment_attention a where a.payment_id = p_pid and a.what = 'refund'
 $$;
 create or replace function tests.if_refused(p_before jsonb, p_after integer) returns text language sql as $$
@@ -630,7 +630,7 @@ select tests.if_dispute(:'jxc') as xcd1 \gset
 select (public.resolve_job_dispute(:'jxc', 'customer')).refund_cents as xcrc \gset
 select tests.if_refunded('evt_if_xc', :'pxc', 60, 're_if_xc_hand') as xc \gset
 select is(exists (select 1 from public.refunds_due where id = :'pxc')::text || ' / ' || tests.if_refund_lines(:'pxc'),
-  'false / a refund already landed on this charge: finish by hand in Stripe, then record_settlement_sent',
+  'false / refund_partly_landed',
   'X30: (c) the full refund is not sent on top of the 60 cents; it is listed for a person');
 select tests.if_dispute(:'jxc') as xcd2 \gset
 select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_cents::text', :'jxc', 'worker')),
@@ -685,8 +685,8 @@ select is((select status::text || ' / ' || (transfer_reversed_at is not null)::t
              from public.payments where id = :'pg2w'),
   'held / true / cancellation_fee / true', 'G1: S2: the fee sent and recorded, then reversed in full: parked, the rest''s refund not sent');
 update public.payments set transfer_sent_at = now() - interval '24 hours' where id = :'pg2w';
-select is((select string_agg(reason, ' | ' order by reason) from public.payment_attention where payment_id = :'pg2w' and what = 'transfer'),
-  'reversed at the provider: resolve_job_dispute (job payment) or resolve_tip (tip) decides',
+select is((select string_agg(code, ' | ' order by code) from public.payment_attention where payment_id = :'pg2w' and what = 'transfer'),
+  'transfer_reversed',
   'G2: reversed more than 23 hours after the send: the attention line names the reversal, not the closed attempt');
 select transfer_attempts as g2w_att, transfer_cents as g2w_tc, refund_cents as g2w_rc from public.payments where id = :'pg2w' \gset
 select is(tests.if_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_attempts::text', :'jg2w', 'worker')),
