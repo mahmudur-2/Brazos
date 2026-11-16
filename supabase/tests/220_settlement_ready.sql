@@ -149,6 +149,9 @@ select ok(not has_table_privilege('authenticated', 'public.refunds_ready', 'SELE
 -- 5. A9 review (20261003001100): twenty-five rows the provider keeps refusing — transfer_attempts > 0,
 --    the drain's recorder having rotated their keys — released EARLIER than one row never tried.
 --    Every payee here is ENABLED, so the payee filter hides none of them: this is the order alone.
+--    A9-03 (c, ready_wait): the order is now the oldest last change first (updated_at); each refusal's
+--    write-back moves updated_at (record_settlement_result), so the fixture dates each refused row's
+--    last refusal in the last half hour and the fresh row's release an hour ago (5c to 5e rewritten).
 -- ---------------------------------------------------------------------------
 do $$
 declare
@@ -172,7 +175,8 @@ begin
        set release_requested_at = now() - interval '10 days' + make_interval(hours => v_i),
            transfer_cents = 4500,
            transfer_attempts = 1 + (v_i % 3),
-           last_error = 'transfer: 400 account_invalid'
+           last_error = 'transfer: 400 account_invalid',
+           updated_at = now() - make_interval(mins => 30 - v_i)
      where id = v_payment;
     insert into fx values ('refused_' || v_i, v_payment);
   end loop;
@@ -186,7 +190,7 @@ insert into public.jobs (client_id, title, assigned_worker_id)
 values (:'customer', 'A9r fresh fixture', :'fresh') returning id as j_fresh \gset
 insert into public.payments (job_id, payer_id, payee_id, amount_cents, platform_fee_cents, provider, status)
 values (:'j_fresh', :'customer', :'fresh', 6000, 600, 'stripe', 'held') returning id as p_fresh \gset
-update public.payments set release_requested_at = now() + interval '1 second', transfer_cents = 5400 where id = :'p_fresh';
+update public.payments set release_requested_at = now() + interval '1 second', transfer_cents = 5400, updated_at = now() - interval '1 hour' where id = :'p_fresh';
 insert into fx values ('p_fresh', :'p_fresh');
 
 select is(
@@ -205,14 +209,14 @@ select is(
   '5c: the fresh row is FIRST in transfers_ready — twenty-five refused rows ahead of it by release request hide nothing'
 );
 select ok(
-  (select bool_and(r.transfer_attempts > 0)
-     from (select r.transfer_attempts from public.transfers_ready r where r.id in (select v from fx where k like 'refused_%' or k = 'p_fresh') offset 1) r),
-  '5d: every row after it has been refused at least once — never tried comes before tried, whatever the dates'
+  (select bool_and(r.updated_at > (select updated_at from public.payments where id = :'p_fresh'))
+     from (select r.updated_at from public.transfers_ready r where r.id in (select v from fx where k like 'refused_%' or k = 'p_fresh') offset 1) r),
+  '5d: every row after it changed after it: a refusal sends the row behind a row that waited longer'
 );
 select is(
   (select r.id from public.transfers_ready r where r.id in (select v from fx where k like 'refused_%') limit 1),
-  (select v from fx where k = 'refused_3'),
-  '5e: within a tier the oldest release request still goes first — the first refused row is the oldest of those refused once'
+  (select v from fx where k = 'refused_1'),
+  '5e: among the refused rows the oldest last refusal goes first'
 );
 select is(
   (select array_agg(c.column_name::text order by c.ordinal_position) from information_schema.columns c where c.table_schema = 'public' and c.table_name = 'transfers_ready'),

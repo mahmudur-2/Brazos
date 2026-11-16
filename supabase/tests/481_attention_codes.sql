@@ -26,15 +26,15 @@ select tests.create_user('ac.user@brazos.test', 'Ace User') as usr \gset
 -- The map.
 -- ---------------------------------------------------------------------------
 select is((select string_agg(code, ',' order by code collate "C") from public.payment_attention_codes()),
-  'amount_differs,cancel_unconfirmed,card_dispute_lost,card_dispute_open,card_dispute_unclear,event_failed,issue_no_show,issue_open,'
-  || 'job_closed_money_held,job_stuck,money_short,push_stuck,refund_card_dispute,refund_failed,refund_failed_before,'
-  || 'refund_failed_dispute_lost,refund_failed_dispute_unclear,refund_failed_disputed,refund_failed_several,refund_more_than_left,refund_no_answer,refund_no_intent,'
-  || 'refund_outside_app,refund_partly_landed,refund_retrying,refund_stopped,refund_unconfirmed,status_unusual,'
+  'amount_differs,cancel_unconfirmed,card_dispute_lost,card_dispute_open,card_dispute_unclear,event_failed,event_scan_gap,issue_no_show,issue_open,'
+  || 'job_closed_money_held,job_stuck,money_not_moving,money_short,payout_not_automatic,push_stuck,refund_after_dispute_lost,refund_after_dispute_pending,refund_card_dispute,refund_failed,refund_failed_before,'
+  || 'refund_failed_dispute_lost,refund_failed_dispute_unclear,refund_failed_disputed,refund_failed_several,refund_more_than_left,refund_no_answer,refund_no_answer_yet,refund_no_intent,'
+  || 'refund_not_started,refund_outside_app,refund_partly_landed,refund_retrying,refund_stopped,refund_unconfirmed,status_unusual,'
   || 'timer_failed,timer_late,timer_missing,tip_payee_gone,transfer_already_recorded,transfer_balance_low,transfer_card_dispute,'
-  || 'transfer_issue_open,transfer_more_than_left,transfer_no_answer,transfer_no_payout_account,'
+  || 'transfer_issue_open,transfer_more_than_left,transfer_no_answer,transfer_no_answer_yet,transfer_no_payout_account,transfer_not_started,'
   || 'transfer_partly_reversed,transfer_payee_gone,transfer_payout_review,transfer_retrying,transfer_reversed,transfer_reversed_disputed,'
   || 'transfer_stopped,vault_missing',
-  'M1, M1b, M1c: the map holds exactly these 47 codes');
+  'M1, M1b, M1c, M2 (money_not_moving, ready_wait, A9-02 event_scan_gap, A9 PART 2 b payout_not_automatic, A12-01 refund_after_dispute_lost, A12-03 the two no_answer_yet, A13-01 refund_after_dispute_pending): the map holds exactly these 56 codes');
 select is((select count(*) - count(distinct code) from public.payment_attention_codes()), 0::bigint,
   'M2: each code once');
 

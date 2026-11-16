@@ -143,7 +143,8 @@ test('8 · a throw keeps the key and defers — the request may have reached the
   assert.equal(classifySettlementFailure({ status: 400, body: {}, threw: new Error('fetch failed') }).message, 'threw: fetch failed');
 });
 
-test('9 · a malformed or empty body on a 4xx rotates, does not defer, and the message degrades rather than crashes', () => {
+// A5-01 (rewritten): a malformed or empty body proves nothing, so it keeps the key (was: rotates).
+test('9 · a malformed or empty body on a 4xx keeps the key, and the message degrades rather than crashes', () => {
   const bodies = [
     ['an empty object', {}, '400: empty body'],
     ['undefined', undefined, '400: no body'],
@@ -158,14 +159,18 @@ test('9 · a malformed or empty body on a 4xx rotates, does not defer, and the m
   ];
   for (const [label, body, message] of bodies) {
     const verdict = classifySettlementFailure({ status: 400, body, threw: null });
-    both(verdict, true, false, label);
+    both(verdict, false, true, label);
     assert.equal(typeof verdict.message, 'string', `${label}: a string message`);
     assert.ok(verdict.message.length > 0, `${label}: never empty`);
     assert.equal(verdict.message, message, `${label}: the degraded message`);
   }
-  // Only balance_insufficient defers a 4xx; a malformed body never does.
-  both(classifySettlementFailure({ status: 400, body: { error: { code: 'balance_insufficient' } } }), true, true, 'balance_insufficient with no message');
-  assert.equal(classifySettlementFailure({ status: 400, body: { error: { code: 'balance_insufficient' } } }).message, '400 balance_insufficient');
+  // balance_insufficient with its type is a refusal that defers; without a type it is no proof.
+  both(classifySettlementFailure({ status: 400, body: { error: { code: 'balance_insufficient', type: 'invalid_request_error' } } }), true, true, 'balance_insufficient with no message');
+  assert.equal(classifySettlementFailure({ status: 400, body: { error: { code: 'balance_insufficient', type: 'invalid_request_error' } } }).message, '400 balance_insufficient');
+  both(classifySettlementFailure({ status: 400, body: { error: { code: 'balance_insufficient' } } }), false, true, 'balance_insufficient with no type');
+  // A typed error with nothing else in it still proves the refusal.
+  both(classifySettlementFailure({ status: 400, body: { error: { type: 'invalid_request_error' } } }), true, false, 'a type alone');
+  both(classifySettlementFailure({ status: 400, body: { error: { type: '' } } }), false, true, 'an empty type');
   // A very long body is bounded, and a body that cannot be serialised does not throw.
   const long = classifySettlementFailure({ status: 400, body: 'x'.repeat(5000) });
   assert.ok(long.message.length <= 220, 'bounded');
@@ -178,12 +183,14 @@ test('9 · a malformed or empty body on a 4xx rotates, does not defer, and the m
 
 test('10 · the predicate, stated once, holds over every status from 400 to 599', () => {
   for (let status = 400; status <= 599; status++) {
-    const verdict = classifySettlementFailure({ status, body: {}, threw: null });
+    // A5-01 (rewritten): the provider's typed error is the proof; {} never rotates.
+    const verdict = classifySettlementFailure({ status, body: { error: { type: 'invalid_request_error' } }, threw: null });
     // lean B16: 401 and 403 joined 409 and 429 — none of them proves the key moved nothing.
     const expectRotate = status < 500 && ![401, 403, 409, 429].includes(status);
     assert.equal(verdict.rotate, expectRotate, `${status}: rotate`);
     // With no provider code a 4xx is failed and everything else is deferred.
     assert.equal(verdict.deferred, !expectRotate, `${status}: deferred`);
+    both(classifySettlementFailure({ status, body: {}, threw: null }), false, true, `${status} with {}`);
   }
 });
 
@@ -243,8 +250,9 @@ test('13 · the drain (raw text): refunds_due select names refund_attempts, both
   assert.match(src, /refunds_ready\?select=id,provider_ref,refund_cents,refund_attempts&/, 'refunds_ready select names refund_attempts');
   assert.match(src, /transfers_ready\?select=id,payee_id,transfer_cents,transfer_attempts&/, 'transfers_ready select still names transfer_attempts');
   assert.doesNotMatch(src, /transfers_due\?select|refunds_due\?select/, 'the drain no longer pages the complete queues');
-  assert.match(src, /counts\.blocked = await countBlocked\('transfers_due', 'transfers_ready'\);/, 'pass one reports blocked = due − ready');
-  assert.match(src, /counts\.blocked = await countBlocked\('refunds_due', 'refunds_ready'\);/, 'pass two reports blocked = due − ready');
+  // A5-04 (i): the counts are read after the rows (with the run handed down, A5-05) and added.
+  assert.equal((src.match(/counts\.blocked \+= await countBlocked\(run, 'transfers_due', 'transfers_ready'\);/g) ?? []).length, 2, 'pass one reports blocked = due − ready (also with no row read)');
+  assert.match(src, /counts\.blocked \+= await countBlocked\(run, 'refunds_due', 'refunds_ready'\);/, 'pass two reports blocked = due − ready');
   assert.match(src, /headers: \{ \.\.\.serviceHeaders\(\), Prefer: 'count=exact' \}/, "the count is PostgREST's exact count, no rows transferred");
   const migration = readFileSync(new URL('../supabase/migrations/20261003000000_settlement_queue_ready.sql', import.meta.url), 'utf8');
   assert.match(migration, /create or replace view public\.transfers_ready as\s+select t\.\*\s+from public\.transfers_due t\s+where exists \(\s+select 1\s+from public\.payment_accounts a\s+where a\.user_id = t\.payee_id\s+and a\.payouts_enabled\s+and a\.stripe_account_id is not null\s+\)\s+order by t\.release_requested_at;/);
@@ -262,7 +270,15 @@ test('13 · the drain (raw text): refunds_due select names refund_attempts, both
   assert.match(reordered, /create or replace view public\.transfers_ready as\s+select t\.\*\s+from public\.transfers_due t\s+where exists \(\s+select 1\s+from public\.payment_accounts a\s+where a\.user_id = t\.payee_id\s+and a\.payouts_enabled\s+and a\.stripe_account_id is not null\s+\)\s+order by t\.transfer_attempts, t\.release_requested_at;/);
   assert.match(reordered, /revoke all on table public\.transfers_ready from public, anon, authenticated;\s*grant select on table public\.transfers_ready to service_role;/, 'transfers_ready: still service_role only');
   assert.doesNotMatch(reordered, /\bdrop |\brename |truncate|delete from/i, 'additive — never destructive');
-  assert.doesNotMatch(src, /transfers_ready\?select=[^`]*order=/, "the drain adds no order of its own: the view's is the queue's");
+  // A9-03 (c): ready_wait restates it once more, word for word but the order: the oldest last change
+  // first (updated_at, as refunds_ready), so a row just tried goes to the back and a higher attempt is
+  // not behind every new row.
+  const fair = readFileSync(new URL('../supabase/migrations/20261116300400_ready_wait.sql', import.meta.url), 'utf8');
+  assert.match(fair, /create or replace view public\.transfers_ready as\s+select t\.\*\s+from public\.transfers_due t\s+where exists \(\s+select 1\s+from public\.payment_accounts a\s+where a\.user_id = t\.payee_id\s+and a\.payouts_enabled\s+and a\.stripe_account_id is not null\s+\)\s+order by t\.updated_at;/);
+  assert.match(fair, /revoke all on table public\.transfers_ready from public, anon, authenticated;\s*grant select on table public\.transfers_ready to service_role;/, 'transfers_ready: still service_role only');
+  // A5-04 (ii): the view's order still decides which rows are read; the drain only turns the order
+  // it tries the rows it read in (rowOrder), one offset per turn.
+  assert.doesNotMatch(src, /transfers_ready\?select=[^`]*order=/, "the drain adds no order to the read: the view's decides which rows are read");
 
   // Both idempotency keys carry their counter (lean B16: built by classify.mjs settlementKey, with
   // the attempt the row was read with), and the counter-less refund key is gone.
@@ -274,7 +290,7 @@ test('13 · the drain (raw text): refunds_due select names refund_attempts, both
 
   // The classifier is the sibling this file executes, imported by relative
   // path, and it is what decides the next step.
-  assert.match(src, /^import \{ KEY_UNKNOWN_STATUSES, refundFailedEvent, settlementKey, settlementVerdict \} from '\.\/classify\.mjs';$/m, 'classify.mjs is imported by relative path');
+  assert.match(src, /^import \{ accountReading, eventListReading, intentReading, refundFailedEvent, rowOrder, SCANNED_EVENT_TYPES, settlementKey, settlementVerdict, turnOrder \} from '\.\/classify\.mjs';$/m, 'classify.mjs is imported by relative path');
   assert.equal(src.match(/^import .* from '\.\/classify\.mjs';$/gm).length, 1, 'in one import');
   assert.match(src, /const verdict = settlementVerdict\(kind, outcome\);/, 'and its verdict is the one the drain acts on');
   assert.match(src, /p_next: verdict\.next, p_error: verdict\.message/, 'the next step comes from the verdict, never from the drain');
@@ -291,8 +307,8 @@ test('13 · the drain (raw text): refunds_due select names refund_attempts, both
   assert.ok(one > -1 && two > one && serve > two, 'the two pass sections and the handler are found, in order');
   const passOne = src.slice(one, two);
   const passTwo = src.slice(two, serve);
-  assert.match(passOne, /await settle\(counts, 'transfer', row\.id, attempt, outcome\);/, 'pass one writes back every answer as a transfer');
-  assert.match(passTwo, /await settle\(counts, 'refund', row\.id, attempt, outcome\);/, 'pass two writes back every answer as a refund');
+  assert.match(passOne, /await settle\(run, counts, 'transfer', row\.id, attempt, outcome\);/, 'pass one writes back every answer as a transfer');
+  assert.match(passTwo, /await settle\(run, counts, 'refund', row\.id, attempt, outcome\);/, 'pass two writes back every answer as a refund');
   assert.equal((passOne.match(/outcome = \{ threw: err \?\? 'unknown' \};/g) ?? []).length, 1, 'pass one turns a throw into an answer');
   assert.equal((passTwo.match(/outcome = \{ threw: err \?\? 'unknown' \};/g) ?? []).length, 1, 'pass two turns a throw into an answer');
   assert.match(src, /if \(recorded === null\) counts\.defects\+\+;/, 'a row that could not be recorded counts as a defect');

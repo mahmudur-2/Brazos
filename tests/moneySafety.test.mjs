@@ -158,12 +158,16 @@ test('8 · an idempotency error stops the row at once, for both kinds', () => {
 });
 
 test('9 · over every status from 100 to 599: a new key only for a 4xx that proves nothing moved', () => {
+  // A5-01 (rewritten): the proof is a complete answer, the provider's error with its type. The same
+  // statuses with {} (a body lost or never sent) never rotate.
   for (const kind of ['transfer', 'refund']) {
     for (let status = 100; status <= 599; status++) {
-      const v = settlementVerdict(kind, answer(status, {}));
+      const v = settlementVerdict(kind, answer(status, { error: { type: 'invalid_request_error' } }));
       const refused = status >= 400 && status < 500 && ![401, 403, 409, 429].includes(status);
       assert.equal(v.next, refused ? 'new_key' : 'same_key', `${kind} ${status}`);
       assert.notEqual(v.next, 'write_back', `${kind} ${status}: never written back without an id`);
+      const bare = settlementVerdict(kind, answer(status, {}));
+      assert.equal(bare.next, 'same_key', `${kind} ${status} with {}: no proof, the same key`);
     }
   }
 });
@@ -190,9 +194,9 @@ test('10 · every verdict has the same shape', () => {
 // ---------------------------------------------------------------------------
 // The drain, as source text: begin, then POST, then write-back, in both passes.
 // ---------------------------------------------------------------------------
-test('11 · each pass begins before it posts and writes back after, with the attempt it read', () => {
+test('11 · each pass begins before it posts and writes back after, with the attempt it read; no money decision, no RPC argument, no Stripe request and no idempotency key reads the drain\'s clock: its one clock read chooses the order of rows', () => {
   const src = readFileSync(new URL('../supabase/functions/process-settlements/index.ts', import.meta.url), 'utf8');
-  assert.match(src, /^import \{ KEY_UNKNOWN_STATUSES, refundFailedEvent, settlementKey, settlementVerdict \} from '\.\/classify\.mjs';$/m);
+  assert.match(src, /^import \{ accountReading, eventListReading, intentReading, refundFailedEvent, rowOrder, SCANNED_EVENT_TYPES, settlementKey, settlementVerdict, turnOrder \} from '\.\/classify\.mjs';$/m);
   const one = src.indexOf('// Pass one:');
   const two = src.indexOf('// Pass two:');
   const serve = src.indexOf('Deno.serve(');
@@ -204,12 +208,12 @@ test('11 · each pass begins before it posts and writes back after, with the att
     const attempt = pass.indexOf(`const attempt = row.${kind}_attempts ?? 0;`);
     // Codex R5-A1: begin names the amount the POST sends; the database refuses another one.
     const amount = pass.indexOf(`const amount = cents(row.${kind}_cents);`);
-    const begin = pass.indexOf(`await beginSend('${kind}', row.id, attempt, amount);`);
+    const begin = pass.indexOf(`await beginSend(run, '${kind}', row.id, attempt, amount);`); // A5-05: the run handed down
     const skip = pass.indexOf('if (!begun) {');
     const post = pass.indexOf(path);
     const sent = pass.indexOf('amount: String(amount),');
     const key = pass.indexOf(`settlementKey('${kind}', row.id, attempt)`);
-    const settle = pass.indexOf(`await settle(counts, '${kind}', row.id, attempt, outcome);`);
+    const settle = pass.indexOf(`await settle(run, counts, '${kind}', row.id, attempt, outcome);`);
     assert.ok(attempt > -1 && begin > attempt, `${kind}: the attempt is read, then begin`);
     assert.ok(amount > -1 && begin > amount, `${kind}: the amount is read, then begin names it`);
     assert.ok(sent > post, `${kind}: the POST sends that same amount`);
@@ -221,15 +225,57 @@ test('11 · each pass begins before it posts and writes back after, with the att
     assert.equal(pass.split(path).length - 1, 1, `${kind}: one POST per row`);
     assert.match(pass, /outcome = \{ threw: err \?\? 'unknown' \};/, `${kind}: a throw is an answer too`);
   }
-  assert.match(src, /function beginSend\(kind: Kind, paymentId: string, attempt: number, amount: number\)/);
+  assert.match(src, /function beginSend\(run: Run, kind: Kind, paymentId: string, attempt: number, amount: number\)/);
   assert.match(src, /'settlement_send_begin',\s*\{ p_payment_id: paymentId, p_kind: kind, p_attempt: attempt, p_amount_cents: amount \}/);
   assert.match(src, /'record_settlement_sent',\s*\{ p_payment_id: paymentId, p_kind: kind, p_ref: verdict\.ref, p_amount_cents: verdict\.amount \}/);
   assert.match(src, /'record_settlement_result',\s*\{ p_payment_id: paymentId, p_kind: kind, p_attempt: attempt, p_next: verdict\.next, p_error: verdict\.message \}/);
   const code = src.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
   assert.doesNotMatch(code, /record_settlement_attempt/, 'the R6b recorder is no longer called');
   assert.doesNotMatch(code, /`(tr|rf):\$\{/, 'no key is built outside settlementKey');
-  assert.doesNotMatch(code, /Date\.now|new Date/, 'the drain keeps no clock of its own; the database does');
+  // Rewritten (A5-04 ii): the drain keeps no money clock; the database does. Its one wall-clock read
+  // picks the run's turn, and the turn goes only to the order of the passes and of the rows.
+  assert.deepEqual(clockReads(code), CLOCK_READS, 'one wall-clock read: the turn, which orders the passes and the rows only');
+  // The pin is not idle: each planted break below, the clock or the turn reaching a key, an RPC
+  // argument or a Stripe request, fails it.
+  for (const [what, from, to] of [
+    ['the turn in an idempotency key', "settlementKey('transfer', row.id, attempt)", "settlementKey('transfer', row.id, attempt + run.turn)"],
+    ['the turn in an RPC argument', 'p_attempt: attempt, p_amount_cents: amount }', 'p_attempt: attempt, p_amount_cents: amount, p_turn: run.turn }'],
+    ['the clock in a Stripe request', "'metadata[payment_id]': row.id,", "'metadata[payment_id]': row.id, 'metadata[at]': String(Date.now()),"],
+    ['the turn taken out of the run', 'const counts = tally();', 'const counts = tally(); const { turn } = run;'],
+    ['a second clock', 'const counts = tally();', 'const counts = tally(); const at = new Date();'],
+    ['the run timer in an RPC argument', 'p_attempt: attempt, p_amount_cents: amount }', 'p_attempt: attempt, p_amount_cents: amount, p_ms: performance.now() }'],
+  ]) {
+    assert.ok(code.includes(from), `${what}: the planted line's place is found`);
+    assert.notDeepEqual(clockReads(code.replace(from, to)), CLOCK_READS, `${what}: the pin fails`);
+  }
 });
+
+/** Every line of the drain's code that reads a clock or names the turn (A5-04 ii, test 11). */
+const clockReads = (code) => ({
+  clocks: (code.match(/[^\n]*(Date\.now|new Date|\bDate\(|performance\.timeOrigin)[^\n]*/g) ?? []).map((l) => l.trim()),
+  // The run's own timer (performance.now) only says when a row may start and when a request ends.
+  timers: (code.match(/[^\n]*performance\.now[^\n]*/g) ?? []).map((l) => l.trim()),
+  turns: (code.match(/[^\n]*\b(turn|TURN_MS)\b[^\n]*/g) ?? []).map((l) => l.trim()),
+});
+const CLOCK_READS = {
+  clocks: ['turn: Math.floor(Date.now() / TURN_MS),'],
+  timers: [
+    'const start = performance.now();',
+    'return performance.now() + calls * REQUEST_TIMEOUT_MS < run.requestsEndBy;',
+    'if (performance.now() >= run.requestsEndBy) {',
+    'const ms = Math.min(REQUEST_TIMEOUT_MS, endBy - performance.now());',
+  ],
+  turns: [
+    'const TURN_MS = 300_000;',
+    'turn: number;',
+    'turn: Math.floor(Date.now() / TURN_MS),',
+    'const rows = rowOrder(run.turn, PASS_NAMES.length, await getRows<PayoutRow>(',
+    'const rows = rowOrder(run.turn, PASS_NAMES.length, await getRows<TransferRow>(',
+    'const rows = rowOrder(run.turn, PASS_NAMES.length, await getRows<RefundRow>(',
+    'const rows = rowOrder(run.turn, PASS_NAMES.length,',
+    'for (const name of turnOrder(run.turn, PASS_NAMES) as PassName[]) {',
+  ],
+};
 
 // ---------------------------------------------------------------------------
 // B17: every column the app selects from payments is granted to authenticated.

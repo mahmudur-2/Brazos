@@ -3,8 +3,9 @@
 -- advance_job_series (post_window), each run by its pg_cron job directly, end every run with
 -- report_timer_run(<the cron job's name>, <four times the job's interval>) (release_clock 5b, A7-06),
 -- which calls record_timer_run(<name>, no error, <interval>) (attention_plain) in its own block, so
--- a timer that stopped becomes a timer_late line on payment_attention and a failed report never
--- undoes the run (490, 491 and 494 each prove that on their own working run: A7-06 CONTROL).
+-- a timer that stopped becomes a timer_late line on payment_attention and an ordinary error of the
+-- report never undoes the run (490, 491 and 494 each prove that on their own working run: A7-06
+-- CONTROL); a statement timeout or a cancel during the report still does (A12-05, not tested here).
 -- The runs that do real work (a release, a close, a series moved) report too: 490, 491 and 494
 -- each prove it on their own working run.
 --

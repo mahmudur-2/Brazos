@@ -191,6 +191,48 @@ export type Database = {
           },
         ]
       }
+      event_scan_coverage: {
+        Row: {
+          covered_to: string
+          only_row: boolean
+        }
+        Insert: {
+          covered_to: string
+          only_row?: boolean
+        }
+        Update: {
+          covered_to?: string
+          only_row?: boolean
+        }
+        Relationships: []
+      }
+      event_scan_gaps: {
+        Row: {
+          cleared_at: string | null
+          cleared_note: string | null
+          found_at: string
+          id: number
+          missing_from: string
+          missing_to: string
+        }
+        Insert: {
+          cleared_at?: string | null
+          cleared_note?: string | null
+          found_at?: string
+          id?: never
+          missing_from: string
+          missing_to: string
+        }
+        Update: {
+          cleared_at?: string | null
+          cleared_note?: string | null
+          found_at?: string
+          id?: never
+          missing_from?: string
+          missing_to?: string
+        }
+        Relationships: []
+      }
       fee_schedule: {
         Row: {
           cancel_fee_bps: number
@@ -1372,6 +1414,77 @@ export type Database = {
           },
         ]
       }
+      payment_intent_checks: {
+        Row: {
+          answer: string
+          checked_at: string
+          first_tried_at: string
+          payment_id: string
+        }
+        Insert: {
+          answer: string
+          checked_at?: string
+          first_tried_at?: string
+          payment_id: string
+        }
+        Update: {
+          answer?: string
+          checked_at?: string
+          first_tried_at?: string
+          payment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_intent_checks_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: true
+            referencedRelation: "intents_to_cancel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_intent_checks_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: true
+            referencedRelation: "payment_money"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "payment_intent_checks_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: true
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_intent_checks_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: true
+            referencedRelation: "refunds_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_intent_checks_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: true
+            referencedRelation: "refunds_ready"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_intent_checks_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: true
+            referencedRelation: "transfers_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_intent_checks_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: true
+            referencedRelation: "transfers_ready"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_refund_failures: {
         Row: {
           amount_cents: number | null
@@ -1714,6 +1827,39 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      payout_account_checks: {
+        Row: {
+          answer: string
+          tried_at: string
+          user_id: string
+        }
+        Insert: {
+          answer: string
+          tried_at?: string
+          user_id: string
+        }
+        Update: {
+          answer?: string
+          tried_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_account_checks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "payment_accounts"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "payout_account_checks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "payout_accounts_due"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -2087,9 +2233,161 @@ export type Database = {
           },
         ]
       }
+      settlement_ready_since: {
+        Row: {
+          attempt: number
+          kind: string
+          payment_id: string
+          since: string
+        }
+        Insert: {
+          attempt: number
+          kind: string
+          payment_id: string
+          since: string
+        }
+        Update: {
+          attempt?: number
+          kind?: string
+          payment_id?: string
+          since?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "settlement_ready_since_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "intents_to_cancel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_ready_since_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payment_money"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "settlement_ready_since_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_ready_since_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "refunds_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_ready_since_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "refunds_ready"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_ready_since_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "transfers_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_ready_since_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "transfers_ready"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      settlement_refusals: {
+        Row: {
+          ended_at: string | null
+          first_refused_at: string
+          kind: string
+          last_attempt: number
+          last_refused_at: string
+          payment_id: string
+          refusals: number
+        }
+        Insert: {
+          ended_at?: string | null
+          first_refused_at: string
+          kind: string
+          last_attempt: number
+          last_refused_at: string
+          payment_id: string
+          refusals: number
+        }
+        Update: {
+          ended_at?: string | null
+          first_refused_at?: string
+          kind?: string
+          last_attempt?: number
+          last_refused_at?: string
+          payment_id?: string
+          refusals?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "settlement_refusals_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "intents_to_cancel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_refusals_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payment_money"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "settlement_refusals_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_refusals_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "refunds_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_refusals_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "refunds_ready"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_refusals_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "transfers_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_refusals_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "transfers_ready"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       timer_runs: {
         Row: {
           error: string | null
+          expected_from: string | null
           failed_at: string | null
           failing_since: string | null
           name: string
@@ -2098,6 +2396,7 @@ export type Database = {
         }
         Insert: {
           error?: string | null
+          expected_from?: string | null
           failed_at?: string | null
           failing_since?: string | null
           name: string
@@ -2106,6 +2405,7 @@ export type Database = {
         }
         Update: {
           error?: string | null
+          expected_from?: string | null
           failed_at?: string | null
           failing_since?: string | null
           name?: string
@@ -2235,6 +2535,23 @@ export type Database = {
             columns: ["job_id"]
             isOneToOne: false
             referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payout_accounts_due: {
+        Row: {
+          last_read_at: string | null
+          payouts_checked_at: string | null
+          stripe_account_id: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_accounts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -3209,6 +3526,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      clear_event_scan_gap: {
+        Args: { p_id: number; p_note: string }
+        Returns: boolean
+      }
       client_job_stats: {
         Args: { p_client_id: string }
         Returns: {
@@ -3741,6 +4062,7 @@ export type Database = {
           worker_id: string
         }[]
       }
+      note_ready_rows: { Args: never; Returns: number }
       notify_display_name: { Args: { p_user: string }; Returns: string }
       notify_nearby_for_job: { Args: { p_job_id: string }; Returns: undefined }
       offer_post_event: {
@@ -3780,6 +4102,21 @@ export type Database = {
           code: string
           finish: string
           reason: string
+        }[]
+      }
+      payment_attention_more: {
+        Args: never
+        Returns: {
+          cents: number
+          code: string
+          job_id: string
+          more: string
+          old: string
+          overdue: boolean
+          payment_id: string
+          ref: string
+          since: string
+          what: string
         }[]
       }
       payment_for_party: {
@@ -3873,6 +4210,10 @@ export type Database = {
       }
       payment_refund_held_by_dispute: {
         Args: { p_payment_id: string }
+        Returns: boolean
+      }
+      payment_refund_owed: {
+        Args: { p: Database["public"]["Tables"]["payments"]["Row"] }
         Returns: boolean
       }
       payment_refund_reserved_cents: {
@@ -3972,8 +4313,25 @@ export type Database = {
         Returns: boolean
       }
       receipt_details: { Args: { p_payment_id: string }; Returns: Json }
+      record_event_scan: {
+        Args: { p_read_from: number; p_window_from: number }
+        Returns: boolean
+      }
       record_intent_cancel: {
         Args: { p_final?: boolean; p_payment_id: string }
+        Returns: boolean
+      }
+      record_intent_check: {
+        Args: { p_answer: string; p_payment_id: string }
+        Returns: boolean
+      }
+      record_payout_check: {
+        Args: {
+          p_answer: string
+          p_seen: string
+          p_status: string
+          p_user_id: string
+        }
         Returns: boolean
       }
       record_settlement_attempt: {

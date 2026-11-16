@@ -13,7 +13,9 @@
 --   T5  a lost card dispute with a payout asked for and not sent: card_dispute_lost, not "unclear".
 --   T6  a timeout and a refusal: both transfer_retrying with a sentence true for both; the refund
 --       side's error never makes a transfer line.
---   T7  an undated job left in progress: job_stuck says "or 7 days after the hire".
+--   T7  an undated job left in progress: job_stuck says "or 7 days after the hire". A12-04: a dated
+--       job the worker arrived at and never started, 8 days after its window: the customer cancels
+--       and a fee is kept, as the sentence says (it no longer promises a full refund).
 --   T8  a cron failure and the task's own report under one name: two lines (A4-10).
 --   T9  an intent cancel answered final, then the charge's success arrives: the line said "never
 --       paid" before; it ends when the money is known, and the full refund is queued.
@@ -30,7 +32,8 @@
 --
 -- FIXTURE SURGERY, DECLARED (now() is fixed inside a transaction):
 --   * profiles.is_admin = true for A; rate_counters reset before each hire (as 370 and 480).
---   * T7: job_agreements.accepted_at moved back 8 days (its immutable trigger off around the update).
+--   * T7: job_agreements.accepted_at moved back 8 days (its immutable trigger off around the update);
+--     T7d: a job's date, window and arrived_at set 9 days back, its accepted_at 10 days back.
 --   * T8: one cron.job_run_details row, failed, dated a day ahead so it is the job's last run.
 --   * T9: payments.intent_cancel_at moved back 2 hours.
 -- Everything rolls back.
@@ -39,7 +42,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(58);
+select plan(62);
 
 select tests.create_user('at.c1@brazos.test', 'Ann Customer') as c1 \gset
 select tests.create_user('at.w1@brazos.test', 'Art Worker')   as w1 \gset
@@ -325,8 +328,9 @@ select is(tests.at_rows(:'t6c'), 'held :: refund_retrying/' || :'t6c' || '/' || 
   'T6e: the refund side''s error makes the refund line only, never a transfer line');
 
 -- ---------------------------------------------------------------------------
--- T7. An undated job left in progress.
+-- T7. An undated job left in progress; and (A12-04) a dated job the worker arrived at and never started.
 -- ---------------------------------------------------------------------------
+\set t7_sentence 'This job is paid but still not finished 7 days after its date, or 7 days after the hire if it has no date, so its payment stays held. The customer can cancel the job. The cancellation rules of the job then decide the refund: the full amount, or the amount less a cancellation fee that the worker keeps. The refund is asked for at once, but it can wait, for example while a bank reviews a card dispute. Suspending the worker''s account also cancels this job and asks for a full refund to the customer, but it cancels every unfinished job of that account, also the jobs it posted as a customer. Ask your developer if neither fits.'
 select tests.at_hire('AT-T7 undated', :'c1', :'w1') as t7j \gset
 select tests.test_fund_job(:'t7j') as t7 \gset
 select charge_amount_cents as t7c from public.payments where id = :'t7' \gset
@@ -339,11 +343,40 @@ update public.job_agreements set accepted_at = now() - interval '8 days' where j
 alter table public.job_agreements enable trigger job_agreements_immutable;
 select is(tests.at_rows(:'t7'), 'held :: job_stuck/' || :'t7' || '/' || :t7c || '/developer',
   'T7a: an undated job 8 days after the hire is listed');
-select is(tests.at_reason(:'t7', 'job_stuck'),
-  'This job is paid but still not finished 7 days after its date, or 7 days after the hire if it has no date. Nothing in the app can move this money yet. Ask your developer.',
+select is(tests.at_reason(:'t7', 'job_stuck'), :'t7_sentence',
   'T7b: the sentence covers the job with no date (was "after its date" only)');
 select is((select a.since from public.payment_attention a where a.payment_id = :'t7' and a.code = 'job_stuck'),
   now() - interval '1 day', 'T7c: since is the hire plus 7 days');
+
+-- T7d-g (A12-04): the reader's history. The worker marked arrival on the booked day and never started;
+-- 8 days after the window the job is still assigned; the customer cancels: a fee is kept.
+select tests.at_hire('AT-T7 arrived', :'c1', :'w1') as t7aj \gset
+select tests.test_fund_job(:'t7aj') as t7a \gset
+select charge_amount_cents as t7ac, amount_cents as t7aa from public.payments where id = :'t7a' \gset
+-- SURGERY: booked 9 days ago (New York), 9:00 to 12:00; the worker marked arrival at 10:00 that day;
+-- the hire was 10 days ago (the terms trigger off around it, as T7).
+update public.jobs
+   set scheduled_date = ((now() at time zone 'America/New_York')::date - 9), arrival_start_hour = 9, arrival_end_hour = 12,
+       arrived_at = (((now() at time zone 'America/New_York')::date - 9)::timestamp + interval '10 hours') at time zone 'America/New_York'
+ where id = :'t7aj';
+alter table public.job_agreements disable trigger job_agreements_immutable;
+update public.job_agreements set accepted_at = now() - interval '10 days' where job_id = :'t7aj';
+alter table public.job_agreements enable trigger job_agreements_immutable;
+select is(tests.at_rows(:'t7a') || ' / ' || (select status::text || '/' || (arrived_at is not null)::text from public.jobs where id = :'t7aj')
+          || ' / ' || (tests.at_reason(:'t7a', 'job_stuck') = :'t7_sentence')::text,
+  'held :: job_stuck/' || :'t7a' || '/' || :t7ac || '/developer / assigned/true / true',
+  'T7d: arrived, never started, 8 days after the window: job_stuck, with the sentence of T7b');
+select tests.authenticate_as(:'c1');
+select public.cancel_job(:'t7aj', 'customer_cancelled');
+select tests.clear_auth();
+select public.cancellation_fee_cents(:'t7aj', :t7aa) as t7afee \gset
+select is((select transfer_cents || '/' || refund_cents || '/' || release_reason || '/' || refund_reason
+                  || '/' || (select cancel_reason from public.jobs where id = :'t7aj')
+             from public.payments where id = :'t7a'),
+  :t7afee || '/' || (:t7ac - :t7afee) || '/cancellation_fee/customer_cancelled_late/customer_cancelled',
+  'T7e: the customer cancels: the job''s cancellation rules keep a fee for the worker and ask for the rest back at once (the sentence''s "less a cancellation fee that the worker keeps")');
+select ok(:t7afee > 0 and :t7afee < :t7aa, 'T7f: the fee is kept: more than nothing, less than the price');
+select is(tests.at_rows(:'t7a'), 'held :: <none>', 'T7g: the job is cancelled: the job_stuck line ends');
 
 -- ---------------------------------------------------------------------------
 -- T8. A cron failure and the task's own report under one name (A4-10).
