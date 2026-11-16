@@ -1,12 +1,14 @@
 -- 360_open_job_expiry.sql — ledger B15 (docs/critical/job-lifecycle.md, B15): an open market job
--- nobody was hired for is closed by the server: a dated one 24 hours after its arrival window ends,
--- an undated one 30 days after it was posted. cancel_reason 'expired', closed by nobody; its pending
+-- nobody was hired for is closed by the server: a dated one once its arrival window is over (A7-03,
+-- one cutoff: job_window_over; before, 24 hours after), an undated one 30 days after it was posted. cancel_reason 'expired', closed by nobody; its pending
 -- offers are declined by the existing cancel trigger; the owner is told once. Hired jobs are never
 -- touched. The hourly timer is installed by install_lifecycle_schedules().
 --
 -- THE CAST: a customer (owner), a worker (hired on one job), a bidder (a pending offer), and the
 -- runner (RLS bypassed) playing the service role. Time moves only through expire_open_jobs(p_now).
--- No fixture surgery. Everything rolls back.
+-- FIXTURE SURGERY, DECLARED: a booking whose window is already over is posted for tomorrow, bid on
+-- and hired, then moved back to its own day (-- SURGERY (post_window)), as 030 and 370 do.
+-- Everything rolls back.
 \set tests_included 1
 \ir _helpers.sql
 
@@ -25,14 +27,20 @@ create or replace function tests.lc_post(p_customer uuid, p_title text,
   p_date date default null, p_start smallint default null, p_end smallint default null)
 returns uuid language plpgsql as $$
 declare v_job uuid;
+  v_over boolean;
 begin
+  -- post_window: no post for a window already over (today 9 to 12 is, from noon on). Such a post is
+  -- made for tomorrow; it is moved back to its own day after its bids and hire (below).
+  perform tests.clear_auth();
+  v_over := public.job_window_over(p_date, p_end, now());
   perform tests.authenticate_as(p_customer);
   select (public.create_job(
     p_title := p_title, p_description := 'Lifecycle probe row, rolled back',
     p_category := 'other', p_location := 'Probe Area',
     p_budget_min_cents := 4000, p_budget_max_cents := 4000,
     p_address_line := '4 Proof Way',
-    p_scheduled_date := p_date, p_arrival_start_hour := p_start, p_arrival_end_hour := p_end
+    p_scheduled_date := case when v_over then (now() at time zone 'America/New_York')::date + 1 else p_date end,
+    p_arrival_start_hour := p_start, p_arrival_end_hour := p_end
   )).id into v_job;
   perform tests.clear_auth();
   return v_job;
@@ -52,15 +60,18 @@ select public.create_offer(p_amount_cents := 4000, p_job_id := :'j4', p_message 
 select tests.authenticate_as(:'customer');
 select public.accept_offer(:'o4');
 select tests.clear_auth();
+-- A7-03: bids and a hire are refused once the window is over, so both are made first, then the day is set.
+update public.jobs set scheduled_date = (now() at time zone 'America/New_York')::date
+ where id in (:'j1', :'j4');   -- SURGERY (post_window)
 
--- X1: 23 hours past the window end it stays open; 25 hours past, it is closed as expired.
-select public.expire_open_jobs(:'we'::timestamptz + interval '23 hours');
-select is((select status::text from public.jobs where id = :'j1'), 'open', 'X1: 23 hours past the window end the job is still open');
-select public.expire_open_jobs(:'we'::timestamptz + interval '25 hours');
+-- X1 (A7-03): a minute before the window end it stays open; at the window end, it is closed as expired.
+select public.expire_open_jobs(:'we'::timestamptz - interval '1 minute');
+select is((select status::text from public.jobs where id = :'j1'), 'open', 'X1: a minute before the window end the job is still open');
+select public.expire_open_jobs(:'we'::timestamptz);
 select is((select jsonb_build_object('status', status, 'reason', cancel_reason, 'by', cancelled_by, 'at', cancelled_at is not null)
              from public.jobs where id = :'j1'),
   jsonb_build_object('status', 'cancelled', 'reason', 'expired', 'by', null, 'at', true),
-  'X1: 25 hours past the window end: closed as expired, by nobody');
+  'X1: at the window end (the one cutoff): closed as expired, by nobody');
 
 -- X3: its pending offer is declined by the existing cancel trigger.
 select is((select status::text from public.job_offers where id = :'o1'), 'declined', 'X3: the pending offer is declined');

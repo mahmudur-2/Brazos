@@ -71,25 +71,33 @@ declare
   v_worker   uuid := (select v from fx where k = 'worker');
   v_job uuid;
   v_offer uuid;
+  v_over boolean;
 begin
   -- B10: this file hires many times inside one frozen now(), past the ten posts an hour one customer
   -- may make. The limit is not what this file tests (410_abuse_limits.sql is), so the runner starts
   -- each hire with both counters at zero.
   perform tests.clear_auth();
   update public.rate_counters set hits = 0 where user_id in (v_customer, v_worker);
+  -- post_window: no post for a window already over. Such a booking is posted for tomorrow, hired,
+  -- then moved back to its own day (SURGERY): the job a customer booked and had taken before it.
+  v_over := public.job_window_over(p_date, p_end, now());
   perform tests.authenticate_as(v_customer);
   select (public.create_job(
     p_title := p_title, p_description := 'Money probe row, rolled back',
     p_category := 'other', p_location := 'Probe Area',
     p_budget_min_cents := 5000, p_budget_max_cents := 5000,
     p_address_line := '4 Proof Way',
-    p_scheduled_date := p_date, p_arrival_start_hour := p_start, p_arrival_end_hour := p_end
+    p_scheduled_date := case when v_over then (now() at time zone 'America/New_York')::date + 1 else p_date end,
+    p_arrival_start_hour := p_start, p_arrival_end_hour := p_end
   )).id into v_job;
   perform tests.authenticate_as(v_worker);
   v_offer := public.create_offer(p_amount_cents := 5000, p_job_id := v_job, p_message := 'Money bid');
   perform tests.authenticate_as(v_customer);
   perform public.accept_offer(v_offer);
   perform tests.clear_auth();
+  if v_over then
+    update public.jobs set scheduled_date = p_date where id = v_job;   -- SURGERY (post_window)
+  end if;
   return v_job;
 end $$;
 

@@ -39,6 +39,10 @@
 --     (case 8), in the shapes the prefs upsert and the app's block insert
 --     write; written AFTER the hire because create_offer refuses under a
 --     block while transition_job_status carries no block check.
+--   * jobs.completion_told_at is set to completed_at in cases 3-5: release_clock
+--     counts the 72 hours from the moment the customer was told, and the outbox
+--     trigger can only write that moment as now(); told at completion, 73 hours
+--     ago, is the case these three prove (490_release_clock.sql proves the rest).
 --
 -- WHAT CASE 7 PROVES, AND WHY IT HAS TWO JOBS: resolve_job_dispute in the
 -- worker's favour on a completed job is ITSELF the release (release_reason
@@ -195,6 +199,7 @@ select tests.r4_fund(:'customer', :'j3', 'evt_n3_c3') as p3 \gset
 select tests.r4_work(:'worker', :'j3');
 update public.notification_outbox set status = 'skipped', last_error = 'no active push tokens' where recipient_id = :'customer' and type = 'job_completed' and data ->> 'jobId' = :'j3'::text;   -- SURGERY: as send-push resolves a row with no token
 update public.jobs set completed_at = now() - interval '73 hours' where id = :'j3';   -- SURGERY
+update public.jobs set completion_told_at = completed_at where id = :'j3';   -- SURGERY: told at completion (release_clock)
 select is(public.auto_release_due_payments(), 1, '3: told-gate — a skipped row at 73 h releases exactly this row');
 select ok((select status = 'held' and release_requested_at is not null and release_reason = 'auto_approved'
              and transfer_cents = amount_cents - platform_fee_cents and transfer_cents = 4625
@@ -211,6 +216,7 @@ select tests.r4_fund(:'customer', :'j4', 'evt_n3_c4') as p4 \gset
 select tests.r4_work(:'worker', :'j4');
 update public.notification_outbox set status = 'failed', last_error = 'delivery failed' where recipient_id = :'customer' and type = 'job_completed' and data ->> 'jobId' = :'j4'::text;   -- SURGERY: the terminal status no writer uses yet
 update public.jobs set completed_at = now() - interval '73 hours' where id = :'j4';   -- SURGERY
+update public.jobs set completion_told_at = completed_at where id = :'j4';   -- SURGERY: told at completion (release_clock)
 select is(public.auto_release_due_payments(), 1, '4: told-gate — a failed row at 73 h releases exactly this row');
 select ok((select release_requested_at is not null and release_reason = 'auto_approved' and transfer_cents = 4625 from public.payments where id = :'p4'), '4: … auto_approved');
 
@@ -222,6 +228,7 @@ select tests.r4_fund(:'customer', :'j5', 'evt_n3_c5') as p5 \gset
 select tests.r4_work(:'worker', :'j5');
 update public.notification_outbox set status = 'sent', sent_at = now() where recipient_id = :'customer' and type = 'job_completed' and data ->> 'jobId' = :'j5'::text;   -- SURGERY: as the drain would (030 §13)
 update public.jobs set completed_at = now() - interval '73 hours' where id = :'j5';   -- SURGERY
+update public.jobs set completion_told_at = completed_at where id = :'j5';   -- SURGERY: told at completion (release_clock)
 select is(public.auto_release_due_payments(), 1, '5: told-gate — a sent row at 73 h releases exactly this row (the pre-n3 path, unchanged)');
 select ok((select release_requested_at is not null and release_reason = 'auto_approved' and transfer_cents = 4625 from public.payments where id = :'p5'), '5: … auto_approved');
 

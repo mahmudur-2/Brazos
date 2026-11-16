@@ -52,6 +52,8 @@ select tests.authenticate_as(:'customer');
 select public.accept_offer(:'offer1') as accepted1 \gset
 select public.accept_offer(:'offer2') as accepted2 \gset
 select public.accept_offer(:'offer3') as accepted3 \gset
+select tests.clear_auth();
+select tests.test_fund_job(:'job2');   -- trip_day: "I'm here" needs the held payment, so job 2 is paid first (the checkout helper)
 select tests.authenticate_as(:'worker');
 select (public.mark_worker_arrival(:'job2', 'arrived')).id as arrived2 \gset
 

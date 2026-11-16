@@ -757,6 +757,7 @@ export type Database = {
           completed_at: string | null
           completion_photo_url: string | null
           completion_photos: Json
+          completion_told_at: string | null
           completion_videos: Json
           created_at: string
           description: string | null
@@ -797,6 +798,7 @@ export type Database = {
           completed_at?: string | null
           completion_photo_url?: string | null
           completion_photos?: Json
+          completion_told_at?: string | null
           completion_videos?: Json
           created_at?: string
           description?: string | null
@@ -837,6 +839,7 @@ export type Database = {
           completed_at?: string | null
           completion_photo_url?: string | null
           completion_photos?: Json
+          completion_told_at?: string | null
           completion_videos?: Json
           created_at?: string
           description?: string | null
@@ -2988,6 +2991,7 @@ export type Database = {
         Args: { p_payment_id: string; p_ref: string }
         Returns: undefined
       }
+      auto_approval_deadline: { Args: { p_job_id: string }; Returns: string }
       auto_release_due_payments: { Args: never; Returns: number }
       ban_user: {
         Args: { p_report_id?: string; p_target: string }
@@ -3136,6 +3140,7 @@ export type Database = {
           completed_at: string | null
           completion_photo_url: string | null
           completion_photos: Json
+          completion_told_at: string | null
           completion_videos: Json
           created_at: string
           description: string | null
@@ -3260,6 +3265,7 @@ export type Database = {
           completed_at: string | null
           completion_photo_url: string | null
           completion_photos: Json
+          completion_told_at: string | null
           completion_videos: Json
           created_at: string
           description: string | null
@@ -3463,6 +3469,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      fill_completion_told_at: { Args: never; Returns: number }
       get_my_active_mode: { Args: never; Returns: string }
       get_my_profile: {
         Args: never
@@ -3510,6 +3517,10 @@ export type Database = {
       is_active_user: { Args: never; Returns: boolean }
       is_blocked_between: { Args: { a: string; b: string }; Returns: boolean }
       is_profile_active: { Args: { p_user: string }; Returns: boolean }
+      job_day_reached: {
+        Args: { p_at: string; p_date: string }
+        Returns: boolean
+      }
       job_hotspots: {
         Args: never
         Returns: {
@@ -3615,6 +3626,10 @@ export type Database = {
         Args: { p_arrival_end_hour: number; p_scheduled_date: string }
         Returns: string
       }
+      job_window_over: {
+        Args: { p_at: string; p_date: string; p_end_hour: number }
+        Returns: boolean
+      }
       jobs_in_cell: {
         Args: { p_ilat: number; p_ilng: number }
         Returns: {
@@ -3670,6 +3685,7 @@ export type Database = {
           completed_at: string | null
           completion_photo_url: string | null
           completion_photos: Json
+          completion_told_at: string | null
           completion_videos: Json
           created_at: string
           description: string | null
@@ -3871,6 +3887,7 @@ export type Database = {
         Args: { p_name: string; p_namespace: string }
         Returns: boolean
       }
+      posting_paused: { Args: never; Returns: boolean }
       profile_review_summaries: {
         Args: { p_role?: string; p_users: string[] }
         Returns: {
@@ -3995,6 +4012,10 @@ export type Database = {
         Args: { p_platform?: string; p_token: string }
         Returns: undefined
       }
+      release_due_at: {
+        Args: { p_job: Database["public"]["Tables"]["jobs"]["Row"] }
+        Returns: string
+      }
       release_job_payment: {
         Args: { p_job_id: string }
         Returns: {
@@ -4076,6 +4097,7 @@ export type Database = {
           completed_at: string | null
           completion_photo_url: string | null
           completion_photos: Json
+          completion_told_at: string | null
           completion_videos: Json
           created_at: string
           description: string | null
@@ -4105,6 +4127,11 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      report_timer_run: {
+        Args: { p_name: string; p_stale_after: string }
+        Returns: undefined
+      }
+      require_work_money: { Args: { p_job_id: string }; Returns: undefined }
       resolve_job_dispute: {
         Args: { p_in_favour_of: string; p_job_id: string; p_note?: string }
         Returns: {
@@ -4457,6 +4484,7 @@ export type Database = {
           completed_at: string | null
           completion_photo_url: string | null
           completion_photos: Json
+          completion_told_at: string | null
           completion_videos: Json
           created_at: string
           description: string | null
@@ -4526,6 +4554,7 @@ export type Database = {
           completed_at: string | null
           completion_photo_url: string | null
           completion_photos: Json
+          completion_told_at: string | null
           completion_videos: Json
           created_at: string
           description: string | null

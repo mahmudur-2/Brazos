@@ -189,18 +189,19 @@ test('no client-side jobs.status writer exists anywhere', () => {
   assert.match(jobs, /\.rpc\('transition_job_status'/);
 
   // The RPC the app depends on still exists and is still transactional: its
-  // newest definition (pack 1, A6: the work-start money rule, restated from job
-  // completions) locks the row and checks the caller.
-  const newest = '20261115000200_work_start_money_rule.sql';
+  // newest definition, whichever migration holds it (the last file in name
+  // order that names the function, from its last definition there), locks the
+  // row and checks the caller. No file name is pinned, so a later restatement
+  // is checked by the same three assertions. P10: a definition written with quotes, as a schema
+  // dump writes it ("public"."transition_job_status"), is a definition too.
+  const transitionDef = /create\s+or\s+replace\s+function\s+(?:"public"|public)\.(?:"transition_job_status"|transition_job_status)\(/i;
+  assert.match('CREATE OR REPLACE FUNCTION "public"."transition_job_status"("p_job_id" "uuid", "p_status" "text")', transitionDef);
+  const newest = migrationFiles.filter((f) => transitionDef.test(read(`supabase/migrations/${f}`))).at(-1);
   const definition = read(`supabase/migrations/${newest}`);
-  const transition = definition.slice(definition.indexOf('create or replace function public.transition_job_status('));
-  assert.match(transition, /^create or replace function public\.transition_job_status\(/);
+  const transition = definition.slice([...definition.matchAll(new RegExp(transitionDef.source, 'gi'))].at(-1).index);
+  assert.match(transition, new RegExp(`^${transitionDef.source}`, 'i'));
   assert.match(transition, /where id = p_job_id\s+for update;/i);
   assert.match(transition, /v_job\.assigned_worker_id is distinct from v_user/i);
-  const later = migrationFiles.filter((f) => f > newest);
-  for (const f of later) {
-    assert.doesNotMatch(read(`supabase/migrations/${f}`), /function public\.transition_job_status\(/i, `${f} redefines it`);
-  }
 
   // Sweep: no file under lib/, hooks/, screens/ or components/ chains an
   // update off the jobs table at all — status or any other column; RPCs are

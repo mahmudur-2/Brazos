@@ -623,7 +623,9 @@ begin
     p_title := p_title, p_description := 'Refund failure probe row, rolled back',
     p_category := 'other', p_location := 'Probe Area',
     p_budget_min_cents := 5000, p_budget_max_cents := 5000, p_address_line := '4 Proof Way',
-    p_scheduled_date := case when p_yesterday then (now() at time zone 'America/New_York')::date - 1 end,
+    -- post_window: no post for a window already over, so yesterday's booking is posted for tomorrow,
+    -- hired, then moved back to its own day below (SURGERY): the job booked and taken before it.
+    p_scheduled_date := case when p_yesterday then (now() at time zone 'America/New_York')::date + 1 end,
     p_arrival_start_hour := case when p_yesterday then 9::smallint end,
     p_arrival_end_hour := case when p_yesterday then 12::smallint end
   )).id into v_job;
@@ -632,6 +634,9 @@ begin
   perform tests.authenticate_as(v_customer);
   perform public.accept_offer(v_offer);
   perform tests.clear_auth();
+  if p_yesterday then
+    update public.jobs set scheduled_date = (now() at time zone 'America/New_York')::date - 1 where id = v_job;   -- SURGERY (post_window)
+  end if;
   return v_job;
 end $$;
 

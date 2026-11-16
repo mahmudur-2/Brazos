@@ -253,6 +253,7 @@ select tests.clear_auth();
 update public.jobs set completed_at = now() - interval '73 hours' where id = :'job2';
 update public.notification_outbox set status = 'sent'
  where recipient_id = :'customer' and type = 'job_completed' and data ->> 'jobId' = :'job2';
+update public.jobs set completion_told_at = completed_at where id = :'job2';   -- SURGERY: told at completion, 73 hours ago (release_clock counts the 72 hours from the told time, which the trigger writes as now())
 select public.auto_release_due_payments();
 select tests.lc_event('transfer.created', (select id from public.payments where job_id = :'job2' and kind = 'job_payment'), 'tr_lc_job2');
 select tests.authenticate_as(:'worker_a');

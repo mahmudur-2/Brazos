@@ -55,12 +55,19 @@ as $fn$
 declare
   v_job uuid;
   v_offer uuid;
+  v_over boolean;
 begin
+  -- post_window: no post for a window already over. Such a first visit is posted for tomorrow,
+  -- hired, then moved back to its own day at the end (SURGERY); the series counts from that day
+  -- (series_on_visit_change re-anchors a sole first visit whose day moves).
+  perform tests.clear_auth();
+  v_over := public.job_window_over(p_date, 12::smallint, now());
   perform tests.authenticate_as(p_customer);
   v_job := (public.create_job(
     p_title := p_title, p_description := 'probe row, rolled back', p_category := 'cleaning',
     p_location := 'Park Slope', p_budget_cents := p_amount, p_lat := 40.6720, p_lng := -73.9780,
-    p_scheduled_date := p_date, p_arrival_start_hour := 10::smallint, p_arrival_end_hour := 12::smallint,
+    p_scheduled_date := case when v_over then (now() at time zone 'America/New_York')::date + 1 else p_date end,
+    p_arrival_start_hour := 10::smallint, p_arrival_end_hour := 12::smallint,
     p_address_line := '12 Garfield Pl, Brooklyn'
   )).id;
   if p_start_first then
@@ -74,6 +81,9 @@ begin
     perform public.start_job_series(v_job, 'weekly');
   end if;
   perform tests.clear_auth();
+  if v_over then
+    update public.jobs set scheduled_date = p_date where id = v_job;   -- SURGERY (post_window)
+  end if;
   return v_job;
 end
 $fn$;
@@ -410,10 +420,13 @@ values (:'cust_j', 'I14 J the stale post', 'open', :'today'::date - 3, :'series_
 select tests.authenticate_as(:'cust_k');
 select (public.create_job(
   p_title := 'I14 K mow the lawn', p_description := 'probe row, rolled back', p_category := 'yard_work',
-  p_location := 'Park Slope', p_budget_cents := 4000, p_scheduled_date := :'anchor'::date
+  p_location := 'Park Slope', p_budget_cents := 4000, p_scheduled_date := (:'today'::date + 1)
 )).id as job_k \gset
 select (public.start_job_series(:'job_k', 'weekly')).id as series_k \gset
 select tests.clear_auth();
+-- post_window: no post for a day gone by, so K's first visit was posted for tomorrow; it moves back
+-- to the anchor day here (SURGERY), and the series with it (series_on_visit_change, as 13b shows).
+update public.jobs set scheduled_date = :'anchor'::date where id = :'job_k';
 insert into public.jobs (client_id, title, status, scheduled_date, series_id)
 values (:'cust_k', 'I14 K the next post', 'open', :'today'::date + 5, :'series_k');
 select tests.authenticate_as(:'cust_l');

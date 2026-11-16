@@ -71,19 +71,23 @@ returns uuid language plpgsql as $$
 declare
   v_job uuid;
   v_offer uuid;
+  v_over boolean;
 begin
   -- B10: this file hires some twenty times inside one frozen now(), past the ten posts an hour one
   -- customer may make. The limit is not what this file tests (410_abuse_limits.sql is), so the runner
   -- starts each hire with the three counters at zero.
   perform tests.clear_auth();
   update public.rate_counters set hits = 0 where user_id in (p_customer, p_worker, p_bidder);
+  -- post_window: no post for a window already over. Such a booking is posted for tomorrow, hired,
+  -- then moved back to its own day (SURGERY): the job a customer booked and had taken before it.
+  v_over := public.job_window_over(p_scheduled_date, p_end, now());
   perform tests.authenticate_as(p_customer);
   select (public.create_job(
     p_title := p_title, p_description := 'R4 probe row, rolled back',
     p_category := 'other', p_location := 'Probe Area',
     p_budget_min_cents := p_amount, p_budget_max_cents := p_amount,
     p_address_line := '4 Proof Way',
-    p_scheduled_date := p_scheduled_date,
+    p_scheduled_date := case when v_over then tests.r4_today() + 1 else p_scheduled_date end,
     p_arrival_start_hour := p_start, p_arrival_end_hour := p_end
   )).id into v_job;
   perform tests.authenticate_as(p_worker);
@@ -95,6 +99,9 @@ begin
   perform tests.authenticate_as(p_customer);
   perform public.accept_offer(v_offer);
   perform tests.clear_auth();
+  if v_over then
+    update public.jobs set scheduled_date = p_scheduled_date where id = v_job;   -- SURGERY (post_window)
+  end if;
   return v_job;
 end $$;
 
@@ -277,6 +284,7 @@ select is(public.apply_payment_event('evt_missing') ->> 'error', 'unknown event'
 select is((select status::text from public.payments where id = :'p1'), 'held', '1: the bad events touched no ledger row');
 
 -- §3 the start lands once held; §2 refusals before completion
+update public.jobs set scheduled_date = tests.r4_today() where id = :'j1';   -- SURGERY: J1's day has come (trip_day: the start waits for the job's own day; J1 was posted for three days on)
 select tests.authenticate_as(:'worker');
 select is((public.transition_job_status(:'j1', 'in_progress')).status::text, 'in_progress', '3: stripe path: the start succeeds once the payment is held');
 select tests.authenticate_as(:'customer');
@@ -471,9 +479,14 @@ select throws_ok($$ select public.cancel_job((select v from fx where k = 'j4'), 
 select tests.authenticate_as(:'worker');
 select throws_ok($$ select public.cancel_job((select v from fx where k = 'j4'), 'customer_cancelled') $$,
   'P0001', 'Only the customer can cancel as the customer', '8: the worker cannot give the customer''s reason');
+select tests.clear_auth();
+update public.jobs set scheduled_date = tests.r4_today(), arrival_start_hour = 23, arrival_end_hour = 24 where id = :'j4';   -- SURGERY: J4's day is today and its window the day's last hour, so the arrival can be declared (trip_day) and the window has not passed
+select tests.authenticate_as(:'worker');
 select lives_ok($$ select public.mark_worker_arrival((select v from fx where k = 'j4'), 'arrived') $$, 'J4: the worker declares arrival (positive control for the gate below)');
 select throws_ok($$ select public.cancel_job((select v from fx where k = 'j4'), 'customer_no_show') $$,
   'P0001', 'A no-show can be reported once the arrival window has passed', '9: gate — the arrival window has not passed');
+select tests.clear_auth();
+update public.jobs set scheduled_date = tests.r4_today() + 2, arrival_start_hour = 9, arrival_end_hour = 12 where id = :'j4';   -- SURGERY: J4 back on its own day and window, for the free-outside-the-window cancel below
 select tests.authenticate_as(:'customer');
 select throws_ok($$ select public.cancel_job((select v from fx where k = 'j4'), 'worker_cancelled') $$,
   'P0001', 'Only the assigned worker can cancel as the worker', '8: the customer cannot give the worker''s reason');
@@ -788,6 +801,7 @@ select tests.clear_auth();
 select is(public.auto_release_due_payments(), 0, '13: auto_release_due_payments releases nothing while the completion notification is pending');
 select ok((select status = 'held' and release_requested_at is null from public.payments where id = :'p20'), '13: … the stripe row is untouched');
 update public.notification_outbox set status = 'sent', sent_at = now() where recipient_id = :'customer' and type = 'job_completed' and data ->> 'jobId' = :'j20'::text;   -- SURGERY: as the drain would
+update public.jobs set completion_told_at = completed_at where id = :'j20';   -- SURGERY: told at completion, 73 hours ago (release_clock counts the 72 hours from the told time, which the trigger writes as now())
 select is(public.auto_release_due_payments(), 1, '13: … and releases exactly this row once the notification is sent');
 select ok((select status = 'held' and release_requested_at is not null and release_reason = 'auto_approved' and transfer_cents = 4625 from public.payments where id = :'p20'),
   '13: the auto-release requests the transfer (auto_approved, transfer_cents = price − worker fee) and leaves the row held for R5');
