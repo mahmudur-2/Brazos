@@ -74,7 +74,7 @@ and `tests/` are their record. Full history of every ruling up to 2026-11-07 is 
 | D-20260904-n1-1 | 2026-09-04 | Nearby alerts default on for every user; the one-tap opt-out stays. |
 | D-20260904-n1-3 | 2026-09-04 | `accepting_work` defaults on for new profiles. |
 | D-20260904-n1-5 | 2026-09-04 | The worker's three offer numbers come from the server's `quote_job_price()`, never a client-side rate. |
-| D-20260905-1 | 2026-09-05 | The 10-user TestFlight cohort runs on staging with test money; production is set up by the Production button, with test money only (D-20261111-3). |
+| D-20261115-1 | 2026-11-15 | No human testers: the owner has none and wants none. Proof is robot tests (pgTAP, node, Maestro, TestSprite) and Apple's checks. A test account or job in production carries a TEST mark, and a real user never sees test data. Production is set up by the Production button, with test money only (D-20261111-3). Replaces D-20260905-1 (the 10-user TestFlight cohort). |
 | D-20260905-2 | 2026-09-05 | Posted-price choice at posting is in v1: the customer picks a posted price or open bids (not Instant Book). |
 | D-20260905-3 | 2026-09-05 | Support contact is brazosmvp@gmail.com, one mailto row on Profile. |
 | D-20260930-1 | 2026-09-30 | In v1: running-late chips (10, 20, 30 minutes), the "Need it today" toggle, and the Post-a-job dictation mics (title and description). |

@@ -7,9 +7,15 @@ first. Ranked lists are in the owner's order.
 - The wizard's "Today" and "Tomorrow" chips take the device's local date, while the running-late
   chips and the server use the New York market date (`lib/runningLate.ts`): a phone outside New York
   between 7 PM and midnight New York time posts "Today" as the wrong market day (e2e run 15 on a UTC
-  runner, 2026-11-08; the runner now uses New York time, the app is unchanged).
-
-none open
+  runner, 2026-11-08; the runner now uses New York time, the app is unchanged). Still open on
+  2026-11-16 (`screens/PostJobScreen.tsx:151-169`, `new Date()`); planned in pack 3 of the PRODUCTION
+  RDY run (Codex C9).
+- A payment refunded in part by hand in the Stripe dashboard: the app cannot tell that refund from its
+  own. On a finished job the screens show less after the worker's part lands (empty Earnings line, no
+  review button); on a late cancel the customer reads that the rest is on its way; a tip refunded in
+  part and then reversed points at a function that refuses (pack 1 known limits E, R14-A1, R14-A2).
+  Root: a `partially_refunded` payment never becomes `released`. Until a pack fixes it, the owner
+  refunds no part of a payment by hand (his yes, 2026-11-15).
 
 ## v1.2 ranked
 
@@ -58,7 +64,8 @@ From the lean security verdict (archived 2026-11-08, `_archive/2026-11-lean/SECU
 - L3. `supabase_admin` default privileges are Supabase-owned: raise them with the Advisor on staging.
 - L4. Export the Security Advisor and Performance Advisor reports for staging (owner, 2 minutes).
 - L5. Re-home `notify_on_bid`, then drop the `bids` table (v1.2 item 16).
-- `is_blocked_between` still answers for any two users: restrict it to the caller's own pairs.
+- `is_blocked_between` still answers for any two users: restrict it to the caller's own pairs (planned:
+  pack 2 of the PRODUCTION RDY run, Codex B4).
 - TestSprite happy-path tests need a staging user token (auto-auth is Pro): listed under Other open
   items.
 
@@ -70,7 +77,8 @@ From the lean security verdict (archived 2026-11-08, `_archive/2026-11-lean/SECU
 - Media: `useCaching: true`, a one-year `cacheControl`, a downscale to 1600 px, poster frames. Needs
   `expo-image-manipulator` and `expo-video-thumbnails` (not installed; flag before adding).
 - The job draft stores the private service address in plain device storage: the offline cache
-  should be an allowlist.
+  should be an allowlist (planned: pack 2 of the PRODUCTION RDY run clears the draft at sign-out and at
+  account deletion).
 - Nominatim is called directly from phones: add a server-side proxy with caching before real volume.
 - A reviewee whose review was blind is not told when it is revealed (no event to hang a
   notification on: the reveal is computed at read time). Needs a new notification type or a sweep.
