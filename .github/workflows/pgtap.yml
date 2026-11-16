@@ -65,9 +65,15 @@ jobs:
 
       # The CLI is the repository's own devDependency (package.json), so the
       # version that runs here is the version the lockfile pins. The runner
-      # ships Docker; this starts the whole local stack on 127.0.0.1.
+      # ships Docker; this starts the whole local stack on 127.0.0.1. Its ports
+      # (supabase/config.toml: 54320 to 54329) lie inside Linux's range for
+      # outgoing connections; reserved, the kernel never lends one to a
+      # connection, so Docker can always bind them.
       - name: Start the local stack
-        run: npx supabase start
+        run: |
+          set -euo pipefail
+          sudo sysctl -w net.ipv4.ip_local_reserved_ports=54320-54329
+          npx supabase start
 
       # A fresh database: every file in supabase/migrations/, then seed.sql.
       - name: Reset the local database

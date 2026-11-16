@@ -355,9 +355,13 @@ jobs:
           set -euo pipefail
           npm ci
 
+      # The stack's ports (supabase/config.toml: 54320 to 54329) lie inside
+      # Linux's range for outgoing connections. Reserved, the kernel never lends
+      # one to a connection, so Docker can always bind them.
       - name: Start the local stack
         run: |
           set -euo pipefail
+          sudo sysctl -w net.ipv4.ip_local_reserved_ports=54320-54329
           npx supabase start
 
       - name: Reset the local database

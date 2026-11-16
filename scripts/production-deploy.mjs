@@ -6,18 +6,21 @@
  *
  *   node scripts/production-deploy.mjs <command> [argument]
  *
- *   guards                       branch, the seven secrets, the refs, sk_test_, the approval rule
+ *   guards                       branch, the seven secrets, PRODUCTION_REF, sk_test_, the approval rule
  *   status                       the project is running
  *   keys                         the server key in use and the legacy keys (types only, never values)
+ *   webhook-plan                 the Stripe webhook decision and its inputs (see webhookAction); changes nothing
  *   cli-fetch <folder>           the Supabase CLI for Linux, only from the bytes package-lock.json pins (sha512)
  *   plan <migration list>        what apply will do, written to the run summary; changes nothing
  *   check <migration list>       the plan is unchanged since the owner approved it
  *   secrets                      the function secret STRIPE_SECRET_KEY
- *   webhook                      the Stripe TEST webhook and STRIPE_WEBHOOK_SECRET, found by its URL
+ *   webhook                      the Stripe TEST webhook and STRIPE_WEBHOOK_SECRET, found by its URL; never deleted
+ *   webhook-event                one canceled test payment's event reaches stripe-webhook signed and matches no payment
  *   vault                        set_drain_secrets(): the URL and the key the timers call functions with
  *   smoke <push|status|webhook|return>  one function answers a call without a user (see SMOKE)
  *   timers                       one test call from the database to each drain gets HTTP 200
  *   auth                         the sign-in settings: scripts/production-auth.json plus Twilio
+ *   admin                        the optional PRODUCTION_ADMIN_USER_ID account gets is_admin (never removed)
  *   fingerprint <file>           the hosted database matches the local build of the same commit
  *   summary <plan|apply|prove>   the PASS/FAIL table
  *
@@ -42,7 +45,7 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFile
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
-import { RETIRED_PRODUCTION_REF, STAGING_REF } from './supabase-ref.mjs';
+import { PRODUCTION_REF, RETIRED_PRODUCTION_REF, STAGING_REF } from './supabase-ref.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCAN = path.join(ROOT, 'scripts', 'staging-scan.sh');
@@ -65,6 +68,8 @@ const SAY = Object.freeze({
   notRef: 'SUPABASE_PROJECT_REF is not a project ref (20 small letters).',
   staging: 'SUPABASE_PROJECT_REF names the staging project. Production must be its own project.',
   retired: 'SUPABASE_PROJECT_REF names the retired production project. Use the new project.',
+  notProduction:
+    'SUPABASE_PROJECT_REF is not the production project that scripts/supabase-ref.mjs names (PRODUCTION_REF). The button works on that project only.',
   testOnly: 'STRIPE_SECRET_KEY is not a Stripe test key (it must start with sk_test_). The button takes test money only.',
   noServerKey:
     'The project has no secret key named default and no legacy service_role key. Create a secret key in the Supabase dashboard (Project Settings, API Keys), then press the button again.',
@@ -129,10 +134,11 @@ function refProblem(ref, { allowStaging = false } = {}) {
   if (ref === RETIRED_PRODUCTION_REF) return SAY.retired;
   if (ref === STAGING_REF) return allowStaging ? null : SAY.staging;
   if (!/^[a-z]{20}$/.test(ref ?? '')) return SAY.notRef;
+  if (ref !== PRODUCTION_REF) return SAY.notProduction;
   return null;
 }
 
-/** The project this run works on. Only the staging proof's read-only commands accept staging. */
+/** The project this run works on: production's only; the staging proof's read-only commands also accept staging. */
 function projectRef(io, options) {
   const ref = io.env.SUPABASE_PROJECT_REF ?? '';
   const problem = refProblem(ref, options);
@@ -250,8 +256,8 @@ async function guards(io) {
   const approval = await approvalProblem(io);
   if (approval) problems.push(approval);
   if (problems.length > 0) stop(problems.join(' '));
-  io.log('Guards: mainexpo, seven secrets present, a new project, a Stripe test key, an approval rule.');
-  note(io, 'mainexpo; seven secrets; new project; test key; approval rule');
+  io.log('Guards: mainexpo, seven secrets present, the production project, a Stripe test key, an approval rule.');
+  note(io, 'mainexpo; seven secrets; the production project; test key; approval rule');
 }
 
 // ---- status and keys ----------------------------------------------------------------------------
@@ -444,22 +450,60 @@ export function webhookContract(root = ROOT) {
   return { events, apiVersion: [...versions][0] };
 }
 
-/** keep: exactly one enabled endpoint with the same events and version, and its secret is stored. */
+const sameEvents = (list, events) =>
+  Array.isArray(list) && list.length === events.length && events.every((event) => list.includes(event));
+
+/**
+ * F02, F07: THE BUTTON NEVER DELETES A WEBHOOK OR A STORED SIGNING SECRET. In this order: no
+ * endpoint at the address: create. Several, or one whose API version the functions do not read:
+ * stop, Stripe untouched. One whose secret is not stored: stop with the owner's steps (Stripe
+ * shows a signing secret to the button only when it makes the webhook). One enabled with the
+ * same events: keep. Otherwise: update its events and enabled state in place.
+ */
 export function webhookAction({ matches, events, apiVersion, secretSet }) {
   if (matches.length === 0) return 'create';
+  if (matches.length > 1) return 'several';
   const [one] = matches;
-  const same =
-    matches.length === 1 &&
-    secretSet &&
-    one.status === 'enabled' &&
-    one.api_version === apiVersion &&
-    Array.isArray(one.enabled_events) &&
-    one.enabled_events.length === events.length &&
-    events.every((event) => one.enabled_events.includes(event));
-  return same ? 'keep' : 'recreate';
+  if (one.api_version !== apiVersion) return 'version';
+  if (!secretSet) return 'pairing';
+  return one.status === 'enabled' && sameEvents(one.enabled_events, events) ? 'keep' : 'update';
 }
 
-async function webhook(io) {
+const WEBHOOK_STOPS = Object.freeze(['several', 'version', 'pairing']);
+const yesNo = (value) => (value ? 'yes' : 'no');
+const versionText = (v) => {
+  if (v === null || v === undefined) return 'none (the account default)';
+  return /^\d{4}-\d{2}-\d{2}(\.[a-z]+)?$/.test(String(v)) ? v : 'unreadable';
+};
+
+/** The decision's inputs as counts, yes/no and the version string: never a secret, an id or the address. */
+export function webhookInputs({ matches, events, apiVersion, secretSet }) {
+  const one = matches.length === 1 ? matches[0] : null;
+  const on = Array.isArray(one?.enabled_events) ? one.enabled_events.length : 0;
+  return [
+    `endpoints at this project's address: ${matches.length}`,
+    `STRIPE_WEBHOOK_SECRET stored: ${yesNo(secretSet)}`,
+    `enabled: ${one ? yesNo(one.status === 'enabled') : 'n/a'}`,
+    `events match: ${one ? `${yesNo(sameEvents(one.enabled_events, events))} (${events.length} wanted, ${on} on the endpoint)` : 'n/a'}`,
+    `API version: ${one ? versionText(one.api_version) : 'n/a'} (the functions read ${apiVersion})`,
+  ].join('; ');
+}
+
+const PAIR =
+  'In Stripe (test mode), open Developers, Webhooks, the webhook whose address ends in /functions/v1/stripe-webhook, and reveal its signing secret. In Supabase, open the production project, Edge Functions, Secrets, and save it as STRIPE_WEBHOOK_SECRET. Then press the button again.';
+
+export function webhookStop(action, { matches, events, apiVersion }) {
+  if (action === 'several') {
+    return `Stripe has ${matches.length} webhooks for this project's address, so the button cannot tell which one the signing secret saved in Supabase belongs to. Nothing in Stripe was changed. In Stripe (test mode), open Developers, Webhooks. Keep one of them (one that lists all ${events.length} events, if there is one), reveal its signing secret, and in Supabase (the production project, Edge Functions, Secrets) save it as STRIPE_WEBHOOK_SECRET. Then delete the other ${matches.length - 1} and press the button again.`;
+  }
+  if (action === 'version') {
+    return `The Stripe webhook for this project sends events in API version ${versionText(matches[0].api_version)}, and the functions of this commit read ${apiVersion}. Nothing in Stripe was changed. Stripe cannot change a webhook's version in place, so choose one: a builder moves the functions to that version, or you delete the webhook in Stripe (test mode, Developers, Webhooks, the webhook whose address ends in /functions/v1/stripe-webhook, Delete) and press the button again, which makes a new one with ${apiVersion} and saves its signing secret.`;
+  }
+  return `Stripe already has the webhook for this project, but no STRIPE_WEBHOOK_SECRET is saved in Supabase, and Stripe hands the button a signing secret only when it makes a webhook. Nothing in Stripe was changed. ${PAIR}`;
+}
+
+/** Reads Stripe and the secret names, logs the inputs and the decision. Changes nothing. */
+async function webhookDecide(io) {
   const ref = projectRef(io);
   if (!(io.env.STRIPE_SECRET_KEY ?? '').startsWith('sk_test_')) stop(SAY.testOnly);
   const { events, apiVersion } = webhookContract(ROOT);
@@ -478,39 +522,115 @@ async function webhook(io) {
     after = res.json.data[res.json.data.length - 1].id;
   }
 
-  const names = await secretNames(io, ref);
-  const action = webhookAction({ matches, events, apiVersion, secretSet: names.includes('STRIPE_WEBHOOK_SECRET') });
+  const state = { url, events, apiVersion, matches, secretSet: (await secretNames(io, ref)).includes('STRIPE_WEBHOOK_SECRET') };
+  const action = webhookAction(state);
+  io.log(`Stripe webhook inputs: ${webhookInputs(state)}.`);
+  io.log(`Stripe webhook decision: ${action}.`);
+  return { ref, state, action, halt: WEBHOOK_STOPS.includes(action) ? webhookStop(action, state) : null };
+}
+
+/** Before any change in the press: the target and the webhook decision, in the run summary. */
+async function webhookPlan(io) {
+  const { action, halt } = await webhookDecide(io);
+  addSummary(io, `**Target:** the production project (\`PRODUCTION_REF\` in scripts/supabase-ref.mjs). **Stripe webhook:** ${halt ? 'stop' : action}.\n`);
+  if (halt) stop(halt);
+  note(io, `the production project; webhook: ${action}`);
+}
+
+async function webhook(io) {
+  const { ref, state, action, halt } = await webhookDecide(io);
+  if (halt) stop(halt);
+  const { url, events, apiVersion, matches } = state;
   if (action === 'keep') {
-    io.log('Stripe webhook: already right, kept.');
+    io.log('Stripe webhook: already right, kept unchanged.');
     note(io, 'kept');
     return;
   }
-
-  // From here the stored signing secret is wrong or unknown. Its name goes first, so a press that
-  // stops half-way leaves the next press a missing name, which always makes the webhook anew.
-  if (names.includes('STRIPE_WEBHOOK_SECRET')) {
-    const removed = await mgmt(io, ref, '/secrets', { method: 'DELETE', json: ['STRIPE_WEBHOOK_SECRET'] });
-    if (!removed.ok) stop(`The old STRIPE_WEBHOOK_SECRET could not be removed (HTTP ${removed.status}).`);
-  }
-  for (const endpoint of matches) {
-    const removed = await stripe(io, `/webhook_endpoints/${encodeURIComponent(endpoint.id)}`, { method: 'DELETE' });
-    if (!removed.ok) stop(`Stripe refused to delete the old webhook (HTTP ${removed.status}).`);
+  if (action === 'update') {
+    const form = new URLSearchParams({ disabled: 'false' });
+    for (const event of events) form.append('enabled_events[]', event);
+    const res = await stripe(io, `/webhook_endpoints/${encodeURIComponent(matches[0].id)}`, { method: 'POST', form });
+    if (!res.ok) {
+      stop(`Stripe did not confirm the webhook update (HTTP ${res.status}). Press the button again: it reads the webhook again and changes only what still differs.`);
+    }
+    if (webhookAction({ matches: [res.json ?? {}], events, apiVersion, secretSet: true }) !== 'keep') {
+      stop('Stripe answered the webhook update, but the webhook still differs from what the functions need. Press the button again.');
+    }
+    io.log(`Stripe webhook: updated in place (enabled, ${events.length} events); its signing secret is unchanged.`);
+    note(io, 'updated in place');
+    return;
   }
   const form = new URLSearchParams({ url, api_version: apiVersion, description: 'Brazos production (made by the Production button)' });
   for (const event of events) form.append('enabled_events[]', event);
   const made = await stripe(io, '/webhook_endpoints', { method: 'POST', form });
   const secret = made.json?.secret;
   mask(io, secret);
-  if (!made.ok) stop(`Stripe refused to make the webhook (HTTP ${made.status}).`);
-  if (typeof secret !== 'string' || !secret.startsWith('whsec_')) {
-    stop('Stripe made the webhook but returned no signing secret. Press the button again: it makes the webhook anew.');
+  if (!made.ok) {
+    stop(`Stripe did not confirm the new webhook (HTTP ${made.status}). Press the button again; if Stripe made it anyway, the next press stops and says how to save its signing secret.`);
   }
+  if (typeof secret !== 'string' || !secret.startsWith('whsec_')) stop(`Stripe made the webhook but returned no signing secret. ${PAIR}`);
   const stored = await mgmt(io, ref, '/secrets', { method: 'POST', json: [{ name: 'STRIPE_WEBHOOK_SECRET', value: secret }] });
-  if (!stored.ok) {
-    stop(`The webhook was made, but Supabase refused its signing secret (HTTP ${stored.status}). Press the button again: it makes the webhook anew.`);
+  if (!stored.ok) stop(`The webhook was made, but Supabase refused its signing secret (HTTP ${stored.status}). ${PAIR}`);
+  io.log(`Stripe webhook: made, ${events.length} events, signing secret stored.`);
+  note(io, 'made');
+}
+
+/**
+ * F08: THE SIGNED RECEIPT. A PaymentIntent with no card and no customer, canceled at once, so it
+ * can never be charged. Its payment_intent.canceled event proves the pairing by a fact only Stripe
+ * writes: the event's pending_webhooks reaches 0 only when every webhook subscribed to it answered
+ * 2xx, and stripe-webhook answers 2xx only after verifyStripeSignature (index.ts:150). The step
+ * first checks that this project's webhook is kept as is (so it is subscribed). Its payment_events
+ * row must be processed with no payment: apply_payment_event's unmatched path sets processed_at and
+ * a null payment_id and writes nothing else (20261115000600:168-191, 344-345); payment_attention
+ * lists only unprocessed rows (:580-581), so nobody is told about it.
+ */
+const PROBE_DESCRIPTION = 'Brazos Production button check (never charged, canceled at once)';
+
+async function webhookEvent(io) {
+  const { ref, action } = await webhookDecide(io);
+  if (action !== 'keep') stop(`The Stripe webhook is not ready (decision: ${action}), so no test event was sent. Press the button again.`);
+  const key = await serverKey(io, ref);
+  const form = new URLSearchParams({ amount: '50', currency: 'usd', description: PROBE_DESCRIPTION });
+  form.append('payment_method_types[]', 'card');
+  form.append('metadata[brazos_probe]', io.env.GITHUB_RUN_ID || 'button');
+  const made = await stripe(io, '/payment_intents', { method: 'POST', form });
+  const pi = typeof made.json?.id === 'string' && /^pi_\w+$/.test(made.json.id) ? made.json.id : null;
+  if (!made.ok || !pi) stop(`Stripe did not confirm the test payment that proves the webhook (HTTP ${made.status}). Press the button again.`);
+  const canceled = await stripe(io, `/payment_intents/${pi}/cancel`, { method: 'POST' });
+  if (!canceled.ok) {
+    stop(`Stripe did not confirm that the test payment was canceled (HTTP ${canceled.status}). It holds no card, so it can never be charged. Press the button again.`);
   }
-  io.log(`Stripe webhook: ${action === 'create' ? 'made' : 'made anew'}, ${events.length} events, signing secret stored.`);
-  note(io, action === 'create' ? 'made' : 'made anew');
+
+  const lookup = `https://${ref}.supabase.co/rest/v1/payment_events?select=id,processed_at,attempts,payment_id&type=eq.payment_intent.canceled&payload->data->object->>id=eq.${pi}`;
+  const deadline = io.now() + PROBE_WAIT_MS;
+  let row = null;
+  let pending = null;
+  for (;;) {
+    const res = await call(io, lookup, { headers: keyHeaders(key) });
+    if (!res.ok) stop(`The test event could not be looked up in the database (HTTP ${res.status}). Press the button again.`);
+    row = Array.isArray(res.json) && res.json.length === 1 ? res.json[0] : null;
+    if (row?.processed_at && typeof row.id === 'string' && /^evt_\w+$/.test(row.id)) {
+      const event = await stripe(io, `/events/${row.id}`);
+      pending = event.ok && Number.isInteger(event.json?.pending_webhooks) ? event.json.pending_webhooks : null;
+      if (pending === 0) break;
+    }
+    if (io.now() >= deadline) break;
+    await io.sleep(5_000);
+  }
+  if (!row) {
+    stop(`No signed test event reached stripe-webhook within 3 minutes, so the webhook is not proven: the signing secret saved in Supabase is most likely not this webhook's. ${PAIR}`);
+  }
+  if (!row.processed_at) {
+    stop('stripe-webhook took the signed test event but could not apply it within 3 minutes; payment_attention lists its error. Press the button again.');
+  }
+  if (row.payment_id !== null) stop('The test event matched a payment, which a test payment never may, so the button stopped here.');
+  if (pending === null) stop("Stripe's test event could not be read back, so its delivery is not proven. Press the button again.");
+  if (pending !== 0) {
+    stop('stripe-webhook took the signed test event, but Stripe still counts it as undelivered to another webhook on this account. In Stripe (test mode), open Developers, Webhooks, and fix or delete the webhook that shows failed deliveries; then press the button again.');
+  }
+  io.log('Stripe test event: delivered and signed to every webhook on the account; stripe-webhook recorded and applied it; it matched no payment.');
+  note(io, 'a signed test event reached stripe-webhook and matched no payment');
 }
 
 // ---- the key the timers use, and the smoke checks -------------------------------------------------
@@ -679,7 +799,8 @@ export function authWanted(env, now, root = ROOT) {
   if (!/^\d{8,15}=\d{6}$/.test(otp)) {
     stop('PRODUCTION_TEST_OTP is not one phone number in digits, an equals sign and a 6-digit code.');
   }
-  const testUntil = new Date(now + TEST_OTP_DAYS * 86_400_000).toISOString();
+  // Whole seconds, so a read-back that drops the milliseconds still compares equal.
+  const testUntil = new Date(Math.floor((now + TEST_OTP_DAYS * 86_400_000) / 1000) * 1000).toISOString();
   compare.sms_test_otp = otp;
   return { body: { ...body, sms_test_otp: otp, sms_test_otp_valid_until: testUntil }, compare, testUntil };
 }
@@ -700,13 +821,64 @@ async function auth(io) {
   const back = await mgmt(io, ref, '/config/auth');
   if (!back.ok) stop(`The sign-in settings could not be read back (HTTP ${back.status}).`);
   const differ = authDiff(compare, back.json);
+  // R6-f: the end date is compared when the answer holds it; an answer without it is a visible warning.
+  const until = back.json?.sms_test_otp_valid_until;
+  if (testUntil && until !== undefined && until !== null && Date.parse(until) !== Date.parse(testUntil)) differ.push('sms_test_otp_valid_until');
   if (differ.length > 0) stop(`These sign-in settings did not take: ${differ.join(', ')}.`);
+  const unverified = testUntil !== null && (until === undefined || until === null);
+  if (unverified) io.log("::warning::The sign-in settings answer holds no sms_test_otp_valid_until, so the test number's 7-day end is unverified.");
   io.log(`Sign-in settings: ${Object.keys(compare).length} read back as wanted.`);
   note(
     io,
     'phone sign-in through Twilio Verify; email sign-in off' +
-      (testUntil ? `; one test sign-in number until ${testUntil.slice(0, 10)}` : '')
+      (testUntil ? `; one test sign-in number until ${testUntil.slice(0, 10)}${unverified ? ' (end date unverified)' : ''}` : '')
   );
+}
+
+// ---- the admin account ---------------------------------------------------------------------------
+
+const ADMIN_STEPS =
+  'In Supabase, open the production project, then Authentication, Users, and copy the User UID of your own account. In GitHub, open Settings, Environments, production, and save it as the secret PRODUCTION_ADMIN_USER_ID. Then press the button again.';
+
+/**
+ * F10: the optional PRODUCTION_ADMIN_USER_ID gets is_admin, only on an active account (a profile
+ * row, not deleted, not banned), and only when the one row that comes back has that id and the
+ * flag. An account that is already an admin is left unchanged. The step never removes admin from
+ * anyone, and the id is never printed.
+ */
+async function admin(io) {
+  const id = (io.env.PRODUCTION_ADMIN_USER_ID ?? '').trim().toLowerCase();
+  if (!id) {
+    io.log('Admin: PRODUCTION_ADMIN_USER_ID is not set, so no account was changed.');
+    note(io, 'PRODUCTION_ADMIN_USER_ID not set: no change');
+    return;
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) {
+    stop(`PRODUCTION_ADMIN_USER_ID is not a user id (36 characters: digits, the letters a to f, and four dashes). ${ADMIN_STEPS}`);
+  }
+  const ref = projectRef(io);
+  const key = await serverKey(io, ref);
+  const rows = `https://${ref}.supabase.co/rest/v1/profiles?id=eq.${id}`;
+  const read = await call(io, `${rows}&select=id,is_admin,banned,deleted_at`, { headers: keyHeaders(key) });
+  if (!read.ok || !Array.isArray(read.json)) stop(`The production accounts could not be read (HTTP ${read.status}). Press the button again.`);
+  const [row] = read.json;
+  if (read.json.length !== 1 || row?.id !== id) stop(`No account in the production project has the id saved in PRODUCTION_ADMIN_USER_ID. ${ADMIN_STEPS}`);
+  if (row.deleted_at !== null || row.banned !== false) {
+    stop(`The account saved in PRODUCTION_ADMIN_USER_ID is deleted or banned, so the button does not make it an admin. ${ADMIN_STEPS}`);
+  }
+  if (row.is_admin !== true) {
+    const res = await call(io, `${rows}&deleted_at=is.null&banned=is.false&select=id,is_admin`, {
+      method: 'PATCH',
+      headers: { ...keyHeaders(key), Prefer: 'return=representation' },
+      json: { is_admin: true },
+    });
+    const back = Array.isArray(res.json) ? res.json : [];
+    if (!res.ok || back.length !== 1 || back[0]?.id !== id || back[0]?.is_admin !== true) {
+      stop(`The account saved in PRODUCTION_ADMIN_USER_ID did not become an admin (HTTP ${res.status}). Press the button again.`);
+    }
+  }
+  io.log('Admin: the account saved in PRODUCTION_ADMIN_USER_ID is an admin. The button never removes admin from anyone.');
+  note(io, 'done: the saved account is an admin');
 }
 
 // ---- fingerprint ---------------------------------------------------------------------------------
@@ -804,6 +976,7 @@ const ROWS = Object.freeze({
     ['guards', 'Safety checks'],
     ['status', 'Project is running'],
     ['keys', 'Project keys'],
+    ['webhook_plan', 'Target project and Stripe webhook decision'],
     ['cli', 'Supabase CLI matches package-lock.json'],
     ['link', 'Link the project'],
     ['list', 'Read the migration list'],
@@ -814,6 +987,7 @@ const ROWS = Object.freeze({
     ['guards', 'Safety checks'],
     ['status', 'Project is running'],
     ['keys', 'Project keys'],
+    ['webhook_plan', 'Target project and Stripe webhook decision'],
     ['cli', 'Supabase CLI matches package-lock.json'],
     ['link', 'Link the project'],
     ['list_before', 'Read the migration list'],
@@ -829,9 +1003,11 @@ const ROWS = Object.freeze({
     ['smoke_push', 'send-push refuses a stranger'],
     ['smoke_status', 'connect-status refuses a caller who is not signed in'],
     ['smoke_webhook', 'stripe-webhook checks the signature'],
+    ['webhook_event', 'A signed Stripe test event reaches stripe-webhook'],
     ['smoke_return', 'connect-return sends the browser back to the app'],
     ['timers', 'Timers reach the functions'],
     ['auth', 'Sign-in settings'],
+    ['admin', 'Admin account'],
   ],
   prove: [
     ['download', 'Local fingerprint from the local job'],
@@ -900,15 +1076,18 @@ const COMMANDS = Object.freeze({
   guards,
   status,
   keys,
+  'webhook-plan': webhookPlan,
   'cli-fetch': cliFetch,
   plan,
   check,
   secrets,
   webhook,
+  'webhook-event': webhookEvent,
   vault,
   smoke,
   timers,
   auth,
+  admin,
   fingerprint,
   summary,
 });

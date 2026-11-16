@@ -4,7 +4,7 @@
  * eas-build-pre-install.mjs, which pins every build profile to one project).
  * Refs only are ever compared and printed — never a URL, key, or
  * connection string. Dependency-free on purpose: the EAS pre-install hook
- * runs before node_modules exists.
+ * runs before node_modules exists, and app.config.ts imports keyKind (F05).
  */
 
 /** Project ref from a REST URL (https://<ref>.supabase.co). */
@@ -54,7 +54,8 @@ function jwtClaims(k) {
  * PRODUCTION_REF: the new production project (D-20261111-1), written here
  * 2026-11-13. Only the `production` EAS build profile is pinned to it
  * (eas-build-pre-install.mjs); the Production button reads its own
- * SUPABASE_PROJECT_REF secret and does not import this.
+ * SUPABASE_PROJECT_REF secret and refuses it unless it equals this one
+ * (production-deploy.mjs, F09).
  */
 export const STAGING_REF = 'zzkumxcjtbqoselzptig';
 export const RETIRED_PRODUCTION_REF = 'avkighsiufeefyycbebf';

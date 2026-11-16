@@ -1,16 +1,26 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
+import { keyKind } from './scripts/supabase-ref.mjs';
 
 /**
  * THE APP CONFIG, replacing app.json so that three build variants can live on
  * one device at once.
  *
- * IT IMPORTS NOTHING BUT A TYPE, AND THAT IS LOAD-BEARING. `import type` is
- * erased at compile time, so this file pulls in no runtime module at all. In
- * particular it must never import config/env.ts: that module validates the
- * environment at import time and THROWS on a malformed one, and this file is
- * evaluated by `expo start`, `expo export` and every EAS build. A throw here
- * breaks all three before anything can report why. So the two variables below
- * are read straight off process.env and nothing is validated.
+ * IT IMPORTS A TYPE AND ONE DEPENDENCY-FREE FUNCTION, AND THAT IS LOAD-BEARING.
+ * `import type` is erased at compile time; keyKind comes from
+ * scripts/supabase-ref.mjs, which imports nothing. In particular this file must
+ * never import config/env.ts: that module validates the whole environment at
+ * import time and THROWS on a malformed one, and this file is evaluated by
+ * `expo start`, `expo export`, `eas update` and every EAS build. A throw here
+ * breaks all of them before anything can report why. So the variant is read
+ * straight off process.env and is not validated.
+ *
+ * IT THROWS IN ONE CASE ONLY (F05): EXPO_PUBLIC_SUPABASE_KEY is set and is
+ * neither an anon key nor a publishable key (keyKind, the build gate's own
+ * rule). An EXPO_PUBLIC_ value is written into the bundle, and every route to
+ * a phone evaluates this file, including the update route, where no build
+ * hook runs (scripts/eas-build-pre-install.mjs guards builds only). So a
+ * server key can never ship. An absent key passes, so a step that evaluates
+ * the config without the EAS environment (`eas update --skip-bundler`) works.
  *
  * WHAT DECIDES A VARIANT is APP_VARIANT, a build-time variable set by the
  * eas.json profile. It is deliberately NOT the EXPO_PUBLIC_ one: this file
@@ -62,6 +72,11 @@ const ICON: Record<Variant, string> = {
   preview: './assets/brand/app-icon-b-leaf.png',
   production: './assets/brand/app-icon-b-leaf.png',
 };
+
+const shippedKey = process.env.EXPO_PUBLIC_SUPABASE_KEY;
+if (shippedKey && keyKind(shippedKey) === 'unknown') {
+  throw new Error('EXPO_PUBLIC_SUPABASE_KEY is neither an anon key nor a publishable key, so it must never ship in the app: refused.');
+}
 
 export default (_context: ConfigContext): ExpoConfig => ({
   name: DISPLAY_NAME[VARIANT],

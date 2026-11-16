@@ -72,10 +72,14 @@ staging accounts (a customer and a worker, both Supabase test phone numbers; the
 Connect-onboarded once, in Stripe test mode, by the owner, and the flows never open payout setup).
 
 - Where: GitHub's macOS runner, through `.github/workflows/e2e-ios.yml`. It runs on manual dispatch
-  only (Actions → e2e iOS → Run workflow, optional `build_id`).
+  only (Actions → e2e iOS → Run workflow, optional `build_id`, optional `build_this_commit`).
   It finds the latest FINISHED `e2e-test` EAS simulator build (or the `build_id`), installs it on an
   iPhone simulator, runs Maestro 2.12.1 over `.maestro/`, and uploads a junit file, debug output
-  and a screen recording as artifacts. Secrets: `MAESTRO_E2E_PHONE`, `MAESTRO_E2E_OTP`,
+  and a screen recording as artifacts. With `build_this_commit` ticked (off by default) it first
+  makes one `e2e-test` build of the dispatched commit and tests that one: it costs one metered EAS
+  build each time. The run summary says which build was tested and which commit it was made from.
+  A run on a build of this commit is release evidence; a run on an older build (or one whose commit
+  EAS did not report) is compatibility evidence, not release evidence. Secrets: `MAESTRO_E2E_PHONE`, `MAESTRO_E2E_OTP`,
   `MAESTRO_E2E_PHONE_2`, `MAESTRO_E2E_OTP_2` (two Supabase test phone numbers with fixed codes; no
   SMS is sent).
 - The app: the `e2e-test` EAS profile in `eas.json` builds a simulator app (`ios.simulator: true`,
@@ -94,16 +98,17 @@ A chat never runs a production step; these are parked steps for the owner. The u
 Connect is also an owner step.
 
 1. `npm run verify` is green on `mainexpo`.
-2. `npm run release:testflight` (= `npx eas-cli@27.7.0 build --platform ios --profile testflight`,
-   no auto-submit). The `testflight` profile has store distribution, `autoIncrement` and the
+2. `npm run release:testflight` (= `npx eas-cli@27.7.0 build --platform ios --profile testflight
+   --auto-submit`): it builds AND submits the build to App Store Connect in one step. The
+   `testflight` profile has store distribution, `autoIncrement` and the
    `preview` EAS environment (staging Supabase), which must hold
    `EXPO_PUBLIC_PAYMENTS_MODE=stripe`, the Stripe publishable test key,
    `EXPO_PUBLIC_PHONE_AUTH_MODE=supabase`, the Sentry DSN, and the Supabase URL and key.
-   `release:production` is the old production line and is not used for v1.
-3. `npx eas-cli@27.7.0 submit --platform ios --profile testflight --latest`, run by the owner.
-4. In App Store Connect, add the build to the internal testers group. Apple's two-factor sign-in is
+   `release:production` (`--profile production --auto-submit`) also builds AND submits; it is the
+   old production line and is not used for v1.
+3. In App Store Connect, add the build to the internal testers group. Apple's two-factor sign-in is
    the owner's.
-5. Install from TestFlight on a phone and walk the loop (section 5 below) before inviting anyone.
+4. Install from TestFlight on a phone and walk the loop (section 5 below) before inviting anyone.
 
 A new native dependency or plugin needs a new build; a JavaScript-only change can go as an
 `npm run update:preview` update (run `npm run fingerprint` first if unsure).

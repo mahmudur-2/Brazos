@@ -99,7 +99,7 @@ App Store Connect has TWO records. "Brazos MVP" (Apple ID 6832193439, bundle `ap
 2. ~~Second test phone~~ DONE 2026-11-08 (number and code live in the GitHub secrets and the Supabase dashboard, not here: the repo is public).
 3. ~~Upload build 9 to TestFlight~~ DONE 2026-11-08: build 9 is on Brazos MVP and installed on your phone. Friends later: App Store Connect → Users and Access → add each with the Marketing role → TestFlight → group "Friends" → add them.
 4. ~~Send build 10 (the publish fix) to TestFlight~~ DONE 2026-11-08 17:11: uploaded to Brazos MVP (6832193439); Apple processes it in 5-10 min, then the TestFlight app on your phone offers Update to 1.0.0 (10). A later build needs the same one line, run inside `C:\Users\mdmah\BRAZOS`:
-   `npx eas-cli@latest submit --platform ios --profile testflight --id <build id from the chat>`
+   `npx eas-cli@27.7.0 submit --platform ios --profile testflight --id <build id from the chat>`
 5. **`.env.example` cleanup (the chat may not open that file).** Remove the lines for EXPO_PUBLIC_POSTHOG_KEY and TWILIO_* and any script names that no longer exist (around lines 11 and 15).
 6. **Supabase advisors.** Dashboard → Database → Security Advisor and Performance Advisor → export both; paste into a chat if anything is red.
 7. **Optional EAS cleanup.** `eas env:list preview` and delete EXPO_PUBLIC_POSTHOG_KEY and the old MAESTRO_E2E_*_EMAIL / _PASSWORD secrets; confirm the staging edge-function STRIPE_SECRET_KEY starts with `sk_test_` (Supabase → Edge Functions → Secrets).

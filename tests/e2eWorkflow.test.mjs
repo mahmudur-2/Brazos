@@ -95,20 +95,22 @@ const OLD = 'fedcba9876543210fedcba9876543210fedcba98';
 test('the summary line says whether the app under test was made from the commit this run tests', () => {
   assert.equal(
     buildLine({ id: 'b-1', gitCommitHash: SHA }, SHA),
-    `App under test: EAS build b-1, made from commit ${SHA}. This run tests commit ${SHA}: the same commit.`
+    `App under test: EAS build b-1, made from commit ${SHA}. This run tests commit ${SHA}: the same commit, so this run is release evidence.`
   );
   assert.equal(
     buildLine({ id: 'b-1', gitCommitHash: OLD }, SHA),
-    `App under test: EAS build b-1, made from commit ${OLD}. This run tests commit ${SHA}: NOT the same commit, so the flows test an older app.`
+    `App under test: EAS build b-1, made from commit ${OLD}. This run tests commit ${SHA}: NOT the same commit, so the flows test an older app: this run is compatibility evidence, not release evidence.`
   );
   // A short hash is not the commit: no guess.
   assert.match(buildLine({ id: 'b-1', gitCommitHash: SHA.slice(0, 7) }, SHA), /: NOT the same commit, /);
   for (const gitCommitHash of [undefined, null, '']) {
     assert.equal(
       buildLine({ id: 'b-1', gitCommitHash }, SHA),
-      `App under test: EAS build b-1; EAS did not report the commit it was made from. This run tests commit ${SHA}; the two cannot be compared.`
+      `App under test: EAS build b-1; EAS did not report the commit it was made from. This run tests commit ${SHA}; the two cannot be compared, so this run is compatibility evidence, not release evidence.`
     );
   }
+  // F15: "release evidence" only for a build of this very commit.
+  assert.doesNotMatch(buildLine({ id: 'b-1', gitCommitHash: SHA.slice(0, 7) }, SHA), /is release evidence/);
 });
 
 test('e2e-build.mjs prints the archive URL, writes the line to the run summary, and stops on an unfinished build', () => {

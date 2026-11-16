@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { RETIRED_PRODUCTION_REF, STAGING_REF } from '../scripts/supabase-ref.mjs';
+import { PRODUCTION_REF, RETIRED_PRODUCTION_REF, STAGING_REF } from '../scripts/supabase-ref.mjs';
 
 // The Production button's shape (.github/workflows/production.yml), pinned as text: no YAML
 // library, no new dependency. Its logic lives in scripts/production-deploy.mjs and is tested in
@@ -126,12 +126,18 @@ test('secrets reach a step through env only, by their own name, never inside run
     const m = line.match(/^ {10}([A-Z_]+): \$\{\{ secrets\.([A-Z_]+) \}\}$/);
     assert.ok(m, `secret outside a step env mapping: ${line.trim()}`);
     assert.equal(m[1], m[2], `${m[2]} is renamed to ${m[1]}`);
-    assert.ok([...SEVEN, 'PRODUCTION_TEST_OTP'].includes(m[2]), `${m[2]} is not one of the seven secrets`);
+    assert.ok(
+      [...SEVEN, 'PRODUCTION_TEST_OTP', 'PRODUCTION_ADMIN_USER_ID'].includes(m[2]),
+      `${m[2]} is not one of the seven secrets or the two optional ones`
+    );
   }
   for (const name of SEVEN) assert.match(text, new RegExp(`secrets\\.${name}\\b`), `${name} is never used`);
   // The optional test sign-in number reaches the sign-in step only.
   const otpSteps = steps(P.apply).concat(steps(P.plan)).filter((s) => s.includes('secrets.PRODUCTION_TEST_OTP'));
   assert.deepEqual(otpSteps.map(stepId), ['auth']);
+  // The optional admin account id reaches the admin step only.
+  const adminSteps = steps(P.apply).concat(steps(P.plan)).filter((s) => s.includes('secrets.PRODUCTION_ADMIN_USER_ID'));
+  assert.deepEqual(adminSteps.map(stepId), ['admin']);
   // No expression is ever expanded into shell text: inputs and outputs arrive through env too.
   for (const [name, job] of Object.entries(P)) {
     for (const step of steps(job)) {
@@ -191,13 +197,16 @@ test('the local job builds the fingerprint without any secret and hands it over 
 const ids = (job) => steps(job).map(stepId);
 
 test('plan reads and changes nothing; apply applies only after the plan check', () => {
-  assert.deepEqual(ids(P.plan).filter(Boolean), ['guards', 'status', 'keys', 'cli', 'link', 'list', 'plan', 'summary']);
-  assert.doesNotMatch(P.plan, /db push|functions deploy|production-deploy\.mjs (secrets|webhook|vault|auth)\b/);
+  assert.deepEqual(ids(P.plan).filter(Boolean), ['guards', 'status', 'keys', 'webhook_plan', 'cli', 'link', 'list', 'plan', 'summary']);
+  // A command name ends at a space or the line end, so the read-only webhook-plan is not webhook.
+  assert.doesNotMatch(P.plan, /db push|functions deploy|production-deploy\.mjs (secrets|webhook|webhook-event|vault|auth|admin)(?![\w-])/);
+  assert.match(P.plan, /production-deploy\.mjs webhook-plan\n/);
   assert.deepEqual(ids(P.apply).filter(Boolean), [
     'download',
     'guards',
     'status',
     'keys',
+    'webhook_plan',
     'cli',
     'link',
     'list_before',
@@ -213,11 +222,15 @@ test('plan reads and changes nothing; apply applies only after the plan check', 
     'smoke_push',
     'smoke_status',
     'smoke_webhook',
+    'webhook_event',
     'smoke_return',
     'timers',
     'auth',
+    'admin',
     'summary',
   ]);
+  // F02: the webhook decision runs before the first change of the press (the migrations).
+  assert.ok(ids(P.apply).indexOf('webhook_plan') < ids(P.apply).indexOf('push'));
   // The schema compare is a hard gate: nothing in apply may continue past a failure.
   assert.doesNotMatch(P.apply, /continue-on-error/);
   // The workflow names no migration file and no count of them: more files land after it.
@@ -252,7 +265,35 @@ test('no project ref is written into the workflow; it arrives as a secret', () =
   for (const text of [PRODUCTION, STAGING]) {
     assert.equal(text.includes(RETIRED_PRODUCTION_REF), false);
     assert.equal(text.includes(STAGING_REF), false);
+    assert.equal(text.includes(PRODUCTION_REF), false);
   }
+});
+
+// Staging run 43861250202: Docker could not bind 54324 because an outgoing connection held it.
+// Every port of the local stack that lies in Linux's range for outgoing connections (32768 to
+// 60999) is reserved before the stack starts, in every workflow that starts one.
+test('every job that starts the local stack first reserves its ports from outgoing connections', () => {
+  const toml = read('supabase/config.toml');
+  const ports = [...toml.matchAll(/^\s*(?:port|shadow_port)\s*=\s*(\d+)\s*$/gm)].map((m) => Number(m[1]));
+  const outgoing = ports.filter((port) => port >= 32768 && port <= 60999);
+  assert.ok(outgoing.includes(54324), 'the inbucket port is no longer read from config.toml');
+  const reserve = /sudo sysctl -w net\.ipv4\.ip_local_reserved_ports=(\d+)-(\d+)\n/;
+  const starts = [];
+  for (const file of readdirSync(join(ROOT, '.github/workflows'))) {
+    for (const [job, text] of Object.entries(jobs(read(`.github/workflows/${file}`)))) {
+      for (const step of steps(text)) {
+        const run = runText(step) ?? '';
+        if (!/supabase start/.test(run)) continue;
+        starts.push(`${file} ${job}`);
+        assert.match(text, /^ {4}runs-on: ubuntu-latest$/m, `${file} ${job}: the reservation is a Linux command`);
+        const m = run.match(reserve);
+        assert.ok(m, `${file} ${job}: the stack starts without reserving its ports`);
+        assert.ok(run.indexOf(m[0]) < run.indexOf('supabase start'), `${file} ${job}: the ports are reserved after the start`);
+        for (const port of outgoing) assert.ok(port >= Number(m[1]) && port <= Number(m[2]), `${file} ${job}: port ${port} is not reserved`);
+      }
+    }
+  }
+  assert.deepEqual(starts.sort(), ['pgtap.yml pgtap', 'production.yml local', 'staging.yml local']);
 });
 
 test('staging proves the same tools first: a secretless local job and a prove report', () => {

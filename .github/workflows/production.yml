@@ -4,7 +4,8 @@ name: Production
 # and approves it twice; nothing else starts it, and no chat ever starts,
 # approves or re-runs it. It sets up and updates the production Supabase
 # project from this commit: migrations, edge functions, function secrets, the
-# Stripe TEST webhook, the key the timers use, and the sign-in settings. It ends
+# Stripe TEST webhook (never deleted) and a signed test event, the key the
+# timers use, the sign-in settings and the optional admin account. It ends
 # with one PASS/FAIL table in the run summary.
 #
 # The owner's guide: docs/production/owner-steps.md. The logic:
@@ -33,13 +34,14 @@ name: Production
 #     SHAs staging.yml uses; the Supabase CLI only from the bytes
 #     package-lock.json pins (sha512), checked before its first use.
 #   * Secrets reach a step through env: only, never inside run text.
-#   * The guards refuse the staging project, the retired production project,
+#   * The guards refuse any project but PRODUCTION_REF (scripts/supabase-ref.mjs)
 #     and any Stripe key that is not sk_test_: test money only.
 #   * Every step is safe to repeat, so pressing the button again is always safe.
 #   * The repository is public, so every log line is public: nothing prints a
 #     key, token, password, sign-in code or phone number.
 #
-# The `production` environment holds the seven secrets read below. The project
+# The `production` environment holds the seven secrets read below, and two
+# optional ones (PRODUCTION_TEST_OTP, PRODUCTION_ADMIN_USER_ID). The project
 # ref is one of them, so no ref is ever written into this file.
 
 on:
@@ -109,9 +111,13 @@ jobs:
           set -euo pipefail
           npm ci
 
+      # The stack's ports (supabase/config.toml: 54320 to 54329) lie inside
+      # Linux's range for outgoing connections. Reserved, the kernel never lends
+      # one to a connection, so Docker can always bind them.
       - name: Start the local stack
         run: |
           set -euo pipefail
+          sudo sysctl -w net.ipv4.ip_local_reserved_ports=54320-54329
           npx supabase start
 
       - name: Reset the local database
@@ -200,6 +206,19 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      # Reads only: the target is production (PRODUCTION_REF) and the Stripe
+      # webhook decision (create, keep, update, or a stop that changes nothing),
+      # before any change. The webhook is never deleted.
+      - name: Target project and Stripe webhook decision
+        id: webhook_plan
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs webhook-plan
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
 
       # The CLI only from the bytes package-lock.json pins: their sha512 is
       # checked before it first runs. npx would fetch it by version alone.
@@ -310,6 +329,19 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      # Reads only: the target is production (PRODUCTION_REF) and the Stripe
+      # webhook decision (create, keep, update, or a stop that changes nothing),
+      # before any change. The webhook is never deleted.
+      - name: Target project and Stripe webhook decision
+        id: webhook_plan
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs webhook-plan
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
 
       - name: Supabase CLI matches package-lock.json
         id: cli
@@ -456,6 +488,18 @@ jobs:
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
+      # One test payment, never charged (no card), canceled at once: its event
+      # must reach stripe-webhook signed and match no payment.
+      - name: A signed Stripe test event reaches stripe-webhook
+        id: webhook_event
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs webhook-event
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+
       - name: connect-return sends the browser back to the app
         id: smoke_return
         run: |
@@ -485,6 +529,18 @@ jobs:
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_VERIFY_SERVICE_SID: ${{ secrets.TWILIO_VERIFY_SERVICE_SID }}
           PRODUCTION_TEST_OTP: ${{ secrets.PRODUCTION_TEST_OTP }}
+
+      # Optional: the account in PRODUCTION_ADMIN_USER_ID (your own User UID)
+      # gets is_admin. The step never removes admin from anyone.
+      - name: Admin account
+        id: admin
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy.mjs admin
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          PRODUCTION_ADMIN_USER_ID: ${{ secrets.PRODUCTION_ADMIN_USER_ID }}
 
       - name: Result
         id: summary

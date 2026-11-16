@@ -13,13 +13,19 @@ import { appendFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** The run summary's line. It says "the same commit" only when EAS reported this very commit. */
+/**
+ * The run summary's line. It says "the same commit" and "release evidence" only when EAS reported
+ * this very commit; any other run is compatibility evidence (F15).
+ */
 export function buildLine(build, sha) {
   const made = build.gitCommitHash;
   if (!made) {
-    return `App under test: EAS build ${build.id}; EAS did not report the commit it was made from. This run tests commit ${sha}; the two cannot be compared.`;
+    return `App under test: EAS build ${build.id}; EAS did not report the commit it was made from. This run tests commit ${sha}; the two cannot be compared, so this run is compatibility evidence, not release evidence.`;
   }
-  const verdict = made === sha ? 'the same commit.' : 'NOT the same commit, so the flows test an older app.';
+  const verdict =
+    made === sha
+      ? 'the same commit, so this run is release evidence.'
+      : 'NOT the same commit, so the flows test an older app: this run is compatibility evidence, not release evidence.';
   return `App under test: EAS build ${build.id}, made from commit ${made}. This run tests commit ${sha}: ${verdict}`;
 }
 

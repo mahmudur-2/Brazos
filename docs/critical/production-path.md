@@ -370,8 +370,8 @@ Build settings read from `eas.json`, profile `production`: channel `production`,
 `EXPO_PUBLIC_PHONE_AUTH_MODE=supabase`, `EXPO_PUBLIC_PAYMENTS_MODE=stripe`. The build gate
 `scripts/eas-build-pre-install.mjs:68-74` still expects the RETIRED ref for `production`
 (`scripts/supabase-ref.mjs:48`), so a production build fails until step 4 is done. Good: it fails
-closed. `package.json` runs both release scripts with `eas-cli@latest` and `--auto-submit`; pinning
-the version (ledger R10 fixed the same in a workflow, `:14` `[2]`) is recommended.
+closed. `package.json` runs both release scripts with `eas-cli@27.7.0` and `--auto-submit`; the
+version is pinned since R-M1 (b8c420b), as ledger R10 did in a workflow (`:14` `[2]`).
 
 Sentry: only the app uses it (no edge function reads a Sentry name). Nothing to do on the backend.
 Push credentials for the production bundle id: not investigated.

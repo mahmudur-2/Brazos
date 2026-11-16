@@ -87,7 +87,7 @@ What the table means: each row is one check that ran. PASS means the button saw 
     Put them on expo.dev: the project, Environment variables, environment `production`. On 2026-11-13 the chat set `EXPO_PUBLIC_SUPABASE_URL` there to the new project's URL (your word: "do everything yourself"). The two keys are yours to paste. Make no production build before both are in.
 22. Done 2026-11-13: the ref is in the build gate (`PRODUCTION_REF` in `scripts/supabase-ref.mjs`, used by `scripts/eas-build-pre-install.mjs`). A production build against any other project stops at the gate.
 23. Receipts: until you set `RESEND_API_KEY` and `RECEIPT_FROM` on the project, each receipt is marked "skipped", with the reason, and logged. No email goes out.
-24. The Stripe sandbox now has a webhook to `https://<ref>.supabase.co/functions/v1/stripe-webhook`. Do not change it. If you delete it, press the button again.
+24. The Stripe sandbox now has a webhook to `https://<ref>.supabase.co/functions/v1/stripe-webhook`. Do not change it. The button never deletes a webhook or a saved signing secret. If you delete the webhook, press the button again: it makes a new one and saves its signing secret. If the row "Target project and Stripe webhook decision" says FAIL, its sentence names the clicks.
 
 ## H. Later
 
@@ -96,6 +96,8 @@ What the table means: each row is one check that ran. PASS means the button saw 
 - A migration the scan flags on a database that is not empty stops the plan. Read the file. If you agree with it, press again with `allow_destructive` checked.
 
 ## I. Optional steps
+
+- Admin account: once your own account exists in the production project, open the production project in Supabase, then Authentication, Users, and copy the User UID of your account. In GitHub, open Settings, Environments, production, Add environment secret, name `PRODUCTION_ADMIN_USER_ID`, value the UID. Press the button again; the row "Admin account" says PASS. The admin step never removes admin from anyone.
 
 - Legacy keys: if the table says "legacy keys: yes, active", you can switch them off. In Supabase, click Project Settings, API Keys, Legacy API keys, and disable them. Press the button again. The table must still say PASS. If not, switch them on again and press again.
 - Your chat rules: change line 6 of `CLAUDE.md` to say that production changes only through this button, which only you start and approve. In `.claude/settings.json`, add deny lines for the new ref and for `*gh workflow run*`, `*gh run rerun*`, `*pending_deployments*` and `*/dispatches*`. A chat may not edit these files, so this step is yours.

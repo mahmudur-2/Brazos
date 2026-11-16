@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
@@ -129,19 +130,50 @@ test('no project ref, URL or key is written into the app config', () => {
   assert.doesNotMatch(source, /\beyJ|sb_publishable_|sb_pu_|sb_secret_/);
 });
 
-test('the config imports nothing at runtime, so it can never throw on a build machine', () => {
+test('the config imports only keyKind at runtime, so it throws on a build machine for one reason only', () => {
   // THE REASON app.config.ts MUST NOT IMPORT config/env.ts. That module
   // validates the environment at import time and throws on a malformed one,
   // and this file is evaluated by `expo start`, `expo export` and every EAS
   // build — a throw here breaks all three before anything can report why.
-  // `import type` is erased, so the only import in the file must be one.
-  const imports = [...source.matchAll(/^import\s+(type\s+)?/gm)];
+  // `import type` is erased; the one value import is keyKind from the
+  // dependency-free gate module (F05, the test below).
+  const imports = [...source.matchAll(/^import\s+(type\s+)?[^\n]*/gm)];
   assert.ok(imports.length > 0, 'the file has no imports at all — check the scan');
-  for (const match of imports) {
-    assert.ok(match[1], `app.config.ts has a VALUE import: ${match[0].trim()}`);
-  }
+  const values = imports.filter((match) => !match[1]).map((match) => match[0]);
+  assert.deepEqual(values, ["import { keyKind } from './scripts/supabase-ref.mjs';"], 'app.config.ts has another VALUE import');
   assert.doesNotMatch(code, /config\/env/);
   assert.doesNotMatch(code, /require\(/);
+  assert.equal((code.match(/throw /g) ?? []).length, 1, 'app.config.ts throws for another reason too');
+});
+
+// F05: every route to a phone evaluates the config (an EAS build, `expo export` for an update), and
+// only builds run the pre-install gate. So the config itself refuses a server key, by the gate's rule.
+test('a config evaluation with a server key is refused; an anon key, a publishable key and no key pass', () => {
+  const jwt = (role) =>
+    [{ alg: 'HS256' }, { ref: STAGING_REF, role }].map((part) => Buffer.from(JSON.stringify(part)).toString('base64')).join('.') +
+    '.signature';
+  const evaluate = (key) => {
+    const env = { ...process.env };
+    delete env.EXPO_PUBLIC_SUPABASE_KEY;
+    if (key !== undefined) env.EXPO_PUBLIC_SUPABASE_KEY = key;
+    const script =
+      "const { getConfig } = require(require.resolve('expo/config', { paths: [process.cwd()] }));" +
+      'try { getConfig(process.cwd(), { skipSDKVersionRequirement: true }); console.log("EVALUATED"); }' +
+      ' catch (e) { console.log(String(e.message)); process.exit(1); }';
+    return spawnSync(process.execPath, ['-e', script], { cwd: root, env, encoding: 'utf8' });
+  };
+  const REFUSED = 'EXPO_PUBLIC_SUPABASE_KEY is neither an anon key nor a publishable key, so it must never ship in the app: refused.';
+  for (const key of [jwt('service_role'), ['sb', 'secret', 'abc123'].join('_')]) {
+    const result = evaluate(key);
+    assert.equal(result.status, 1, 'a server key evaluated');
+    assert.ok(result.stdout.includes(REFUSED), result.stdout + result.stderr);
+    assert.ok(!`${result.stdout}${result.stderr}`.includes(key), 'the refusal printed the key');
+  }
+  for (const key of [jwt('anon'), ['sb', 'publishable', 'abc123'].join('_'), undefined]) {
+    const result = evaluate(key);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /^EVALUATED$/m);
+  }
 });
 
 test('iOS only: no android or web block, and no Google map configuration ships', () => {
