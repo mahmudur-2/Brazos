@@ -3,7 +3,7 @@
 // development may run the mock phone provider. Secrets (Supabase URL and key, Stripe key) stay in
 // the EAS environment and never appear here.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -45,6 +45,20 @@ test('G0 · release:testflight builds the testflight profile, never production',
   const { scripts } = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8'));
   assert.match(scripts['release:testflight'], /--profile testflight --auto-submit$/);
   assert.match(scripts['release:production'], /--profile production --auto-submit$/);
+});
+
+// A release build runs the eas-cli version the repo names, never whatever is newest that day: one
+// exact version in package.json and every workflow.
+test('eas-cli is pinned to one exact version everywhere, never @latest', () => {
+  const root = join(import.meta.dirname, '..');
+  const workflows = join(root, '.github', 'workflows');
+  const sources = [readFileSync(join(root, 'package.json'), 'utf8')].concat(
+    readdirSync(workflows).filter((f) => f.endsWith('.yml')).map((f) => readFileSync(join(workflows, f), 'utf8'))
+  );
+  const pins = sources.flatMap((s) => [...s.matchAll(/eas-cli@(\S+?)(?=[\s"'])/g)].map((m) => m[1]));
+  assert.ok(pins.length >= 5, `only ${pins.length} eas-cli calls found`);
+  for (const pin of pins) assert.match(pin, /^\d+\.\d+\.\d+$/, `eas-cli@${pin} is not an exact version`);
+  assert.equal(new Set(pins).size, 1, `eas-cli versions differ: ${[...new Set(pins)]}`);
 });
 
 // 2026-11-08: the first TestFlight upload landed on the dev-only App Store Connect record

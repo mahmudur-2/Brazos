@@ -84,9 +84,9 @@ test('one run at a time, never cancelled half-way', () => {
   assert.match(code(PRODUCTION), /^concurrency:\n {2}group: production-pipeline\n {2}cancel-in-progress: false/m);
 });
 
-test('the jobs and their order: verify, local, plan after verify, apply after plan and local', () => {
+test('the jobs and their order: verify, local, plan after verify and local, apply after plan and local', () => {
   assert.deepEqual(Object.keys(P), ['verify', 'local', 'plan', 'apply']);
-  assert.match(P.plan, /^ {4}needs: verify$/m);
+  assert.match(P.plan, /^ {4}needs: \[verify, local\]$/m);
   assert.match(P.apply, /^ {4}needs: \[plan, local\]$/m);
   assert.match(P.plan, /^ {4}timeout-minutes: 15$/m);
   assert.match(P.apply, /^ {4}timeout-minutes: 30$/m);
@@ -169,6 +169,9 @@ test('the local job builds the fingerprint without any secret and hands it over 
   assert.match(local, /npx supabase start/);
   assert.match(local, /npm run db:reset/);
   assert.match(local, /node scripts\/verify-schema\.mjs print local --json > local-fingerprint\.json/);
+  // The database tests run on the fresh database, and a red suite hands nothing over.
+  const order = ['npm run db:reset', 'local-fingerprint.json', 'npm run db:test', 'upload-artifact'].map((s) => local.indexOf(s));
+  assert.ok(order.every((at, i) => at >= 0 && (i === 0 || at > order[i - 1])), `local job order: ${order}`);
   assert.match(local, /uses: actions\/upload-artifact@[0-9a-f]{40}\n {8}with:\n {10}name: local-fingerprint\n/);
   assert.match(local, /if-no-files-found: error/);
   assert.match(local, /if: always\(\)\n {8}run: \|\n {10}set -euo pipefail\n {10}npx supabase stop --no-backup/);

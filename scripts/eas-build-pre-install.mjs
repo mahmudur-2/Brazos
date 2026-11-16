@@ -27,8 +27,8 @@
  *     project ref                              → named parse failure
  *   - sources disagreeing, or any source not equal to the profile's expected
  *     ref                                      → named, listing every ref found
- *   - a key that is neither a legacy eyJ… JWT nor a new-format publishable
- *     key (sb_secret_… included)               → named refusal
+ *   - a key that is neither a legacy eyJ… anon JWT nor a new-format publishable
+ *     key (sb_secret_… and service_role JWTs included) → named refusal
  *
  * THE URL IS THE AUTHORITATIVE REF SOURCE: refFromRestUrl of the URL variable
  * must resolve and equal the profile's expected ref, or the build fails. Key

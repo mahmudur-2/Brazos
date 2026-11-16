@@ -93,6 +93,23 @@ export default (_context: ConfigContext): ExpoConfig => ({
       // request. Nothing reads location in the background (live location
       // sharing was removed in lean D3b), and App Review asks what uses them.
     },
+    // The app's own privacy manifest: the union of the required-reason APIs that the linked native
+    // modules declare in their PrivacyInfo.xcprivacy files (tests/appConfig.test.mjs derives it again
+    // from node_modules).
+    privacyManifests: {
+      NSPrivacyAccessedAPITypes: [
+        {
+          NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryFileTimestamp',
+          NSPrivacyAccessedAPITypeReasons: ['C617.1', '0A2A.1', '3B52.1'],
+        },
+        { NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryUserDefaults', NSPrivacyAccessedAPITypeReasons: ['CA92.1'] },
+        { NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategorySystemBootTime', NSPrivacyAccessedAPITypeReasons: ['35F9.1'] },
+        {
+          NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryDiskSpace',
+          NSPrivacyAccessedAPITypeReasons: ['E174.1', '85F4.1'],
+        },
+      ],
+    },
     // FIX-RUN B13 (2026-10-03, the operator switched it on): no entitlements
     // block. R6a (D8) declared Time Sensitive notifications here, but nothing
     // ever sends one (no interruptionLevel anywhere in lib/ or

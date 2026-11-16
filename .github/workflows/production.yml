@@ -14,13 +14,14 @@ name: Production
 # FOUR JOBS
 #   verify  the offline suite, as in staging.yml. No secret.
 #   local   builds the database from this commit on the runner's own local
-#           stack and hands its fingerprint to `apply` as an artifact. No
+#           stack, runs the database tests on it (as pgtap.yml does), and
+#           hands its fingerprint to `apply` as an artifact. No
 #           secret: it runs npm ci, and a job that holds a production secret
 #           never runs npm ci or code from node_modules (an install script can
 #           write to GITHUB_ENV and change the steps after it).
-#   plan    FIRST APPROVAL. Reads production and writes the plan to the run
-#           summary: the files to apply, the files the scan flags, the plan
-#           code. Changes nothing.
+#   plan    FIRST APPROVAL, asked only after verify and local are green. Reads
+#           production and writes the plan to the run summary: the files to
+#           apply, the files the scan flags, the plan code. Changes nothing.
 #   apply   SECOND APPROVAL. Applies exactly that plan, and stops by itself when
 #           the plan code changed in between.
 #
@@ -122,6 +123,11 @@ jobs:
           set -euo pipefail
           node scripts/verify-schema.mjs print local --json > local-fingerprint.json
 
+      - name: Run the database tests
+        run: |
+          set -euo pipefail
+          npm run db:test
+
       - name: Hand the fingerprint to the apply job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -139,7 +145,7 @@ jobs:
   # FIRST APPROVAL. Reads only: no db push, no deploy, no secret set.
   plan:
     name: plan (changes nothing)
-    needs: verify
+    needs: [verify, local]
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 15

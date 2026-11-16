@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -201,6 +201,55 @@ test('the app icon is the opaque 1024x1024 b-leaf export Apple accepts', () => {
       `app-icon-b-leaf.png: the ${corner} corner is not opaque — Apple rejects it`
     );
   }
+});
+
+// Apple refuses an upload whose binary uses a required-reason API that the app's privacy manifest
+// does not declare. The app declares exactly the union of what its linked native modules declare.
+// A manifest under node_modules that is in neither list fails here until someone classifies it.
+const LINKED_MANIFESTS = [
+  '@react-native-async-storage/async-storage/ios/PrivacyInfo.xcprivacy',
+  'expo-application/ios/PrivacyInfo.xcprivacy',
+  'expo-constants/ios/PrivacyInfo.xcprivacy',
+  'expo-device/ios/PrivacyInfo.xcprivacy',
+  'expo-file-system/ios/PrivacyInfo.xcprivacy',
+  'expo-notifications/ios/PrivacyInfo.xcprivacy',
+  'react-native-maps/ios/PrivacyInfo.xcprivacy',
+  'react-native/React/Resources/PrivacyInfo.xcprivacy',
+  'react-native/ReactCommon/cxxreact/PrivacyInfo.xcprivacy',
+  'react-native/third-party-podspecs/RCT-Folly/PrivacyInfo.xcprivacy',
+  'react-native/third-party-podspecs/boost/PrivacyInfo.xcprivacy',
+  'react-native/third-party-podspecs/glog/PrivacyInfo.xcprivacy',
+];
+// Bundled only by react-native-google-maps.podspec; iOS stays on Apple Maps (test above).
+const UNLINKED_MANIFESTS = ['react-native-maps/ios/AirGoogleMaps/Resources/GoogleMapsPrivacy.bundle/PrivacyInfo.xcprivacy'];
+
+/** { category: sorted reasons } from manifest XML, or from the config's list. */
+const reasonsOf = (entries) => {
+  const out = {};
+  for (const [type, reasons] of entries) out[type] = [...new Set([...(out[type] ?? []), ...reasons])].sort();
+  return out;
+};
+const xmlEntries = (xml) =>
+  [
+    ...xml.matchAll(
+      /<key>NSPrivacyAccessedAPIType<\/key>\s*<string>([^<]+)<\/string>\s*<key>NSPrivacyAccessedAPITypeReasons<\/key>\s*<array>([\s\S]*?)<\/array>/g
+    ),
+  ].map((m) => [m[1], [...m[2].matchAll(/<string>([^<]+)<\/string>/g)].map((r) => r[1])]);
+
+test('the privacy manifest declares exactly the required-reason APIs the linked native modules declare', () => {
+  const modules = join(root, 'node_modules');
+  const found = readdirSync(modules, { recursive: true })
+    .filter((p) => p.endsWith('.xcprivacy'))
+    .map((p) => p.split('\\').join('/'))
+    .sort();
+  assert.deepEqual(found, [...LINKED_MANIFESTS, ...UNLINKED_MANIFESTS].sort(), 'a privacy manifest under node_modules is not classified');
+
+  const wanted = reasonsOf(LINKED_MANIFESTS.flatMap((rel) => xmlEntries(readFileSync(join(modules, rel), 'utf8'))));
+  assert.ok(Object.keys(wanted).length >= 4, 'the manifests were not read');
+  const declared = resolved.ios.privacyManifests?.NSPrivacyAccessedAPITypes ?? [];
+  assert.equal(new Set(declared.map((d) => d.NSPrivacyAccessedAPIType)).size, declared.length, 'a category is listed twice');
+  assert.deepEqual(reasonsOf(declared.map((d) => [d.NSPrivacyAccessedAPIType, d.NSPrivacyAccessedAPITypeReasons])), wanted);
+  assert.deepEqual(Object.keys(resolved.ios.privacyManifests), ['NSPrivacyAccessedAPITypes']);
 });
 
 test('TestFlight and EAS Update configuration remains present', () => {

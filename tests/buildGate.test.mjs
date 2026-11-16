@@ -26,12 +26,12 @@ const STAGING = EXPECTED_REF.development;
 const RETIRED = RETIRED_PRODUCTION_REF;
 const PRODUCTION = PRODUCTION_REF;
 
-// A legacy-shaped Supabase key is a JWT whose payload carries { ref }. The
+// A legacy-shaped Supabase key is a JWT whose payload carries { ref, role }. The
 // header must be real base64 JSON so the fixture starts with eyJ like every
-// actual legacy key — the gate classifies key format by that prefix.
-const jwtFor = (ref) =>
+// actual legacy key; the gate accepts only role anon.
+const jwtFor = (ref, role = 'anon') =>
   `${Buffer.from(JSON.stringify({ alg: 'HS256' })).toString('base64')}.${Buffer.from(
-    JSON.stringify({ ref })
+    JSON.stringify(role === null ? { ref } : { ref, role })
   ).toString('base64')}.signature`;
 const urlFor = (ref) => `https://${ref}.supabase.co`;
 
@@ -243,6 +243,19 @@ test('a key in neither format fails closed — sb_secret_ never ships in a clien
       EXPO_PUBLIC_SUPABASE_KEY: key,
     });
     assertFailure(result, 'env:EXPO_PUBLIC_SUPABASE_KEY is neither a legacy');
+  }
+});
+
+test('a legacy key for the right project is refused unless its role is anon — a service key never ships', () => {
+  for (const role of ['service_role', 'authenticated', null]) {
+    const key = jwtFor(STAGING, role);
+    const result = runGate({
+      EAS_BUILD_PROFILE: 'development',
+      EXPO_PUBLIC_SUPABASE_URL: urlFor(STAGING),
+      EXPO_PUBLIC_SUPABASE_KEY: key,
+    });
+    assertFailure(result, 'env:EXPO_PUBLIC_SUPABASE_KEY is neither a legacy');
+    assert.ok(!`${result.stdout}${result.stderr}`.includes(key), 'gate printed the key');
   }
 });
 

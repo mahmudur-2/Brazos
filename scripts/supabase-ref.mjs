@@ -28,8 +28,12 @@ export function refFromPgUrl(u) {
  * "unresolvable", never as a match.
  */
 export function refFromJwt(k) {
+  return jwtClaims(k)?.ref ?? null;
+}
+
+function jwtClaims(k) {
   try {
-    return JSON.parse(Buffer.from(String(k).split('.')[1], 'base64').toString('utf8')).ref ?? null;
+    return JSON.parse(Buffer.from(String(k).split('.')[1], 'base64').toString('utf8'));
   } catch {
     return null;
   }
@@ -59,8 +63,9 @@ export const PRODUCTION_REF = 'agjwgvclzvjmpqhjutpd';
 /**
  * SUPABASE_KEY format classification — one rule for both gates.
  *
- *   'legacy-jwt'  — eyJ… anon key; its payload embeds the project ref, so
- *                   the gates decode and cross-check it against the URL.
+ *   'legacy-jwt'  — eyJ… key whose payload says role anon; it embeds the
+ *                   project ref, so the gates decode and cross-check it
+ *                   against the URL. Any other role is 'unknown'.
  *   'publishable' — new-format sb_publishable_… / sb_pu_… key; carries NO
  *                   ref BY DESIGN, so the REST URL is the authoritative ref
  *                   source and the live control probe is what verifies the
@@ -70,7 +75,7 @@ export const PRODUCTION_REF = 'agjwgvclzvjmpqhjutpd';
  */
 export function keyKind(k) {
   const s = String(k ?? '');
-  if (/^eyJ/.test(s)) return 'legacy-jwt';
+  if (/^eyJ/.test(s)) return jwtClaims(s)?.role === 'anon' ? 'legacy-jwt' : 'unknown';
   if (/^sb_publishable_/.test(s) || /^sb_pu_/.test(s)) return 'publishable';
   return 'unknown';
 }
