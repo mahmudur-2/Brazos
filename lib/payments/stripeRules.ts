@@ -98,7 +98,7 @@ export type JobCheckoutResult =
 
 /**
  * R3-1: the job path's answer. `{ paymentId, confirmed: true }` (a non-empty paymentId) is passed on
- * as it is; every other answer is read by validateCheckoutResponse. The tip path stays strict.
+ * as it is; every other answer is read by validateCheckoutResponse. The tip path reads it here too.
  */
 export function readJobCheckoutResponse(payload: unknown): JobCheckoutResult {
   const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
@@ -109,6 +109,20 @@ export function readJobCheckoutResponse(payload: unknown): JobCheckoutResult {
       : { data: null, error: { message: CHECKOUT_RESPONSE_MALFORMED } };
   }
   return validateCheckoutResponse(payload);
+}
+
+/**
+ * SM-03 (c): a confirmed tip answer names an earlier tip that is already going through at the card. When that
+ * row's amount (never the picked one) differs from the amount just picked, the person is told; the same
+ * amount, or no row, says nothing.
+ */
+export function earlierTipNotice(
+  rowCents: number | null | undefined,
+  pickedCents: number,
+  format: (cents: number) => string
+): { title: string; message: string } | null {
+  if (typeof rowCents !== 'number' || rowCents === pickedCents) return null;
+  return { title: 'Earlier Tip in Progress', message: `Your earlier ${format(rowCents)} tip is already going through, so no new tip was charged.` };
 }
 
 // ---------------------------------------------------------------------------

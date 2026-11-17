@@ -16,6 +16,8 @@ import { litBetween } from '../ui/primitives/LitSurface';
 
 type PermState = 'loading' | 'granted' | 'denied' | 'skipped';
 
+const FALLBACK_PIN = 88;
+
 // Brooklyn beachhead (East Flatbush / Sheepshead Bay area) — the fallback
 // center when we don't have the user's location.
 const DEFAULT_REGION = {
@@ -47,6 +49,10 @@ export function HotspotMap({
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const [perm, setPerm] = useState<PermState>('loading');
+  // LOOK-S: the location-off block's measured room (the scroller's height) and its words-and-buttons span.
+  const [fallbackHeight, setFallbackHeight] = useState(0);
+  const [titleTop, setTitleTop] = useState(0);
+  const [actionsFoot, setActionsFoot] = useState(0);
   const mapRef = useRef<MapView>(null);
   // Where the user last left the map. Survives the theme-keyed remount below
   // so a Light/Dark switch does not snap them back to the default region.
@@ -135,26 +141,34 @@ export function HotspotMap({
 
   if (perm === 'denied') {
     // LOOK-R L-2: a scroller, so both buttons stay reachable where the free band is shorter than the block.
+    // LOOK-S: the pin is drawn only where the free band holds it too, so both buttons rest above the sheet.
+    const padTop = Math.max(spacing.xl, fallbackInsetTop);
+    const padBottom = Math.max(spacing.xl, fallbackInsetBottom);
+    const pinFits =
+      fallbackHeight === 0 ||
+      actionsFoot === 0 ||
+      fallbackHeight - padTop - padBottom >= actionsFoot - titleTop + FALLBACK_PIN + spacing.sm;
     return (
       <ScrollView
         style={[styles.flex, { backgroundColor: colors.background }]}
-        contentContainerStyle={[
-          styles.fallback,
-          {
-            paddingTop: Math.max(spacing.xl, fallbackInsetTop),
-            paddingBottom: Math.max(spacing.xl, fallbackInsetBottom),
-          },
-        ]}
+        contentContainerStyle={[styles.fallback, { paddingTop: padTop, paddingBottom: padBottom }]}
+        onLayout={(e) => setFallbackHeight(e.nativeEvent.layout.height)}
       >
-        <MapPinIcon size={88} />
-        <Text style={[styles.fallbackTitle, { color: colors.text }]}>
+        {pinFits && <MapPinIcon size={FALLBACK_PIN} />}
+        <Text
+          style={[styles.fallbackTitle, { color: colors.text }]}
+          onLayout={(e) => setTitleTop(e.nativeEvent.layout.y)}
+        >
           Location is off
         </Text>
         <Text style={[styles.fallbackText, { color: colors.textMuted }]}>
           Brazos uses your location to show work near you on the map. Turn it on
           in Settings to see nearby hotspots.
         </Text>
-        <View style={styles.fallbackActions}>
+        <View
+          style={styles.fallbackActions}
+          onLayout={(e) => setActionsFoot(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}
+        >
           <Button title="Open Settings" onPress={() => Linking.openSettings()} />
           <Button
             title="View Map Without Location"

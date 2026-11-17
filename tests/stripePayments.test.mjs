@@ -143,9 +143,29 @@ test('R3-1 · the job path passes { paymentId, confirmed: true } on; without the
   assert.equal(readJobCheckoutResponse({ paymentId: 'pay-1' }).error.message, CHECKOUT_RESPONSE_MALFORMED);
 });
 
-test('[static] R3-1 · only the job path reads the flag; the tip path stays strict', () => {
+test('[static] R3-1, SM-03 · the job path and the tip path read the flag with the one reader', () => {
   const code = stripComments(read('lib/payments/stripe.ts'));
-  assert.match(code, /return tipAmountCents != null \? validateCheckoutResponse\(invoked\.data\) : readJobCheckoutResponse\(invoked\.data\);/);
+  assert.match(code, /\{ data: null, error: \{ message: userMessage\(message\) \} \};\s*\}\s*return readJobCheckoutResponse\(invoked\.data\);\s*\}/);
+  assert.doesNotMatch(code, /validateCheckoutResponse/, 'no second reader');
+});
+
+test('SM-03 (c) · earlierTipNotice: the confirmed row\'s amount, never the picked one; the same amount or no row says nothing', () => {
+  const fmt = (cents) => `$${(cents / 100).toFixed(2)}`;
+  assert.deepEqual(rules.earlierTipNotice(500, 900, fmt), {
+    title: 'Earlier Tip in Progress',
+    message: 'Your earlier $5.00 tip is already going through, so no new tip was charged.',
+  });
+  assert.equal(rules.earlierTipNotice(900, 900, fmt), null);
+  assert.equal(rules.earlierTipNotice(null, 900, fmt), null);
+  assert.equal(rules.earlierTipNotice(undefined, 900, fmt), null);
+  // The screen: a confirmed answer reads the row, may alert with formatBudget, then polls; no dialog, no sheet.
+  const screen = stripComments(read('screens/ReviewAndTipScreen.tsx'));
+  assert.match(
+    screen,
+    /if \('confirmed' in session\.data\) \{\s*const \{ data: row \} = await fetchJobTip\(job\.id\);\s*if \(!activeRef\.current\) return;\s*if \(row\) setTip\(row\);\s*const earlier = earlierTipNotice\(row\?\.amount_cents, tipCents, formatBudget\);\s*if \(earlier\) await alertAsync\(earlier\.title, earlier\.message\);\s*if \(!activeRef\.current\) return;\s*await confirmCardTip\(\);\s*return;\s*\}\s*tipSessionRef\.current = session\.data;/
+  );
+  assert.match(screen, /tip is started but not confirmed\. Finish it below, or choose another amount\./);
+  assert.doesNotMatch(screen, /started but not sent/);
 });
 
 // ---------------------------------------------------------------------------

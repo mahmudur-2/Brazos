@@ -123,7 +123,8 @@ for (const fn of ['create-payment', 'payment-methods', 'connect-onboarding', 'co
     for (const admit of [async () => new Response('down', { status: 500 }), said(true), async () => { throw new TypeError('fetch failed'); }]) {
       const out = await run(handler, fn, admit);
       assert.equal(out.status, 503);
-      assert.deepEqual(out.body, { error: ACCOUNT_UNCHECKED });
+      // SM-04: create-payment's 5xx before its confirm call says that nothing was charged.
+      assert.deepEqual(out.body, fn === 'create-payment' ? { error: ACCOUNT_UNCHECKED, ambiguous: false } : { error: ACCOUNT_UNCHECKED });
       assert.equal(out.calls.length, 1);
     }
   });

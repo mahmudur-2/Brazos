@@ -255,6 +255,13 @@ test('a line with both sides: both people, the report in the customer\'s words, 
   assert.equal(attention.attentionCard(line({ ...DECIDING, decisions: ['worker'], report_reason: null })).report, null);
 });
 
+test('SM-01: on an issue_no_show line the WORKER reported the absent customer, so the report says "The customer wasn’t there"; the customer\'s own no_show keeps its words', () => {
+  const NO_SHOW = { ...DECIDING, decisions: ['customer', 'worker'], code: 'issue_no_show', report_reason: 'no_show', cancelled_at: '2026-11-15T16:00:00Z' };
+  assert.equal(attention.attentionCard(line(NO_SHOW)).report.label, 'The customer wasn’t there');
+  assert.equal(attention.attentionCard(line({ ...NO_SHOW, code: 'issue_open' })).report.label, disputes.DISPUTE_REASON_LABELS.no_show);
+  assert.equal(disputes.DISPUTE_REASON_LABELS.no_show, 'The worker didn’t show up', 'the customer\'s report screen keeps its words');
+});
+
 test('a line with one side and a note: one button and the server\'s note; a note also stands without a button', () => {
   const NOTE = 'The worker side is not offered: the payment was never captured.';
   const card = attention.attentionCard(line({ ...DECIDING, decisions: ['customer'], decision_note: NOTE }));
@@ -273,7 +280,7 @@ test('an unknown decision value is not drawn; nothing comes from code or finish'
   assert.deepEqual(attention.attentionCard(line({ ...DECIDING, job_id: null, decisions: ['customer', 'worker'] })).buttons, []);
   const lib = strip(read('lib/adminAttention.ts'));
   assert.doesNotMatch(lib, /\.finish\b/, 'the app never reads finish');
-  assert.deepEqual([...lib.matchAll(/line\.code\b/g)].length, 1, 'code only goes into Details');
+  assert.deepEqual([...lib.matchAll(/line\.code\b/g)].length, 2, 'code only goes into Details and names the no-show report (SM-01)');
 });
 
 // ---------------------------------------------------------------- a decision
@@ -322,6 +329,23 @@ test('a decision that works: the card\'s buttons off from the tap, the confirmat
   run = decisionIo({ confirm: false });
   await attention.runDecision(deciding, 'customer', run.io);
   assert.deepEqual(run.log, ['busy issue:job-7 true', 'confirm Refund the customer? / This sends the payment back to the customer. You cannot undo it. / Refund', 'busy issue:job-7 false']);
+});
+
+test('SM-02: on a cancelled job the worker side pays only the cancellation fee, and its confirmation says so; the customer side keeps its words', async () => {
+  const cancelled = line({ ...DECIDING, decisions: ['customer', 'worker'], code: 'issue_no_show', cancelled_at: '2026-11-15T16:00:00Z' });
+  assert.deepEqual(attention.attentionCard(cancelled).buttons, [
+    { side: 'customer', label: 'Refund Customer' },
+    { side: 'worker', label: 'Pay Worker' },
+  ]);
+  let run = decisionIo({ confirm: false });
+  await attention.runDecision(cancelled, 'worker', run.io);
+  assert.equal(
+    run.log[1],
+    'confirm Pay the cancellation fee? / This pays the worker the cancellation fee only. The customer gets back the rest of the payment. You cannot undo it. / Pay'
+  );
+  run = decisionIo({ confirm: false });
+  await attention.runDecision(cancelled, 'customer', run.io);
+  assert.equal(run.log[1], 'confirm Refund the customer? / This sends the payment back to the customer. You cannot undo it. / Refund');
 });
 
 test('a decision the server refuses: its sentence as it is, then the list is read again', async () => {

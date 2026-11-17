@@ -10,7 +10,8 @@ import { titleCase } from './titleCase';
  * in the server's own order and the server's own words (screens/AdminAttentionScreen.tsx draws
  * them). The owner is the only admin; a push "Brazos needs you" brings him here.
  *
- * The app holds no table from `code` or `finish` to anything. A line's only buttons are its own
+ * The app holds no table from `code` or `finish` to anything (one exception, SM-01: 'issue_no_show'
+ * names the report's words). A line's only buttons are its own
  * `decisions` ('customer', 'worker'); each runs rpc('admin_decide_issue') behind a confirmation, and
  * a value this build does not know is not drawn.
  */
@@ -121,6 +122,18 @@ const DECISIONS: Record<
   },
 };
 
+/** SM-02: on a cancelled job the worker side moves only the cancellation fee (resolve_job_dispute). */
+function decisionConfirm(side: AttentionDecision, line: AttentionLine) {
+  if (side === 'worker' && line.cancelled_at) {
+    return {
+      title: 'Pay the cancellation fee?',
+      message: 'This pays the worker the cancellation fee only. The customer gets back the rest of the payment. You cannot undo it.',
+      confirmText: 'Pay',
+    };
+  }
+  return DECISIONS[side].confirm;
+}
+
 function isDecision(value: unknown): value is AttentionDecision {
   return value === 'customer' || value === 'worker';
 }
@@ -187,8 +200,12 @@ export function attentionCard(line: AttentionLine): AttentionCardView {
     report:
       deciding && line.report_reason
         ? {
-            // The same words the customer's report screen shows (lib/disputes.ts).
-            label: DISPUTE_REASON_LABELS[line.report_reason as DisputeReason] ?? null,
+            // The same words the customer's report screen shows (lib/disputes.ts). SM-01: on
+            // 'issue_no_show' the worker reported the customer absent, the opposite of no_show's words.
+            label:
+              line.code === 'issue_no_show'
+                ? 'The customer wasn’t there'
+                : (DISPUTE_REASON_LABELS[line.report_reason as DisputeReason] ?? null),
             details: line.report_details,
             at: dayTime(line.report_at),
           }
@@ -252,7 +269,7 @@ export async function runDecision(
   // Before the first await: a second tap on this card, even in the same frame, finds the hold.
   if (!io.guard.take(line.key)) return;
   try {
-    const ok = await io.confirm(DECISIONS[side].confirm);
+    const ok = await io.confirm(decisionConfirm(side, line));
     if (!ok) return;
     let outcome: { error: string | null; unanswered?: boolean };
     try {

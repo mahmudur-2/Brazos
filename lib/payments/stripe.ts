@@ -43,9 +43,7 @@ import {
   classifySheetError,
   extractInvokeError,
   readJobCheckoutResponse,
-  validateCheckoutResponse,
   type CheckoutSession,
-  type CheckoutSessionResult,
   type InvokeErrorLike,
   type JobCheckoutResult,
 } from './stripeRules';
@@ -218,13 +216,13 @@ async function readInvokeErrorBody(error: unknown): Promise<string | null> {
  * R6c (D3/D4): with `tipAmountCents` the same function mints the job's TIP
  * row instead (begin_tip_payment, as the caller) and the body carries the
  * amount — integer cents — as `tipAmountCents`. Nothing else differs: the
- * same four strings come back, and the amount the sheet charges is the tip
+ * job path's answers come back, and the amount the sheet charges is the tip
  * row's own charge_amount_cents, which the screen reads off the row.
  */
 export async function createPaymentSession(
   jobId: string,
   options: { tipAmountCents: number }
-): Promise<CheckoutSessionResult>;
+): Promise<JobCheckoutResult>;
 export async function createPaymentSession(
   jobId: string,
   options?: { saveCard?: boolean }
@@ -255,8 +253,8 @@ export async function createPaymentSession(
     return { data: null, error: { message: userMessage(message) } };
   }
 
-  // R3-1: only a job payment may answer { paymentId, confirmed: true }; a tip stays strict.
-  return tipAmountCents != null ? validateCheckoutResponse(invoked.data) : readJobCheckoutResponse(invoked.data);
+  // R3-1, SM-03: a job payment or a tip may answer { paymentId, confirmed: true } (its intent already settled).
+  return readJobCheckoutResponse(invoked.data);
 }
 
 // ---------------------------------------------------------------------------

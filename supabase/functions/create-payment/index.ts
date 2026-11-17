@@ -55,13 +55,15 @@
 // cents greater than zero, starts a TIP instead of the job payment: the one
 // difference is which RPC the database decides with — begin_tip_payment(),
 // called AS THE CALLER exactly as begin_job_payment() is, with the caller's
-// own token and the publishable key. begin_tip_payment() enforces the kill switch,
+// own token and the publishable key. A pre-read comes first (SM-03 c): an earlier
+// unfunded tip row whose intent is settled is answered as confirmed, and a read that
+// fails for a moment refuses. begin_tip_payment() enforces the kill switch,
 // ownership, that the job is completed, that the job payment released first,
 // one tip per job and both tip ceilings — and its refusals are passed through
 // verbatim, as the job path's are. Everything after step 1 is shared and
 // unchanged: the customer, the ephemeral key, the intent for the tip row's
 // own charge_amount_cents under brazos-intent-<its own id>, the provider ref,
-// and the same four-string response. A body without the field is the job
+// and the job path's answers. A body without the field is the job
 // path, byte for byte. A malformed tip amount is a 400 before any RPC call.
 //
 // ---------------------------------------------------------------------------
@@ -164,8 +166,61 @@ async function stripeGet(path: string): Promise<{ ok: boolean; status: number; b
   return { ok: res.ok, status: res.status, body };
 }
 
+/** An intent the provider already settled: never confirmed or charged again. */
+function isSettled(status: unknown): boolean {
+  return status === 'succeeded' || status === 'processing' || status === 'requires_capture';
+}
 
+/** SM-03 (c): the pre-read could not read the state for a moment, at the database or at the provider. */
+const UNREAD = { payments: 'unread:payments', intent: 'unread:intent' } as const;
+
+/** SM-03 (c): a refused read. A 5xx or 429 is for a moment (unknown); any other refusal is for good (null). */
+function refusedRead(place: 'payments' | 'intent', status: number): string | null {
+  console.error(`create-payment: tip pre-read ${place} ${status}`);
+  return status >= 500 || status === 429 ? UNREAD[place] : null;
+}
+
+/**
+ * SM-03 (c): the caller's newest unfunded tip row of this job, when its intent is already settled (the
+ * sheet went through, the webhook not yet). Read before begin_tip_payment, which would void that row for
+ * another amount and charge again. Writes nothing. The row's id: settled. null: no such row, an intent not
+ * settled, or a read refused for good (today's path). UNREAD: a throw, a 5xx or a 429 (the caller refuses).
+ */
+async function settledTipId(jobId: string, payerId: string): Promise<string | null> {
+  let place: 'payments' | 'intent' = 'payments';
+  try {
+    const read = await fetch(
+      `${SUPABASE_URL}/rest/v1/payments?job_id=eq.${encodeURIComponent(jobId)}&payer_id=eq.${encodeURIComponent(payerId)}` +
+        '&kind=eq.tip&status=eq.unfunded&provider_ref=not.is.null&select=id,provider_ref&order=created_at.desc&limit=1',
+      { headers: serviceHeaders() }
+    );
+    if (!read.ok) return refusedRead(place, read.status);
+    const rows = (await read.json()) as unknown;
+    const row = Array.isArray(rows) ? (rows[0] as { id?: unknown; provider_ref?: unknown } | undefined) : undefined;
+    if (typeof row?.id !== 'string' || typeof row.provider_ref !== 'string') return null;
+    place = 'intent';
+    const intent = await stripeGet(`/v1/payment_intents/${encodeURIComponent(row.provider_ref)}`);
+    if (!intent.ok) return refusedRead(place, intent.status);
+    return isSettled(intent.body.status) ? row.id : null;
+  } catch {
+    console.error(`create-payment: tip pre-read ${place} threw`);
+    return UNREAD[place];
+  }
+}
+
+// SM-04: the one exit. An answer of 500 or more that leaves before the confirm call (the only call that
+// can charge a card) charged nothing, and says so with `ambiguous: false`, keeping its status and
+// headers. A 4xx answer, and every answer at or after the confirm call, leaves as it is.
 Deno.serve(async (req) => {
+  const charging = { now: false };
+  const res = await createPayment(req, charging);
+  if (res.status < 500 || charging.now) return res;
+  const body = (await res.clone().json().catch(() => null)) as Record<string, unknown> | null;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return res;
+  return new Response(JSON.stringify({ ...body, ambiguous: false }), { status: res.status, headers: res.headers });
+});
+
+async function createPayment(req: Request, charging: { now: boolean }): Promise<Response> {
   const unset = notConfigured('create-payment', { SUPABASE_URL, PUBLISHABLE_KEY, SECRET_KEY, STRIPE_SECRET_KEY });
   if (unset) return unset;
 
@@ -226,6 +281,12 @@ Deno.serve(async (req) => {
     // returns the unfunded row, creating it if this is the first attempt.
     // With a tip amount, begin_tip_payment() decides instead — same token,
     // same key — and returns the unfunded TIP row (R6c, D4).
+    if (tipAmountCents != null) {
+      const settledTip = await settledTipId(jobId, caller.id);
+      if (settledTip === UNREAD.payments) return json({ error: 'Could not start this payment.' }, 500);
+      if (settledTip === UNREAD.intent) return json({ error: 'The payment provider is unavailable right now.' }, 502);
+      if (settledTip) return json({ paymentId: settledTip, confirmed: true });
+    }
     const begun = tipAmountCents != null
       ? await fetch(`${SUPABASE_URL}/rest/v1/rpc/begin_tip_payment`, {
           method: 'POST',
@@ -321,11 +382,10 @@ Deno.serve(async (req) => {
       console.error(`create-payment: intent ${intent.status}: ${JSON.stringify(intent.body).slice(0, 300)}`);
       return json({ error: 'The payment provider is unavailable right now.' }, 502);
     }
-    // P-1: a resumed job payment whose intent the provider already settled (a lost sheet answer, a late
-    // webhook) is never written again; both paths get the saved-card path's answer and the webhook marks
-    // the row held. A tip is left out: the app's tip path does not read this answer.
-    const resumedStatus = storedRef && tipAmountCents == null ? intent.body.status : undefined;
-    if (resumedStatus === 'succeeded' || resumedStatus === 'processing' || resumedStatus === 'requires_capture') {
+    // P-1: a resumed payment, job or tip (SM-03), whose intent the provider already settled (a lost sheet
+    // answer, a late webhook) is never written again; every path gets the saved-card path's answer and the
+    // webhook marks the row held.
+    if (storedRef && isSettled(intent.body.status)) {
       return json({ paymentId, confirmed: true });
     }
 
@@ -389,6 +449,7 @@ Deno.serve(async (req) => {
         return json({ error: 'Your card was declined. Protect the payment in Checkout.', declined: true }, 402);
       }
       const priorCharge = intentNow.ok && typeof intentNow.body.latest_charge === 'string' ? intentNow.body.latest_charge : '';
+      charging.now = true;
       const confirmed = await stripe(
         `/v1/payment_intents/${encodeURIComponent(intentId)}/confirm`,
         { payment_method: savedCardId, off_session: 'true', return_url: OFF_SESSION_RETURN_URL },
@@ -442,4 +503,4 @@ Deno.serve(async (req) => {
     console.error('create-payment: unhandled', err);
     return json({ error: 'Could not start this payment.' }, 500);
   }
-});
+}

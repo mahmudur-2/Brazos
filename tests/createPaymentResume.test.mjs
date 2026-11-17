@@ -47,7 +47,7 @@ const PAYMENT = { id: 'pay-1', charge_amount_cents: 5375, provider_ref: null };
  * One call to the handler against a fake world. `stored` is the intent the provider holds under the
  * row's provider_ref (or a function answering its GET). Returns the response, its body and every call.
  */
-async function run({ payment = PAYMENT, body = { jobId: 'job-1' }, stored } = {}) {
+async function run({ payment = PAYMENT, body = { jobId: 'job-1' }, stored, tipRows, earlier, answer } = {}) {
   const calls = [];
   const original = globalThis.fetch;
   globalThis.fetch = async (url, init = {}) => {
@@ -55,10 +55,16 @@ async function run({ payment = PAYMENT, body = { jobId: 'job-1' }, stored } = {}
     const call = { url: String(url), method, headers: init.headers ?? {}, body: init.body ?? '' };
     calls.push(call);
     const at = call.url;
+    // SM-04: one call answered (or thrown) as the test says; undefined = the fake world's answer.
+    const given = answer ? answer(call) : undefined;
+    if (given) return given;
     if (at === `${ENV.SUPABASE_URL}/rest/v1/rpc/begin_job_payment`) return Response.json(payment);
     if (at === `${ENV.SUPABASE_URL}/rest/v1/rpc/begin_tip_payment`) return Response.json(payment);
     if (at === `${ENV.SUPABASE_URL}/rest/v1/rpc/get_payment_customer`) return Response.json('cus_test');
     if (at === `${ENV.SUPABASE_URL}/rest/v1/rpc/attach_provider_ref`) return Response.json(null);
+    // SM-03 (c): the caller's unfunded tip row, read before begin_tip_payment (unset: an unexpected answer).
+    if (tipRows && at.startsWith(`${ENV.SUPABASE_URL}/rest/v1/payments?`)) return typeof tipRows === 'function' ? tipRows() : Response.json(tipRows);
+    if (earlier && at === `${STRIPE}/v1/payment_intents/pi_earlier` && method === 'GET') return typeof earlier === 'function' ? earlier() : Response.json({ id: 'pi_earlier', status: earlier });
     if (at === `${STRIPE}/v1/ephemeral_keys`) return Response.json({ secret: 'ek_test' });
     if (at === `${STRIPE}/v1/payment_intents` && method === 'POST') {
       return Response.json({ id: 'pi_new', client_secret: 'pi_new_secret' });
@@ -89,7 +95,7 @@ async function run({ payment = PAYMENT, body = { jobId: 'job-1' }, stored } = {}
     } finally {
       console.error = log;
     }
-    return { status: res.status, json: await res.json(), calls, errors };
+    return { status: res.status, type: res.headers.get('Content-Type'), json: await res.json(), calls, errors };
   } finally {
     globalThis.fetch = original;
   }
@@ -125,7 +131,8 @@ test('A2 · the stored intent cannot be read: the request fails, and nothing is 
   ]) {
     const r = await run({ payment, stored });
     assert.equal(r.status, 502, `${why}: 502`);
-    assert.deepEqual(r.json, { error: 'The payment provider is unavailable right now.' }, `${why}: the one sentence`);
+    // SM-04: before the confirm call, so nothing was charged.
+    assert.deepEqual(r.json, { error: 'The payment provider is unavailable right now.', ambiguous: false }, `${why}: the one sentence`);
     assert.equal(creates(r.calls).length, 0, `${why}: never a POST in its place`);
     assert.equal(attaches(r.calls).length, 0, `${why}: nothing attached`);
   }
@@ -229,12 +236,151 @@ test('P-1 (control) · sheet path, a stored intent still payable: the opt-in is 
   assert.deepEqual(r.json, { paymentId: 'pay-1', customerId: 'cus_test', clientSecret: 'pi_stored_secret', ephemeralKeySecret: 'ek_test' });
 });
 
-test('P-1 (control) · a TIP resume whose stored intent succeeded: unchanged, the sheet gets its four fields', async () => {
+test('P-1, SM-03 (a) · a TIP resume whose stored intent is settled: { paymentId, confirmed: true }, and no write reaches the provider', async () => {
   const payment = { ...PAYMENT, provider_ref: 'pi_stored' };
-  const r = await run({ payment, body: { jobId: 'job-1', tipAmountCents: 500 }, stored: { id: 'pi_stored', client_secret: 'pi_stored_secret', status: 'succeeded' } });
+  for (const status of SETTLED) {
+    const r = await run({ payment, body: { jobId: 'job-1', tipAmountCents: 500 }, tipRows: [], stored: { id: 'pi_stored', client_secret: 'pi_stored_secret', status } });
+    assert.equal(r.status, 200, `${status}: 200`);
+    assert.ok(r.calls.some((c) => c.url.endsWith('/rest/v1/rpc/begin_tip_payment')), `${status}: the tip row`);
+    assert.deepEqual(r.json, { paymentId: 'pay-1', confirmed: true }, `${status}: confirmed`);
+    assert.deepEqual(r.calls.filter((c) => c.url.startsWith(STRIPE)).map((c) => `${c.method} ${c.url.slice(STRIPE.length)}`),
+      ['GET /v1/payment_intents/pi_stored'], `${status}: the one read, no ephemeral key`);
+  }
+});
+
+const tipReads = (calls) => calls.filter((c) => c.url.startsWith(`${ENV.SUPABASE_URL}/rest/v1/payments?`));
+const tipBegins = (calls) => calls.filter((c) => c.url.endsWith('/rest/v1/rpc/begin_tip_payment'));
+const TIP_BODY = { jobId: 'job-1', tipAmountCents: 900 };
+const EARLIER = [{ id: 'pay-0', provider_ref: 'pi_earlier' }];
+
+test('SM-03 (c) · another amount while the earlier tip\'s intent is settled: that row confirmed, no begin_tip_payment, no write anywhere', async () => {
+  for (const status of SETTLED) {
+    const r = await run({ body: TIP_BODY, tipRows: EARLIER, earlier: status });
+    assert.equal(r.status, 200, `${status}: 200`);
+    assert.deepEqual(r.json, { paymentId: 'pay-0', confirmed: true }, `${status}: the earlier row's id`);
+    assert.equal(tipBegins(r.calls).length, 0, `${status}: begin_tip_payment is not called (nothing voided)`);
+    assert.equal(stripePosts(r.calls).length, 0, `${status}: no POST to the provider`);
+    assert.deepEqual(r.calls.map((c) => c.method), ['GET', 'GET'], `${status}: two reads, nothing else`);
+    const read = new URL(tipReads(r.calls)[0].url);
+    assert.equal(read.searchParams.get('payer_id'), 'eq.user-1', 'the verified caller, never the body');
+    assert.equal(read.searchParams.get('job_id'), 'eq.job-1');
+    assert.equal(read.searchParams.get('kind'), 'eq.tip');
+    assert.equal(read.searchParams.get('status'), 'eq.unfunded');
+    assert.equal(read.searchParams.get('order'), 'created_at.desc');
+    assert.equal(read.searchParams.get('limit'), '1');
+    assert.equal(tipReads(r.calls)[0].headers.Authorization, undefined, 'read with the service headers, never the caller\'s token');
+  }
+});
+
+test('SM-03 (c) (control) · the earlier intent is not settled: today\'s path exactly (begin_tip_payment, a new intent, the sheet)', async () => {
+  const r = await run({ body: TIP_BODY, tipRows: EARLIER, earlier: 'requires_payment_method' });
+  assert.equal(tipReads(r.calls).length, 1, 'the earlier row was read');
+  assert.equal(tipBegins(r.calls).length, 1, 'begin_tip_payment decides');
+  assert.deepEqual(r.json, { paymentId: 'pay-1', customerId: 'cus_test', clientSecret: 'pi_new_secret', ephemeralKeySecret: 'ek_test' });
+});
+
+test('SM-03 (c) (control) · the pre-read answers no row or no stored intent: today\'s path exactly, no new refusal', async () => {
+  const answers = [
+    () => Response.json({ not: 'a list' }),
+    () => Response.json([]),
+    () => Response.json([{ id: 'pay-0', provider_ref: null }]),
+  ];
+  for (const [index, tipRows] of answers.entries()) {
+    const r = await run({ body: TIP_BODY, tipRows });
+    assert.equal(tipReads(r.calls).length, 1, `${index}: the read was tried`);
+    assert.equal(tipBegins(r.calls).length, 1, `${index}: begin_tip_payment decides`);
+    assert.equal(r.status, 200, `${index}: 200`);
+    assert.deepEqual(r.json, { paymentId: 'pay-1', customerId: 'cus_test', clientSecret: 'pi_new_secret', ephemeralKeySecret: 'ek_test' }, `${index}`);
+  }
+  // A job payment never reads a tip row.
+  assert.equal(tipReads((await run({ body: { jobId: 'job-1' }, tipRows: EARLIER, earlier: 'succeeded' })).calls).length, 0);
+});
+
+// SM-03 (c), unknown state: a pre-read that fails for a moment refuses with an existing answer; begin_tip_payment
+// would void a row whose intent may already be settled, and the sheet would charge a second time.
+const fails = (status) => () => Response.json({ error: { type: 'api_error' } }, { status });
+const throws = () => { throw new TypeError('fetch failed'); };
+const stopped = (r, label) => {
+  assert.equal(tipBegins(r.calls).length, 0, `${label}: begin_tip_payment is not called`);
+  assert.equal(creates(r.calls).length, 0, `${label}: no intent is created`);
+};
+
+test('SM-03 (c) T1 · the tip row read answers 503, 429 or throws: 500 with the begin call\'s own answer, nothing begun', async () => {
+  for (const [label, tipRows, line] of [['503', fails(503), '503'], ['429', fails(429), '429'], ['thrown', throws, 'threw']]) {
+    const r = await run({ body: TIP_BODY, tipRows });
+    assert.equal(r.status, 500, `${label}: 500`);
+    assert.deepEqual(r.json, { error: 'Could not start this payment.', ambiguous: false }, `${label}`);
+    stopped(r, label);
+    assert.deepEqual(r.errors, [`create-payment: tip pre-read payments ${line}`], `${label}: one log line, place and status`);
+  }
+});
+
+test('SM-03 (c) T2 · a row is found and its intent read answers 503 or 429: line 364\'s 502, nothing begun', async () => {
+  for (const status of [503, 429]) {
+    const r = await run({ body: TIP_BODY, tipRows: EARLIER, earlier: fails(status) });
+    assert.equal(r.status, 502, `${status}: 502`);
+    assert.deepEqual(r.json, { error: 'The payment provider is unavailable right now.', ambiguous: false }, `${status}`);
+    stopped(r, status);
+    assert.deepEqual(r.errors, [`create-payment: tip pre-read intent ${status}`]);
+  }
+});
+
+test('SM-03 (c) T3 · a row is found and its intent read throws: line 364\'s 502, nothing begun', async () => {
+  const r = await run({ body: TIP_BODY, tipRows: EARLIER, earlier: throws });
+  assert.equal(r.status, 502);
+  assert.deepEqual(r.json, { error: 'The payment provider is unavailable right now.', ambiguous: false });
+  stopped(r, 'thrown');
+  assert.deepEqual(r.errors, ['create-payment: tip pre-read intent threw']);
+});
+
+test('SM-03 (c) C1 · the tip row read is refused for good (400, 401, 403, 404): today\'s path, begin_tip_payment decides', async () => {
+  for (const status of [400, 401, 403, 404]) {
+    const r = await run({ body: TIP_BODY, tipRows: fails(status) });
+    assert.equal(tipBegins(r.calls).length, 1, `${status}: begin_tip_payment decides`);
+    assert.equal(r.status, 200, `${status}: 200`);
+  }
+});
+
+test('SM-03 (c) C2 · a row is found and its intent read answers 404: today\'s path, begin_tip_payment decides', async () => {
+  const r = await run({ body: TIP_BODY, tipRows: EARLIER, earlier: fails(404) });
+  assert.equal(tipBegins(r.calls).length, 1, 'begin_tip_payment decides');
   assert.equal(r.status, 200);
-  assert.ok(r.calls.some((c) => c.url.endsWith('/rest/v1/rpc/begin_tip_payment')), 'the tip row');
-  assert.deepEqual(r.json, { paymentId: 'pay-1', customerId: 'cus_test', clientSecret: 'pi_stored_secret', ephemeralKeySecret: 'ek_test' });
-  assert.deepEqual(r.calls.filter((c) => c.url.startsWith(STRIPE)).map((c) => `${c.method} ${c.url.slice(STRIPE.length)}`),
-    ['GET /v1/payment_intents/pi_stored', 'POST /v1/ephemeral_keys'], 'the same provider calls as before P-1');
+});
+
+// ---------------------------------------------------------------- SM-04: a refusal before any charge says so
+
+const SAVED = { jobId: 'job-1', useSavedCard: true, paymentMethodId: 'pm_saved' };
+const UNAVAILABLE = 'The payment provider is unavailable right now.';
+
+test('SM-04 · every answer of 500 or more before the confirm call carries ambiguous: false, with its status and type', async () => {
+  const cases = [
+    ['the card read answers 503', SAVED, (c) => (c.url.includes('/v1/payment_methods/') ? new Response('{}', { status: 503 }) : undefined), 502, { error: UNAVAILABLE }],
+    ['the customer read fails (thrown, the catch)', SAVED, (c) => (c.url.endsWith('/rpc/get_payment_customer') ? new Response('down', { status: 500 }) : undefined), 500, { error: 'Could not start this payment.' }],
+    ['begin_job_payment answers 500', SAVED, (c) => (c.url.endsWith('/rpc/begin_job_payment') ? Response.json({ message: 'boom' }, { status: 500 }) : undefined), 500, { error: 'boom' }],
+    ['the intent create fails (sheet path)', { jobId: 'job-1' }, (c) => (c.url === `${STRIPE}/v1/payment_intents` ? Response.json({}, { status: 500 }) : undefined), 502, { error: UNAVAILABLE }],
+    ['the intent read before the confirm throws', SAVED, (c) => (c.method === 'GET' && c.url === `${STRIPE}/v1/payment_intents/pi_new` ? (() => { throw new TypeError('fetch failed'); })() : undefined), 500, { error: 'Could not start this payment.' }],
+  ];
+  for (const [why, body, answer, status, sent] of cases) {
+    const r = await run({ body, answer });
+    assert.equal(r.status, status, `${why}: the status is kept`);
+    assert.equal(r.type, 'application/json', `${why}: the type is kept`);
+    assert.deepEqual(r.json, { ...sent, ambiguous: false }, `${why}: nothing was charged`);
+    assert.equal(r.calls.filter((c) => c.url.endsWith('/confirm')).length, 0, `${why}: no confirm call`);
+  }
+});
+
+test('SM-04 (controls) · a 4xx gets no field; at the confirm call nothing changes', async () => {
+  const refused = await run({ body: SAVED, answer: (c) => (c.url.endsWith('/rpc/begin_job_payment') ? Response.json({ message: 'Job not found' }, { status: 400 }) : undefined) });
+  assert.equal(refused.status, 400);
+  assert.deepEqual(refused.json, { error: 'Job not found' });
+  const gone = await run({ body: SAVED, answer: (c) => (c.url.includes('/v1/payment_methods/') ? Response.json({}, { status: 404 }) : undefined) });
+  assert.deepEqual(gone.json, { error: 'That card is no longer saved. Protect the payment in Checkout.', code: 'no_saved_card' });
+  // The confirm call throws: no answer is known, so no `ambiguous` (the app reads a 500 without it as unknown).
+  const thrown = await run({ body: SAVED, answer: (c) => (c.url.endsWith('/confirm') ? (() => { throw new TypeError('fetch failed'); })() : undefined) });
+  assert.equal(thrown.status, 500);
+  assert.deepEqual(thrown.json, { error: 'Could not start this payment.' });
+  // The confirm call answers 5xx: ambiguous: true, as before.
+  const failed = await run({ body: SAVED, answer: (c) => (c.url.endsWith('/confirm') ? Response.json({ error: { type: 'api_error' } }, { status: 500 }) : undefined) });
+  assert.equal(failed.status, 502);
+  assert.deepEqual(failed.json, { error: UNAVAILABLE, ambiguous: true });
 });

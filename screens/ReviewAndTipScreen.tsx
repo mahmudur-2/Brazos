@@ -54,7 +54,7 @@ import {
   STRIPE_UNAVAILABLE_MESSAGE,
   type CheckoutSession,
 } from '../lib/payments/stripe';
-import { CHECKOUT_POLL_INTERVAL_MS, CHECKOUT_POLL_TIMEOUT_MS } from '../lib/payments/stripeRules';
+import { CHECKOUT_POLL_INTERVAL_MS, CHECKOUT_POLL_TIMEOUT_MS, earlierTipNotice } from '../lib/payments/stripeRules';
 import { fetchProfileById } from '../lib/profiles';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { dollarsToCents, formatBudget } from '../lib/jobs';
@@ -252,6 +252,18 @@ export function ReviewAndTipScreen() {
           `${userMessage(session.error, 'Check your connection and try again.')}`
         );
         await load();
+        return;
+      }
+      if ('confirmed' in session.data) {
+        // SM-03: the tip's intent already settled (an earlier sheet went through): no dialog, no sheet;
+        // the poll waits for it. Its row's amount, not the picked one, is what was charged.
+        const { data: row } = await fetchJobTip(job.id);
+        if (!activeRef.current) return;
+        if (row) setTip(row);
+        const earlier = earlierTipNotice(row?.amount_cents, tipCents, formatBudget);
+        if (earlier) await alertAsync(earlier.title, earlier.message);
+        if (!activeRef.current) return;
+        await confirmCardTip();
         return;
       }
       tipSessionRef.current = session.data;
@@ -665,7 +677,7 @@ export function ReviewAndTipScreen() {
                       {tipPhase === 'gone'
                         ? 'The tip did not go through. You can try again below.'
                         : tipPending && tip
-                          ? `A ${formatBudget(tip.amount_cents)} tip is started but not sent. Finish it below, or choose another amount.`
+                          ? `A ${formatBudget(tip.amount_cents)} tip is started but not confirmed. Finish it below, or choose another amount.`
                           : `Entirely optional — every cent of the tip goes to ${workerName ?? 'the worker'}.`}
                     </Text>
                     {amountControls}
@@ -709,7 +721,7 @@ export function ReviewAndTipScreen() {
         onCancel={() => {
           setConfirmTip(false);
           // R6c: the unfunded tip row keeps its funding window; the controls
-          // return with the "started but not sent" note.
+          // return with the "started but not confirmed" note.
           tipSessionRef.current = null;
         }}
       />

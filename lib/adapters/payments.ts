@@ -6,7 +6,6 @@ import {
   stripePublishableKey,
   stripeReady,
   STRIPE_UNAVAILABLE_MESSAGE,
-  type CheckoutSession,
   type JobCheckoutResult,
 } from '../payments/stripe';
 
@@ -48,12 +47,6 @@ export type PaymentResult = {
   error: { message: string } | null;
 };
 
-/** D4: what the stripe checkout needs to open the payment sheet. */
-export type CheckoutSessionResult = {
-  data: CheckoutSession | null;
-  error: { message: string } | null;
-};
-
 export type PaymentProvider = {
   getMode(): PaymentsMode;
   /**
@@ -82,7 +75,7 @@ export type PaymentProvider = {
    * refusals (one tip per job, release first, the ceiling's dollar sentence)
    * come back verbatim. Disabled refuses it.
    */
-  beginTipCheckout(jobId: string, amountCents: number): Promise<CheckoutSessionResult>;
+  beginTipCheckout(jobId: string, amountCents: number): Promise<JobCheckoutResult>;
 };
 
 /**
