@@ -112,12 +112,14 @@
 // GRANTs are the real defence and the check below is the first line of it,
 // exactly as in send-push. Its writes — settlement_send_begin,
 // record_settlement_sent, record_settlement_result, record_intent_cancel,
-// record_intent_check, record_payout_check, and a failed refund's or a read
+// record_intent_check, record_payout_check, the account cleanup's
+// claim_account_cleanups and record_account_cleanup, and a failed refund's or a read
 // intent's fact through the webhook's own payment_events insert and
 // apply_payment_event — are service_role-only and record what happened; none
 // can move money.
 // ============================================================================
 
+import { runAccountCleanups } from '../_shared/accountCleanup.ts';
 import { notConfigured, requireServiceRole, SECRET_KEY, serviceHeaders } from '../_shared/serviceAuth.ts';
 import { classifyAccount } from '../connect-status/classify.mjs';
 import { accountReading, eventListReading, intentReading, refundFailedEvent, rowOrder, SCANNED_EVENT_TYPES, settlementKey, settlementVerdict, turnOrder } from './classify.mjs';
@@ -1081,6 +1083,13 @@ Deno.serve(async (req) => {
       console.error(`process-settlements: ${name} pass failed`, err);
     }
   }
+
+  // S1 decision 12: the account cleanup, after the money passes, never inside their rotation: one row
+  // a run, started only while the claim, two Stripe requests and the record fit; each Stripe request
+  // only while it and the record fit. Its requests end by the 50th second like every other one.
+  // A14-F F2: its own failures (a claim, a record, a fault) are errors of this run, so the report
+  // below carries them; a Stripe refusal is its row's, not the run's.
+  if (fits(run, 4)) errors.push(...await runAccountCleanups({ fetch: (url, init) => fetch(url, timed(run, init)), mayStart: () => fits(run, 2), supabaseUrl: SUPABASE_URL, serviceHeaders: serviceHeaders(), stripeKey: STRIPE_SECRET_KEY }));
 
   // M2-1: the run reports itself, last, with every pass's outcome. A report that cannot be written
   // is an error of this run; the timer then shows the task late after its 20 minutes.

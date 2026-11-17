@@ -315,8 +315,8 @@ select is((select count(*) from public.bids where id = :'b_live'), 1::bigint,
 -- The catalog, as fact rather than inference.
 select policies_are('public', 'bids', ARRAY[
   'bids_select_job_owner', 'bids_select_own', 'job owner views bids on their job',
-  'workers view own bids'],
-  'catalog: public.bids carries exactly these four SELECT policies, and NONE for DELETE');
+  'workers view own bids', 'bids_active_select', 'bids_hide_inactive_worker'],
+  'catalog: public.bids carries exactly these four SELECT policies, plus the restrictive bids_active_select (active_account_rule) and bids_hide_inactive_worker (ban_hides_content), and NONE for DELETE');
 select table_privs_are('public', 'bids', 'authenticated',
   ARRAY['SELECT'],
   'catalog: authenticated holds only SELECT on bids (20261116000000 took DELETE; lean E4 took REFERENCES/TRIGGER/TRUNCATE)');
@@ -959,7 +959,7 @@ select tests.authenticate_anon();
 select throws_ok($$ select public.ban_user((select v from fx where k = 'bidder')) $$, '42501', 'permission denied for function ban_user', 'anon: cannot execute ban_user');
 select throws_ok($$ select * from public.admin_open_reports() $$, '42501', 'permission denied for function admin_open_reports', 'anon: cannot execute admin_open_reports');
 select tests.authenticate_as(:'bidder');
-select lives_ok($$ select public.update_my_profile('{"phone": "+15550001111"}'::jsonb) $$, 'bidder: sets a phone number (so the ban below has one to record)');
+select lives_ok($$ select public.update_my_profile('{"phone": "+15550001111"}'::jsonb) $$, 'bidder: types a phone number into the profile (B1: the ban below must NOT record it)');
 select tests.authenticate_as(:'admin');
 select is((select count(*) from public.reports where id = :'rep_1'), 1::bigint, 'admin: reads the report (reports_select_admin)');
 select is((select count(*) from public.admin_open_reports() r where r.id = :'rep_1'), 1::bigint, 'admin: admin_open_reports lists it');
@@ -967,14 +967,14 @@ select lives_ok($$ select public.ban_user((select v from fx where k = 'bidder'),
 select tests.clear_auth();
 select ok(not public.is_profile_active(:'bidder'), 'runner: the bidder is no longer active after the ban');
 select is((select status from public.reports where id = :'rep_1'), 'actioned', 'runner: the report is marked actioned');
-select is((select count(*) from public.banned_phones where banned_profile_id = :'bidder'), 1::bigint, 'runner: the bidder''s phone was recorded in banned_phones');
+select is((select count(*) from public.banned_phones where banned_profile_id = :'bidder'), 0::bigint, 'runner: the phone the bidder typed into the profile was NOT recorded in banned_phones (B1, ban_switch: only the sign-in phone is, by profiles_ban_record_sign_in_phone; the bidder signed in by email, so nothing is; the sign-in phone case is proven in 472_ban_switch.sql)');
 select tests.authenticate_as(:'admin');
 select throws_ok($$ select count(*) from public.banned_phones $$, '42501', 'permission denied for table banned_phones', 'admin: banned_phones is refused at the grant, even to an admin (20261116000000 took the unused SELECT; it never had a policy)');
 select tests.authenticate_anon();
 select throws_ok($$ select count(*) from public.banned_phones $$, '42501', 'permission denied for table banned_phones', 'anon: cannot read banned phones at all (lean E4)');
 select tests.authenticate_as(:'bidder');
 select throws_ok($$ select public.create_offer(p_amount_cents := 100, p_job_id := (select v from fx where k = 'j_open')) $$,
-  'P0001', 'Active authentication required', 'bidder (banned): can no longer bid — is_active_user() gates the RPC');
+  'P0001', 'This account has been suspended for violating the Brazos community rules. Contact support if you think this is a mistake.', 'bidder (banned): can no longer bid — the guard (active_account_rule) refuses first, in the suspended words');
 select tests.authenticate_as(:'admin');
 select lives_ok($$ select public.unban_user((select v from fx where k = 'bidder')) $$, 'admin: unban_user on the bidder succeeds');
 select tests.clear_auth();
@@ -997,8 +997,8 @@ select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), '')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  'accept_legal_documents, accept_offer, account_deletion_blockers, admin_open_reports, ban_user, begin_job_payment, begin_tip_payment, can_delete_own_job, cancel_job, client_job_stats, counter_offer, create_job, create_offer, create_review, current_fee, current_user_is_admin, current_user_is_banned, decline_offer, delete_my_account, drop_series_worker, get_my_active_mode, get_my_profile, is_active_user, is_profile_active, job_hotspots, job_offer_count, job_offer_counts, job_payment_state, jobs_in_cell, jobs_within_radius, mark_direct_thread_read, mark_worker_arrival, messaging_unlocked, my_payouts_on_their_way, my_payouts_status, my_pending_offers, open_job_dispute, profile_review_summaries, profile_review_summary, profile_reviews, quote_job_price, register_push_token, release_due_at, release_job_payment, report_running_late, review_is_revealed, set_active_mode, start_job_series, stop_job_series, transition_job_status, unban_user, unsend_message, update_job_details, update_my_profile, withdraw_job_dispute, withdraw_offer, worker_job_stats',
-  'the SECURITY DEFINER functions authenticated may execute are exactly this list (R4 added begin_job_payment, begin_tip_payment, cancel_job, current_fee, quote_job_price, release_job_payment; R5b added my_payouts_status; R8a added review_is_revealed; n6 added profile_review_summaries — the batch per-role revealed summary, any signed-in user, refused to anon, proven in 120_reputation_batch.sql §10; idea 5 (2026-09-30) added report_running_late — the hired worker only, before arriving, refused to anon, proven in 150_running_late.sql §5-§8; idea 14 (2026-09-30) added start_job_series, stop_job_series and drop_series_worker — the customer''s own job / series, the series'' worker, refused to anon, proven in 180_job_series.sql §1-§2, §10-§11; lean v1 (20261108000000) removed thirty: the cut features'' RPCs, the sandbox money RPCs, the deprecated shims and the probe markers; lean E4 (20261108010000) removed should_notify and job_request_parties_ok, whose only callers are definer functions, proven in 310_grants.sql; Codex R8-A1 added my_payouts_on_their_way — the ids of the caller''s own payments whose payout is on its way, refused to anon, proven in 460_payout_on_its_way.sql S1-S9; 20261116000000 made is_blocked_between SECURITY INVOKER, proven in 470_access_allow_list.sql; release_clock added release_due_at — the automatic approval deadline, for the job''s customer and hired worker only, null for anyone else, refused to anon, proven in 490_release_clock.sql §0-§2)');
+  'accept_legal_documents, accept_offer, account_deletion_blockers, admin_open_reports, admin_open_reports_v2, ban_user, begin_job_payment, begin_tip_payment, can_delete_own_job, cancel_job, client_job_stats, counter_offer, create_job, create_offer, create_review, current_fee, current_user_is_admin, current_user_is_banned, decline_offer, delete_my_account, dismiss_report, drop_series_worker, get_my_active_mode, get_my_profile, is_active_user, is_profile_active, job_hotspots, job_offer_count, job_offer_counts, job_payment_state, jobs_in_cell, jobs_within_radius, mark_direct_thread_read, mark_worker_arrival, messaging_unlocked, my_payouts_on_their_way, my_payouts_status, my_pending_offers, open_job_dispute, profile_review_summaries, profile_review_summary, profile_reviews, profile_visible, quote_job_price, register_push_token, release_due_at, release_job_payment, report_running_late, review_is_revealed, set_active_mode, start_job_series, stop_job_series, transition_job_status, unban_user, unsend_message, update_job_details, update_my_profile, withdraw_job_dispute, withdraw_offer, worker_job_stats',
+  'the SECURITY DEFINER functions authenticated may execute are exactly this list (R4 added begin_job_payment, begin_tip_payment, cancel_job, current_fee, quote_job_price, release_job_payment; R5b added my_payouts_status; R8a added review_is_revealed; n6 added profile_review_summaries — the batch per-role revealed summary, any signed-in user, refused to anon, proven in 120_reputation_batch.sql §10; idea 5 (2026-09-30) added report_running_late — the hired worker only, before arriving, refused to anon, proven in 150_running_late.sql §5-§8; idea 14 (2026-09-30) added start_job_series, stop_job_series and drop_series_worker — the customer''s own job / series, the series'' worker, refused to anon, proven in 180_job_series.sql §1-§2, §10-§11; lean v1 (20261108000000) removed thirty: the cut features'' RPCs, the sandbox money RPCs, the deprecated shims and the probe markers; lean E4 (20261108010000) removed should_notify and job_request_parties_ok, whose only callers are definer functions, proven in 310_grants.sql; Codex R8-A1 added my_payouts_on_their_way — the ids of the caller''s own payments whose payout is on its way, refused to anon, proven in 460_payout_on_its_way.sql S1-S9; 20261116000000 made is_blocked_between SECURITY INVOKER, proven in 470_access_allow_list.sql; release_clock added release_due_at — the automatic approval deadline, for the job''s customer and hired worker only, null for anyone else, refused to anon, proven in 490_release_clock.sql §0-§2; ban_switch added admin_open_reports_v2 and dismiss_report — admins only, proven in 472_ban_switch.sql; ban_hides_content added profile_visible — a policy helper about a pair the caller belongs to, proven in 473_ban_hides_content.sql)');
 select ok(has_function_privilege('service_role', 'public.claim_notification_batch(integer)', 'EXECUTE'), 'service_role may execute claim_notification_batch (positive control for the two refusals below)');
 -- R4: the service-role-only money functions, same pattern — the positive
 -- control is service_role's privilege, the proof is the stranger's refusal.
@@ -1051,8 +1051,9 @@ select policies_are('storage', 'objects', ARRAY[
   'avatars_insert', 'avatars_read', 'avatars_update',
   'chat_photos_insert_party', 'chat_photos_read_party',
   'job_photos_delete_own_completion', 'job_photos_delete_own_posting', 'job_photos_delete_own_review',
-  'job_photos_insert', 'job_photos_insert_review', 'job_photos_read'],
-  'catalog: storage.objects carries exactly these eleven policies — eight writes and three reads, across three buckets');
+  'job_photos_insert', 'job_photos_insert_review', 'job_photos_read',
+  'objects_active_select', 'objects_active_insert', 'objects_active_update', 'objects_active_delete'],
+  'catalog: storage.objects carries exactly these fifteen policies — eight writes and three reads across three buckets, and the four restrictive active-account policies (active_account_rule)');
 
 -- The eight write policies: command and roles, one assertion each.
 select policy_cmd_is('storage', 'objects', 'avatars_insert', 'INSERT', 'catalog: avatars_insert is FOR INSERT');

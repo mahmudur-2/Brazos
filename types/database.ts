@@ -9,6 +9,53 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      account_cleanups: {
+        Row: {
+          attempts: number
+          created_at: string
+          customer_done: boolean
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          next_attempt_at: string
+          step_opened_at: string
+          stripe_customer_id: string | null
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          customer_done?: boolean
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          step_opened_at?: string
+          stripe_customer_id?: string | null
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          customer_done?: boolean
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          step_opened_at?: string
+          stripe_customer_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_cleanups_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_config: {
         Row: {
           key: string
@@ -2466,6 +2513,47 @@ export type Database = {
       }
     }
     Views: {
+      account_cleanup_attention: {
+        Row: {
+          attempts: number | null
+          code: string | null
+          detail: string | null
+          finish: string | null
+          id: string | null
+          reason: string | null
+          since: string | null
+          user_id: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          code?: never
+          detail?: never
+          finish?: never
+          id?: string | null
+          reason?: never
+          since?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          code?: never
+          detail?: never
+          finish?: never
+          id?: string | null
+          reason?: never
+          since?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_cleanups_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           assigned_worker_id: string | null
@@ -3285,6 +3373,7 @@ export type Database = {
           ref_id: string
         }[]
       }
+      active_guard_problem: { Args: { p_fn: unknown }; Returns: string }
       admin_open_reports: {
         Args: never
         Returns: {
@@ -3301,6 +3390,36 @@ export type Database = {
           reporter_name: string
           status: string
         }[]
+      }
+      admin_open_reports_v2: {
+        Args: never
+        Returns: {
+          created_at: string
+          description: string
+          id: string
+          job_id: string
+          job_title: string
+          reason: string
+          reported_banned: boolean
+          reported_id: string
+          reported_name: string
+          reporter_id: string
+          reporter_name: string
+          status: string
+          subject_id: string
+          subject_kind: string
+          subject_text: string
+        }[]
+      }
+      admit_user_call: {
+        Args: {
+          p_action: string
+          p_allow_suspended?: boolean
+          p_max: number
+          p_user: string
+          p_window: string
+        }
+        Returns: string
       }
       advance_job_series: { Args: { p_now?: string }; Returns: number }
       apply_payment_event: { Args: { p_event_id: string }; Returns: Json }
@@ -3436,6 +3555,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      caller_is_trusted_active: { Args: never; Returns: boolean }
       can_delete_own_job: { Args: { p_job_id: string }; Returns: boolean }
       cancel_job: {
         Args: { p_job_id: string; p_reason: string }
@@ -3487,9 +3607,67 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cancel_job_core: {
+        Args: { p_actor: string; p_job_id: string; p_reason: string }
+        Returns: {
+          accepted_bid_id: string | null
+          accepted_offer_id: string | null
+          arrival_end_hour: number | null
+          arrival_start_hour: number | null
+          arrived_at: string | null
+          assigned_worker_id: string | null
+          budget_cents: number | null
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          category: Database["public"]["Enums"]["job_category"]
+          client_id: string
+          completed_at: string | null
+          completion_photo_url: string | null
+          completion_photos: Json
+          completion_told_at: string | null
+          completion_videos: Json
+          created_at: string
+          description: string | null
+          en_route_at: string | null
+          final_amount_cents: number | null
+          id: string
+          job_number: number
+          late_minutes: number | null
+          late_reported_at: string | null
+          location: string | null
+          location_text: string | null
+          needed_today: boolean
+          photos: Json
+          pricing_mode: string
+          scheduled_date: string | null
+          scheduled_for: string | null
+          series_id: string | null
+          status: Database["public"]["Enums"]["job_status"]
+          title: string
+          videos: Json
+          visibility: Database["public"]["Enums"]["job_visibility"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cancellation_fee_cents: {
         Args: { p_amount_cents: number; p_job_id: string }
         Returns: number
+      }
+      claim_account_cleanups: {
+        Args: { p_limit: number }
+        Returns: {
+          customer_done: boolean
+          id: string
+          stripe_customer_id: string
+        }[]
       }
       claim_notification_batch: {
         Args: { p_limit?: number }
@@ -3683,6 +3861,7 @@ export type Database = {
       deactivate_push_token: { Args: { p_token: string }; Returns: undefined }
       decline_offer: { Args: { p_offer_id: string }; Returns: undefined }
       delete_my_account: { Args: never; Returns: undefined }
+      dismiss_report: { Args: { p_report_id: string }; Returns: boolean }
       drain_notification_outbox: { Args: never; Returns: number }
       drain_probe: { Args: never; Returns: Json }
       drain_probe_status: { Args: { p_probe: Json }; Returns: Json }
@@ -3791,6 +3970,8 @@ export type Database = {
         }
       }
       fill_completion_told_at: { Args: never; Returns: number }
+      function_fingerprint: { Args: { p_fn: unknown }; Returns: string }
+      function_shape: { Args: { p_fn: unknown }; Returns: Json }
       get_my_active_mode: { Args: never; Returns: string }
       get_my_profile: {
         Args: never
@@ -3982,6 +4163,10 @@ export type Database = {
           videos: Json
         }[]
       }
+      lock_account: {
+        Args: { p_id: string; p_shared: boolean }
+        Returns: undefined
+      }
       mark_direct_thread_read: {
         Args: { p_thread_id: string }
         Returns: undefined
@@ -4063,6 +4248,16 @@ export type Database = {
         }[]
       }
       note_ready_rows: { Args: never; Returns: number }
+      notify_admins: {
+        Args: {
+          p_body: string
+          p_data: Json
+          p_dedupe: string
+          p_title: string
+          p_type: string
+        }
+        Returns: undefined
+      }
       notify_display_name: { Args: { p_user: string }; Returns: string }
       notify_nearby_for_job: { Args: { p_job_id: string }; Returns: undefined }
       offer_post_event: {
@@ -4224,6 +4419,13 @@ export type Database = {
         Args: { p: Database["public"]["Tables"]["payments"]["Row"] }
         Returns: boolean
       }
+      payment_unsettled_for: {
+        Args: {
+          p: Database["public"]["Tables"]["payments"]["Row"]
+          p_user: string
+        }
+        Returns: boolean
+      }
       pg_function_present: {
         Args: { p_name: string; p_namespace: string }
         Returns: boolean
@@ -4279,6 +4481,7 @@ export type Database = {
           reviewer_name: string
         }[]
       }
+      profile_visible: { Args: { p_id: string }; Returns: boolean }
       project_offer_chain_to_bids: {
         Args: { p_root_offer_id: string }
         Returns: undefined
@@ -4313,6 +4516,10 @@ export type Database = {
         Returns: boolean
       }
       receipt_details: { Args: { p_payment_id: string }; Returns: Json }
+      record_account_cleanup: {
+        Args: { p_customer: boolean; p_error: string; p_id: string }
+        Returns: undefined
+      }
       record_event_scan: {
         Args: { p_read_from: number; p_window_from: number }
         Returns: boolean
@@ -4435,6 +4642,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      repair_suspended_jobs: { Args: never; Returns: number }
       report_running_late: {
         Args: { p_job_id: string; p_minutes: number }
         Returns: {
@@ -4489,6 +4697,7 @@ export type Database = {
         Args: { p_name: string; p_stale_after: string }
         Returns: undefined
       }
+      require_active_caller: { Args: never; Returns: undefined }
       require_work_money: { Args: { p_job_id: string }; Returns: undefined }
       resolve_job_dispute: {
         Args: { p_in_favour_of: string; p_job_id: string; p_note?: string }
@@ -4737,6 +4946,7 @@ export type Database = {
         Args: { p_status: string; p_user_id: string }
         Returns: boolean
       }
+      settle_offers_of_suspended: { Args: { p_user: string }; Returns: number }
       settlement_attempt_closed: {
         Args: {
           p_attempt: number

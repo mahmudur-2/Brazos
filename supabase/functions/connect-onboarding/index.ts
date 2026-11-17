@@ -53,7 +53,7 @@
 // ============================================================================
 
 import { notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser } from '../_shared/serviceAuth.ts';
-import { overHourlyLimit, RATE_LIMITED } from '../_shared/rateLimit.ts';
+import { refuseUnadmitted } from '../_shared/rateLimit.ts';
 import { contactEmail, createRefusal, newAccount, withoutEmails } from './account.mjs';
 
 const STRIPE_API = 'https://api.stripe.com';
@@ -121,6 +121,11 @@ function providerError(body: Record<string, unknown>): string {
 async function resolveCaller(req: Request, auth: string): Promise<Caller | Response> {
   const user = await verifiedUser(req, 'Sign in to set up payouts.', 'Could not start payout setup. Try again.');
   if (user instanceof Response) return user;
+  // B10 + active_account_rule: right after the auth server named the caller, before the caller's own
+  // payout-status read and every provider call: an active account within its hourly limit, or the
+  // refusal (401, 429, 503).
+  const denied = await refuseUnadmitted(serviceRpc, 'connect-onboarding', user.id);
+  if (denied) return json({ error: denied.error }, denied.status);
 
   const asCaller = await fetch(`${SUPABASE_URL}/rest/v1/rpc/my_payouts_status`, {
     method: 'POST',
@@ -156,8 +161,6 @@ Deno.serve(async (req) => {
     const caller = await resolveCaller(req, auth);
     if (caller instanceof Response) return caller;
     const userId = caller.userId;
-    // B10: one hit on the caller's hourly counter before anything reaches the provider.
-    if (await overHourlyLimit(serviceRpc, 'connect-onboarding', userId)) return json({ error: RATE_LIMITED }, 429);
 
     // --- 2. The payout account, created once and reused forever --------------
     const stored = await serviceRpc('get_payment_account', { p_user_id: userId });

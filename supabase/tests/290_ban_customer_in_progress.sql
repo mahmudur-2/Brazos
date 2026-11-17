@@ -137,18 +137,25 @@ select throws_ok(
 
 -- ---------------------------------------------------------------------------
 -- 5. The loop's shape, read from the live body: the lock, the allow-listed re-check and the skip.
+--    A8-01 (20261116400200_ban_switch.sql) moved the cancellation into cancel_job_core()'s
+--    account_suspended mode, so the trunk's three source regexes cannot hold on the new body: 5a and
+--    5b pin the new shape, 5c proves the skip by its effect on J.
 -- ---------------------------------------------------------------------------
 select ok(
-  (select pg_get_functiondef('public.ban_user(uuid, uuid)'::regprocedure)) ~ $re$and \(client_id = p_target or assigned_worker_id = p_target\)\s+for update$re$,
-  '5a: the in-flight jobs are read FOR UPDATE'
+  (select pg_get_functiondef('public.ban_user(uuid, uuid)'::regprocedure)) ~ $re$where client_id = p_target or assigned_worker_id = p_target\s+order by id\s+for update;$re$,
+  '5a: every job of the account is locked FOR UPDATE before anything changes'
 );
 select ok(
-  (select pg_get_functiondef('public.ban_user(uuid, uuid)'::regprocedure)) ~ $re$set status = 'cancelled'\s+where id = v_job\.id\s+and status in \('open', 'assigned', 'in_progress'\);$re$,
-  '5b: the cancellation re-checks the allow-listed status it is leaving'
+  (select pg_get_functiondef('public.ban_user(uuid, uuid)'::regprocedure)) ~ $re$loop\s+perform public\.cancel_job_core\(v_job\.id, 'account_suspended', p_target\);$re$
+  and (select pg_get_functiondef('public.cancel_job_core(uuid, text, uuid)'::regprocedure)) ~ $re$select \* into v_job from public\.jobs where id = p_job_id for update;$re$
+  and (select pg_get_functiondef('public.cancel_job_core(uuid, text, uuid)'::regprocedure)) ~ $re$if p_reason = 'account_suspended' then\s+if not \(\(v_is_customer and v_job\.status in \('open', 'assigned', 'in_progress'\)\)\s+or \(v_is_worker and v_job\.status in \('assigned', 'in_progress'\)\)\) then$re$,
+  '5b: each job is cancelled through cancel_job_core(), which re-reads it under its lock and re-checks the allow-listed status it is leaving'
 );
-select ok(
-  (select pg_get_functiondef('public.ban_user(uuid, uuid)'::regprocedure)) ~ $re$get diagnostics v_rows = row_count;\s+if v_rows = 0 then\s+continue;\s+end if;$re$,
-  '5c: a job the update did not cancel is skipped whole — no money, no message'
+select is(
+  (select row((select count(*) from public.messages m where m.job_id = :'j_j'),
+              (select count(*) from public.notification_outbox o where o.data->>'jobId' = :'j_j'::text)) ),
+  row(0::bigint, 0::bigint),
+  '5c: the completed job is skipped whole — no thread line, no notice (its money is 1c)'
 );
 
 -- ---------------------------------------------------------------------------

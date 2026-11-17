@@ -25,7 +25,7 @@
 // ============================================================================
 
 import { notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser } from '../_shared/serviceAuth.ts';
-import { overHourlyLimit, RATE_LIMITED } from '../_shared/rateLimit.ts';
+import { refuseUnadmitted } from '../_shared/rateLimit.ts';
 
 const STRIPE_API = 'https://api.stripe.com';
 // The version the mobile SDK speaks, pinned on the ephemeral key only (create-payment's own).
@@ -104,8 +104,6 @@ Deno.serve(async (req) => {
   const caller = await verifiedUser(req, 'Sign in to manage your cards.', 'Could not reach your cards right now. Try again.');
   if (caller instanceof Response) return caller;
   const userId = caller.id;
-  // B10: one hit on the caller's hourly counter before anything reaches the provider.
-  if (await overHourlyLimit(serviceRpc, 'payment-methods', userId)) return json({ error: RATE_LIMITED }, 429);
 
   let action = '';
   let paymentMethodId = '';
@@ -118,6 +116,12 @@ Deno.serve(async (req) => {
   }
   // An allow-list of three.
   if (action !== 'list' && action !== 'setup' && action !== 'remove') return json({ error: 'Unknown action.' }, 400);
+  // B10 + active_account_rule: after the auth server named the caller and the action is read (no
+  // database or provider call yet), before any other call: an active account within its hourly limit,
+  // or the refusal (401, 429, 503). A suspended account may still list and remove its own cards (C1);
+  // it cannot save a new one.
+  const denied = await refuseUnadmitted(serviceRpc, 'payment-methods', userId, { allowSuspended: action !== 'setup' });
+  if (denied) return json({ error: denied.error }, denied.status);
 
   try {
     if (action === 'list') {

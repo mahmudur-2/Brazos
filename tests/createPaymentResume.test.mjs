@@ -16,7 +16,7 @@ const read = (path) => readFileSync(join(root, path), 'utf8').replace(/\r\n/g, '
 const FILE = 'supabase/functions/create-payment/index.ts';
 const AUTH_IMPORT =
   /^import \{ notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser \} from '\.\.\/_shared\/serviceAuth\.ts';$/m;
-const LIMIT_IMPORT = /^import \{ overHourlyLimit, RATE_LIMITED \} from '\.\.\/_shared\/rateLimit\.ts';$/m;
+const LIMIT_IMPORT = /^import \{ refuseUnadmitted \} from '\.\.\/_shared\/rateLimit\.ts';$/m;
 
 const source = read(FILE);
 globalThis.__cpStubs = {
@@ -25,13 +25,13 @@ globalThis.__cpStubs = {
   SECRET_KEY: 'service-for-the-test',
   serviceHeaders: () => ({ 'Content-Type': 'application/json' }),
   verifiedUser: async () => ({ id: 'user-1' }),
-  overHourlyLimit: async () => false,
-  RATE_LIMITED: 'Too many tries.',
+  // active_account_rule: an active account within its limit (tests/edgeAdmission.test.mjs runs the refusals).
+  refuseUnadmitted: async () => null,
 };
 const js = stripTypeScriptTypes(
   source
     .replace(AUTH_IMPORT, 'const { notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser } = globalThis.__cpStubs;')
-    .replace(LIMIT_IMPORT, 'const { overHourlyLimit, RATE_LIMITED } = globalThis.__cpStubs;'),
+    .replace(LIMIT_IMPORT, 'const { refuseUnadmitted } = globalThis.__cpStubs;'),
   { mode: 'strip' }
 );
 

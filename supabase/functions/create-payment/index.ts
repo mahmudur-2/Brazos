@@ -90,7 +90,7 @@
 // ============================================================================
 
 import { notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser } from '../_shared/serviceAuth.ts';
-import { overHourlyLimit, RATE_LIMITED } from '../_shared/rateLimit.ts';
+import { refuseUnadmitted } from '../_shared/rateLimit.ts';
 
 const STRIPE_API = 'https://api.stripe.com';
 
@@ -172,8 +172,10 @@ Deno.serve(async (req) => {
   // lean K1: the caller, as the auth server reads the token. Everything below acts for caller.id.
   const caller = await verifiedUser(req, 'Sign in to protect a payment.', 'Could not start this payment. Try again.');
   if (caller instanceof Response) return caller;
-  // B10: one hit on the caller's hourly counter before anything reaches the provider.
-  if (await overHourlyLimit(serviceRpc, 'create-payment', caller.id)) return json({ error: RATE_LIMITED }, 429);
+  // B10 + active_account_rule: right after the auth server named the caller, before any other database
+  // or provider call: an active account within its hourly limit, or the refusal (401, 429, 503).
+  const denied = await refuseUnadmitted(serviceRpc, 'create-payment', caller.id);
+  if (denied) return json({ error: denied.error }, denied.status);
   const auth = req.headers.get('Authorization') ?? '';
 
   let jobId = '';

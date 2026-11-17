@@ -29,7 +29,10 @@ globalThis.__psRunStubs = {
   requireServiceRole: () => null,
   SECRET_KEY: 'service-for-the-test',
   serviceHeaders: () => ({ 'Content-Type': 'application/json' }),
+  // The account cleanup pass (S1 decision 12) answers with its own failures; none by default.
+  runAccountCleanups: async () => cleanupFailures,
 };
+let cleanupFailures = [];
 const js = stripTypeScriptTypes(source.replace(IMPORT, (_, names) => `const {${names}} = globalThis.__psRunStubs;`), { mode: 'strip' });
 
 let handler = null;
@@ -159,6 +162,24 @@ test('M2-1 · a pass that throws is the run\'s error, with its message', async (
   assert.equal(r.json.ok, false);
   assert.deepEqual(reports(r.calls).map((b) => b.p_error),
     ['transfers: transfers_ready?select=id,payee_id,transfer_cents,transfer_attempts&limit=25 failed: 503 down']);
+});
+
+test('A14-F F2 · the account cleanup\'s own failures are the run\'s errors: the report carries them, after the money passes\' own', async () => {
+  const lines = ['account cleanup: the claim failed (500)', "account cleanup: a row's result was not saved (no answer)"];
+  cleanupFailures = lines;
+  try {
+    const r = await drain((call) => (call.url.startsWith(`${DB}/transfers_ready?`) ? new Response('down', { status: 503 }) : undefined));
+    assert.equal(r.json.ok, false);
+    assert.deepEqual(reports(r.calls).map((b) => b.p_error),
+      [`transfers: transfers_ready?select=id,payee_id,transfer_cents,transfer_attempts&limit=25 failed: 503 down; ${lines.join('; ')}`]);
+    assert.deepEqual(r.json.errors.slice(1), lines);
+  } finally {
+    cleanupFailures = [];
+  }
+  // None handed back (a quiet pass, or a Stripe refusal its row records): the run stays clean.
+  const clean = await drain();
+  assert.deepEqual(reports(clean.calls).map((b) => b.p_error), [null]);
+  assert.equal(clean.json.ok, true);
 });
 
 test('M2-1 · a report that cannot be written makes the run not ok (the task then shows late)', async () => {

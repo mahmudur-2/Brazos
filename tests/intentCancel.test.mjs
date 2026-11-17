@@ -33,6 +33,7 @@ globalThis.__psStubs = {
   requireServiceRole: () => null,
   SECRET_KEY: 'service-for-the-test',
   serviceHeaders: () => ({ 'Content-Type': 'application/json' }),
+  runAccountCleanups: async () => [],
 };
 const js = stripTypeScriptTypes(source.replace(IMPORT, (_, names) => `const {${names}} = globalThis.__psStubs;`), { mode: 'strip' });
 

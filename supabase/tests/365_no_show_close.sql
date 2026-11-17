@@ -124,8 +124,10 @@ select is((select string_agg(n.title || ' | ' || n.body || ' | ' || (n.data ->> 
 -- C8: one home for the refund, and service role only on the schedule.
 select ok(coalesce((select bool_and(p.prosrc like '%queue_free_cancel_refund(%') and count(*) = 2
                       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-                     where n.nspname = 'public' and p.proname in ('cancel_job', 'close_no_show_hires')), false),
-  'C8: cancel_job and the sweep queue the refund through the same function');
+                     where n.nspname = 'public' and p.proname in ('cancel_job_core', 'close_no_show_hires')), false)
+          and (select p.prosrc like '%return public.cancel_job_core(p_job_id, p_reason, auth.uid());%'
+                 from pg_proc p where p.oid = 'public.cancel_job(uuid, text)'::regprocedure),
+  'C8: cancel_job (through cancel_job_core, its one implementation since ban_switch) and the sweep queue the refund through the same function');
 select ok(coalesce((select not has_function_privilege('authenticated', p.oid, 'EXECUTE')
                        and not has_function_privilege('anon', p.oid, 'EXECUTE')
                        and has_function_privilege('service_role', p.oid, 'EXECUTE')

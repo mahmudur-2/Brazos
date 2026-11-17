@@ -445,8 +445,16 @@ worker services); scrub the profile to a tombstone (`Deleted user`, phone, avata
 nulled, `deleted_at` set; `banned` is never touched, so deletion cannot launder a ban); delete the
 `auth.users` row and assert exactly one row went. Retained, pointing at the tombstone: reviews,
 reports, blocks, banned phones, legal acceptances, payments, disputes, jobs, offers, messages,
-threads, job locations. Not done: storage cleanup, and notification titles that embed an actor's
-name.
+threads, job locations. Not done: storage cleanup, and the person's name in alert bodies and in
+alert titles written under an older name (the deletion file's header, F10, lists them).
+
+After the auth row goes, one `account_cleanups` row records the person's Stripe customer, and the
+settlements run deletes it at Stripe. The speed: at most one row a run (every 5 minutes), and only
+in a quiet run, one whose money passes end within its first 10 seconds; while the money passes use
+the run, none. A row whose customer step is still open after 1 hour gets a line on
+`account_cleanup_attention`. Only the service role can read that view (no client role, no admin in
+the app), and it is not part of `payment_attention`: the owner's payment list does not show it and
+nothing pushes it.
 
 Check after a change: delete a throwaway staging account that has an open posting; expect the auth
 row gone, the tombstone present, `phone` null, the posting `cancelled`, a completed job untouched.
@@ -497,7 +505,8 @@ bios, services, offers, reviews and messages.
 | `rate_counters` | per account and action, the current window and its hits | `rate_limit_take()` | nobody (no grant) |
 
 Plus views `conversations`, `transfers_due`, `refunds_due`, `transfers_ready`, `refunds_ready`,
-`payment_money` and `payment_attention` (service_role), and the functions. The schema is the
+`payment_money` and `payment_attention` (service_role), `account_cleanup_attention` (service_role;
+not part of `payment_attention`), and the functions. The schema is the
 numbered files in `supabase/migrations/` (baseline `20260901000000` to
 `20261112050000_access_start_state.sql`). A migration file existing is not evidence staging has it: the
 pipeline's list-after step is.

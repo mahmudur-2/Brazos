@@ -37,6 +37,7 @@
 --   * rate_counters reset before each hire (as 370 does, B10).
 --   * H1: payments.intent_cancel_at moved back 2 hours (the 1-hour wait for payment_intent.canceled).
 --   * E: payment_events.received_at moved back 2 hours (the 1-hour wait for a stored event).
+--   * H7: jobs.cancelled_at set back to null after the ban: the shape a ban before ban_switch left.
 -- Everything rolls back.
 \set tests_included 1
 \ir _helpers.sql
@@ -367,6 +368,7 @@ select public.transition_job_status(:'h7j', 'in_progress');
 select tests.authenticate_as(:'admin');
 select public.ban_user(:'c2');
 select tests.clear_auth();
+update public.jobs set cancelled_at = null where id = :'h7j';
 select is((select status::text || '/' || coalesce(cancelled_at::text, 'no cancelled_at') from public.jobs where id = :'h7j'),
   'cancelled/no cancelled_at', 'H7a: the ban cancelled the job in progress (and stamps no cancelled_at)');
 select is(tests.ax_rows(:'h7p'), 'held :: job_closed_money_held/' || :'h7p' || '/' || :h7c || '/app',

@@ -200,6 +200,8 @@ test('no client-side jobs.status writer exists anywhere', () => {
   const definition = read(`supabase/migrations/${newest}`);
   const transition = definition.slice([...definition.matchAll(new RegExp(transitionDef.source, 'gi'))].at(-1).index);
   assert.match(transition, new RegExp(`^${transitionDef.source}`, 'i'));
+  // production-36h S1 M2 (active_account_rule): the guard line is that body's first statement.
+  assert.match(transition.slice(transition.search(/\nbegin\n/)), /^\nbegin\n  perform public\.require_active_caller\(\);\n/, 'the guard is its first statement');
   assert.match(transition, /where id = p_job_id\s+for update;/i);
   assert.match(transition, /v_job\.assigned_worker_id is distinct from v_user/i);
 

@@ -20,11 +20,19 @@ select tests.create_user('a14.worker@brazos.test',   'Wren Worker')   as worker 
 
 insert into public.jobs (client_id, title, assigned_worker_id, status)
 values (:'customer', 'A14 late cancellation', :'worker', 'cancelled') returning id as job \gset
-insert into public.payments (job_id, payer_id, payee_id, amount_cents, platform_fee_cents, customer_fee_cents, provider, status)
-values (:'job', :'customer', :'worker', 8000, 800, 600, 'stripe', 'partially_refunded') returning id as payment \gset
+-- production-36h S1 M3: the row is the late cancellation as the ledger leaves it once both legs
+-- landed (cancel_job's split with release_requested_at, charge.refunded's refunded total, the fee's
+-- transfer_ref). A partially_refunded row with no release asked for is a refund made outside the app,
+-- the rest still held, and blocks both sides (500_account_deletion.sql).
+insert into public.payments (job_id, payer_id, payee_id, amount_cents, platform_fee_cents, customer_fee_cents, provider, status,
+                             transfer_cents, refund_cents, refunded_cents, release_reason, refund_reason,
+                             release_requested_at, transfer_ref, released_at)
+values (:'job', :'customer', :'worker', 8000, 800, 600, 'stripe', 'partially_refunded',
+        1600, 7000, 7000, 'cancellation_fee', 'customer_cancelled_late', now(), 'tr_a14_landed', now())
+returning id as payment \gset
 
 -- ---------------------------------------------------------------------------
--- 1. partially_refunded is final: neither side is blocked by it.
+-- 1. A landed late cancellation (partially_refunded) is final: neither side is blocked by it.
 -- ---------------------------------------------------------------------------
 select tests.authenticate_as(:'customer');
 select is((select count(*) from public.account_deletion_blockers()), 0::bigint,

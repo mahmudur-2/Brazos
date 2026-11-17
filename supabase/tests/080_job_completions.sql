@@ -145,8 +145,8 @@ select col_not_null('public', 'job_completions', 'photos', '1: photos is not nul
 select col_is_unique('public', 'job_completions', 'job_id', '1: one completion per job — job_id is unique');
 select col_is_fk('public', 'job_completions', 'job_id', '1: job_id references jobs');
 select col_is_fk('public', 'job_completions', 'completed_by', '1: completed_by references profiles');
-select policies_are('public', 'job_completions', array['job_completions_parties_select'],
-  '1: exactly one policy on the table');
+select policies_are('public', 'job_completions', array['job_completions_parties_select', 'job_completions_active_select'],
+  '1: exactly two policies on the table: the parties'' SELECT, and the restrictive active-account SELECT (active_account_rule)');
 select policy_cmd_is('public', 'job_completions', 'job_completions_parties_select', 'SELECT',
   '1: … and it is a SELECT policy');
 select policy_roles_are('public', 'job_completions', 'job_completions_parties_select', array['authenticated'],
