@@ -67,7 +67,7 @@ appId: app.brazos.mobile.preview
 - tapOn: 'Back( to .*)?'
 - runFlow:
     when:
-      visible: "Keep editing"
+      visible: "Discard"
     commands:
       - tapOn: "Discard"
 - tapOn: "Home"
@@ -167,11 +167,11 @@ appId: app.brazos.mobile.preview
     below: "Arrival window"
     optional: true
 - tapOn: "Continue to Review"
-# Review: set a price from the presets, repeat left Off. "Need it today" stays off: it dates the job today.
+# Review: set a price from the presets, repeat left Off. "Need It Today" stays off: it dates the job today.
 - extendedWaitUntil:
     visible: "STEP 4 OF 4"
     timeout: 30000
-- tapOn: ".*Set a price.*"
+- tapOn: ".*Set a Price.*"
 - scrollUntilVisible:
     element:
       text: "Edit budget"
@@ -182,10 +182,10 @@ appId: app.brazos.mobile.preview
 - assertVisible: "Workers can request the job at this price. You still choose who gets it."
 - scrollUntilVisible:
     element:
-      text: "Repeat this job"
+      text: "Repeat This Job"
     direction: DOWN
     timeout: 60000
-- tapOn: "Repeat this job"
+- tapOn: "Repeat This Job"
 - tapOn: "Off"
 - takeScreenshot: 02-main-review
 - runFlow: subflows/publish-job.yml
@@ -276,16 +276,16 @@ appId: app.brazos.mobile.preview
 - runFlow: subflows/publish-job.yml
 - takeScreenshot: 02-side-live
 # Edit job (offered while the job is open with no bids, hooks/useJobOwnerActions.ts).
-- tapOn: "View job and bids"
+- tapOn: "View Job"
 - extendedWaitUntil:
-    visible: "Job & Bids|Job Details"
+    visible: "Job Details"
     timeout: 30000
 - scrollUntilVisible:
     element:
-      text: "Edit job"
+      text: "Edit Job"
     direction: DOWN
     timeout: 30000
-- tapOn: "Edit job"
+- tapOn: "Edit Job"
 - extendedWaitUntil:
     visible: "STEP 1 OF 4"
     timeout: 30000
@@ -301,14 +301,14 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "STEP 4 OF 4"
     timeout: 30000
-- tapOn: "Save changes"
+- tapOn: "Save Changes"
 - extendedWaitUntil:
     visible: 'Your job is updated\.|Could not save changes'
     timeout: 60000
 - assertVisible: 'Your job is updated\.'
-- tapOn: "Back to job"
+- tapOn: "View Job"
 - extendedWaitUntil:
-    visible: "Job & Bids|Job Details"
+    visible: "Job Details"
     timeout: 30000
 
 # ─── All services: the sheet starts a post in the picked category ────────

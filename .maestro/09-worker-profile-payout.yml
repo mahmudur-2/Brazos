@@ -30,10 +30,10 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 - scrollUntilVisible:
     element:
-      text: "Earnings & payouts"
+      text: "Earnings & Payouts"
     direction: DOWN
     timeout: 60000
-- tapOn: "Earnings & payouts"
+- tapOn: "Earnings & Payouts"
 - extendedWaitUntil:
     visible: "PENDING"
     timeout: 30000
@@ -61,19 +61,19 @@ appId: app.brazos.mobile.preview
 # ─── Services & Availability: add a priced service, then remove it ───────
 - scrollUntilVisible:
     element:
-      text: "Services & availability"
+      text: "Services & Availability"
     direction: UP
     timeout: 60000
-- tapOn: "Services & availability"
+- tapOn: "Services & Availability"
 - extendedWaitUntil:
-    visible: "Add a service"
+    visible: "Add a Service"
     timeout: 30000
 - tapOn: "Service title"
 - inputText: "${output.marker} service"
-- tapOn: "Add a service"
+- tapOn: "Add a Service"
 - tapOn: "Price in dollars"
 - inputText: "40"
-- tapOn: "Add a service"
+- tapOn: "Add a Service"
 - scrollUntilVisible:
     element:
       text: "Add service"
@@ -92,7 +92,7 @@ appId: app.brazos.mobile.preview
     timeout: 15000
 - tapOn:
     text: "Remove"
-    rightOf: "Keep"
+    rightOf: "Cancel"
 - extendedWaitUntil:
     notVisible: "Remove ${output.marker} service"
     timeout: 30000

@@ -271,7 +271,7 @@ export function firstNameOf(name: string | null | undefined): string | null {
 export function postedCardLive(input: {
   job: Parameters<typeof liveJobStatus>[0]['job'] & {
     assigned_worker_id?: string | null;
-    completed_at?: string | null;
+    release_due_at?: string | null;
   };
   state: JobLifecycleState;
   paymentStatus: string | null | undefined;

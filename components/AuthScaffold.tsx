@@ -8,6 +8,7 @@ import {
   Text,
   View,
   useWindowDimensions,
+  type ViewStyle,
 } from 'react-native';
 import { KeyboardAvoid } from './KeyboardAvoid';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
-import { authSurface, fonts, useThemeColors, withAlpha } from '../lib/theme';
+import { authSurface, discs, fonts, useThemeColors, withAlpha } from '../lib/theme';
 import { backgroundImageStyle } from '../ui/primitives/LitSurface';
 import type { AuthBackdropVariant } from './AuthBackdrop';
 import { KeyboardRisingColumn } from './KeyboardRisingColumn';
@@ -44,30 +45,28 @@ const FOOTER_REST_GAP = authSpacing.md;
 
 /**
  * The back control's press: the iOS circular button's dip — a quick scale in,
- * a springy return, on the native driver. The fill's darkening is the
- * Pressable's own pressed state (a colour, so not animated).
+ * a springy return, on the native driver.
  */
 const BACK_PRESS_SCALE = 0.88;
 const BACK_PRESS_IN_MS = 90;
-const BACK_FILL_ALPHA = 0.08;
-const BACK_FILL_PRESSED_ALPHA = 0.16;
 
 function BackButton({
   onPress,
   themed,
   color,
-  fill,
+  disc,
 }: {
   onPress: () => void;
   themed: boolean;
   color: string;
-  fill: string;
+  /** F7: the in-app header's disc (components/ScreenHeader.tsx). */
+  disc: ViewStyle;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   // Untouched screens (not themed) keep the plain 22 chevron on a bare 44
-  // hit box, byte for byte; the themed sign-in pages get the ship page's
-  // circle — a 36 disc at the ink's own faint alpha — with the chevron a size
-  // down, inside the same 44 target.
+  // hit box, byte for byte; the themed sign-in pages get the in-app header's
+  // disc (F7: one Back button) with the chevron a size down, inside the same
+  // 44 target.
   if (!themed) {
     return (
       <Pressable
@@ -104,17 +103,9 @@ function BackButton({
       accessibilityRole="button"
       accessibilityLabel="Go back"
     >
-      {({ pressed }) => (
-        <Animated.View
-          style={[
-            styles.backCircle,
-            { backgroundColor: pressed ? withAlpha(fill, BACK_FILL_PRESSED_ALPHA) : withAlpha(fill, BACK_FILL_ALPHA) },
-            { transform: [{ scale }] },
-          ]}
-        >
-          <Ionicons name="chevron-back" size={authSizes.backChevron} color={color} />
-        </Animated.View>
-      )}
+      <Animated.View style={[styles.backCircle, disc, { transform: [{ scale }] }]}>
+        <Ionicons name="chevron-back" size={authSizes.backChevron} color={color} />
+      </Animated.View>
     </Pressable>
   );
 }
@@ -264,9 +255,13 @@ export function AuthScaffold({
   const glowAlpha = isDark ? GROUND.glow.dark : GROUND.glow.light;
   const cornerAlpha = isDark ? GROUND.corner.dark : GROUND.corner.light;
   const footAlpha = isDark ? GROUND.foot.dark : GROUND.foot.light;
-  // Masters 3 and 4 draw the back chevron gold and the bar title in the serif;
-  // untouched screens keep the ink chevron and the sans title.
-  const chevronColor = themed ? surface.accent : authColors.ink;
+  // Masters 3 and 4 draw the bar title in the serif; untouched screens keep the
+  // ink chevron and the sans title. F7 (owner, 2026-11-16): one Back button,
+  // the in-app header's disc and arrow: gold in dark, the text ink in light.
+  const chevronColor = themed ? (isDark ? palette.gold : palette.text) : authColors.ink;
+  const backDisc: ViewStyle = isDark
+    ? { backgroundColor: withAlpha(discs.header.ink, discs.header.inkAlpha), borderColor: withAlpha(discs.header.rim, discs.header.rimAlpha) }
+    : { backgroundColor: withAlpha(palette.text, 0.08), borderColor: withAlpha(palette.text, 0.1) };
 
   return (
     // The ivory fill and the artwork live outside the safe area, so the art
@@ -332,7 +327,7 @@ export function AuthScaffold({
                     onPress={onBack}
                     themed={themed}
                     color={chevronColor}
-                    fill={surface.ink}
+                    disc={backDisc}
                   />
                 ) : (
                   <View style={styles.iconButton} />
@@ -434,6 +429,7 @@ const styles = StyleSheet.create({
     width: authSizes.backCircle,
     height: authSizes.backCircle,
     borderRadius: authSizes.backCircle / 2,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

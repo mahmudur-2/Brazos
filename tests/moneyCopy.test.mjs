@@ -30,9 +30,9 @@ const SETTLED = ['released', 'paid_out'];
 const PAID = /(?<!not )\bpaid\b|received|sent to/i;
 
 test('C4 · the glossary: one fee name, one held state, one action, one eyebrow', () => {
-  assert.equal(FEE_NAME, 'Protection fee');
+  assert.equal(FEE_NAME, 'Protection Fee');
   assert.equal(HELD_IN_PROTECTION, 'Held in protection');
-  assert.equal(PAY_AND_PROTECT, 'Pay & protect');
+  assert.equal(PAY_AND_PROTECT, 'Pay & Protect');
   assert.equal(paymentEyebrow(), 'PAYMENT');
   assert.deepEqual(Object.keys(PAYMENT_STATE_WORDS).sort(), [...STATUSES].sort());
   assert.ok(STATUSES.length >= 9, 'the union is real');

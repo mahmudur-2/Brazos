@@ -94,7 +94,7 @@ test('[static] M-31 — one dialog order: Cancel on the left, the action on the 
     const b = source.indexOf(action, a);
     assert.ok(a > 0 && b > a, `${file}: ${cancel} renders before ${action}`);
   };
-  order('components/ConfirmDialog.tsx', 'title={cancelText}', 'title={confirmText}');
+  order('components/ConfirmDialog.tsx', 'title="Cancel"', 'title={confirmText}');
   order('components/AmountPrompt.tsx', 'title="Cancel"', 'title={confirmText}');
   const confirm = stripComments(read('components/ConfirmDialog.tsx'));
   assert.match(confirm, /actions: \{\s*flexDirection: 'row',/);
@@ -103,9 +103,9 @@ test('[static] M-31 — one dialog order: Cancel on the left, the action on the 
 
 test('[static] M-31 — one way to close a sheet: the handle, the title, one word', () => {
   for (const [file, word] of [
-    ['components/ActionSheet.tsx', 'Close'],
-    ['components/CreateSheet.tsx', 'Close'],
-    ['components/ServicePickerSheet.tsx', 'Close'],
+    ['components/ActionSheet.tsx', 'Cancel'],
+    ['components/CreateSheet.tsx', 'Cancel'],
+    ['components/ServicePickerSheet.tsx', 'Cancel'],
   ]) {
     const source = stripComments(read(file));
     assert.match(source, new RegExp(`<SheetHeader[\\s\\S]*?dismissWord="${word}"`), `${file} wears the one header`);
@@ -125,7 +125,7 @@ test('[static] M-31 — one way to close a sheet: the handle, the title, one wor
     );
   }
   const header = stripComments(read('ui/primitives/SheetHeader.tsx'));
-  assert.match(header, /export type SheetDismissWord = 'Done' \| 'Close';/);
+  assert.match(header, /export type SheetDismissWord = 'Done' \| 'Cancel' \| 'Close';/);
   assert.match(header, /accessibilityLabel=\{dismissWord\}/);
 });
 

@@ -266,7 +266,7 @@ test('[static] the report sheet can block in the same breath, and says so when i
   // THE REPORT IS THE PRIMARY ACTION: a failed block is named on its own, or
   // someone files the same report twice believing the first did not land.
   assert.match(dialog, /alertAsync\('Reported, but not blocked', userMessage\(blockError\)\)/);
-  assert.match(dialog, /Also block this person/);
+  assert.match(dialog, /Also Block This Person/);
 
   // THE SENT STATE replaces the sheet's body rather than firing an alert
   // after the sheet has already closed — a confirmation that appears

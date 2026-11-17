@@ -214,8 +214,8 @@ test('§5.4 · chips: no chip = the default rule; price leads by amount; rating 
 
   // Exactly two chips, exactly this copy — the blended "Best value" is gone.
   assert.deepEqual(BID_SORT_CHIPS, [
-    { label: 'Lowest price', value: 'price' },
-    { label: 'Highest rated', value: 'rating' },
+    { label: 'Lowest Price', value: 'price' },
+    { label: 'Highest Rated', value: 'rating' },
   ]);
 
   const a = bid('a', 7000, 4.5, 10, '2026-08-01T00:00:00Z');
@@ -246,7 +246,8 @@ test('§5.4 · ClientJobDetail consumes the one ordering source; the blended sor
   const detail = await read('screens/ClientJobDetailScreen.tsx');
   assert.match(detail, /sortBidsForChip\(pendingBids, sort\)/);
   assert.match(detail, /BID_SORT_CHIPS/);
-  assert.match(detail, /useState<BidSortChip \| null>\(null\)/, 'default = no chip = the stated rule');
+  // G1b: the default is shown as the chip it equals ("Highest Rated" = the stated rule, proven above).
+  assert.match(detail, /useState<BidSortChip>\('rating'\)/, 'default = Highest Rated = the stated rule');
 
   // The deleted symbols exist NOWHERE in app code any more.
   const offers = await read('lib/offers.ts');
@@ -461,8 +462,8 @@ test('§6.2 · a null price reads "Ask about this" and prefills no amount; ceili
 test('§6.3 · pricing is an explicit two-state choice; Ask me clears; ceilings refuse in writing [static]', async () => {
   const screen = await read('screens/ServicesPricingScreen.tsx');
 
-  assert.match(screen, /\{ label: 'Flat price', value: 'flat' \}/);
-  assert.match(screen, /\{ label: 'Ask me', value: 'ask' \}/);
+  assert.match(screen, /\{ label: 'Flat Price', value: 'flat' \}/);
+  assert.match(screen, /\{ label: 'Ask Me', value: 'ask' \}/);
   assert.match(screen, /if \(next === 'ask'\) setPrice\(''\)/);
   // The add control is gated on the written ceiling refusal…
   assert.match(screen, /const canAdd = title\.trim\(\)\.length > 0 && priceValid && !priceCeilingProblem && !adding;/);

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { resolveChatMediaUrl, resolveChatMediaUrls } from './storage';
+import { API_MAX_ROWS } from './supabaseTypes';
 
 /**
  * Which conversation a chat screen, message or read receipt belongs to.
@@ -121,13 +122,21 @@ export type MessagePage = {
   error: { message?: string | null; code?: string | null } | null;
   /** Whether the thread may hold older messages than this page reached. */
   hasMore: boolean;
+  /**
+   * The oldest instant this page loaded completely: where the next older page
+   * starts. A `since` load that reached its instant says `since`; one the API
+   * cut at API_MAX_ROWS says its oldest row's time, so no message between
+   * `since` and that row is skipped (C5). Null when the page is empty.
+   */
+  cursor: string | null;
 };
 
 /**
  * F5 — one page of a thread, oldest first: the newest `limit` messages at or
  * before `before` (the thread's newest when absent). `since` instead loads
- * every message from that instant on, unpaged — the legacy jobId entry's way
- * to reach the job's first message. At-or-before, not strictly before, so a
+ * the messages from that instant on — the legacy jobId entry's way to reach
+ * the job's first message — at most API_MAX_ROWS of them, newest first, and
+ * `cursor` says where they stopped. At-or-before, not strictly before, so a
  * message sharing the cursor's timestamp is never skipped; the store drops
  * the repeat by id.
  */
@@ -148,13 +157,21 @@ export async function fetchMessages(
     query = query.lte('created_at', before);
   }
   const ordered = query.order('created_at', { ascending: false }).order('id', { ascending: false });
-  const { data, error } = await (since ? ordered : ordered.limit(limit));
+  const cap = since ? API_MAX_ROWS : limit;
+  const { data, error } = await ordered.limit(cap);
 
-  if (error) return { data: [] as Message[], error, hasMore: true };
+  if (error) return { data: [] as Message[], error, hasMore: true, cursor: null };
   const newestFirst = (data ?? []) as Message[];
   const messages = await resolveMessagesMedia([...newestFirst].reverse());
+  const oldest = messages[0]?.created_at ?? null;
+  const reachedSince = since != null && newestFirst.length < cap;
   // A `since` load reached its instant, but older messages may sit before it.
-  return { data: messages, error: null, hasMore: since ? true : newestFirst.length >= limit };
+  return {
+    data: messages,
+    error: null,
+    hasMore: since ? true : newestFirst.length >= limit,
+    cursor: reachedSince ? since : oldest,
+  };
 }
 
 /**

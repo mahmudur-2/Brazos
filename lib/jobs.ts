@@ -200,9 +200,12 @@ export type Job = {
   /** Idea 14 (2026-09-30, migration 20260930001000): the repeating job this visit belongs to, if any
    *  (lib/jobSeries.ts). Set only by the series' own functions. */
   series_id: string | null;
-  /** When the job reached `completed` (phase51). Starts the 72h auto-release
-   *  clock. Null for jobs completed before phase51 — their clock never runs. */
+  /** When the job reached `completed` (phase51). Null for jobs completed before phase51. */
   completed_at: string | null;
+  /** A4 wiring (P1): the server's automatic approval time (the computed field release_due_at,
+   *  20261116200000_release_clock.sql), for the job's customer and hired worker only. Null when
+   *  none will come, and on every job read that is not a select on `jobs` (an RPC result). */
+  release_due_at: string | null;
 };
 
 /** `photos` is jsonb; tolerate null/legacy rows and non-array values. */
@@ -245,6 +248,7 @@ export function mapJobRow(row: any): Job {
     late_reported_at: row.late_reported_at ?? null,
     series_id: row.series_id ?? null,
     completed_at: row.completed_at ?? null,
+    release_due_at: typeof row.release_due_at === 'string' ? row.release_due_at : null,
   };
 }
 
@@ -378,8 +382,10 @@ export function toOpenJob(row: any): OpenJob {
 // ever added to `jobs`.
 const OPEN_JOB_COLUMNS =
   'id, client_id, title, description, category, location, budget_cents, budget_min_cents, budget_max_cents, pricing_mode, needed_today, scheduled_date, arrival_start_hour, arrival_end_hour, status, created_at, photos, videos';
+// release_due_at is a computed field (a function of the row): it is selectable only on the table
+// `jobs` itself, so JOB_COLUMNS goes only into `.from('jobs')` selects, never a view or an RPC.
 const JOB_COLUMNS =
-  `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos, completion_videos, en_route_at, arrived_at, late_minutes, late_reported_at, series_id, completed_at`;
+  `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos, completion_videos, en_route_at, arrived_at, late_minutes, late_reported_at, series_id, completed_at, release_due_at`;
 
 /** Fetch all jobs with status 'open', newest first (worker browse feed). */
 export async function fetchOpenJobs() {

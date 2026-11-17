@@ -1,8 +1,10 @@
+import { useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { OfferComposer } from '../components/OfferComposer';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { Sheet } from '../ui/primitives/Sheet';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { goBackOrHome } from '../lib/navigationRef';
 import { themedStyles, useThemeColors, type ColorPalette,
@@ -48,6 +50,44 @@ export function CounterofferScreen() {
             }}
           />
     </SafeAreaView>
+  );
+}
+
+/**
+ * P4 (owner, 2026-11-16): the same counter-offer as a sheet that rises over the screen that asked
+ * for it: the same composer and the same counter_offer() call; only the container changes.
+ */
+export function CounterOfferSheet({
+  params,
+  onCancel,
+  onSubmitted,
+}: {
+  /** The bid being countered; null = the sheet is closed. */
+  params: MyJobsStackParamList['Counteroffer'] | null;
+  onCancel: () => void;
+  /** Called only after counter_offer() succeeded. */
+  onSubmitted: () => void;
+}) {
+  // The last bid stays drawn while the sheet slides away.
+  const lastParams = useRef(params);
+  if (params) lastParams.current = params;
+  const shown = params ?? lastParams.current;
+  return (
+    <Sheet visible={params != null} title="Counter-Offer" dismissWord="Cancel" onClose={onCancel} avoidKeyboard>
+      {shown ? (
+        <OfferComposer
+          layout="inline"
+          context={{
+            kind: 'counter',
+            offer: shown.offer,
+            counterpartyName: shown.counterpartyName,
+            jobTitle: shown.job.title,
+            countersRemaining: shown.countersRemaining,
+          }}
+          onSubmitted={onSubmitted}
+        />
+      ) : null}
+    </Sheet>
   );
 }
 

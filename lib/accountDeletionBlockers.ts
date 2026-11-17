@@ -66,7 +66,13 @@ export type BlockerRow = {
   refId: string | null;
   /** The route to open, or null when this stack has none for this kind. */
   route: BlockerRoute | null;
+  /** B4: true when the row has no route, so the app offers no way to settle it: the row then
+   *  carries CONTACT_SUPPORT_LINE and the support address. */
+  support: boolean;
 };
+
+/** B4: the server's own last sentence of a refused deletion (delete_my_account's detail). */
+export const CONTACT_SUPPORT_LINE = 'Contact support if you need help.';
 
 export type BlockerList = {
   total: number;
@@ -92,18 +98,24 @@ function fallbackGroup(kind: string): string {
  * "nothing found" string the screen would have to special-case away.
  */
 export function formatBlockerList(
-  blockers: readonly AccountDeletionBlocker[] | null | undefined
+  blockers: readonly AccountDeletionBlocker[] | null | undefined,
+  /** B1: false for a suspended account (the suspended screen's delete flow): no route of the app
+   *  is open to it, so no row routes and every row carries the support line. */
+  options: { routable?: boolean } = {}
 ): BlockerList {
   const source = blockers ?? [];
+  const routable = options.routable !== false;
   const rows: BlockerRow[] = source.map((blocker, index) => {
     const kind = blocker.kind ?? '';
+    const route = routable ? ROUTABLE_KINDS[kind as keyof typeof ROUTABLE_KINDS] ?? null : null;
     return {
       key: `${kind}:${blocker.ref_id ?? 'none'}:${index}`,
       group: GROUP_LABELS[kind] ?? fallbackGroup(kind),
       label: blocker.label,
       detail: blocker.detail,
       refId: blocker.ref_id ?? null,
-      route: ROUTABLE_KINDS[kind as keyof typeof ROUTABLE_KINDS] ?? null,
+      route,
+      support: route === null,
     };
   });
 

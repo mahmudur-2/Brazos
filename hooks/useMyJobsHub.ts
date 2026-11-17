@@ -52,7 +52,7 @@ const EMPTY_HUB: HubSnapshot = {
  * refresh cancels the one in flight and a focus refresh joins it — so an
  * older answer can never land over a newer one.
  */
-async function readHub(user: { id: string }, previous: HubSnapshot | undefined): Promise<HubSnapshot> {
+export async function readHub(user: { id: string }, previous: HubSnapshot | undefined): Promise<HubSnapshot> {
   const [postedRes, workingRes, bidsRes, settledRes] = await Promise.all([
     fetchJobsByClient(user.id),
     fetchJobsAssignedToWorker(user.id),
@@ -60,17 +60,21 @@ async function readHub(user: { id: string }, previous: HubSnapshot | undefined):
     fetchSettledOffersByWorker(user.id),
   ]);
 
+  // C6: the jobs the hub will SHOW — a failed list keeps its last good rows
+  // (mergeKeepOnError below), so the facts are read for those rows too. Read
+  // for the failed answer's empty list instead, a kept card lost its payment
+  // and its open issue.
+  const posted = postedRes.error ? previous?.posted ?? [] : postedRes.data;
+  const working = workingRes.error ? previous?.working ?? [] : workingRes.data;
+
   // The bucketing facts, one query each over the whole page of jobs.
-  const jobIds = [
-    ...postedRes.data.map((j) => j.id),
-    ...workingRes.data.map((j) => j.id),
-  ];
+  const jobIds = [...posted.map((j) => j.id), ...working.map((j) => j.id)];
 
   // Resolve counterparty names: assigned workers on posted jobs, clients on
   // working jobs and offer jobs (live and settled alike).
   const ids = [
-    ...postedRes.data.map((j) => j.assigned_worker_id),
-    ...workingRes.data.map((j) => j.client_id),
+    ...posted.map((j) => j.assigned_worker_id),
+    ...working.map((j) => j.client_id),
     ...bidsRes.data.map((b) => b.job?.client_id),
     ...settledRes.data.map((b) => b.job?.client_id),
   ].filter((id): id is string => !!id);

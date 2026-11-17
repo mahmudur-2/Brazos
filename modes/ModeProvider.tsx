@@ -351,7 +351,6 @@ export function ModeProvider({ children }: PropsWithChildren) {
           message: copy.message,
           confirmText: copy.confirmText ?? `Switch to ${modeLabel(target)}`,
           // C6: declining is "Not now" — "Stay in Customer" named a mode as a place.
-          cancelText: 'Not now',
         });
         // Declining lands the user exactly where they already were — §F's
         // "decline lands on the current mode's home", which is free here

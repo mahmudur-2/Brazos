@@ -133,8 +133,10 @@ test('[static] the app: the buttons registered, the intents allow-listed, the co
   const detail = flat(read('screens/ClientJobDetailScreen.tsx'));
   assert.match(
     detail,
-    /if \(params\.intent !== 'accept' \|\| !params\.offerId \|\| acceptIntentRef\.current \|\| loading \|\| !canAccept \|\| !cardsRead\) return; acceptIntentRef\.current = true; \/\/ [^]*?const pending = pendingBids\.find\(\(bid\) => bid\.id === params\.offerId\); if \(pending\) confirmAccept\(pending\.offer\);/
+    // A4 wiring (A4): canDecideBids = open AND its booked window not over (accept_offer's cutoff).
+    /if \(params\.intent !== 'accept' \|\| !params\.offerId \|\| acceptIntentRef\.current \|\| loading \|\| !canDecideBids \|\| !cardsRead\) return; acceptIntentRef\.current = true; \/\/ [^]*?const pending = pendingBids\.find\(\(bid\) => bid\.id === params\.offerId\); if \(pending\) confirmAccept\(pending\.offer\);/
   );
+  assert.match(detail, /const canDecideBids = canAccept && !windowOver;/);
   // Only a confirm that named the saved card pays at once — and it names it.
   assert.match(detail, /const card = oneTapCardRef\.current; navigation\.navigate\('Checkout', card \? \{ job, oneTap: true, oneTapCard: card \} : \{ job \}\);/);
   assert.match(detail, /onConfirm=\{\(\) => \{ \/\/ [^]*?oneTapCardRef\.current = stripe && savedCard && acceptQuote \? savedCard\.id : null; if \(pendingAccept\) void doAccept\(pendingAccept\); \}\}/);
@@ -157,7 +159,7 @@ test('[static] the app: the buttons registered, the intents allow-listed, the co
   // path, which names the card and the amount; no charge happens out of sight.
   assert.match(
     checkout,
-    /if \(!params\.oneTap \|\| oneTapRef\.current \|\| !stripe \|\| !cardsRead \|\| !savedCard\) return; if \(!canFund \|\| !figures \|\| !paymentsEnabled \|\| phase !== 'idle' \|\| funding\) return; oneTapRef\.current = true; \/\/ [^]*?if \(params\.oneTapCard === savedCard\.id\) \{ void fundBySavedCard\(\); return; \} setDialogPath\('saved'\); setConfirmVisible\(true\);/
+    /if \(!params\.oneTap \|\| oneTapRef\.current \|\| !stripe \|\| !cardsRead \|\| !savedCard \|\| !configRead\) return; if \(!canFund \|\| !figures \|\| !paymentsEnabled \|\| phase !== 'idle' \|\| funding\) return; oneTapRef\.current = true; \/\/ [^]*?if \(params\.oneTapCard === savedCard\.id\) \{ void fundBySavedCard\(\); return; \} setDialogPath\('saved'\); setConfirmVisible\(true\);/
   );
   assert.match(checkout, /const result = await confirmWithSavedCard\(job\.id, savedCard\.id\); \/\/ [^]*?if \(result\.confirmed \|\| result\.ambiguous\) \{ await confirmPayment\(\); return; \}/);
   // fundBySavedCard has exactly two callers: the matched-card branch above and the confirm's own
@@ -170,7 +172,7 @@ test('[static] the app: the buttons registered, the intents allow-listed, the co
   // The confirm it opens names the card and the total.
   assert.match(checkout, /`Charge \$\{formatBudget\(figures\?\.total \?\? null\)\} to \$\{dialogPath === 'saved' && savedCard \? cardLabel\(savedCard\) : 'your card'\}\?`/);
   // Money is integer cents, through formatBudget, and the button names the card.
-  assert.match(checkout, /title=\{`Protect \$\{formatBudget\(figures\.total\)\} with card ···· \$\{savedCard\.last4\}`\}/);
+  assert.match(checkout, /title=\{`Protect \$\{formatBudget\(figures\.total\)\} with Card ···· \$\{savedCard\.last4\}`\}/);
   // The saved card is read before the page paints, and one-tap is one spinner until held.
   assert.match(checkout, /!paymentLoaded \|\| \(stripe && !cardsRead\) \? \{ kind: 'loading', variant: 'spinner' \}/);
   assert.match(checkout, /setPhase\('confirming'\); try \{ const result = await confirmWithSavedCard\(job\.id, savedCard\.id\);/);
@@ -187,4 +189,34 @@ test('[static] Payment methods: the saved card listed, removed only after its co
   const lib = read('lib/paymentMethods.ts');
   assert.match(lib, /supabase\.functions\.invoke\('payment-methods', \{ body \}\)/);
   assert.doesNotMatch(lib, /\bcvc\b|card_?number/i, 'the app never handles a card number');
+});
+
+test('A4-06: one-tap pay waits until the config read has ended (the effect as written, run with its values)', () => {
+  const src = read('screens/CheckoutScreen.tsx').replace(/\r\n/g, '\n');
+  const start = src.indexOf('  useEffect(() => {\n    if (!params.oneTap');
+  const end = src.indexOf('\n  }, [params.oneTap,', start);
+  assert.ok(start > 0 && end > start, 'the one-tap effect');
+  const body = src.slice(src.indexOf('{', start) + 1, end);
+  const NAMES = ['params', 'oneTapRef', 'stripe', 'cardsRead', 'savedCard', 'configRead', 'canFund', 'figures',
+    'paymentsEnabled', 'phase', 'funding', 'fundBySavedCard', 'setDialogPath', 'setConfirmVisible'];
+  const effect = new Function(...NAMES, body);
+  const run = (values) => {
+    const calls = [];
+    const v = {
+      params: { oneTap: true, oneTapCard: 'pm_a' }, oneTapRef: { current: false }, stripe: {}, cardsRead: true,
+      savedCard: { id: 'pm_a' }, canFund: true, figures: { total: 5000 }, phase: 'idle', funding: false,
+      fundBySavedCard: () => calls.push('charge'), setDialogPath: () => {}, setConfirmVisible: () => calls.push('confirm'),
+      ...values,
+    };
+    effect(...NAMES.map((n) => v[n]));
+    return { calls, ref: v.oneTapRef };
+  };
+  // Before the read ends the pause is unknown (paymentsEnabled still holds its first value, true): nothing runs.
+  let r = run({ configRead: false, paymentsEnabled: true });
+  assert.deepEqual(r.calls, [], 'no charge before the config read has ended');
+  assert.equal(r.ref.current, false, 'and the one-tap is still to come');
+  // The read said paused: nothing runs.
+  assert.deepEqual(run({ configRead: true, paymentsEnabled: false }).calls, []);
+  // The read said open: the named card pays, as before.
+  assert.deepEqual(run({ configRead: true, paymentsEnabled: true }).calls, ['charge']);
 });

@@ -40,9 +40,10 @@ import {
 import { skillCategoryLabel } from '../lib/skillCategories';
 import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 import {
-  fonts,
+  EYEBROW_TYPE,
   radius,
   spacing,
+  textScale,
   themedStyles,
   useThemeColors,
   type ColorPalette,
@@ -181,7 +182,7 @@ export function NotificationSettingsScreen() {
   const selectedCategories = profile?.categories ?? [];
 
   // One clear sentence about whether this device can actually receive a push.
-  function deliveryNotice(): { tone: 'warn' | 'info'; text: string; settings?: boolean; retry?: boolean } | null {
+  function deliveryNotice(): { tone: 'warn' | 'info' | 'quiet'; text: string; settings?: boolean; retry?: boolean } | null {
     if (!pushState || pushState.ok) return null;
     if (pushState.reason === 'unsupported' && isExpoGo()) {
       return {
@@ -202,7 +203,8 @@ export function NotificationSettingsScreen() {
     }
     if (pushState.reason === 'denied') {
       return {
-        tone: 'warn',
+        // A2-M5 A10: switched off on the phone is the person's own choice, a notice and not a danger.
+        tone: 'quiet',
         text:
           'Notifications are turned off for Brazos on this device. Turn them back on in your device Settings to start receiving them.',
         // B11: the switch is one tap away.
@@ -220,6 +222,8 @@ export function NotificationSettingsScreen() {
   }
 
   const notice = deliveryNotice();
+  // Plain row icons, as on the Profile hub: the mint in dark, the forest mark in light.
+  const iconColour = isDark ? colors.emerald : colors.mark;
 
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
@@ -240,7 +244,20 @@ export function NotificationSettingsScreen() {
               </Pressable>
             </View>
           )}
-          {notice && (
+          {notice && notice.tone === 'quiet' ? (
+            // A2-M5 A10: the app's quiet notice, the form of the job page's "booked time has passed"
+            // card (a lit card on the mint, the muted line beside its mark); the words and the way to
+            // Settings are unchanged.
+            <Card style={[styles.quietNotice, isDark && styles.quietNoticeDark]}>
+              <Ionicons name="information-circle-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.quietNoticeText}>{notice.text}</Text>
+              {notice.settings ? (
+                <Pressable onPress={() => void Linking.openSettings()} hitSlop={touchSlop(textLine(styles.noticeRetry))} accessibilityRole="button">
+                  <Text style={styles.noticeRetry}>Open Settings</Text>
+                </Pressable>
+              ) : null}
+            </Card>
+          ) : notice ? (
             <View
               style={[
                 styles.notice,
@@ -263,8 +280,10 @@ export function NotificationSettingsScreen() {
                 </Pressable>
               ) : null}
             </View>
-          )}
+          ) : null}
 
+          <View style={styles.section}>
+          <Text accessibilityRole="header" style={styles.sectionLabel}>Alerts</Text>
           <Card>
             {NOTIFICATION_TOGGLES.map((item, index) => {
               const value = prefs
@@ -275,16 +294,13 @@ export function NotificationSettingsScreen() {
                   key={item.key}
                   style={[styles.row, index > 0 && styles.rowDivider]}
                 >
-                  {/* Master 39 leads each preference with its own ringed
-                      glyph. The icon is presentation, keyed off the same
-                      toggle key the row already carries. */}
-                  <View style={[styles.rowGlyph, isDark && styles.rowGlyphDark]}>
-                    <Ionicons
-                      name={TOGGLE_ICONS[item.key] ?? 'notifications-outline'}
-                      size={18}
-                      color={isDark ? colors.gold : colors.primary}
-                    />
-                  </View>
+                  {/* Master 39 leads each preference with its own glyph. The icon is
+                      presentation, keyed off the same toggle key the row already carries. */}
+                  <Ionicons
+                    name={TOGGLE_ICONS[item.key] ?? 'notifications-outline'}
+                    size={22}
+                    color={iconColour}
+                  />
                   <View style={styles.rowText}>
                     <Text style={styles.rowLabel}>{item.label}</Text>
                     <Text style={styles.rowHint}>{item.hint}</Text>
@@ -302,15 +318,16 @@ export function NotificationSettingsScreen() {
               );
             })}
           </Card>
+          </View>
 
           {/* 2026-09-30 (idea 7): QUIET HOURS — midnight to 6 am, off until switched on; only the
               nearby alerts wait, so it sits with them. The phone's zone goes with the switch. */}
           {prefs?.nearby_jobs && (
+            <View style={styles.section}>
+            <Text accessibilityRole="header" style={styles.sectionLabel}>Nearby Jobs</Text>
             <Card>
               <View style={styles.row}>
-                <View style={[styles.rowGlyph, isDark && styles.rowGlyphDark]}>
-                  <Ionicons name="moon-outline" size={18} color={isDark ? colors.gold : colors.primary} />
-                </View>
+                <Ionicons name="moon-outline" size={22} color={iconColour} />
                 <View style={styles.rowText}>
                   <Text style={styles.rowLabel}>{QUIET_HOURS_LABEL}</Text>
                   <Text style={styles.rowHint}>{QUIET_HOURS_HINT}</Text>
@@ -328,6 +345,7 @@ export function NotificationSettingsScreen() {
                 )}
               </View>
             </Card>
+            </View>
           )}
 
           {prefs?.nearby_jobs && (
@@ -414,15 +432,35 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   noticeText: {
     flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.text,
   },
   noticeRetry: {
-    fontSize: 13,
-    lineHeight: 18,
+    ...textScale.label,
     fontWeight: '700',
     color: colors.primary,
+  },
+  // A2-M5 A10: the quiet notice (ClientJobDetailScreen's noticeCard: the mint, its rim, the xl corner).
+  quietNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
+    backgroundColor: colors.mint,
+  },
+  quietNoticeDark: { borderColor: colors.border },
+  quietNoticeText: {
+    flex: 1,
+    ...textScale.body,
+    color: colors.textMuted,
+  },
+  section: { gap: spacing.sm },
+  sectionLabel: {
+    ...EYEBROW_TYPE,
+    color: colors.eyebrow,
+    marginHorizontal: 2,
   },
   row: {
     flexDirection: 'row',
@@ -438,39 +476,22 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flex: 1,
     gap: 2,
   },
-  // Master 39 rings every preference glyph in gold.
-  rowGlyph: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  rowGlyphDark: {
-    borderColor: colors.gold,
-  },
   rowLabel: {
-    fontFamily: fonts.display,
-    fontSize: 18,
-    fontWeight: '700',
+    ...textScale.control,
     color: colors.text,
   },
   rowHint: {
-    fontSize: 12,
-    lineHeight: 17,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontFamily: fonts.display,
-    fontWeight: '700',
+    ...textScale.title,
     color: colors.text,
   },
   sectionNote: {
-    fontSize: 12,
-    lineHeight: 17,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textMuted,
     marginTop: spacing.xs,
   },
@@ -478,7 +499,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     marginTop: spacing.md,
   },
   link: {
-    fontSize: 14,
+    ...textScale.body,
     fontWeight: '700',
     color: colors.emerald,
     marginTop: spacing.sm,
@@ -490,8 +511,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingTop: spacing.md,
   },
   footnote: {
-    fontSize: 12,
-    lineHeight: 17,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textSubtle,
     textAlign: 'center',
   },

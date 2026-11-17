@@ -16,7 +16,7 @@ type AppErrorBoundaryState = {
  * and the container itself (navigationRef, the parked cold-start replay) sit
  * outside and are never interfered with.
  *
- * Recovery is a real remount, not a re-render: "Try again" bumps the key on
+ * Recovery is a real remount, not a re-render: "Try Again" bumps the key on
  * the child tree, so every navigator under RootNavigator rebuilds from its
  * initial state. That trades the crashed screen's stack for a working app —
  * the same trade a forced app restart makes, minus the restart.
@@ -98,7 +98,7 @@ function CrashFallbackView({ onReset, palette: colors }: { onReset: () => void; 
   const styles = stylesFor(colors);
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Something went wrong</Text>
+      <Text style={styles.title}>Something Went Wrong</Text>
       <Text style={styles.body}>
         The app ran into a problem it couldn’t recover from on its own. Your
         account, jobs, and messages are safe.
@@ -108,7 +108,7 @@ function CrashFallbackView({ onReset, palette: colors }: { onReset: () => void; 
         onPress={onReset}
         style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
       >
-        <Text style={styles.buttonLabel}>Try again</Text>
+        <Text style={styles.buttonLabel}>Try Again</Text>
       </Pressable>
     </View>
   );

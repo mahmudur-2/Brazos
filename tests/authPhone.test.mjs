@@ -277,7 +277,8 @@ test('the phone screen never fakes a session, and email still does the real sign
   assert.match(phone, /phoneAuth\.requestOtp\(/);
 
   // The one screen that does authenticate still goes through AuthContext.
-  assert.match(email, /const \{ login, bannedNotice \} = useAuth\(\)/);
+  // B1: the suspended notice left with the ban sign-out (a suspended account stays signed in).
+  assert.match(email, /const \{ login \} = useAuth\(\)/);
   assert.match(email, /await login\(trimmedEmail, password\)/);
 });
 
@@ -350,7 +351,7 @@ test('B12 · with phone sign-in live, no reachable control opens the email sign-
   // Welcome's email button exists only while the phone screens are not live.
   assert.match(
     read('screens/WelcomeScreen.tsx'),
-    /\{!PHONE_ENTRY\.live && \(\s*<AuthButton\s+title="Continue with email"/,
+    /\{!PHONE_ENTRY\.live && \(\s*<AuthButton\s+title="Continue with Email"/,
     'Welcome hides "Continue with email" while phone sign-in is live'
   );
   // CreateAccount opens only while live (PHONE_ENTRY.createAccount), so it offers no email sign-up.

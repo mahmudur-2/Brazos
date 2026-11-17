@@ -89,6 +89,28 @@ export function validateCheckoutResponse(payload: unknown): CheckoutSessionResul
   return { data: session as CheckoutSession, error: null };
 }
 
+/** R3-1: a job payment whose stored intent is already settled; there is no sheet to show. */
+export type ConfirmedCheckout = { paymentId: string; confirmed: true };
+
+export type JobCheckoutResult =
+  | { data: CheckoutSession | ConfirmedCheckout; error: null }
+  | { data: null; error: { message: string } };
+
+/**
+ * R3-1: the job path's answer. `{ paymentId, confirmed: true }` (a non-empty paymentId) is passed on
+ * as it is; every other answer is read by validateCheckoutResponse. The tip path stays strict.
+ */
+export function readJobCheckoutResponse(payload: unknown): JobCheckoutResult {
+  const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
+  if (record?.confirmed === true) {
+    const paymentId = record.paymentId;
+    return typeof paymentId === 'string' && paymentId.trim() !== ''
+      ? { data: { paymentId, confirmed: true }, error: null }
+      : { data: null, error: { message: CHECKOUT_RESPONSE_MALFORMED } };
+  }
+  return validateCheckoutResponse(payload);
+}
+
 // ---------------------------------------------------------------------------
 // D6 — the edge function's error, as the user should read it
 // ---------------------------------------------------------------------------

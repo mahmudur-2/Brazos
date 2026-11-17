@@ -90,19 +90,17 @@ export function Chip({
   const small = size === 'sm';
   const isFilter = variant === 'filter';
   // emerald D6: ONE selected treatment in dark — gold outline, gold label, no
-  // fill. Light keeps each variant's Heritage selected state untouched.
+  // fill. F3: light's chosen chip takes the same "ring with a soft tint" look — the mint fill
+  // under a dark-green (forest) ring, the forest label and glyph.
   const chosen = selectedInDark(colors);
-  const goldSelected = selected && isDark;
 
   // Resolved once, so the icon and the label can never disagree about which
   // variant is being rendered. Prestige (master 44 / cross-cutting chip
   // vocabulary): in dark, service chips are sage with a GREEN glyph and a
   // CREAM label (master 44 draws them that way), and gold-outline chips
   // carry a gold glyph + cream label; light keeps the Heritage forest.
-  const iconColor = goldSelected
-    ? chosen.line
-    : selected
-    ? (isFilter ? colors.onForest : colors.onPrimary)
+  const iconColor = selected
+    ? (isDark ? chosen.line : colors.forest)
     : variant === 'service'
       ? (isDark ? colors.emerald : colors.forest)
       : variant === 'outlineGold'
@@ -114,10 +112,8 @@ export function Chip({
             : (accentColor ?? colors.textMuted);
 
   // FIX-RUN F12: the label's colour at either state, so a chosen chip's label can fade to it.
-  const labelColorAt = (on: boolean) => on && isDark
-    ? chosen.line
-    : on
-    ? (isFilter ? colors.onForest : colors.onPrimary)
+  const labelColorAt = (on: boolean) => on
+    ? (isDark ? chosen.line : colors.forest)
     : variant === 'service'
       ? (isDark ? colors.ink : colors.forest)
       : variant === 'outlineGold'
@@ -202,7 +198,7 @@ export function Chip({
     // Gold line, gold label, NO fill, so gold stays line-work and a chosen
     // chip reads as a step up from its neighbours rather than as a different
     // colour. Applied last so it wins over every variant's own selected fill;
-    // light keeps each variant's Heritage pair untouched.
+    // light takes the forest ring over the mint (F3).
     // 2026-09-27 (the Lux remake, ruling 11): the chosen chip KEEPS its dark
     // glass — the variant's own unselected fill — under the mint rim; the
     // helper's `fill` is for the controls that never had a glass to keep.
@@ -210,6 +206,7 @@ export function Chip({
       backgroundColor: isFilter || variant === 'soft' ? colors.mint : colors.surface,
       borderColor: chosen.line,
     },
+    on && !isDark && { backgroundColor: colors.mint, borderColor: colors.forest },
     style,
   ];
   const shape = shapeAt(selected);
@@ -232,11 +229,13 @@ export function Chip({
   // that does nothing when activated.
   if (!onPress) return <View style={shape} onLayout={onLayout}>{content}</View>;
 
-  // FIX-RUN F12: the shared press spring under the finger, the dim kept.
+  // FIX-RUN F12: the shared press spring under the finger, the dim kept. A2-M2: a choice chip
+  // ticks (`select`); a chip that is a door (`check={false}`) keeps the tap.
   return (
     <PressScale
       onPress={onPress}
       onLayout={onLayout}
+      haptic={check ? 'select' : true}
       style={({ pressed }) => [...shape, fades && CLEAR_PAINT, pressed && styles.pressed]}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}

@@ -22,20 +22,23 @@ appId: app.brazos.mobile.preview
     env:
       TAP: "Profile"
       NEXT: "Switch to Worker"
+# P11: the row opens in place, a drop-down, and "Delete Account" is its first row. Centred (as 08 does
+# for Legal), the row it opens sits above the floating tab bar, not under it or past the screen's foot.
 - scrollUntilVisible:
     element:
-      text: "Account & safety"
+      text: "Account & Safety"
     direction: DOWN
     timeout: 60000
-- tapOn: "Account & safety"
+    centerElement: true
+- tapOn: "Account & Safety"
 - extendedWaitUntil:
-    visible: "Delete account"
+    visible: "Delete Account"
     timeout: 30000
-- tapOn: "Delete account"
+- tapOn: "Delete Account"
 - extendedWaitUntil:
-    visible: "What is removed"
+    visible: "What Is Removed"
     timeout: 30000
-- assertVisible: "What is kept, and why"
+- assertVisible: "What Is Kept, and Why"
 # Both the blockers' note and the DELETE field sit below the two explainer cards, off a 852 pt screen,
 # and Maestro counts an off-screen element as not visible: scroll to whichever this account shows.
 - scrollUntilVisible:
@@ -56,7 +59,7 @@ appId: app.brazos.mobile.preview
           timeout: 60000
       - takeScreenshot: 10-blockers
       - assertVisible:
-          text: "Delete my account"
+          text: "Delete My Account"
           enabled: false
 # No blocker: DELETE enables the button; the confirm is always cancelled.
 - runFlow:
@@ -64,12 +67,12 @@ appId: app.brazos.mobile.preview
       visible: "Type DELETE to confirm account deletion"
     commands:
       - assertVisible:
-          text: "Delete my account"
+          text: "Delete My Account"
           enabled: false
       - tapOn: "Type DELETE to confirm account deletion"
       - inputText: "DELETE"
       - tapOn: "Confirm"
-      - tapOn: "Delete my account"
+      - tapOn: "Delete My Account"
       - extendedWaitUntil:
           visible: 'Delete this account\?'
           timeout: 15000
@@ -78,5 +81,5 @@ appId: app.brazos.mobile.preview
       - extendedWaitUntil:
           notVisible: 'Delete this account\?'
           timeout: 15000
-      - assertVisible: "What is removed"
+      - assertVisible: "What Is Removed"
 - runFlow: subflows/sign-out.yml

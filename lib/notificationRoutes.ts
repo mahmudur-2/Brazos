@@ -163,6 +163,12 @@ function resolveTarget(data: NotificationData | null): RouteTarget | null {
   const tab = TAB_FOR_SCREEN[data.screen];
   if (!tab) return null;
 
+  // B6: the owner's "Brazos needs you" opens his Needs Attention list, by the notice's type. Its
+  // payload names ProfileMain for builds that have no such screen.
+  if (data.type === 'admin_attention') {
+    return { kind: 'direct', tab: 'Profile', screen: 'AdminAttention', mode: null };
+  }
+
   const mode = MODE_FOR_SCREEN[data.screen] ?? null;
 
   // Profile needs no record.

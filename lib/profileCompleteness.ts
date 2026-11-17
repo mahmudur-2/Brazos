@@ -41,22 +41,22 @@ export function profileCompleteness(input: CompletenessInput): Completeness {
   const steps: CompletenessStep[] = [
     {
       key: 'categories',
-      label: 'Pick your job categories',
+      label: 'Pick Your Job Categories',
       done: input.categoryCount > 0,
     },
     {
       key: 'avatar',
-      label: 'Add a profile photo',
+      label: 'Add a Profile Photo',
       done: !!input.avatarUrl,
     },
     {
       key: 'bio',
-      label: 'Write a short bio',
+      label: 'Write a Short Bio',
       done: !!input.bio && input.bio.trim().length > 0,
     },
     {
       key: 'services',
-      label: `Publish ${SERVICES_TARGET} services`,
+      label: `Publish ${SERVICES_TARGET} Services`,
       done: input.publishedServiceCount >= SERVICES_TARGET,
     },
   ];

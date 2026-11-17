@@ -9,22 +9,23 @@ import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { fetchJobById } from '../lib/jobs';
 import { useAuth } from '../hooks/useAuth';
-import { supabase } from '../lib/supabase';
+import { signOutLocally, SIGN_OUT_UNFINISHED_MESSAGE } from '../lib/signOut';
 import { deleteMyAccount, fetchAccountDeletionBlockers } from '../lib/accountDeletion';
 import { paymentsMode } from '../lib/adapters/payments';
-import { listSavedCards, removeSavedCard } from '../lib/paymentMethods';
-import { formatBlockerList, type BlockerRow } from '../lib/accountDeletionBlockers';
+import { cardSweepMessage, removeEverySavedCard } from '../lib/paymentMethods';
+import { CONTACT_SUPPORT_LINE, formatBlockerList, type BlockerRow } from '../lib/accountDeletionBlockers';
+import { openSupportMail, SUPPORT_EMAIL } from '../lib/appLinks';
+import { Button } from '../ui/primitives';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import {
   EYEBROW_TYPE,
-  fonts,
-  radius,
   spacing,
+  textScale,
   themedStyles,
-  litCardStyle,
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
+import { Card } from '../components/Card';
 
 /**
  * Delete account — App Store Guideline 5.1.1(v).
@@ -48,10 +49,14 @@ import {
 const CONFIRM_WORD = 'DELETE';
 
 export function DeleteAccountScreen() {
-  const { palette: colors, isDark } = useThemeColors();
+  const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   const navigation = useNavigation<ProfileStackNavigation>();
-  const { user } = useAuth();
+  const { user, suspended } = useAuth();
+  // B1: opened from the suspended screen (App.tsx AccountGate). The same blockers, the same card
+  // step and the same delete; no row opens another screen (none is open to a suspended account),
+  // and each row names support instead.
+  const inGate = suspended === true;
   const openingRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
@@ -60,6 +65,7 @@ export function DeleteAccountScreen() {
   const [headline, setHeadline] = useState('');
   const [confirmText, setConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const deletingRef = useRef(false);
 
   const loadBlockers = useCallback(async () => {
     setLoading(true);
@@ -70,11 +76,11 @@ export function DeleteAccountScreen() {
       setLoading(false);
       return;
     }
-    const list = formatBlockerList(data);
+    const list = formatBlockerList(data, { routable: !inGate });
     setBlockers(list.rows);
     setHeadline(list.headline);
     setLoading(false);
-  }, []);
+  }, [inGate]);
 
   useEffect(() => {
     void loadBlockers();
@@ -110,16 +116,30 @@ export function DeleteAccountScreen() {
   }
 
   async function handleDelete() {
+    if (deletingRef.current) return;
     const ok = await confirmAsync({
       title: 'Delete this account?',
       message:
         'This cannot be undone. You will be signed out immediately and will not be able to sign back in with this account.',
-      confirmText: 'Delete account',
-      cancelText: 'Cancel',
+      confirmText: 'Delete Account',
       destructive: true,
     });
     if (!ok) return;
+    // A4 wiring (P2): one run at a time, so a double tap starts one card step, not two. "Try Again"
+    // runs again from the gate, with no second confirm.
+    if (deletingRef.current) return;
+    deletingRef.current = true;
+    try {
+      while (await deleteOnce()) {
+        // Try Again.
+      }
+    } finally {
+      deletingRef.current = false;
+    }
+  }
 
+  /** One run, from the gate. True only when the card step kept the account and the person chose Try Again. */
+  async function deleteOnce(): Promise<boolean> {
     setDeleting(true);
     // A18a review (2026-10-03): the server's gate — account_deletion_blockers(), the same function
     // delete_my_account() applies — is read again HERE, before any card is touched. The list on
@@ -129,17 +149,31 @@ export function DeleteAccountScreen() {
     if (gate.error) {
       setDeleting(false);
       await alertAsync('Could not delete this account', userMessage(gate.error));
-      return;
+      return false;
     }
     // A18a (2026-10-03): the saved cards go with the account — detached at the provider through
-    // payment-methods, the one path that removes a card, before the row is deleted. Best effort:
-    // a card that cannot be reached now does not keep the account alive, and the provider's
-    // customer object, like every payment record, no longer identifies the person once the
-    // profile is a tombstone. The payout account is NOT closed: money still owed to a worker
-    // reaches it after deletion (process-settlements pays payment_accounts, not profiles).
+    // payment-methods, the one path that removes a card, before the row is deleted. A4 wiring (P2):
+    // no longer best effort. The account goes only after an empty list proves every card is gone;
+    // any failure keeps the account and asks to try again. The step runs on the card path
+    // (paymentsMode 'stripe', the build's own setting in lib/adapters/payments.ts), even while the
+    // owner's remote pause is on: cards can exist then. With payments off ('disabled') there is no
+    // card path, the step is skipped, and the account can still be deleted. The payout account is
+    // NOT closed: money still owed to a worker reaches it after deletion (process-settlements pays
+    // payment_accounts, not profiles).
+    let cardsNote = '';
     if (gate.data.length === 0 && paymentsMode === 'stripe') {
-      const { data: cards } = await listSavedCards();
-      await Promise.all(cards.map((card) => removeSavedCard(card.id).catch(() => null)));
+      const cards = await removeEverySavedCard();
+      if (cards.error) {
+        setDeleting(false);
+        return confirmAsync({
+          title: 'Could not delete this account',
+          // UA-02: cards removed before the step failed are gone; the message says so.
+          message: `${cardSweepMessage(cards.error)}${cards.removed > 0 ? ' Some of your saved cards were removed.' : ''}`,
+          confirmText: 'Try Again',
+        });
+      }
+      // A4-03: when the deletion then fails, the two messages below say the cards are already gone.
+      if (cards.removed > 0) cardsNote = ' Your saved cards were removed.';
     }
     const { blocked, error } =
       gate.data.length > 0 ? { blocked: true, error: null } : await deleteMyAccount();
@@ -152,29 +186,26 @@ export function DeleteAccountScreen() {
       await loadBlockers();
       await alertAsync(
         'Not ready yet',
-        'Something on this account still has to be settled first. The list below is up to date.'
+        `Something on this account still has to be settled first. The list below is up to date.${cardsNote}`
       );
-      return;
+      return false;
     }
 
     if (error) {
       // Deletion did NOT happen. Keep the user here, keep their typed
       // confirmation, and say so plainly.
       setDeleting(false);
-      await alertAsync('Could not delete this account', userMessage(error));
-      return;
+      await alertAsync('Could not delete this account', `${userMessage(error)}${cardsNote}`);
+      return false;
     }
 
-    // Deleted. From here nothing may surface an error: the account is already
-    // gone, and telling the user otherwise would be false.
-    try {
-      // scope:'local' clears the stored session without contacting the auth
-      // server — which is the point, since the row that session authenticates
-      // no longer exists.
-      await supabase.auth.signOut({ scope: 'local' });
-    } catch {
-      // Non-fatal by construction. Swallowed deliberately.
-    }
+    // Deleted. From here nothing may say the deletion failed: the account is
+    // already gone, and telling the user otherwise would be false.
+    // A4 wiring (A2): the session leaves this phone through lib/signOut, which
+    // never throws and reads every removal back (the row that session
+    // authenticates no longer exists, so no server call is needed). When the
+    // removal is not proven, the one sign-out sentence follows the confirmation.
+    const signedOut = await signOutLocally();
 
     // The root navigator gates on the session (App.tsx renders <AuthFlow />
     // whenever there is no user), so clearing it IS the stack reset — the
@@ -182,10 +213,10 @@ export function DeleteAccountScreen() {
     // half, so this screen is not left in a stack even if the SIGNED_OUT
     // event never lands.
     navigation.popToTop();
-    void alertAsync(
-      'Account deleted',
-      'Your account has been deleted. Reviews you wrote or received stay on the marketplace, attributed to “Deleted user”.'
-    );
+    const deletedBody =
+      'Your account has been deleted. Reviews you wrote or received stay on the marketplace, attributed to “Deleted user”.';
+    void alertAsync('Account deleted', signedOut ? deletedBody : `${deletedBody} ${SIGN_OUT_UNFINISHED_MESSAGE}`);
+    return false;
   }
 
   const blocked = blockers.length > 0;
@@ -198,11 +229,12 @@ export function DeleteAccountScreen() {
       onBack={goBackOrHome}
       // M-33 — the commit is pinned above the keyboard, red, and stays
       // disabled until DELETE is typed (or while anything blocks deletion).
-      submitLabel="Delete my account"
+      submitLabel="Delete My Account"
       onSubmit={handleDelete}
       submitDisabled={!canDelete}
       submitLoading={deleting}
       submitVariant="destructive"
+      insideTabs={!inGate}
       state={
         loading
           ? { kind: 'loading', variant: 'spinner' }
@@ -211,18 +243,18 @@ export function DeleteAccountScreen() {
           : { kind: 'ready' }
       }
     >
-      <View style={[styles.card, litCardStyle(isDark)]}>
-        <Text style={styles.cardTitle}>What is removed</Text>
+      <Card style={styles.card}>
+        <Text accessibilityRole="header" style={styles.cardTitle}>What Is Removed</Text>
         <Line text="Your name, phone number, photo, bio and categories." />
         <Line text="Your services, availability and portfolio." />
         <Line text="Your saved workers, notification settings and this device’s push registration." />
         <Line text="Any card you saved for one-tap hiring. It is removed from the payment provider before the account goes." />
         <Line text="Your open job postings. Any job still taking offers is cancelled when the account is deleted — it does not stay on the marketplace without you." />
         <Line text="Your sign-in. You will not be able to sign back in with this account." />
-      </View>
+      </Card>
 
-      <View style={[styles.card, litCardStyle(isDark)]}>
-        <Text style={styles.cardTitle}>What is kept, and why</Text>
+      <Card style={styles.card}>
+        <Text accessibilityRole="header" style={styles.cardTitle}>What Is Kept, and Why</Text>
         <Line
           text="Reviews you wrote and reviews you received stay on the marketplace. They are attributed to “Deleted user” — removing them would rewrite other people’s reputation."
         />
@@ -231,26 +263,29 @@ export function DeleteAccountScreen() {
         />
         <Line text="Your payout account stays open until every payment still owed to you has reached it — nothing you earned is lost with the account." />
         <Line text="Messages and jobs stay in the other person’s history, under “Deleted user”." />
-      </View>
+      </Card>
 
       {blocked ? (
-        <View style={styles.blockedBox}>
+        // The gate: one lit card under an amber heading, each blocker a well inside it.
+        <Card style={styles.blockedCard}>
           <View style={styles.blockedHeader}>
-            <Ionicons name="alert-circle-outline" size={20} color={colors.warning} />
-            <Text style={styles.blockedTitle}>{headline}</Text>
+            <Ionicons name="alert-circle-outline" size={22} color={colors.warning} />
+            <Text accessibilityRole="header" style={styles.blockedTitle}>{headline}</Text>
           </View>
           {blockers.map((row) => (
             <BlockerRowView key={row.key} row={row} onOpen={() => openBlocker(row)} />
           ))}
-          <Text style={styles.blockedNote}>
-            Finish or cancel each of these, then come back. Deleting now would
-            leave someone else without the job, the payment or the answer they
-            are waiting on.
-          </Text>
-        </View>
+          {inGate ? null : (
+            <Text style={styles.blockedNote}>
+              Finish or cancel each of these, then come back. Deleting now would
+              leave someone else without the job, the payment or the answer they
+              are waiting on.
+            </Text>
+          )}
+        </Card>
       ) : (
-        <View style={[styles.card, litCardStyle(isDark)]}>
-          <Text style={styles.cardTitle}>Confirm</Text>
+        <Card style={styles.card}>
+          <Text accessibilityRole="header" style={styles.cardTitle}>Confirm</Text>
           <Text style={styles.body}>
             Type {CONFIRM_WORD} to enable the button below.
           </Text>
@@ -263,7 +298,7 @@ export function DeleteAccountScreen() {
             placeholder={CONFIRM_WORD}
             accessibilityLabel={`Type ${CONFIRM_WORD} to confirm account deletion`}
           />
-        </View>
+        </Card>
       )}
 
     </FormScreen>
@@ -285,21 +320,36 @@ function BlockerRowView({ row, onOpen }: { row: BlockerRow; onOpen: () => void }
         ) : null}
       </View>
       <Text style={styles.blockerDetail}>{row.detail}</Text>
+      {row.support ? (
+        <>
+          <Text style={styles.blockerDetail}>{CONTACT_SUPPORT_LINE}</Text>
+          <Button
+            title={SUPPORT_EMAIL}
+            variant="ghost"
+            size="sm"
+            icon="mail-outline"
+            iconPosition="leading"
+            onPress={() => void openSupportMail()}
+            accessibilityLabel={`Email ${SUPPORT_EMAIL}`}
+            style={styles.supportLink}
+          />
+        </>
+      ) : null}
     </>
   );
 
   // No route for this kind: a row that looks tappable but does nothing is
   // worse than a row that plainly is not.
-  if (!row.route) return <View style={styles.blockerRow}>{body}</View>;
+  if (!row.route) return <Card level="well" style={styles.blockerRow}>{body}</Card>;
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.blockerRow, pressed && styles.pressed]}
+      style={({ pressed }) => pressed && styles.pressed}
       onPress={onOpen}
       accessibilityRole="button"
       accessibilityLabel={`${row.group}: ${row.label}`}
     >
-      {body}
+      <Card level="well" style={styles.blockerRow}>{body}</Card>
     </Pressable>
   );
 }
@@ -320,23 +370,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
   card: {
     gap: spacing.sm,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
   },
   cardTitle: {
-    fontFamily: fonts.display,
-    fontSize: 21,
-    fontWeight: '800',
+    ...textScale.title,
     color: colors.text,
   },
   body: {
     flex: 1,
-    fontSize: 14,
+    ...textScale.body,
     color: colors.textMuted,
-    lineHeight: 20,
   },
   line: {
     flexDirection: 'row',
@@ -346,13 +388,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   bullet: {
     marginTop: 7,
   },
-  blockedBox: {
+  blockedCard: {
     gap: spacing.md,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.warning,
-    backgroundColor: colors.warningBg,
   },
   blockedHeader: {
     flexDirection: 'row',
@@ -362,17 +399,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Master 32's gate heading is the hottest amber in the set — warn, never
   // danger red. The palette's `warning` IS that amber under v2.
   blockedTitle: {
-    fontFamily: fonts.display,
     flex: 1,
-    fontSize: 20,
-    fontWeight: '800',
+    ...textScale.title,
     color: colors.warning,
-    lineHeight: 21,
   },
   blockedNote: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
-    lineHeight: 19,
   },
   blockerRow: {
     gap: 2,
@@ -380,8 +414,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
   },
   blockerTitleRow: {
     flexDirection: 'row',
@@ -395,16 +427,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.eyebrow,
   },
   blockerLabel: {
-    fontFamily: fonts.display,
     flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
+    ...textScale.headline,
     color: colors.text,
   },
   blockerDetail: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
-    lineHeight: 19,
+  },
+  supportLink: {
+    alignSelf: 'flex-start',
   },
   pressed: {
     opacity: 0.85,

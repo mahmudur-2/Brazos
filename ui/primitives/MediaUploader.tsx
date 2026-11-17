@@ -1,12 +1,14 @@
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { RemoteImage } from '../../components/RemoteImage';
+import { FieldLabel } from '../../components/TextField';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { radius, spacing, withAlpha, type EmeraldPalette, type as typeScale } from '../tokens';
 import { themedStyles, useThemeColors, type ColorPalette } from '../../lib/theme';
-import { userMessage } from '../../lib/errorMessage';
+import { PICKER_MEDIA_OPTIONS } from '../../lib/pickerOptions';
+import { MAX_VIDEO_SECONDS, uploadErrorMessage } from '../../lib/uploadRules';
 
 /**
  * §I "MediaUploader" (BRAZOS_MASTER_PLAN.md §J Phase 4 — the one Phase 1
@@ -77,9 +79,6 @@ export type MediaUploaderProps = {
   shouldDeleteOnRemove?: (url: string) => boolean;
   /** Opens a tile (photo viewer, video player). Omit for plain tiles. */
   onPressItem?: (url: string) => void;
-  /** Caps in-picker recording length for `kind="video"`. Library picks are
-   *  not covered by it — enforce real duration limits via `validate`. */
-  videoMaxDurationSec?: number;
   /**
    * RUN PJ1 (C5) — a per-instance scale for the whole control: tile
    * dimensions, label and caption sizes, glyphs and internal spacing move
@@ -160,7 +159,6 @@ export function MediaUploader({
   onUploadError,
   shouldDeleteOnRemove,
   onPressItem,
-  videoMaxDurationSec,
   scale = 1,
   tileAspect = 1,
   kind,
@@ -215,7 +213,6 @@ export function MediaUploader({
             width: Math.round(TILE_SIZE * scale * tileAspect),
             height: s(TILE_SIZE),
           },
-          label: { fontSize: s(typeScale.sub.fontSize) },
           capText: { fontSize: s(typeScale.caption.fontSize) },
         }
       : null;
@@ -227,8 +224,8 @@ export function MediaUploader({
   // identical if either is ever restyled. The photo glyph is the one the
   // photo-nudge row already speaks ('image-outline').
   const capBadge =
-    kind === 'video' && videoMaxDurationSec
-      ? { icon: 'time-outline' as const, text: `Up to ${videoMaxDurationSec} seconds` }
+    kind === 'video'
+      ? { icon: 'time-outline' as const, text: `Up to ${MAX_VIDEO_SECONDS} seconds` }
       : kind === 'photo'
         ? { icon: 'image-outline' as const, text: `Up to ${maxItems} photos` }
         : null;
@@ -237,9 +234,8 @@ export function MediaUploader({
     if (atLimit || uploading || disabled) return;
 
     const result = await ImagePicker.launchImageLibraryAsync({
+      ...PICKER_MEDIA_OPTIONS,
       mediaTypes: kind === 'video' ? ['videos'] : ['images'],
-      quality: kind === 'photo' ? 0.7 : undefined,
-      videoMaxDuration: kind === 'video' ? videoMaxDurationSec : undefined,
     });
     if (result.canceled || !result.assets[0]) return;
 
@@ -267,7 +263,7 @@ export function MediaUploader({
     // was bound to a parameter named `message`. The wrap belongs HERE, at the
     // one seam every caller passes through, not at each caller.
     if (error || !url) {
-      onUploadError?.(userMessage(error, 'Upload failed. Please try again.'));
+      onUploadError?.(uploadErrorMessage(error));
       return;
     }
 
@@ -292,11 +288,10 @@ export function MediaUploader({
   return (
     <View style={[styles.wrap, sized?.wrap]}>
       <View style={[styles.labelRow, sized?.labelRow]}>
-        <Text style={[styles.label, isDark && styles.labelDark, sized?.label]}>
-          {label} · {items.length}/{maxItems}
-        </Text>
+        {/* G1a-1: the field-label style every other field on the screen wears. */}
+        <FieldLabel>{`${label} · ${items.length}/${maxItems}`}</FieldLabel>
         {/* The cap, said out loud beside the counter, and READ FROM the value
-            actually enforced — the picker's own duration cap, or the add
+            actually enforced — the one video cap (MAX_VIDEO_SECONDS: the picker's and the check's), or the add
             tile's own item cap — so the badge cannot promise a different
             limit from the one the control applies. */}
         {capBadge ? (
@@ -403,14 +398,6 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     alignItems: 'center',
     gap: spacing.sm,
   },
-  label: {
-    ...typeScale.sub,
-    fontWeight: '700',
-    color: colors.forest,
-  },
-  // The counter is the one thing on this control that has to be readable at a
-  // glance ("Photos · 3/10"); in dark it takes the cream ink.
-  labelDark: { color: colors.ink },
   row: {
     flexDirection: 'row',
     flexWrap: 'wrap',

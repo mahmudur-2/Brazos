@@ -3,8 +3,10 @@ import { controls, layout, radius, spacing, type EmeraldPalette, type as typeSca
 import { themedStyles, useThemeColors } from '../../lib/theme';
 
 /** The word on a sheet's right: "Done" where closing APPLIES what the sheet
- *  holds, "Close" where closing only dismisses it. */
-export type SheetDismissWord = 'Done' | 'Close';
+ *  holds, "Cancel" where closing only dismisses it (F9, owner 2026-11-16: one
+ *  way-out word). "Close" stays only as the generic Sheet's default, which the
+ *  map's pin sheet alone uses (the map screen is not changed). */
+export type SheetDismissWord = 'Done' | 'Cancel' | 'Close';
 
 /**
  * 2026-09-28 (LUX-LIST-64 #64, audit M-31) — ONE WAY TO CLOSE A SHEET. Every

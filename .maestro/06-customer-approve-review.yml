@@ -1,5 +1,5 @@
 appId: app.brazos.mobile.preview
-# F3 customer approve and close (account A): Review tab, Finished Work (photo, report + withdraw), approve and release, Review & Tip, decline a counter, Delete job; F2 Reuse a past job.
+# F3 customer approve and close (account A): Review tab, Review & Approve (photo, report + withdraw), approve and release, Review & Tip, decline a counter, Delete job; F2 Reuse a past job.
 # Proves the held main job is released only on approval, A rates B 5 stars and skips the tip, declines B's $42 counter, and a reused post can be published then deleted.
 ---
 - launchApp:
@@ -19,19 +19,19 @@ appId: app.brazos.mobile.preview
 - runFlow: subflows/ensure-mode-customer.yml
 - evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
 
-# ─── Main job: Review tab → Finished Work ────────────────────────────────
+# ─── Main job: Review tab → Review & Approve ────────────────────────────
 - runFlow:
     file: subflows/home-tap.yml
     env:
       TAP: "Create"
-      NEXT: "My jobs"
+      NEXT: "My Jobs"
 - extendedWaitUntil:
-    visible: "My jobs"
+    visible: "My Jobs"
     timeout: 15000
 - runFlow:
     file: subflows/home-tap.yml
     env:
-      TAP: "My jobs"
+      TAP: "My Jobs"
       NEXT: 'Back( to .*)?'
 - extendedWaitUntil:
     notVisible: "Loading your jobs…"
@@ -52,10 +52,10 @@ appId: app.brazos.mobile.preview
 - assertNotVisible: "Paid"
 - tapOn: "Review & approve.*"
 - extendedWaitUntil:
-    visible: "Finished Work"
+    visible: "Review & Approve"
     timeout: 30000
 - extendedWaitUntil:
-    visible: "Approve & release payment"
+    visible: "Approve & Release Payment"
     timeout: 30000
 # The worker's photo opens full screen.
 - tapOn:
@@ -67,36 +67,47 @@ appId: app.brazos.mobile.preview
 - takeScreenshot: 06-finished-photo
 - tapOn: "Close"
 # Report an issue (holds the payment), then withdraw it.
-- tapOn: "Report an issue"
+- tapOn: "Report an Issue"
 - extendedWaitUntil:
     visible: "Something else"
     timeout: 15000
+# P12: Review & Approve is a sheet with its main action in a footer. The last reason sits below the sheet's
+# fold, under that footer (a tap there would hit "Send Report", still disabled), so it is centred first;
+# the report's card then opens the sheet's list, so it is scrolled back up to.
+- scrollUntilVisible:
+    element:
+      text: "Something else"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
 - tapOn: "Something else"
-- tapOn: "Send report"
-- extendedWaitUntil:
-    visible: "Issue reported|Could not send the report"
+- tapOn: "Send Report"
+- scrollUntilVisible:
+    element:
+      text: "Issue reported|Could not send the report"
+    direction: UP
     timeout: 60000
 - assertVisible: "Issue reported"
 - takeScreenshot: 06-issue-reported
-- tapOn: "Withdraw report"
+- tapOn: "Withdraw Report"
 - extendedWaitUntil:
     visible: 'Withdraw your issue report\?'
     timeout: 15000
 - tapOn:
-    text: "Withdraw report"
-    rightOf: "Keep it open"
+    text: "Withdraw Report"
+    rightOf: "Cancel"
 - extendedWaitUntil:
-    visible: "Approve & release payment"
+    visible: "Approve & Release Payment"
     timeout: 60000
 - assertNotVisible: "Issue reported"
 # Approve: the release is its own confirmed step.
-- tapOn: "Approve & release payment"
+- tapOn: "Approve & Release Payment"
 - extendedWaitUntil:
     visible: 'Release the payment to the worker\?'
     timeout: 15000
 - tapOn:
-    text: "Approve & release"
-    rightOf: "Not yet"
+    text: "Approve & Release"
+    rightOf: "Cancel"
 - extendedWaitUntil:
     visible: "Review & Tip"
     timeout: 60000
@@ -119,11 +130,11 @@ appId: app.brazos.mobile.preview
     direction: UP
 - scrollUntilVisible:
     element:
-      text: "Submit review"
+      text: "Submit Review"
     direction: DOWN
     centerElement: true
     timeout: 60000
-- tapOn: "Submit review"
+- tapOn: "Submit Review"
 # This tap closes the keyboard (runs 38-39: iOS retires it ~4.8 s later), so keyboard-settle follows, as in flow 03.
 - runFlow: subflows/keyboard-settle.yml
 - extendedWaitUntil:
@@ -138,7 +149,7 @@ appId: app.brazos.mobile.preview
     timeout: 60000
 - tapOn: "Done"
 
-# ─── Side job: decline B's $42 counter on Bid Detail ─────────────────────
+# ─── Side job: decline B's $42 counter on the job page ───────────────────
 - launchApp:
     stopApp: true
 - runFlow: subflows/launch-settle.yml
@@ -149,14 +160,14 @@ appId: app.brazos.mobile.preview
     file: subflows/home-tap.yml
     env:
       TAP: "Create"
-      NEXT: "My jobs"
+      NEXT: "My Jobs"
 - extendedWaitUntil:
-    visible: "My jobs"
+    visible: "My Jobs"
     timeout: 15000
 - runFlow:
     file: subflows/home-tap.yml
     env:
-      TAP: "My jobs"
+      TAP: "My Jobs"
       NEXT: 'Back( to .*)?'
 - extendedWaitUntil:
     notVisible: "Loading your jobs…"
@@ -170,30 +181,29 @@ appId: app.brazos.mobile.preview
     text: '.*${output.marker} side.*'
     index: 0
 - extendedWaitUntil:
-    visible: "Job & Bids"
+    visible: "Job Details"
     timeout: 30000
 - extendedWaitUntil:
     notVisible: "Loading bids…"
     timeout: 30000
+# P3: the top bid is open in place on the job page, with its own Decline, Counter and Accept. Centred, as
+# in flow 04: the floating tab bar is over the page's foot, where Decline could sit.
 - scrollUntilVisible:
     element:
-      text: "Open full bid detail with counter and decline options"
+      text: 'Accept Bid \(\$42\)'
     direction: DOWN
     timeout: 30000
-- tapOn: "Open full bid detail with counter and decline options"
-- extendedWaitUntil:
-    visible: "Bid Detail"
-    timeout: 30000
-- assertVisible: 'Accept bid \(\$42\)'
-- tapOn: "Decline bid"
+    centerElement: true
+# A2-M4b: the card's opener is "Decline"; the pop-up's confirm below keeps "Decline Bid".
+- tapOn: "Decline"
 - extendedWaitUntil:
     visible: 'Decline this \$42 bid\?'
     timeout: 15000
 - tapOn:
-    text: "Decline bid"
+    text: "Decline Bid"
     rightOf: "Cancel"
 - extendedWaitUntil:
-    notVisible: "Bid Detail"
+    notVisible: 'Decline this \$42 bid\?'
     timeout: 30000
 - takeScreenshot: 06-declined
 
@@ -208,16 +218,16 @@ appId: app.brazos.mobile.preview
     file: subflows/home-tap.yml
     env:
       TAP: "Create"
-      NEXT: "Reuse a past job"
+      NEXT: "Reuse a Past Job"
 - extendedWaitUntil:
-    visible: "Reuse a past job"
+    visible: "Reuse a Past Job"
     timeout: 15000
 # The row opens its strip of "Post again: …" cards in place; a second tap would close it, so it is
 # tried again only where the 30 s wait below would have failed (subflows/home-tap.yml).
 - runFlow:
     file: subflows/home-tap.yml
     env:
-      TAP: "Reuse a past job"
+      TAP: "Reuse a Past Job"
       NEXT: 'Post again: .*'
 - extendedWaitUntil:
     visible: "Post again: ${output.marker} main"
@@ -243,21 +253,21 @@ appId: app.brazos.mobile.preview
 - assertVisible: "Copied from .*"
 - takeScreenshot: 06-reuse-review
 - runFlow: subflows/publish-job.yml
-- tapOn: "View job and bids"
+- tapOn: "View Job"
 - extendedWaitUntil:
-    visible: "Job & Bids|Job Details"
+    visible: "Job Details"
     timeout: 30000
 - scrollUntilVisible:
     element:
-      text: "Delete job"
+      text: "Delete Job"
     direction: DOWN
     timeout: 30000
-- tapOn: "Delete job"
+- tapOn: "Delete Job"
 - extendedWaitUntil:
     visible: 'Delete this job\?'
     timeout: 15000
 - tapOn:
-    text: "Delete job"
+    text: "Delete Job"
     rightOf: "Cancel"
 - extendedWaitUntil:
     visible: "My Jobs"
@@ -282,16 +292,16 @@ appId: app.brazos.mobile.preview
     file: subflows/home-tap.yml
     env:
       TAP: "Create"
-      NEXT: "My jobs"
+      NEXT: "My Jobs"
     optional: true
 - extendedWaitUntil:
-    visible: "My jobs"
+    visible: "My Jobs"
     timeout: 15000
     optional: true
 - runFlow:
     file: subflows/home-tap.yml
     env:
-      TAP: "My jobs"
+      TAP: "My Jobs"
       NEXT: 'Back( to .*)?'
     optional: true
 - extendedWaitUntil:
@@ -309,7 +319,7 @@ appId: app.brazos.mobile.preview
     index: 0
     optional: true
 - extendedWaitUntil:
-    visible: "Job & Bids"
+    visible: "Job Details"
     timeout: 30000
     optional: true
 # An open job with bids shows "Cancel job" at the foot of the page (screens/ClientJobDetailScreen.tsx).
@@ -333,7 +343,7 @@ appId: app.brazos.mobile.preview
     optional: true
 - tapOn:
     text: "Cancel job"
-    rightOf: "Keep job"
+    rightOf: "Cancel"
     optional: true
 - extendedWaitUntil:
     visible: "This job was cancelled"

@@ -10,36 +10,12 @@ import { AppState } from 'react-native';
 import type { AuthError, Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { fetchCurrentUserBanned, updateProfile } from './profiles';
-import { unregisterPushToken } from './pushNotifications';
 import { setSentryUser } from './observability/sentry';
+import { endSession, forgetDevice, SIGN_OUT_UNFINISHED_MESSAGE } from './signOut';
+import { onSuspensionMark, suspendedFor, suspensionChecks, type SuspensionAnswer } from './suspension';
 
-/** A6: the most sign-out waits for this device to detach from push. */
-const LOGOUT_PUSH_UNREGISTER_MS = 5000;
-
-/**
- * Ends the session on this device without the network (B6). The public
- * `signOut({ scope: 'local' })` still posts to /logout and keeps the session
- * when that fails, so after it the client's own session removal (auth-js
- * 2.108's `_removeSession`: clears the stored session and emits SIGNED_OUT)
- * finishes the job. Guarded: if a future auth-js drops the method, this is a
- * no-op and the session simply stays, which is the old behaviour.
- */
-async function signOutLocally(): Promise<void> {
-  try {
-    const { error } = await supabase.auth.signOut({ scope: 'local' });
-    if (!error) return;
-  } catch {
-    // Fall through to the device-only removal.
-  }
-  const auth = supabase.auth as unknown as { _removeSession?: () => Promise<void> };
-  try {
-    if (typeof auth._removeSession === 'function') await auth._removeSession();
-  } catch {
-    // Nothing more can be done offline.
-  }
-}
-
-/** B16: how often a foregrounded app re-asks whether this account was banned. */
+/** B16: how often a foregrounded app re-asks whether this account was banned (B1: always while
+ *  it is suspended, so the suspended screen leaves when the suspension ends). */
 const BAN_RECHECK_MS = 10 * 60 * 1000;
 
 type AuthResult = { error: AuthError | null };
@@ -51,9 +27,12 @@ type AuthContextValue = {
   session: Session | null;
   /** True until the initial session has been restored from storage. */
   loading: boolean;
-  /** Set when the last sign-out happened because the account is suspended. */
-  bannedNotice: boolean;
-  dismissBannedNotice: () => void;
+  /**
+   * B1: whether the signed-in account is suspended, by the server's own answer
+   * (current_user_is_banned). Null while no answer is known for this account, or nobody is
+   * signed in. App.tsx shows the suspended screen in place of the app while it is true.
+   */
+  suspended: boolean | null;
   signUp: (
     email: string,
     password: string,
@@ -61,7 +40,8 @@ type AuthContextValue = {
     phone: string
   ) => Promise<AuthResult & { needsConfirmation: boolean }>;
   login: (email: string, password: string) => Promise<AuthResult>;
-  logout: () => Promise<AuthResult>;
+  /** R7-a: an error only when the session could not be proven gone from this phone (SIGN_OUT_UNFINISHED_MESSAGE). */
+  logout: () => Promise<{ error: { message: string } | null }>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -69,7 +49,8 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [bannedNotice, setBannedNotice] = useState(false);
+  const [suspension, setSuspension] = useState<SuspensionAnswer>(null);
+  const suspended = suspendedFor(suspension, session?.user?.id ?? null);
 
   useEffect(() => {
     // Restore any persisted session on startup. The rejection branch matters:
@@ -114,39 +95,54 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setSentryUser(userId);
   }, [session?.user?.id]);
 
-  // Enforce bans on the client: a banned user is signed straight back out.
-  // The database is the real gate (phase13 policies reject their writes even
-  // with a valid token) — this is what makes the app *look* signed out.
-  // NOTE: this cannot prevent the initial token from being issued. Blocking
-  // authentication itself would need a Supabase Auth Hook, which isn't
-  // configured here.
+  // R7-d: at every launch (once the stored session is restored) and whenever
+  // the signed-in person changes, sign-out included, the phone forgets what
+  // belongs to anyone else (lib/signOut.ts forgetDevice). A failure is
+  // retried at the next launch; it never blocks the app.
+  const restoredUserId = loading ? undefined : session?.user?.id ?? null;
+  useEffect(() => {
+    if (restoredUserId === undefined) return;
+    void forgetDevice(restoredUserId);
+  }, [restoredUserId]);
+
+  // B1 (production-36h): a suspended account stays signed in and sees the suspended screen
+  // (App.tsx AccountGate) in place of the app; nothing here signs anyone out. The database is the
+  // real gate (the access lane refuses every guarded call and returns no rows); this only decides
+  // what the app shows. The read runs beside the legal and setup reads, and App.tsx holds its
+  // loader until this account's first answer. A deleted account (the server's hint
+  // 'account_inactive') is not a suspension and never a mark, so it never shows the suspended
+  // screen. The app has no handler of its own for that hint: the delete screen signs this phone out
+  // after its own deletion (lib/signOut signOutLocally); a session left on another phone stays
+  // signed in, and each call the server refuses there shows its error, until the person signs out.
   useEffect(() => {
     const userId = session?.user?.id;
     if (!userId) return;
-    let active = true;
-    let lastCheck = 0;
-
-    const check = async () => {
-      lastCheck = Date.now();
-      const { data: banned } = await fetchCurrentUserBanned(userId);
-
-      if (!active) return;
-      if (banned) {
-        setBannedNotice(true);
-        await supabase.auth.signOut();
-      }
-    };
-    void check();
-
-    // FIX-RUN B16: a ban that lands while the app stays signed in is enforced
-    // the next time it comes to the front — at most once per BAN_RECHECK_MS.
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && Date.now() - lastCheck >= BAN_RECHECK_MS) void check();
+    // B7 (R6, R7): the reads, their answer and their timers live in lib/suspension.ts (executed by the
+    // tests): a failed read is asked again after 5 s, 15 s, then every 60 s, until one answers; while
+    // suspended, a read every 60 s.
+    const checks = suspensionChecks({
+      userId,
+      read: () => fetchCurrentUserBanned(userId),
+      publish: setSuspension,
+      everyMs: BAN_RECHECK_MS,
     });
+    void checks.check();
+
+    // FIX-RUN B16: a ban that lands while the app stays signed in is seen the next time it comes
+    // to the front: at most once per BAN_RECHECK_MS, and every time while suspended.
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') checks.foreground();
+    });
+    // Between two checks, a call the server refused for a suspended account asks for one now
+    // (lib/suspension.ts; the client's fetch in lib/supabase.ts). Only the answer above decides.
+    const stopMarks = onSuspensionMark(() => void checks.check());
 
     return () => {
-      active = false;
+      checks.stop();
       subscription.remove();
+      stopMarks();
+      // The next account (or this one, signed in again) starts with no answer.
+      setSuspension(null);
     };
   }, [session?.user?.id]);
 
@@ -167,8 +163,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       user: session?.user ?? null,
       session,
       loading,
-      bannedNotice,
-      dismissBannedNotice: () => setBannedNotice(false),
+      suspended,
       signUp: async (email, password, fullName, phone) => {
         // full_name / phone are passed as user metadata; the handle_new_user
         // DB trigger writes them onto the profiles row (works even when email
@@ -193,28 +188,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return { error };
       },
       logout: async () => {
-        // Detach this device BEFORE the session goes away — the update is
-        // RLS-scoped to the signed-in user, so it would be rejected after
-        // sign-out. Without it, the next person to sign in on this phone would
-        // keep receiving the previous user's notifications.
-        // A6: bounded - a hung unregister (no network, a stuck token read) must not hold sign-out.
-        await Promise.race([
-          unregisterPushToken().catch(() => undefined),
-          new Promise<void>((resolve) => setTimeout(resolve, LOGOUT_PUSH_UNREGISTER_MS)),
-        ]);
-        const { error } = await supabase.auth.signOut();
-        if (!error) return { error };
-        // FIX-RUN B6: sign-out never fails offline. auth-js keeps the session
-        // whenever the logout request itself fails (only a 401/403/404 answer
-        // clears it), so a person with no connection could not sign out at
-        // all. They asked to leave THIS device: end it here. The server's push
-        // token stays registered; register_push_token() reassigns it on the
-        // next sign-in on this phone (lib/pushNotifications.ts).
-        await signOutLocally();
-        return { error: null };
+        // R7-a: push unregister (bounded), server sign-out, then the device-only
+        // removal when offline — each removal read back (lib/signOut.ts). Only a
+        // session proven gone is reported as signed out.
+        const ended = await endSession();
+        return { error: ended ? null : { message: SIGN_OUT_UNFINISHED_MESSAGE } };
       },
     }),
-    [session, loading, bannedNotice]
+    [session, loading, suspended]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

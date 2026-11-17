@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { useModalPresence } from '../hooks/useModalPresence';
 import { StyleSheet, Text, View } from 'react-native';
 import { Button } from './Button';
+import { warning } from '../lib/haptics';
 import {
   radius,
   shadows,
@@ -19,7 +21,6 @@ type ConfirmDialogProps = {
   title: string;
   message?: string;
   confirmText?: string;
-  cancelText?: string;
   /** Red confirm action, for actions that end or remove something. */
   destructive?: boolean;
   /** Shows a spinner on the confirm button and disables both actions. */
@@ -44,7 +45,6 @@ export function ConfirmDialog({
   title,
   message,
   confirmText = 'Confirm',
-  cancelText = 'Cancel',
   destructive = false,
   loading = false,
   onConfirm,
@@ -57,6 +57,10 @@ export function ConfirmDialog({
   useModalPresence(visible);
   const palette = paletteProp ?? colors;
   const styles = stylesFor(colors);
+  // A2-M2: a pop-up that ends something warns the hand as it opens (lib/haptics `warning`).
+  useEffect(() => {
+    if (visible && destructive) warning();
+  }, [visible, destructive]);
   return (
     // 2026-09-30 (the smoothness pass): PopModal — the dim and its frost at once, the card moving
     // in at full opacity, never a fade of the blur (components/PopModal.shared.tsx).
@@ -90,14 +94,19 @@ export function ConfirmDialog({
                 width and the action the rest, so a long action ("Cash out
                 (simulated)") still reads whole. */}
             <View style={styles.actions}>
+              {/* F9 (owner, 2026-11-16): the way out is always the one word "Cancel". */}
               <Button
-                title={cancelText}
+                title="Cancel"
                 variant="secondary"
                 palette={palette}
                 onPress={onCancel}
                 disabled={loading}
                 style={styles.cancel}
+                // A2-M3: at a large text size the action's label wraps; Cancel keeps its height.
+                pairHeight
               />
+              {/* A2-M2 (one red): a red confirm is the Button's own `destructive` — the same solid
+                  #F83641 under a black label in both themes as a page's red button. */}
               <Button
                 title={confirmText}
                 variant={destructive ? 'destructive' : 'primary'}

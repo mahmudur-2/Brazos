@@ -4,20 +4,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { Divider } from '../ui/primitives/Divider';
+import { MoneyText } from '../ui/primitives/MoneyText';
 import { Chip } from './Chip';
 import { DrawnCheck } from './DrawnCheck';
 import { PostJobBar } from './PostJobBar';
 import { useLoopActive } from '../hooks/useLoopActive';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { arrivalWindowLabel, formatBudget, JOB_CATEGORY_LABELS, type Job } from '../lib/jobs';
+import { arrivalWindowLabel, JOB_CATEGORY_LABELS, type Job } from '../lib/jobs';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { pricingModeFrom } from '../lib/pricingMode';
 import {
   EYEBROW_TYPE,
   fonts,
   spacing,
+  textScale,
   themedStyles,
-  litCardStyle,
   useThemeColors,
   withAlpha,
   type ColorPalette,
@@ -166,26 +167,24 @@ export function JobLivePage({
               </View>
               <View style={styles.cell}>
                 <Text style={styles.label}>{posted ? 'PRICE' : 'BUDGET'}</Text>
-                <Text style={styles.value} numberOfLines={1}>
-                  {cents != null ? (
-                    <>
-                      {posted ? null : <Text style={styles.valueSub}>Up to </Text>}
-                      <Text style={styles.money}>{formatBudget(cents)}</Text>
-                    </>
-                  ) : (
-                    <Text style={styles.valueSub}>No maximum</Text>
-                  )}
-                </Text>
+                {cents != null ? (
+                  <View style={styles.moneyRow}>
+                    {posted ? null : <Text style={styles.valueSub}>Up to</Text>}
+                    <MoneyText cents={cents} size="md" />
+                  </View>
+                ) : (
+                  <Text style={[styles.value, styles.valueSub]}>No maximum</Text>
+                )}
               </View>
-              <View style={styles.cell}>
+              <View style={[styles.cell, styles.cellWide]}>
                 <Text style={styles.label}>AREA</Text>
-                <Text style={styles.value} numberOfLines={1}>
+                <Text style={styles.value} numberOfLines={2}>
                   {job.location}
                 </Text>
               </View>
-              <View style={styles.cell}>
+              <View style={[styles.cell, styles.cellWide]}>
                 <Text style={styles.label}>TIMING</Text>
-                <Text style={styles.value} numberOfLines={1}>
+                <Text style={styles.value} numberOfLines={2}>
                   {timing}
                 </Text>
               </View>
@@ -193,58 +192,59 @@ export function JobLivePage({
           </Card>
         </Animated.View>
 
-        <Animated.View style={[styles.next, litCardStyle(isDark), rise(beats[4], 18)]}>
-          <Text style={styles.eyebrow}>WHAT HAPPENS NEXT</Text>
-          <View style={styles.stepper} onLayout={(event) => setStepperWidth(event.nativeEvent.layout.width)}>
-            {column > 0 ? (
-              <>
-                <View style={[styles.track, { left: 7, width: column * 2 + nodeGap * 2 }]} />
-                {FADE.map((alpha, i) => (
-                  <View
-                    key={alpha}
-                    style={[styles.track, { left: 7 + i * FADE_STEP, width: FADE_STEP, backgroundColor: withAlpha(colors.emerald, alpha) }]}
-                  />
-                ))}
-              </>
-            ) : null}
-            {[
-              [posted ? 'Requests arrive' : 'Bids arrive', 'From workers nearby'],
-              ['You choose', 'We hold the payment'],
-              ['You approve', 'Then they’re paid'],
-            ].map(([head, sub], i) => (
-              <View key={head} style={styles.step}>
-                <View style={[styles.node, i === 0 && styles.nodeOn]}>
-                  {i === 0 && !still ? (
-                    <Animated.View
-                      style={[
-                        styles.nodePulse,
-                        {
-                          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] }),
-                          transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.6] }) }],
-                        },
-                      ]}
+        <Animated.View style={rise(beats[4], 18)}>
+          <Card style={styles.next}>
+            <Text style={styles.eyebrow}>WHAT HAPPENS NEXT</Text>
+            <View style={styles.stepper} onLayout={(event) => setStepperWidth(event.nativeEvent.layout.width)}>
+              {column > 0 ? (
+                <>
+                  <View style={[styles.track, { left: 7, width: column * 2 + nodeGap * 2 }]} />
+                  {FADE.map((alpha, i) => (
+                    <View
+                      key={alpha}
+                      style={[styles.track, { left: 7 + i * FADE_STEP, width: FADE_STEP, backgroundColor: withAlpha(colors.emerald, alpha) }]}
                     />
-                  ) : null}
+                  ))}
+                </>
+              ) : null}
+              {[
+                [posted ? 'Requests arrive' : 'Bids arrive', 'From workers nearby'],
+                ['You choose', 'We hold the payment'],
+                ['You approve', 'Then they’re paid'],
+              ].map(([head, sub], i) => (
+                <View key={head} style={styles.step}>
+                  <View style={[styles.node, i === 0 && styles.nodeOn]}>
+                    {i === 0 && !still ? (
+                      <Animated.View
+                        style={[
+                          styles.nodePulse,
+                          {
+                            opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] }),
+                            transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.6] }) }],
+                          },
+                        ]}
+                      />
+                    ) : null}
+                  </View>
+                  <Text style={styles.stepHead}>{head}</Text>
+                  <Text style={styles.stepSub}>{sub}</Text>
                 </View>
-                <Text style={styles.stepHead}>{head}</Text>
-                <Text style={styles.stepSub}>{sub}</Text>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          </Card>
         </Animated.View>
 
         {/* A promise the app keeps: `bid_received` reaches the job's owner and
             notification_prefs.bids defaults to on (tests/postJobPublish D22). */}
         <Animated.View style={[styles.notify, rise(beats[5], 10)]}>
           <Ionicons name="notifications-outline" size={18} color={colors.emerald} />
-          <Text style={styles.notifyText}>We’ll let you know when the first bid arrives.</Text>
+          <Text style={styles.notifyText}>{`We’ll let you know when the first ${posted ? 'request' : 'bid'} arrives.`}</Text>
         </Animated.View>
       </ScrollView>
 
       <PostJobBar
         secondary={{ label: 'Back to Home', onPress: onBackHome }}
-        primary={{ label: 'View job and bids', onPress: onViewJob }}
-        primaryTrailingIcon="arrow-forward"
+        primary={{ label: 'View Job', onPress: onViewJob }}
       />
     </View>
   );
@@ -289,8 +289,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     sub: {
       marginTop: -spacing.sm,
-      fontSize: 15,
-      lineHeight: 21,
+      ...textScale.callout,
+      fontWeight: '400',
       textAlign: 'center',
       color: colors.textMuted,
     },
@@ -309,7 +309,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       color: colors.eyebrow,
     },
     hint: {
-      fontSize: 12,
+      ...textScale.footnote,
+      fontWeight: '400',
       color: colors.textSubtle,
     },
     // The same serif title the review summary shows — this is that card, published.
@@ -337,6 +338,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       width: '46%',
       flexGrow: 1,
     },
+    // Place and time each take their own line, as on the review summary.
+    cellWide: {
+      width: '100%',
+    },
     label: {
       ...EYEBROW_TYPE,
       color: colors.eyebrow,
@@ -347,26 +352,24 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     value: {
       marginTop: 5,
-      fontSize: 15,
-      lineHeight: 20,
+      ...textScale.callout,
       fontWeight: '600',
       color: colors.ink,
     },
     valueSub: {
-      fontWeight: '500',
+      ...textScale.callout,
       color: colors.textMuted,
     },
-    money: {
-      fontWeight: '700',
-      color: colors.money,
+    // The summary card's money line: "Up to" muted, the amount in MoneyText.
+    moneyRow: {
+      marginTop: 5,
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: spacing.xs,
     },
+    // The lit Card (its own radius, rim and padding); only the rhythm of the stepper is set here.
     next: {
-      paddingVertical: 14,
-      paddingHorizontal: 16,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: withAlpha(colors.surface, 0.5),
+      paddingVertical: spacing.md + 2,
     },
     stepper: {
       marginTop: 12,
@@ -407,14 +410,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       borderColor: withAlpha(colors.emerald, 0.6),
     },
     stepHead: {
-      fontSize: 13,
-      lineHeight: 17,
+      ...textScale.label,
       fontWeight: '700',
       color: colors.ink,
     },
     stepSub: {
-      fontSize: 11.5,
-      lineHeight: 15,
+      ...textScale.footnote,
+      fontWeight: '400',
       color: colors.textMuted,
     },
     notify: {
@@ -425,8 +427,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     notifyText: {
       flex: 1,
-      fontSize: 13,
-      lineHeight: 18,
+      ...textScale.label,
+      fontWeight: '400',
       color: colors.textMuted,
     },
   })

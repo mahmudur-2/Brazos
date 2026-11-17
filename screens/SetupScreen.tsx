@@ -21,7 +21,14 @@ import { setPendingLanding } from '../lib/setupLanding';
 import { writeSetupRecord } from '../lib/setupStorage';
 import { DEFAULT_LANDING, type LandingPreference } from '../lib/setupState';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
-import { litCardStyle, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  authSurface,
+  fonts,
+  litCardStyle,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import { Announce } from '../hooks/useAnnounce';
 
 const ENTER_MS = 340;
@@ -63,6 +70,7 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
   // today's layout: every colour is a palette role resolved at render.
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  const surface = authSurface(colors, isDark);
   const { user, logout } = useAuth();
   const reducedMotion = useReducedMotion();
 
@@ -188,6 +196,7 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
     <AuthScaffold title="Finish Setup" titleVariant="large" backdrop="soft" themed>
       <View style={styles.body}>
         <Animated.View style={stagger(0, 0.42)}>
+          <Text style={[styles.eyebrow, { color: surface.accent }]}>ONE LAST STEP</Text>
           <Text style={styles.title} maxFontSizeMultiplier={1.4}>
             Set up your experience
           </Text>
@@ -226,7 +235,7 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
         </Animated.View>
 
         <Animated.View style={stagger(0.3, 0.8)}>
-          <Text accessibilityRole="header" style={styles.sectionTitle}>Start in</Text>
+          <Text accessibilityRole="header" style={styles.sectionTitle}>Start In</Text>
           <View style={styles.choices} accessibilityRole="radiogroup">
             <SetupChoiceCard
               icon="home-outline"
@@ -262,7 +271,7 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
           </View>
 
           <AuthButton
-            title="Finish setup"
+            title="Finish Setup"
             weight="semibold"
             themed
             onPress={handleFinish}
@@ -298,10 +307,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingTop: authSpacing.sm,
     paddingBottom: authSpacing.lg,
   },
+  // The sign-in family's measure (screens/SignInScreen.tsx): the eyebrow, the
+  // serif headline and the subtitle at the same top distance.
+  eyebrow: {
+    ...authType.heroEyebrow,
+    marginTop: authSpacing.xl,
+  },
   title: {
-    ...authType.title,
+    ...authType.heroTitle,
+    fontFamily: fonts.display,
     color: colors.ink,
-    marginTop: authSpacing.lg,
+    marginTop: authSpacing.sm,
   },
   subtitle: {
     ...authType.body,

@@ -25,13 +25,14 @@ import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import {
-  acceptOfferActionLabel,
   acceptOfferConfirmMessage,
   acceptOfferConfirmText,
   acceptOfferConfirmTitle,
   firstNameOf,
+  declineOfferActionLabel,
+  declineOfferConfirmTitle,
 } from '../lib/offerCopy';
-import { OfferCard } from '../components/OfferCard';
+import { OfferCard, offerActionInset } from '../components/OfferCard';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { HeldPulse, ReleasedTick } from '../components/MoneyMoment';
 import { JobOwnerActions } from '../components/JobOwnerActions';
@@ -63,26 +64,37 @@ import {
   type Payment,
 } from '../lib/payments';
 import {
+  BOOKED_TIME_PASSED,
   customerCancelPreview,
   customerChargeCents,
   isPayoutOnItsWay,
   isRefundArranged,
   isRefundFailed,
+  jobWindowOver,
 } from '../lib/paymentRules';
 import { paymentsMode } from '../lib/adapters/payments';
 import { customerCancelConfirm, paymentEyebrow } from '../lib/moneyCopy';
 import { cardLabel, listSavedCards, type SavedCard } from '../lib/paymentMethods';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
+import { fetchMyReviewedJobIds } from '../lib/reviews';
 import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
 import { MoneyText } from '../ui/primitives/MoneyText';
-import { usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
+import { FloatingAction, useScrollClearance } from '../ui/primitives';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { RepeatNote } from '../components/RepeatNote';
 import { useJobSeries } from '../hooks/useJobSeries';
 import { stopJobSeries } from '../lib/jobSeries';
 import { userMessage } from '../lib/errorMessage';
-import { goBackOrHome } from '../lib/navigationRef';
-import { acceptOffer, type OfferWithWorker } from '../lib/offers';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
+import {
+  acceptOffer,
+  countersRemaining,
+  declineOffer,
+  isOfferActionableBy,
+  type OfferWithWorker,
+} from '../lib/offers';
+import { CounterOfferSheet } from './CounterofferScreen';
+import { ApproveOrDispute } from './ApproveOrDisputeScreen';
 import {
   BID_SORT_CHIPS,
   compareWorkerFromSummary,
@@ -93,6 +105,7 @@ import { jobStage } from '../lib/jobStage';
 import {
   deriveJobLifecycle,
   jobPillLabel,
+  myJobsNextAction,
   releaseAtLabel,
   isRefundFailureRecorded,
   releaseDeadlineMs,
@@ -127,9 +140,12 @@ import {
   type ColorPalette,
   screenGround,
   textLine,
+  textScale,
   touchSlop,
+  wellStyle,
 } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
+import { serverNowMs } from '../lib/serverClock';
 import { Announce } from '../hooks/useAnnounce';
 import { STATE_COPY } from '../ui/templates/ScreenStates';
 
@@ -148,7 +164,6 @@ export function ClientJobDetailScreen() {
   // emerald(3): the floating pill's real footprint. This is the "Job & bids"
   // surface the device pass caught scrolling under it.
   const navClearance = useScrollClearance();
-  const footerPad = usePinnedFooterPadding();
   const emeraldColors = emeraldColorsFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'ClientJobDetail'>>();
@@ -171,12 +186,23 @@ export function ClientJobDetailScreen() {
     refresh: refreshBids,
     summaries,
   } = useJobOffers(job.id, { summaries: true });
-  // null = no chip selected = the stated deterministic default order
-  // (lib/compareBids.ts — the single ordering source).
-  const [sort, setSort] = useState<BidSortChip | null>(null);
+  // The stated deterministic default order (lib/compareBids.ts — the single ordering source) leads
+  // with rating, so "Highest Rated" is the default made explicit: the row shows the list's real order.
+  const [sort, setSort] = useState<BidSortChip>('rating');
   const [refreshing, setRefreshing] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [pendingAccept, setPendingAccept] = useState<OfferWithWorker | null>(null);
+  // P3 (owner, 2026-11-16): bids are read, compared and decided on this page. Which bid is open in
+  // place (undefined = the top bid by the current sort); the bid waiting on the decline pop-up; the
+  // decline in flight; the bid being countered in the sheet (null = closed).
+  const [openBidId, setOpenBidId] = useState<string | null | undefined>(undefined);
+  const [pendingDecline, setPendingDecline] = useState<OfferWithWorker | null>(null);
+  const [declining, setDeclining] = useState(false);
+  const [counterSheet, setCounterSheet] = useState<MyJobsStackParamList['Counteroffer'] | null>(null);
+  // P12 (owner yes): approve or report in a sheet over this page, the approve screen's own body. Once
+  // opened it stays mounted with the page, so a typed report survives a close; it reads on each open.
+  const [approveSheet, setApproveSheet] = useState<'unopened' | 'open' | 'closed'>('unopened');
+  const openApproveOrDispute = () => setApproveSheet('open');
   const [worker, setWorker] = useState<Profile | null>(null);
   // The job's ledger row. Loaded on focus so returning from Checkout
   // immediately reflects its state truthfully.
@@ -223,6 +249,11 @@ export function ClientJobDetailScreen() {
   currentJobIdRef.current = job.id;
 
   const canAccept = job.status === 'open';
+  // A4 wiring (A4): once an open job's booked window has ended, accept_offer and every new counter are
+  // refused (job_window_over), so its bids stay readable with no accept, counter or decline, and the
+  // server's sentence says why. The hourly closer then closes the job.
+  const windowOver = canAccept && jobWindowOver({ job, nowMs: serverNowMs() });
+  const canDecideBids = canAccept && !windowOver;
   // A retained ClientJobDetail route can be retargeted to another job. Never
   // render the previous assignment while this job's profile read is pending.
   const assignedWorker = worker?.id === job.assigned_worker_id ? worker : null;
@@ -265,9 +296,9 @@ export function ClientJobDetailScreen() {
   const hasBefore = job.photos.length + job.videos.length > 0;
   const evidenceTitle = hasCompletionEvidence
     ? hasBefore
-      ? 'Before & after'
-      : 'Finished work'
-    : 'Your original media';
+      ? 'Before & After'
+      : 'Finished Work'
+    : 'Your Original Media';
   // Always the poster's own view of their job, so isPoster is unconditionally
   // true here — this is the one screen that legitimately shows "In Progress".
   const actionableBidCount = loading && bids.length === 0 ? null : visibleBidCount;
@@ -288,7 +319,32 @@ export function ClientJobDetailScreen() {
     job,
     payment,
     hasOpenDispute: !!openDispute,
+    nowMs: serverNowMs(),
   });
+  // A4 wiring (A5, G1b-2): whether this customer already reviewed the job, read on each focus while
+  // it is completed (the hub's own read, fetchMyReviewedJobIds), so a return from the review sees it.
+  // Kept per job; null = not read yet. A failed read keeps what was known (a review is never taken
+  // back), and with nothing known the page offers the review as before.
+  const [reviewRead, setReviewRead] = useState<{ jobId: string; reviewed: boolean } | null>(null);
+  const reviewedByMe = reviewRead?.jobId === job.id ? reviewRead.reviewed : null;
+  const reviewReadWanted = !!user && lifecycle === 'completed';
+  useFocusEffect(
+    useCallback(() => {
+      if (!reviewReadWanted || !user) return;
+      let active = true;
+      const readJobId = job.id;
+      fetchMyReviewedJobIds(user.id, [readJobId]).then(
+        ({ data, error }) => {
+          if (!active || error) return;
+          setReviewRead({ jobId: readJobId, reviewed: data.has(readJobId) });
+        },
+        () => undefined
+      );
+      return () => {
+        active = false;
+      };
+    }, [reviewReadWanted, user, job.id])
+  );
   // Idea 14: from a repeat visit's "Confirm $X" push — Checkout, once, and only when this visit can
   // still be funded (a visit already paid, or a closed funding window, stays here).
   const checkoutIntentRef = useRef(false);
@@ -323,14 +379,14 @@ export function ClientJobDetailScreen() {
   // visit; an offer no longer open simply leaves the screen as it is.
   const acceptIntentRef = useRef(false);
   useEffect(() => {
-    if (params.intent !== 'accept' || !params.offerId || acceptIntentRef.current || loading || !canAccept || !cardsRead) return;
+    if (params.intent !== 'accept' || !params.offerId || acceptIntentRef.current || loading || !canDecideBids || !cardsRead) return;
     acceptIntentRef.current = true;
     // Only a bid still open: a countered or withdrawn one leaves the screen as it is.
     const pending = pendingBids.find((bid) => bid.id === params.offerId);
     if (pending) confirmAccept(pending.offer);
     // confirmAccept is this render's own; the gate above is what the effect waits on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.intent, params.offerId, loading, canAccept, cardsRead, pendingBids]);
+  }, [params.intent, params.offerId, loading, canDecideBids, cardsRead, pendingBids]);
 
   // A1 — cancel_job('customer_cancelled'), the one cancel path. The ref is the double-tap guard;
   // the state only draws the spinner. Payment and fee terms are read fresh at the tap, so the
@@ -352,7 +408,7 @@ export function ClientJobDetailScreen() {
           fetchCancelTerms(cancelledJobId),
         ]);
         if (!paymentResult.error && !termsResult.error) {
-          preview = customerCancelPreview({ job, payment: paymentResult.data, terms: termsResult.data });
+          preview = customerCancelPreview({ job, payment: paymentResult.data, terms: termsResult.data, nowMs: serverNowMs() });
         }
       }
       if (!screenMountedRef.current || currentJobIdRef.current !== cancelledJobId) return;
@@ -382,8 +438,7 @@ export function ClientJobDetailScreen() {
     const ok = await confirmAsync({
       title: 'Stop repeating?',
       message: 'Visits already booked stay booked. No new visits will be offered or posted.',
-      confirmText: 'Stop repeating',
-      cancelText: 'Keep it',
+      confirmText: 'Stop Repeating',
       destructive: true,
     });
     if (!ok) return;
@@ -408,9 +463,9 @@ export function ClientJobDetailScreen() {
       ? Date.parse(payment.funding_due_at)
       : null;
   const fundingWindowOpen =
-    fundingDueMs != null && Number.isFinite(fundingDueMs) && Date.now() < fundingDueMs;
+    fundingDueMs != null && Number.isFinite(fundingDueMs) && serverNowMs() < fundingDueMs;
   const fundingWindowClosed =
-    fundingDueMs != null && Number.isFinite(fundingDueMs) && Date.now() >= fundingDueMs;
+    fundingDueMs != null && Number.isFinite(fundingDueMs) && serverNowMs() >= fundingDueMs;
   // D23: approved, payout pending — the completed branch offers Review for it.
   const releaseRequested = !!payment && isReleaseRequested(payment);
   const stripe = paymentsMode === 'stripe';
@@ -450,7 +505,7 @@ export function ClientJobDetailScreen() {
     // React Navigation can retarget this retained route to another job. Modal,
     // viewer, sort, and payment state belong to the old job and must not follow.
     refreshRunRef.current += 1;
-    setSort(null);
+    setSort('rating');
     setRefreshing(false);
     setPendingAccept(null);
     setViewerUri(null);
@@ -579,40 +634,32 @@ export function ClientJobDetailScreen() {
   // from the same lifecycle the hub's next-action line reads, so the sentence on
   // the hub card and the button here always agree. Null = nothing to decide.
   // Codex R11-A2: no release time once a refund of the payment failed (the button's shorter label).
+  // A4 wiring (P1): the server's release time (release_due_at), shown only while it is ahead: the
+  // timer runs every 10 minutes, so a passed time is no promise and is not shown.
   const approvalDeadline = isRefundFailureRecorded(payment) ? null : releaseDeadlineMs(job);
   const primaryAction: { label: string; onPress: () => void } | null = (() => {
     if (statusReadError) return null;
-    if (canAccept) {
-      if (pendingBids.length === 1) {
-        const only = pendingBids[0].offer;
-        return { label: acceptOfferActionLabel(formatBudget(only.amount_cents), false), onPress: () => confirmAccept(only) };
-      }
-      if (pendingBids.length > 1) {
-        return { label: `Compare ${pendingBids.length} bids`, onPress: () => navigation.navigate('CompareBids', { job }) };
-      }
-      return null;
-    }
+    // P3: no bar while bids are open: each bid opens in place with its own Accept.
+    if (canAccept) return null;
     // The funding CTA renders from canOfferJobFunding ALONE (AUD-P1-02), and
     // D15's kill switch hides it in every mode.
-    const fundingAction = canFundNow ? (paymentsEnabled ? { label: 'Protect payment in checkout', onPress: () => navigation.navigate('Checkout', { job }) } : null) : undefined;
+    const fundingAction = canFundNow ? (paymentsEnabled ? { label: 'Protect Payment in Checkout', onPress: () => navigation.navigate('Checkout', { job }) } : null) : undefined;
     if (fundingAction !== undefined) return fundingAction;
     switch (lifecycle) {
       case 'awaiting_approval':
-        return {
-          label:
-            approvalDeadline != null
-              ? `Review & approve · releases ${releaseAtLabel(approvalDeadline, Date.now())}`
-              : 'Review & approve the work',
-          onPress: () => navigation.navigate('ApproveOrDispute', { job }),
-        };
+        // A4 wiring (A5, G1b-3): the float names no time, so it stays one line on every phone; the
+        // approval card below says the server's time, once, while it is ahead.
+        return { label: 'Review & Approve the Work', onPress: openApproveOrDispute };
       case 'disputed':
         return openDispute
-          ? { label: 'Manage your report', onPress: () => navigation.navigate('ApproveOrDispute', { job }) }
+          ? { label: 'Manage Your Report', onPress: openApproveOrDispute }
           : null;
       case 'completed':
+        // A4 wiring (A5, G1b-2): a review already left is not offered again; the same page shows it
+        // (and its tip card).
         return payment && (isReleased(payment) || releaseRequested)
           ? {
-              label: stripe || !isReleased(payment) ? 'Leave a review' : 'Review & tip',
+              label: reviewedByMe === true ? 'See Your Review' : stripe || !isReleased(payment) ? 'Leave a Review' : 'Review & Tip',
               onPress: () => navigation.navigate('ReviewAndTip', { job }),
             }
           : null;
@@ -620,6 +667,21 @@ export function ClientJobDetailScreen() {
         return null;
     }
   })();
+  // The status line under the title: the My Jobs row's own next-step sentence (the one derivation,
+  // myJobsNextAction), so the row and this page say the same thing. Open jobs keep the bid count
+  // in the hero's foot; a cancelled job says it in its own card. No release time here: the approval
+  // card carries it, so it is said once. A4 wiring (A5): a review already left reads "Closed"
+  // (G1b-2), and the payments pause is passed so a waiting hire is not told to check out (G1b-4).
+  const nextStepLine =
+    canAccept || lifecycle === 'unknown' || lifecycle === 'cancelled'
+      ? null
+      : myJobsNextAction({
+          perspective: 'customer',
+          state: lifecycle,
+          releaseDeadline: null,
+          reviewedByMe: reviewedByMe === true,
+          checkoutOpen: paymentsEnabled,
+        });
 
   async function onRefresh() {
     const runId = ++refreshRunRef.current;
@@ -705,6 +767,34 @@ export function ClientJobDetailScreen() {
     setPendingAccept(null);
     proceedToCheckout();
   }
+
+  // P3: Bid Detail's decline, on this page: the same declineOffer() and invalidateJobs(), the same
+  // failure alert; the bids are read again.
+  async function doDecline(bid: OfferWithWorker) {
+    if (declining) return;
+    setDeclining(true);
+    const { error: declineError } = await declineOffer(bid.id);
+    // F13: an own mutation — the cached hub and feed are out of date.
+    invalidateJobs();
+    setDeclining(false);
+    setPendingDecline(null);
+    if (declineError) {
+      await alertAsync('Could not decline this bid', userMessage(declineError));
+    }
+    void refreshBids();
+  }
+  // P3: Bid Detail's turn rule and counter count, for one bid on this page.
+  function bidTurn(bid: OfferWithWorker) {
+    const chain = bids.filter((o) => o.root_offer_id === bid.root_offer_id);
+    return {
+      canDecide: !!user && isOfferActionableBy(bid, user.id),
+      countersLeft: user ? countersRemaining(chain, user.id) : 0,
+    };
+  }
+  const shownOpenBidId =
+    openBidId === null || (openBidId !== undefined && sortedBids.some(({ offer }) => offer.id === openBidId))
+      ? openBidId
+      : sortedBids[0]?.offer.id ?? null;
 
   if (missing) {
     return (
@@ -802,9 +892,9 @@ export function ClientJobDetailScreen() {
         : formatPendingBidCount(visibleBidCount);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader
-        title={canAccept ? 'Job & Bids' : 'Job Details'}
+        title="Job Details"
         onBack={goBackOrHome}
         palette={emeraldColors}
       />
@@ -862,6 +952,11 @@ export function ClientJobDetailScreen() {
           <Text style={[styles.jobTitle, !canAccept && styles.heroTitleLight]}>
             {job.title}
           </Text>
+          {nextStepLine ? (
+            <Text style={styles.nextStep} numberOfLines={2}>
+              {nextStepLine}
+            </Text>
+          ) : null}
 
           <View style={styles.jobMetaRow}>
             {/* Master 8: a sage squircle behind a gold hairline, with the
@@ -1010,7 +1105,7 @@ export function ClientJobDetailScreen() {
 
         {canAccept && (job.photos.length > 0 || job.videos.length > 0) ? (
           <Card palette={emeraldColors} style={[styles.mediaCard, isDark && styles.hairlineDark]}>
-            <Text accessibilityRole="header" style={styles.sectionTitle}>Posting media</Text>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>Posting Media</Text>
             <Text style={styles.sectionCaption}>What workers can review before bidding.</Text>
             {job.photos.length > 0 ? (
               <ScrollView
@@ -1065,6 +1160,21 @@ export function ClientJobDetailScreen() {
           </View>
         ) : null}
 
+        {windowOver ? (
+          // A4 wiring (A4): the screen's own notice card, with accept_offer's sentence for the customer.
+          <Card palette={emeraldColors} style={[styles.noticeCard, styles.noticeStack, isDark && styles.hairlineDark]}>
+            <View style={styles.noticeRow}>
+              <Ionicons name="time-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.noticeText}>{BOOKED_TIME_PASSED.customerAccept}</Text>
+            </View>
+            <Button
+              title="Post Again"
+              variant="secondary"
+              onPress={() => navigateAcrossTabs('Home', 'PostJob', { reuseJobId: job.id })}
+            />
+          </Card>
+        ) : null}
+
         {canAccept ? (
           loading ? (
             <View style={styles.loadingState}>
@@ -1081,7 +1191,7 @@ export function ClientJobDetailScreen() {
                 {error}
               </Text>
               <Button
-                title="Try again"
+                title="Try Again"
                 onPress={onRefresh}
                 loading={refreshing}
                 palette={emeraldColors}
@@ -1106,7 +1216,7 @@ export function ClientJobDetailScreen() {
             <>
               <View style={styles.bidSectionHeader}>
                 <View>
-                  <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>WORKER OFFERS</Text>
+                  <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>BIDS</Text>
                   <Text style={styles.bidSectionTitle}>
                     {pendingBids.length}{' '}
                     {pendingBids.length === 1 ? 'bid' : 'bids'} to compare
@@ -1138,7 +1248,7 @@ export function ClientJobDetailScreen() {
                       summary={summaries?.get(bid.worker_id) ?? null}
                       allInCents={quotes[bid.amount_cents]?.total_cents ?? null}
                       palette={emeraldColors}
-                      canAccept={canAccept}
+                      canAccept={canDecideBids}
                       accepting={acceptingId === bid.id}
                       disabled={acceptingId !== null && acceptingId !== bid.id}
                       onAccept={() => confirmAccept(bid)}
@@ -1167,6 +1277,21 @@ export function ClientJobDetailScreen() {
                               })
                           : undefined
                       }
+                      inPlace={{
+                        open: shownOpenBidId === bid.id,
+                        onToggle: () => setOpenBidId(shownOpenBidId === bid.id ? null : bid.id),
+                        ...bidTurn(bid),
+                        onDecline: () => setPendingDecline(bid),
+                        onCounter: () =>
+                          setCounterSheet({
+                            job,
+                            offer: bid,
+                            counterpartyName: worker?.full_name ?? 'this worker',
+                            countersRemaining: bidTurn(bid).countersLeft,
+                          }),
+                        // A2-M5 A9: past the booked time the card makes no "Open until" promise.
+                        windowOver,
+                      }}
                     />
                   );
                 })}
@@ -1224,7 +1349,7 @@ export function ClientJobDetailScreen() {
             {hasLifecycle ? (
               <Card palette={emeraldColors} style={[styles.progressCard, isDark && styles.hairlineDark]}>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark, styles.eyebrowGold]}>JOB PROGRESS</Text>
-                <Text accessibilityRole="header" style={styles.sectionTitle}>Where things stand</Text>
+                <Text accessibilityRole="header" style={styles.sectionTitle}>Where Things Stand</Text>
                 <JobProgress status={job.status} palette={emeraldColors} />
               </Card>
             ) : null}
@@ -1255,8 +1380,8 @@ export function ClientJobDetailScreen() {
               <PressScale
                 style={({ pressed }) => [
                   styles.workerRow,
-                  isDark && styles.workerRowDark,
-                  litCardStyle(isDark),
+                  // A row inside the worker card is a well, never a second lit card.
+                  wellStyle(colors, isDark),
                   pressed && styles.workerRowPressed,
                 ]}
                 onPress={() =>
@@ -1298,20 +1423,20 @@ export function ClientJobDetailScreen() {
                   <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
                 )}
               </PressScale>
+              {/* RESTRUCTURE (G1b): the message button belongs to the person it messages. */}
+              {job.assigned_worker_id && (
+                <Button
+                  title={`Message ${workerName}`}
+                  icon="chatbubble-outline"
+                  iconPosition="leading"
+                  variant="secondary"
+                  palette={emeraldColors}
+                  onPress={() =>
+                    navigation.navigate('Chat', { jobId: job.id })
+                  }
+                />
+              )}
             </Card>
-
-            {job.assigned_worker_id && (
-              <Button
-                title={`Message ${workerName}`}
-                icon="chatbubble-outline"
-                iconPosition="leading"
-                variant="secondary"
-                palette={emeraldColors}
-                onPress={() =>
-                  navigation.navigate('Chat', { jobId: job.id })
-                }
-              />
-            )}
 
             {/* The money truth for this job (phase50 ledger). Labels come from
                 MoneyText's fixed §H.3 captions — never hand-written here. The
@@ -1346,7 +1471,7 @@ export function ClientJobDetailScreen() {
                   {fundingWindowOpen
                     ? ` The funding window closes ${releaseAtLabel(
                         fundingDueMs as number,
-                        Date.now()
+                        serverNowMs()
                       )}${job.status === 'assigned' ? '; if it isn’t protected by then, the job is closed' : ''}.`
                     : job.status === 'assigned'
                       ? ' If it isn’t protected within 24 hours of hiring, the job is closed.'
@@ -1408,7 +1533,7 @@ export function ClientJobDetailScreen() {
                   Tap Check again in a moment.
                 </Text>
                 <Button
-                  title="Check again"
+                  title="Check Again"
                   variant="secondary"
                   palette={emeraldColors}
                   onPress={() => setStatusReadAttempt((attempt) => attempt + 1)}
@@ -1533,7 +1658,7 @@ export function ClientJobDetailScreen() {
                       contentContainerStyle={styles.photoRow}
                     >
                       {completionVideos.map((url) => (
-                        <JobVideo key={url} uri={url} label="Finished work" />
+                        <JobVideo key={url} uri={url} label="Finished Work" />
                       ))}
                     </ScrollView>
                   </View>
@@ -1555,7 +1680,7 @@ export function ClientJobDetailScreen() {
               statusReadError ? null : payment ? (
                 lifecycle === 'disputed' && openDispute ? (
                   <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
-                    <Text style={styles.approvalTitle}>Issue reported</Text>
+                    <Text style={styles.approvalTitle}>Issue Reported</Text>
                     <Text style={styles.noticeText}>
                       {DISPUTE_REASON_LABELS[openDispute.reason]} — the payment
                       stays held while your report is open.
@@ -1564,33 +1689,37 @@ export function ClientJobDetailScreen() {
                   </Card>
                 ) : lifecycle === 'awaiting_approval' ? (
                   <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
-                    <Text style={styles.approvalTitle}>The work is done — your call</Text>
+                    <Text style={styles.approvalTitle}>The Work Is Done — Your Call</Text>
                     {/* Codex R11-A2: a refund of it failed: approval releases nothing; no release sentence. */}
                     {isRefundFailureRecorded(payment) ? null : (
                       <Text style={styles.noticeText}>
                         Review what {workerName} submitted, then approve to release
-                        the held funds or report an issue. With no response, the
-                        funds release automatically after 72 hours.
+                        the held funds or report an issue.
+                        {approvalDeadline != null && approvalDeadline > serverNowMs()
+                          ? ` With no response, the funds release automatically ${releaseAtLabel(approvalDeadline, serverNowMs())}.`
+                          : null}
                       </Text>
                     )}
                     <Button
-                      title="Report an issue"
+                      title="Report an Issue"
                       variant="secondary"
                       palette={emeraldColors}
-                      onPress={() => navigation.navigate('ApproveOrDispute', { job })}
+                      onPress={openApproveOrDispute}
                     />
                   </Card>
                 ) : isReleased(payment) ? (
                   <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
                     {/* Idea 10: fresh, the release pops a tick in beside the title with the success haptic. */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                      <Text style={styles.approvalTitle}>Payment released</Text>
+                      <Text style={styles.approvalTitle}>Payment Released</Text>
                       <ReleasedTick paymentId={payment.id} releasedAt={payment.released_at} color={colors.emerald} />
                     </View>
                     <Text style={styles.noticeText}>
-                      {stripe
-                        ? `Settled. Leave ${workerFirstName} a review.`
-                        : `Settled. Leave ${workerFirstName} a review or a tip.`}
+                      {reviewedByMe === true
+                        ? `Settled. You left ${workerFirstName} a review.`
+                        : stripe
+                          ? `Settled. Leave ${workerFirstName} a review.`
+                          : `Settled. Leave ${workerFirstName} a review or a tip.`}
                     </Text>
                   </Card>
                 ) : isPayoutOnItsWay(payment) ? (
@@ -1599,11 +1728,11 @@ export function ClientJobDetailScreen() {
                   // — never released until the transfer lands. Codex R7-A3: no
                   // card beside a refund; the pinned "Leave a review" stays.
                   <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
-                    <Text style={styles.approvalTitle}>Work approved — payout on its way</Text>
+                    <Text style={styles.approvalTitle}>Work Approved — Payout on Its Way</Text>
                     <Text style={styles.noticeText}>
                       You approved {workerName}’s work. The payment is on its
                       way to them and shows as released when the transfer
-                      lands. Leave a review whenever you like.
+                      lands.{reviewedByMe === true ? null : ' Leave a review whenever you like.'}
                     </Text>
                   </Card>
                 ) : null
@@ -1643,27 +1772,27 @@ export function ClientJobDetailScreen() {
         job.status === 'in_progress' ||
         (job.status === 'open' && !loading && bids.length > 0) ? (
           <Button
-            title="Cancel job"
+            title="Cancel Job"
             variant="destructive"
             palette={emeraldColors}
             onPress={() => void handleCancelJob()}
             loading={cancelling}
             disabled={cancelling || acceptingId !== null}
             accessibilityLabel="Cancel job"
+            // P3 (owner): apart from the bids and as wide as the bid card's Accept, in every state.
+            style={{ marginHorizontal: offerActionInset(), marginTop: spacing.sm }}
           />
         ) : null}
         </ScrollView>
-        {primaryAction ? (
-          <View style={[styles.actionBar, { paddingBottom: footerPad }]}>
-            <Button
-              title={primaryAction.label}
-              palette={emeraldColors}
-              onPress={primaryAction.onPress}
-              disabled={acceptingId !== null}
-            />
-          </View>
-        ) : null}
       </KeyboardAvoid>
+      {/* THE ONE DECISION floats at the foot with no plate; the bar steps aside while it shows. */}
+      {primaryAction ? (
+        <FloatingAction
+          title={primaryAction.label}
+          onPress={primaryAction.onPress}
+          disabled={acceptingId !== null}
+        />
+      ) : null}
 
       <PhotoViewer
         visible={!!viewerUri}
@@ -1700,7 +1829,6 @@ export function ClientJobDetailScreen() {
         // total it charges is spelled out in the message above. 2026-09-30 (decision C):
         // with the quote, the button itself says what the tap does — "Accept & pay $129".
         confirmText={acceptOfferConfirmText(false, acceptQuote ? formatBudget(acceptQuote.total_cents) : undefined)}
-        cancelText="Cancel"
         loading={!!pendingAccept && acceptingId === pendingAccept.id}
         palette={emeraldColors}
         onConfirm={() => {
@@ -1710,6 +1838,41 @@ export function ClientJobDetailScreen() {
         }}
         onCancel={() => setPendingAccept(null)}
       />
+      <ConfirmDialog
+        visible={!!pendingDecline}
+        title={declineOfferConfirmTitle(formatBudget(pendingDecline?.amount_cents ?? null), false)}
+        message="This declines this bid. It will no longer be available to accept. They can send a new bid unless the job is filled."
+        confirmText={declineOfferActionLabel(false)}
+        destructive
+        loading={declining}
+        palette={emeraldColors}
+        onConfirm={() => {
+          if (pendingDecline) void doDecline(pendingDecline);
+        }}
+        onCancel={() => setPendingDecline(null)}
+      />
+      <CounterOfferSheet
+        params={counterSheet}
+        onCancel={() => setCounterSheet(null)}
+        onSubmitted={() => {
+          setCounterSheet(null);
+          void refreshBids();
+        }}
+      />
+      {approveSheet !== 'unopened' ? (
+        <ApproveOrDispute
+          key={job.id}
+          job={job}
+          presentation="sheet"
+          visible={approveSheet === 'open'}
+          onClose={() => {
+            setApproveSheet('closed');
+            // The page re-reads the money and the report as it did on its return from the screen
+            // (focus): the same read its poll and retry run.
+            setStatusReadAttempt((attempt) => attempt + 1);
+          }}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1720,13 +1883,6 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
   safe: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  actionBar: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
   },
   flex: {
     flex: 1,
@@ -1804,6 +1960,12 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     ...typography.title,
     color: colors.ink,
     lineHeight: 34,
+  },
+  nextStep: {
+    ...textScale.callout,
+    fontWeight: '700',
+    color: colors.emerald,
+    marginTop: -spacing.sm,
   },
   jobMeta: {
     flex: 1,
@@ -1884,7 +2046,8 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     lineHeight: 21,
   },
   timingCaption: {
-    fontSize: 12,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textMuted,
     lineHeight: 17,
   },
@@ -1941,6 +2104,16 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     borderColor: colors.mint2,
     backgroundColor: colors.mint,
   },
+  // LOOK-R L-4c: the past-window notice stacks its line over its button.
+  noticeStack: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+  noticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   noticeText: {
     flex: 1,
     ...typography.body,
@@ -1996,15 +2169,8 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.mint,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  // Master 17 draws this as an inner hairlined card on the card's own
-  // surface, not a sage panel; light keeps the sage.
-  workerRowDark: {
-    backgroundColor: 'transparent',
+    // The well's corner (Card level="well"); its fill and rim come from wellStyle.
+    borderRadius: radius.md,
   },
   // Master 17's shield sits in a gold ring at the payment card's right.
   paymentShield: {
@@ -2033,8 +2199,8 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     gap: spacing.sm,
   },
   workerName: {
+    ...textScale.headline,
     flexShrink: 1,
-    fontSize: 17,
     fontWeight: '800',
     color: colors.ink,
   },
@@ -2123,7 +2289,7 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
   emptyIcon: {
     width: 72,
     height: 72,
-    borderRadius: 36,
+    borderRadius: radius.pill,
     backgroundColor: colors.mint,
     alignItems: 'center',
     justifyContent: 'center',

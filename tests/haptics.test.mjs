@@ -14,20 +14,24 @@ const flatten = (source) => stripComments(source).replace(/\s+/g, ' ');
 // — and it is written to be falsifiable rather than decorative: the counting
 // assertions below fail on zero occurrences just as loudly as they fail on
 // two, so a green result means the needles were really found.
-test('[static] lib/haptics exposes three no-ops, and the vendor is one caught require', () => {
+test('[static] lib/haptics exposes four no-ops, and the vendor is one caught require', () => {
   const source = read('lib/haptics.ts');
   const code = stripComments(source);
   const flat = flatten(source);
 
-  // 1. THE THREE EXPORTS, EACH WITH THE FEEDBACK KIND IT WAS SPECIFIED WITH.
+  // 1. THE FOUR EXPORTS, EACH WITH THE FEEDBACK KIND IT WAS SPECIFIED WITH. A2-M1 added `warning`,
+  //    the buzz before a dangerous confirm.
   assert.match(code, /export function tap\(\): void \{/);
   assert.match(code, /export function confirm\(\): void \{/);
   assert.match(code, /export function select\(\): void \{/);
+  assert.match(code, /export function warning\(\): void \{/);
   assert.match(flat, /tap\(\): void \{ fire\(\(h\) => h\.impactAsync\(/);
   assert.match(flat, /confirm\(\): void \{ fire\(\(h\) => h\.notificationAsync\(/);
   assert.match(flat, /select\(\): void \{ fire\(\(h\) => h\.selectionAsync\(\)\)/);
+  assert.match(flat, /warning\(\): void \{ fire\(\(h\) => h\.notificationAsync\(/);
   assert.match(code, /ImpactFeedbackStyle\?\.Light \?\? 'light'/);
   assert.match(code, /NotificationFeedbackType\?\.Success \?\? 'success'/);
+  assert.match(code, /NotificationFeedbackType\?\.Warning \?\? 'warning'/);
 
   // 2. THE VENDOR IS NEVER STATICALLY IMPORTED. A top-level import would run
   //    expo-haptics' module scope unguarded, which is exactly what this

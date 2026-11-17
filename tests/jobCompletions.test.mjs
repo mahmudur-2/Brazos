@@ -43,7 +43,7 @@ test('1 · the complete flow requires a photo before the call, and passes the up
   const guardBlock = handler.slice(guard, call);
   assert.match(guardBlock, /return;/, 'an empty gallery returns without calling the RPC');
   assert.match(guardBlock, /if \(addNow\) await pickCompletionMedia\(\);/, 'the same picker is offered — no new upload machinery');
-  assert.match(flatten(guardBlock), /title: 'Add a photo of the finished work',/);
+  assert.match(flatten(guardBlock), /title: 'Add a Photo of the Finished Work',/);
   assert.match(
     flatten(guardBlock),
     /At least one photo of the finished work is required to mark this job complete — it’s what the customer approves against\. Add one now\?/
@@ -178,9 +178,10 @@ test('7 · the worker’s job card shows the take, and the three-line breakdown 
   assert.doesNotMatch(worker, /cents=\{payment\.amount_cents\}/);
   // Stripe only, and only on a held / released / paid_out row — never unfunded, and (final
   // sweep) never on a held row whose refund is queued: a cancelled job's money is going home.
+  // A2-M5 4d-1: and never on a cancelled job held for review (tests/a2m5Repairs.test.mjs draws it).
   assert.match(
     workerFlat,
-    /\{paymentsMode === 'stripe' && payment\.charge_amount_cents != null && \(\(isHeld\(payment\) && !isRefundQueued\(payment\)\) \|\| isReleased\(payment\)\) \? \(/
+    /\{!heldForReview && paymentsMode === 'stripe' && payment\.charge_amount_cents != null && \(\(isHeld\(payment\) && !isRefundQueued\(payment\)\) \|\| isReleased\(payment\)\) \? \(/
   );
   const breakdown = workerFlat.slice(workerFlat.indexOf('<View style={styles.breakdown}>'), workerFlat.indexOf('</View> ) : null} </Card>'));
   assert.ok(breakdown.length > 0);
@@ -190,12 +191,12 @@ test('7 · the worker’s job card shows the take, and the three-line breakdown 
   // status 'held', and the fee line carries the app's one fee name.
   assert.match(
     breakdown,
-    /<Text style=\{styles\.breakdownLabel\}> \{isHeld\(payment\) \? 'Customer’s payment · held' : 'Customer paid'\} <\/Text> <Text style=\{styles\.breakdownValue\}> \{formatBudget\(payment\.charge_amount_cents\)\}/
+    /<Text style=\{styles\.breakdownLabel\}> \{isHeld\(payment\) \? 'Customer’s Payment · Held' : 'Customer Paid'\} <\/Text> <Text style=\{styles\.breakdownValue\}> \{formatBudget\(payment\.charge_amount_cents\)\}/
   );
   assert.doesNotMatch(breakdown, />Customer paid</, 'no unconditional "paid" label on the worker breakdown');
-  assert.doesNotMatch(breakdown, /Brazos Protection/, 'one fee name: "Protection fee" (C4)');
-  assert.match(breakdown, /Protection fee<\/Text> <Text style=\{styles\.breakdownValue\}>\{formatBudget\(brazosFeeCents\(payment\)\)\}/);
-  assert.match(breakdown, /You get<\/Text> <Text style=\{styles\.breakdownStrongValue\}> \{formatBudget\(workerTakeCents\(payment\)\)\}/);
+  assert.doesNotMatch(breakdown, /Brazos Protection/, 'one fee name: "Protection Fee" (C4)');
+  assert.match(breakdown, /Protection Fee<\/Text> <Text style=\{styles\.breakdownValue\}>\{formatBudget\(brazosFeeCents\(payment\)\)\}/);
+  assert.match(breakdown, /You Get<\/Text> <Text style=\{styles\.breakdownStrongValue\}> \{formatBudget\(workerTakeCents\(payment\)\)\}/);
   // The customer-facing held-amount surfaces are R7's and untouched here.
   for (const file of ['screens/JobConfirmedScreen.tsx', 'screens/ClientJobDetailScreen.tsx', 'screens/ApproveOrDisputeScreen.tsx']) {
     assert.doesNotMatch(read(file), /workerTakeCents|brazosFeeCents/, `${file} is not a worker-facing surface`);
@@ -215,7 +216,7 @@ test('8 · A8 — the worker is never offered a start the server refuses: no "St
   assert.match(workerFlat, /const beforeArrival = step === 'en_route' \|\| step === 'arrived'; const canSkipToStart = beforeArrival;/);
   // Unheld: the pinned primary is the conversation, and the note says what it waits for.
   assert.match(workerFlat, /: step === 'message' \? \{ title: `Message \$\{clientName\}`, onPress: \(\) => navigation\.navigate\('Chat', \{ jobId: job\.id \}\), loading: false \}/);
-  assert.match(workerFlat, /: \{ title: 'Start job', onPress: handleStart,/, 'Start is the one remaining step, reached only past the held check');
+  assert.match(workerFlat, /: \{ title: 'Start Job', onPress: handleStart,/, 'Start is the one remaining step, reached only past the held check');
   assert.match(worker, /Waiting for \$\{clientName\} to protect the payment\./);
 });
 

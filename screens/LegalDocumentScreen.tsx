@@ -6,10 +6,10 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { LEGAL_DOCUMENTS } from '../lib/legal';
 import { goBackOrHome } from '../lib/navigationRef';
 import type { LegalDocumentRouteParamList } from '../lib/navigation';
-import { spacing, themedStyles, useThemeColors, type ColorPalette,
+import { spacing, textScale, themedStyles, useThemeColors, type ColorPalette,
   screenGround,
 } from '../lib/theme';
-import { useScrollClearance } from '../ui/primitives';
+import { Divider, useScrollClearance } from '../ui/primitives';
 
 /**
  * Read-only view of one legal document, reachable from Profile at any time —
@@ -43,10 +43,12 @@ export function LegalDocumentScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader title={doc.title} onBack={goBackOrHome} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}>
         <MarkdownText markdown={doc.body} />
+        {/* The page's foot: a hairline, then the version the reader saw. */}
+        <Divider style={styles.footRule} />
         <Text style={styles.version}>Version {doc.version}</Text>
       </ScrollView>
     </SafeAreaView>
@@ -66,18 +68,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.xl,
   },
   muted: {
-    fontSize: 14,
+    ...textScale.body,
     color: colors.textMuted,
     textAlign: 'center',
-    lineHeight: 20,
   },
   content: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.xxl,
   },
-  version: {
+  footRule: {
     marginTop: spacing.xl,
-    fontSize: 11,
+  },
+  version: {
+    marginTop: spacing.md,
+    ...textScale.caption,
     color: colors.textSubtle,
   },
   }),

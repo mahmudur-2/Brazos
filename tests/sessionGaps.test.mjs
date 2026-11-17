@@ -34,13 +34,15 @@ test('B16 · both payment sheets carry the app-scheme return URL, and the link h
   assert.ok(app.indexOf('handleStripeUrl(url)') < app.indexOf('parseRecoveryLink(url)'));
 });
 
-test('B16 · a ban is re-checked when the app comes to the front, at most once per ten minutes', () => {
+test('B16 · a ban is re-checked when the app comes to the front, at most once per ten minutes (B1: every time while suspended)', () => {
   const auth = stripComments(read('lib/AuthContext.tsx'));
   assert.match(auth, /const BAN_RECHECK_MS = 10 \* 60 \* 1000;/);
-  assert.match(auth, /if \(state === 'active' && Date\.now\(\) - lastCheck >= BAN_RECHECK_MS\) void check\(\);/);
-  assert.match(auth, /lastCheck = Date\.now\(\);\s*const \{ data: banned \} = await fetchCurrentUserBanned\(userId\);/);
-  // The listener goes with the signed-in user.
-  assert.match(auth, /return \(\) => \{\s*active = false;\s*subscription\.remove\(\);\s*\};\s*\}, \[session\?\.user\?\.id\]\);/);
+  // recheckDue and the checks (lib/suspension.ts suspensionChecks, B7 R6) are executed in
+  // tests/suspendedAccount.test.mjs; here: the way to the front asks them, with the ten minutes.
+  assert.match(auth, /if \(state === 'active'\) checks\.foreground\(\);/);
+  assert.match(auth, /read: \(\) => fetchCurrentUserBanned\(userId\),\s*publish: setSuspension,\s*everyMs: BAN_RECHECK_MS,/);
+  // The listeners and the timers go with the signed-in user.
+  assert.match(auth, /return \(\) => \{\s*checks\.stop\(\);\s*subscription\.remove\(\);\s*stopMarks\(\);\s*setSuspension\(null\);\s*\};\s*\}, \[session\?\.user\?\.id\]\);/);
 });
 
 test('B16 · a deleted account gets a notice in place of the composer', () => {

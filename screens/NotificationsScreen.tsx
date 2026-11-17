@@ -21,7 +21,9 @@ import { goBackOrHome } from '../lib/navigationRef';
 import { canRouteNotification, handleNotificationData } from '../lib/notificationRoutes';
 import {
   discs,
+  radius,
   spacing,
+  textScale,
   themedStyles,
   useThemeColors,
   withAlpha,
@@ -59,6 +61,8 @@ const KIND_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   dispute_opened: 'alert-circle-outline',
   review_received: 'star-outline',
   message: 'chatbubble-outline',
+  // B6: the owner's "Brazos needs you" (the admin entry's shield).
+  admin_attention: 'shield-checkmark-outline',
 };
 
 /**
@@ -174,7 +178,8 @@ export function NotificationsScreen() {
     }
     // A folded row opens its newest (lead) row's subject: the job's bids.
     const notification = entry.lead;
-    void handleNotificationData(notification.data, modeBridge);
+    // The row's type rides with its data, as it does in a push (send-push), so both taps route alike.
+    void handleNotificationData({ ...notification.data, type: notification.type }, modeBridge);
   }
 
   async function markAll() {
@@ -224,7 +229,7 @@ export function NotificationsScreen() {
     // directThreadId, ClientJobDetail, JobDetail, WorkerJob, ProfileMain). This
     // is the safety net for a payload that does not — it stays a readable row,
     // but it never offers a tap that would only mark it read.
-    const routable = canRouteNotification(n.data);
+    const routable = canRouteNotification({ ...n.data, type: n.type });
     const tone = kindColour(n.type, colors);
     return (
       <Pressable
@@ -244,7 +249,7 @@ export function NotificationsScreen() {
           <Ionicons name={KIND_ICONS[n.type] ?? 'notifications-outline'} size={20} color={tone} />
         </View>
         <View style={styles.rowCopy}>
-          <Text style={[styles.rowTitle, entry.unread && styles.rowTitleUnread]} numberOfLines={1}>
+          <Text style={[styles.rowTitle, entry.unread && styles.rowTitleUnread]} numberOfLines={2}>
             {entry.title}
           </Text>
           {entry.body ? (
@@ -255,6 +260,11 @@ export function NotificationsScreen() {
           <Text style={styles.rowMeta}>{formatTimeAgo(n.created_at)}</Text>
         </View>
         {entry.unread ? <View style={styles.dot} /> : null}
+        {/* Where the tap leads: a row that opens its subject ends in a chevron; a row that
+            routes nowhere (the safety net above) stays plain text. */}
+        {routable ? (
+          <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} style={styles.chevron} />
+        ) : null}
       </Pressable>
     );
   };
@@ -271,7 +281,7 @@ export function NotificationsScreen() {
           hitSlop={4}
           style={styles.gearHit}
           accessibilityRole="button"
-          accessibilityLabel="Notification settings"
+          accessibilityLabel="Notification Settings"
         >
           <View style={[styles.gear, discStyle]}>
             <Ionicons name="settings-outline" size={18} color={colors.text} />
@@ -286,7 +296,7 @@ export function NotificationsScreen() {
                   <View style={styles.unreadLine}>
                     <Text style={styles.unreadCount}>{`${unread} unread`}</Text>
                     <Pressable onPress={() => void markAll()} hitSlop={touchSlop(textLine(styles.markAll))} accessibilityRole="button">
-                      <Text style={styles.markAll}>Mark all read</Text>
+                      <Text style={styles.markAll}>Mark All Read</Text>
                     </Pressable>
                   </View>
                 ),
@@ -313,7 +323,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   gear: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radius.pill,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -326,11 +336,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     marginBottom: -spacing.sm,
   },
   unreadCount: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
   },
   markAll: {
-    fontSize: 14,
+    ...textScale.body,
     fontWeight: '700',
     color: colors.emerald,
   },
@@ -370,8 +382,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: 2,
   },
   rowTitle: {
-    fontSize: 15,
-    lineHeight: 20,
+    ...textScale.callout,
     fontWeight: '600',
     color: colors.text,
   },
@@ -380,21 +391,25 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.ink,
   },
   rowBody: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
-    lineHeight: 18,
   },
   rowMeta: {
     marginTop: 2,
-    fontSize: 12,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textSubtle,
   },
   dot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: radius.pill,
     backgroundColor: colors.emerald,
     marginTop: 6,
+  },
+  chevron: {
+    alignSelf: 'center',
   },
   }),
 );

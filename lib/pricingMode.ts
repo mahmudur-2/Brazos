@@ -38,8 +38,8 @@ export function pricingModeFrom(value: unknown): PricingMode {
 
 /** The two segments, open bids FIRST so the default is the first cell. */
 export const PRICING_MODE_OPTIONS: ReadonlyArray<{ value: PricingMode; label: string }> = [
-  { value: 'open_bids', label: 'Ask for bids' },
-  { value: 'posted_price', label: 'Set a price' },
+  { value: 'open_bids', label: 'Ask for Bids' },
+  { value: 'posted_price', label: 'Set a Price' },
 ];
 
 /**

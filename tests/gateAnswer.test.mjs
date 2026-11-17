@@ -185,7 +185,7 @@ test('the public API of both hooks is unchanged', () => {
   // because this condition reads the hooks' state in the same render.
   assert.match(
     read('App.tsx'),
-    /if \(loading \|\| \(user && \(legal\.state === 'loading' \|\| setup\.state === 'loading'\)\)\)/
+    /if \(loading \|\| \(user && \(suspended === null \|\| legal\.state === 'loading' \|\| setup\.state === 'loading'\)\)\)/
   );
 });
 

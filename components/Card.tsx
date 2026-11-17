@@ -2,11 +2,20 @@ import {
   Animated,
   Pressable,
   StyleSheet,
+  View,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import type { PropsWithChildren } from 'react';
-import { metricStyles, spacing, type ColorPalette } from '../lib/theme';
+import {
+  litRowStyle,
+  metricStyles,
+  radius,
+  spacing,
+  useThemeColors,
+  wellStyle,
+  type ColorPalette,
+} from '../lib/theme';
 import { usePressFeedback } from '../hooks/usePressFeedback';
 import { Surface } from '../ui/primitives/Surface';
 
@@ -20,6 +29,14 @@ type CardProps = PropsWithChildren<{
   accessibilityHint?: string;
   /** Overrides the material's fill and rim, e.g. for the Map tab's dark mode. */
   palette?: ColorPalette;
+  /**
+   * A2-M3 — the card's depth (UI-DIRECTION §3). `lit`, the default, is the card exactly as it has
+   * always drawn. `well` sinks a part INTO the card it sits in (a quote, a price box, a group of
+   * pills): lib/theme `wellStyle`, corner 12, no shadow; never a well inside a well. `row` is the lit
+   * card for one row of a long list (lib/theme `litRowStyle`: a solid fill, the rim, one shadow
+   * layer), used only where a phone measurement shows the full card dropping frames.
+   */
+  level?: 'lit' | 'well' | 'row';
 }>;
 
 /**
@@ -38,17 +55,30 @@ export function Card({
   onLongPress,
   accessibilityHint,
   palette: paletteProp,
+  level = 'lit',
 }: CardProps) {
   const styles = stylesFor();
   const press = usePressFeedback();
+  const { palette: colors, isDark } = useThemeColors();
   const paletteStyle = paletteProp
     ? { backgroundColor: paletteProp.surface, borderColor: paletteProp.border }
     : null;
-  const surface = (
-    <Surface material="card" style={[styles.card, paletteStyle, style]}>
-      {children}
-    </Surface>
-  );
+  const surface =
+    level === 'lit' ? (
+      <Surface material="card" style={[styles.card, paletteStyle, style]}>
+        {children}
+      </Surface>
+    ) : (
+      <View
+        style={[
+          styles.card,
+          level === 'well' ? [styles.well, wellStyle(paletteProp ?? colors, isDark)] : [styles.row, litRowStyle(isDark)],
+          style,
+        ]}
+      >
+        {children}
+      </View>
+    );
 
   if (onPress || onLongPress) {
     return (
@@ -76,5 +106,11 @@ const stylesFor = metricStyles(() => StyleSheet.create({
   },
   pressed: {
     opacity: 0.92,
+  },
+  well: {
+    borderRadius: radius.md,
+  },
+  row: {
+    borderRadius: radius.card,
   },
 }));

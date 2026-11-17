@@ -1,5 +1,18 @@
 import type { ImagePickerAsset } from 'expo-image-picker';
+import { cleanPhoto, cleanVideo } from './mediaMetadata';
 import { supabase } from './supabase';
+import {
+  DELETE_UNFINISHED_MESSAGE,
+  MAX_UPLOAD_BYTES,
+  MAX_VIDEO_DURATION_MS,
+  PHOTO_KIND_MESSAGE,
+  PHOTO_LOCATION_MESSAGE,
+  PHOTO_TOO_LARGE_MESSAGE,
+  UploadRefused,
+  VIDEO_KIND_MESSAGE,
+  VIDEO_LOCATION_MESSAGE,
+  VIDEO_TOO_LARGE_MESSAGE,
+} from './uploadRules';
 
 const BUCKET = 'job-photos';
 const AVATAR_BUCKET = 'avatars';
@@ -46,6 +59,11 @@ export type ChatMediaBucket = 'chat-photos';
  */
 const SIGNED_URL_REUSE_MS = 5 * 60 * 60 * 1000;
 const signedUrls = new Map<string, { url: string; signedAt: number }>();
+
+/** R7-d: forget every kept signed link (lib/signOut.ts forgetDevice, when the signed-in person changes). */
+export function clearSignedUrls(): void {
+  signedUrls.clear();
+}
 
 function keptSignedUrl(bucket: ChatMediaBucket, path: string): string | null {
   const kept = signedUrls.get(`${bucket}/${path}`);
@@ -153,20 +171,52 @@ export function signedUrlCacheKey(url: string | null | undefined): string | unde
   return query === -1 ? url : url.slice(0, query);
 }
 
+type UploadKind = 'photo' | 'video';
+type UploadResult = { url: string | null; error: Error | null };
+
+const refused = (sentence: string): UploadResult => ({ url: null, error: new UploadRefused(sentence) });
+
+/** The bytes as one ArrayBuffer of exactly their length (no copy when they already are one). */
+function exactBuffer(bytes: Uint8Array): ArrayBuffer {
+  const { buffer, byteOffset, byteLength } = bytes;
+  return (byteOffset === 0 && byteLength === buffer.byteLength
+    ? buffer
+    : buffer.slice(byteOffset, byteOffset + byteLength)) as ArrayBuffer;
+}
+
+/**
+ * Every upload goes through here. B10: more than the bucket's own limit is
+ * refused before a byte is sent. R7-b / R7-c: the location is removed from
+ * the bytes first (lib/mediaMetadata.ts), and a file that cannot be cleaned,
+ * or is not a kind Brazos uploads, is never sent. The stored name's extension
+ * and the content type follow the bytes, never the picker's word. A refusal's
+ * error carries its sentence (uploadErrorMessage in lib/uploadRules.ts).
+ */
 async function uploadAsset(
   bucket: string,
-  path: string,
+  pickedPath: string,
   asset: ImagePickerAsset,
-  privateReference = false
-): Promise<{ url: string | null; error: Error | null }> {
+  privateReference = false,
+  kind: UploadKind = 'photo'
+): Promise<UploadResult> {
   try {
     const response = await fetch(asset.uri);
-    const arrayBuffer = await response.arrayBuffer();
-    const contentType = asset.mimeType ?? 'image/jpeg';
+    const picked = new Uint8Array(await response.arrayBuffer());
+    if (picked.byteLength > MAX_UPLOAD_BYTES) {
+      return refused(kind === 'video' ? VIDEO_TOO_LARGE_MESSAGE : PHOTO_TOO_LARGE_MESSAGE);
+    }
+    const cleaned = kind === 'video' ? cleanVideo(picked) : cleanPhoto(picked);
+    if (!cleaned.ok) {
+      if (cleaned.failure === 'wrong-kind') {
+        return refused(kind === 'video' ? VIDEO_KIND_MESSAGE : PHOTO_KIND_MESSAGE);
+      }
+      return refused(kind === 'video' ? VIDEO_LOCATION_MESSAGE : PHOTO_LOCATION_MESSAGE);
+    }
+    const path = `${pickedPath.replace(/\.[^./]*$/, '')}.${cleaned.extension}`;
 
     const { error } = await supabase.storage
       .from(bucket)
-      .upload(path, arrayBuffer, { contentType, upsert: true });
+      .upload(path, exactBuffer(cleaned.bytes), { contentType: cleaned.contentType, upsert: true });
     if (error) return { url: null, error };
 
     if (privateReference) {
@@ -209,12 +259,21 @@ export async function uploadJobPhoto(jobId: string, asset: ImagePickerAsset) {
  * submit, so it doesn't sit orphaned in storage forever with nothing pointing
  * at it. Requires the phase26 SQL (job-photos never had a DELETE policy
  * before).
+ *
+ * T1 (A4-M3): a storage:// reference is a real file too, so it is resolved
+ * like a public URL; one that points into another bucket is an error, never
+ * "nothing to delete". A remove() that answers with no removed object (a
+ * policy refusal looks exactly like that) is an error too.
  */
-export async function deleteJobPhoto(url: string) {
-  const path = pathFromPublicUrl(BUCKET, url);
-  if (!path) return { error: null };
-  const { error } = await supabase.storage.from(BUCKET).remove([path]);
-  return { error };
+export async function deleteJobPhoto(url: string): Promise<{ error: Error | null }> {
+  const path = pathFromStorageValue(BUCKET, url);
+  if (!path) {
+    return { error: url.startsWith(STORAGE_REFERENCE_PREFIX) ? new Error(DELETE_UNFINISHED_MESSAGE) : null };
+  }
+  const { data, error } = await supabase.storage.from(BUCKET).remove([path]);
+  if (error) return { error };
+  if (!data || data.length === 0) return { error: new Error(DELETE_UNFINISHED_MESSAGE) };
+  return { error: null };
 }
 
 /**
@@ -265,11 +324,11 @@ export async function uploadReviewPhoto(userId: string, asset: ImagePickerAsset)
 
 /** Container formats a picker can realistically hand back, mapped to the
  *  content type the object is stored with. Anything outside this list is
- *  refused before upload rather than stored with a guessed type. */
+ *  refused before upload rather than stored with a guessed type. B10: only
+ *  the bucket's two video types (m4v's video/x-m4v is not one of them). */
 const VIDEO_CONTENT_TYPES: Record<string, string> = {
   mp4: 'video/mp4',
   mov: 'video/quicktime',
-  m4v: 'video/x-m4v',
 };
 
 /** Whether a picked asset is a video this app will accept. */
@@ -293,20 +352,25 @@ function videoExtension(uri: string): string | null {
  * Returns a `{ title, message }` ready to show, or null when the asset is
  * acceptable. Everything here is checked before a byte is uploaded, so a
  * rejected file costs nothing and the reason is specific.
+ *
+ * B10 (A4-M3): a caller's limits can only tighten the app's own, never widen
+ * them: at most MAX_VIDEO_DURATION_MS (30 s, choice 4) and MAX_UPLOAD_BYTES
+ * (the bucket's 25 MB). With no limits given, those two are used.
  */
 export function rejectionForPickedVideo(
   asset: ImagePickerAsset,
-  limits: { maxDurationMs: number; maxBytes: number }
-): { title: string; message: string } | null {
-  if (!isSupportedVideo(asset)) {
-    return {
-      title: 'Unsupported video',
-      message:
-        'Please choose an MP4 or MOV video. Other formats can’t be played back reliably in the app.',
-    };
+  limits: { maxDurationMs: number; maxBytes: number } = {
+    maxDurationMs: MAX_VIDEO_DURATION_MS,
+    maxBytes: MAX_UPLOAD_BYTES,
   }
-  if (asset.duration != null && asset.duration > limits.maxDurationMs) {
-    const seconds = Math.round(limits.maxDurationMs / 1000);
+): { title: string; message: string } | null {
+  const maxDurationMs = Math.min(limits.maxDurationMs, MAX_VIDEO_DURATION_MS);
+  const maxBytes = Math.min(limits.maxBytes, MAX_UPLOAD_BYTES);
+  if (!isSupportedVideo(asset)) {
+    return { title: 'Unsupported video', message: VIDEO_KIND_MESSAGE };
+  }
+  if (asset.duration != null && asset.duration > maxDurationMs) {
+    const seconds = Math.round(maxDurationMs / 1000);
     return {
       title: 'Video is too long',
       message:
@@ -315,10 +379,13 @@ export function rejectionForPickedVideo(
           : `Videos must be under ${seconds} seconds. Trim it and try again.`,
     };
   }
-  if (asset.fileSize != null && asset.fileSize > limits.maxBytes) {
+  if (asset.fileSize != null && asset.fileSize > maxBytes) {
     return {
       title: 'Video is too large',
-      message: `Videos must be under ${Math.round(limits.maxBytes / (1024 * 1024))} MB.`,
+      message:
+        maxBytes === MAX_UPLOAD_BYTES
+          ? VIDEO_TOO_LARGE_MESSAGE
+          : `Videos must be under ${Math.round(maxBytes / (1024 * 1024))} MB. Trim it and try again.`,
     };
   }
   return null;
@@ -335,9 +402,9 @@ export function rejectionForPickedVideo(
  * exactly as written. No new bucket, no new policy, and deliberately nothing
  * loosened.
  *
- * The content type is resolved from an allowlist rather than trusted from the
- * picker, so an object can never be stored under a type this app would not
- * play back.
+ * The content type is resolved from the bytes (uploadAsset) rather than trusted
+ * from the picker, so an object can never be stored under a type this app
+ * would not play back.
  */
 export async function uploadCompletionVideo(jobId: string, asset: ImagePickerAsset) {
   const ext =
@@ -348,14 +415,16 @@ export async function uploadCompletionVideo(jobId: string, asset: ImagePickerAss
     null;
 
   if (!ext) {
-    return { url: null, error: new Error('Unsupported video format') };
+    return refused(VIDEO_KIND_MESSAGE);
   }
 
   const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return uploadAsset(
     BUCKET,
     `${jobId}/completion/${unique}.${ext}`,
-    { ...asset, mimeType: VIDEO_CONTENT_TYPES[ext] },
+    asset,
+    false,
+    'video'
   );
 }
 
@@ -366,9 +435,9 @@ export async function uploadCompletionVideo(jobId: string, asset: ImagePickerAss
  * insert on the path's owner, phase26 the delete) — no new bucket and no
  * loosened policy.
  *
- * The content type is resolved from an allowlist rather than trusted from the
- * picker, so an object can never be stored under a type this app would not
- * play back.
+ * The content type is resolved from the bytes (uploadAsset) rather than trusted
+ * from the picker, so an object can never be stored under a type this app
+ * would not play back.
  */
 export async function uploadJobVideo(userId: string, asset: ImagePickerAsset) {
   const ext =
@@ -379,13 +448,15 @@ export async function uploadJobVideo(userId: string, asset: ImagePickerAsset) {
     null;
 
   if (!ext) {
-    return { url: null, error: new Error('Unsupported video format') };
+    return refused(VIDEO_KIND_MESSAGE);
   }
 
   const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return uploadAsset(
     BUCKET,
     `postings/${userId}/${unique}.${ext}`,
-    { ...asset, mimeType: VIDEO_CONTENT_TYPES[ext] },
+    asset,
+    false,
+    'video'
   );
 }

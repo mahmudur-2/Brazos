@@ -24,7 +24,8 @@ test('[static] F18: the shell ground re-renders only its own view, and PostJob b
   assert.match(modeShell, /<ShellGroundView>\s*(\{\}\s*)?<LaunchReadySignal \/>\s*\{treeMode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\}/);
 
   const post = strip(read('screens/PostJobScreen.tsx'));
-  assert.match(post, /const dayKey = toLocalIsoDate\(new Date\(\)\);\s*const scheduleDates = useMemo\(upcomingDates, \[dayKey\]\);/);
+  // A4 wiring (A3): the key is the market's day (C9).
+  assert.match(post, /const dayKey = marketDayKey\(\);\s*const scheduleDates = useMemo\(upcomingDates, \[dayKey\]\);/);
   assert.doesNotMatch(post, /const scheduleDates = upcomingDates\(\)/);
 });
 
@@ -253,6 +254,8 @@ const messagesLib = await import(
         /import \{ resolveChatMediaUrl, resolveChatMediaUrls \} from '\.\/storage';/,
         'const resolveChatMediaUrl = async (_b, v) => v; const resolveChatMediaUrls = async (_b, vs) => vs.map((v) => v ?? null);'
       )
+      // A4-M1 (C5): the API's row limit, a plain constant.
+      .replace(/import \{ API_MAX_ROWS \} from '\.\/supabaseTypes';/, 'const API_MAX_ROWS = 1000;')
   )
 );
 
@@ -288,6 +291,8 @@ async function storageWith(signedUrlsFor) {
       }) } };`
     )
     .replace(/import type \{ ImagePickerAsset \} from 'expo-image-picker';\n?/, '')
+    // A4-M3: the upload checks the signing cases never call (tests/uploadRules.test.mjs runs them).
+    .replace(/^import \{[^}]*\} from '\.\/(?:mediaMetadata|uploadRules)';\n?/gm, '')
     // A fresh module per case, so one case's kept URLs never answer another's.
     .concat(`\n// ${Math.random()}`);
   return { mod: await import(toDataUrl(js)), calls };
@@ -499,7 +504,7 @@ test('[static] F15: every screen that ranks by the worker’s history reads the 
     'screens/ApproveOrDisputeScreen.tsx': 3,
     'screens/BidDetailScreen.tsx': 2,
     'screens/ChatScreen.tsx': 1,
-    'screens/ClientJobDetailScreen.tsx': 3,
+    'screens/ClientJobDetailScreen.tsx': 4,
     'screens/JobConfirmedScreen.tsx': 1,
     'screens/JobDetailScreen.tsx': 4,
     'screens/PostJobScreen.tsx': 3,
@@ -521,9 +526,11 @@ test('[static] F1: the layer holds for real content, capped by a named constant;
   assert.match(app, /<LaunchHoldContext\.Provider value=\{reportLaunchReady\}>/);
   assert.match(app, /sessionReady=\{!loading && \(contentReady \|\| holdCapped\)\}/);
   // Every RootNavigator branch but the loader and the tabs reports; the tabs report from ModeShell.
-  assert.match(app, /const holdsLoader = loading \|\| \(!!user && \(legal\.state === 'loading' \|\| setup\.state === 'loading'\)\);/);
+  // B1: and until the signed-in account's suspension answer is in.
+  assert.match(app, /const holdsLoader = loading \|\| \(!!user && \(suspended === null \|\| legal\.state === 'loading' \|\| setup\.state === 'loading'\)\);/);
   assert.match(app, /const reachesTabs = !!user && !recoveryPending && setup\.state === 'complete' && legal\.state === 'accepted';/);
-  assert.match(app, /const drawsContent = !holdsLoader && !reachesTabs;\s*useEffect\(\(\) => \{\s*if \(drawsContent\) reportLaunchReady\(\);/);
+  // A4-M5: the update stop (U1) is drawn content too, so it reports as well.
+  assert.match(app, /const drawsContent = updateStop \|\| \(!holdsLoader && !reachesTabs\);\s*useEffect\(\(\) => \{\s*if \(drawsContent\) reportLaunchReady\(\);/);
   const shell = strip(read('navigation/ModeShell.tsx'));
   assert.match(shell, /function LaunchReadySignal\(\) \{\s*const report = useReportLaunchReady\(\);\s*return <View style=\{styles\.signal\} pointerEvents="none" onLayout=\{report\} \/>;/);
   // LaunchScreen itself is untouched: the exit condition is still the one flag it is handed.
@@ -567,13 +574,13 @@ test('[static] F13 review: the hub screens take their one clock reading per READ
   // would freeze at the first read. The hub hands out the read's own instant instead.
   assert.match(strip(read('hooks/useMyJobsHub.ts')), /readAt: query\.dataUpdatedAt,/);
   const sites = {
-    'screens/HomeScreen.tsx': /const nowMs = useMemo\(\(\) => Date\.now\(\), \[myJobsReadAt\]\);/,
-    'screens/MyJobsHubScreen.tsx': /const nowMs = useMemo\(\(\) => Date\.now\(\), \[readAt\]\);/,
-    'components/CreateSheet.tsx': /const nowMs = useMemo\(\(\) => Date\.now\(\), \[hub\.readAt\]\);/,
+    'screens/HomeScreen.tsx': /const nowMs = useMemo\(\(\) => serverNowMs\(\), \[myJobsReadAt\]\);/,
+    'screens/MyJobsHubScreen.tsx': /const nowMs = useMemo\(\(\) => serverNowMs\(\), \[readAt\]\);/,
+    'components/CreateSheet.tsx': /const nowMs = useMemo\(\(\) => serverNowMs\(\), \[hub\.readAt\]\);/,
   };
   for (const [file, clock] of Object.entries(sites)) {
     const src = strip(read(file));
     assert.match(src, clock, `${file} keys its clock on the read`);
-    assert.doesNotMatch(src, /Date\.now\(\),\s*\[\s*posted/, `${file} keys a clock on row identity`);
+    assert.doesNotMatch(src, /(Date\.now|serverNowMs)\(\),\s*\[\s*posted/, `${file} keys a clock on row identity`);
   }
 });

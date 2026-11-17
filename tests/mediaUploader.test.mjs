@@ -36,7 +36,9 @@ test('MediaUploader only ever appends a URL a real upload returned', async () =>
   // `items` mutation — is what this assertion is for and is unchanged.
   assert.match(
     source,
-    /if \(error \|\| !url\) \{\s*onUploadError\?\.\(userMessage\(error, 'Upload failed\. Please try again\.'\)\);\s*return;\s*\}/
+    // A4 wiring (A1): the sentence is lib/uploadRules uploadErrorMessage(): a refusal keeps its own words,
+    // anything else is the one calm "did not finish" sentence, never the raw text.
+    /if \(error \|\| !url\) \{\s*onUploadError\?\.\(uploadErrorMessage\(error\)\);\s*return;\s*\}/
   );
 
   // Removal is exclusively user-initiated (the "x" on a tile) — never

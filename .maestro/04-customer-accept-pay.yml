@@ -1,5 +1,5 @@
 appId: app.brazos.mobile.preview
-# F3 customer hire and pay (account A): Payment methods, My Jobs hub, Job & Bids, Bid Detail + counter-offer, accept, Protected Checkout, Stripe test card, Job Confirmed.
+# F3 customer hire and pay (account A): Payment methods, My Jobs hub, Job Details, the bid in place + counter-offer, accept, Protected Checkout, Stripe test card, Job Confirmed.
 # Proves A counters the side bid, accepts the $50 main bid, pays the all-in total with 4242 (held; F8: never "Paid" before release), and the saved card can be removed.
 ---
 - launchApp:
@@ -27,10 +27,10 @@ appId: app.brazos.mobile.preview
       NEXT: "Switch to Worker"
 - scrollUntilVisible:
     element:
-      text: "Payment methods"
+      text: "Payment Methods"
     direction: DOWN
     timeout: 60000
-- tapOn: "Payment methods"
+- tapOn: "Payment Methods"
 - extendedWaitUntil:
     visible: "Payment Methods"
     timeout: 30000
@@ -44,16 +44,16 @@ appId: app.brazos.mobile.preview
     commands:
       - tapOn: 'Remove .*\d{4}'
       - extendedWaitUntil:
-          visible: "Keep it"
+          visible: "Cancel"
           timeout: 15000
       - tapOn:
           text: "Remove"
-          rightOf: "Keep it"
+          rightOf: "Cancel"
       - extendedWaitUntil:
-          notVisible: "Keep it"
+          notVisible: "Cancel"
           timeout: 30000
 - extendedWaitUntil:
-    visible: "No card saved"
+    visible: "No Card Saved"
     timeout: 30000
 - tapOn: 'Back( to .*)?'
 - tapOn: "Home"
@@ -66,14 +66,14 @@ appId: app.brazos.mobile.preview
     file: subflows/home-tap.yml
     env:
       TAP: "Create"
-      NEXT: "My jobs"
+      NEXT: "My Jobs"
 - extendedWaitUntil:
-    visible: "My jobs"
+    visible: "My Jobs"
     timeout: 15000
 - runFlow:
     file: subflows/home-tap.yml
     env:
-      TAP: "My jobs"
+      TAP: "My Jobs"
       NEXT: 'Back( to .*)?'
 - extendedWaitUntil:
     notVisible: "Loading your jobs…"
@@ -88,23 +88,22 @@ appId: app.brazos.mobile.preview
     text: '.*${output.marker} side.*'
     index: 0
 - extendedWaitUntil:
-    visible: "Job & Bids"
+    visible: "Job Details"
     timeout: 30000
 - extendedWaitUntil:
     notVisible: "Loading bids…"
     timeout: 30000
+# P3: the top bid is open in place on the job page, with its own Decline, Counter and Accept. Centred:
+# with bids open the page has no bar, so the floating tab bar is over the foot, where Counter could sit.
 - scrollUntilVisible:
     element:
-      text: "Open full bid detail with counter and decline options"
+      text: 'Accept Bid \(\$40\)'
     direction: DOWN
     timeout: 30000
-- tapOn: "Open full bid detail with counter and decline options"
-- extendedWaitUntil:
-    visible: "Bid Detail"
-    timeout: 30000
-- assertVisible: 'Accept bid \(\$40\)'
+    centerElement: true
 - takeScreenshot: 04-bid-detail
-- tapOn: "Send counter-offer"
+# A2-M4b: the card's opener is "Counter"; the sheet's submit below keeps "Send Counter-Offer".
+- tapOn: "Counter"
 - extendedWaitUntil:
     visible: "Counter-Offer"
     timeout: 30000
@@ -113,9 +112,11 @@ appId: app.brazos.mobile.preview
 - tapOn: "COUNTERING"
 # Each step that closes the keyboard is followed by keyboard-settle, as in flow 03 (runs 38-39: iOS retires it ~4.8 s later).
 - runFlow: subflows/keyboard-settle.yml
-- tapOn: "Send counter-offer"
+- tapOn: "Send Counter-Offer"
+# P4: the counter is a sheet over the job page, so "Job Details" shows the whole time; the card's
+# waiting line is what a sent counter leaves (components/OfferCard.tsx).
 - extendedWaitUntil:
-    visible: 'Job & Bids|Job Details|No counter-offers left|Could not send.*'
+    visible: 'You countered.*|No counter-offers left|Could not send.*'
     timeout: 60000
 - assertNotVisible: 'No counter-offers left|Could not send.*'
 - takeScreenshot: 04-countered
@@ -129,35 +130,52 @@ appId: app.brazos.mobile.preview
     text: '.*${output.marker} main.*'
     index: 0
 - extendedWaitUntil:
-    visible: "Job & Bids"
+    visible: "Job Details"
     timeout: 30000
 - extendedWaitUntil:
     notVisible: "Loading bids…"
     timeout: 30000
-- assertVisible: "WORKER OFFERS"
-- tapOn: 'Accept bid \(\$50\)'
+# The bids sit under the job's scope and address cards, and the open bid's Accept ends its card: each
+# is scrolled to (Accept centred, as on the side job), since a tap does not scroll.
+- scrollUntilVisible:
+    element:
+      text: "BIDS"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: 'Accept Bid \(\$50\)'
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
+- tapOn: 'Accept Bid \(\$50\)'
 - extendedWaitUntil:
     visible: 'Accept this bid for \$50\?'
     timeout: 15000
 # The confirm names the server's all-in total once its quote loads (lib/offerCopy.ts).
 - extendedWaitUntil:
-    visible: 'Accept & pay \$.*'
+    visible: 'Accept & Pay \$.*'
     timeout: 30000
-- tapOn: 'Accept & pay \$.*'
+- tapOn: 'Accept & Pay \$.*'
 - extendedWaitUntil:
     visible: "Protected Checkout"
     timeout: 60000
 - extendedWaitUntil:
     visible: 'Protect \$.* by card'
     timeout: 60000
-- assertVisible: "Total charged to your card"
-- tapOn: "Save this card for one-tap hiring"
+- assertVisible: "Total Charged to Your Card"
+# The save row follows the summary card, just over the floating "Protect" button: centred first, so its
+# tap cannot land on the button.
+- scrollUntilVisible:
+    element:
+      text: "Save This Card for One-Tap Hiring"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
+- tapOn: "Save This Card for One-Tap Hiring"
 - takeScreenshot: 04-checkout
+# P16: the tap opens the card sheet at once (no confirm before it).
 - tapOn: 'Protect \$.* by card'
-- extendedWaitUntil:
-    visible: 'Charge \$.* to your card\?'
-    timeout: 15000
-- tapOn: "Pay & protect"
 # The Stripe PaymentSheet is native; its fields answer to their labels. The card goes in four groups.
 - extendedWaitUntil:
     visible: 'Card number|1234 1234 1234 1234'
@@ -192,14 +210,14 @@ appId: app.brazos.mobile.preview
     commands:
       - runFlow:
           when:
-            visible: "Check again"
+            visible: "Check Again"
           commands:
-            - tapOn: "Check again"
+            - tapOn: "Check Again"
       - runFlow:
           when:
-            visible: "Continue — job confirmed"
+            visible: "Continue — Job Confirmed"
           commands:
-            - tapOn: "Continue — job confirmed"
+            - tapOn: "Continue — Job Confirmed"
       - extendedWaitUntil:
           visible: 'Job Confirmed|The card was not charged|The payment did not go through|Payment timed out'
           timeout: 30000
@@ -209,7 +227,7 @@ appId: app.brazos.mobile.preview
 - assertVisible: "Your card was charged. Nothing reaches the worker until you approve the finished work."
 - assertNotVisible: "Paid"
 - takeScreenshot: 04-job-confirmed
-- tapOn: "View job"
+- tapOn: "View Job"
 - extendedWaitUntil:
     visible: "Job Details"
     timeout: 30000
@@ -230,25 +248,25 @@ appId: app.brazos.mobile.preview
       NEXT: "Switch to Worker"
 - scrollUntilVisible:
     element:
-      text: "Payment methods"
+      text: "Payment Methods"
     direction: DOWN
     timeout: 60000
-- tapOn: "Payment methods"
+- tapOn: "Payment Methods"
 - extendedWaitUntil:
     visible: "Payment Methods"
     timeout: 30000
 - extendedWaitUntil:
-    visible: "Saved for one-tap hiring"
+    visible: "Saved for One-Tap Hiring"
     timeout: 60000
 - takeScreenshot: 04-card-saved
 - tapOn: 'Remove .*4242'
 - extendedWaitUntil:
-    visible: "Keep it"
+    visible: "Cancel"
     timeout: 15000
 - tapOn:
     text: "Remove"
-    rightOf: "Keep it"
+    rightOf: "Cancel"
 - extendedWaitUntil:
-    visible: "No card saved"
+    visible: "No Card Saved"
     timeout: 30000
 - runFlow: subflows/sign-out.yml

@@ -7,12 +7,12 @@ appId: app.brazos.mobile.preview
     latitude: "40.5840"
     longitude: "-73.9539"
 - extendedWaitUntil:
-    visible: "I already have an account"
+    visible: "I Already Have an Account"
     timeout: 60000
 - runFlow:
     file: welcome-tap.yml
     env:
-      TAP: "I already have an account"
+      TAP: "I Already Have an Account"
       NEXT: "Sign in to Brazos"
 # PhoneNumberInput drops the leading 1 of a NANP number as it is typed.
 - tapOn: "Phone number, United States, plus 1"
@@ -55,12 +55,12 @@ appId: app.brazos.mobile.preview
     commands:
       - tapOn: "Go back"
       - extendedWaitUntil:
-          visible: "Continue with phone"
+          visible: "Continue with Phone"
           timeout: 15000
       - runFlow:
           file: welcome-tap.yml
           env:
-            TAP: "Continue with phone"
+            TAP: "Continue with Phone"
             NEXT: "One account. Two ways to use it."
       - tapOn: "Carlos Reyes"
       - inputText: ${NAME}
@@ -70,7 +70,7 @@ appId: app.brazos.mobile.preview
       - tapOn: "Switch modes to hire help or find work."
       # Below the field, so the header's "Create Account" is never the match.
       - tapOn:
-          text: "Create account"
+          text: "Create Account"
           below: "Phone number, United States, plus 1"
       - extendedWaitUntil:
           visible: "Enter the 6-digit code"
@@ -93,7 +93,7 @@ appId: app.brazos.mobile.preview
       - tapOn: "Enter the 6-digit code"
       # This tap closes the keyboard; iOS retires it 4.7-4.9 s later (runs 38-39), so keyboard-settle follows.
       - runFlow: keyboard-settle.yml
-      - tapOn: "Verify and continue"
+      - tapOn: "Verify and Continue"
       # GoTrue answers a wrong code with otp_expired or otp_invalid (lib/phoneAuth/errors.ts).
       - extendedWaitUntil:
           visible: "That code (isn.t right|has expired).*"
@@ -105,7 +105,7 @@ appId: app.brazos.mobile.preview
 - inputText: ${OTP}
 - tapOn: "Enter the 6-digit code"
 - runFlow: keyboard-settle.yml
-- tapOn: "Verify and continue"
+- tapOn: "Verify and Continue"
 
 # First sign-in of an account: Setup (Start in + Terms); a new legal version: the gate alone.
 - extendedWaitUntil:
@@ -124,7 +124,7 @@ appId: app.brazos.mobile.preview
           commands:
             - assertVisible: "Review Terms & Privacy to finish setup."
             - assertVisible:
-                text: "Finish setup"
+                text: "Finish Setup"
                 enabled: false
             - tapOn: 'Terms and Privacy\. Review both documents to continue\.'
             - runFlow: accept-legal.yml
@@ -134,8 +134,8 @@ appId: app.brazos.mobile.preview
       - takeScreenshot: setup-done
       # Below "Start in", so the header's "Finish Setup" is never the match.
       - tapOn:
-          text: "Finish setup"
-          below: "Start in"
+          text: "Finish Setup"
+          below: "Start In"
 - runFlow:
     when:
       visible: "BEFORE YOU START"

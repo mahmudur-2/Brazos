@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -20,11 +21,19 @@ const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\
 
 const ADDRESS = 'brazosmvp@gmail.com';
 
-// lib/appLinks.ts executed for real. It imports nothing, so it loads straight
-// from its own file URL the way tests/errorMessage.test.mjs loads
-// lib/errorMessage.ts — no data-URL rewrite is needed here.
-const { SUPPORT_EMAIL, supportMailtoUrl } = await import(
-  pathToFileURL(join(root, 'lib/appLinks.ts')).href
+// lib/appLinks.ts executed for real. T3 (production-36h): it now holds the one support-mail opener,
+// so its two imports (react-native's Linking, lib/dialog's alertAsync) are replaced by stand-ins
+// that log what the opener does.
+let appLinksJs = stripTypeScriptTypes(read('lib/appLinks.ts'), { mode: 'strip' });
+for (const [from, to] of [
+  ["import { Linking } from 'react-native';", 'const Linking = { openURL: (url) => globalThis.__support_mail.openURL(url) };'],
+  ["import { alertAsync } from './dialog';", 'const alertAsync = (title, message) => globalThis.__support_mail.alert(title, message);'],
+]) {
+  assert.ok(appLinksJs.includes(from), `expected the import: ${from}`);
+  appLinksJs = appLinksJs.replace(from, () => to);
+}
+const { SUPPORT_EMAIL, supportMailtoUrl, openSupportMail } = await import(
+  'data:text/javascript;charset=utf-8;base64,' + Buffer.from(appLinksJs, 'utf8').toString('base64')
 );
 
 test('a1 · lib/appLinks.ts publishes the address and assembles the mailto in one place', () => {
@@ -32,32 +41,48 @@ test('a1 · lib/appLinks.ts publishes the address and assembles the mailto in on
   assert.equal(supportMailtoUrl(), `mailto:${ADDRESS}`);
   // (Lean D5 removed the public profile link, PROFILE_WEB_BASE_URL with it.)
 
-  // Import-free, which is the property that lets the import above work.
+  // T3: the only imports are the two the opener needs.
   const code = stripComments(read('lib/appLinks.ts'));
-  assert.deepEqual([...code.matchAll(/^import .*$/gm)].map((m) => m[0]), []);
+  assert.deepEqual([...code.matchAll(/^import .*$/gm)].map((m) => m[0]), [
+    "import { Linking } from 'react-native';",
+    "import { alertAsync } from './dialog';",
+  ]);
+  assert.doesNotMatch(code, /canOpenURL|Alert\./);
+});
+
+test('T3 · the one support-mail opener: the mailto opens; when it cannot, the address is published through lib/dialog', async () => {
+  const run = async (opens) => {
+    const log = [];
+    globalThis.__support_mail = {
+      openURL: async (url) => {
+        log.push(`open ${url}`);
+        if (!opens) throw new Error('No mail app');
+      },
+      alert: async (title, message) => log.push(`alert ${title}: ${message}`),
+    };
+    await openSupportMail();
+    return log;
+  };
+  assert.deepEqual(await run(true), [`open mailto:${ADDRESS}`]);
+  assert.deepEqual(await run(false), [`open mailto:${ADDRESS}`, `alert Could not open your mail app: Write to ${ADDRESS}.`]);
+  // The three places use this one opener and keep no copy of their own.
+  for (const file of ['screens/ProfileScreen.tsx', 'screens/DeleteAccountScreen.tsx', 'screens/SuspendedAccountScreen.tsx']) {
+    const screen = stripComments(read(file));
+    assert.match(screen, /import \{ openSupportMail, SUPPORT_EMAIL \} from '\.\.\/lib\/appLinks';/, file);
+    assert.doesNotMatch(screen, /function openSupportMail|Linking\.openURL|supportMailtoUrl|canOpenURL/, file);
+    assert.match(screen, /void openSupportMail\(\)/, file);
+  }
 });
 
 test('a1 · the Profile hub carries Contact support as a row that opens the mailto', () => {
   const code = stripComments(read('screens/ProfileScreen.tsx'));
 
-  // The screen imports the address; it never retypes it.
-  assert.match(code, /import \{ SUPPORT_EMAIL, supportMailtoUrl \} from '\.\.\/lib\/appLinks';/);
+  // The screen imports the address and the one opener (T3, lib/appLinks.ts, executed above); it
+  // never retypes either. canOpenURL would need an LSApplicationQueriesSchemes entry app.config.ts
+  // does not carry; the opener's failure still publishes the contact, through lib/dialog.
+  assert.match(code, /import \{ openSupportMail, SUPPORT_EMAIL \} from '\.\.\/lib\/appLinks';/);
   assert.doesNotMatch(code, /brazosmvp/, 'the address reaches the screen only through the constant');
-
-  // One opener, the house shape (screens/PayoutsScreen.tsx). canOpenURL would
-  // need an LSApplicationQueriesSchemes entry app.config.ts does not carry.
-  assert.equal(
-    (code.match(/Linking\.openURL\(supportMailtoUrl\(\)\)/g) ?? []).length,
-    1,
-    'exactly one Linking.openURL(supportMailtoUrl())'
-  );
   assert.doesNotMatch(code, /canOpenURL/);
-
-  // The failure still publishes the contact, through lib/dialog (never Alert).
-  assert.match(
-    code,
-    /alertAsync\(\s*'Could not open your mail app',\s*`Write to \$\{SUPPORT_EMAIL\}\.`\s*\)/
-  );
   assert.doesNotMatch(code, /Alert\.alert\(/);
 
   // Every row the hub opens, in one table.
@@ -70,14 +95,14 @@ test('a1 · the Profile hub carries Contact support as a row that opens the mail
   // the rebuilt hub): the two notification rows are ONE, 'Notifications' —
   // the feed, the name its screen wears, whose header gear opens Notification
   // settings — and Payment methods and Account & safety joined the table
-  // (Payment methods moved off Account & safety).
+  // (Payment methods moved off Account & Safety).
   assert.deepEqual(labels, [
-    'Services & availability',
-    'Earnings & payouts',
-    'Payment methods',
+    'Services & Availability',
+    'Earnings & Payouts',
+    'Payment Methods',
     'Notifications',
-    'Account & safety',
-    'Contact support',
+    'Account & Safety',
+    'Contact Support',
   ]);
   // M-22, kept — each mode leads with its own rows (HUB_LAYOUT: YOUR PROFILE,
   // MONEY) and puts the other mode's behind one row that opens in place; with
@@ -92,13 +117,13 @@ test('a1 · the Profile hub carries Contact support as a row that opens the mail
   const notifications = [...code.slice(code.indexOf('const HUB_NOTIFICATIONS = ['), code.indexOf('];', code.indexOf('const HUB_NOTIFICATIONS = ['))).matchAll(/'([^']+)'/g)].map((m) => m[1]);
   const account = [...code.slice(code.indexOf('const HUB_ACCOUNT = ['), code.indexOf('];', code.indexOf('const HUB_ACCOUNT = ['))).matchAll(/'([^']+)'/g)].map((m) => m[1]);
   assert.deepEqual(notifications, ['Notifications']);
-  assert.deepEqual(account, ['Account & safety', 'Contact support']);
+  assert.deepEqual(account, ['Account & Safety', 'Contact Support']);
   for (const mode of ['customer', 'worker']) {
     const own = layout.slice(layout.indexOf(`${mode}: {`), layout.indexOf('},', layout.indexOf(`${mode}: {`)));
     const drawn = [...listOf(own, 'profile'), ...listOf(own, 'money'), ...listOf(own, 'tools'), ...notifications, ...account];
     assert.deepEqual([...drawn].sort(), [...labels].sort(), `${mode} draws every row exactly once`);
   }
-  assert.match(block, /mailto: true,\s*icon: 'mail-outline',\s*label: 'Contact support',/);
+  assert.match(block, /mailto: true,\s*icon: 'mail-outline',\s*label: 'Contact Support',/);
   assert.match(block, /sub: `Email \$\{SUPPORT_EMAIL\}`/);
 
   // One renderer still draws every row, and every route dispatches through it.

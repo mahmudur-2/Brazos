@@ -23,7 +23,22 @@ const SHIMMER_WIDTH = 28;
  * lib/liveJobStatus.ts, never from here. The sheen is a transform on the native
  * driver; Reduce Motion: the bar holds still.
  */
-export function StageRail({ status, onChat, chatLabel }: { status: LiveJobStatus; onChat?: () => void; chatLabel?: string }) {
+export function StageRail({
+  status,
+  onChat,
+  chatLabel,
+  thin = false,
+}: {
+  status: LiveJobStatus;
+  onChat?: () => void;
+  chatLabel?: string;
+  /**
+   * M5 (T1, the My Jobs row): the four bars without the four words under them. The
+   * status line below names the current step ("Booked · starts tomorrow, 8–11 AM"),
+   * so the words are not lost; the bars, the line and the chat button are unchanged.
+   */
+  thin?: boolean;
+}) {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   return (
@@ -33,7 +48,7 @@ export function StageRail({ status, onChat, chatLabel }: { status: LiveJobStatus
           <RailBar key={LIVE_RAIL_STEPS[index]} fill={fill} current={index === status.step} />
         ))}
       </View>
-      <View style={styles.rail}>
+      {thin ? null : <View style={styles.rail}>
         {LIVE_RAIL_STEPS.map((label, index) => (
           <Text
             key={label}
@@ -47,8 +62,8 @@ export function StageRail({ status, onChat, chatLabel }: { status: LiveJobStatus
             {label}
           </Text>
         ))}
-      </View>
-      <View style={styles.statusRow}>
+      </View>}
+      <View style={[styles.statusRow, thin && styles.statusRowThin]}>
         {status.live ? <LiveDot color={colors.emerald} size={8} motion="pulse" /> : null}
         <Text style={styles.line} numberOfLines={1}>
           <Text style={styles.lineHead}>{status.head}</Text> · {status.detail}
@@ -163,6 +178,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
+    },
+    // The thin rail's line sits right under the bars: no extra top margin.
+    statusRowThin: {
+      marginTop: 0,
     },
     line: {
       flex: 1,

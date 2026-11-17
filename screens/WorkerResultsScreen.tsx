@@ -41,13 +41,14 @@ import type {
   WorkerHomeStackParamList,
 } from '../lib/navigation';
 import {
-  fonts,
   spacing,
+  textScale,
   themedStyles,
   useThemeColors,
   type ColorPalette,
   screenGround,
 } from '../lib/theme';
+import { titleCase } from '../lib/titleCase';
 import { useScrollClearance } from '../ui/primitives';
 
 // The value now lives in lib/discoveryFilter.ts (4D-2) so lib modules can
@@ -453,7 +454,7 @@ export function WorkerResultsScreen() {
                 <View style={styles.emptyIcon}>
                   <Ionicons name="options-outline" size={30} color={accent} />
                 </View>
-                <Text style={styles.emptyTitle}>No jobs match your filters</Text>
+                <Text style={styles.emptyTitle}>No Jobs Match Your Filters</Text>
                 <Text style={styles.emptyText}>
                   Loosen a filter, or clear them to see everything again.
                 </Text>
@@ -462,7 +463,7 @@ export function WorkerResultsScreen() {
                   accessibilityRole="button"
                   style={styles.clearFilters}
                 >
-                  <Text style={styles.clearFiltersText}>Clear filters</Text>
+                  <Text style={styles.clearFiltersText}>Clear Filters</Text>
                 </Pressable>
               </View>
             ) : (
@@ -479,12 +480,12 @@ export function WorkerResultsScreen() {
                   />
                 </View>
                 <Text style={styles.emptyTitle}>
-                  {emptyTitle(
+                  {titleCase(emptyTitle(
                     params.mode,
                     geoState,
                     jobsError,
                     radiusActive && !radiusUnavailable ? (radius as number) : null
-                  )}
+                  ))}
                 </Text>
                 <Text style={styles.emptyText}>
                   {emptyBody(params.mode, geoMessage, params.query)}
@@ -506,7 +507,7 @@ export function WorkerResultsScreen() {
                     accessibilityRole="button"
                     style={styles.clearFilters}
                   >
-                    <Text style={styles.clearFiltersText}>Add categories</Text>
+                    <Text style={styles.clearFiltersText}>Add Categories</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -611,16 +612,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     marginBottom: spacing.sm,
   },
   emptyTitle: {
-    fontFamily: fonts.display,
-    fontSize: 20,
-    fontWeight: '700',
+    ...textScale.title,
     color: colors.ink,
   },
   emptyText: {
-    fontSize: 14,
+    ...textScale.body,
     color: colors.textMuted,
     textAlign: 'center',
-    lineHeight: 20,
   },
   filterButton: {
     width: 36,
@@ -641,14 +639,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: 3,
   },
   filterBadgeText: {
-    fontSize: 10,
+    ...textScale.caption,
     fontWeight: '800',
     color: colors.onPrimary,
   },
   radiusNote: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   radiusNoteAction: {
@@ -663,7 +662,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
   },
   clearFiltersText: {
-    fontSize: 15,
+    ...textScale.callout,
     fontWeight: '700',
     color: colors.emerald,
   },

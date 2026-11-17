@@ -86,7 +86,6 @@ export function ConfirmHost({ level = 0 }: { level?: number }) {
       title={options?.title ?? ''}
       message={options?.message || undefined}
       confirmText={options?.confirmText}
-      cancelText={options?.cancelText}
       destructive={options?.destructive}
       onShow={() => {
         shown.current = true;

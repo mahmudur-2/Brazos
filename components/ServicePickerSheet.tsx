@@ -96,12 +96,12 @@ export function ServicePickerSheet({
           accessible={false}
           onPress={() => {}}
         >
-          {/* #64 (M-31) — the one sheet header: "Close" on the right, in place
+          {/* #64 (M-31) — the one sheet header: "Cancel" (F9) on the right, in place
               of the X; picking a service is the action. */}
           <SheetHeader
             title={title}
             subtitle={subtitle}
-            dismissWord="Close"
+            dismissWord="Cancel"
             onDismiss={onClose}
             titleStyle={styles.title}
             subtitleStyle={styles.subtitle}

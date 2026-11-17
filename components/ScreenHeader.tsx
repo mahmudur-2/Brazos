@@ -58,6 +58,11 @@ type ScreenHeaderProps = {
    * sits above the big title.
    */
   largeTitle?: boolean;
+  /**
+   * M5: the centred subtitle's lines (default 1). Two is for a fixed sentence that one line
+   * cuts (Earnings); the row grows by one subtitle line to hold it.
+   */
+  subtitleLines?: 1 | 2;
 };
 
 /**
@@ -98,6 +103,7 @@ export function ScreenHeader({
   onPressRight,
   rightDisabled = false,
   largeTitle = false,
+  subtitleLines = 1,
 }: ScreenHeaderProps) {
   const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
@@ -161,7 +167,7 @@ export function ScreenHeader({
             leading ? styles.subtitleConversation : largeTitle ? styles.subtitleLarge : styles.subtitle,
             { color: palette.textMuted },
           ]}
-          numberOfLines={1}
+          numberOfLines={subtitleLines}
         >
           {subtitle}
         </Text>
@@ -270,7 +276,14 @@ export function ScreenHeader({
     titles
   );
   return (
-    <View style={[styles.container, styles.containerRow, styles.containerCentered]}>
+    <View
+      style={[
+        styles.container,
+        styles.containerRow,
+        styles.containerCentered,
+        subtitle && subtitleLines === 2 ? styles.containerTwoLine : null,
+      ]}
+    >
       {/* First, so both edge slots paint above it — a long title truncates
           into its inset instead of covering a link. */}
       <View
@@ -308,6 +321,11 @@ const stylesFor = metricStyles(() => StyleSheet.create({
   },
   containerCentered: {
     justifyContent: 'space-between',
+  },
+  // M5: the 44pt row plus one subtitle line (17), so a two-line subtitle sits inside the row; a
+  // min height counts the padding, so the container's own padding is added.
+  containerTwoLine: {
+    minHeight: 44 + 17 + spacing.xs + spacing.sm,
   },
   containerLarge: {
     gap: spacing.xs,

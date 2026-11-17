@@ -78,3 +78,8 @@ export function confirm(): void {
 export function select(): void {
   fire((h) => h.selectionAsync());
 }
+
+/** The warning notification — a dangerous confirm is about to be answered. */
+export function warning(): void {
+  fire((h) => h.notificationAsync(h.NotificationFeedbackType?.Warning ?? 'warning'));
+}

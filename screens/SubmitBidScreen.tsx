@@ -45,15 +45,15 @@ export function SubmitBidScreen() {
   if (mode === 'customer') {
     return (
       <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top', 'bottom']}>
-        <ScreenHeader title="Submit a Bid" onBack={goBackOrHome} />
+        <ScreenHeader title="Write a Bid" onBack={goBackOrHome} />
         <View style={styles.guard}>
-          <Text style={styles.guardTitle}>Bidding lives in Worker Mode</Text>
+          <Text style={styles.guardTitle}>Bidding Lives in Worker Mode</Text>
           <Text style={styles.guardText}>
             You’re in customer mode right now. Switch to Worker Mode to bid on
             jobs like “{job.title}”.
           </Text>
           <Button
-            title="Switch to Worker Mode and open this job"
+            title="Switch to Worker Mode and Open This Job"
             variant="secondary"
             onPress={() => void switchAndOpen()}
             loading={switching}
@@ -68,26 +68,20 @@ export function SubmitBidScreen() {
     // M-33 — the composer is the whole body: its fields scroll and Send is
     // pinned above the keyboard. The tab bar owns the bottom inset.
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Submit a Bid" onBack={goBackOrHome} />
+      <ScreenHeader title="Write a Bid" onBack={goBackOrHome} />
           <OfferComposer
             layout="screen"
             context={{ kind: 'bid', job }}
-            onSubmitted={(offerId, amountCents) => {
+            onSubmitted={() => {
               // Fire-and-forget: the push prompt is a nice-to-have and must
               // not hold the confirmation hostage to a permission dialog.
               void maybePromptForPush(
                 'Get told the moment this customer accepts your bid — and when new jobs like this are posted.'
               );
+              // P6 (owner, 2026-11-16): back to the job page, whose bid card says "Bid sent".
               (navigation as unknown as {
-                replace: (
-                  screen: 'BidSent',
-                  params: { jobTitle: string; amountCents: number; offerId: string }
-                ) => void;
-              }).replace('BidSent', {
-                jobTitle: job.title,
-                amountCents,
-                offerId,
-              });
+                popTo: (screen: 'JobDetail', params: { job: typeof job; bidSent: true }) => void;
+              }).popTo('JobDetail', { job, bidSent: true });
             }}
           />
     </SafeAreaView>

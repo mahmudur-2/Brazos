@@ -300,7 +300,8 @@ test('both tap consumers forward ModeContext through the bridge hook', () => {
 
   const feed = read('screens/NotificationsScreen.tsx');
   assert.match(feed, /useNotificationModeBridge\(\)/);
-  assert.match(feed, /handleNotificationData\(notification\.data, modeBridge\)/);
+  // B6: the row's type rides with its data, as in a push (tests/adminAttention.test.mjs proves no other route moves).
+  assert.match(feed, /handleNotificationData\(\{ \.\.\.notification\.data, type: notification\.type \}, modeBridge\)/);
 });
 
 // ---------------------------------------------------------------------------
@@ -396,13 +397,13 @@ test('E5 · on the Home feed, a job opens on the Home stack, so Back returns to 
   );
 });
 
-test('E5 · a screen the tab lacks, or a caller that does not ask, still lands on its own tab', () => {
+test('E5 · a screen the tab lacks still lands on its own tab; P13 · a job page opens in place unasked', () => {
   nav.calls.length = 0;
   nav.state = onHomeFeed(homeRoutes('navigation/CustomerRoot.tsx', 'CustomerHomeStack'));
   navigateAcrossTabs('MyJobs', 'WorkerJob', { jobId: 'w' }, { inPlace: true });
   navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job: { id: 'j' } });
   assert.deepEqual(
     nav.calls.map(([tab, payload]) => [tab, payload.screen]),
-    [['MyJobs', 'WorkerJob'], ['MyJobs', 'ClientJobDetail']]
+    [['MyJobs', 'WorkerJob'], ['Home', 'ClientJobDetail']]
   );
 });

@@ -1,10 +1,13 @@
+import type { ReactElement } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type {
   MapStackParamList,
   MessagesStackParamList,
   MyJobsStackParamList,
   ProfileStackParamList,
+  WorkerHomeStackParamList,
 } from '../lib/navigation';
+import { AdminAttentionScreen } from '../screens/AdminAttentionScreen';
 import { AdminReportsScreen } from '../screens/AdminReportsScreen';
 import { ApproveOrDisputeScreen } from '../screens/ApproveOrDisputeScreen';
 import { BidDetailScreen } from '../screens/BidDetailScreen';
@@ -37,6 +40,7 @@ import { ReviewAndTipScreen } from '../screens/ReviewAndTipScreen';
 import { ServicesPricingScreen } from '../screens/ServicesPricingScreen';
 import { WorkerJobScreen } from '../screens/WorkerJobScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
+import { WorkerResultsScreen } from '../screens/WorkerResultsScreen';
 
 /**
  * The four tabs that are the SAME in both modes (BRAZOS_MASTER_PLAN.md §F,
@@ -67,6 +71,59 @@ const MessagesStack = createNativeStackNavigator<MessagesStackParamList>();
 const MapStack = createNativeStackNavigator<MapStackParamList>();
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
+/**
+ * P13: a job opens inside the tab you are on. A tab's stack also registers the job pages and every
+ * screen they lead to, so navigateAcrossTabs() can push them on the focused tab
+ * (lib/navigationRef.ts IN_PLACE_SCREENS). Every navigator shares React Navigation's one Screen
+ * component, so these entries are ordinary routes of the stack they are rendered in.
+ */
+type JobPageParamList = Pick<
+  MyJobsStackParamList,
+  | 'ClientJobDetail'
+  | 'CompareBids'
+  | 'BidDetail'
+  | 'Counteroffer'
+  | 'Checkout'
+  | 'JobConfirmed'
+  | 'ApproveOrDispute'
+  | 'ReviewAndTip'
+  | 'Chat'
+  | 'WorkerJob'
+  | 'JobDetail'
+  | 'SubmitBid'
+  | 'BidSent'
+> &
+  Pick<ProfileStackParamList, 'Payouts'> &
+  Pick<WorkerHomeStackParamList, 'WorkerResults'>;
+
+const JobPageStack = createNativeStackNavigator<JobPageParamList>();
+
+const JOB_PAGE_SCREENS: Record<keyof JobPageParamList, ReactElement> = {
+  ClientJobDetail: <JobPageStack.Screen key="ClientJobDetail" name="ClientJobDetail" component={ClientJobDetailScreen} getId={({ params }) => params?.job?.id} />,
+  CompareBids: <JobPageStack.Screen key="CompareBids" name="CompareBids" component={CompareBidsScreen} />,
+  BidDetail: <JobPageStack.Screen key="BidDetail" name="BidDetail" component={BidDetailScreen} />,
+  Counteroffer: <JobPageStack.Screen key="Counteroffer" name="Counteroffer" component={CounterofferScreen} />,
+  Checkout: <JobPageStack.Screen key="Checkout" name="Checkout" component={CheckoutScreen} />,
+  JobConfirmed: <JobPageStack.Screen key="JobConfirmed" name="JobConfirmed" component={JobConfirmedScreen} />,
+  ApproveOrDispute: <JobPageStack.Screen key="ApproveOrDispute" name="ApproveOrDispute" component={ApproveOrDisputeScreen} />,
+  ReviewAndTip: <JobPageStack.Screen key="ReviewAndTip" name="ReviewAndTip" component={ReviewAndTipScreen} />,
+  Chat: <JobPageStack.Screen key="Chat" name="Chat" component={ChatScreen} />,
+  WorkerJob: <JobPageStack.Screen key="WorkerJob" name="WorkerJob" component={WorkerJobScreen} getId={({ params }) => params?.jobId} />,
+  JobDetail: <JobPageStack.Screen key="JobDetail" name="JobDetail" component={JobDetailScreen} />,
+  SubmitBid: <JobPageStack.Screen key="SubmitBid" name="SubmitBid" component={SubmitBidScreen} />,
+  BidSent: <JobPageStack.Screen key="BidSent" name="BidSent" component={BidSentScreen} />,
+  Payouts: <JobPageStack.Screen key="Payouts" name="Payouts" component={PayoutsScreen} />,
+  WorkerResults: <JobPageStack.Screen key="WorkerResults" name="WorkerResults" component={WorkerResultsScreen} />,
+};
+
+/** P13: the listed job-page screens (only ones the calling stack lacks). */
+export function jobPageScreens(names: readonly (keyof JobPageParamList)[]) {
+  return names.map((name) => JOB_PAGE_SCREENS[name]);
+}
+
+/** P13: the customer's own job and its hire-and-pay loop (ClientJobDetail and every screen it opens). */
+export const CLIENT_JOB_SCREENS = ['ClientJobDetail', 'CompareBids', 'BidDetail', 'Counteroffer', 'Checkout', 'JobConfirmed', 'ApproveOrDispute', 'ReviewAndTip'] as const;
+
 export function MyJobsStackNavigator() {
   return (
     <MyJobsStack.Navigator screenOptions={{ headerShown: false }}>
@@ -95,6 +152,7 @@ export function MyJobsStackNavigator() {
       <MyJobsStack.Screen name="PostJob" component={PostJobScreen} />
       <MyJobsStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <MyJobsStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
+      {jobPageScreens(['Payouts'])}
     </MyJobsStack.Navigator>
   );
 }
@@ -107,6 +165,7 @@ export function MessagesStackNavigator() {
       <MessagesStack.Screen name="PostJob" component={PostJobScreen} />
       <MessagesStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <MessagesStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
+      {jobPageScreens([...CLIENT_JOB_SCREENS, 'WorkerJob', 'JobDetail', 'SubmitBid', 'BidSent', 'Payouts'])}
     </MessagesStack.Navigator>
   );
 }
@@ -124,6 +183,7 @@ export function MapStackNavigator() {
       <MapStack.Screen name="PostJob" component={PostJobScreen} />
       <MapStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <MapStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
+      {jobPageScreens(['WorkerResults', 'WorkerJob', 'Payouts'])}
     </MapStack.Navigator>
   );
 }
@@ -138,6 +198,7 @@ export function ProfileStackNavigator() {
       <ProfileStack.Screen name="ProfileDetails" component={ProfileDetailsScreen} />
       <ProfileStack.Screen name="AccountSafety" component={AccountSafetyScreen} />
       <ProfileStack.Screen name="AdminReports" component={AdminReportsScreen} />
+      <ProfileStack.Screen name="AdminAttention" component={AdminAttentionScreen} />
       <ProfileStack.Screen
         name="NotificationSettings"
         component={NotificationSettingsScreen}
@@ -159,6 +220,7 @@ export function ProfileStackNavigator() {
           Profile is the shared account surface: deletion has to be reachable
           in BOTH modes, and this stack is mounted by both trees. */}
       <ProfileStack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+      {jobPageScreens([...CLIENT_JOB_SCREENS, 'Chat', 'WorkerJob'])}
     </ProfileStack.Navigator>
   );
 }

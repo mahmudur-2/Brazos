@@ -93,9 +93,11 @@ export function CategoryTileRow({
   );
 
   // A tile chosen at the row's edge grows past it; once it has grown, the row brings it whole
-  // into view.
+  // into view. M5 (T7): a choice that is already there when the row mounts (a resumed draft) waits
+  // for the row's first layout, which sets the viewport, and then runs once: `measured` is in the deps.
+  const measured = rowWidth !== null;
   useEffect(() => {
-    if (selectedIndex < 0 || viewport.current <= 0) return;
+    if (selectedIndex < 0 || !measured || viewport.current <= 0) return;
     const left = inset + selectedIndex * pitch;
     const right = left + tile + postTiles.slot;
     const x = scrollX.current;
@@ -108,9 +110,10 @@ export function CategoryTileRow({
       animated ? postTiles.widenMs : 0
     );
     return () => clearTimeout(timer);
-    // Runs when the choice changes; the geometry it reads is the row's at that moment.
+    // Runs when the choice changes, and once when the row is first measured; the geometry it reads
+    // is the row's at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIndex]);
+  }, [selectedIndex, measured]);
 
   return (
     <ScrollView

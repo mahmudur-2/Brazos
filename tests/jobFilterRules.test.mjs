@@ -185,8 +185,9 @@ test('a window keeps dated jobs inside it, inclusive, and never an undated one',
   assert.deepEqual(ids(applyJobFilters(rows, oneDay)), ['thu']);
 });
 
-test('the When presets and the Custom date list are built from the caller’s day', () => {
-  const sat = new Date(2026, 8, 19);
+test('the When presets and the Custom date list are built from the market’s day', () => {
+  // C9 (A4-M4): a fixed instant, noon on Saturday 19 September in New York, whatever zone runs the test.
+  const sat = new Date('2026-09-19T16:00:00Z');
   assert.deepEqual(dateWindowPreset('today', sat), { scheduledOn: '2026-09-19', scheduledUntil: null });
   assert.deepEqual(dateWindowPreset('tomorrow', sat), { scheduledOn: '2026-09-20', scheduledUntil: null });
   assert.deepEqual(dateWindowPreset('week', sat), { scheduledOn: '2026-09-19', scheduledUntil: '2026-09-25' });
@@ -194,7 +195,7 @@ test('the When presets and the Custom date list are built from the caller’s da
   assert.equal(keys.length, 30);
   assert.equal(keys[0], '2026-09-20', 'the list starts tomorrow — Today and Tomorrow are pills');
   assert.equal(keys[29], '2026-10-19');
-  assert.equal(localDateKeyAfter(new Date(2026, 11, 31), 1), '2027-01-01', 'crosses a year without a timezone');
+  assert.equal(localDateKeyAfter(new Date('2026-12-31T17:00:00Z'), 1), '2027-01-01', 'crosses a year');
 });
 
 // ---------------------------------------------------------------------------
@@ -256,8 +257,10 @@ test('the radius RPC’s clamp rose to 3,000 in an additive migration that resta
 // ---------------------------------------------------------------------------
 const { scheduledDayLabel, localDateKey } = await import(jobFiltersUrl);
 
-test('the day word is Today, Tmrw, the short date, or nothing — in the local calendar', () => {
-  const now = new Date(2026, 8, 19, 22, 30); // late evening, so UTC would already be the 20th
+test('the day word is Today, Tmrw, the short date, or nothing — in the market calendar', () => {
+  // C9 (A4-M4): 10:30 pm on the 19th in New York, when UTC is already the 20th.
+  const now = new Date('2026-09-20T02:30:00Z');
+  assert.equal(localDateKey(now), '2026-09-19');
   assert.equal(scheduledDayLabel(localDateKey(now), now), 'Today');
   // Short, by the 2026-09-20 ruling: the row may not grow a line and the
   // day may not reach the pay column.

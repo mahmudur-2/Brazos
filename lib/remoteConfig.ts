@@ -22,8 +22,10 @@ import { supabase } from './supabase';
  * checkout, tip or release CTA; when it is false those CTAs are hidden in every
  * payments mode. The database refuses regardless — this is the second lock,
  * never the only one — which is why a FAILED read falls back to true rather
- * than locking a paying customer out. The other three values are still
- * consumed by nothing.
+ * than locking a paying customer out. minimumSupportedVersion stops an old
+ * build (U1) and postingEnabled pauses new posts (U3), both below; the two
+ * maintenance values are still consumed by nothing (U2: this version has no
+ * maintenance lock).
  *
  * THE EXPECTED TABLE SHAPE is one row per setting — `key` text primary key,
  * `value` jsonb — read with an anonymous-safe SELECT policy, because this is
@@ -44,8 +46,9 @@ export type RemoteConfig = {
   maintenanceMessage: string;
   /**
    * The oldest app `version` (app.config.ts's `version`, and therefore the
-   * OTA runtime version) still allowed to run. A build below it is asked to
-   * update. Compared as a version string by the consumer, not here.
+   * OTA runtime version) still allowed to run. A build below it is stopped
+   * by the 'Update Brazos' screen (U1, A4-M5): `mustUpdate()` below, read by
+   * hooks/useUpdateStop.ts.
    */
   minimumSupportedVersion: string;
   /**
@@ -83,12 +86,21 @@ const asBoolean = (value: unknown, fallback: boolean): boolean =>
 const asString = (value: unknown, fallback: string): string =>
   typeof value === 'string' ? value : fallback;
 
+/**
+ * A4-05: the two pause switches, read as the server reads them (begin_job_payment and
+ * posting_paused: only the jsonb boolean true is on). A present row holding anything else is a
+ * pause; no row keeps the fallback.
+ */
+const asSwitch = (byKey: Map<string, unknown>, key: string, fallback: boolean): boolean =>
+  byKey.has(key) ? byKey.get(key) === true : fallback;
+
 type ConfigRow = { key: string | null; value: unknown };
 
 /**
  * Merge whatever the table returned over FALLBACK, one key at a time. An
  * unrecognised key is dropped; a recognised key holding the wrong type keeps
- * its fallback. A single bad row can therefore never take the rest down.
+ * its fallback (the two pause switches excepted: asSwitch). A single bad row
+ * can therefore never take the rest down.
  */
 function merge(rows: ConfigRow[]): RemoteConfig {
   const byKey = new Map<string, unknown>();
@@ -102,10 +114,68 @@ function merge(rows: ConfigRow[]): RemoteConfig {
       byKey.get('minimumSupportedVersion'),
       FALLBACK.minimumSupportedVersion
     ),
-    postingEnabled: asBoolean(byKey.get('postingEnabled'), FALLBACK.postingEnabled),
-    paymentsEnabled: asBoolean(byKey.get('paymentsEnabled'), FALLBACK.paymentsEnabled),
+    postingEnabled: asSwitch(byKey, 'postingEnabled', FALLBACK.postingEnabled),
+    paymentsEnabled: asSwitch(byKey, 'paymentsEnabled', FALLBACK.paymentsEnabled),
   };
 }
+
+// ---------------------------------------------------------------------------
+// U1 (A4-M5) — THE UPDATE STOP. A build below minimumSupportedVersion shows one
+// full screen before sign-in, with one button to the App Store page.
+// ---------------------------------------------------------------------------
+
+export const UPDATE_STOP_TITLE = 'Update Brazos';
+export const UPDATE_STOP_BODY =
+  'This version of Brazos is too old. Update it in the App Store to keep using Brazos.';
+export const UPDATE_STOP_ACTION = 'Open App Store';
+/** The App Store page of the app: eas.json's `ascAppId` (6832193439). */
+export const APP_STORE_URL = 'https://apps.apple.com/app/id6832193439';
+
+/** 'x.y.z' as numbers, or null when any part is not a plain whole number. */
+function versionParts(version: string | null | undefined): number[] | null {
+  if (typeof version !== 'string') return null;
+  const parts = version.trim().split('.');
+  if (!parts.every((part) => /^\d+$/.test(part))) return null;
+  return parts.map(Number);
+}
+
+/**
+ * Whether `current` is OLDER than `minimum`, compared part by part as
+ * numbers (1.2.9 is below 1.10.0; a missing part is 0, so 1.2 equals 1.2.0).
+ * Anything that is not a plain version on either side is false: a malformed
+ * value never stops anyone.
+ */
+export function appVersionBelow(current: string | null | undefined, minimum: string | null | undefined): boolean {
+  const have = versionParts(current);
+  const need = versionParts(minimum);
+  if (!have || !need) return false;
+  for (let i = 0; i < Math.max(have.length, need.length); i += 1) {
+    const a = have[i] ?? 0;
+    const b = need[i] ?? 0;
+    if (a !== b) return a < b;
+  }
+  return false;
+}
+
+/**
+ * The stop decision. A failed read is FALLBACK, whose minimum '0.0.0' no build
+ * is below — so an unreachable config never stops anyone, even a person it
+ * stopped a minute ago.
+ */
+export function mustUpdate(config: RemoteConfig, currentVersion: string | null | undefined): boolean {
+  return appVersionBelow(currentVersion, config.minimumSupportedVersion);
+}
+
+// ---------------------------------------------------------------------------
+// U3 (A4-M5) — POSTING PAUSED. While postingEnabled is false, Post a job shows
+// this before the form; create_job refuses with the same sentence, which
+// userMessage() shows unchanged if it comes later. Bids, accepts and payments
+// on existing jobs never read it.
+// ---------------------------------------------------------------------------
+
+export const POSTING_PAUSED_TITLE = 'Posting Paused';
+export const POSTING_PAUSED_MESSAGE = 'Posting is paused right now. Please try again shortly.';
+export const POSTING_PAUSED_ACTION = 'Try Again';
 
 /**
  * Read the server's configuration. Resolves to FALLBACK on ANY failure and

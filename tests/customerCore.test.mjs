@@ -66,7 +66,8 @@ test('Post Job is a guarded four-step presentation over the existing form state'
   // (components/JobLivePage.tsx), no longer the SuccessScreen template; its two
   // actions are the same two handlers, in the posting bar's two places.
   const live = codeOnly(await read('components/JobLivePage.tsx'));
-  assert.match(live, /label: 'View job and bids'/);
+  // F10 (owner, 2026-11-16): every link to a job page says "View Job".
+  assert.match(live, /label: 'View Job'/);
   assert.match(live, /label: 'Back to Home'/);
   assert.match(postJob, /<JobLivePage/);
   assert.match(postJob, /onBackHome=\{\(\) => leaveAfterSuccess\(false\)\}/);
@@ -195,10 +196,9 @@ test('Worker job detail uses the real photo gallery and no verification pill', a
   assert.match(detail, /<PhotoViewer/);
   assert.match(detail, /<JobVideo/);
   assert.match(detail, /handleTakeListedPrice/);
-  // Phase 5: the custom-terms bid form moved to the SubmitBid route (screen
-  // 52, OfferComposer). This screen must still offer that path — as a
-  // navigation, not a second inline form — plus the §H.2 withdraw exit.
-  assert.match(detail, /navigate\('SubmitBid', \{ job \}\)/);
+  // P7 (owner, 2026-11-16): the custom-terms bid form is the shared OfferComposer
+  // in a sheet over this page (not a second hand-made form), plus the §H.2 withdraw exit.
+  assert.match(detail, /<OfferComposer layout="inline" context=\{\{ kind: 'bid', job \}\}/);
   assert.doesNotMatch(detail, /createMarketplaceOffer\(\{[^}]*message:\s*message/s);
   assert.match(detail, /withdrawOffer\(/);
   assert.match(detail, /confirmWithdrawVisible/);

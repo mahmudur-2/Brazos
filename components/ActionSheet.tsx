@@ -89,11 +89,11 @@ export function ActionSheet({
         <Pressable accessible={false} onPress={() => {}}>
           <Surface material="menu" corners="all" radius={dialogRadius} style={styles.sheet}>
           {/* 2026-09-28 (LUX-LIST-64 #64, audit M-31) — the one sheet header:
-              the handle, the title (and its line), and "Close" on the right —
+              the handle, the title (and its line), and "Cancel" on the right —
               choosing a row is the action, closing only dismisses. The
               bottom Cancel row is gone; the backdrop means Close. */}
           <View style={styles.headerWrap}>
-            <SheetHeader title={title} subtitle={subtitle} dismissWord="Close" onDismiss={onClose} />
+            <SheetHeader title={title} subtitle={subtitle} dismissWord="Cancel" onDismiss={onClose} />
           </View>
 
           {items.map((item) => (

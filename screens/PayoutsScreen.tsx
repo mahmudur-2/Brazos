@@ -3,6 +3,7 @@ import { ActivityIndicator, AppState, Linking, Pressable, StyleSheet, Text, View
 import { useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
+import { Card } from '../components/Card';
 import { TextField } from '../components/TextField';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
@@ -19,7 +20,7 @@ import {
 } from '../lib/payments/stripe';
 import { fetchMyEarnings, type EarningsRow } from '../lib/earnings';
 import type { ProfileStackParamList } from '../lib/navigation';
-import { EYEBROW_TYPE, radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { EYEBROW_TYPE, radius, spacing, textScale, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { isValidEmail } from '../lib/validation';
 
 /**
@@ -230,7 +231,7 @@ export function PayoutsScreen() {
     <Button title={view.cta} onPress={() => void openSetup()} loading={opening} disabled={opening || !emailReady} />
   ) : view?.refresh ? (
     <Button
-      title="Check again"
+      title="Check Again"
       variant="secondary"
       onPress={() => void refresh()}
       loading={refreshing}
@@ -282,7 +283,7 @@ export function PayoutsScreen() {
           : [
               {
                 content: (
-                  <View style={styles.statusCard}>
+                  <Card style={styles.statusCard}>
                     <View style={styles.statusHeader}>
                       <View style={styles.statusGlyph}>
                         <Ionicons name={STATUS_ICON[status]} size={18} color={colors.emerald} />
@@ -316,17 +317,17 @@ export function PayoutsScreen() {
                       <Text style={styles.meta}>Checking with the payment provider…</Text>
                     ) : null}
                     {refreshError ? <Text style={styles.errorText}>{refreshError}</Text> : null}
-                  </View>
+                  </Card>
                 ),
               },
               ...(notice
                 ? [
                     {
                       content: (
-                        <View style={styles.noticeCard}>
+                        <Card style={styles.noticeCard}>
                           <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
                           <Text style={styles.noticeText}>{notice}</Text>
-                        </View>
+                        </Card>
                       ),
                     },
                   ]
@@ -334,7 +335,7 @@ export function PayoutsScreen() {
               {
                 title: 'How payouts work',
                 content: (
-                  <View style={styles.explainer}>
+                  <Card style={styles.explainer}>
                     <ExplainRow
                       icon="open-outline"
                       strong="Set up once"
@@ -350,7 +351,7 @@ export function PayoutsScreen() {
                       strong="No cash-out step"
                       text="there is nothing to trigger. Earnings shows each payment as held, released and transferred as it happens."
                     />
-                  </View>
+                  </Card>
                 ),
               },
             ]
@@ -396,13 +397,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    // G2: the status, the notice and the explainer are lit cards (components/Card).
     statusCard: {
-      padding: spacing.lg,
       gap: spacing.sm,
-      borderRadius: radius.xl,
-      borderWidth: 1,
-      borderColor: colors.mint2,
-      backgroundColor: colors.surface,
     },
     statusHeader: {
       flexDirection: 'row',
@@ -416,51 +413,44 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surface,
+      borderColor: colors.mint2,
+      backgroundColor: colors.mint,
     },
     statusCopy: {
       flex: 1,
-      gap: 2,
+      gap: spacing.xs / 2,
     },
     eyebrow: {
       ...EYEBROW_TYPE,
       color: colors.eyebrow,
     },
     headline: {
-      fontSize: 17,
+      ...textScale.headline,
       fontWeight: '800',
       color: colors.ink,
     },
     body: {
-      fontSize: 13,
+      ...textScale.body,
       color: colors.textMuted,
-      lineHeight: 19,
     },
     meta: {
-      fontSize: 12,
+      ...textScale.footnote,
       color: colors.textMuted,
     },
     errorText: {
-      fontSize: 12,
+      ...textScale.footnote,
       color: colors.danger,
-      lineHeight: 17,
     },
     noticeCard: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: spacing.sm,
       padding: spacing.md,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surface,
     },
     noticeText: {
+      ...textScale.footnote,
       flex: 1,
-      fontSize: 12,
       color: colors.textMuted,
-      lineHeight: 17,
     },
     explainer: {
       gap: spacing.md,
@@ -471,10 +461,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       gap: spacing.sm,
     },
     explainText: {
+      ...textScale.body,
       flex: 1,
-      fontSize: 13,
       color: colors.textMuted,
-      lineHeight: 19,
     },
     explainStrong: {
       fontWeight: '800',

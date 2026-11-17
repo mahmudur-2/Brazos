@@ -1,5 +1,5 @@
 appId: app.brazos.mobile.preview
-# Shared: signs out through Profile's "Sign out" and its confirm (screens/ProfileScreen.tsx).
+# Shared: signs out through Profile's "Sign Out" and its confirm (screens/ProfileScreen.tsx).
 # A relaunch keeps the session and lands on a tab root, so this works from any screen.
 ---
 - launchApp:
@@ -17,10 +17,10 @@ appId: app.brazos.mobile.preview
       NEXT: 'Switch to (Worker|Customer)'
 - scrollUntilVisible:
     element:
-      text: "Sign out"
+      text: "Sign Out"
     direction: DOWN
     timeout: 30000
-- tapOn: "Sign out"
+- tapOn: "Sign Out"
 - extendedWaitUntil:
     visible: 'Sign out\?'
     timeout: 15000
@@ -34,12 +34,12 @@ appId: app.brazos.mobile.preview
       - waitForAnimationToEnd:
           timeout: 3000
       - tapOn:
-          text: "Sign out"
+          text: "Sign Out"
           rightOf: "Cancel"
       - extendedWaitUntil:
           notVisible: 'Sign out\?'
           timeout: 5000
           optional: true
 - extendedWaitUntil:
-    visible: "I already have an account"
+    visible: "I Already Have an Account"
     timeout: 30000

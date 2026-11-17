@@ -176,7 +176,7 @@ test('B5 · the rewritten lines are the product sentences', () => {
   assert.match(code('screens/NotificationSettingsScreen.tsx'), /'Notifications aren’t available in this version\. Update Brazos to turn them on\.'/);
   assert.match(code('lib/adapters/payments.ts'), /'Payments aren’t available right now\. Nothing was charged or held\.'/);
   assert.match(code('lib/errorMessage.ts'), /'Can’t reach Brazos right now\. Check your connection and try again\.'/);
-  assert.match(code('screens/CheckoutScreen.tsx'), /<Text style=\{styles\.summaryLabel\}>Pay by<\/Text>/);
+  assert.match(code('screens/CheckoutScreen.tsx'), /<Text style=\{styles\.summaryLabel\}>Pay By<\/Text>/);
 });
 
 // ---------------------------------------------------------------------------

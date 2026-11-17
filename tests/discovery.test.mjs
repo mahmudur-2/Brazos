@@ -251,15 +251,15 @@ test('[executed] Today filters on the scheduled date, in the caller’s own cale
     'the budget rule is unchanged: no stated budget still passes every floor'
   );
 
-  // THE DAY KEY IS LOCAL, and that is why it is computed by the caller rather
-  // than inside the pure filter. `toISOString().slice(0,10)` is UTC: for
-  // anyone west of Greenwich it answers "tomorrow" through the whole evening,
-  // and a Today filter would start hiding today's jobs after dinner. This is
-  // asserted against a fixed local instant so it holds in any test timezone.
-  const evening = new Date(2026, 7, 24, 21, 30, 0);
+  // THE DAY KEY IS THE MARKET'S (C9, A4-M4), and that is why it is computed by
+  // the caller rather than inside the pure filter. `toISOString().slice(0,10)`
+  // is UTC: west of Greenwich it answers "tomorrow" through the whole evening,
+  // and a Today filter would start hiding today's jobs after dinner. Asserted
+  // against fixed instants read in New York, so it holds in any test timezone.
+  const evening = new Date('2026-08-25T01:30:00Z'); // 9:30 pm on the 24th in New York (EDT)
   assert.equal(localDateKey(evening), '2026-08-24');
-  assert.equal(localDateKey(new Date(2026, 0, 5, 0, 0, 0)), '2026-01-05');
-  assert.equal(localDateKey(new Date(2026, 11, 31, 23, 59, 0)), '2026-12-31');
+  assert.equal(localDateKey(new Date('2026-01-05T05:00:00Z')), '2026-01-05'); // midnight EST
+  assert.equal(localDateKey(new Date('2027-01-01T04:59:00Z')), '2026-12-31'); // 11:59 pm EST
 
   // The new field joins the badge count and the default check rather than
   // being a filter nothing can see is on.

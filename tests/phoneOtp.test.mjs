@@ -670,8 +670,9 @@ test('both halves of each pair are registered and offer each other', () => {
 
 test('changing the number or backing out invalidates the challenge', () => {
   assert.match(verify, /phoneAuth\.cancelChallenge\(\)/);
-  assert.match(verify, /title="Change phone number"/);
-  assert.match(verify, /onBack=\{\(\) => leaveChallenge/);
+  assert.match(verify, /title="Change Phone Number"/);
+  assert.match(verify, /const goBack = \(\) => leaveChallenge\(\(\) => navigation\.goBack\(\)\);/);
+  assert.match(verify, /onBack=\{goBack\}/);
 });
 
 test('the verify screen guards every duplicate and stale path', () => {
@@ -870,7 +871,7 @@ test('mock success never claims a session and says so on screen', () => {
     verify,
     /Real app access still requires\s*\n?\s*email sign in until SMS is activated\./
   );
-  assert.match(verify, /title="Back to welcome"/);
+  assert.match(verify, /title="Back to Welcome"/);
   // The verify screen authenticates nobody by itself.
   assert.doesNotMatch(verify, /\blogin\(|\bsignUp\(/);
 });

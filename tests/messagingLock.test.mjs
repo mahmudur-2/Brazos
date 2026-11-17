@@ -31,7 +31,9 @@ const messagesModule = (async () => {
       /import \{ resolveChatMediaUrl, resolveChatMediaUrls \} from '\.\/storage';/,
       // F5: the batch signer beside the single one, both identity stubs.
       'const resolveChatMediaUrl = async (_b, v) => v; const resolveChatMediaUrls = async (_b, vs) => vs.map((v) => v ?? null);'
-    );
+    )
+    // A4-M1 (C5): the API's row limit, a plain constant.
+    .replace(/import \{ API_MAX_ROWS \} from '\.\/supabaseTypes';/, 'const API_MAX_ROWS = 1000;');
   assert.match(stubbed, /const supabase = null;/, 'the supabase import must be stubbed');
   assert.doesNotMatch(stubbed, /from '\.\/storage'/, 'the storage import must be stubbed');
   return import(toDataUrl(stubbed));

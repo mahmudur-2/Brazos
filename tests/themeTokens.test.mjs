@@ -90,7 +90,8 @@ const themeModule = (async () => {
       // are defined once in ui/tokens.ts and lib/theme.ts takes BOTH palettes'
       // values by reference, the light side included.
       // Fix run E3 added `controls`: touchSlop() reads the 44pt floor from it.
-      'const { brand, controls, dark: emeraldDark, light: emeraldLight, constantAccents, radius, shadows: tokenShadows, spacing, type: tokenType, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
+      // A2-M1 added `litCard` and `wells`: litRowStyle() and wellStyle() are called below.
+      'const { brand, controls, dark: emeraldDark, light: emeraldLight, constantAccents, litCard: tokenLitCard, radius, shadows: tokenShadows, spacing, type: tokenType, wells, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
     )
     .replace(/export \{[^}]*\} from '\.\.\/ui\/tokens';\n/g, '')
     .replace(/export \{[^}]*\} from '\.\.\/hooks\/useThemeColors';\n/g, '');
@@ -611,7 +612,8 @@ const MATERIALS_AS_DISPATCHED = {
   // contrast assertion still passes on its own arithmetic (the worst-case
   // ground simply becomes the pure scrim ink rather than a wash of it).
   chrome: { blur: 0, scrimAlpha: 1, borderAlpha: 0.2, fallbackScrimAlpha: 1, radius: null, radiusTopOnly: false },
-  sheet: { blur: 40, scrimAlpha: 0.72, borderAlpha: 0.16, fallbackScrimAlpha: 0.92, radius: 28, radiusTopOnly: true },
+  // A2-M3 (the director, finding 1): solid where no blur draws, as `menu` is. Was .92.
+  sheet: { blur: 40, scrimAlpha: 0.72, borderAlpha: 0.16, fallbackScrimAlpha: 1, radius: 28, radiusTopOnly: true },
   // 2026-09-29 (LUX-LIST-2 #9): the pop-ups' glass, frosted stronger and denser, solid where no blur draws.
   menu: { blur: 80, scrimAlpha: 0.9, borderAlpha: 0.14, fallbackScrimAlpha: 1, radius: 16, radiusTopOnly: false },
 };
@@ -671,7 +673,9 @@ test('G1 materials: the table is as dispatched, worn from one scrim ink and the 
   assert.equal(materials.clear.borderColor, lightPalette.surface, 'the rim is the one white');
   assert.equal(materials.clear.borderAlpha, 0.14);
   assert.equal(materials.clear.highlightAlpha, 0.22);
-  assert.equal(materials.clear.fallbackScrimAlpha, materials.sheet.fallbackScrimAlpha, 'no blur, no clearer pane');
+  // A2-M3: the sheet's own fallback went solid (finding 1); the [+] create sheet is a loved surface
+  // and keeps its .92 — the value it always shared with the sheet — pinned here on its own.
+  assert.equal(materials.clear.fallbackScrimAlpha, 0.92, 'no blur, no clearer pane');
   assert.deepEqual([materials.clear.radius, materials.clear.radiusTopOnly], [28, true], 'docked: top corners');
   assert.deepEqual(materials.clear.light, {
     blur: 50,
@@ -909,6 +913,397 @@ test('E2 contrast: the dark secondary inks and the one dark red clear 4.5:1 on t
   for (const stop of [litCard.dark.top, litCard.dark.bottom]) {
     assertAA(over(dark.ink, meltBar.restInkAlpha.dark, stop), stop, 'a resting dark tab label on the pill');
   }
+});
+
+// ---------------------------------------------------------------------------
+// A2-M1 (E3) — THE PARTS' CONTRAST, COMPUTED. Every text and mark the visual
+// foundation's parts draw, on every ground the part sits on, in both themes:
+// the button family, the field, the section label, the status pill, the focus
+// ring and the header chevron. Text needs 4.5:1, a mark 3:1. The ratio of each
+// pair prints as a diagnostic, so `node --test tests/themeTokens.test.mjs` is
+// the contrast table. It reads lib/theme's `palette` (the screens' one door)
+// and the token constants; the second palette (ui/tokens `light`/`dark`) is
+// E1 and E2's until the palettes become one.
+// ---------------------------------------------------------------------------
+
+test('A2-E3 contrast: the parts\' text and marks clear AA on the grounds they sit on, in both themes', async (t) => {
+  const { colors, darkColors } = await themeModule;
+  const { litCard, wells, discs, dangerBright } = await tokensModule;
+  const rows = [];
+  const check = (what, ink, grounds, floor = 4.5) => {
+    for (const [name, ground] of Object.entries(grounds)) {
+      rows.push({ what: `${what} on ${name}`, ink, ground, floor, ratio: contrastOf(ink, ground) });
+    }
+  };
+  const darkWell = (stop) => over(wells.field.ink, wells.field.inkAlpha, stop);
+  const light = {
+    background: colors.background,
+    surface: colors.surface,
+    litCardTop: litCard.light.top,
+    litCardBottom: litCard.light.bottom,
+  };
+  const dark = {
+    background: darkColors.background,
+    surface: darkColors.surface,
+    litCardTop: litCard.dark.top,
+    litCardBottom: litCard.dark.bottom,
+    wellOnCardTop: darkWell(litCard.dark.top),
+    wellOnCardBottom: darkWell(litCard.dark.bottom),
+  };
+
+  // The button family. Main: its ink on its fill. Danger: the one bright red, both themes.
+  check('light main label', colors.onPrimary, { primary: colors.primary });
+  check('dark main label', darkColors.onPrimary, { primary: darkColors.primary });
+  check('danger label', dangerBright.label, { dangerBright: dangerBright.fill });
+  // Quiet (a well) and text buttons: dark green in light, mint in dark. The field label is the same ink.
+  check('light quiet/text label', colors.forest, light);
+  check('dark quiet/text and field label', darkColors.primary, dark);
+  check('light field label', colors.eyebrow, light);
+  // A field's value, on the well (light: the cream ground) and the card.
+  check('light field value', colors.text, light);
+  check('dark field value', darkColors.text, dark);
+  // The section label.
+  check('light section label', colors.eyebrow, light);
+  check('light gold section label', colors.eyebrowGold, light);
+  check('dark section label', darkColors.eyebrow, dark);
+  // The status pill: light is its ink on its own tint; dark is its ink on a .14 tint of itself over the card or page.
+  for (const key of ['success', 'warning', 'danger', 'neutral', 'stageAssigned', 'stageProgress']) {
+    check(`light ${key} pill`, colors[key], { [`${key}Bg`]: colors[`${key}Bg`] });
+    const ink = darkColors[key];
+    check(`dark ${key} pill`, ink, { onCard: over(ink, 0.14, litCard.dark.bottom), onPage: over(ink, 0.14, darkColors.background) });
+  }
+  // Marks. The focus ring's edge is the field's accent (TextField: `palette.emerald`) at the alpha
+  // components/FocusRing.tsx draws it with in each theme, read from that file so the pair follows the code.
+  const edge = /const EDGE_ALPHA = \{ dark: ([0-9.]+), light: ([0-9.]+) \}/.exec(await read('components/FocusRing.tsx'));
+  const edgeAlpha = { dark: Number(edge?.[1]), light: Number(edge?.[2]) };
+  for (const alpha of Object.values(edgeAlpha)) {
+    assert.ok(alpha > 0 && alpha <= 1, `FocusRing's EDGE_ALPHA must be found (saw ${JSON.stringify(edgeAlpha)})`);
+  }
+  for (const [name, ground] of Object.entries({ background: colors.background, surface: colors.surface })) {
+    const ink = over(colors.emerald, edgeAlpha.light, ground);
+    rows.push({ what: `light focus ring edge on ${name}`, ink, ground, floor: 3, ratio: contrastOf(ink, ground) });
+  }
+  for (const [name, ground] of Object.entries({ wellOnCardTop: dark.wellOnCardTop, wellOnCardBottom: dark.wellOnCardBottom })) {
+    const ink = over(darkColors.emerald, edgeAlpha.dark, ground);
+    rows.push({ what: `dark focus ring edge on ${name}`, ink, ground, floor: 3, ratio: contrastOf(ink, ground) });
+  }
+  // The header's back chevron on its disc (ScreenHeader, AuthScaffold): gold on the card-ink disc in
+  // dark, the text ink on a .08 text disc in light.
+  check('dark header chevron', darkColors.gold, { disc: over(discs.header.ink, discs.header.inkAlpha, darkColors.background) }, 3);
+  check('light header chevron', colors.text, { disc: over(colors.text, 0.08, colors.background) }, 3);
+
+  // Every pair must clear (A2-M2 fixed the light focus ring, the last pair under its floor).
+  assert.ok(rows.length > 50, `the table must cover the parts (saw ${rows.length} pairs)`);
+  for (const row of rows) {
+    t.diagnostic(`${row.ratio.toFixed(2)}:1  ${row.what}: ${row.ink} on ${row.ground}`);
+  }
+  const under = rows
+    .filter((row) => !(row.ratio >= row.floor))
+    .map((row) => `${row.what}: ${row.ink} on ${row.ground} is ${row.ratio.toFixed(2)}:1, under ${row.floor}:1`);
+  assert.deepEqual(under, [], `a part's ink is under the contrast floor:\n${under.join('\n')}`);
+});
+
+test('A2 depth helpers: the well and the lit row draw no gradient, and the lit row one shadow layer', async () => {
+  const { wellStyle, litRowStyle, colors, darkColors } = await themeModule;
+  for (const isDark of [false, true]) {
+    const well = wellStyle(isDark ? darkColors : colors, isDark);
+    const row = litRowStyle(isDark);
+    for (const [name, style] of [['wellStyle', well], ['litRowStyle', row]]) {
+      assert.equal(style.experimental_backgroundImage, undefined, `${name} draws no gradient (isDark ${isDark})`);
+      assert.equal(style.borderWidth, 1, `${name} keeps its 1pt rim (isDark ${isDark})`);
+    }
+    assert.equal(well.boxShadow ?? well.shadowOpacity, undefined, `the well casts no shadow (isDark ${isDark})`);
+    assert.ok(typeof row.boxShadow === 'string' && !/\)\s*,/.test(row.boxShadow), `the lit row has one shadow layer: ${row.boxShadow}`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// A2-M2 — THE CONTROLS. The press's `fill` and `dim` are executed; the one red, the haptics and
+// the never-cut labels are pinned against the parts' source.
+// ---------------------------------------------------------------------------
+
+/** components/PressScale.shared.tsx, executed with react-native's StyleSheet.flatten stubbed. */
+const pressSharedModule = (async () => {
+  const js = stripTypeScriptTypes(await read('components/PressScale.shared.tsx'), { mode: 'strip' });
+  const stubbed = js.replace(
+    /import \{[^}]*\} from 'react-native';/,
+    'const flat = (s) => (Array.isArray(s) ? Object.assign({}, ...s.map(flat)) : s || {});\n' +
+      'const StyleSheet = { flatten: (s) => flat(s) };',
+  );
+  assert.ok(!/from '/.test(stubbed), 'every import of PressScale.shared must be stubbed or type-only');
+  return import(toDataUrl(stubbed));
+})();
+
+test('[executed] A2-M2 press: `fill` gives a flex share one row height, and `dim` is the pressed opacity', async () => {
+  const { pressStyles, withPressDim } = await pressSharedModule;
+  // Without `fill` the split is today's: no grow on the Pressable, no row on the wrapper (2026-10-03).
+  const plain = pressStyles({ flex: 1, minHeight: 52, backgroundColor: 'red' });
+  assert.equal(plain.outer.flex, 1);
+  assert.equal(plain.outer.flexDirection, undefined);
+  assert.equal(plain.inner.flexGrow, undefined);
+  // With `fill` the wrapper lays out as a row and the Pressable takes its width; the row's stretch carries the height.
+  const filled = pressStyles({ flex: 2, minHeight: 52, backgroundColor: 'red' }, true);
+  assert.equal(filled.outer.flex, 2);
+  assert.equal(filled.outer.flexDirection, 'row');
+  assert.deepEqual(
+    [filled.inner.flexGrow, filled.inner.flexShrink, filled.inner.flexBasis, filled.inner.backgroundColor],
+    [1, 1, 0, 'red'],
+  );
+  // A style that is a function of the press keeps being one, and keeps the share.
+  const fn = pressStyles(({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.5 }], true);
+  assert.equal(fn.outer.flexDirection, 'row');
+  assert.deepEqual([fn.inner({ pressed: true }).flexGrow, fn.inner({ pressed: true }).opacity], [1, 0.5]);
+  // `dim`: nothing without it; the pressed style with it, over the caller's own.
+  const style = { backgroundColor: 'red' };
+  assert.equal(withPressDim(style, undefined), style);
+  const dimmed = withPressDim(style, 0.85);
+  assert.deepEqual(Object.assign({}, ...dimmed({ pressed: true }).filter(Boolean)), { backgroundColor: 'red', opacity: 0.85 });
+  assert.equal(Object.assign({}, ...dimmed({ pressed: false }).filter(Boolean)).opacity, undefined);
+});
+
+test('[static] A2-M2 one red: a page\'s red button, a form\'s red submit and a pop-up\'s red confirm are dangerBright', async () => {
+  const button = stripComments(await read('components/Button.tsx'));
+  assert.match(button, /: isDestructive\s*\? \{ backgroundColor: dangerBright\.fill \}/);
+  assert.match(button, /: isDestructive\s*\? dangerBright\.label/);
+  assert.match(button, /isDestructive && !isDisabled \? \(isDark \? dangerBright\.glow : shadows\.card\) : null/);
+  const dialog = stripComments(await read('components/ConfirmDialog.tsx'));
+  assert.match(dialog, /variant=\{destructive \? 'destructive' : 'primary'\}/);
+  const form = stripComments(await read('ui/templates/FormScreen.tsx'));
+  assert.match(form, /destructive: \{\s*backgroundColor: dangerBright\.fill,\s*\}/);
+  assert.match(form, /destructiveLabel: \{\s*color: dangerBright\.label,\s*\}/);
+  assert.match(form, /destructiveArmed && \(isDark \? dangerBright\.glow : shadows\.card\)/);
+  // The second red is gone everywhere.
+  const tokens = await tokensModule;
+  assert.equal(tokens.dangerConfirmDark, undefined);
+  for (const path of ['components/ConfirmDialog.tsx', 'lib/theme.ts', 'ui/tokens.ts', 'components/Button.tsx']) {
+    assert.doesNotMatch(stripComments(await read(path)), /dangerConfirmDark|#FF5A4E/i, `${path} keeps no second red`);
+  }
+});
+
+test('[executed] A2-M2 haptics: a choosing control ticks, a dangerous pop-up warns', async () => {
+  const hook = await read('hooks/usePressFeedback.ts');
+  const at = hook.indexOf('export function pressHaptic');
+  const js = stripTypeScriptTypes(hook.slice(at, hook.indexOf('\n}', at) + 2), { mode: 'strip' });
+  const calls = [];
+  globalThis.__PRESS_HAPTICS__ = { select: () => calls.push('select'), tap: () => calls.push('tap') };
+  const { pressHaptic } = await import(toDataUrl('const { select, tap } = globalThis.__PRESS_HAPTICS__;\n' + js));
+  for (const haptic of [true, 'select', false]) pressHaptic(haptic);
+  assert.deepEqual(calls, ['tap', 'select']);
+  // The wearers: a choice chip, the switch, a segment that moves, a destructive pop-up as it opens.
+  assert.match(stripComments(await read('components/Chip.tsx')), /haptic=\{check \? 'select' : true\}/);
+  assert.match(stripComments(await read('ui/primitives/Toggle.tsx')), /usePressFeedback\(\{ haptic: 'select' \}\)/);
+  assert.match(stripComments(await read('components/SegmentedControl.tsx')), /if \(!selected\) select\(\);\s*onChange\(option\.value\);/);
+  assert.match(
+    stripComments(await read('components/ConfirmDialog.tsx')),
+    /useEffect\(\(\) => \{\s*if \(visible && destructive\) warning\(\);\s*\}, \[visible, destructive\]\);/,
+  );
+});
+
+test('[static] A2-M2 labels and fields: a label takes two lines, centred; a pair keeps one height; a field is the 52pt well; money has equal digits', async () => {
+  const button = stripComments(await read('components/Button.tsx'));
+  assert.match(button, /numberOfLines=\{2\}\s*adjustsFontSizeToFit\s*minimumFontScale=\{0\.8\}/);
+  assert.match(button, /text: \{[^}]*textAlign: 'center',\s*overflow: 'visible',/, 'the line limit never clips a glyph');
+  assert.match(button, /const sharesRow = typeof flatStyle\?\.flex === 'number' && flatStyle\.flex > 0;/);
+  assert.match(button, /dim=\{PRESS_DIM\}\s*fill=\{sharesRow \|\| \(pairHeight \? 'height' : false\)\}/);
+  assert.doesNotMatch(button, /state\.pressed/, 'the dim is the press\'s now, not a pressed style');
+  const form = stripComments(await read('ui/templates/FormScreen.tsx'));
+  assert.equal(form.match(/<PressScale\s+onPress=\{on(?:Secondary|Submit)\}[^>]*?\s+fill\s/g)?.length, 2, 'both footer buttons fill their share');
+  assert.equal(form.match(/\{\.\.\.LABEL_FIT\}/g)?.length, 2);
+  assert.match(form, /buttonLabel: \{[^}]*textAlign: 'center',\s*overflow: 'visible',/);
+  const field = stripComments(await read('components/TextField.tsx'));
+  assert.match(field, /minHeight: controls\.textFieldHeight,/);
+  assert.match(field, /wellStyle\(palette, isDark\),/);
+  const { controls } = await tokensModule;
+  assert.equal(controls.textFieldHeight, 52);
+  const money = stripComments(await read('ui/primitives/MoneyText.tsx'));
+  assert.equal(money.match(/fontVariant: \['tabular-nums'\]/g)?.length, 2, 'both amount sizes use equal-width digits');
+});
+
+// ---------------------------------------------------------------------------
+// A2-M3 — SURFACES AND THE FOOT. The press's `fill="height"` is executed; the bottom rule (the bar
+// steps aside), the floating action, Card's levels and the pop-up's pair height are pinned
+// against the parts' source.
+// ---------------------------------------------------------------------------
+
+test('[executed] A2-M3 press: `fill="height"` is the row wrapper alone, so a content-width control takes its row\'s height', async () => {
+  const { pressStyles } = await pressSharedModule;
+  const paired = pressStyles({ flexShrink: 0, minHeight: 52, backgroundColor: 'red' }, 'height');
+  assert.equal(paired.outer.flexDirection, 'row', 'the row stretch carries the height');
+  assert.equal(paired.outer.flexShrink, 0);
+  assert.deepEqual([paired.inner.flexGrow, paired.inner.flexBasis, paired.inner.backgroundColor], [undefined, undefined, 'red'], 'nothing grows: the control keeps its own width');
+  const button = stripComments(await read('components/Button.tsx'));
+  assert.match(button, /pairHeight = false,/);
+  const dialog = stripComments(await read('components/ConfirmDialog.tsx'));
+  assert.match(dialog, /title="Cancel"[\s\S]*?style=\{styles\.cancel\}\s*pairHeight\s*\/>/, 'the pop-up\'s Cancel keeps its action\'s height');
+});
+
+test('[static] A2-M3 the bottom rule: a focused screen hides the bar, which steps aside on its own spring and draws as before at rest', async () => {
+  const nav = stripComments(await read('ui/primitives/BottomNav.tsx'));
+  assert.match(nav, /export function useHideTabBar\(hidden = true\): void \{\s*useFocusedRegistration\(useContext\(BarHiddenRegistry\), hidden\);/);
+  assert.match(nav, /export function useTabBarHidden\(\): boolean \{\s*return useContext\(BarHiddenCount\) > 0;/);
+  assert.match(nav, /<BarHiddenRegistry\.Provider value=\{registerHidden\}>\s*<BarHiddenCount\.Provider value=\{hidden\}>\{children\}/, 'one provider above both trees serves the bar and the screens');
+  const shared = stripComments(await read('components/MeltTabBar.shared.tsx'));
+  const step = shared.slice(shared.indexOf('export function useStepAside'), shared.indexOf('export function UnderBarFade'));
+  assert.match(step, /const hidden = useTabBarHidden\(\);/);
+  assert.match(step, /const moved = hidden \|\| !home;/);
+  assert.match(step, /const aside = !moved\s*\? null/, 'at rest the root wears no transform and no opacity');
+  assert.match(step, /if \(finished && !hidden\) setHome\(true\);/, 'the style comes off only once the bar is home');
+  assert.match(step, /const \[stiffness, damping\] = meltBar\.springs\.circles\[1\];/, "the bar's own middle spring");
+  assert.equal(step.match(/useNativeDriver: USE_NATIVE_DRIVER/g)?.length, 2, 'both the slide and the reduced fade run on the native driver');
+  assert.match(step, /: reduced\s*\? \{ opacity: away\.interpolate/, 'Reduce Motion fades instead of sliding');
+  assert.match(step, /pointerEvents: hidden \? \('none' as const\) : \('box-none' as const\)/, 'a bar that has stepped aside takes no touch');
+  assert.match(shared, /const shown = !onMap && !footPinned && !barHidden;/, 'the fade under the bar goes with it');
+  // No wrapper: a wrapping view changes how the pill draws even at rest, so each path's root wears it.
+  assert.match(stripComments(await read('components/MeltTabBar.tsx')), /<>\s*<UnderBarFade state=\{props\.state\} \/>\s*<Bar \{\.\.\.props\} \/>\s*<\/>/);
+  for (const [path, tag] of [['components/MeltTabBar.tsx', 'Animated'], ['components/MeltTabBar.motion120.tsx', 'NativeAnimated']]) {
+    const src = stripComments(await read(path));
+    assert.match(src, /const stepAside = useStepAside\((reduced|false)\);/, `${path} steps aside`);
+    assert.match(
+      src,
+      new RegExp(`<${tag}\\.View\\s+pointerEvents=\\{stepAside\\.pointerEvents\\}\\s+accessibilityElementsHidden=\\{stepAside\\.accessibilityElementsHidden\\}\\s+importantForAccessibility=\\{stepAside\\.importantForAccessibility\\}\\s+style=\\{\\[styles\\.root, \\{ height: m\\.bottom \\+ meltBar\\.height \\}, stepAside\\.aside\\]\\}`),
+      `${path}: the root wears it`
+    );
+  }
+  // A screen switches it on itself: no navigation file names it.
+  for (const file of ['navigation/CustomerRoot.tsx', 'navigation/WorkerRoot.tsx', 'navigation/ModeShell.tsx', 'navigation/sharedStacks.tsx']) {
+    assert.doesNotMatch(stripComments(await read(file)), /useHideTabBar|useTabBarHidden/, `${file} does not decide it`);
+  }
+});
+
+test('[static] A2-M3 the floating action: no plate, the bar\'s place and lift, a quiet second, one hint line, its own keyboard rise', async () => {
+  const part = stripComments(await read('ui/primitives/FloatingAction.tsx'));
+  assert.match(part, /\}: FloatingActionProps\) \{\s*useHideTabBar\(\);/, 'it hides the bar while its screen is focused');
+  assert.match(part, /const bottom = pillBottomOffset\(insets\.bottom, meltBar\.bottomTuck, meltBar\.bottomMin\);/, "it sits where the bar's pill sat");
+  assert.match(part, /<KeyboardAvoid\s+behavior=\{Platform\.OS === 'ios' \? 'padding' : undefined\}\s+keyboardVerticalOffset=\{PINNED_FOOTER_BOTTOM_PADDING - bottom\}/);
+  assert.match(part, /variant="quiet"/);
+  assert.match(part, /numberOfLines=\{1\}/);
+  const foot = part.match(/foot: \{[^}]*\}/)?.[0] ?? '';
+  assert.ok(foot.length > 0, 'the foot style exists');
+  assert.doesNotMatch(foot, /background|border|shadow/i, 'no plate behind the pills');
+  assert.match(part, /const shadow = \(isDark \? litCard\.dark : litCard\.light\)\.shadow;/, "depth 2: the lit card's lift");
+  assert.match(part, /share: \{\s*flex: 1,\s*\}/, 'equal shares: one width, one height');
+});
+
+test('[static] A2-M3 Card levels: `lit` is the card as it was; `well` and `row` are the depth helpers', async () => {
+  const card = stripComments(await read('components/Card.tsx'));
+  assert.match(card, /level = 'lit',/);
+  assert.match(card, /level === 'lit' \? \(\s*<Surface material="card" style=\{\[styles\.card, paletteStyle, style\]\}>/, 'the default draws exactly as before');
+  assert.match(card, /level === 'well' \? \[styles\.well, wellStyle\(paletteProp \?\? colors, isDark\)\] : \[styles\.row, litRowStyle\(isDark\)\]/);
+  assert.match(card, /well: \{\s*borderRadius: radius\.md,\s*\}/);
+  assert.match(card, /row: \{\s*borderRadius: radius\.card,\s*\}/);
+});
+
+// ---------------------------------------------------------------------------
+// A2-M4 — THE BID PARTS (direction §7, the owner's picture, F11, P3, F5). Pinned against the
+// parts' source: the open bid's actions and links, the small "New", the Cancel Job inset, the
+// amount label. The reply card's order is pinned in offerActionParity.test.mjs.
+// ---------------------------------------------------------------------------
+
+const openBidOf = (card) => card.slice(card.indexOf('if (inPlace) {'), card.indexOf('<View style={styles.headerRow}>'));
+
+test('[static] A2-M4 the open bid: a quiet pair of one width, the main Accept under it; the name is the profile link; no Hire Again', async () => {
+  const card = stripComments(await read('components/OfferCard.tsx'));
+  const open = openBidOf(card);
+  assert.ok(open.length > 0 && open.includes('inPlace.onToggle'), 'the in-place branch exists');
+  const row = open.slice(open.indexOf('<View style={styles.inPlaceActionRow}>'), open.indexOf('acceptOfferActionLabel('));
+  assert.equal((row.match(/variant="quiet"/g) ?? []).length, 2, 'Decline and Counter are the quiet pair');
+  assert.equal((row.match(/style=\{styles\.actionButton\}/g) ?? []).length, 2, 'one share each: one width');
+  assert.match(card, /actionButton: \{\s*flex: 1,\s*minWidth: 0,\s*\}/);
+  assert.match(open, /<\/View>\s*<Button\s+title=\{acceptOfferActionLabel\(formatBudget\(offer\.amount_cents\), false\)\}\s+onPress=\{onAccept\}/, 'Accept is the main button under the pair');
+  assert.doesNotMatch(open, /variant="(secondary|destructive)"/, 'no outlined or red action on the card');
+  assert.doesNotMatch(open, /Hire Again|onHireAgain/, 'no Hire Again on a live bid');
+  assert.doesNotMatch(open, /View Profile/, 'no "View Profile" row');
+  assert.match(open, /inPlace\.open && onViewProfile \? \(\s*<PressScale[\s\S]*?onPress=\{onViewProfile\}[\s\S]*?accessibilityLabel=\{`View \$\{name\}'s profile`\}/, 'the open name opens the profile');
+  assert.doesNotMatch(open, /priceLabel/, 'the chevron takes the "BID" eyebrow\'s place');
+  assert.match(open, /<Text style=\{\[styles\.pitch, wellStyle\(palette, isDark\)\]\} selectable>/, 'the note sits in a well');
+});
+
+test('[static] A2-M4b F11: the small "New" tag only for no reviews and no jobs; under the star line the count stands alone; a star only beside a rating', async () => {
+  const card = stripComments(await read('components/OfferCard.tsx'));
+  const open = openBidOf(card);
+  assert.match(open, /const showNewTag = summary\?\.isNew === true && summary\.total === 0 && jobs === 0;/, '"New" never sits beside a review or a job');
+  assert.match(open, /const rated = summary\?\.isNew === false && ratingText !== '';/);
+  assert.match(open, /ratingCount == null \|\| showNewTag \? '' : ratingCount === 0 \? 'No reviews yet' : rated \? `\(\$\{reviewCount\}\)` : reviewCount;/, 'the count alone ("1 review") under the star threshold');
+  assert.match(open, /\{showNewTag \? \(\s*<View style=\{styles\.tag\}>\s*<Text style=\{styles\.tagText\}>\{ratingText\}<\/Text>\s*<\/View>\s*\) : rated \? \(\s*<>\s*<Ionicons name="star"/, 'a star stands only beside a rating');
+  assert.equal((open.match(/name="star"/g) ?? []).length, 1);
+  assert.doesNotMatch(open, /'New worker'/, 'no "New worker" line on the card');
+  assert.match(open, /trust\.kind === 'new'\s*\?\s*jobs != null && jobs > 0\s*\?\s*`\$\{jobs\} completed \$\{jobs === 1 \? 'job' : 'jobs'\}`\s*:\s*''/, 'a worker with jobs shows the jobs line');
+  assert.match(card, /tagText: \{\s*fontSize: 11,\s*fontWeight: '700',\s*color: colors\.emerald,\s*\}/);
+});
+
+test('[static] A2-M4b P3: the bid card\'s and the reply card\'s openers are one word; the form and the pop-ups keep theirs', async () => {
+  const open = openBidOf(stripComments(await read('components/OfferCard.tsx')));
+  const row = open.slice(open.indexOf('<View style={styles.inPlaceActionRow}>'), open.indexOf('acceptOfferActionLabel('));
+  assert.match(row, /title=\{DECLINE_OPENER_LABEL\}[\s\S]*title=\{COUNTER_OPENER_LABEL\}/);
+  const reply = stripComments(await read('components/OfferResponseActions.tsx'));
+  assert.match(reply, /title=\{DECLINE_OPENER_LABEL\}[\s\S]*title=\{COUNTER_OPENER_LABEL\}/);
+  assert.doesNotMatch(reply, /COUNTER_OFFER_ACTION_LABEL|declineOfferActionLabel/);
+  assert.match(stripComments(await read('components/OfferComposer.tsx')), /title=\{isBid \? 'Send Bid' : 'Send Counter-Offer'\}/, "the counter form's submit keeps its words");
+});
+
+test('[static] A2-M5 T1: My Jobs draws the job row (one-line title, badge, price right, one hint, one chevron, thin rail); the Home keeps its card', async () => {
+  const card = stripComments(await read('components/HubCard.tsx'));
+  const row = card.slice(card.indexOf("if (layout === 'row') {"), card.indexOf('<View style={styles.statusRow}>'));
+  assert.match(row, /<Text style=\{styles\.rowTitle\} numberOfLines=\{1\}>/, 'the title on one line');
+  assert.match(row, /<StatusBadge status=\{status\} label=\{statusLabel\} \/>/);
+  assert.match(row, /\{priceCents != null \? \(/, 'no budget, no big words in the price place');
+  assert.doesNotMatch(row, /View details|arrow-forward/, 'the tap on the card is the action; no "View details"');
+  assert.equal((row.match(/name="chevron-forward"/g) ?? []).length, 1, 'one chevron');
+  assert.match(row, /<StageRail status=\{live\} onChat=\{onChat\} chatLabel=\{chatLabel\} thin \/>/);
+  assert.match(row, /\{actionHead\}\s*\{actionTail \? <Text style=\{styles\.rowHintTail\}>\{` — \$\{actionTail\}`\}<\/Text> : null\}/, 'the hint keeps the same words');
+  const hub = stripComments(await read('screens/MyJobsHubScreen.tsx'));
+  assert.equal((hub.match(/layout="row"/g) ?? []).length, 4, 'every hub list draws rows');
+  assert.equal((hub.match(/<HubCard/g) ?? []).length, 4);
+  assert.doesNotMatch(stripComments(await read('screens/HomeScreen.tsx')), /layout=/, 'the loved Home keeps the card');
+  assert.match(stripComments(await read('components/StageRail.tsx')), /\{thin \? null : <View style=\{styles\.rail\}>/, 'the thin rail drops only the step words');
+});
+
+test('[static] A2-M5 T2: the results row has one hint line and a narrow budget column; Worker Home\'s card is unchanged', async () => {
+  const card = stripComments(await read('components/WorkerJobCard.tsx'));
+  const end = card.indexOf('function PeekRow(');
+  const compactAt = card.lastIndexOf('return (', end);
+  const full = card.slice(card.indexOf("if (variant === 'full') {"), compactAt);
+  const compact = card.slice(compactAt, end);
+  assert.ok(full.length > 0 && compact.length > 0);
+  assert.match(full, /<Text style=\{\[styles\.title, \{ paddingRight: payClear \}\]\} numberOfLines=\{1\}>/);
+  assert.equal((full.match(/numberOfLines=\{2\}/g) ?? []).length, 1, 'one hint (it may wrap rather than cut a time)');
+  assert.match(full, />BUDGET</);
+  assert.match(card, /fullPay: \{\s*maxWidth: 84,\s*\}/, 'a narrow budget column');
+  assert.match(compact, /<View style=\{styles\.metaRow\}>[\s\S]*<View style=\{styles\.metaRow\}>[\s\S]*Break the ice/, 'Worker Home keeps its lines');
+});
+
+test('[static] A2-M5 S1: the Earnings subtitle takes two lines and the header row grows to hold them; every other header keeps one', async () => {
+  const header = stripComments(await read('components/ScreenHeader.tsx'));
+  assert.match(header, /subtitleLines = 1,/, 'one line unless asked');
+  assert.match(header, /numberOfLines=\{subtitleLines\}/);
+  assert.match(header, /subtitle && subtitleLines === 2 \? styles\.containerTwoLine : null/);
+  assert.match(header, /containerTwoLine: \{\s*minHeight: 44 \+ 17 \+ spacing\.xs \+ spacing\.sm,\s*\}/);
+  assert.match(stripComments(await read('ui/templates/DetailScreen.tsx')), /subtitleLines=\{subtitleLines\}/);
+  assert.match(stripComments(await read('screens/EarningsScreen.tsx')), /subtitleLines=\{2\}/);
+});
+
+test('[static] A2-M5 S2: the bid page\'s Decline | Counter is the bid card\'s quiet pair; no outline in a second red', async () => {
+  const bid = stripComments(await read('screens/BidDetailScreen.tsx'));
+  const bar = bid.slice(bid.indexOf('actionBar={'), bid.indexOf('<ConfirmDialog'));
+  assert.ok(bar.length > 0, 'the action bar must exist');
+  const pair = bar.slice(bar.indexOf('<View style={styles.actionRow}>'), bar.indexOf('acceptOfferActionLabel('));
+  assert.match(pair, /title=\{declineOfferActionLabel\(false\)\}\s*variant="quiet"\s*palette=\{emeraldColors\}/);
+  assert.match(pair, /title=\{COUNTER_OFFER_ACTION_LABEL\}\s*variant="quiet"\s*palette=\{emeraldColors\}/);
+  assert.doesNotMatch(bar, /colors\.danger/, 'the one red is the destructive Button, never a palette swap');
+});
+
+test('[static] A2-M4 P3: the Cancel Job inset is the bid card\'s padding plus its rim, so it shares the Accept\'s width', async () => {
+  const card = stripComments(await read('components/OfferCard.tsx'));
+  assert.match(card, /export function offerActionInset\(\): number \{\s*return spacing\.lg \+ 1;\s*\}/);
+  assert.match(card, /card: \{\s*borderRadius: radius\.xl,\s*borderColor: colors\.mint2,\s*padding: spacing\.lg,\s*\}/, 'the card pads by spacing.lg');
+  assert.match(stripComments(await read('ui/primitives/Surface.tsx')), /rim\?\.width \?\? 1;/, "the card's rim is 1 pt");
+});
+
+test('[static] A2-M4 F5: the offer amount label is mint like every field label (no gold tone)', async () => {
+  const composer = stripComments(await read('components/OfferComposer.tsx'));
+  const field = composer.slice(composer.indexOf('export function OfferAmountField'), composer.indexOf('export function OfferComposer'));
+  assert.match(field, /<TextField\s+label=\{label\}\s+value=\{value\}/);
+  assert.doesNotMatch(field, /labelTone/);
 });
 
 test('E3 touchSlop: any drawn size reaches the 44pt floor on each axis it is given, and keeps its identity', async () => {

@@ -88,7 +88,7 @@ test('the dispatcher asks before opening another account link, and says when a l
 
 test('A4: the new-password screen has a way out that clears the pending flag and signs out', () => {
   const screen = read('screens/ResetPasswordScreen.tsx');
-  assert.match(screen, /Cancel and sign out/);
+  assert.match(screen, /Cancel and Sign Out/);
   assert.ok(screen.indexOf('setRecoveryPending(false);\n    await logout()') > 0, 'flag cleared, then the AuthContext logout');
   assert.match(screen, /leavingRef\.current/);
 });

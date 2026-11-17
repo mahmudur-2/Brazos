@@ -7,6 +7,7 @@ import {
   stripeReady,
   STRIPE_UNAVAILABLE_MESSAGE,
   type CheckoutSession,
+  type JobCheckoutResult,
 } from '../payments/stripe';
 
 /**
@@ -62,7 +63,8 @@ export type PaymentProvider = {
    * Disabled refuses it.
    */
   /** Idea 20: `saveCard` is the customer's own opt-in to keep the card for one-tap hiring. */
-  beginJobCheckout(jobId: string, options?: { saveCard?: boolean }): Promise<CheckoutSessionResult>;
+  /** R3-1: `{ paymentId, confirmed: true }` = the stored intent is already settled; no sheet. */
+  beginJobCheckout(jobId: string, options?: { saveCard?: boolean }): Promise<JobCheckoutResult>;
   /**
    * The customer's approval: move the held payment toward `released`. The
    * server enforces ownership, completed status, the dispute freeze, and

@@ -68,7 +68,7 @@ test('[static] the sheet: one read per opening, the row closed until tapped, the
   // Under the first action, and closed until tapped.
   assert.match(sheet, /\{index === 0 && onReuseJob \? \( <ReusePastJob hub=\{hub\} ready=\{hubReady\} visible=\{visible\} onPick=\{onReuseJob\} \/> \) : null\}/);
   assert.match(sheet, /const \[open, setOpen\] = useState\(false\);/);
-  assert.match(sheet, /accessibilityLabel="Reuse a past job" accessibilityHint="Start from one you posted before" accessibilityState=\{\{ expanded: open \}\}/);
+  assert.match(sheet, /accessibilityLabel="Reuse a Past Job" accessibilityHint="Start from one you posted before" accessibilityState=\{\{ expanded: open \}\}/);
   assert.match(sheet, /<DropdownBody open=\{open\} grow>/);
   // The compact card: as wide as its title needs in 128–160, three lines at most, the price at the bottom right.
   assert.match(sheet, /\{ width: reuseCardWidth\(job\.title, 2 \* \(spacing\.md - 1\)\) \}/);
@@ -99,6 +99,6 @@ test('[static] the post: a NEW job, filled from the old one, on its Review step 
   // Group 2's review: a reuse never touches the draft slot and offers no "Save draft"; and it is
   // its own screen — keyed by the job it copies — never a rewrite of a post already open.
   assert.match(screen, /const usesDraft = isFreshPost && !reuseJobId;/);
-  assert.match(flat(screen), /secondary=\{ usesDraft \? \{ label: 'Save draft'/);
+  assert.match(flat(screen), /secondary=\{ usesDraft \? \{ label: 'Save Draft'/);
   assert.match(flat(read('navigation/CustomerRoot.tsx')), /<CustomerHomeStack\.Screen name="PostJob" component=\{PostJobScreen\} getId=\{\(\{ params \}\) => params\?\.reuseJobId\} \/>/);
 });

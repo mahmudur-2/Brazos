@@ -311,17 +311,17 @@ test('a PINNED footer takes its own padding, never the scroll clearance', async 
     ['ui/templates/FormScreen.tsx', 'footer'],
     ['ui/templates/DetailScreen.tsx', 'actionBar'],
     ['components/OfferComposer.tsx', 'footer'],
-    ['screens/ClientJobDetailScreen.tsx', 'actionBar'],
-    ['screens/JobDetailScreen.tsx', 'bidBar'],
-    ['screens/WorkerJobScreen.tsx', 'actionBar'],
-    ['screens/ReviewAndTipScreen.tsx', 'doneBar'],
   ];
   const bar = (await read('components/PostJobBar.tsx')).replace(/\s+/g, ' ');
   const barStyle = / bar: \{([^}]*)\}/.exec(bar);
   assert.ok(barStyle, 'the posting bar must keep a flat bar style');
-  assert.doesNotMatch(barStyle[1], /paddingBottom|paddingVertical|paddingTop/, 'the posting bar style itself carries no space above or below its buttons');
-  assert.match(bar, /const footerPad = usePinnedFooterPadding\(\);/, 'the posting bar lifts over the pill like every pinned footer');
-  assert.match(bar, /<View style=\{\[styles\.bar, \{ paddingBottom: footerPad \}\]\}>/);
+  assert.doesNotMatch(barStyle[1], /paddingBottom|paddingVertical/, 'the posting bar style itself carries no space below its buttons');
+  assert.match(barStyle[1], /paddingTop: spacing\.sm,/, "G1a RESTRUCTURE: the floating foot's breathing room above its buttons, as FloatingAction");
+  // G1a RESTRUCTURE (2026-11-16): the posting bar takes the tab bar's place (the bottom rule), so it
+  // stands where the pill sat, as ui/primitives/FloatingAction does, instead of lifting over it.
+  assert.match(bar, /useHideTabBar\(\); const foot = usePostBarFoot\(\);/, 'the posting bar hides the tab bar and takes its place');
+  assert.match(bar, /return pillBottomOffset\(insets\.bottom, meltBar\.bottomTuck, meltBar\.bottomMin\);/, "it stands where the bar's pill sat");
+  assert.match(bar, /<View style=\{\[styles\.bar, \{ paddingBottom: foot \}\]\}>/);
   assert.doesNotMatch(bar, /navClearance|useScrollClearance/, "and it never reserves the pill's footprint");
 
   const bottomNav = await read('ui/primitives/BottomNav.tsx');
@@ -338,6 +338,18 @@ test('a PINNED footer takes its own padding, never the scroll clearance', async 
   assert.match(index, /PINNED_FOOTER_BOTTOM_PADDING,/);
   assert.match(index, /usePinnedFooterPadding,/);
 
+  // G1b: the job page's one decision floats (FloatingAction keeps the pill's offset itself), so it
+  // has no pinned footer to pad, and it never reserves the pill's footprint under its action.
+  const jobPage = (await read('screens/ClientJobDetailScreen.tsx')).replace(/\s+/g, ' ');
+  assert.match(jobPage, /\{primaryAction \? \( <FloatingAction title=\{primaryAction\.label\} onPress=\{primaryAction\.onPress\}/);
+  assert.doesNotMatch(jobPage, /usePinnedFooterPadding|styles\.actionBar/, 'no plate under the floating action');
+  assert.match(jobPage, /primaryAction \? \{ paddingBottom: contentGap \} : \{ paddingBottom: navClearance \}/);
+  // G1b: the same for Review & Tip's Done (it was the doneBar), and before it floats the scroller clears the pill.
+  const review = (await read('screens/ReviewAndTipScreen.tsx')).replace(/\s+/g, ' ');
+  assert.match(review, /\{!gateState && reviewed \? <FloatingAction title="Done" onPress=\{goBackOrHome\} \/> : null\}/);
+  assert.doesNotMatch(review, /usePinnedFooterPadding|styles\.doneBar/, 'no plate under the floating Done');
+  assert.match(review, /!reviewed && \{ paddingBottom: Math\.max\(spacing\.xxl, navClearance\) \}/);
+
   for (const [path, styleName] of pinned) {
     const source = await read(path);
     const flat = source.replace(/\s+/g, ' ');
@@ -348,6 +360,18 @@ test('a PINNED footer takes its own padding, never the scroll clearance', async 
     assert.match(applied, /paddingBottom: footerPad/, path + "'s pinned " + styleName + ' must APPLY the pinned-footer padding');
     assert.doesNotMatch(applied, /navClearance/, path + ": the pinned " + styleName + " must not reserve the pill's footprint a second time");
   }
+  // G2: the market job page floats its bid pair (ui/primitives/FloatingAction keeps the pill's
+  // offset itself) with no pinned plate, and its scroller reserves no pill under the float.
+  const jobDetail = (await read('screens/JobDetailScreen.tsx')).replace(/\s+/g, ' ');
+  assert.match(jobDetail, /<FloatingAction title="Write a Bid"/);
+  assert.doesNotMatch(jobDetail, /styles\.bidBar|usePinnedFooterPadding/);
+  assert.match(jobDetail, /floatingBid \? \{ paddingBottom: spacing\.xl \} : \{ paddingBottom: navClearance \}/);
+  // G2: the worker's job page floats a real next step the same way; hired and not paid has none.
+  const workerJob = (await read('screens/WorkerJobScreen.tsx')).replace(/\s+/g, ' ');
+  assert.match(workerJob, /const floatingStep = stageAction && !awaitingProtection \? stageAction : null;/);
+  assert.match(workerJob, /\{floatingStep \? \( <FloatingAction title=\{floatingStep\.title\}/);
+  assert.doesNotMatch(workerJob, /styles\.actionBar|usePinnedFooterPadding/);
+  assert.match(workerJob, /floatingStep \? \{ paddingBottom: contentGap \} : \{ paddingBottom: navClearance \}/);
 
   assert.match(bottomNav, /export function useFloatingNavClearance\(\): number \{/);
   assert.match(index, /useScrollClearance,/);

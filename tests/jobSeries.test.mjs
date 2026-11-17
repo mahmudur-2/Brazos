@@ -16,7 +16,7 @@ const MIGRATION = 'supabase/migrations/20260930001000_job_series.sql';
 
 test('[executed] the words: three cadences as drawn, and the one line each person reads', () => {
   assert.deepEqual([...SERIES_CADENCES], ['weekly', 'biweekly', 'monthly']);
-  assert.equal(CADENCE_LABELS.biweekly, 'Every 2 weeks', 'the drawn "Repeat this job · Every 2 weeks"');
+  assert.equal(CADENCE_LABELS.biweekly, 'Every 2 Weeks', 'the drawn "Repeat this job · Every 2 Weeks"');
   assert.equal(visitDayLabel('2026-10-20'), 'Tue, Oct 20', 'a plain calendar date, local parts');
   const active = { cadence: 'biweekly', next_visit_date: '2026-10-20', status: 'active' };
   // Two texts (the Fable review): what repeats, then what it means for the reader.
@@ -104,8 +104,8 @@ test('[static] allow-lists, RLS and the ACLs (CLAUDE.md section Supabase)', () =
 test('[static] the app: the Review row, the start after publishing, each visit\'s line, and Confirm opening Checkout', () => {
   const post = flat(read('screens/PostJobScreen.tsx'));
   assert.match(post, /const \[repeatCadence, setRepeatCadence\] = useState<SeriesCadence \| null>\(null\);/, 'off by default');
-  assert.match(post, /\{isFreshPost \? \( <View> <Pressable onPress=\{\(\) => \{ const opening = !repeatOpen; setRepeatOpen\(opening\); if \(opening\) revealInView\(repeatRef\); \}\}/);
-  assert.match(post, /<Text style=\{styles\.todayTitle\}>Repeat this job<\/Text>/);
+  assert.match(post, /\{isFreshPost \? \( <Card style=\{styles\.optionsCard\}>[\s\S]*?<View style=\{styles\.optionSplit\}> <Pressable onPress=\{\(\) => \{ const opening = !repeatOpen; setRepeatOpen\(opening\); if \(opening\) revealInView\(repeatRef\); \}\}/ /* G1a 2026-11-16: the row sits in the post's options card, under Need It Today */);
+  assert.match(post, /<Text style=\{styles\.todayTitle\}>Repeat This Job<\/Text>/);
   assert.match(post, /\{repeatCadence \? CADENCE_LABELS\[repeatCadence\] : 'Off'\}/);
   // The choices open in place as a tick list — Off first, then the three cadences.
   assert.match(post, /\{\[null, \.\.\.SERIES_CADENCES\]\.map\(\(cadence\) => \{/);

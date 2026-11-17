@@ -83,7 +83,11 @@ export function emptyStateFor(filter: InboxFilter): InboxEmptyState {
       };
     case 'all':
     default:
-      return { title: 'No messages yet', body: 'Conversations start once a bid is accepted.' };
+      // A4 wiring (A5, G4-1): the next step for either side of the one account.
+      return {
+        title: 'No messages yet',
+        body: 'Conversations start once a bid is accepted. Post a job, or bid on one, to get started.',
+      };
   }
 }
 

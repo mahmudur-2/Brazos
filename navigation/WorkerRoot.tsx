@@ -23,6 +23,7 @@ import {
   MapStackNavigator,
   MessagesStackNavigator,
   MyJobsStackNavigator,
+  jobPageScreens,
   ProfileStackNavigator,
 } from './sharedStacks';
 
@@ -77,6 +78,7 @@ function WorkerHomeStackNavigator() {
       <WorkerHomeStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
       {/* E5: a notification's job opens here when the person is on Home (the feed), so Back returns to it. */}
       <WorkerHomeStack.Screen name="WorkerJob" component={WorkerJobScreen} getId={({ params }) => params?.jobId} />
+      {jobPageScreens(['Payouts'])}
     </WorkerHomeStack.Navigator>
   );
 }

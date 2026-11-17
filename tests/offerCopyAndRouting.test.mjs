@@ -35,7 +35,8 @@ test('the notifications feed owns no routing of its own', async () => {
   );
   // Stage 4D: the delegation carries ModeContext through the bridge, for the
   // router's cross-mode gate — still no routing of the screen's own.
-  assert.match(screen, /handleNotificationData\(notification\.data, modeBridge\)/);
+  // B6: the row's type rides with its data, as in a push.
+  assert.match(screen, /handleNotificationData\(\{ \.\.\.notification\.data, type: notification\.type \}, modeBridge\)/);
 
   // No second routing switch, and no direct cross-tab dispatch of its own.
   assert.doesNotMatch(screen, /navigateAcrossTabs\(/);
@@ -44,7 +45,7 @@ test('the notifications feed owns no routing of its own', async () => {
 
   // A row that resolves to nothing is not tappable — a tap that only marks
   // read is the defect this replaced.
-  assert.match(screen, /const routable = canRouteNotification\(n\.data\)/);
+  assert.match(screen, /const routable = canRouteNotification\(\{ \.\.\.n\.data, type: n\.type \}\)/);
   // 2026-09-29 (LUX-LIST-2 #8): a row is a feed ENTRY (bids on one job the same day fold into one),
   // and `n` is its lead notification — the one whose route the entry opens.
   assert.match(screen, /const n = entry\.lead;/);
@@ -128,7 +129,7 @@ test('the worker job detail names an incoming counter by first name', async () =
   // that same first name — the wording itself now has exactly one definition.
   assert.match(detail, /senderFirstName=\{posterFirstName\}/);
   // 2026-09-28 (#64, M-17): sentence case, the worker's noun.
-  assert.match(copy, /`\$\{senderFirstName\} sent you a counter-offer`/);
+  assert.match(copy, /`\$\{senderFirstName\} sent you a \$\{COUNTER_OFFER_WORD\}`/);
   // The full-name form must not come back.
   assert.doesNotMatch(detail, /\{poster\?\.full_name \?\? 'The customer'\} countered/);
 });
@@ -137,8 +138,9 @@ test('the My Jobs hub names an incoming counter by first name', async () => {
   const hub = stripComments(await read('screens/MyJobsHubScreen.tsx'));
 
   assert.match(hub, /const clientFirstName =\s*\n?\s*clientName\.trim\(\)\.split\(\/\\s\+\/\)\[0\] \|\| clientName;/);
-  // 2026-09-28 (#64, M-17): the card's own spelling, sentence case.
-  assert.match(hub, /\$\{clientFirstName\} sent you a counter-offer — respond/);
+  // 2026-09-28 (#64, M-17): the card's own spelling, sentence case. A2-M5 A5: without "— respond"
+  // (the pill and the hint line say it).
+  assert.match(hub, /`\$\{clientFirstName\} sent you a \$\{COUNTER_OFFER_WORD\}`/);
   assert.doesNotMatch(hub, /\$\{clientName\} countered/);
 });
 
@@ -217,7 +219,8 @@ test('the badge itself is derived, never stored', async () => {
   // while the viewer owes the reply — so it still cannot be stored state.
   assert.match(detail, /<OfferResponseActions/);
   const actions = stripComments(await read('components/OfferResponseActions.tsx'));
-  assert.match(actions, /<StatusBadge status="pending" label=\{YOUR_MOVE_BADGE_LABEL\} \/>/);
+  // A2-M5 A11: "Your move" while the reply can be sent; past the booked time (actionsClosed) the plain state.
+  assert.match(actions, /<StatusBadge status="pending" label=\{actionsClosed \? undefined : YOUR_MOVE_BADGE_LABEL\} \/>/);
   assert.match(
     stripComments(await read('lib/offerCopy.ts')),
     /export const YOUR_MOVE_BADGE_LABEL = 'Your move';/

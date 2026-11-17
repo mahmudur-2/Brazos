@@ -114,8 +114,8 @@ export type BidSortChip = 'price' | 'rating';
 
 /** Exactly these two chips — the blended "Best value" chip is gone. */
 export const BID_SORT_CHIPS: { label: string; value: BidSortChip }[] = [
-  { label: 'Lowest price', value: 'price' },
-  { label: 'Highest rated', value: 'rating' },
+  { label: 'Lowest Price', value: 'price' },
+  { label: 'Highest Rated', value: 'rating' },
 ];
 
 /**

@@ -335,6 +335,8 @@ export function MapScreen() {
   // height and the search pill's. Zero until the first layout pass.
   const [rootHeight, setRootHeight] = useState(0);
   const [pillHeight, setPillHeight] = useState(0);
+  // LOOK-R L-2: the foot of the header block (the pill and the chip row), from the screen's top.
+  const [headerFoot, setHeaderFoot] = useState(0);
   // The search pill's own text. It is a DISPATCH field, not a live filter:
   // the map draws hotspot cells, which carry counts and categories and no
   // text to match against, so a query resolves on the list surface that
@@ -525,6 +527,8 @@ export function MapScreen() {
       : 0;
   const onRootLayout = (event: LayoutChangeEvent) => setRootHeight(event.nativeEvent.layout.height);
   const onPillLayout = (event: LayoutChangeEvent) => setPillHeight(event.nativeEvent.layout.height);
+  const onHeaderLayout = (event: LayoutChangeEvent) =>
+    setHeaderFoot(event.nativeEvent.layout.y + event.nativeEvent.layout.height);
 
   const chosen = selectedInDark(colors);
 
@@ -551,6 +555,9 @@ export function MapScreen() {
           hideLocateButton={isWorker}
           // The Fable review: above the floating tab bar always, and above the job card when one shows.
           legalLabelInsetBottom={isWorker ? sheetBottom + peekHeight + LEGAL_LINK_AIR : undefined}
+          // LOOK-R L-2: location off, the worker's block centres between the header and the jobs sheet.
+          fallbackInsetTop={isWorker ? headerFoot : undefined}
+          fallbackInsetBottom={isWorker ? sheetBottom + peekHeight + LEGAL_LINK_AIR : undefined}
           onRegionChangeComplete={
             isWorker ? (region) => setLatDelta(region.latitudeDelta) : undefined
           }
@@ -567,7 +574,7 @@ export function MapScreen() {
             together because the open sheet stops a gap under whatever is
             here. 4D-4: chrome and tiles resolve together — the MapView follows
             the in-app theme (HotspotMap userInterfaceStyle). */}
-        <View style={styles.headerBlock} pointerEvents="box-none">
+        <View style={styles.headerBlock} pointerEvents="box-none" onLayout={onHeaderLayout}>
           {/* 2026-09-19 — ONE GLASS PILL, not a capsule around a field. The
               shared SearchBar keeps its behaviour — the mic, the clear, the
               dispatch — and hands its own ground to the `pane` Surface, so the

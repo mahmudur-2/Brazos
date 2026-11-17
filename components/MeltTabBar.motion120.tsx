@@ -26,7 +26,7 @@
  * body — rows, glyphs, colours, the tab-press path — is `MeltTabBar.shared.tsx`.
  */
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Animated as NativeAnimated, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -58,6 +58,7 @@ import {
   PlusGlyph,
   pressTab,
   useMeltMetrics,
+  useStepAside,
   type MeltSlot,
   type MeltTabBarProps,
 } from './MeltTabBar.shared';
@@ -175,6 +176,8 @@ export function MeltTabBar(props: MeltTabBarProps) {
   const hasCreate = onCreate != null;
   const slots = useMemo(() => meltSlots(tabs, hasCreate), [tabs, hasCreate]);
   const m = useMeltMetrics(slots.length);
+  // This path runs only without Reduce Motion (MeltTabBar.tsx takes the fallback with it on).
+  const stepAside = useStepAside(false);
   const focused = focusedSlotIndex(state, slots);
   const centres = m.centres;
   const createIndex = slots.findIndex((s) => s.kind === 'create');
@@ -582,7 +585,14 @@ export function MeltTabBar(props: MeltTabBarProps) {
   );
 
   return (
-    <View pointerEvents="box-none" style={[styles.root, { height: m.bottom + meltBar.height }]}>
+    // A2-M3: the root wears the step-aside (MeltTabBar.shared `useStepAside`, core Animated on the
+    // native driver beside this path's own worklets); at rest it wears nothing.
+    <NativeAnimated.View
+      pointerEvents={stepAside.pointerEvents}
+      accessibilityElementsHidden={stepAside.accessibilityElementsHidden}
+      importantForAccessibility={stepAside.importantForAccessibility}
+      style={[styles.root, { height: m.bottom + meltBar.height }, stepAside.aside]}
+    >
       <GestureDetector gesture={pan}>
         <View style={pillStyle(m.isDark, m.pillWidth, m.bottom)}>
           {/* Everything drawn is clipped to the pill: a swell or a stretch at an end tab stays in it. */}
@@ -634,7 +644,7 @@ export function MeltTabBar(props: MeltTabBarProps) {
           />
         </View>
       </GestureDetector>
-    </View>
+    </NativeAnimated.View>
   );
 }
 

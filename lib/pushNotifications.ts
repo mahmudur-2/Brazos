@@ -274,8 +274,7 @@ export async function maybePromptForPush(rationale: string): Promise<PushRegistr
   const ok = await confirmAsync({
     title: 'Get notified?',
     message: rationale,
-    confirmText: 'Turn on',
-    cancelText: 'Not now',
+    confirmText: 'Turn On',
   });
 
   if (!ok) {

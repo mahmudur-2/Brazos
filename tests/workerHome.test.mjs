@@ -223,7 +223,7 @@ test('every figure derives from an existing source, none is invented', () => {
   // No placeholder marketplace data: the skill pill degrades to an honest
   // instruction, not a fake count — and since 2026-09-26 (the refresh, audit
   // M-29) that instruction opens the profile editor where skills are picked.
-  assert.match(screen, /: 'Add your skills';/);
+  assert.match(screen, /: 'Add Your Skills';/);
   assert.match(code, /: navigateAcrossTabs\('Profile', 'ProfileMain', \{ edit: true \}\)/);
 });
 
@@ -313,8 +313,8 @@ test('the summary card: surface fill, card-rim hairline, divided halves, chips i
   assert.ok(end > open, 'the summary card container must close');
   const pillRow = screen.indexOf('<View style={styles.pillRow}>');
   assert.ok(pillRow > open && pillRow < end, 'the count chips must render inside the summary card');
-  assert.match(screen, /match your skills/);
-  assert.match(screen, /within \$\{NEARBY_RADIUS_MILES\} miles|within \$\{NEARBY_RADIUS_MILES\}/);
+  assert.match(screen, /Match Your Skills/);
+  assert.match(screen, /Within \$\{NEARBY_RADIUS_MILES\} Miles|Within \$\{NEARBY_RADIUS_MILES\}/);
 });
 
 test('the section heading reads Available Jobs, with no dot; retired copy stays gone', () => {
@@ -443,7 +443,7 @@ test('4D-6 card geometry: padding 14, 14pt row gap, 1pt divider at 14pt margins,
 test('4D-6 pills: 40pt capsules, 12pt gap, two-tone counts, 44pt touch kept by slop', () => {
   assert.match(
     code,
-    /pill: \{\s*flex: 1,\s*flexDirection: 'row',\s*alignItems: 'center',\s*justifyContent: 'center',\s*gap: spacing\.sm,\s*height: 40,\s*paddingHorizontal: spacing\.md,\s*borderRadius: radius\.pill,\s*borderWidth: 1,\s*borderColor: colors\.mint2,\s*backgroundColor: colors\.surface,\s*\}/
+    /pill: \{\s*flex: 1,\s*flexDirection: 'row',\s*alignItems: 'center',\s*justifyContent: 'center',\s*gap: spacing\.sm,\s*height: 40,\s*paddingHorizontal: spacing\.sm,\s*borderRadius: radius\.pill,\s*borderWidth: 1,\s*borderColor: colors\.mint2,\s*backgroundColor: colors\.surface,\s*\}/
   );
   assert.match(code, /pillRow: \{ flexDirection: 'row', gap: spacing\.md \}/);
   // Two-tone: the count emerald, the rest of the label primary ink.
@@ -457,8 +457,8 @@ test('4D-6 pills: 40pt capsules, 12pt gap, two-tone counts, 44pt touch kept by s
   // 40pt visual height + 2pt slop each side = the 44pt floor (CLAUDE.md).
   assert.match(code, /hitSlop=\{\{ top: 2, bottom: 2 \}\}/);
   // The honest degraded labels survive; no count is ever invented.
-  assert.match(screen, /: 'Add your skills';/);
-  assert.match(screen, /Enable location/);
+  assert.match(screen, /: 'Add Your Skills';/);
+  assert.match(screen, /Enable Location/);
 });
 
 test('4D-6 light palette: every value the card reads is byte-identical', async () => {
@@ -574,57 +574,22 @@ test('T6: one availability writer — the server-side accepting_work path', () =
 // are asserted here: the control cannot express a contradiction, and the fact
 // behind it is singular.
 
-test('D5: the toggle track is state-blind in dark, and only the knob carries state', async () => {
+test('F2 (owner pick B, 2026-11-16): an ON switch lights a mint track in both modes, with a white knob', async () => {
   const toggle = stripComments(await read('ui/primitives/Toggle.tsx'));
 
-  // THE TRACK. In dark it is a neutral surface under the ordinary hairline,
-  // identical ON and OFF — written without a `value` term at all, so it is not
-  // merely the same colour today but structurally unable to carry state.
+  // THE TRACK carries the state: the app's mint (emerald) when ON in both modes; OFF is the
+  // neutral surface in dark and the border in light. Never the danger red.
   const trackColor = toggle.match(/const trackColor = ([^;]+);/);
   assert.ok(trackColor, 'Toggle must resolve a track colour');
-  const darkBranch = trackColor[1].slice(0, trackColor[1].indexOf('?') + 1 || undefined);
-  assert.match(trackColor[1], /isDark \? palette\.neutralBg/);
-  assert.doesNotMatch(
-    darkBranch,
-    /\bvalue\b/,
-    'the dark track must not depend on the toggle value'
-  );
-  // D5 retires red from this control outright, and no emerald track in dark.
-  assert.doesNotMatch(
-    trackColor[1].split(':')[0] + trackColor[1].match(/isDark \? [^:]+/)[0],
-    /palette\.danger|palette\.emerald/,
-    'the dark track may be neither the danger red nor emerald'
-  );
+  assert.match(trackColor[1], /^value \? palette\.emerald : isDark \? palette\.neutralBg : palette\.border$/);
+  assert.doesNotMatch(trackColor[1], /palette\.danger/);
+  assert.match(toggle, /const trackBorder = isDark \? \(value \? palette\.emerald : palette\.border\) : 'transparent';/);
 
-  // THE KNOB. Gold when ON in BOTH palettes since 2026-08-23 (light was a
-  // plain white disc, so the same state read two different ways depending on
-  // the theme); each palette's own quiet disc when OFF; every part of it
-  // reading the same `value`, and the position doing the same.
-  const knobColor = /const knobColor = ([\s\S]+?);/.exec(toggle);
-  assert.ok(knobColor, 'Toggle must resolve a knob colour');
-  assert.match(
-    knobColor[1],
-    /^\s*value\b/,
-    'the knob colour must branch on `value` FIRST — theme-first is how the two palettes drifted apart'
-  );
-  assert.match(
-    knobColor[1],
-    /withAlpha\(palette\.gold, 0\.92\)/,
-    'the ON face is the gold tint, and it is not inside an isDark branch'
-  );
-  assert.doesNotMatch(
-    knobColor[1].slice(0, knobColor[1].indexOf('withAlpha')),
-    /isDark/,
-    'nothing may gate the gold face on the theme'
-  );
-  // Fix run D6: the dark OFF face is the Lux muted (`textMuted`), visible on
-  // the dark track — `onPrimary` went near-black in the 09-26 refresh.
-  assert.match(knobColor[1], /isDark[\s\S]*?palette\.textMuted[\s\S]*?palette\.white/);
-  assert.doesNotMatch(knobColor[1], /palette\.onPrimary/, 'the near-black onPrimary disc vanished on the dark track');
-  assert.match(toggle, /const knobBorder = value \? palette\.gold : 'transparent';/);
-  // The halo stays DARK-ONLY and deliberately so: a glow is an atmosphere the
-  // dark ground has and the cream one does not.
-  assert.match(toggle, /const knobGlow = isDark && value \? glow\.halo\(withAlpha\(palette\.gold, 0\.55\)\) : null;/);
+  // THE KNOB is the plain white knob of a standard iPhone switch: no gold, no ring, no halo.
+  assert.match(toggle, /const knobColor = palette\.white;/);
+  assert.match(toggle, /const knobBorder = 'transparent';/);
+  assert.doesNotMatch(toggle, /palette\.gold/, 'the switch carries no gold');
+  assert.doesNotMatch(toggle, /glow\.halo/, 'the knob has no halo');
   assert.match(toggle, /toValue: value \? 1 : 0/);
   assert.match(toggle, /outputRange: \[0, TRAVEL\]/);
   // Fix run D6 (smooth): the knob springs on the native driver, and Reduce
@@ -633,19 +598,6 @@ test('D5: the toggle track is state-blind in dark, and only the knob carries sta
   assert.match(toggle, /if \(reduceMotion !== false\) \{\s*position\.setValue\(value \? 1 : 0\);/);
   assert.doesNotMatch(toggle, /Animated\.timing\(position/, 'the knob no longer slides on a fixed 160 ms timing');
 
-  // GOLD IS LINE-WORK. The knob's face is a TINT and its ring is the metal, so
-  // tests/goldOnForest.test.mjs's "no gold fill" rule holds without an
-  // allowlist entry — the compromise D5 names.
-  assert.doesNotMatch(
-    toggle,
-    /backgroundColor:\s*\w+\.gold\b/,
-    'the ON knob must be a gold ring over a gold tint, never a gold fill'
-  );
-
-  // LIGHT'S TRACK IS UNTOUCHED: the Heritage arrangement is still emerald
-  // when ON, border when OFF. Only the knob crossed over.
-  assert.match(trackColor[1], /value \? palette\.emerald : palette\.border/);
-  assert.match(toggle, /: palette\.white;/, "light's OFF knob is still the plain white disc");
 });
 
 test('D5: the two availability toggles cannot show different states', async () => {

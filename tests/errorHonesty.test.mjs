@@ -390,13 +390,16 @@ test('B6 · isOnline is optimistic: only an explicit false is offline', async ()
 });
 
 test('B6 · sign-out never fails offline: the device session ends even when /logout cannot be reached', () => {
-  const auth = read('lib/AuthContext.tsx');
-  assert.match(auth, /const \{ error \} = await supabase\.auth\.signOut\(\);\s*if \(!error\) return \{ error \};[\s\S]*?await signOutLocally\(\);\s*return \{ error: null \};/);
-  const helper = auth.slice(auth.indexOf('async function signOutLocally'), auth.indexOf('type AuthResult'));
+  // A4-M2 (R7-a): the sign-out lives in lib/signOut.ts, and offline it is PROVEN, never assumed
+  // (tests/signOutAndForget.test.mjs runs it offline against the real keychain adapter).
+  const auth = read('lib/signOut.ts');
+  assert.match(auth, /const \{ error \} = await supabase\.auth\.signOut\(\);\s*if \(!error\) return sessionIsGone\(\);[\s\S]*?return signOutLocally\(\);/);
+  const helper = auth.slice(auth.indexOf('export async function signOutLocally'), auth.indexOf('export async function endSession'));
   assert.match(helper, /supabase\.auth\.signOut\(\{ scope: 'local' \}\)/);
-  assert.match(helper, /if \(typeof auth\._removeSession === 'function'\) await auth\._removeSession\(\);/);
+  assert.match(helper, /if \(typeof auth\._removeSession !== 'function'\) return false;\s*try \{\s*await auth\._removeSession\(\);\s*\} catch \{\s*return false;/);
   // Never throws: both steps are caught.
   assert.equal((helper.match(/\} catch \{/g) ?? []).length, 2);
+  assert.match(read('lib/AuthContext.tsx'), /const ended = await endSession\(\);/);
 });
 
 test('App.tsx blocks on unknown with the shared error state and a retry', () => {

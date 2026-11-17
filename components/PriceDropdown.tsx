@@ -27,7 +27,7 @@ import {
   type PricingMode,
 } from '../lib/pricingMode';
 import { moneyCeilingError } from '../lib/validation';
-import { radius, spacing, themedStyles, touchSlop, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import { radius, spacing, textScale, themedStyles, touchSlop, useThemeColors, wellStyle, type ColorPalette } from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -223,9 +223,9 @@ export const PriceDropdown = forwardRef<
     presets.sort((a, b) => a - b);
   }
   const options: PickerOption<string>[] = [
-    ...(posted ? [] : [{ value: NONE, label: 'No maximum' }]),
+    ...(posted ? [] : [{ value: NONE, label: 'No Maximum' }]),
     ...presets.map((dollars) => ({ value: String(dollars), label: formatBudget(dollars * 100) })),
-    { value: CUSTOM, label: 'Enter your own amount', icon: 'pencil' as const, accent: true },
+    { value: CUSTOM, label: 'Enter Your Own Amount', icon: 'pencil' as const, accent: true },
   ];
   const current = chosenDollars != null ? String(chosenDollars) : posted ? null : NONE;
   const listChrome = spacing.xs * 2 + 2;
@@ -245,10 +245,8 @@ export const PriceDropdown = forwardRef<
           ? 'Workers can bid up to this amount.'
           : 'Workers will propose a price.';
 
-  const well = {
-    backgroundColor: isDark ? withAlpha(colors.white, 0.06) : colors.surface,
-    borderColor: problem ? colors.danger : colors.border,
-  };
+  // G1a: the price box is a well inside the review's lit card, as every field is (lib/theme wellStyle).
+  const well = [wellStyle(colors, isDark), problem ? { borderColor: colors.danger } : null];
 
   return (
     <View style={styles.wrap}>
@@ -267,7 +265,7 @@ export const PriceDropdown = forwardRef<
       />
 
       <View ref={sectionRef} collapsable={false} style={styles.field}>
-        <FieldLabel palette={palette} tone="gold">{priceFieldLabel(mode)}</FieldLabel>
+        <FieldLabel palette={palette}>{priceFieldLabel(mode)}</FieldLabel>
         {entering ? (
           <View style={[styles.box, styles.entry, well]}>
             <Text style={styles.dollar}>$</Text>
@@ -394,8 +392,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     value: {
       flex: 1,
-      fontSize: 17,
-      fontWeight: '700',
+      ...textScale.headline,
       color: colors.ink,
     },
     placeholder: {
@@ -403,8 +400,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       color: colors.textMuted,
     },
     upTo: {
-      fontSize: 15,
-      fontWeight: '500',
+      ...textScale.callout,
       color: colors.textMuted,
     },
     // #40 — money is white (dark) / the dark ink (light): the `money` role.
@@ -429,7 +425,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     done: {
       height: 38,
       paddingHorizontal: 18,
-      borderRadius: 19,
+      borderRadius: radius.pill,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.primary,
@@ -438,13 +434,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       transform: [{ scale: 0.96 }],
     },
     doneText: {
-      fontSize: 15,
+      ...textScale.callout,
       fontWeight: '700',
       color: colors.onPrimary,
     },
     helper: {
-      fontSize: 13,
-      lineHeight: 18,
+      ...textScale.label,
+      fontWeight: '400',
       color: colors.textMuted,
     },
     helperProblem: {

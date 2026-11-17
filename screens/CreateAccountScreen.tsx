@@ -6,8 +6,9 @@ import { AuthButton } from '../components/AuthButton';
 import { AuthField } from '../components/AuthField';
 import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
+import { Card } from '../components/Card';
 import { PhoneNumberInput } from '../components/PhoneNumberInput';
-import { authRadius, authSpacing, authType } from '../lib/authTheme';
+import { authSpacing, authType } from '../lib/authTheme';
 import {
   authSurface,
   fonts,
@@ -105,14 +106,29 @@ export function CreateAccountScreen() {
     setNotice(result.message);
   }
 
+  // The sign-in family's one action, pinned by the scaffold (see its `footer`):
+  // it rides the keyboard until it sits flush on it, so an error line never moves it.
+  const footer = (
+    <AuthButton
+      title="Create Account"
+      themed
+      onPress={handleCreateAccount}
+      loading={loading}
+      accessibilityHint="Send a verification code to this phone number"
+    />
+  );
+
   return (
     <AuthScaffold
       title="Create Account"
       onBack={() => navigation.goBack()}
       backdrop="soft"
+      lift={authSpacing.xl}
+      footer={footer}
       themed
     >
       <View style={styles.body}>
+        <Text style={[styles.eyebrow, { color: surface.accent }]}>GET STARTED</Text>
         <Text style={styles.title} maxFontSizeMultiplier={1.5}>
           One account. Two ways to use it.
         </Text>
@@ -121,65 +137,54 @@ export function CreateAccountScreen() {
         </Text>
 
         <View style={styles.form}>
-          <AuthField
-            label="Full name"
-            themed
-            leading={<Ionicons name="person-outline" size={20} color={surface.fieldGlyph} />}
-            value={fullName}
-            onChangeText={(next) => {
-              setFullName(next);
-              if (nameError) setNameError(null);
-              if (notice) setNotice(null);
-            }}
-            error={nameError}
-            autoCapitalize="words"
-            autoComplete="name"
-            textContentType="name"
-            placeholder="Carlos Reyes"
-            returnKeyType="next"
-            onSubmitEditing={() => phoneRef.current?.focus()}
-            submitBehavior="submit"
-          />
+          {/* The sign-in family's one lit card: the fields, then the privacy line. */}
+          <Card style={styles.card}>
+            <AuthField
+              label="Full name"
+              themed
+              leading={<Ionicons name="person-outline" size={20} color={surface.fieldGlyph} />}
+              value={fullName}
+              onChangeText={(next) => {
+                setFullName(next);
+                if (nameError) setNameError(null);
+                if (notice) setNotice(null);
+              }}
+              error={nameError}
+              autoCapitalize="words"
+              autoComplete="name"
+              textContentType="name"
+              placeholder="Carlos Reyes"
+              returnKeyType="next"
+              onSubmitEditing={() => phoneRef.current?.focus()}
+              submitBehavior="submit"
+            />
 
-          <PhoneNumberInput
-            ref={phoneRef}
-            themed
-            country={country}
-            onChangeCountry={setCountry}
-            value={phoneDigits}
-            onChangeValue={(digits) => {
-              setPhoneDigits(digits);
-              if (phoneError) setPhoneError(null);
-              if (notice) setNotice(null);
-            }}
-            error={phoneError}
-            editable={!loading}
-            returnKeyType="go"
-            onSubmitEditing={handleCreateAccount}
-          />
+            <PhoneNumberInput
+              ref={phoneRef}
+              themed
+              country={country}
+              onChangeCountry={setCountry}
+              value={phoneDigits}
+              onChangeValue={(digits) => {
+                setPhoneDigits(digits);
+                if (phoneError) setPhoneError(null);
+                if (notice) setNotice(null);
+              }}
+              error={phoneError}
+              editable={!loading}
+              returnKeyType="go"
+              onSubmitEditing={handleCreateAccount}
+            />
+
+            <View style={styles.privacy}>
+              <Ionicons name="shield-checkmark-outline" size={18} color={surface.accent} />
+              <Text style={styles.privacyText}>
+                Private until a job is confirmed.
+              </Text>
+            </View>
+          </Card>
 
           {notice ? <AuthNotice tone="info">{notice}</AuthNotice> : null}
-        </View>
-
-        {/* Master 3 draws this as a hairlined card, not a sage wash. */}
-        <View style={[styles.privacy, { borderColor: surface.line }]}>
-          <Ionicons name="shield-checkmark-outline" size={20} color={surface.accent} />
-          <Text style={styles.privacyText}>
-            Private until a job is confirmed.
-          </Text>
-        </View>
-
-        {/* marginTop:'auto' — extra height on a tall device becomes breathing
-            room above this, not taller inputs, and the CTA stays clear of the
-            bottom safe area that AuthScaffold reserves. */}
-        <View style={styles.actions}>
-          <AuthButton
-            title="Create account"
-            themed
-            onPress={handleCreateAccount}
-            loading={loading}
-            accessibilityHint="Send a verification code to this phone number"
-          />
         </View>
       </View>
     </AuthScaffold>
@@ -188,45 +193,44 @@ export function CreateAccountScreen() {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // The sign-in family's measure (screens/SignInScreen.tsx): the same top
+  // distance, eyebrow, serif headline, subtitle and card rhythm.
   body: {
     flexGrow: 1,
-    paddingBottom: authSpacing.lg,
+    paddingTop: authSpacing.sm,
+    paddingBottom: authSpacing.xxl,
   },
-  // Master 3's display headline is the serif.
+  eyebrow: {
+    ...authType.heroEyebrow,
+    marginTop: authSpacing.xl,
+  },
   title: {
-    ...authType.title,
+    ...authType.heroTitle,
     fontFamily: fonts.display,
     color: colors.ink,
-    marginTop: authSpacing.md,
+    marginTop: authSpacing.sm,
   },
   subtitle: {
     ...authType.body,
     color: colors.textMuted,
-    marginTop: authSpacing.md - 2,
+    marginTop: authSpacing.sm,
   },
   form: {
-    marginTop: authSpacing.xxl,
-    gap: authSpacing.xl - 4,
+    marginTop: authSpacing.xl,
+    gap: authSpacing.lg,
+  },
+  card: {
+    gap: authSpacing.lg,
   },
   privacy: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: authSpacing.md - 2,
-    marginTop: authSpacing.xl,
-    padding: authSpacing.lg - 2,
-    borderRadius: authRadius.field + 2,
-    borderWidth: 1,
-    backgroundColor: colors.surface,
+    gap: authSpacing.sm,
   },
   privacyText: {
     ...authType.note,
     flex: 1,
-    color: colors.ink,
-  },
-  actions: {
-    marginTop: 'auto',
-    paddingTop: authSpacing.xxl,
-    gap: authSpacing.md,
+    color: colors.textMuted,
   },
   }),
 );

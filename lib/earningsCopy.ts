@@ -41,7 +41,7 @@ export type EarningsRowFacts = {
   refund_cents?: number | null;
   transfer_cents?: number | null;
   job_status?: string | null;
-  /** releaseDeadlineMs(job) computed by the caller from job_completed_at; null when no clock runs. */
+  /** releaseDeadlineMs(job) computed by the caller from job_release_due_at; null when no clock runs. */
   releaseDeadlineMs: number | null;
   /** 2026-09-28 (LUX-LIST-64 #63, M-14): payoutSetupNotice() (lib/payments.ts)
    *  answered for this row — the caller asks the ONE rule and hands the answer

@@ -9,14 +9,15 @@ import {
   fonts,
   radius,
   spacing,
-  litCardStyle,
+  textScale,
   themedStyles,
   useThemeColors,
+  wellStyle,
   type ColorPalette,
 } from '../lib/theme';
 import {
   categoryAccent,
-  formatBidCount,
+  formatBidCountShort,
   formatBudget,
   formatPendingBidCount,
   JOB_CATEGORY_ICONS,
@@ -24,16 +25,16 @@ import {
   jobThumbnailUrl,
   type OpenJob,
 } from '../lib/jobs';
-import { formatTimeAgo } from '../lib/time';
+import { formatTimeAgoShort } from '../lib/time';
 import { showsTodayPill } from '../lib/neededToday';
 import { TodayPill } from './TodayPill';
 
 /**
- * Fixed, so every card in the list is the same height whether its title runs
- * to one line or two and whether it has a photo or not. A ragged list of
- * different-height cards is the thing that makes a feed feel unfinished.
+ * Fixed, so every row in the list is the same height whether it has a photo or not. A ragged list
+ * of different-height cards is the thing that makes a feed feel unfinished. G2, the job row rule:
+ * the picture on the left, the title on one line with the price on the right, one hint line.
  */
-const THUMB_SIZE = 92;
+const THUMB_SIZE = 64;
 
 /**
  * A job in the browse feed: the poster's first photo, then everything needed
@@ -76,7 +77,7 @@ export function BrowseJobCard({
   const showImage = !!thumbUrl && !imageFailed;
 
   return (
-    <Card onPress={onPress} style={styles.card}>
+    <Card level="row" onPress={onPress} style={styles.card}>
       <View style={styles.row}>
         <View>
         {showImage ? (
@@ -93,11 +94,11 @@ export function BrowseJobCard({
             style={[
               styles.thumb,
               styles.thumbFallback,
-              // LUX-LIST-2 #6: the lit tile in dark; light keeps the category colour.
-              isDark ? [styles.thumbFallbackDark, litCardStyle(true, 'tile')] : { backgroundColor: accent.bg },
+              // G2: a well in dark (never a lit tile on the lit row); light keeps the category colour.
+              isDark ? wellStyle(colors, isDark) : { backgroundColor: accent.bg },
             ]}
           >
-            <CategoryGlyph name={icon} size={30} color={isDark ? colors.emerald : accent.icon} bare />
+            <CategoryGlyph name={icon} size={26} color={isDark ? colors.emerald : accent.icon} bare />
           </View>
         )}
         {/* Idea 12: needed today, on the day it was posted — on the picture's corner, so the fixed-height
@@ -106,14 +107,18 @@ export function BrowseJobCard({
         </View>
 
         <View style={styles.body}>
-          <View style={styles.bodyTop}>
-            <Text style={styles.title} numberOfLines={2}>
+          <View style={styles.lineRow}>
+            <Text style={styles.title} numberOfLines={1}>
               {job.title}
             </Text>
-            <Text style={styles.meta} numberOfLines={1}>
-              {categoryLabel}
-              {job.location ? ` · ${job.location}` : ''}
+            {/* Masters 12/43's money slot: an unset budget reads "Open". */}
+            <Text style={[styles.budget, isDark && styles.budgetDark]} numberOfLines={1}>
+              {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
             </Text>
+          </View>
+
+          {/* The one hint line: what and roughly where, then the bids and the age on the right. */}
+          <View style={styles.lineRow}>
             {isOwn && (
               <View style={[styles.ownBadge, isDark && styles.ownBadgeDark]}>
                 <Ionicons
@@ -126,22 +131,15 @@ export function BrowseJobCard({
                 </Text>
               </View>
             )}
-          </View>
-
-          <View style={styles.footerRow}>
-            {/* Masters 12/43's money slot: an unset budget reads "Open". */}
-            <Text style={[styles.budget, isDark && styles.budgetDark]} numberOfLines={1}>
-              {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
+            <Text style={styles.meta} numberOfLines={1}>
+              {categoryLabel}
+              {job.location ? ` · ${job.location}` : ''}
             </Text>
-            {/* Sits next to the pay, where a worker is already looking to
-                judge the job — not next to the title, which it would crowd. */}
-            {bidCount != null && (
-              <Text style={styles.bids} numberOfLines={1}>
-                {isOwn ? formatPendingBidCount(bidCount) : formatBidCount(bidCount)}
-              </Text>
-            )}
-            <Text style={styles.time} numberOfLines={1}>
-              {formatTimeAgo(job.created_at)}
+            <Text style={styles.facts} numberOfLines={1}>
+              {bidCount != null
+                ? `${isOwn ? formatPendingBidCount(bidCount) : formatBidCountShort(bidCount)} · `
+                : ''}
+              {formatTimeAgoShort(job.created_at)}
             </Text>
           </View>
         </View>
@@ -159,6 +157,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   row: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.md,
   },
   thumb: {
@@ -179,32 +178,27 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderWidth: 1,
     borderColor: colors.border,
   },
-  // D2: one category tile everywhere — deep-green surface, gold hairline,
-  // gold glyph. The saturated per-category fills are retired in dark; light
-  // keeps them.
-  thumbFallbackDark: {
-    backgroundColor: colors.mint,
-  },
   body: {
     flex: 1,
-    // Pins the pay/age line to the bottom of the thumbnail's height, so it
-    // sits on the same baseline on every card regardless of title length.
-    height: THUMB_SIZE,
-    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
-  bodyTop: {
-    gap: 3,
+  // One line each: the title beside the price, the hint beside the bids and the age.
+  lineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   // Decision 9: a card title is display type. Master 10 draws it serif.
   title: {
+    ...textScale.headline,
     fontFamily: fonts.display,
-    fontSize: 18,
-    fontWeight: '700',
+    flex: 1,
     color: colors.ink,
-    lineHeight: 23,
   },
   meta: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
+    flex: 1,
     color: colors.textMuted,
   },
   ownBadge: {
@@ -216,43 +210,30 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radius.pill,
-    marginTop: 2,
   },
   // Masters 10 and 12 draw "Your job" as the sage chip with green content,
   // not the teal info pair; light keeps the Heritage info tones.
   ownBadgeDark: { backgroundColor: colors.mint },
   ownBadgeText: {
-    fontSize: 10,
+    ...textScale.caption,
     fontWeight: '700',
     color: colors.info,
   },
   ownBadgeTextDark: { color: colors.emerald },
-  footerRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
   // Eyebrow law: a money value is emerald, and the serif carries prices.
   // Master 10 draws this one gold — the same B-4 split masters 12/13 carry —
   // and decision 6 settles it green everywhere.
   budget: {
-    flexShrink: 1,
+    ...textScale.headline,
     fontFamily: fonts.display,
-    fontSize: 18,
     fontWeight: '800',
     color: colors.money,
+    fontVariant: ['tabular-nums'],
   },
   budgetDark: { color: colors.money },
-  bids: {
-    flexShrink: 1,
-    fontSize: 12,
-    fontWeight: '600',
+  facts: {
+    ...textScale.footnote,
     color: colors.textMuted,
-  },
-  time: {
-    fontSize: 12,
-    color: colors.textSubtle,
   },
   skeletonLine: {
     height: 12,

@@ -43,9 +43,11 @@ const formattersModule = (async () => {
   // 2026-09-30 (idea 5): arrivalWindowLabel moves the window by a running-late tap through
   // lib/runningLate.ts — itself pure, with no imports — so the span is evaluated beside it: the one
   // shift rule, executed, never a copy of it.
-  const lateJs = stripTypeScriptTypes(await read('lib/runningLate.ts'), { mode: 'strip' });
+  // C9 (A4-M4): runningLate reads the market's day from lib/time.ts, pointed at its file the same way.
+  const timeUrl = pathToFileURL(join(root, 'lib/time.ts')).href;
+  const lateJs = stripTypeScriptTypes(await read('lib/runningLate.ts'), { mode: 'strip' }).replace("from './time'", `from '${timeUrl}'`);
   // F19: the span's day label is lib/time.ts's formatDayKey, imported from its file.
-  const timeImport = `import { formatDayKey } from '${pathToFileURL(join(root, 'lib/time.ts')).href}';`;
+  const timeImport = `import { formatDayKey } from '${timeUrl}';`;
   return import(toDataUrl(`${timeImport}\n${lateJs}\n${jobsJs.slice(start, end)}`));
 })();
 

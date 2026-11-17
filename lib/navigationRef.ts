@@ -97,6 +97,10 @@ export type CrossTabOptions = {
   inPlace?: boolean;
 };
 
+/** P13: pages a cross-tab call opens in the tab you are on, when its stack has them: the page slides
+ *  in there, that tab stays lit, and Back returns to it (navigation/sharedStacks.tsx jobPageScreens). */
+const IN_PLACE_SCREENS = new Set(['ClientJobDetail', 'WorkerJob', 'JobDetail', 'Checkout', 'Chat', 'PostJob', 'WorkerResults', 'Payouts']);
+
 /** E5: the focused tab, when its stack has rendered and registers `screen`. */
 function focusedTabWith(screen: string): string | undefined {
   const root = navigationRef.getRootState();
@@ -111,7 +115,7 @@ function focusedTabWith(screen: string): string | undefined {
  *
  * WHY THIS EXISTS AS ONE FUNCTION
  * `Home` is the mode-defining tab (BRAZOS_MASTER_PLAN.md §F): its stack is
- * `HomeMain/PostJob/WorkerSearch/...` in customer mode and
+ * `HomeMain/PostJob/WorkerProfile/...` in customer mode and
  * `WorkerHome/WorkerResults/JobDetail/...` in worker mode, and only one of the
  * two trees is ever mounted. The other four tabs are shared. So a nested
  * `navigate('Home', { screen: 'WorkerResults' })` written inside a SHARED
@@ -133,7 +137,7 @@ export function navigateAcrossTabs(
   options?: CrossTabOptions
 ): void {
   navigateWhenReady(() => {
-    if (options?.inPlace && screen) tab = focusedTabWith(screen) ?? tab;
+    if (screen && (options?.inPlace || IN_PLACE_SCREENS.has(screen))) tab = focusedTabWith(screen) ?? tab;
     if (canNavigateTo(tab, screen)) {
       if (screen) {
         navigationRef.navigate(tab, {

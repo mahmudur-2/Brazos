@@ -94,9 +94,10 @@ test('B3 · the inbox Support pill reaches the team through the published addres
   assert.doesNotMatch(filters, /coming soon/i);
 
   const inbox = stripComments(read('screens/MessagesInboxScreen.tsx'));
-  assert.match(inbox, /import \{ SUPPORT_EMAIL, supportMailtoUrl \} from '\.\.\/lib\/appLinks';/);
-  assert.match(inbox, /await Linking\.openURL\(supportMailtoUrl\(\)\);/);
-  assert.match(inbox, /alertAsync\('Could not open your mail app', `Write to \$\{SUPPORT_EMAIL\}\.`\)/);
+  // T5: the app's one opener (lib/appLinks.ts openSupportMail, run on both paths in
+  // tests/supportContact.test.mjs); the inbox keeps no copy.
+  assert.match(inbox, /import \{ openSupportMail \} from '\.\.\/lib\/appLinks';/);
+  assert.doesNotMatch(inbox, /function openSupportMail|Linking|supportMailtoUrl/);
   assert.match(inbox, /onPress=\{\(\) => void openSupportMail\(\)\}/);
 });
 

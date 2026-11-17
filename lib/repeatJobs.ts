@@ -13,9 +13,9 @@ export const SERIES_CADENCES: readonly SeriesCadence[] = ['weekly', 'biweekly', 
 
 /** The drawn words: "Repeat this job · Every 2 weeks". */
 export const CADENCE_LABELS: Record<SeriesCadence, string> = {
-  weekly: 'Every week',
-  biweekly: 'Every 2 weeks',
-  monthly: 'Every month',
+  weekly: 'Every Week',
+  biweekly: 'Every 2 Weeks',
+  monthly: 'Every Month',
 };
 
 export type JobSeries = {

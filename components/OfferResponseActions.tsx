@@ -2,11 +2,11 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Button } from './Button';
 import { StatusBadge } from './StatusBadge';
 import {
-  COUNTER_OFFER_ACTION_LABEL,
+  COUNTER_OPENER_LABEL,
   COUNTERS_SPENT_NOTE,
+  DECLINE_OPENER_LABEL,
   YOUR_MOVE_BADGE_LABEL,
   acceptOfferActionLabel,
-  declineOfferActionLabel,
   offerResponseHeading,
 } from '../lib/offerCopy';
 import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
@@ -64,6 +64,11 @@ type OfferResponseActionsProps = {
    * and wording are identical, which is the point of the component.
    */
   compact?: boolean;
+  /**
+   * A2-M5 A11: the job's booked time has passed, so the server refuses accept and counter. The card
+   * shows its facts (a plain Pending badge, the amount, the caller's note) and no buttons. Absent is false.
+   */
+  actionsClosed?: boolean;
 };
 
 export function OfferResponseActions({
@@ -78,6 +83,7 @@ export function OfferResponseActions({
   onCounter,
   onDecline,
   compact = false,
+  actionsClosed = false,
 }: OfferResponseActionsProps) {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
@@ -89,7 +95,8 @@ export function OfferResponseActions({
         <Text style={[styles.heading, compact && styles.headingCompact]}>
           {offerResponseHeading(senderFirstName, isCounter, viewerIsWorker)}
         </Text>
-        <StatusBadge status="pending" label={YOUR_MOVE_BADGE_LABEL} />
+        {/* Not "Your Move" once nothing can be done: the offer's own state. */}
+        <StatusBadge status="pending" label={actionsClosed ? undefined : YOUR_MOVE_BADGE_LABEL} />
       </View>
 
       <Text style={[styles.amount, compact && styles.amountCompact]}>
@@ -98,38 +105,39 @@ export function OfferResponseActions({
 
       <Text style={[styles.note, compact && styles.noteCompact]}>{note}</Text>
 
-      <View style={styles.actions}>
-        <Button
-          title={acceptOfferActionLabel(amountLabel, viewerIsWorker)}
-          icon="checkmark"
-          iconPosition="leading"
-          size={buttonSize}
-          onPress={onAccept}
-          disabled={busy}
-        />
-        {canCounter ? (
+      {/* A2-M4 (direction §7, the bid card's order): the quiet pair of one width and one height,
+          then the main Accept under it. The one red stays for the dangerous Cancel Job. */}
+      {actionsClosed ? null : (
+        <View style={styles.actions}>
+          <View style={styles.pair}>
+            <Button
+              title={DECLINE_OPENER_LABEL}
+              variant="quiet"
+              size={buttonSize}
+              onPress={onDecline}
+              disabled={busy}
+              style={styles.pairButton}
+            />
+            {canCounter ? (
+              <Button
+                title={COUNTER_OPENER_LABEL}
+                variant="quiet"
+                size={buttonSize}
+                onPress={onCounter}
+                disabled={busy}
+                style={styles.pairButton}
+              />
+            ) : null}
+          </View>
+          {canCounter ? null : <Text style={styles.capNote}>{COUNTERS_SPENT_NOTE}</Text>}
           <Button
-            title={COUNTER_OFFER_ACTION_LABEL}
-            icon="swap-horizontal"
-            iconPosition="leading"
-            variant="secondary"
+            title={acceptOfferActionLabel(amountLabel, viewerIsWorker)}
             size={buttonSize}
-            onPress={onCounter}
+            onPress={onAccept}
             disabled={busy}
           />
-        ) : (
-          <Text style={styles.capNote}>{COUNTERS_SPENT_NOTE}</Text>
-        )}
-        <Button
-          title={declineOfferActionLabel(viewerIsWorker)}
-          icon="close"
-          iconPosition="leading"
-          variant="destructive"
-          size={buttonSize}
-          onPress={onDecline}
-          disabled={busy}
-        />
-      </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -183,6 +191,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   actions: {
     marginTop: spacing.xs,
     gap: spacing.sm,
+  },
+  pair: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  pairButton: {
+    flex: 1,
+    minWidth: 0,
   },
   capNote: {
     fontSize: 12,

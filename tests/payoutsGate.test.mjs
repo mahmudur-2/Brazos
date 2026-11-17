@@ -28,9 +28,9 @@ globalThis.__DEV__ = false;
 const { userMessage } = await import(new URL('../lib/errorMessage.ts', import.meta.url).href);
 
 const SET_UP = {
-  title: 'Finish payout set-up first',
+  title: 'Finish Payout Set-Up First',
   body: 'You need a payout account before you can send offers.',
-  cta: 'Set up payouts',
+  cta: 'Set Up Payouts',
 };
 const UNDER_REVIEW = {
   title: null,

@@ -10,23 +10,23 @@ appId: app.brazos.mobile.preview
     optional: true
 - runFlow: subflows/launch-recover.yml
 - extendedWaitUntil:
-    visible: "I already have an account"
+    visible: "I Already Have an Account"
     timeout: 60000
-- assertVisible: "Continue with phone"
+- assertVisible: "Continue with Phone"
 # B12: the e2e build has phone sign-in live, so every new account carries a verified phone.
-- assertNotVisible: "Continue with email"
+- assertNotVisible: "Continue with Email"
 - takeScreenshot: 01-welcome
 
 # Phone create account: no email sign-up; the empty form names each missing field (Create itself is never sent).
 - runFlow:
     file: subflows/welcome-tap.yml
     env:
-      TAP: "Continue with phone"
+      TAP: "Continue with Phone"
       NEXT: "One account. Two ways to use it."
 - assertNotVisible: "Use Email Instead"
 - tapOn: "Switch modes to hire help or find work."
 - tapOn:
-    text: "Create account"
+    text: "Create Account"
     below: "Phone number, United States, plus 1"
 - assertVisible: "Enter your full name."
 - assertVisible: "Enter your phone number."
@@ -34,12 +34,12 @@ appId: app.brazos.mobile.preview
 
 # Email sign-in: both fields required; Forgot password needs the email first (no reset mail is ever sent).
 - extendedWaitUntil:
-    visible: "I already have an account"
+    visible: "I Already Have an Account"
     timeout: 15000
 - runFlow:
     file: subflows/welcome-tap.yml
     env:
-      TAP: "I already have an account"
+      TAP: "I Already Have an Account"
       NEXT: "Sign in to Brazos"
 - tapOn: "Continue"
 - assertVisible: "Enter your phone number."
@@ -61,7 +61,7 @@ appId: app.brazos.mobile.preview
     timeout: 15000
 - tapOn: "Country: United States, plus 1"
 - extendedWaitUntil:
-    visible: "Select country"
+    visible: "Select Country"
     timeout: 15000
 - tapOn: "Search countries by name or code"
 - inputText: "Canada"
@@ -71,7 +71,7 @@ appId: app.brazos.mobile.preview
     timeout: 15000
 - tapOn: "Country: Canada, plus 1"
 - extendedWaitUntil:
-    visible: "Select country"
+    visible: "Select Country"
     timeout: 15000
 - tapOn: "Search countries by name or code"
 - inputText: "United States"
@@ -100,7 +100,7 @@ appId: app.brazos.mobile.preview
 - runFlow: subflows/ensure-mode-customer.yml
 - takeScreenshot: 01-customer-home
 - runFlow: subflows/sign-out.yml
-- assertVisible: "Continue with phone"
+- assertVisible: "Continue with Phone"
 
 # Account B (worker).
 - launchApp:
@@ -120,4 +120,4 @@ appId: app.brazos.mobile.preview
 - runFlow: subflows/ensure-mode-worker.yml
 - takeScreenshot: 01-worker-home
 - runFlow: subflows/sign-out.yml
-- assertVisible: "Continue with phone"
+- assertVisible: "Continue with Phone"

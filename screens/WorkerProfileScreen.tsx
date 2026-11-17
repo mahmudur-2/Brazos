@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,7 +12,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { Chip } from '../components/Chip';
 import { PhotoViewer } from '../components/PhotoViewer';
+import { PressScale } from '../components/PressScale';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { ReportContentLink } from '../components/ReportContentLink';
@@ -42,24 +43,24 @@ import type {
   WorkerProfileRouteParamList,
 } from '../lib/navigation';
 import {
-  fonts,
-  radius,
+  eyebrowStyle,
   spacing,
   starColors,
+  textScale,
   themedStyles,
   useThemeColors,
   type ColorPalette,
   screenGround,
-  touchSlop,
 } from '../lib/theme';
-import { useScrollClearance } from '../ui/primitives';
+import { Divider, FloatingAction, useScrollClearance } from '../ui/primitives';
 import { SPINNER_STATE, ScreenStateView, loadErrorTitle } from '../ui/templates/ScreenStates';
 
 /**
  * Read-only view of another user's profile — the public face of a worker's
- * reputation: the 4E hero trust content (rating · jobs completed ·
- * responds-in, positive-only and non-null only — lib/workerHeroCard.ts),
- * and the categories they work in.
+ * reputation: the 4E hero trust content (rating · jobs completed,
+ * positive-only and non-null only — lib/workerHeroCard.ts), and the
+ * categories they work in. No responds-in row: profiles.response_time is
+ * written by nothing that measures this worker's replies, so it is not shown.
  *
  * Everything here is readable by any signed-in user: `profiles` is already
  * public-readable, and the completed-job stats come from the
@@ -229,6 +230,10 @@ export function WorkerProfileScreen() {
   const canOffer = !!user && !isSelf && recipientActive && hireable;
   const heroTrust = deriveWorkerHeroTrust({ profile, ratingSummary, stats: jobStats });
 
+  // F11, as on the bid card: the small "New" tag only while there is no rating to show.
+  const showNewTag = heroTrust.newWorker ? heroTrust.rating === null : false;
+  const hasStats = heroTrust.rating !== null || heroTrust.completedJobs != null;
+
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader title="Worker Profile" onBack={goBackOrHome} />
@@ -238,37 +243,38 @@ export function WorkerProfileScreen() {
       ) : error ? (
         <ScreenStateView state={{ kind: 'error', title: loadErrorTitle('this profile'), message: error, onRetry: load }} />
       ) : (
+        <>
+        {/* The offer floats in the bar's place (FloatingAction hides the bar), so the list ends
+            above it, not above the pill. */}
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
+          style={styles.scroll}
+          contentContainerStyle={[styles.content, canOffer ? { paddingBottom: spacing.xl } : { paddingBottom: navClearance }]}
           showsVerticalScrollIndicator={false}
         >
-          <Card>
-            <View style={styles.headerRow}>
-              <AvatarPressable
-                name={name}
-                uri={profile?.avatar_url}
-                size={64}
-                onLongPress={
-                  profile?.avatar_url ? () => setAvatarUri(profile.avatar_url) : undefined
-                }
-              />
-              <View style={styles.headerText}>
-                <View style={styles.nameRow}>
-                  <Text style={styles.name} numberOfLines={1}>
-                    {name}
-                  </Text>
-                </View>
-                {/* 4E hero trust content — positive-only, real reads,
-                    non-null only (lib/workerHeroCard.ts). A rating with zero
-                    REVEALED worker-role reviews is not a fact, so with none
-                    there is no rating row at all — no stand-in, no "no
-                    reviews yet" placeholder — and nothing to open
-                    ProfileReviews on either, so the reviews entry exists
-                    only with reviews. With revealed reviews the number is
-                    D1's shown_average, or the word "New" while the
-                    reputation is too young for one. */}
+          {/* The person leads: picture, name, then the facts other people made (lib/workerHeroCard.ts:
+              positive-only, real reads, non-null only). */}
+          <Card style={styles.hero}>
+            <AvatarPressable
+              name={name}
+              uri={profile?.avatar_url}
+              size={88}
+              onLongPress={
+                profile?.avatar_url ? () => setAvatarUri(profile.avatar_url) : undefined
+              }
+            />
+            <Text style={styles.name} numberOfLines={2}>
+              {name}
+            </Text>
+            {showNewTag ? <Chip variant="soft" size="sm" label="New" /> : null}
+
+            {hasStats ? (
+              <Card level="well" style={styles.stats}>
+                {/* A rating with zero REVEALED worker-role reviews is not a fact, so with none there
+                    is no rating cell and nothing to open ProfileReviews on. Under the star threshold
+                    the count stands alone; a star only beside a rating (F11). */}
                 {heroTrust.rating ? (
-                  <Pressable
+                  <PressScale
+                    haptic={false}
                     onPress={() =>
                       navigation.navigate('ProfileReviews', {
                         userId: params.workerId,
@@ -276,61 +282,55 @@ export function WorkerProfileScreen() {
                         role: 'worker',
                       })
                     }
-                    hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                    style={styles.stat}
                     accessibilityRole="button"
                     accessibilityLabel={`See all ${heroTrust.rating.count} reviews for ${name}`}
-                    style={({ pressed }) => [styles.proofRow, pressed && styles.proofRowPressed]}
                   >
-                    <Ionicons name="star" size={14} color={starColors(colors, isDark).filled} />
-                    <Text style={styles.proofStrong}>
-                      {heroTrust.rating.isNew ? 'New' : heroTrust.rating.shownAverage.toFixed(1)}
-                    </Text>
-                    <Text style={styles.proofMuted}>
-                      {`(${heroTrust.rating.count} ${
-                        heroTrust.rating.count === 1 ? 'review' : 'reviews'
-                      })`}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={13} color={colors.textSubtle} />
-                  </Pressable>
+                    <View style={styles.statValueRow}>
+                      {heroTrust.rating.isNew ? null : (
+                        <Ionicons name="star" size={16} color={starColors(colors, isDark).filled} />
+                      )}
+                      <Text style={styles.statValue}>
+                        {heroTrust.rating.isNew
+                          ? heroTrust.rating.count
+                          : heroTrust.rating.shownAverage.toFixed(1)}
+                      </Text>
+                    </View>
+                    <View style={styles.statValueRow}>
+                      <Text style={styles.statLabel}>
+                        {heroTrust.rating.isNew
+                          ? heroTrust.rating.count === 1 ? 'review' : 'reviews'
+                          : `${heroTrust.rating.count} ${heroTrust.rating.count === 1 ? 'review' : 'reviews'}`}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={12} color={colors.textSubtle} />
+                    </View>
+                  </PressScale>
                 ) : null}
-                {heroTrust.newWorker ? (
-                  <View style={styles.proofRow}>
-                    <Ionicons name="leaf-outline" size={13} color={colors.emerald} />
-                    <Text style={styles.proofMuted}>New worker</Text>
+                {heroTrust.rating && heroTrust.completedJobs != null ? (
+                  <Divider orientation="vertical" />
+                ) : null}
+                {heroTrust.completedJobs != null ? (
+                  <View style={styles.stat}>
+                    <Text style={styles.statValue}>{heroTrust.completedJobs}</Text>
+                    <Text style={styles.statLabel}>
+                      {`${heroTrust.completedJobs === 1 ? 'job' : 'jobs'} completed`}
+                    </Text>
                   </View>
-                ) : (
-                  <>
-                    {heroTrust.completedJobs != null ? (
-                      <View style={styles.proofRow}>
-                        <Ionicons name="briefcase-outline" size={13} color={colors.textMuted} />
-                        <Text style={styles.proofMuted}>
-                          {`${heroTrust.completedJobs} ${
-                            heroTrust.completedJobs === 1 ? 'job' : 'jobs'
-                          } completed`}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {heroTrust.respondsIn ? (
-                      <View style={styles.proofRow}>
-                        <Ionicons name="time-outline" size={13} color={colors.textMuted} />
-                        <Text style={styles.proofMuted}>{`Responds in ${heroTrust.respondsIn}`}</Text>
-                      </View>
-                    ) : null}
-                  </>
-                )}
-              </View>
-            </View>
+                ) : null}
+              </Card>
+            ) : null}
 
             {profile?.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
 
             {profile?.categories && profile.categories.length > 0 && (
               <View style={styles.chips}>
                 {profile.categories.map((c) => (
-                  <View key={c} style={[styles.chip, isDark && styles.chipDark]}>
-                    <Text style={[styles.chipText, isDark && styles.chipTextDark]}>
-                      {JOB_CATEGORY_LABELS[c as keyof typeof JOB_CATEGORY_LABELS] ?? c}
-                    </Text>
-                  </View>
+                  <Chip
+                    key={c}
+                    variant="soft"
+                    size="sm"
+                    label={JOB_CATEGORY_LABELS[c as keyof typeof JOB_CATEGORY_LABELS] ?? c}
+                  />
                 ))}
               </View>
             )}
@@ -354,50 +354,47 @@ export function WorkerProfileScreen() {
           ) : null}
 
           {services.length > 0 ? (
-            <Card style={styles.servicesCard}>
-              <Text style={styles.servicesTitle}>Services & pricing</Text>
-              {services.map((service) => (
-                <View key={service.id} style={styles.serviceRow}>
-                  <View style={styles.serviceMain}>
-                    <View style={styles.serviceCopy}>
-                      <Text style={styles.serviceName} numberOfLines={1}>
-                        {service.title}
-                        {service.published ? '' : '  ·  Draft'}
-                      </Text>
-                      {service.description ? (
-                        <Text style={styles.serviceDescription} numberOfLines={2}>
-                          {service.description}
+            <View style={styles.section}>
+              <Text accessibilityRole="header" style={styles.sectionLabel}>Services & Pricing</Text>
+              <Card style={styles.servicesCard}>
+                {services.map((service, index) => (
+                  <View key={service.id} style={styles.serviceRow}>
+                    {index > 0 ? <Divider /> : null}
+                    <View style={styles.serviceMain}>
+                      <View style={styles.serviceCopy}>
+                        <Text style={styles.serviceName} numberOfLines={1}>
+                          {service.title}
+                          {service.published ? '' : '  ·  Draft'}
                         </Text>
-                      ) : null}
+                        {service.description ? (
+                          <Text style={styles.serviceDescription} numberOfLines={2}>
+                            {service.description}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Text style={styles.servicePrice}>{servicePriceLabel(service)}</Text>
                     </View>
-                    <Text style={styles.servicePrice}>{servicePriceLabel(service)}</Text>
+                    {/* §6.2 — published rows carry the booking entry for a
+                        viewer who can offer; a null price is the "Ask me" case
+                        and opens the same composer with no amount. */}
+                    {!isSelf && canOffer && service.published ? (
+                      <Button
+                        variant="quiet"
+                        size="sm"
+                        title={service.price_cents != null ? 'Request at listed price' : 'Ask about this'}
+                        onPress={() => bookService(service)}
+                        accessibilityLabel={
+                          service.price_cents != null
+                            ? `Book ${service.title} at ${servicePriceLabel(service)}`
+                            : `Ask about ${service.title}`
+                        }
+                        style={styles.serviceBook}
+                      />
+                    ) : null}
                   </View>
-                  {/* §6.2 — published rows carry the booking entry for a
-                      viewer who can offer; a null price is the "Ask me" case
-                      and opens the same composer with no amount. */}
-                  {!isSelf && canOffer && service.published ? (
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.serviceBook,
-                        pressed && styles.serviceBookPressed,
-                      ]}
-                      onPress={() => bookService(service)}
-                      hitSlop={touchSlop(40)}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        service.price_cents != null
-                          ? `Book ${service.title} at ${servicePriceLabel(service)}`
-                          : `Ask about ${service.title}`
-                      }
-                    >
-                      <Text style={styles.serviceBookText}>
-                        {service.price_cents != null ? 'Request at listed price' : 'Ask about this'}
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              ))}
-            </Card>
+                ))}
+              </Card>
+            </View>
           ) : null}
 
           {canOffer && (
@@ -412,17 +409,6 @@ export function WorkerProfileScreen() {
                   ? `Send ${firstName} a job with a price. It arrives as an offer in your existing conversation — they can accept, decline, or suggest a different price before anything is booked.`
                   : `Send ${firstName} a job with a price. It goes to them privately — nobody else sees it, and it never appears in open jobs. They can accept, decline, or suggest a different price before anything is booked.`}
               </Text>
-              <Button
-                title="Send an offer"
-                icon="paper-plane-outline"
-                onPress={() =>
-                  navigation.navigate('PostJob', {
-                    hireWorkerId: params.workerId,
-                    hireWorkerName: profile?.full_name ?? params.workerName ?? 'this worker',
-                  })
-                }
-                style={styles.hireAction}
-              />
             </Card>
           )}
 
@@ -432,9 +418,22 @@ export function WorkerProfileScreen() {
             subject={{ kind: 'profile', id: params.workerId }}
             reportedId={params.workerId}
             reportedName={name}
-            label="Report this profile"
+            label="Report This Profile"
+            style={styles.report}
           />
         </ScrollView>
+        {canOffer ? (
+          <FloatingAction
+            title="Send an Offer"
+            onPress={() =>
+              navigation.navigate('PostJob', {
+                hireWorkerId: params.workerId,
+                hireWorkerName: profile?.full_name ?? params.workerName ?? 'this worker',
+              })
+            }
+          />
+        ) : null}
+        </>
       )}
 
       <PhotoViewer
@@ -449,32 +448,89 @@ export function WorkerProfileScreen() {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  scroll: {
+    flex: 1,
+  },
+  content: {
+    padding: spacing.lg,
+    gap: spacing.lg,
+  },
+  hero: {
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingTop: spacing.xl,
+  },
+  // Decision 9: identity and card headings are display type.
+  name: {
+    ...textScale.heading,
+    color: colors.ink,
+    textAlign: 'center',
+  },
+  stats: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+  },
+  stat: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  statValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  statValue: {
+    ...textScale.title,
+    color: colors.ink,
+    fontVariant: ['tabular-nums'],
+  },
+  statLabel: {
+    ...textScale.footnote,
+    color: colors.textMuted,
+  },
+  bio: {
+    ...textScale.callout,
+    fontWeight: '400',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
   availabilityCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
   },
   availabilityText: {
+    ...textScale.body,
     flex: 1,
-    fontSize: 14,
     color: colors.text,
-    lineHeight: 20,
+  },
+  section: {
+    gap: spacing.sm,
+  },
+  sectionLabel: {
+    ...eyebrowStyle(colors),
+    marginLeft: spacing.xs,
   },
   servicesCard: {
-    gap: spacing.sm,
-  },
-  servicesTitle: {
-    fontFamily: fonts.display,
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.ink,
+    gap: spacing.md,
   },
   serviceRow: {
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    minHeight: 48,
+    gap: spacing.md,
   },
   serviceMain: {
     flexDirection: 'row',
@@ -483,138 +539,37 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   serviceCopy: {
     flex: 1,
-    gap: 2,
-  },
-  serviceBook: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.lg,
-    minHeight: 40,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.emerald,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  serviceBookPressed: {
-    opacity: 0.8,
-  },
-  serviceBookText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.emerald,
+    gap: spacing.xs,
   },
   serviceName: {
-    fontSize: 15,
-    fontWeight: '700',
+    ...textScale.headline,
     color: colors.ink,
   },
   serviceDescription: {
-    fontSize: 12,
+    ...textScale.footnote,
     color: colors.textMuted,
-    lineHeight: 17,
   },
   servicePrice: {
-    fontSize: 14,
-    fontWeight: '800',
+    ...textScale.headline,
     color: colors.money,
+    fontVariant: ['tabular-nums'],
   },
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  headerText: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  // Decision 9: identity and card headings are display type.
-  name: {
-    flexShrink: 1,
-    fontFamily: fonts.display,
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  proofRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
+  serviceBook: {
     alignSelf: 'flex-start',
   },
-  proofRowPressed: {
-    opacity: 0.6,
-  },
-  proofStrong: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  proofMuted: {
-    fontSize: 13,
-    color: colors.textMuted,
-  },
-  bio: {
-    fontSize: 15,
-    color: colors.text,
-    lineHeight: 21,
-    marginTop: spacing.md,
-  },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primarySoft,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  // Master 18 draws the identity card's category chips as gold OUTLINES with
-  // cream labels; light keeps the Heritage sage-filled pair.
-  chipDark: {
-    backgroundColor: 'transparent',
-    borderColor: colors.gold,
-  },
-  chipText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  chipTextDark: { color: colors.ink },
   hireCard: {
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   hireTitle: {
-    fontFamily: fonts.display,
-    fontSize: 22,
-    fontWeight: '700',
+    ...textScale.title,
     color: colors.ink,
   },
   hireText: {
-    fontSize: 14,
+    ...textScale.body,
     color: colors.textMuted,
-    lineHeight: 20,
   },
-  hireAction: {
-    marginTop: spacing.md,
+  report: {
+    alignSelf: 'center',
   },
   }),
 );

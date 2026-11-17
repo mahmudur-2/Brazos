@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { Animated } from 'react-native';
-import { tap } from '../lib/haptics';
+import { select, tap } from '../lib/haptics';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { useReducedMotion } from './useReducedMotion';
 
@@ -67,10 +67,20 @@ export type PressFeedback = {
 export type PressFeedbackOptions = {
   /**
    * FIX-RUN F12 — the light tap as the finger lands. Default true; a row inside a scroller passes
-   * false, so a scroll that happens to start on a row does not buzz.
+   * false, so a scroll that happens to start on a row does not buzz. A2-M2: 'select' gives the
+   * selection tick instead, for a control that CHOOSES (a switch, a choice chip).
    */
-  haptic?: boolean;
+  haptic?: PressHaptic;
 };
+
+/** true: the light tap; 'select': the selection tick; false: none. */
+export type PressHaptic = boolean | 'select';
+
+/** The haptic a press gives as the finger lands. */
+export function pressHaptic(haptic: PressHaptic): void {
+  if (haptic === 'select') select();
+  else if (haptic) tap();
+}
 
 export function usePressFeedback({ haptic = true }: PressFeedbackOptions = {}): PressFeedback {
   const scale = useRef(new Animated.Value(1)).current;
@@ -90,7 +100,7 @@ export function usePressFeedback({ haptic = true }: PressFeedbackOptions = {}): 
   );
 
   const onPressIn = useCallback(() => {
-    if (haptic) tap();
+    pressHaptic(haptic);
     spring(PRESS_SCALE);
   }, [haptic, spring]);
 

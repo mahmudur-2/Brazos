@@ -9,7 +9,7 @@
  */
 
 /** The row's words, one place. */
-export const QUIET_HOURS_LABEL = 'Quiet hours';
+export const QUIET_HOURS_LABEL = 'Quiet Hours';
 export const QUIET_HOURS_HINT = 'Midnight to 6 am. Nearby alerts wait.';
 
 /**

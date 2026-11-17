@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { RemoteImage } from './RemoteImage';
 import { AvatarPressable } from './AvatarPressable';
 import {
+  litRowStyle,
   radius,
   spacing,
   themedStyles,
@@ -47,7 +48,7 @@ export const ChatBubble = memo(function ChatBubble({
   replyToName,
   onLongPressAvatarUri,
 }: ChatBubbleProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const isUnsent = !!message.unsent_at;
   const onLongPress = onLongPressMessage && !isUnsent ? () => onLongPressMessage(message) : undefined;
@@ -73,7 +74,10 @@ export const ChatBubble = memo(function ChatBubble({
         <View
           style={[
             styles.bubble,
-            isOwn ? styles.bubbleOwn : styles.bubbleOther,
+            // Theirs is the list's lit row (the lit card's fill, rim and edge
+            // in one cheap layer): it stands on the ground in both themes, as
+            // every card does, while mine stays the solid accent.
+            isOwn ? styles.bubbleOwn : [styles.bubbleOther, litRowStyle(isDark)],
             isUnsent && styles.unsentBubble,
           ]}
         >

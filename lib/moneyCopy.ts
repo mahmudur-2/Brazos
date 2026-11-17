@@ -17,9 +17,9 @@ import type { PaymentStatus } from './payments';
  * and "You received" under a worker's is what they got.
  */
 
-export const FEE_NAME = 'Protection fee';
+export const FEE_NAME = 'Protection Fee';
 export const HELD_IN_PROTECTION = 'Held in protection';
-export const PAY_AND_PROTECT = 'Pay & protect';
+export const PAY_AND_PROTECT = 'Pay & Protect';
 
 export type MoneyViewer = 'customer' | 'worker';
 
@@ -175,7 +175,7 @@ export const PAYMENT_HELD_NOT_INSURANCE =
  * formatBudget, passed in so this module keeps no runtime imports.
  * ------------------------------------------------------------------------- */
 
-export type CancelConfirmCopy = { title: string; message: string; confirmText: string; cancelText: string };
+export type CancelConfirmCopy = { title: string; message: string; confirmText: string };
 
 type CustomerCancelPreviewShape =
   | { kind: 'no_charge' }
@@ -193,7 +193,7 @@ export function customerCancelConfirm(
   preview: CustomerCancelPreviewShape,
   opts: { workerFirstName: string; format: (cents: number) => string }
 ): CancelConfirmCopy {
-  const base = { title: 'Cancel this job?', confirmText: 'Cancel job', cancelText: 'Keep job' };
+  const base = { title: 'Cancel this job?', confirmText: 'Cancel Job' };
   const { workerFirstName: worker, format } = opts;
   if (!preview) {
     return {
@@ -239,9 +239,25 @@ export function workerCancelConfirm(opts: { customerFirstName: string; paid: 'he
   return {
     title: 'Cancel this job?',
     message: `${money} ${customer} is told you cancelled. ${CANNOT_UNDO}`,
-    confirmText: 'Cancel this job',
-    cancelText: 'Keep job',
+    confirmText: 'Cancel This Job',
   };
+}
+
+/**
+ * A4 wiring (A4): trip_day's refusal before the job's day, word for word ("This job is booked for
+ * <day>; the trip and the start open on that day.", mark_worker_arrival and transition_job_status).
+ */
+export function isBookedDayRefusal(error: { message?: string | null } | null | undefined): boolean {
+  return /^This job is booked for [^;]+; the trip and the start open on that day\.$/.test(error?.message ?? '');
+}
+
+/**
+ * The one line beside that refusal: a real change of date is the worker's own "Cancel This Job".
+ * The refusal comes only after the start's money rule passed (a held payment), so the customer is
+ * refunded in full, as workerCancelConfirm says for a held payment.
+ */
+export function bookedDayCancelLine(customerFirstName: string): string {
+  return `If the day has to change, use Cancel This Job on this page. ${customerFirstName} is refunded in full.`;
 }
 
 /** The worker's confirm for cancel_job('customer_no_show'): a claim, never a payout. */
@@ -254,7 +270,6 @@ export function noShowConfirm(opts: { customerFirstName: string; paid: 'held' | 
   return {
     title: `${customer} wasn’t there?`,
     message: `This closes the job. ${money} ${CANNOT_UNDO}`,
-    confirmText: 'Report no-show',
-    cancelText: 'Go back',
+    confirmText: 'Report No-Show',
   };
 }

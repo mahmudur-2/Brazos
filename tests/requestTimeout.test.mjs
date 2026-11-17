@@ -37,8 +37,10 @@ test('storage transfers are exempt; everything else is bounded', () => {
 });
 
 test('the client is created with the wrapper, and logout waits at most 5 s for the push detach', () => {
-  assert.match(read('lib/supabase.ts'), /global: \{ fetch: withRequestTimeout\(fetch\) \}/);
-  const auth = read('lib/AuthContext.tsx');
-  assert.match(auth, /const LOGOUT_PUSH_UNREGISTER_MS = 5000;/);
+  // B1: the suspension watcher sits outside it and hands every answer back untouched (tests/suspendedAccount).
+  assert.match(read('lib/supabase.ts'), /global: \{ fetch: watchSuspension\(withRequestTimeout\(watchServerClock\(fetch\)\)\) \}/);
+  // A4-M2 (R7-a): the bounded unregister moved to lib/signOut.ts endSession, with AuthContext's sign-out.
+  const auth = read('lib/signOut.ts');
+  assert.match(auth, /export const LOGOUT_PUSH_UNREGISTER_MS = 5000;/);
   assert.match(auth, /Promise\.race\(\[\s*unregisterPushToken\(\)\.catch\(\(\) => undefined\),/);
 });

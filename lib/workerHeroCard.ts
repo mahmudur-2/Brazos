@@ -27,8 +27,10 @@ import {
  * - completedJobs: null until the stats read answers (a pending or failed
  *   read is UNKNOWN, not zero), and a KNOWN zero also renders nothing —
  *   positive-only means no "0 jobs completed" line.
- * - respondsIn: profiles.response_time verbatim (a nullable free-text column
- *   the app never fabricates), trimmed; blank is null.
+ * - respondsIn: always null (C14, A4-M4). profiles.response_time is an
+ *   integer in SQL with no named unit (minutes? hours?), so any sentence
+ *   built on it would be a guess; the row stays hidden until the owner
+ *   names the unit, and a number can never reach a string method.
  * - newWorker: trustRowFor's verdict — requires KNOWING the worker has fewer
  *   than 3 completed jobs alongside a null on_time_pct. It replaces the fact
  *   rows entirely (the 4D-3 §5.3 reading), so a card never says both
@@ -41,13 +43,14 @@ export type WorkerHeroTrust = {
   newWorker: boolean;
   /** A positive completed-jobs total, or null (unknown or zero). */
   completedJobs: number | null;
-  /** The responds-in string to render after "Responds in ", or null. */
-  respondsIn: string | null;
+  /** Always null until the owner names response_time's unit (C14): "Responds in" never renders. */
+  respondsIn: null;
 };
 
 export type WorkerHeroProfileFacts = {
   on_time_pct?: number | null;
-  response_time?: string | null;
+  /** The SQL integer, unit unnamed; read by nothing here (C14). */
+  response_time?: number | null;
 } | null;
 
 export type WorkerHeroRatingSummary = {
@@ -77,11 +80,10 @@ export function deriveWorkerHeroTrust(input: {
     return { rating, newWorker: true, completedJobs: null, respondsIn: null };
   }
 
-  const respondsIn = profile?.response_time?.trim() || null;
   return {
     rating,
     newWorker: false,
     completedJobs: completed != null && completed > 0 ? completed : null,
-    respondsIn,
+    respondsIn: null,
   };
 }

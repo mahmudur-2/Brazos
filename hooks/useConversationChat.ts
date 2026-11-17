@@ -112,7 +112,8 @@ export function useConversationChat(
     setCursor((previous) => {
       const next: Record<string, string | null> = {};
       for (const { key, result } of results) {
-        next[key] = result.error ? previous[key] ?? null : since ?? result.data[0]?.created_at ?? null;
+        // C5: the page's own cursor — `since`, or its oldest row when the API cut the load short.
+        next[key] = result.error ? previous[key] ?? null : result.cursor;
       }
       return next;
     });
@@ -156,7 +157,7 @@ export function useConversationChat(
       const known = new Set(existing.map((m) => m.id));
       return { ...previous, [key]: [...result.data.filter((m) => !known.has(m.id)), ...existing] };
     });
-    setCursor((previous) => ({ ...previous, [key]: result.data[0]?.created_at ?? previous[key] ?? null }));
+    setCursor((previous) => ({ ...previous, [key]: result.cursor ?? previous[key] ?? null }));
     setHasMore((previous) => ({ ...previous, [key]: result.hasMore }));
   }, [byThread, cursor, hasMore]);
 

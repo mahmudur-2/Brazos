@@ -4,13 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthButton } from '../components/AuthButton';
 import { AuthField } from '../components/AuthField';
 import { AuthScaffold } from '../components/AuthScaffold';
-import { authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
+import { Card } from '../components/Card';
+import { authSizes, authSpacing, authType } from '../lib/authTheme';
 import {
   authSurface,
   fonts,
   themedStyles,
   useThemeColors,
-  withAlpha,
   type ColorPalette,
 } from '../lib/theme';
 import { completePasswordReset, MIN_PASSWORD_LENGTH, setRecoveryPending } from '../lib/passwordReset';
@@ -91,10 +91,12 @@ export function ResetPasswordScreen() {
     </Pressable>
   );
 
+  // The sign-in family's pair (screens/EmailSignInScreen.tsx): the main action,
+  // then the way out as the family's quiet well with its glyph.
   const footer = (
     <View style={styles.footer}>
-      <AuthButton title="Save new password" themed hero lit chevron onPress={handleSave} loading={saving} disabled={leaving} />
-      <AuthButton title="Cancel and sign out" themed variant="ghost" onPress={() => void handleLeave()} loading={leaving} disabled={saving} />
+      <AuthButton title="Save New Password" themed onPress={handleSave} loading={saving} disabled={leaving} />
+      <AuthButton title="Cancel and Sign Out" themed variant="quiet" icon="log-out-outline" onPress={() => void handleLeave()} loading={leaving} disabled={saving} />
     </View>
   );
 
@@ -110,6 +112,7 @@ export function ResetPasswordScreen() {
         </Text>
 
         <View style={styles.form}>
+          <Card style={styles.card}>
           <AuthField
             label="New password"
             themed
@@ -151,6 +154,7 @@ export function ResetPasswordScreen() {
             returnKeyType="done"
             onSubmitEditing={handleSave}
           />
+          </Card>
           {formError ? (
             <View style={styles.formError} accessibilityLiveRegion="polite">
               <Text style={styles.formErrorText}>{formError}</Text>
@@ -189,10 +193,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       marginTop: authSpacing.xl,
       gap: authSpacing.lg,
     },
+    // The fields in the family's one card.
+    card: {
+      gap: authSpacing.lg,
+    },
+    // The sign-in family's error: one red line under the card, no box.
     formError: {
-      padding: authSpacing.md,
-      borderRadius: authRadius.field,
-      backgroundColor: withAlpha(colors.danger, 0.14),
+      paddingHorizontal: authSpacing.xs,
     },
     formErrorText: {
       ...authType.note,
@@ -200,7 +207,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     footer: {
       gap: authSpacing.md,
-      minHeight: authSizes.heroButton,
+      minHeight: authSizes.button,
     },
   })
 );

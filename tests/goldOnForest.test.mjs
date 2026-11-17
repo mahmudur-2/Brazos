@@ -311,7 +311,8 @@ const D6_SURFACES = [
   ['components/ReportDialog.tsx', ['reasonSelectedDark', 'reasonTextSelectedDark']],
   ['screens/ServicesPricingScreen.tsx', ['categoryChipActiveDark']],
   ['screens/ApproveOrDisputeScreen.tsx', ['reasonRowActiveDark', 'radioActiveDark']],
-  ['screens/ReviewAndTipScreen.tsx', ['presetActiveDark', 'presetTextActiveDark']],
+  // G1b: ReviewAndTip's tip presets ARE the Chip above now (asserted in the test below), so the
+  // screen paints no selection of its own to fence.
 ];
 
 test('[static] selection in dark resolves through ONE helper, everywhere', () => {
@@ -357,6 +358,11 @@ test('[static] selection in dark resolves through ONE helper, everywhere', () =>
       );
     }
   }
+  // G1b: every tip preset is the fenced Chip, chosen by its own `selected`, and no local selected paint is left.
+  const tip = stripComments(read('screens/ReviewAndTipScreen.tsx'));
+  assert.match(tip, /<Chip\s+key=\{cents\}\s+label=\{formatBudget\(cents\)\}\s+selected=\{tipChoice === cents\}/);
+  assert.match(tip, /<Chip\s+label="Other"\s+selected=\{tipChoice === 'custom'\}/);
+  assert.doesNotMatch(tip, /presetActive|presetText/, 'the tip presets keep no selection paint beside the Chip');
 });
 
 test('[static] disabled is a neutral fill, never an opacity dim on a live colour', () => {
@@ -522,7 +528,7 @@ test('[static] master 18 was already built', () => {
   // and it dispatches the existing offer flow (PostJob with hireWorkerId), not
   // a new path.
   const profile = stripComments(read('screens/WorkerProfileScreen.tsx'));
-  assert.match(profile, /title="Send an offer"/);
+  assert.match(profile, /title="Send an Offer"/);
   assert.match(profile, /styles\.hireText/, 'the explanation master 18 draws must stay');
   assert.match(profile, /hireWorkerId: params\.workerId/);
 });

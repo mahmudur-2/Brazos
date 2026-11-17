@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Fix run, group D (one look) — the source fences for D3, D11 and D13.
+ * Fix run, group D (one look) — the source fences for D3, D11 and D13 (and A2-M1's one
+ * Reduce Transparency listener, beside D11.1's Surface fence).
  * Each test names the item it holds; the measure fences live beside their
  * tokens (D7 in tests/sectionLabels.test.mjs, D8 in tests/themeTokens.test.mjs).
  */
@@ -35,6 +37,50 @@ test('[static] D11.1: the pickers float on the menu material OPAQUE, so the rows
   assert.match(strip(read('components/PickerPopover.tsx')), /<Surface material="menu"[^>]*\bopaque\b/);
 });
 
+// A2-M1 — ONE Reduce Transparency query and ONE listener for the whole app, however many Surfaces
+// mount. EXECUTED: Surface.tsx's own store (its source, from the flag to the hook) runs against a
+// counting stand-in for AccessibilityInfo.
+test('A2-M1: Surface asks iOS about Reduce Transparency once and listens once, for every Surface', async () => {
+  const source = read('ui/primitives/Surface.tsx');
+  const start = source.indexOf('let reduceTransparency = false;');
+  const end = source.indexOf('function useReduceTransparency(');
+  assert.ok(start > 0 && end > start, 'the Reduce Transparency store must be found in Surface.tsx');
+  const js = stripTypeScriptTypes(source.slice(start, end), { mode: 'strip' });
+  const calls = { query: 0, listen: 0 };
+  let changed = null;
+  const AccessibilityInfo = {
+    isReduceTransparencyEnabled: () => {
+      calls.query += 1;
+      return Promise.resolve(true);
+    },
+    addEventListener: (name, handler) => {
+      calls.listen += 1;
+      assert.equal(name, 'reduceTransparencyChanged');
+      changed = handler;
+      return { remove() {} };
+    },
+  };
+  const store = new Function(
+    'AccessibilityInfo',
+    `${js}\nreturn { subscribe: subscribeReduceTransparency, read: () => reduceTransparency };`,
+  )(AccessibilityInfo);
+
+  const heard = [0, 0, 0];
+  const leave = heard.map((_, index) => store.subscribe(() => { heard[index] += 1; }));
+  assert.deepEqual(calls, { query: 1, listen: 1 }, 'three Surfaces: one query and one listener');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(store.read(), true, 'the first answer reaches the store');
+  assert.deepEqual(heard, [1, 1, 1], 'and every mounted Surface');
+  changed(false);
+  assert.equal(store.read(), false);
+  assert.deepEqual(heard, [2, 2, 2], 'a change in Settings reaches every mounted Surface');
+  leave.forEach((off) => off());
+  changed(true);
+  assert.deepEqual(heard, [2, 2, 2], 'an unmounted Surface hears nothing');
+  store.subscribe(() => {});
+  assert.deepEqual(calls, { query: 1, listen: 1 }, 'a later Surface reuses the one listener');
+});
+
 test('[static] D11.2: the inbox pill row fades into the ground at its right edge while more pills lie past it', () => {
   const inbox = strip(read('screens/MessagesInboxScreen.tsx'));
   assert.match(inbox, /<Animated\.View\s+pointerEvents="none"\s+style=\{\[styles\.filterFade, edgeFade\(pillFadeTo, 90\), \{ opacity: pillFade \}\]\}/);
@@ -55,7 +101,8 @@ test('[static] D11.3: the Report dialog is the frosted PopModal, and no stray ba
 
 test('[static] D11.5: no lone star — the star draws only beside a figure, and an unknown summary draws no row', () => {
   const search = strip(read('screens/WorkerSearchScreen.tsx'));
-  assert.match(search, /\{summary != null \? \(\s*<View style=\{styles\.proofRow\}>\s*\{ratingText !== '' \? \(\s*<>\s*<Ionicons name="star"/);
+  // F11 (owner, 2026-11-16): and none beside "New".
+  assert.match(search, /\{summary != null \? \(\s*<View style=\{styles\.proofRow\}>\s*\{ratingText !== '' \? \(\s*<>\s*(?:\{\s*\}\s*)?\{summary\.isNew \? null : <Ionicons name="star"/);
   assert.equal((search.match(/<Ionicons name="star"/g) ?? []).length, 1, 'one star, the gated one');
 });
 
@@ -70,10 +117,11 @@ test('[static] D11.6: an unarmed destructive submit is a danger OUTLINE at full 
 test('[static] D11.7-10: the evidence title says what it holds, the hired name shows once, and no title is doubled', () => {
   const client = strip(read('screens/ClientJobDetailScreen.tsx'));
   assert.match(client, /const hasBefore = job\.photos\.length \+ job\.videos\.length > 0;/);
-  assert.match(client, /hasCompletionEvidence\s*\? hasBefore\s*\? 'Before & after'\s*: 'Finished work'\s*: 'Your original media'/);
+  assert.match(client, /hasCompletionEvidence\s*\? hasBefore\s*\? 'Before & After'\s*: 'Finished Work'\s*: 'Your Original Media'/);
   // The ASSIGNED WORKER card: the eyebrow, then straight to the worker row — the name once.
   assert.match(client, />ASSIGNED WORKER<\/Text>\s*\{workerError \?/);
-  assert.match(client, /title=\{canAccept \? 'Job & Bids' : 'Job Details'\}/);
+  // F10 (owner, 2026-11-16): one name for the job page, whether or not bids are open.
+  assert.match(client, /title="Job Details"/);
   for (const file of ['screens/ClientJobDetailScreen.tsx', 'screens/JobDetailScreen.tsx', 'screens/WorkerJobScreen.tsx']) {
     assert.doesNotMatch(strip(read(file)), /'Job Detail'|"Job Detail"/, `${file}: one name, "Job Details"`);
   }
@@ -93,7 +141,8 @@ test('[static] D13: a soft fade sits behind the floating bar, takes no touch, an
   assert.match(fade, /height: fadeStops\.height/, 'no taller than the line content clears, so a list at its end is never washed');
   assert.match(fade, /const ground = isDark \? palette\.authGroundBottom : palette\.background;/, "the ground is the page's own foot");
   assert.match(fade, /const onMap = state\.routes\[state\.index\]\?\.name === 'Map';/);
-  assert.match(fade, /const shown = !onMap && !footPinned;/, 'off on the Map tab and over a pinned footer');
+  // A2-M3: and off while a focused screen has hidden the bar (the bottom rule).
+  assert.match(fade, /const shown = !onMap && !footPinned && !barHidden;/, 'off on the Map tab, over a pinned footer and with the bar hidden');
   assert.match(fade, /useNativeDriver: USE_NATIVE_DRIVER/);
   assert.match(shared, /underBarFade: \{ position: 'absolute', left: 0, right: 0, bottom: 0 \}/);
   assert.doesNotMatch(strip(read('ui/tokens.ts')), /fadeAbove/, 'the fade has no reach of its own above the clearance line');

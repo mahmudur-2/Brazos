@@ -320,8 +320,8 @@ export function WelcomeScreen() {
           THE ORDER IS THE OPERATOR'S (2026-09-21, from the shipped screen:
           "make Continue with phone the top one" — DECISIONS 19,
           tests/firstSession.test.mjs n5): phone leads, lit, carrying the rim
-          light; email is the outlined second; sign-in is the page's text
-          link. Phone auth resolves to `disabled` on every non-development
+          light; email and sign-in are the family's quiet well (G4: one main,
+          one quiet). Phone auth resolves to `disabled` on every non-development
           build (lib/phoneAuth/mode.ts), so until SMS is provisioned the phone
           button opens the email sign-up (which asks for the number too) and
           the sign-in link opens email sign-in — PHONE_ENTRY, FIX-RUN B2. The
@@ -334,7 +334,7 @@ export function WelcomeScreen() {
         ]}
       >
         <AuthButton
-          title="Continue with phone"
+          title="Continue with Phone"
           themed
           hero
           lit
@@ -348,21 +348,20 @@ export function WelcomeScreen() {
             phone, so the email sign-up is offered only while it is not. */}
         {!PHONE_ENTRY.live && (
           <AuthButton
-            title="Continue with email"
+            title="Continue with Email"
+            variant="quiet"
             themed
             hero
             icon="mail-outline"
-            chevron
             onPress={() => navigation.navigate('EmailCreateAccount')}
             accessibilityHint="Create an account with your email"
           />
         )}
         <AuthButton
-          title="I already have an account"
-          variant="ghost"
+          title="I Already Have an Account"
+          variant="quiet"
           themed
           hero
-          chevron
           onPress={() => navigation.navigate(PHONE_ENTRY.signIn)}
           accessibilityHint="Sign in to an existing account"
         />

@@ -4,6 +4,7 @@ import { coordinateLocationError } from './locationPrivacy';
 import type { Message } from './messages';
 import { PUBLIC_PROFILE_COLUMNS, type Profile } from './profiles';
 import { moneyCeilingError } from './validation';
+import { serverNowMs } from './serverClock';
 
 /**
  * The one negotiation module. Replaces lib/bids.ts and lib/jobRequests.ts,
@@ -150,7 +151,7 @@ export function isOpenOffer(status: OfferStatus): boolean {
  */
 export function isOfferLapsed(
   offer: Pick<Offer, 'status' | 'expires_at'>,
-  nowMs: number = Date.now()
+  nowMs: number = serverNowMs()
 ): boolean {
   return (
     offer.status === 'pending' &&
@@ -162,7 +163,7 @@ export function isOfferLapsed(
 /** The status a screen should render and act on: lapsed pending = expired. */
 export function effectiveOfferStatus(
   offer: Pick<Offer, 'status' | 'expires_at'>,
-  nowMs: number = Date.now()
+  nowMs: number = serverNowMs()
 ): OfferStatus {
   return isOfferLapsed(offer, nowMs) ? 'expired' : offer.status;
 }
@@ -192,7 +193,7 @@ export function effectiveOfferStatus(
 export function isOfferActionableBy(
   offer: Pick<Offer, 'status' | 'expires_at' | 'awaiting_id' | 'author_id'> | null | undefined,
   viewerId: string | null | undefined,
-  nowMs: number = Date.now()
+  nowMs: number = serverNowMs()
 ): boolean {
   if (!offer || !viewerId) return false;
   return (

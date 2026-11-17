@@ -82,7 +82,13 @@ test('[static] no remote photo is left on the react-native Image', () => {
   for (const file of files) {
     if (file === BOUNDARY) continue;
     const code = stripComments(read(file));
-    if (/expo-image'/.test(code)) offenders.push(`${file}: imports expo-image directly`);
+    // A4-M2 (R7-d): lib/signOut.ts may name expo-image for one thing only, emptying its two caches.
+    const clearsCachesOnly =
+      file === 'lib/signOut.ts' &&
+      (code.match(/expo-image'/g) ?? []).length === 1 &&
+      code.includes("require('expo-image') as { Image?: Partial<ExpoImageCaches> } | null;") &&
+      !/<Image|source=/.test(code);
+    if (/expo-image'/.test(code) && !clearsCachesOnly) offenders.push(`${file}: imports expo-image directly`);
     // A remote source is `{{ uri` — a local one is `require(...)`.
     const remote = [...code.matchAll(/<(?:Animated\.)?Image[\s\S]{0,80}?source=\{\{\s*uri/g)];
     if (remote.length && !EXCEPTIONS[file]) {

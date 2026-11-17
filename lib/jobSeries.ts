@@ -1,7 +1,9 @@
 /**
  * 2026-09-30 (the build run, idea 14) — REPEAT JOBS. The customer posts once and picks every week,
  * every 2 weeks or every month on the Review step; three days before each next visit the worker they
- * hired gets it first, at the same price, for 24 hours; a pass or a lapse opens that visit to bids.
+ * hired gets it first, at the same price, for 24 hours; a pass or a lapse opens that visit to bids
+ * while it is still tomorrow or later. A visit that is today or gone by then (after a posting pause,
+ * say) is never posted: the series moves on to the next visit (A7-07, post_window.sql).
  * Every visit is its own job — hired through accept_offer(), paid in Checkout when the customer
  * confirms. The schedule's work is the server's (migration 20260930001000, advance_job_series());
  * this file is the app's side: the one read and the three calls a person makes. The words — the

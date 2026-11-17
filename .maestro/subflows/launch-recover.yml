@@ -5,12 +5,12 @@ appId: app.brazos.mobile.preview
 # Every clean launch comes straight here, so the launch's keyboard-process instant is waited out here.
 - runFlow: launch-settle.yml
 - extendedWaitUntil:
-    visible: "I already have an account"
+    visible: "I Already Have an Account"
     timeout: 30000
     optional: true
 - runFlow:
     when:
-      notVisible: "I already have an account"
+      notVisible: "I Already Have an Account"
     commands:
       - retry:
           maxRetries: 2
@@ -20,5 +20,5 @@ appId: app.brazos.mobile.preview
                   all: allow
             - runFlow: launch-settle.yml
             - extendedWaitUntil:
-                visible: "I already have an account"
+                visible: "I Already Have an Account"
                 timeout: 30000

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useScrollClearance } from '../ui/primitives';
 import {
   ActivityIndicator,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -37,7 +36,7 @@ import { DropdownBody, DropdownChevron } from '../components/DropdownReveal';
 import { useProfile } from '../hooks/useProfile';
 import { useUnreadNotificationCount } from '../hooks/useUnreadNotificationCount';
 import { paymentsMode } from '../lib/adapters/payments';
-import { SUPPORT_EMAIL, supportMailtoUrl } from '../lib/appLinks';
+import { openSupportMail, SUPPORT_EMAIL } from '../lib/appLinks';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { askOpenSettings } from '../lib/permissionPrompt';
 import { goBackOrHome } from '../lib/navigationRef';
@@ -52,6 +51,8 @@ import { fetchWorkerJobStats, updateProfile, type CategoryStat } from '../lib/pr
 import { useMode } from '../modes/ModeProvider';
 import { ModeSwitchRow } from '../components/ModeSwitchRow';
 import { uploadAvatar } from '../lib/storage';
+import { PICKER_MEDIA_OPTIONS } from '../lib/pickerOptions';
+import { uploadErrorMessage } from '../lib/uploadRules';
 import type { ThemePreference } from '../lib/themePreference';
 import { isValidPhone } from '../lib/validation';
 import { DEFAULT_COUNTRY, splitInternational, toE164 } from '../lib/phoneNumber';
@@ -64,11 +65,11 @@ import { formatMonthYear } from '../lib/time';
 import {
   EYEBROW_TYPE,
   emeraldRadius,
-  fonts,
   litCardStyle,
   radius,
   spacing,
   starColors,
+  textScale,
   themedStyles,
   useThemeColors,
   withAlpha,
@@ -124,20 +125,20 @@ const HUB_SETTINGS: SettingsRow[] = [
   {
     route: 'ServicesPricing',
     icon: 'pricetag-outline',
-    label: 'Services & availability',
+    label: 'Services & Availability',
     sub: 'Pricing, categories and schedule.',
   },
   {
     route: 'Earnings',
     icon: 'wallet-outline',
     // M-22 — the word "payouts" exists on the hub now.
-    label: 'Earnings & payouts',
+    label: 'Earnings & Payouts',
     sub: 'Balances and where you get paid.',
   },
   {
     route: 'PaymentMethods',
     icon: 'card-outline',
-    label: 'Payment methods',
+    label: 'Payment Methods',
     // Idea 20: on the card path a card may now be saved — for one-tap hiring, kept by the provider.
     // A build with payments off keeps its words.
     sub: paymentsMode === 'stripe' ? 'Cards and one-tap hiring.' : 'No stored cards · entered at checkout.',
@@ -152,13 +153,13 @@ const HUB_SETTINGS: SettingsRow[] = [
   {
     route: 'AccountSafety',
     icon: 'shield-checkmark-outline',
-    label: 'Account & safety',
+    label: 'Account & Safety',
     sub: 'Privacy, and deleting your account.',
   },
   {
     mailto: true,
     icon: 'mail-outline',
-    label: 'Contact support',
+    label: 'Contact Support',
     // The address is never retyped here — lib/appLinks.ts spells it once.
     sub: `Email ${SUPPORT_EMAIL}`,
   },
@@ -166,18 +167,6 @@ const HUB_SETTINGS: SettingsRow[] = [
 
 const HUB_ROW = new Map(HUB_SETTINGS.map((row) => [row.label, row]));
 
-/**
- * The support row's action. `Linking.openURL` is the house shape (see
- * screens/PayoutsScreen.tsx) — expo-web-browser is not installed and this run
- * adds no dependency.
- *
- * `Linking.canOpenURL` is deliberately NOT called: on iOS it needs an
- * `LSApplicationQueriesSchemes` entry in app.config.ts that this app does not
- * carry, so it would answer false on a device that can in fact send mail. The
- * direct call's own rejection is already the answer, and the failure message
- * names the address — so the contact is published even where no mail app is
- * configured.
- */
 /**
  * 2026-09-29 (LUX-LIST-2 #7) — WHERE EACH MODE PUTS THE ROWS. The mode's own
  * rows lead (YOUR PROFILE, MONEY — M-22's rule, kept); the other mode's sit
@@ -191,17 +180,26 @@ const HUB_ROW = new Map(HUB_SETTINGS.map((row) => [row.label, row]));
 const HUB_LAYOUT: Record<'customer' | 'worker', { profile: string[]; money: string[]; tools: string[] }> = {
   customer: {
     profile: [],
-    money: ['Payment methods'],
-    tools: ['Services & availability', 'Earnings & payouts'],
+    money: ['Payment Methods'],
+    tools: ['Services & Availability', 'Earnings & Payouts'],
   },
   worker: {
-    profile: ['Services & availability'],
-    money: ['Earnings & payouts', 'Payment methods'],
+    profile: ['Services & Availability'],
+    money: ['Earnings & Payouts', 'Payment Methods'],
     tools: [],
   },
 };
 const HUB_NOTIFICATIONS = ['Notifications'];
-const HUB_ACCOUNT = ['Account & safety', 'Contact support'];
+const HUB_ACCOUNT = ['Account & Safety', 'Contact Support'];
+/**
+ * The admin entry (an admin account only), inside "Account & Safety" (P11, owner 2026-11-16): each
+ * row opens its admin screen directly. One row per admin screen; the second is the owner's list of
+ * what needs attention (B6).
+ */
+const ADMIN_ROWS = [
+  { label: 'Review Reports', route: 'AdminReports' },
+  { label: 'Needs Attention', route: 'AdminAttention' },
+] as const;
 
 /** Legal opens in place to its two documents (they were two rows on Account & safety). */
 const LEGAL_ROWS = [
@@ -216,14 +214,6 @@ const APPEARANCE_OPTIONS: { label: string; value: ThemePreference }[] = [
   { label: 'Auto', value: 'system' },
 ];
 
-async function openSupportMail(): Promise<void> {
-  try {
-    await Linking.openURL(supportMailtoUrl());
-  } catch {
-    await alertAsync('Could not open your mail app', `Write to ${SUPPORT_EMAIL}.`);
-  }
-}
-
 
 export function ProfileScreen() {
   // 2026-09-30: the tab bar floats over this screen; the list ends above the pill.
@@ -235,12 +225,10 @@ export function ProfileScreen() {
   // that answer to a token take the `theme.*` scale, because this file imports
   // spacing/radius from lib/theme — `emeraldRadius` is the one name here that
   // reaches the other scale, and nothing below is dialled through it.
-  // 2026-09-29 (LUX-LIST-2 #7): the glyph is a plain 22pt icon now (no tile),
-  // and the hub card rounds at 22 like every #6 card — so both dials ship
-  // at 22, and the card's no longer inherits theme.radius.xl (24).
+  // 2026-09-29 (LUX-LIST-2 #7): the glyph is a plain 22pt icon now (no tile);
+  // the hub card rounds at the card token (radius.card) like every lit card.
   const settingsRowHeight = 64;
   const settingsGlyphSize = 22;
-  const hubCardRadius = 22;
   const hubCardPadding = spacing.lg;
   const contentGap = spacing.lg;
   const navigation = useNavigation<ProfileStackNavigation>();
@@ -301,6 +289,8 @@ export function ProfileScreen() {
   // Sign out.
   const [legalOpen, setLegalOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  // P11 (owner, 2026-11-16): Account & safety opens in place, a drop-down, not a screen.
+  const [safetyOpen, setSafetyOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const unread = useUnreadNotificationCount();
 
@@ -420,10 +410,10 @@ export function ProfileScreen() {
    *  needs (or has) its own upload logic. */
   async function pickAvatar() {
     const result = await ImagePicker.launchImageLibraryAsync({
+      ...PICKER_MEDIA_OPTIONS,
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.7,
     });
     if (!result.canceled && result.assets[0]) {
       setPendingAsset(result.assets[0]);
@@ -440,9 +430,9 @@ export function ProfileScreen() {
     }
 
     const result = await ImagePicker.launchCameraAsync({
+      ...PICKER_MEDIA_OPTIONS,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.7,
     });
     if (!result.canceled && result.assets[0]) {
       setPendingAsset(result.assets[0]);
@@ -502,7 +492,7 @@ export function ProfileScreen() {
         title: 'Discard changes?',
         message: 'Your edits will not be saved.',
         confirmText: 'Discard',
-        cancelText: 'Keep editing',
+        destructive: true,
       });
       if (!ok) return false;
     }
@@ -542,11 +532,11 @@ export function ProfileScreen() {
     setSaving(true);
 
     let avatar = profile?.avatar_url ?? null;
-    let photoFailed = false;
+    let photoError: unknown = null;
     if (pendingAsset) {
       const { url, error } = await uploadAvatar(user.id, pendingAsset);
       // A failed upload never clobbers the photo already there (avatar stays as it was).
-      if (error) photoFailed = true;
+      if (error) photoError = error;
       else avatar = url;
     }
 
@@ -571,10 +561,10 @@ export function ProfileScreen() {
     setPendingAsset(null);
     leaveEditing();
     // "Saved" is never said over a photo that did not go up.
-    await (photoFailed
+    await (photoError
       ? alertAsync(
           'Saved, but your photo didn’t upload',
-          'Your other changes are saved and your current photo is unchanged. Check your connection and choose the photo again.'
+          `Your other changes are saved and your current photo is unchanged. ${uploadErrorMessage(photoError)}`
         )
       : alertAsync('Saved', 'Your profile has been updated.'));
   }
@@ -598,7 +588,9 @@ export function ProfileScreen() {
   // The star leads the line when there is a rating, and is rendered as its own
   // span below so it can carry the one gold star treatment instead of the
   // meta line's grey.
-  const summaryLeadsWithStar = workerReviewTotal > 0;
+  // F11 (owner, 2026-11-16): no star beside "New".
+  const summaryLeadsWithStar =
+    workerReviewTotal > 0 && !(workerSummary?.isNew || workerSummary?.shownAverage == null);
   if (workerSummary && workerReviewTotal > 0) {
     // D1: shown_average or the word New — the raw mean never renders.
     summaryParts.push(
@@ -635,8 +627,7 @@ export function ProfileScreen() {
     const ok = await confirmAsync({
       title: 'Sign out?',
       message: 'You can sign back in any time.',
-      confirmText: 'Sign out',
-      cancelText: 'Cancel',
+      confirmText: 'Sign Out',
       destructive: true,
     });
     if (!ok) return;
@@ -653,7 +644,7 @@ export function ProfileScreen() {
       const row = HUB_ROW.get(label);
       return row ? [row] : [];
     });
-  const toolsTitle = mode === 'worker' ? 'Customer tools' : 'Worker tools';
+  const toolsTitle = mode === 'worker' ? 'Customer Tools' : 'Worker Tools';
   const toolsRows = rowsOf(layout.tools);
   // #47's plain icons: the mint in dark, the forest mark in light.
   const iconColour = isDark ? colors.emerald : colors.mark;
@@ -661,7 +652,7 @@ export function ProfileScreen() {
   /** An eyebrow over one card of rows. */
   const renderSection = (title: string, body: ReactNode) => (
     <View style={styles.section}>
-      <Text style={styles.sectionEyebrow}>{title}</Text>
+      <Text accessibilityRole="header" style={styles.sectionEyebrow}>{title}</Text>
       <Card style={styles.listCard}>{body}</Card>
     </View>
   );
@@ -705,7 +696,7 @@ export function ProfileScreen() {
   const avatarActionSheetItems: ActionSheetItem[] = [
     {
       key: 'library',
-      label: 'Choose from library',
+      label: 'Choose from Library',
       icon: 'image-outline',
       onPress: () => {
         setAvatarActionSheetOpen(false);
@@ -714,7 +705,7 @@ export function ProfileScreen() {
     },
     {
       key: 'camera',
-      label: 'Take photo',
+      label: 'Take Photo',
       icon: 'camera-outline',
       onPress: () => {
         setAvatarActionSheetOpen(false);
@@ -725,7 +716,7 @@ export function ProfileScreen() {
       ? [
           {
             key: 'remove',
-            label: 'Remove current photo',
+            label: 'Remove Current Photo',
             icon: 'trash-outline' as const,
             destructive: true,
             onPress: () => {
@@ -779,13 +770,13 @@ export function ProfileScreen() {
                 style={({ pressed }) => [
                   styles.identityCard,
                   litCardStyle(isDark),
-                  { padding: hubCardPadding, borderRadius: hubCardRadius },
+                  { padding: hubCardPadding, borderRadius: radius.card },
                   pressed && styles.rowPressed,
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel="View your profile"
               >
-                <Avatar name={profile?.full_name ?? ''} uri={profile?.avatar_url ?? null} size={52} />
+                <Avatar name={profile?.full_name ?? ''} uri={profile?.avatar_url ?? null} size={64} />
                 <View style={styles.identityCopy}>
                   <Text style={styles.identityName} numberOfLines={1}>
                     {profile?.full_name?.trim() || 'Your profile'}
@@ -807,15 +798,17 @@ export function ProfileScreen() {
                       style={styles.ratingLine}
                     >
                       <Text style={styles.identityMeta} numberOfLines={1}>
-                        <Text style={{ color: starColors(colors, isDark).filled }}>★ </Text>
+                        {/* F11 (owner, 2026-11-16): no star beside a young rating; its count stands alone. */}
+                        {ratingSummary.isNew || ratingSummary.shownAverage == null ? null : (
+                          <Text style={{ color: starColors(colors, isDark).filled }}>★ </Text>
+                        )}
                         {ratingSummary.isNew || ratingSummary.shownAverage == null
-                          ? 'New'
+                          ? `${ratingSummary.total} ${ratingSummary.total === 1 ? 'review' : 'reviews'}`
                           : `${ratingSummary.shownAverage.toFixed(1)} (${ratingSummary.total})`}
                       </Text>
                     </Pressable>
                   ) : (
                     <View style={styles.ratingLine}>
-                      <Ionicons name="star" size={13} color={colors.textMuted} />
                       <Text style={styles.identityMeta}>No reviews yet</Text>
                     </View>
                   )}
@@ -824,16 +817,15 @@ export function ProfileScreen() {
                     <Ionicons name="chevron-forward" size={12} color={colors.emerald} />
                   </View>
                 </View>
-                <PressScale
+                <Button
+                  title="Edit"
+                  variant="secondary"
+                  size="sm"
+                  icon="pencil"
+                  iconPosition="leading"
                   onPress={editFromHub}
-                  hitSlop={6}
-                  accessibilityRole="button"
                   accessibilityLabel="Edit your profile"
-                  style={({ pressed }) => [styles.editPill, isDark && styles.editPillDark, pressed && styles.rowPressed]}
-                >
-                  <Ionicons name="pencil" size={14} color={colors.emerald} />
-                  <Text style={styles.editPillText}>Edit</Text>
-                </PressScale>
+                />
               </PressScale>
 
               {/* M-8 — THE MODE, AND THE WAY TO CHANGE IT, the same in both
@@ -848,7 +840,7 @@ export function ProfileScreen() {
               {user && mode === 'worker' && meterCounts && !completeness.complete && !isEditing ? (
                 <Card>
                   <View style={styles.meterHeader}>
-                    <Text style={styles.meterTitle}>Complete your worker profile</Text>
+                    <Text style={styles.meterTitle}>Complete Your Worker Profile</Text>
                     <Text style={styles.meterCount}>
                       {completeness.done} of {completeness.total}
                     </Text>
@@ -1042,7 +1034,64 @@ export function ProfileScreen() {
               {renderSection(
                 'Account',
                 <>
-                  {rowsOf(HUB_ACCOUNT.slice(0, 1)).map((row) => renderRow(row, false))}
+                  {/* P11 (owner, 2026-11-16): the row opens in place to the admin row (an admin
+                      account only), Delete account (its own screen and checks stay), and the two
+                      safety sentences as one small line. */}
+                  {rowsOf(HUB_ACCOUNT.slice(0, 1)).map((row) => (
+                    <View key={row.label}>
+                      <PressScale
+                        haptic={false}
+                        style={({ pressed }) => [styles.row, { minHeight: settingsRowHeight }, pressed && styles.rowPressed]}
+                        onPress={() => setSafetyOpen((open) => !open)}
+                        accessibilityRole="button"
+                        accessibilityLabel={row.label}
+                        accessibilityState={{ expanded: safetyOpen }}
+                      >
+                        <Ionicons name={row.icon} size={settingsGlyphSize} color={iconColour} />
+                        <View style={styles.rowCopy}>
+                          <Text style={styles.rowTitle} numberOfLines={1}>{row.label}</Text>
+                          <Text style={styles.rowSub} numberOfLines={1}>{row.sub}</Text>
+                        </View>
+                        <DropdownChevron open={safetyOpen}>
+                          <Ionicons name="chevron-down" size={18} color={colors.textSubtle} />
+                        </DropdownChevron>
+                      </PressScale>
+                      <DropdownBody open={safetyOpen}>
+                        {profile?.is_admin
+                          ? ADMIN_ROWS.map((admin) => (
+                              <PressScale
+                                key={admin.route}
+                                haptic={false}
+                                style={({ pressed }) => [styles.subRow, styles.rowDivider, pressed && styles.rowPressed]}
+                                onPress={() => navigation.navigate(admin.route)}
+                                accessibilityRole="button"
+                                accessibilityLabel={admin.label}
+                              >
+                                <Text style={[styles.subRowTitle, styles.safetyAdmin]} numberOfLines={1}>{admin.label}</Text>
+                                <Ionicons name="chevron-forward" size={16} color={colors.warning} />
+                              </PressScale>
+                            ))
+                          : null}
+                        <PressScale
+                          haptic={false}
+                          style={({ pressed }) => [styles.subRow, styles.rowDivider, pressed && styles.rowPressed]}
+                          onPress={() => navigation.navigate('DeleteAccount')}
+                          accessibilityRole="button"
+                          accessibilityLabel="Delete Account"
+                          accessibilityHint="Permanent; settle jobs and payments first."
+                        >
+                          <View style={styles.rowCopy}>
+                            <Text style={[styles.subRowTitle, styles.safetyDanger]} numberOfLines={1}>Delete Account</Text>
+                            <Text style={styles.rowSub}>Permanent; settle jobs and payments first.</Text>
+                          </View>
+                          <Ionicons name="chevron-forward" size={16} color={colors.danger} />
+                        </PressScale>
+                        <View style={[styles.subRow, styles.rowDivider]}>
+                          <Text style={styles.rowSub}>Private by default. One identity, two modes.</Text>
+                        </View>
+                      </DropdownBody>
+                    </View>
+                  ))}
 
                   {/* Appearance, decided IN the row: one tap, nothing opens —
                       the same stored preference the Appearance screen writes. */}
@@ -1146,22 +1195,26 @@ export function ProfileScreen() {
                 </>
               )}
 
-              {/* SIGN OUT — the only place it lives, quiet, and it confirms
-                  first (Account & safety's "Log out", moved). */}
-              <PressScale
-                onPress={() => void handleSignOut()}
-                disabled={signingOut}
-                style={({ pressed }) => [styles.signOut, isDark && styles.signOutDark, pressed && styles.rowPressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Sign out"
-                accessibilityState={{ disabled: signingOut, busy: signingOut }}
-              >
-                {signingOut ? (
-                  <ActivityIndicator color={colors.danger} />
-                ) : (
-                  <Text style={styles.signOutLabel}>Sign out</Text>
-                )}
-              </PressScale>
+              {/* SIGN OUT — the only place it lives, quiet (one red row in its own
+                  lit card, never a red slab), and it confirms first (Account &
+                  safety's "Log out", moved). */}
+              <Card style={[styles.listCard, styles.signOutCard]}>
+                <PressScale
+                  haptic={false}
+                  onPress={() => void handleSignOut()}
+                  disabled={signingOut}
+                  style={({ pressed }) => [styles.row, styles.signOutRow, { minHeight: settingsRowHeight }, pressed && styles.rowPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Sign Out"
+                  accessibilityState={{ disabled: signingOut, busy: signingOut }}
+                >
+                  {signingOut ? (
+                    <ActivityIndicator color={colors.danger} />
+                  ) : (
+                    <Text style={styles.signOutLabel}>Sign Out</Text>
+                  )}
+                </PressScale>
+              </Card>
             </>
           ) : null}
         </ScrollView>
@@ -1191,7 +1244,7 @@ export function ProfileScreen() {
               }}
             >
               <Ionicons name="eye-outline" size={18} color={colors.text} />
-              <Text style={styles.menuRowText}>View photo</Text>
+              <Text style={styles.menuRowText}>View Photo</Text>
             </Pressable>
 
             {isEditing && (
@@ -1203,7 +1256,7 @@ export function ProfileScreen() {
                 }}
               >
                 <Ionicons name="camera-outline" size={18} color={colors.text} />
-                <Text style={styles.menuRowText}>Change photo</Text>
+                <Text style={styles.menuRowText}>Change Photo</Text>
               </Pressable>
             )}
 
@@ -1233,7 +1286,7 @@ export function ProfileScreen() {
 
       <ActionSheet
         visible={avatarActionSheetOpen}
-        title="Profile photo"
+        title="Profile Photo"
         items={avatarActionSheetItems}
         onClose={() => setAvatarActionSheetOpen(false)}
       />
@@ -1243,7 +1296,6 @@ export function ProfileScreen() {
         title="Remove profile photo?"
         message="Your initials will be shown instead."
         confirmText="Remove"
-        cancelText="Cancel"
         destructive
         loading={removingAvatar}
         onConfirm={handleRemoveAvatar}
@@ -1280,7 +1332,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     bottom: -2,
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: radius.pill,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1289,14 +1341,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // Master 30 sets the email in the serif under the centred avatar.
   email: {
-    fontFamily: fonts.display,
-    fontSize: 19,
-    fontWeight: '600',
+    ...textScale.title,
     color: colors.text,
     marginTop: spacing.sm,
   },
   roleNote: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   reviewsLink: {
@@ -1309,22 +1360,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     opacity: 0.6,
   },
   reviewsLinkText: {
-    fontSize: 13,
+    ...textScale.label,
     fontWeight: '700',
     color: colors.primary,
   },
   form: {
     gap: spacing.lg,
-  },
-  readOnly: {
-    gap: spacing.lg,
-  },
-  readField: {
-    gap: spacing.xs,
-  },
-  readValue: {
-    fontSize: 16,
-    color: colors.text,
   },
   field: {
     gap: spacing.sm,
@@ -1336,7 +1377,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
-  fieldLabelDark: { color: colors.eyebrow },
+  // F5: in dark a field label is the main button's mint.
+  fieldLabelDark: { color: colors.primary },
   // A textarea is not a pill: the shared field is full-round for a single
   // line, and a taller box overrides that back to the card radius.
   multiline: {
@@ -1344,11 +1386,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     height: 84,
     paddingTop: spacing.md,
     textAlignVertical: 'top',
-  },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
   },
   editActions: {
     gap: spacing.md,
@@ -1379,7 +1416,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.lg,
   },
   menuRowText: {
-    fontSize: 15,
+    ...textScale.callout,
     fontWeight: '600',
     color: colors.text,
   },
@@ -1394,7 +1431,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
   },
   menuCancelText: {
-    fontSize: 15,
+    ...textScale.callout,
     fontWeight: '600',
     color: colors.textMuted,
   },
@@ -1407,14 +1444,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   meterTitle: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '800',
+    ...textScale.headline,
     color: colors.ink,
   },
   meterCount: {
-    fontSize: 13,
+    ...textScale.label,
     fontWeight: '700',
     color: colors.emerald,
+    fontVariant: ['tabular-nums'],
   },
   meterRow: {
     flexDirection: 'row',
@@ -1424,7 +1461,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   meterLabel: {
     flex: 1,
-    fontSize: 14,
+    ...textScale.body,
     fontWeight: '600',
     color: colors.ink,
   },
@@ -1441,56 +1478,34 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   identityCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.lg,
   },
-  identityCopy: { flex: 1, minWidth: 0 },
+  identityCopy: { flex: 1, minWidth: 0, gap: spacing.xs },
   identityName: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: '700',
+    ...textScale.title,
     color: colors.ink,
   },
   ratingLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 3,
+    gap: spacing.xs,
     alignSelf: 'flex-start',
   },
   identityMeta: {
-    fontSize: 13,
-    lineHeight: 17,
+    ...textScale.label,
+    fontWeight: '500',
     color: colors.textMuted,
   },
   identityLinkRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    marginTop: spacing.xs,
     alignSelf: 'flex-start',
   },
   identityLink: {
-    fontSize: 13,
+    ...textScale.label,
     fontWeight: '700',
     color: colors.emerald,
-  },
-  // "Edit", not "Edit profile", so the 17/700 name keeps its width.
-  editPill: {
-    height: 40,
-    borderRadius: radius.pill,
-    paddingHorizontal: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  editPillDark: { backgroundColor: withAlpha(colors.text, 0.06) },
-  editPillText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.ink,
   },
   // The section eyebrow sits 24 under what precedes it (the content gap
   // plus this margin) and 10 over its card.
@@ -1515,15 +1530,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   rowPressed: { opacity: 0.82 },
   rowCopy: { flex: 1, minWidth: 0, gap: 2 },
   rowTitle: {
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: '700',
+    ...textScale.control,
     color: colors.ink,
   },
   rowFill: { flex: 1 },
   rowSub: {
-    fontSize: 12,
-    lineHeight: 16,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   // A dropdown's own rows: indented to the parent's title, no icon of their own.
@@ -1538,10 +1551,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   subRowTitle: {
     flex: 1,
-    fontSize: 15,
+    ...textScale.callout,
     fontWeight: '600',
     color: colors.ink,
   },
+  // P11: the Account & safety drop-down's admin and delete rows.
+  safetyAdmin: { color: colors.warning },
+  safetyDanger: { color: colors.danger },
   badge: {
     minWidth: 22,
     height: 22,
@@ -1553,7 +1569,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   badgeDark: { backgroundColor: withAlpha(colors.emerald, 0.14) },
   badgeText: {
-    fontSize: 12,
+    ...textScale.footnote,
     fontWeight: '800',
     color: colors.emerald,
   },
@@ -1581,65 +1597,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 12,
     fontWeight: '700',
   },
-  // Quiet: the danger hue as a line and a breath of fill, never a red slab.
-  signOut: {
-    height: 52,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: withAlpha(colors.danger, 0.3),
-    backgroundColor: withAlpha(colors.danger, 0.05),
+  // Sign out: one centred red row in its own lit card at the foot.
+  signOutCard: {
     marginTop: spacing.md,
     marginBottom: spacing.xl,
   },
-  signOutDark: {
-    borderColor: withAlpha(colors.danger, 0.35),
-    backgroundColor: withAlpha(colors.danger, 0.06),
+  signOutRow: {
+    justifyContent: 'center',
   },
   signOutLabel: {
-    fontSize: 17,
-    fontWeight: '700',
+    ...textScale.control,
     color: colors.danger,
-  },
-  deleteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-  },
-  deleteRowPressed: {
-    opacity: 0.7,
-  },
-  deleteLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.danger,
-  },
-  adminCard: {
-    backgroundColor: colors.warningBg,
-    borderWidth: 1,
-    borderColor: colors.warning,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  adminEyebrow: {
-    ...EYEBROW_TYPE,
-    color: colors.warning,
-  },
-  adminRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  adminLabel: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.warning,
   },
   }),
 );

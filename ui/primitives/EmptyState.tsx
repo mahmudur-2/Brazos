@@ -103,7 +103,8 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     minHeight: controls.buttonHeightSmall,
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
-    borderRadius: radius.pill,
+    // M5 (T4): one corner for buttons, the Button's 12; pills are chips, segments and the tab bar.
+    borderRadius: radius.md,
     backgroundColor: colors.forest,
     marginTop: spacing.xs,
   },

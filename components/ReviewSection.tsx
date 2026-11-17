@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Button } from './Button';
 import { Card } from './Card';
+import { Chip } from './Chip';
 import { StarRating } from './StarRating';
 import { TextField } from './TextField';
 import { alertAsync } from '../lib/dialog';
@@ -27,10 +28,11 @@ import {
   type Review,
 } from '../lib/reviews';
 import { deleteJobPhoto, uploadReviewPhoto } from '../lib/storage';
+import { PICKER_MEDIA_OPTIONS } from '../lib/pickerOptions';
+import { uploadErrorMessage } from '../lib/uploadRules';
 import {
   fonts,
   radius,
-  selectedInDark,
   spacing,
   themedStyles,
   useThemeColors,
@@ -91,7 +93,7 @@ export function ReviewSection({
   scrollRef,
   palette: paletteProp,
 }: ReviewSectionProps) {
-  const { palette: colors, isDark } = useThemeColors();
+  const { palette: colors } = useThemeColors();
   const palette = paletteProp ?? colors;
   const styles = stylesFor(colors);
   const [existing, setExisting] = useState<Review | null>(null);
@@ -203,8 +205,8 @@ export function ReviewSection({
     if (remaining <= 0) return;
 
     const result = await ImagePicker.launchImageLibraryAsync({
+      ...PICKER_MEDIA_OPTIONS,
       mediaTypes: ['images'],
-      quality: 0.7,
       allowsMultipleSelection: true,
       selectionLimit: remaining,
     });
@@ -214,9 +216,13 @@ export function ReviewSection({
     setUploadingPhoto(true);
     const uploaded: string[] = [];
     let failures = 0;
+    let lastError: unknown = null;
     for (const asset of result.assets.slice(0, remaining)) {
       const { url, error } = await uploadReviewPhoto(reviewerId, asset);
-      if (error || !url) failures++;
+      if (error || !url) {
+        failures++;
+        lastError = error;
+      }
       else if (!mountedRef.current) {
         // The picker/upload can finish after navigation removed this form.
         // This URL was never rendered or committed, so delete it immediately —
@@ -240,7 +246,7 @@ export function ReviewSection({
     if (failures > 0) {
       await alertAsync(
         'Some photos didn’t upload',
-        `${failures} of ${result.assets.length} couldn’t be uploaded. You can try again, or submit without them.`
+        `${failures} of ${result.assets.length} couldn’t be uploaded. ${uploadErrorMessage(lastError)} You can also submit without them.`
       );
     }
   }
@@ -326,7 +332,7 @@ export function ReviewSection({
         </Text>
         <Text style={[styles.errorText, { color: palette.textMuted }]}>{loadError}</Text>
         <Button
-          title="Try again"
+          title="Try Again"
           variant="secondary"
           palette={palette}
           onPress={() => setLoadAttempt((attempt) => attempt + 1)}
@@ -341,7 +347,7 @@ export function ReviewSection({
       <Card palette={palette}>
         <View style={styles.doneHeader}>
           <Ionicons name="checkmark-circle" size={20} color={palette.success} />
-          <Text style={[styles.doneTitle, { color: palette.text }]}>Your review</Text>
+          <Text style={[styles.doneTitle, { color: palette.text }]}>Your Review</Text>
         </View>
         <StarRating value={existing.rating} size={22} />
         {existing.comment ? (
@@ -404,29 +410,19 @@ export function ReviewSection({
           : `Would you work for ${revieweeFirstName} again?`}
       </Text>
       <View style={styles.presetRow}>
+        {/* M5 (T6): the Yes / No choice is the Chip, the same control as the tip presets. Taps
+            while the review sends do nothing, as before. */}
         {([true, false] as const).map((answer) => {
           const selected = wouldAgain === answer;
           return (
-            <Pressable
+            <Chip
               key={answer ? 'yes' : 'no'}
-              style={[
-                styles.preset,
-                selected && (isDark ? styles.presetActiveDark : styles.presetActive),
-              ]}
-              onPress={() => setWouldAgain(selected ? null : answer)}
-              disabled={submitting}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-            >
-              <Text
-                style={[
-                  styles.presetText,
-                  selected && (isDark ? styles.presetTextActiveDark : styles.presetTextActive),
-                ]}
-              >
-                {answer ? 'Yes' : 'No'}
-              </Text>
-            </Pressable>
+              label={answer ? 'Yes' : 'No'}
+              selected={selected}
+              onPress={() => {
+                if (!submitting) setWouldAgain(selected ? null : answer);
+              }}
+            />
           );
         })}
       </View>
@@ -478,8 +474,8 @@ export function ReviewSection({
             uploadingPhoto
               ? 'Uploading…'
               : photos.length === 0
-              ? 'Add photos'
-              : `Add another (${photos.length}/${MAX_REVIEW_PHOTOS})`
+              ? 'Add Photos'
+              : `Add Another (${photos.length}/${MAX_REVIEW_PHOTOS})`
           }
           variant="secondary"
           palette={palette}
@@ -492,7 +488,7 @@ export function ReviewSection({
       )}
 
       <Button
-        title="Submit review"
+        title="Submit Review"
         onPress={handleSubmit}
         palette={palette}
         loading={submitting}
@@ -505,7 +501,7 @@ export function ReviewSection({
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
-  // Decision 9: a card heading is display type (master 15's "Your review").
+  // Decision 9: a card heading is display type (master 15's "Your Review").
   title: {
     fontFamily: fonts.display,
     fontSize: 19,
@@ -522,45 +518,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.text,
     marginBottom: spacing.sm,
   },
-  // The Yes/No pair copies ReviewAndTipScreen's tip preset row locally (R8b-c
-  // D6: no new shared component) so the two choices on one submit flow read
-  // as one control family.
+  // The Yes/No row: the Chip, as ReviewAndTipScreen's tip presets, so the two
+  // choices on one submit flow read as one control family.
   presetRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
     marginBottom: spacing.lg,
-  },
-  preset: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  presetActive: {
-    borderColor: colors.emerald,
-    backgroundColor: colors.mint,
-  },
-  // emerald D6: one selection treatment — gold line, gold label, no fill.
-  presetActiveDark: {
-    borderColor: selectedInDark(colors).line,
-    backgroundColor: selectedInDark(colors).fill,
-  },
-  presetText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-  presetTextActive: {
-    color: colors.emerald,
-  },
-  presetTextActiveDark: {
-    color: selectedInDark(colors).line,
   },
   multiline: {
     height: 84,

@@ -30,10 +30,10 @@ export function JobProgress({
   // claim NOTHING — every step stays pending, never a fall-through that
   // draws "Booked" as done for a job that was not.
   const current = track < 0 ? -1 : track <= 2 ? 0 : track === 3 ? 1 : 2;
-  // Masters 6 and 17 draw the stepper as line-work: a done node is the deep
-  // green disc inside a GOLD ring with a gold check, a pending node is a bare
-  // grey ring around its numeral, and the connector behind a done node is
-  // gold. Light keeps the Heritage filled dot.
+  // Masters 6 and 17 draw a pending node as a bare grey ring around its
+  // numeral in dark. F6 (owner, 2026-11-16): a done step is as strong in dark
+  // as in light: the solid primary disc, its own ink check, the solid primary
+  // line (light's recipe, each theme's colours).
   //
   // 2026-08-24: both nodes carry the 1pt ring in BOTH themes. It was dark-only,
   // which made a step a different size in light — a border insets a fixed-width
@@ -42,16 +42,16 @@ export function JobProgress({
   // the Heritage filled dot; only the colours differ, which is the rule.
   const doneNode = {
     borderWidth: 1,
-    backgroundColor: isDark ? palette.forest : palette.primary,
-    borderColor: isDark ? palette.gold : palette.primary,
+    backgroundColor: palette.primary,
+    borderColor: palette.primary,
   };
   const pendingNode = {
     borderWidth: 1,
     backgroundColor: isDark ? 'transparent' : palette.neutralBg,
     borderColor: isDark ? palette.navInactive : palette.neutralBg,
   };
-  const checkColor = isDark ? palette.gold : palette.onPrimary;
-  const doneLine = isDark ? palette.gold : palette.primary;
+  const checkColor = palette.onPrimary;
+  const doneLine = palette.primary;
 
   return (
     <View style={styles.container}>

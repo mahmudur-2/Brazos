@@ -223,8 +223,9 @@ test('D1-D4 · the header owns navigation, and its two links are the neighbourin
   // The header is wired to all of it, and the title is centred rather than
   // sitting beside the back control.
   assert.match(flat, /backLabel=\{backLabel\}/);
-  assert.match(flat, /rightLabel=\{advanceLabel\}/);
-  assert.match(flat, /onPressRight=\{handleContinue\}/);
+  // A4 wiring (A3): the step link waits with the form while posting is paused.
+  assert.match(flat, /rightLabel=\{postingPaused \? undefined : advanceLabel\}/);
+  assert.match(flat, /onPressRight=\{postingPaused \? undefined : handleContinue\}/);
   // M-7: the link reads the same answer the pinned Continue reads.
   assert.match(flat, /rightDisabled=\{advanceDisabled \|\| stepBlocker != null\}/);
   assert.match(flat, /centerTitle/);
@@ -266,10 +267,10 @@ test('M-7 · every step ends in ONE pinned footer control, and a disabled one sa
   assert.match(footer, /primary=\{\{ label: primaryLabel, onPress: onPublish \}\}/, 'the commitment');
   assert.match(
     flat,
-    /const primaryLabel = uploadingNow \? 'Uploading…' : isEditing \? 'Save changes' : isHiring \? 'Send request' : 'Publish';/,
+    /const primaryLabel = uploadingNow \? 'Uploading…' : isEditing \? 'Save Changes' : isHiring \? 'Send Request' : 'Publish';/,
     'Publish on the last step — "Uploading…" while a file travels'
   );
-  assert.match(footer, /label: 'Save draft'/, 'Save draft beside it');
+  assert.match(footer, /label: 'Save Draft'/, 'Save draft beside it');
   assert.ok(!flat.includes('title="Continue"'), 'no pinned Continue on any step');
   assert.ok(!footer.includes('footerBack'), 'the Back button and its style are gone');
 
@@ -285,12 +286,12 @@ test('M-7 · every step ends in ONE pinned footer control, and a disabled one sa
   }
   assert.match(flat, /const reasonUnder = \(field: typeof blockedField\) => blockedField === field && stepBlocker \? \( <Text style=\{styles\.fieldReason\}/);
 
-  // Pills, not rounded rectangles: both of the bar's buttons are fully round
-  // at 52 (refs/bottom-bar.html).
+  // G1a (2026-11-16): both of the bar's buttons are the built Button (REVISION 1: corner 12,
+  // 52 tall) — the quiet well beside the main one, one share each.
   assert.match(
     flatten(read('components/PostJobBar.tsx')),
-    /button: \{ height: POST_BAR_BUTTON, borderRadius: POST_BAR_BUTTON \/ 2,/,
-    'the bar\'s controls are full pills'
+    /<Button title=\{secondary\.label\} onPress=\{secondary\.onPress\} variant="quiet"[\s\S]*?<Button title=\{primary\.label\} onPress=\{primary\.onPress\}/,
+    'the bar\'s controls are the built quiet and main buttons'
   );
   assert.match(read('components/PostJobBar.tsx'), /export const POST_BAR_BUTTON = 52;/);
 });
@@ -524,8 +525,8 @@ test('D10/PJ1-C4 · both cap badges read the caps actually enforced, through ONE
   );
   assert.match(
     flat,
-    /kind === 'video' && videoMaxDurationSec \? \{ icon: 'time-outline' as const, text: `Up to \$\{videoMaxDurationSec\} seconds` \}/,
-    'the video badge spells "seconds" and reads the picker cap'
+    /kind === 'video'\s*\? \{ icon: 'time-outline' as const, text: `Up to \$\{MAX_VIDEO_SECONDS\} seconds` \}/,
+    'the video badge spells "seconds" and reads the one video cap'
   );
   assert.match(
     flat,
@@ -535,10 +536,12 @@ test('D10/PJ1-C4 · both cap badges read the caps actually enforced, through ONE
   assert.ok(!/\bsec\b/.test(flat), 'the abbreviated "sec" is retired');
   // ANTI-VACUITY: the video figure is the SAME number handed to the picker,
   // and the photo figure is the SAME cap the add tile stops at.
-  assert.match(flat, /videoMaxDuration: kind === 'video' \? videoMaxDurationSec : undefined,/);
+  // A4 wiring (A1): the picker's cap is PICKER_MEDIA_OPTIONS.videoMaxDuration = MAX_VIDEO_SECONDS
+  // (tests/pickerOptions.test.mjs), and a library clip is checked by rejectionForPickedVideo's default.
+  assert.match(flat, /launchImageLibraryAsync\(\{\s*\.\.\.PICKER_MEDIA_OPTIONS,\s*mediaTypes: kind === 'video' \? \['videos'\] : \['images'\],\s*\}\)/);
   assert.match(flat, /const atLimit = items\.length >= maxItems;/);
-  assert.match(screen, /videoMaxDurationSec=\{MAX_VIDEO_DURATION_MS \/ 1000\}/);
-  assert.match(screen, /const MAX_VIDEO_DURATION_MS = 60_000;/);
+  assert.doesNotMatch(screen, /videoMaxDurationSec|MAX_VIDEO_DURATION_MS|MAX_VIDEO_BYTES/);
+  assert.equal((screen.match(/rejectionForPickedVideo\(asset\)/g) ?? []).length, 2, 'both video controls use the shared limits');
   assert.match(screen, /maxItems=\{isHiring \? 5 : MAX_PHOTOS\}/);
   assert.match(screen, /const MAX_PHOTOS = 10;/);
 
@@ -699,8 +702,8 @@ test('D13/D14 · the price is ONE field that opens its list — no pencil, no di
   assert.match(drop, /accessibilityLabel="Edit budget"/);
   // The list: No maximum in open bids only, the ready amounts, then the way to type one.
   assert.match(drop, /export const PRICE_PRESETS = \[50, 100, 150, 200, 300, 500\] as const;/);
-  assert.match(drop, /\.\.\.\(posted \? \[\] : \[\{ value: NONE, label: 'No maximum' \}\]\)/);
-  assert.match(drop, /\{ value: CUSTOM, label: 'Enter your own amount', icon: 'pencil' as const, accent: true \}/);
+  assert.match(drop, /\.\.\.\(posted \? \[\] : \[\{ value: NONE, label: 'No Maximum' \}\]\)/);
+  assert.match(drop, /\{ value: CUSTOM, label: 'Enter Your Own Amount', icon: 'pencil' as const, accent: true \}/);
 
   // D13 — the minimum is gone entirely, field and label.
   assert.ok(!flat.includes('Min budget'), 'the MIN BUDGET field and label are removed');
@@ -721,7 +724,7 @@ test('D13/D14 · the price is ONE field that opens its list — no pencil, no di
 
   // The label treatment is the SHARED one, so it cannot drift from Title and
   // Description on step 1.
-  assert.match(drop, /<FieldLabel palette=\{palette\} tone="gold">\{priceFieldLabel\(mode\)\}<\/FieldLabel>/ /* 2026-09-29 (LUX-LIST-2 #4): MAX BUDGET / PRICE stay antique gold */);
+  assert.match(drop, /<FieldLabel palette=\{palette\}>\{priceFieldLabel\(mode\)\}<\/FieldLabel>/ /* G1a 2026-11-16: MAX BUDGET / PRICE take the field label's tone, as Title and Description ("no keep mint") */);
   const field = read('components/TextField.tsx');
   assert.match(field, /export function FieldLabel\(\{/);
   // 2026-09-28 (LUX-LIST-64 #2): the label may take the accent tone ("Phone number").
@@ -880,8 +883,10 @@ test('D19-D21 · the publish copy, the amount, and where the second action goes'
 
   // D19 — the published card's amount is the amount itself, WHITE (#40, the
   // money role), and no wallet glyph stands for it.
-  assert.match(publish, /<Text style=\{styles\.money\}>\{formatBudget\(cents\)\}<\/Text>/);
-  assert.match(publish, /money: \{ fontWeight: '700', color: colors\.money, \}/);
+  // G1a 2026-11-16: the amount goes through MoneyText (as on the review summary), with no state, so it
+  // takes MoneyText's money role.
+  assert.match(publish, /<MoneyText cents=\{cents\} size="md" \/>/);
+  assert.match(read('ui/primitives/MoneyText.tsx'), /\? colors\.muted : colors\.money;/);
   assert.ok(!publish.includes('wallet-outline'), 'no wallet glyph on the published card');
 
   // D21 — the label says where it goes; same handler and same destination.
@@ -895,7 +900,9 @@ test('D22 · the notify line is on the screen because the schema actually backs 
   // approved page's own — and the promise is the same one, so the three links
   // below are exactly what it still rests on.
   const live = flatten(read('components/JobLivePage.tsx'));
-  assert.match(live, /We’ll let you know when the first bid arrives\./);
+  // A4 wiring (G1a-5): the line follows the step above it ("Requests arrive" with a set price).
+  assert.match(live, /\{`We’ll let you know when the first \$\{posted \? 'request' : 'bid'\} arrives\.`\}/);
+  assert.match(live, /\[posted \? 'Requests arrive' : 'Bids arrive', 'From workers nearby'\]/);
 
   // The live schema: the baseline (pg_dump form) and notify_on_bid()'s newest
   // definition (hire from push).

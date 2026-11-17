@@ -33,6 +33,8 @@ const offersModule = (async () => {
       /import \{ moneyCeilingError \} from '\.\/validation';/,
       'const moneyCeilingError = () => null;'
     )
+    // A4-R1: the server's clock (lib/serverClock.ts, executed in tests/serverClock.test.mjs) at offset 0.
+    .replace(/import \{ serverNowMs \} from '\.\/serverClock';/, 'const serverNowMs = () => Date.now();')
     // Same for the location-shape guard — executed in
     // tests/locationPrivacy.test.mjs.
     .replace(

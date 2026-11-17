@@ -62,14 +62,14 @@ export function JobOwnerActions({ jobId, posterId, status, style }: JobOwnerActi
   return (
     <View style={[styles.row, style]}>
       <Button
-        title="Edit job"
+        title="Edit Job"
         variant="secondary"
         onPress={onEdit}
         disabled={deleting}
         style={styles.btn}
       />
       <Button
-        title="Delete job"
+        title="Delete Job"
         variant="secondary"
         onPress={onDelete}
         loading={deleting}
@@ -82,8 +82,7 @@ export function JobOwnerActions({ jobId, posterId, status, style }: JobOwnerActi
         visible={deleteDialogVisible}
         title="Delete this job?"
         message="This cannot be undone."
-        confirmText="Delete job"
-        cancelText="Cancel"
+        confirmText="Delete Job"
         destructive
         loading={deleting}
         onConfirm={confirmDelete}

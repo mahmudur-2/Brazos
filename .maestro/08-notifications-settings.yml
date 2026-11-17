@@ -42,7 +42,7 @@ appId: app.brazos.mobile.preview
     text: "New bid on ${output.marker} main"
     index: 0
 - extendedWaitUntil:
-    visible: "Job & Bids|Job Details"
+    visible: "Job Details"
     timeout: 30000
 # E5: the job opens on top of the feed (the Home stack), so Back returns to the feed.
 - tapOn: 'Back( to .*)?'
@@ -64,7 +64,7 @@ appId: app.brazos.mobile.preview
     visible: "Notification Settings"
     timeout: 30000
 - extendedWaitUntil:
-    visible: "Bids on my jobs"
+    visible: "Bids on My Jobs"
     timeout: 30000
 # Each row shows its label twice (the text, then the switch): index 1 is the switch.
 - tapOn:
@@ -74,34 +74,34 @@ appId: app.brazos.mobile.preview
     text: "Messages"
     index: 1
 - tapOn:
-    text: "Bids on my jobs"
+    text: "Bids on My Jobs"
     index: 1
 - tapOn:
-    text: "Bids on my jobs"
+    text: "Bids on My Jobs"
     index: 1
 - tapOn:
-    text: "Job updates"
+    text: "Job Updates"
     index: 1
 - tapOn:
-    text: "Job updates"
+    text: "Job Updates"
     index: 1
 - tapOn:
-    text: "Hire Again requests"
+    text: "Hire Again Requests"
     index: 1
 - tapOn:
-    text: "Hire Again requests"
+    text: "Hire Again Requests"
     index: 1
 - runFlow:
     when:
-      visible: "Quiet hours"
+      visible: "Quiet Hours"
     commands:
       - assertVisible: "How far is “nearby”.*"
       - tapOn:
-          text: "Quiet hours"
+          text: "Quiet Hours"
           index: 1
       - takeScreenshot: 08-quiet-hours
       - tapOn:
-          text: "Quiet hours"
+          text: "Quiet Hours"
           index: 1
 - takeScreenshot: 08-settings
 - tapOn: 'Back( to .*)?'
@@ -119,11 +119,13 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "Switch to Worker"
     timeout: 30000
+# Centred for the reason given for "Legal" below: the Appearance row sits in the same Account card.
 - scrollUntilVisible:
     element:
       text: "Dark"
     direction: DOWN
     timeout: 60000
+    centerElement: true
 - tapOn: "Dark"
 - takeScreenshot: 08-profile-dark
 - tapOn: "Light"
@@ -167,17 +169,19 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 - takeScreenshot: 08-profile-details
 - tapOn: 'Back( to .*)?'
+# P11: the row opens in place, a drop-down. Centred, as in flow 10: a row that stops at the screen's foot
+# sits under the floating tab bar, and the row it opens would fall past the foot.
 - scrollUntilVisible:
     element:
-      text: "Account & safety"
+      text: "Account & Safety"
     direction: DOWN
     timeout: 60000
-- tapOn: "Account & safety"
+    centerElement: true
+- tapOn: "Account & Safety"
 - extendedWaitUntil:
-    visible: "Account & Safety"
+    visible: "Delete Account"
     timeout: 30000
-- assertVisible: "Delete account"
-- tapOn: 'Back( to .*)?'
+- tapOn: "Account & Safety"
 
 # ─── Mode switch round trip ──────────────────────────────────────────────
 - tapOn: "Home"

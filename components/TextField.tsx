@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
-import { fieldAccessory, metricStyles, radius, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import { controls, fieldAccessory, metricStyles, radius, spacing, useThemeColors, wellStyle, type ColorPalette } from '../lib/theme';
 import { FocusRing } from './FocusRing';
 
 type TextFieldProps = {
@@ -55,12 +55,12 @@ export function FieldLabel({
   tone?: 'eyebrow' | 'accent' | 'gold';
 }) {
   const styles = stylesFor();
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   return (
-    // 2026-09-27 (the Lux remake, ruling 4): gold in dark. 2026-09-28 (LUX-LIST-64
-    // #48): the antique gold #86641A in light — the one eyebrow role.
-    <Text style={[styles.label, { color: tone === 'accent' ? palette.emerald : tone === 'gold' ? palette.eyebrowGold : palette.eyebrow }]}>
+    // F5 (owner, 2026-11-16): in dark every field label, whatever its tone, is the mint of the
+    // main button. 2026-09-28 (LUX-LIST-64 #48): light keeps each tone.
+    <Text style={[styles.label, { color: isDark ? palette.primary : tone === 'accent' ? palette.emerald : tone === 'gold' ? palette.eyebrowGold : palette.eyebrow }]}>
       {children}
     </Text>
   );
@@ -111,13 +111,10 @@ export function TextField({
           // it, so multi-line takes the card radius instead. Shape, not
           // colour — this lands in both themes.
           multiline && styles.inputMultiline,
-          {
-            color: palette.text,
-            // 2026-09-27 (the Lux remake): the input is the Lux well — white
-            // at .06 — inside the card it sits in; light keeps the white field.
-            backgroundColor: isDark ? withAlpha(palette.white, 0.06) : palette.surface,
-            borderColor: palette.border,
-          },
+          // A2-M2: the field is THE well (lib/theme.ts `wellStyle`) — sunk into the card it sits
+          // in, in both themes. Was: white at .06 in dark, the white surface in light.
+          wellStyle(palette, isDark),
+          { color: palette.text },
           error && { borderColor: palette.danger },
           style,
           // The room the inside control needs, whatever the caller's own padding.
@@ -168,7 +165,8 @@ const stylesFor = metricStyles(() => StyleSheet.create({
     fontSize: 12,
   },
   input: {
-    minHeight: 50,
+    // A2-M2 (direction B): a floor, so the text may grow with the phone's large-text setting.
+    minHeight: controls.textFieldHeight,
     borderWidth: 1,
     // Masters 3/4/23/24/30 draw every SINGLE-LINE field as a full-round pill.
     borderRadius: radius.pill,

@@ -472,9 +472,13 @@ export const SPACING_DEFAULTS = THEME_SPACING_DEFAULTS;
 export const spacing = metricGroup(THEME_SPACING_DEFAULTS, {});
 
 export const THEME_RADIUS_DEFAULTS = {
+  // A2-M1: `xs` (a bar's end, a small cap) and `card` (the lit card's corner, the `card` material's
+  // own 22) join the scale, so a restyled screen never spells a corner as a number.
+  xs: 4,
   sm: 8,
   md: 12,
   lg: 16,
+  card: 22,
   xl: 24,
 } as const;
 
@@ -695,6 +699,26 @@ export const type = {
   },
 } as const satisfies Record<string, TextStyle>;
 
+/**
+ * A2-M1 — THE TYPE SCALE a restyled screen writes instead of a number (tests/themeResolution.test.mjs
+ * fences the numbers). It keeps today's three most used sizes exactly (13, 14 and 12) so most text
+ * does not move; a rare size goes to its nearest step. The heading steps take the display voice and
+ * `type`'s -1 tracking. `type` above stays for the primitives that read it.
+ */
+export const textScale = {
+  caption: { fontSize: 11, lineHeight: 14, fontWeight: '600' },
+  footnote: { fontSize: 12, lineHeight: 16, fontWeight: '500' },
+  label: { fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  body: { fontSize: 14, lineHeight: 20, fontWeight: '400' },
+  callout: { fontSize: 15, lineHeight: 20, fontWeight: '500' },
+  control: { fontSize: 16, lineHeight: 20, fontWeight: '700' },
+  headline: { fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  title: { fontSize: 20, lineHeight: 25, fontWeight: '700', fontFamily: fonts.display },
+  heading: { fontSize: 24, lineHeight: 29, fontWeight: '800', fontFamily: fonts.display, letterSpacing: -1 },
+  display: { fontSize: 28, lineHeight: 33, fontWeight: '800', fontFamily: fonts.display, letterSpacing: -1 },
+  hero: { fontSize: 34, lineHeight: 40, fontWeight: '800', fontFamily: fonts.display, letterSpacing: -1 },
+} as const satisfies Record<string, TextStyle>;
+
 // ---------------------------------------------------------------------------
 // Shadow (§I: color #10261D, opacity 0.08, radius ~14, offset (0,5), elev ~3)
 // ---------------------------------------------------------------------------
@@ -763,6 +787,24 @@ export const shadows: Record<'card' | 'cardDark' | 'ctaDark', ViewStyle> = {
     shadowOffset: { width: 0, height: 10 },
   },
 };
+
+/**
+ * A2-M1 — THE ONE BRIGHT RED, read from the owner's picture (docs/UI Inspo, "Job & Bids with Glowing
+ * Red Cancel Button"): the fill #F83641 under a black label (5.60:1), and in dark a glow the shape of
+ * `ctaDark` in that red; light keeps the same fill and label under the soft `shadows.card`. It is the
+ * same in both themes, so it is a constant, not a palette role. A2-M2: it is Button's `destructive`
+ * fill, so a pop-up's red confirm and a page's red button are one red (F12's #FF5A4E is gone).
+ */
+export const dangerBright = {
+  fill: '#F83641',
+  label: '#000000',
+  glow: {
+    shadowColor: '#F83641',
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 10 },
+  } as ViewStyle,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Glow (Prestige, pre-made decision 12)
@@ -1089,7 +1131,10 @@ export const materials: Record<MaterialName, MaterialSpec> = {
     scrimAlpha: 0.72,
     borderColor: brand.mint,
     borderAlpha: 0.16,
-    fallbackScrimAlpha: 0.92,
+    // A2-M3 (the director, finding 1): solid where no blur draws — Reduce Transparency, a binary
+    // without expo-blur — as `menu` already is. Was .92: a faint, sharp ghost of the page showed
+    // through. Where the blur draws, the .72 frost above is unchanged.
+    fallbackScrimAlpha: 1,
     radius: 28,
     radiusTopOnly: true,
   },
@@ -1113,8 +1158,8 @@ export const materials: Record<MaterialName, MaterialSpec> = {
   // WHITE, not the mint — on glass this clear a mint hairline reads green
   // against the near-black; the mockup's rim is white at 0.14 — and the
   // pane carries the specular top edge (0.22). Radius 28, top corners: the
-  // sheet is docked. Web and Reduce Transparency fall back to the sheet
-  // material's own 0.92: without a blur the page would show through a
+  // sheet is docked. Web and Reduce Transparency fall back to 0.92 (the sheet
+  // material's own until A2-M3 made the sheet's solid): without a blur the page would show through a
   // clearer pane UNBLURRED, which is noise behind the rows, not glass — the
   // harness render proved it at 0.80 (tests/themeTokens keeps the cream
   // ≥4.5:1 over the fallback on white).
@@ -1495,6 +1540,16 @@ export const CONTROL_DEFAULTS = {
   fieldHeight: 48,
   /** Square icon-only controls. */
   iconButton: 44,
+  /** A2-M1: components/Button.tsx's corner, the owner's picture: a rounded rectangle, never the pill
+   *  (the pill stays on Home's own "Post a job" and the entry screens). */
+  buttonRadius: THEME_RADIUS_DEFAULTS.md,
+  /** A2-M1: components/Button.tsx's default size (`md`), a FLOOR (minHeight) so a label can grow with
+   *  the phone's text size. `buttonHeight` above is the templates' older floor (FormScreen;
+   *  SuccessScreen since A2-M5 A2 uses this one); `buttonHeightSmall` is Button's `sm`. */
+  buttonHeightDefault: 52,
+  /** A2-M1: components/TextField.tsx's floor from A2-M2 (50 until then). `fieldHeight` above is the
+   *  search field's (ui/primitives/SearchBar.tsx); AuthField keeps lib/authTheme.ts's 54. */
+  textFieldHeight: 52,
 } as const;
 
 export const controls = metricGroup(CONTROL_DEFAULTS, {

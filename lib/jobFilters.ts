@@ -1,5 +1,5 @@
 import type { JobCategory, OpenJob } from './jobs';
-import { dateOfDayKey, formatShortDay } from './time';
+import { dateOfDayKey, formatShortDay, marketDayKey } from './time';
 
 /**
  * The worker-side job filter model (screen 50) — Phase 8, grown 2026-09-19.
@@ -119,22 +119,21 @@ export const BUDGET_CUSTOM_VALUES_CENTS: readonly number[] = (() => {
 
 /**
  * A Date as the 'YYYY-MM-DD' key `scheduled_date` is stored in, in the
- * caller's LOCAL calendar.
+ * MARKET's calendar (C9, A4-M4: lib/time.ts marketDayKey). The name is older
+ * than the rule: "local" now means the job's place, not the phone's clock, so
+ * a phone set to another zone agrees with the server about which day is today.
  *
- * Not `toISOString().slice(0, 10)`, which is UTC: for anyone west of Greenwich
- * that answers "tomorrow" for most of the evening, so a Today filter would
- * start hiding today's jobs after dinner.
+ * Not `toISOString().slice(0, 10)`, which is UTC: west of Greenwich that
+ * answers "tomorrow" for most of the evening, so a Today filter would start
+ * hiding today's jobs after dinner.
  */
 export function localDateKey(when: Date): string {
-  const month = String(when.getMonth() + 1).padStart(2, '0');
-  const day = String(when.getDate()).padStart(2, '0');
-  return `${when.getFullYear()}-${month}-${day}`;
+  return marketDayKey(when);
 }
 
-/** The key `days` calendar days after `from`, in the caller's local calendar. */
+/** The key `days` calendar days after `from`, in the market's calendar. */
 export function localDateKeyAfter(from: Date, days: number): string {
-  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + days);
-  return localDateKey(d);
+  return marketDayKey(from, days);
 }
 
 /**
@@ -154,8 +153,8 @@ export function customDateKeys(from: Date, count = 30): string[] {
  * weekday — for anything later, and null for a job with no date, which then
  * shows nothing rather than a guess. Short on the operator's ruling
  * (2026-09-20): "Tomorrow" and "Wed, Sep 2" ran into the pay column on the
- * phone, and the row may not grow a line. Keys compared in the caller's
- * local calendar, like every other date here.
+ * phone, and the row may not grow a line. Keys compared in the market's
+ * calendar, like every other date here.
  */
 export function scheduledDayLabel(scheduledDate: string | null, now: Date): string | null {
   if (!scheduledDate) return null;

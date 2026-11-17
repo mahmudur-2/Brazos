@@ -21,13 +21,14 @@ import {
   dismissReport,
   fetchAdminReports,
   reasonLabel,
+  reportSubject,
   unbanUser,
   type AdminReport,
 } from '../lib/moderation';
-import { spacing, themedStyles, useThemeColors, type ColorPalette,
+import { spacing, textScale, themedStyles, useThemeColors, type ColorPalette,
   screenGround,
 } from '../lib/theme';
-import { useScrollClearance } from '../ui/primitives';
+import { EmptyState, useScrollClearance } from '../ui/primitives';
 import { formatTimeAgo } from '../lib/time';
 import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 
@@ -75,12 +76,12 @@ export function AdminReportsScreen() {
     const name = report.reported_name ?? 'this user';
     const ok = await confirmAsync({
       title: `Ban ${name}?`,
+      // T1 (production-36h): each clause as ban_user does it (the access lane, 400200 ban_switch). A
+      // suspended account stays signed in and sees the suspended screen (App.tsx AccountGate).
       message:
-        'They will be signed out, blocked from posting, bidding and messaging, ' +
-        'their active jobs will be cancelled, and their phone number will be ' +
-        'blocked from re-registering.',
+        'This suspends their account. They can no longer post, bid or message. ' +
+        'Their unfinished jobs are cancelled, and their phone number cannot be used for a new account.',
       confirmText: 'Ban',
-      cancelText: 'Cancel',
       destructive: true,
     });
     if (!ok) return;
@@ -145,6 +146,7 @@ export function AdminReportsScreen() {
           renderItem={({ item }) => {
             const busy = actioningId === item.id;
             const isOpen = item.status === 'open';
+            const subject = reportSubject(item);
             return (
               <Card>
                 <View style={styles.headerRow}>
@@ -165,8 +167,23 @@ export function AdminReportsScreen() {
                   </Text>
                 ) : null}
 
+                {/* T2: the reported review or message, as the server sent it (200 characters at most). */}
+                {subject ? (
+                  <>
+                    <Text style={styles.job} numberOfLines={1}>
+                      {subject.label}
+                    </Text>
+                    <Card level="well" style={styles.quote}>
+                      <Text style={styles.description}>“{subject.text}”</Text>
+                    </Card>
+                  </>
+                ) : null}
+
+                {/* The reporter's own words sit in a well: a quote inside the lit card. */}
                 {item.description ? (
-                  <Text style={styles.description}>“{item.description}”</Text>
+                  <Card level="well" style={styles.quote}>
+                    <Text style={styles.description}>“{item.description}”</Text>
+                  </Card>
                 ) : null}
 
                 {item.reported_banned && (
@@ -179,16 +196,20 @@ export function AdminReportsScreen() {
                 <View style={styles.actions}>
                   {item.reported_banned ? (
                     <Button
-                      title="Unban user"
+                      title="Unban User"
                       variant="secondary"
                       onPress={() => handleUnban(item)}
                       loading={busy}
+                      style={styles.action}
                     />
                   ) : (
                     <Button
-                      title="Ban user"
+                      title="Ban User"
+                      // F1: a button that removes someone is red.
+                      variant="destructive"
                       onPress={() => handleBan(item)}
                       loading={busy}
+                      style={styles.action}
                     />
                   )}
                   {isOpen && (
@@ -197,6 +218,7 @@ export function AdminReportsScreen() {
                       variant="secondary"
                       onPress={() => handleDismiss(item)}
                       disabled={busy}
+                      style={styles.action}
                     />
                   )}
                 </View>
@@ -204,19 +226,11 @@ export function AdminReportsScreen() {
             );
           }}
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <View style={styles.emptyIcon}>
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={32}
-                  color={colors.primary}
-                />
-              </View>
-              <Text style={styles.emptyTitle}>Nothing to review</Text>
-              <Text style={styles.emptyText}>
-                New reports from users will show up here.
-              </Text>
-            </View>
+            <EmptyState
+              icon="shield-checkmark-outline"
+              title="Nothing to Review"
+              body="New reports from users will show up here."
+            />
           }
         />
       )}
@@ -236,34 +250,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   emptyContainer: {
     flexGrow: 1,
-    alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
-  },
-  empty: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    maxWidth: 300,
-  },
-  emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 20,
   },
   headerRow: {
     flexDirection: 'row',
@@ -273,27 +261,28 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   reported: {
     flex: 1,
-    fontSize: 17,
-    fontWeight: '700',
+    ...textScale.headline,
     color: colors.text,
   },
   meta: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
     marginTop: spacing.xs,
   },
   job: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...textScale.label,
     color: colors.primary,
     marginTop: spacing.xs,
   },
+  quote: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+  },
   description: {
-    fontSize: 14,
+    ...textScale.body,
     color: colors.text,
     fontStyle: 'italic',
-    lineHeight: 20,
-    marginTop: spacing.md,
   },
   bannedRow: {
     flexDirection: 'row',
@@ -302,20 +291,25 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     marginTop: spacing.md,
   },
   bannedText: {
-    fontSize: 12,
+    ...textScale.footnote,
     fontWeight: '700',
     color: colors.danger,
   },
+  // The two decisions side by side, each half the card.
   actions: {
+    flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.lg,
+  },
+  action: {
+    flex: 1,
   },
   error: {
     color: colors.danger,
     backgroundColor: colors.dangerBg,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
-    fontSize: 14,
+    ...textScale.body,
   },
   }),
 );

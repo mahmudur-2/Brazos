@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SelectMark } from '../components/SelectMark';
 import { RemoteImage } from '../components/RemoteImage';
@@ -6,11 +6,15 @@ import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-
 import { Ionicons } from '@expo/vector-icons';
 import { GlowTextInput } from '../components/GlowTextInput';
 import { Button } from '../components/Button';
+import { Card } from '../components/Card';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JobVideo } from '../components/JobVideo';
 import { PhotoViewer } from '../components/PhotoViewer';
-import { FormScreen } from '../ui/templates/FormScreen';
-import type { ScreenState } from '../ui/templates/ScreenStates';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { ScreenStateView, type ScreenState } from '../ui/templates/ScreenStates';
+import { FloatingAction, useScrollClearance } from '../ui/primitives';
+import { Sheet } from '../ui/primitives/Sheet';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
@@ -36,6 +40,7 @@ import {
   isRefundFailed,
   isRefundQueued,
 } from '../lib/paymentRules';
+import { serverNowMs } from '../lib/serverClock';
 import {
   DISPUTE_REASONS,
   DISPUTE_REASON_LABELS,
@@ -46,19 +51,23 @@ import {
   type JobDispute,
 } from '../lib/disputes';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
-import { completionPhotosOf, completionVideosOf, formatBudget } from '../lib/jobs';
+import { completionPhotosOf, completionVideosOf, formatBudget, type Job } from '../lib/jobs';
 import { isRefundFailureRecorded, releaseAtLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import {
   EYEBROW_TYPE,
+  layout,
   radius,
+  screenGround,
   selectedInDark,
   spacing,
+  textScale,
   themedStyles,
-  litCardStyle,
   useThemeColors,
+  wellStyle,
   type ColorPalette,
 } from '../lib/theme';
+import { titleCase } from '../lib/titleCase';
 
 /**
  * Screen 36 — Approve or report an issue (Phase 6, customer side).
@@ -71,13 +80,76 @@ import {
  * until it is withdrawn or resolved.
  *
  * §9 ordering: review & tip (screen 37) comes AFTER release, never before.
+ *
+ * P12 (owner yes, RESTRUCTURE): the route renders the ONE body below as a screen; the job page
+ * mounts the same body as a sheet. Never a second copy of the approve or report body.
  */
 export function ApproveOrDisputeScreen() {
-  const { palette: colors, isDark } = useThemeColors();
-  const styles = stylesFor(colors);
-  const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'ApproveOrDispute'>>();
-  const { job, missing } = useOwnedJobDetail(params.job);
+  return <ApproveOrDispute job={params.job} presentation="screen" />;
+}
+
+/** The two moves off the page the body makes (the route's navigation is one). */
+type ApproveMoves = {
+  replace(screen: 'ReviewAndTip', params: MyJobsStackParamList['ReviewAndTip']): void;
+  navigate(screen: 'Checkout', params: MyJobsStackParamList['Checkout']): void;
+};
+
+/**
+ * P12: lives inside the sheet's Modal, so it mounts when the sheet is drawn and unmounts only when
+ * the Modal stops drawing its content (on iOS after the native dismiss): the close has finished.
+ */
+function SheetPresence({ up, onGone }: { up: MutableRefObject<boolean>; onGone: () => void }) {
+  const latest = useRef(onGone);
+  latest.current = onGone;
+  useEffect(() => {
+    up.current = true;
+    return () => {
+      up.current = false;
+      latest.current();
+    };
+  }, [up]);
+  return null;
+}
+
+export function ApproveOrDispute({
+  job: jobParam,
+  presentation,
+  visible = true,
+  onClose,
+}: {
+  job: Job;
+  /** 'screen' = the route; 'sheet' = the job page's sheet (it stays mounted, so a typed report outlives a close). */
+  presentation: 'screen' | 'sheet';
+  /** Sheet only: whether the sheet is up. */
+  visible?: boolean;
+  /** Sheet only: closes the sheet. The screen goes back instead. */
+  onClose?: () => void;
+}) {
+  const { palette: colors, isDark } = useThemeColors();
+  // With no floating action the bar shows, and the list ends above its pill.
+  const navClearance = useScrollClearance();
+  const styles = stylesFor(colors);
+  const routeNavigation = useNavigation<MyJobsStackNavigation>();
+  // P12: in the sheet, a move off the job page closes the sheet first and starts only when it is
+  // gone (SheetPresence), so no navigation can run under a closing sheet. Review & Tip is pushed
+  // over the job page, which stays under it as it stayed under the approve screen it replaced.
+  const sheetUp = useRef(false);
+  const pendingMove = useRef<(() => void) | null>(null);
+  const afterSheet = (move: () => void) => {
+    if (!sheetUp.current) return move();
+    pendingMove.current = move;
+    onClose?.();
+  };
+  const navigation: ApproveMoves =
+    presentation === 'sheet'
+      ? {
+          replace: (screen, next) => afterSheet(() => routeNavigation.navigate(screen, next)),
+          navigate: (screen, next) => afterSheet(() => routeNavigation.navigate(screen, next)),
+        }
+      : routeNavigation;
+  const leave = onClose ?? goBackOrHome;
+  const { job, missing } = useOwnedJobDetail(jobParam);
   const { user } = useAuth();
 
   const [payment, setPayment] = useState<Payment | null>(null);
@@ -111,14 +183,18 @@ export function ApproveOrDisputeScreen() {
     setLoaded(true);
   }, [job.id]);
 
+  // P12: the sheet stays mounted with the job page, so it reads again each time it opens (as each
+  // visit to the screen did) and never while it is down; the screen is always visible.
   useFocusEffect(
     useCallback(() => {
+      if (!visible) return;
       void load();
-    }, [load])
+    }, [load, visible])
   );
 
   useFocusEffect(
     useCallback(() => {
+      if (!visible) return;
       let active = true;
       fetchRemoteConfig().then((config) => {
         if (active) setPaymentsEnabled(config.paymentsEnabled);
@@ -126,7 +202,7 @@ export function ApproveOrDisputeScreen() {
       return () => {
         active = false;
       };
-    }, [])
+    }, [visible])
   );
 
   const isOwner = !!user && user.id === job.client_id;
@@ -140,7 +216,7 @@ export function ApproveOrDisputeScreen() {
         title: 'This job is no longer available',
         body: 'It may have been deleted or you may no longer have access to it.',
         actionLabel: 'Back',
-        onAction: goBackOrHome,
+        onAction: leave,
       }
     : !isOwner
       ? {
@@ -154,7 +230,7 @@ export function ApproveOrDisputeScreen() {
             title: 'Nothing to approve yet',
             body: 'Once the worker marks the job complete, review their finished work here.',
             actionLabel: 'Back to the job',
-            onAction: goBackOrHome,
+            onAction: leave,
           }
         : !loaded
           ? { kind: 'loading', variant: 'spinner' }
@@ -168,6 +244,9 @@ export function ApproveOrDisputeScreen() {
   // no approve CTA, and review admits it, so nothing can loop back here.
   const releaseRequested = !!payment && isReleaseRequested(payment);
   const held = !!payment && isHeld(payment) && !releaseRequested;
+  // A4 wiring (P1): the server's release time (release_due_at); none, or one already passed (the
+  // timer runs every 10 minutes), promises no time.
+  const releaseAt = isRefundFailureRecorded(payment) ? null : releaseDeadlineMs(job);
   const settled = released || releaseRequested;
   const stripe = paymentsMode === 'stripe';
   // D15 / D18: the release CTA answers to the kill switch and to the mode;
@@ -181,6 +260,7 @@ export function ApproveOrDisputeScreen() {
     job,
     payment,
     hasOpenDispute: !!dispute,
+    nowMs: serverNowMs(),
   });
 
   async function approveAndRelease() {
@@ -273,18 +353,18 @@ export function ApproveOrDisputeScreen() {
   // mode and the kill switch allow it); a released — or approved, payout
   // pending — payment moves on to review; report mode submits the report.
   const submitLabel = reporting
-    ? 'Send report'
+    ? 'Send Report'
     : dispute
-      ? 'Withdraw report'
+      ? 'Withdraw Report'
       : held
         ? releaseAllowed
           ? // Codex R12 (the owner's labels): a refund of it failed: approving releases nothing.
-            isRefundFailureRecorded(payment) ? 'Approve the work' : `Approve & release payment`
+            isRefundFailureRecorded(payment) ? 'Approve the Work' : `Approve & Release Payment`
           : undefined
         : settled
           ? stripe
-            ? 'Continue to review'
-            : 'Continue to review & tip'
+            ? 'Continue to Review'
+            : 'Continue to Review & Tip'
           : undefined;
 
   const onSubmit = reporting
@@ -299,37 +379,19 @@ export function ApproveOrDisputeScreen() {
           ? () => navigation.replace('ReviewAndTip', { job })
           : undefined;
 
-  return (
-    <>
-      <FormScreen
-        title="Finished Work"
-        subtitle={job.title}
-        onBack={() => (reporting ? setReporting(false) : goBackOrHome())}
-        state={state}
-        submitLabel={submitLabel}
-        onSubmit={onSubmit}
-        submitDisabled={reporting ? !reason : false}
-        submitLoading={reporting ? submittingReport : releasing || withdrawing}
-        secondaryLabel={
-          reporting
-            ? 'Cancel'
-            : held && !dispute
-              ? 'Report an issue'
-              : undefined
-        }
-        onSecondary={
-          reporting
-            ? () => setReporting(false)
-            : held && !dispute
-              ? () => setReporting(true)
-              : undefined
-        }
-      >
+  // RESTRUCTURE (G1b): a task screen. The bar steps aside and the one main action floats, full
+  // width, with no plate; the second action sits in the card it belongs to ("Report an Issue" in
+  // the payment card, "Cancel" at the foot of the report form).
+  const showAction = Boolean(submitLabel && onSubmit);
+
+  // P12: the one body, framed below by the screen or by the job page's sheet.
+  const body = (
+      <>
         {dispute ? (
           <View style={styles.disputeCard}>
             <View style={styles.disputeHeader}>
               <Ionicons name="alert-circle" size={20} color={colors.danger} />
-              <Text style={styles.disputeTitle}>Issue reported</Text>
+              <Text style={styles.disputeTitle}>Issue Reported</Text>
             </View>
             <Text style={styles.disputeMeta}>
               {DISPUTE_REASON_LABELS[dispute.reason]}
@@ -342,7 +404,7 @@ export function ApproveOrDisputeScreen() {
                 docs/runbooks/dispute-resolution.md — never from the app. */}
             <Text style={styles.disputeNote}>
               The payment stays held while this report is open — including the
-              automatic release timer. Brazos will look at it and reply by email
+              automatic release timer. Brazos will look at it and reply
               within 2 business days. Withdraw it below if things get sorted
               out.
             </Text>
@@ -350,7 +412,7 @@ export function ApproveOrDisputeScreen() {
         ) : null}
 
         {payment && !canFundNow ? (
-          <View style={[styles.paymentCard, litCardStyle(isDark)]}>
+          <Card style={styles.paymentCard}>
             {/* MoneyText keeps the row's real status — held is still
                 literally true on an approved stripe row (D23); C4: the
                 eyebrow is PAYMENT in every state and the caption carries the
@@ -370,10 +432,9 @@ export function ApproveOrDisputeScreen() {
               refundArranged={isRefundArranged(payment)}
               payoutOnItsWay={isPayoutOnItsWay(payment)}
             />
-            {held && !isRefundFailureRecorded(payment) && releaseDeadlineMs(job) != null ? (
+            {held && releaseAt != null && releaseAt > serverNowMs() ? (
               <Text style={styles.paymentNote}>
-                Releases automatically{' '}
-                {releaseAtLabel(releaseDeadlineMs(job) as number, Date.now())} if you do
+                Releases automatically {releaseAtLabel(releaseAt, serverNowMs())} if you do
                 nothing.
               </Text>
             ) : null}
@@ -382,18 +443,18 @@ export function ApproveOrDisputeScreen() {
               <Text style={styles.paymentNote}>
                 {released
                   ? payment.release_reason === 'auto_approved'
-                    ? 'Released automatically after 72 hours with no issue reported.'
+                    ? 'Released automatically with no issue reported.'
                     : 'You approved the work and the payment was released to the worker.'
                   : releaseRequested && !isPayoutOnItsWay(payment)
                     ? // Codex R5-A5, R7-A3, R8-A1: approved, but the payout is not on its way (a refund, an issue
                       // reported after the timer, a reversed transfer, a card dispute): the approval alone.
                       payment.release_reason === 'auto_approved'
-                      ? 'Approved automatically after 72 hours.'
+                      ? 'Approved automatically.'
                       : 'You approved the work.'
                   : releaseRequested
                     ? payment.release_reason === 'auto_approved'
                       ? // C4: requested is not released — the word waits for the transfer.
-                        'Approved automatically after 72 hours with no issue reported. The payment is on its way to the worker and shows as released when the transfer lands.'
+                        'Approved automatically with no issue reported. The payment is on its way to the worker and shows as released when the transfer lands.'
                       : 'You approved the work. The payment is on its way to the worker and shows as released when the transfer lands.'
                     : releaseAllowed
                       ? // Tier A (C3, D23): approving REQUESTS the release; the
@@ -402,14 +463,17 @@ export function ApproveOrDisputeScreen() {
                       : 'Payments are paused right now, so approval is unavailable for the moment. If something isn’t right, you can still report the issue.'}
               </Text>
             )}
-          </View>
+            {!reporting && held && !dispute ? (
+              <Button title="Report an Issue" variant="quiet" size="sm" onPress={() => setReporting(true)} />
+            ) : null}
+          </Card>
         ) : canFundNow ? (
           // AUD-P1-02: this used to be a dead end ("nothing to release") for
           // exactly the job that most needs a money action — completed with
           // an empty or authorized-only ledger. Funding is offered from the
           // same one derivation ClientJobDetail uses; there is nothing to
           // release until the funds are protected first.
-          <View style={[styles.paymentCard, litCardStyle(isDark)]}>
+          <Card style={styles.paymentCard}>
             <Text style={styles.eyebrow}>PAYMENT NOT PROTECTED YET</Text>
             <Text style={styles.paymentNote}>
               {payment?.status === 'authorized'
@@ -417,29 +481,31 @@ export function ApproveOrDisputeScreen() {
                 : 'This job finished without a protected payment, so there is nothing to release yet — the worker can’t be paid until the payment is protected and then released.'}
             </Text>
             <Button
-              title="Protect payment in checkout"
+              title="Protect Payment in Checkout"
               onPress={() => navigation.navigate('Checkout', { job })}
             />
-          </View>
+          </Card>
         ) : (
-          <View style={[styles.paymentCard, litCardStyle(isDark)]}>
+          <Card style={styles.paymentCard}>
             <Text style={styles.eyebrow}>NO PAYMENT ON THIS JOB</Text>
             <Text style={styles.paymentNote}>
               This job finished without a protected payment, so there is
               nothing to release — you can still review the work from the job
               screen.
             </Text>
-          </View>
+          </Card>
         )}
 
         {reporting ? (
-          <View style={styles.reportForm}>
+          <Card style={styles.group}>
             <Text accessibilityRole="header" style={styles.sectionTitle}>What went wrong?</Text>
             {DISPUTE_REASONS.map((r) => (
               <Pressable
                 key={r}
                 style={[
                   styles.reasonRow,
+                  // Each reason is a well inside the form's card.
+                  wellStyle(colors, isDark),
                   reason === r && (isDark ? styles.reasonRowActiveDark : styles.reasonRowActive),
                 ]}
                 onPress={() => setReason(r)}
@@ -458,13 +524,13 @@ export function ApproveOrDisputeScreen() {
                     mark={<View style={[styles.radioDot, isDark && styles.radioDotDark]} />}
                   />
                 </View>
-                <Text style={styles.reasonLabel}>{DISPUTE_REASON_LABELS[r]}</Text>
+                <Text style={styles.reasonLabel}>{titleCase(DISPUTE_REASON_LABELS[r])}</Text>
               </Pressable>
             ))}
             <GlowTextInput
-              glowRadius={radius.lg}
+              glowRadius={radius.md}
               keyboardAppearance={isDark ? 'dark' : 'light'}
-              style={styles.detailsInput}
+              style={[styles.detailsInput, wellStyle(colors, isDark)]}
               value={details}
               onChangeText={setDetails}
               placeholder="Add details (optional) — what you expected vs. what you got"
@@ -474,11 +540,12 @@ export function ApproveOrDisputeScreen() {
               textAlignVertical="top"
               accessibilityLabel="Issue details"
             />
-          </View>
+            <Button title="Cancel" variant="quiet" size="sm" onPress={() => setReporting(false)} />
+          </Card>
         ) : (
-          <>
+          <Card style={styles.group}>
             <Text accessibilityRole="header" style={styles.sectionTitle}>
-              {hasEvidence ? 'What the worker submitted' : 'No photos or video attached'}
+              {hasEvidence ? 'What the Worker Submitted' : 'No Photos or Video Attached'}
             </Text>
             {!hasEvidence ? (
               <Text style={styles.noEvidenceText}>
@@ -511,14 +578,19 @@ export function ApproveOrDisputeScreen() {
                 contentContainerStyle={styles.mediaRow}
               >
                 {completionVideos.map((url) => (
-                  <JobVideo key={url} uri={url} label="Finished work" />
+                  <JobVideo key={url} uri={url} label="Finished Work" />
                 ))}
               </ScrollView>
             ) : null}
-          </>
+          </Card>
         )}
-      </FormScreen>
+      </>
+  );
 
+  // The photo viewer and the two confirms: beside the screen, and inside the sheet's tree (its
+  // overlay layer, in the sheet's Modal), so iOS presents them over the sheet.
+  const dialogs = (
+    <>
       <PhotoViewer visible={!!viewerUri} uri={viewerUri} onClose={() => setViewerUri(null)} />
 
       <ConfirmDialog
@@ -532,8 +604,7 @@ export function ApproveOrDisputeScreen() {
             : '\n\n' +
               'This approves the finished work and releases the payment to the worker. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands.')
         }
-        confirmText={isRefundFailureRecorded(payment) ? 'Approve' : 'Approve & release'}
-        cancelText="Not yet"
+        confirmText={isRefundFailureRecorded(payment) ? 'Approve' : 'Approve & Release'}
         loading={releasing}
         onConfirm={approveAndRelease}
         onCancel={() => setConfirmApprove(false)}
@@ -549,37 +620,132 @@ export function ApproveOrDisputeScreen() {
             : 'Release is unfrozen once the report is withdrawn — including the automatic release timer. ') +
           'You can approve the work yourself right after.'
         }
-        confirmText="Withdraw report"
-        cancelText="Keep it open"
+        confirmText="Withdraw Report"
+        // F12: withdrawing cancels the report, so the confirm is red.
+        destructive
         loading={withdrawing}
         onConfirm={withdrawReport}
         onCancel={() => setConfirmWithdraw(false)}
       />
     </>
   );
+
+  if (presentation === 'sheet') {
+    // The same title and the same main label as the screen; the main action sits in the sheet's
+    // footer, above the keyboard (avoidKeyboard, the counter-offer sheet's way). "Done" closes it:
+    // the photo viewer owns "Close" and the confirms own "Cancel" while they are up.
+    return (
+      <Sheet
+        visible={visible}
+        title="Review & Approve"
+        dismissWord="Done"
+        onClose={leave}
+        avoidKeyboard
+        footer={
+          state.kind === 'ready' && showAction && submitLabel && onSubmit ? (
+            <Button
+              title={submitLabel}
+              onPress={onSubmit}
+              // F1: "Withdraw report" cancels the report, so it is red.
+              variant={!reporting && dispute ? 'destructive' : 'primary'}
+              disabled={reporting ? !reason : false}
+              loading={reporting ? submittingReport : releasing || withdrawing}
+            />
+          ) : undefined
+        }
+        overlay={
+          <>
+            {dialogs}
+            <SheetPresence
+              up={sheetUp}
+              onGone={() => {
+                const move = pendingMove.current;
+                pendingMove.current = null;
+                move?.();
+              }}
+            />
+          </>
+        }
+      >
+        {state.kind !== 'ready' ? <ScreenStateView state={state} /> : <View style={styles.sheetBody}>{body}</View>}
+      </Sheet>
+    );
+  }
+
+  return (
+    <>
+      <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
+        <ScreenHeader
+          title="Review & Approve"
+          subtitle={job.title}
+          onBack={() => (reporting ? setReporting(false) : goBackOrHome())}
+        />
+        {state.kind !== 'ready' ? (
+          <ScreenStateView state={state} />
+        ) : (
+          <>
+            <ScrollView
+              style={styles.flex}
+              contentContainerStyle={[styles.content, { paddingBottom: showAction ? spacing.lg : navClearance }]}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
+              {body}
+            </ScrollView>
+            {showAction && submitLabel && onSubmit ? (
+              <FloatingAction
+                title={submitLabel}
+                onPress={onSubmit}
+                // F1: "Withdraw report" cancels the report, so it is red.
+                variant={!reporting && dispute ? 'destructive' : 'primary'}
+                disabled={reporting ? !reason : false}
+                loading={reporting ? submittingReport : releasing || withdrawing}
+              />
+            ) : null}
+          </>
+        )}
+      </SafeAreaView>
+      {dialogs}
+    </>
+  );
 }
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  flex: {
+    flex: 1,
+  },
+  content: {
+    padding: layout.screenGutter,
+    gap: spacing.lg,
+  },
+  // P12: the same rhythm between the cards inside the sheet's own scroller and padding.
+  sheetBody: {
+    gap: spacing.lg,
+  },
   eyebrow: {
     ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
   sectionTitle: {
-    fontSize: 16,
+    ...textScale.control,
     fontWeight: '800',
     color: colors.ink,
   },
+  // The lit Card's own padding, fill and rim; only the rhythm inside is set here.
   paymentCard: {
-    padding: spacing.lg,
     gap: spacing.sm,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
+  },
+  group: {
+    gap: spacing.md,
   },
   paymentNote: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
     lineHeight: 19,
   },
@@ -593,7 +759,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.border,
   },
   noEvidenceText: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
     lineHeight: 19,
   },
@@ -611,37 +778,34 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
   },
   disputeTitle: {
-    fontSize: 16,
+    ...textScale.control,
     fontWeight: '800',
     color: colors.danger,
   },
   disputeMeta: {
-    fontSize: 14,
+    ...textScale.body,
     fontWeight: '700',
     color: colors.ink,
   },
   disputeDetails: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.text,
     lineHeight: 19,
   },
   disputeNote: {
-    fontSize: 12,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textMuted,
     lineHeight: 17,
-  },
-  reportForm: {
-    gap: spacing.md,
   },
   reasonRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    // The well's corner; its fill and rim come from wellStyle.
+    borderRadius: radius.md,
     minHeight: 48,
   },
   reasonRowActive: {
@@ -656,7 +820,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   radio: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: radius.pill,
     borderWidth: 2,
     borderColor: colors.border,
     alignItems: 'center',
@@ -671,27 +835,25 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   radioDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: radius.pill,
     backgroundColor: colors.emerald,
   },
   radioDotDark: {
     backgroundColor: selectedInDark(colors).line,
   },
   reasonLabel: {
+    ...textScale.callout,
     flex: 1,
-    fontSize: 15,
     fontWeight: '600',
     color: colors.ink,
   },
   detailsInput: {
+    ...textScale.callout,
+    fontWeight: '400',
     minHeight: 96,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     padding: spacing.md,
-    fontSize: 15,
     color: colors.ink,
-    backgroundColor: colors.surface,
   },
   }),
 );

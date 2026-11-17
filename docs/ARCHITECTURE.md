@@ -12,13 +12,19 @@ typed: `lib/supabase.ts` is `createClient<Database>` over `types/database.ts` (m
 ## Auth and session
 
 `lib/AuthContext.tsx` owns the session: `user`, `session`, `loading`, `signUp`, `login`, sign-out,
-and a `bannedNotice` flag set when the last sign-out was a suspension. Sign-out also unregisters
+and `suspended`, the server's answer (`current_user_is_banned`) whether the signed-in account is
+suspended: asked at sign-in, at launch, on a return to the foreground (at most every 10 minutes,
+every time while suspended) and at once when the server refuses a call for a suspended account; it is null until the
+first answer, and a suspended account stays signed in. Sign-out also unregisters
 the push token. Screens read auth through `hooks/useAuth.ts`. Sign-up creates the profile row
 through the `on_auth_user_created` trigger on `auth.users` (`handle_new_user()`, which prefers the
 verified phone on the auth row over client-supplied metadata).
 
-Two gates sit above the tabs: signed out goes to the auth flow; signed in with the current Terms
-and Privacy not accepted goes to `LegalGateScreen`. A gate failure admits only on-device proof
+Before every gate, a suspended account sees `SuspendedAccountScreen` in place of the app (the
+server's sentence, Contact Support, Delete Account through the existing delete screen, Sign Out);
+the app holds its loader until the account's first answer. Two gates sit above the tabs: signed
+out goes to the auth flow; signed in with the current Terms and Privacy not accepted goes to
+`LegalGateScreen`. A gate failure admits only on-device proof
 that the server confirmed this account accepted the current documents; otherwise it fails closed.
 Sign-out always works locally.
 
@@ -276,7 +282,7 @@ and mints a new one, through the ceiling trigger), and a tip is queued only when
 
 A reported issue is a `job_disputes` row, opened from `ApproveOrDispute` (customer) or by a worker
 no-show claim. While one is open the payment stays held and `transfers_due` excludes the job. The
-app promises: "Brazos will look at it and reply by email within 2 business days." The clock starts
+app promises: "Brazos will look at it and reply within 2 business days." The clock starts
 at `job_disputes.created_at`. `resolve_job_dispute()` is service_role only; the app never calls it.
 An active admin decides an issue between two people with `admin_decide_issue(job, side)`
 (`20261116420000_admin_attention.sql`): a security definer wrapper, guard first, active admins only,

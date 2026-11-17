@@ -45,7 +45,6 @@ test('B11 · askOpenSettings offers Settings and opens it only on yes', async ()
     title: 'Camera is off',
     message: 'Camera is off for Brazos. Turn it on in Settings to take a photo.',
     confirmText: 'Open Settings',
-    cancelText: 'Not now',
   });
   assert.equal(opened.length, 1);
 

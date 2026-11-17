@@ -73,10 +73,11 @@ test('submission is double-tap safe and failure preserves entered terms', async 
   assert.doesNotMatch(composer, /setMessage\(''\)/);
 });
 
-test('worker job detail routes custom bids to SubmitBid instead of a second inline form', async () => {
+test('worker job detail opens custom bids in the shared OfferComposer sheet instead of a second inline form', async () => {
   const detail = await read('screens/JobDetailScreen.tsx');
 
-  assert.match(detail, /navigate\('SubmitBid', \{ job \}\)/);
+  // P7 (owner, 2026-11-16): the bid form opens as a sheet over the job page.
+  assert.match(detail, /<OfferComposer layout="inline" context=\{\{ kind: 'bid', job \}\}/);
   // The one inline path left is the listed-price quick bid; a revived custom
   // pitch form would need a message state feeding createMarketplaceOffer.
   assert.doesNotMatch(detail, /createMarketplaceOffer\(\{[^}]*message:\s*message\b/s);
@@ -215,7 +216,8 @@ test('n5 · the composer reads the quote through the one wrapper and does no fee
   assert.match(composer, /takeQuote\.cents === quoteCents/);
   // Bid context only — a customer's counter is not a worker's take — and the
   // line is a <Text> directly under the amount field.
-  assert.match(composer, /<\/OfferAmountField>|editable=\{!submitting\}\s*\n\s*\/>\s*\n\s*\{isBid && takeLine \? \(\s*\n\s*<Text/);
+  // PART 5b T1: the field sits in the host's measuring View (tests/counterFormReveal.test.mjs).
+  assert.match(composer, /<\/OfferAmountField>|editable=\{!submitting\}\s*\n\s*\/>\s*\n\s*(?:<\/View>\s*\n\s*)?\{isBid && takeLine \? \(\s*\n\s*<Text/);
   // No numeric literal between 0 and 1 multiplying an amount, no rate, no
   // percentage, and the figure is never operated on: the platformFee fence
   // covers the constant, this covers the composer.

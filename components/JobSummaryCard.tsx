@@ -21,13 +21,14 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Card } from './Card';
 import { Divider } from '../ui/primitives/Divider';
+import { MoneyText } from '../ui/primitives/MoneyText';
 import { GlassDropdown, type GlassDropdownItem, type GlassDropdownRequest } from './GlassDropdown';
 import { MediaViewer, type ViewerItem } from './MediaViewer';
 import { RemoteImage } from './RemoteImage';
 import { useLoopActive } from '../hooks/useLoopActive';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { userMessage } from '../lib/errorMessage';
-import { formatBudget } from '../lib/jobs';
+import { PICKER_MEDIA_OPTIONS } from '../lib/pickerOptions';
+import { uploadErrorMessage } from '../lib/uploadRules';
 import { modalSettleDelay } from '../lib/modalPresence';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import {
@@ -35,6 +36,7 @@ import {
   fonts,
   radius,
   spacing,
+  textScale,
   themedStyles,
   useThemeColors,
   withAlpha,
@@ -78,17 +80,16 @@ export function viewGrid(count: number): { columns: number; aspect: number; show
   return { columns: 4, aspect: 1, shown: 4, more: count - 3 };
 }
 
-/** One detail of the card: its mint glyph and label, the value under them; a tap opens its step. */
+/** One detail of the card, on its own line as the job page shows it: its mint glyph and label, the
+ *  value under them; a tap opens its step. */
 function SummaryCell({
   label,
   glyph,
-  wide,
   onPress,
   children,
 }: {
   label: string;
   glyph: IoniconName;
-  wide?: boolean;
   onPress: () => void;
   children: ReactNode;
 }) {
@@ -98,7 +99,7 @@ function SummaryCell({
     <PressScale
       haptic={false}
       onPress={onPress}
-      style={({ pressed }) => [styles.cell, wide ? styles.cellWide : styles.cellHalf, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.cell, pressed && styles.pressed]}
       accessibilityRole="button"
       accessibilityLabel={`Change ${label.toLowerCase()}`}
     >
@@ -184,13 +185,11 @@ export function JobSummaryCard({
   deleteMedia,
   shouldDeleteOnRemove,
   validateVideo,
-  videoMaxDurationSec,
   onUploadingChange,
   onUploadError,
   onToast,
   onEdit,
   disabled,
-  cornerRadius,
 }: {
   title: string;
   description: string;
@@ -217,15 +216,12 @@ export function JobSummaryCard({
   deleteMedia: (url: string) => Promise<{ error: unknown }>;
   shouldDeleteOnRemove: (url: string) => boolean;
   validateVideo: (asset: ImagePicker.ImagePickerAsset) => { title: string; message: string } | null;
-  videoMaxDurationSec: number;
   onUploadingChange: (uploading: boolean) => void;
   onUploadError: (message: string) => void;
   /** The screen draws the note (components/UndoToast.tsx); null clears it. */
   onToast: (toast: { message: string; undo?: () => void } | null) => void;
   onEdit: (target: SummaryTarget) => void;
   disabled?: boolean;
-  /** The card's corner — Post a Job's `postJob.reviewCard.radius` dial. */
-  cornerRadius?: number;
 }) {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
@@ -294,7 +290,7 @@ export function JobSummaryCard({
     }
     if (error || !url) {
       setPending((all) => all.map((p) => (p.id === item.id ? { ...p, status: 'failed' } : p)));
-      onUploadError(userMessage(error, 'Upload failed. Tap Retry.'));
+      onUploadError(uploadErrorMessage(error));
       return;
     }
     setPending((all) => all.filter((p) => p.id !== item.id));
@@ -305,9 +301,8 @@ export function JobSummaryCard({
     setMenu(null);
     if (disabled || (kind === 'photo' ? !canAddPhoto : !canAddVideo)) return;
     const result = await ImagePicker.launchImageLibraryAsync({
+      ...PICKER_MEDIA_OPTIONS,
       mediaTypes: kind === 'video' ? ['videos'] : ['images'],
-      quality: kind === 'photo' ? 0.7 : undefined,
-      videoMaxDuration: kind === 'video' ? videoMaxDurationSec : undefined,
     });
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
@@ -467,7 +462,7 @@ export function JobSummaryCard({
   }
 
   return (
-    <Card style={[styles.card, cornerRadius != null && { borderRadius: cornerRadius }]}>
+    <Card style={styles.card}>
       <View style={styles.head}>
         <Text style={styles.eyebrow}>JOB SUMMARY</Text>
         <Text style={styles.hint}>Tap any detail to edit</Text>
@@ -551,7 +546,7 @@ export function JobSummaryCard({
 
       <Divider thickness={1} style={styles.divider} />
 
-      <View style={styles.details}>
+      <View>
         <SummaryCell onPress={() => onEdit('category')} label="Category" glyph="grid-outline">
           <Text style={styles.value} numberOfLines={2}>
             {categoryLabel ?? 'Not selected'}
@@ -564,12 +559,12 @@ export function JobSummaryCard({
         </SummaryCell>
         {showSchedule ? (
           <>
-            <SummaryCell onPress={() => onEdit('timing')} label="Timing" glyph="time-outline" wide>
+            <SummaryCell onPress={() => onEdit('timing')} label="Timing" glyph="time-outline">
               <Text style={styles.value} numberOfLines={2}>
                 {timing}
               </Text>
             </SummaryCell>
-            <SummaryCell onPress={() => onEdit('address')} label="Address (private)" glyph="lock-closed-outline" wide>
+            <SummaryCell onPress={() => onEdit('address')} label="Address (private)" glyph="lock-closed-outline">
               {address ? (
                 <Text style={styles.value} numberOfLines={2}>
                   {address}
@@ -583,12 +578,14 @@ export function JobSummaryCard({
             </SummaryCell>
           </>
         ) : null}
-        <SummaryCell onPress={() => onEdit('budget')} label={budgetLabel} glyph="wallet-outline" wide>
+        <SummaryCell onPress={() => onEdit('budget')} label={budgetLabel} glyph="wallet-outline">
+          {/* G1a: the amount is the app's money (MoneyText: formatBudget, equal-width digits), as the
+              job page writes it; a budget is no payment, so it carries no state and no caption. */}
           {budgetCents != null ? (
-            <Text style={styles.value} numberOfLines={1}>
-              {budgetUpTo ? <Text style={styles.sub}>Up to </Text> : null}
-              <Text style={styles.money}>{formatBudget(budgetCents)}</Text>
-            </Text>
+            <View style={styles.moneyRow}>
+              {budgetUpTo ? <Text style={styles.sub}>Up to</Text> : null}
+              <MoneyText cents={budgetCents} size="lg" />
+            </View>
           ) : (
             <Text style={[styles.value, styles.sub]} numberOfLines={1}>
               {budgetEmpty}
@@ -617,12 +614,9 @@ export function JobSummaryCard({
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
-    // refs/job-summary.html `.card`: 22 / 20 / 6 of padding — the cells carry
-    // their own 14 top and bottom.
+    // The lit card's own padding; the cells carry their own space top and bottom.
     card: {
-      paddingTop: 22,
-      paddingHorizontal: 20,
-      paddingBottom: 6,
+      paddingBottom: spacing.xs,
     },
     head: {
       flexDirection: 'row',
@@ -635,7 +629,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       color: colors.eyebrow,
     },
     hint: {
-      fontSize: 12,
+      ...textScale.footnote,
+      fontWeight: '400',
       color: colors.textSubtle,
     },
     intro: {
@@ -651,8 +646,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       color: colors.ink,
     },
     description: {
-      marginTop: 10,
-      fontSize: 15,
+      marginTop: spacing.sm,
+      ...textScale.callout,
+      fontWeight: '400',
       lineHeight: 23,
       color: colors.textMuted,
     },
@@ -682,8 +678,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       color: colors.textSubtle,
     },
     link: {
-      fontSize: 13,
-      fontWeight: '600',
+      ...textScale.label,
       color: colors.emerald,
     },
     linkStrong: {
@@ -782,14 +777,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       gap: spacing.sm,
     },
     addWideText: {
-      fontSize: 14,
+      ...textScale.body,
       fontWeight: '600',
       color: colors.emerald,
     },
     note: {
-      marginTop: 10,
-      fontSize: 12.5,
-      lineHeight: 18,
+      marginTop: spacing.sm,
+      ...textScale.footnote,
+      fontWeight: '400',
       color: colors.textMuted,
     },
     // The Divider draws the 1 pt border-role rule; this is only its offset.
@@ -797,39 +792,29 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       marginTop: 20,
       marginBottom: 2,
     },
-    details: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      columnGap: 14,
-    },
+    // G1a: one detail per line — the place and the time each read alone, as on the job page.
     cell: {
       minHeight: 44,
-      paddingVertical: 14,
+      paddingVertical: spacing.md,
       borderRadius: radius.md,
     },
-    cellHalf: {
-      width: '46%',
-      flexGrow: 1,
-    },
-    cellWide: {
-      width: '100%',
-    },
     value: {
-      marginTop: 5,
-      fontSize: 16,
-      lineHeight: 22,
+      marginTop: spacing.xs,
+      ...textScale.control,
       fontWeight: '600',
+      lineHeight: 22,
       color: colors.ink,
     },
     sub: {
-      fontSize: 15,
-      fontWeight: '500',
+      ...textScale.callout,
       color: colors.textMuted,
     },
-    // #40 — money is white in dark, the dark ink in light.
-    money: {
-      fontWeight: '700',
-      color: colors.money,
+    // "Up to" beside the amount, on the amount's baseline; MoneyText colours the money (#40).
+    moneyRow: {
+      marginTop: spacing.xs,
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: spacing.xs + 2,
     },
     addRow: {
       marginTop: 5,

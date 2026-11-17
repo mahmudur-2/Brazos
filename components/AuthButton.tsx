@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
-import { authSurface, fonts, useThemeColors, withAlpha } from '../lib/theme';
+import { authSurface, fonts, shadows, useThemeColors, wellStyle, withAlpha } from '../lib/theme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { litBetween } from '../ui/primitives/LitSurface';
 
@@ -43,8 +43,11 @@ const PRESS_OUT_MS = 120;
 type AuthButtonProps = {
   title: string;
   onPress: () => void;
-  /** `ghost` is the reference's .btn.ghost — outlined, forest label. */
-  variant?: 'primary' | 'ghost';
+  /**
+   * `ghost` is the reference's .btn.ghost — outlined, forest label. `quiet` is the app's quiet
+   * button (components/Button.tsx): a well, the label mint in dark and forest in light, no arrow.
+   */
+  variant?: 'primary' | 'ghost' | 'quiet';
   /**
    * `semibold` is one step down from the default. The onboarding CTAs use it:
    * they sit under a lot of quiet supporting copy, and at full weight the
@@ -115,6 +118,7 @@ export function AuthButton({
   const { palette, isDark } = useThemeColors();
   const isDisabled = disabled || loading;
   const isGhost = variant === 'ghost';
+  const isQuiet = variant === 'quiet';
   const isLink = hero && isGhost;
 
   // Decision 3, resolved for this surface. Dark: `primary` is the STANDARD
@@ -192,6 +196,23 @@ export function AuthButton({
       ? heroInk
       : tint;
 
+  // F4: in dark the sign-in flow's main button is the app's own main button — the mint fill, its
+  // dark ink, the mint glow; while it cannot be tapped, the app's flat disabled look.
+  const mainButton = !isGhost && !isQuiet && (!hero || lit) && !accent;
+  const appCta = isDark && themed && mainButton;
+  const appCtaShape: ViewStyle | null = appCta
+    ? isDisabled
+      ? { backgroundColor: palette.neutralBg, borderColor: 'transparent' }
+      : { backgroundColor: palette.primary, borderColor: 'transparent', ...shadows.ctaDark }
+    : null;
+  // The one second action of the sign-in family: the app's quiet well, the same on every screen.
+  const quietShape: ViewStyle | null = isQuiet ? wellStyle(palette, isDark) : null;
+  const quietInk = isDark ? palette.primary : palette.forest;
+  const labelShown = appCta ? (isDisabled ? palette.textMuted : palette.onPrimary) : isQuiet ? quietInk : labelTint;
+  const glyphShown = appCta || isQuiet ? labelShown : heroGlyph;
+  // F14: a main button carries no arrow; neither does the quiet one.
+  const chevronShown = chevron && !mainButton && !isQuiet;
+
   const animate = (to: number, duration: number) =>
     Animated.timing(scale, {
       toValue: to,
@@ -215,18 +236,20 @@ export function AuthButton({
           isGhost ? styles.ghost : styles.primary,
           themedShape,
           heroShape,
-          heroFill,
-          heroDepth,
+          appCta ? null : heroFill,
+          appCta ? null : heroDepth,
           accentShape,
+          appCtaShape,
+          quietShape,
           // Dimmed, but still clearly the same control — the reference's
           // hierarchy has to survive the disabled state. The accent tone waits
           // in its own colours instead (#10).
-          isDisabled && !accent && styles.disabled,
+          isDisabled && !accent && !appCta && styles.disabled,
         ]}
       >
-        {light ?? null}
+        {appCta ? null : light ?? null}
         {loading ? (
-          <ActivityIndicator color={labelTint} />
+          <ActivityIndicator color={labelShown} />
         ) : (
           (() => {
             const label = (
@@ -238,7 +261,7 @@ export function AuthButton({
                   // conversion reaches: the untouched auth screens keep the sans.
                   themed && styles.labelSerif,
                   hero && (isLink ? styles.linkLabel : styles.heroLabel),
-                  { color: labelTint },
+                  { color: labelShown },
                 ]}
                 numberOfLines={2}
               >
@@ -258,7 +281,7 @@ export function AuthButton({
             }
             return icon ? (
               <View style={styles.group}>
-                <Ionicons name={icon} size={HERO.glyph} color={heroGlyph} />
+                <Ionicons name={icon} size={HERO.glyph} color={glyphShown} />
                 {label}
               </View>
             ) : (
@@ -266,8 +289,8 @@ export function AuthButton({
             );
           })()
         )}
-        {chevron && !isLink ? (
-          <Ionicons name="chevron-forward" size={HERO.chevron} color={heroGlyph} style={styles.chevron} />
+        {chevronShown && !isLink ? (
+          <Ionicons name="chevron-forward" size={HERO.chevron} color={glyphShown} style={styles.chevron} />
         ) : null}
       </Pressable>
     </Animated.View>

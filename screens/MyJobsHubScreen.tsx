@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useScrollClearance } from '../ui/primitives';
+import { EmptyState, useScrollClearance } from '../ui/primitives';
+import { Button } from '../components/Button';
 import {
   Pressable,
   RefreshControl,
@@ -31,6 +32,7 @@ import {
   isRefundFailureRecorded,
   jobPillLabel,
   myJobsNextAction,
+  pausedPaymentNotice,
   releaseDeadlineMs,
   type MyJobsTab,
 } from '../lib/jobLifecycle';
@@ -52,10 +54,14 @@ import {
   type ColorPalette,
   withAlpha,
   screenGround,
+  textScale,
 } from '../lib/theme';
-import { formatTimeAgo } from '../lib/time';
+import { formatTimeAgoShort } from '../lib/time';
+import { serverNowMs } from '../lib/serverClock';
 import { STATE_COPY, ScreenStateView, type ScreenState } from '../ui/templates/ScreenStates';
 import { postedCardLive } from '../lib/liveJobStatus';
+import { fetchRemoteConfig } from '../lib/remoteConfig';
+import { COUNTER_OFFER_WORD } from '../lib/offerCopy';
 
 /** "Cleaning · Bushwick" — the same category+location line the browse feed's
  *  card shows, so one job reads identically on both surfaces. */
@@ -124,9 +130,17 @@ function SectionHeading({ title, count, gold = false }: { title: string; count: 
   );
 }
 
+/**
+ * A2-M5 A6: a row's posting age, on an open job only (an assigned or closed job's age says nothing).
+ * The tight spelling ("1h ago"), as the job cards' one-line facts have it.
+ */
+function openJobAge(open: boolean, createdAt: string): string | undefined {
+  return open ? formatTimeAgoShort(createdAt) : undefined;
+}
+
 /** The settled-bid card's own next-action line — offer facts, not lifecycle. */
 function bidNextAction(status: string, awaitingMe: boolean): string {
-  if (awaitingMe) return 'Respond to the counteroffer';
+  if (awaitingMe) return `Respond to the ${COUNTER_OFFER_WORD}`;
   if (status === 'declined') return 'Not selected';
   if (status === 'expired') return 'Bid expired';
   return 'Awaiting response';
@@ -143,7 +157,6 @@ export function MyJobsHubScreen() {
   // RUN T2 (C4) — this screen's own three, on the `theme.*` scale because this
   // file imports spacing/radius from lib/theme.
   const contentGap = spacing.xl;
-  const emptyPaddingY = spacing.xxl;
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { user } = useAuth();
   // Perspective comes from ModeContext — never a hand-passed prop (CLAUDE.md).
@@ -198,6 +211,22 @@ export function MyJobsHubScreen() {
     }, [refreshIfStale])
   );
 
+  // A4 wiring (A5, G1b-4): the owner's payments pause, read on each focus the way the job page reads
+  // it (fetchRemoteConfig; a failed read is open), so a hire waiting for its payment is not told to
+  // complete a checkout that cannot open.
+  const [checkoutOpen, setCheckoutOpen] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      void fetchRemoteConfig().then((config) => {
+        if (active) setCheckoutOpen(config.paymentsEnabled);
+      });
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
   async function onRefresh() {
     setRefreshing(true);
     try {
@@ -211,7 +240,7 @@ export function MyJobsHubScreen() {
   // derive from the same instant, so a card can't straddle two tabs. Keyed on
   // the read itself (F13 review): a cached read keeps the rows' identity, so a
   // clock keyed on them would freeze every countdown and expiry at the first.
-  const nowMs = useMemo(() => Date.now(), [readAt]);
+  const nowMs = useMemo(() => serverNowMs(), [readAt]);
 
   const lifecycleOf = useCallback(
     (job: Job) =>
@@ -318,44 +347,32 @@ export function MyJobsHubScreen() {
                 <Ionicons name="cloud-offline-outline" size={20} color={colors.danger} />
               </View>
               <View style={styles.errorCopy}>
-                <Text style={styles.errorTitle}>Couldn’t refresh your jobs</Text>
+                <Text style={styles.errorTitle}>Couldn’t Refresh Your Jobs</Text>
                 <Text style={styles.errorText}>{error}</Text>
               </View>
-              <Pressable
+              <Button
+                title={refreshing ? 'Trying…' : STATE_COPY.retry}
+                variant="quiet"
+                size="sm"
                 onPress={() => void onRefresh()}
                 disabled={refreshing}
-                style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
-                accessibilityRole="button"
                 accessibilityLabel="Try loading jobs again"
-              >
-                <Text style={styles.retryText}>{refreshing ? 'Trying…' : STATE_COPY.retry}</Text>
-              </Pressable>
+              />
             </View>
           ) : null}
 
           {isEmpty ? (
             error ? null : (
-              <View style={[styles.empty, { paddingVertical: emptyPaddingY }]}>
-                <View style={styles.emptyIcon}>
-                  <Ionicons name="briefcase-outline" size={34} color={accent} />
-                </View>
-                <Text style={styles.emptyTitle}>Nothing here yet</Text>
-                <Text style={styles.emptyText}>{emptyText}</Text>
-                {/* 2026-09-28 (LUX-LIST-64 #44): only an account with no jobs at all
-                    gets a button here — "Post a job"; a tab that is merely empty
-                    does not, and no "Post another job" is left anywhere. */}
-                {isCustomer && posted.length === 0 && !draft ? (
-                  <Pressable
-                    onPress={openPostJob}
-                    style={({ pressed }) => [styles.primaryCta, pressed && styles.pressed]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Post a job"
-                  >
-                    <Ionicons name="add" size={20} color={colors.onForest} />
-                    <Text style={styles.primaryCtaText}>Post a job</Text>
-                  </Pressable>
-                ) : null}
-              </View>
+              // The shared empty state. 2026-09-28 (LUX-LIST-64 #44): only an account with no jobs at
+              // all gets a button here — "Post a Job"; a tab that is merely empty does not, and no
+              // "Post another job" is left anywhere.
+              <EmptyState
+                icon="briefcase-outline"
+                title="Nothing Here Yet"
+                body={emptyText}
+                actionLabel={isCustomer && posted.length === 0 && !draft ? 'Post a Job' : undefined}
+                onAction={openPostJob}
+              />
             )
           ) : (
             <>
@@ -368,9 +385,9 @@ export function MyJobsHubScreen() {
                     hitSlop={10}
                     style={({ pressed }) => [styles.draftDiscard, pressed && styles.pressed]}
                     accessibilityRole="button"
-                    accessibilityLabel="Discard draft"
+                    accessibilityLabel="Discard Draft"
                   >
-                    <Text style={styles.draftDiscardText}>Discard draft</Text>
+                    <Text style={styles.draftDiscardText}>Discard Draft</Text>
                   </Pressable>
                 </View>
               ) : null}
@@ -382,35 +399,46 @@ export function MyJobsHubScreen() {
                     title={filter === 'closed' ? 'Work history' : 'You’re working'}
                     count={workingItems.length}
                   />
-                  {workingItems.map((job) => (
+                  {workingItems.map((job) => {
+                    const state = lifecycleOf(job);
+                    return (
                     <HubCard
                       key={`work-${job.id}`}
+                      layout="row"
                       icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                       category={job.category}
                       title={job.title}
                       subtitle={names[job.client_id] ?? 'Customer'}
                       thumbnailUrl={jobThumbnailUrl(job)}
                       metaLine={metaLineFor(job)}
-                      timeLabel={formatTimeAgo(job.created_at)}
+                      timeLabel={openJobAge(state === 'open', job.created_at)}
                       priceCents={job.final_amount_cents ?? job.budget_cents}
                       // A7 (2026-10-03): the figure is named — the agreed price once hired, else the
                       // customer's budget — so it is never read as the take, which the job screen
                       // shows as "You get" off the ledger row.
                       priceLabel={job.final_amount_cents != null ? 'Agreed price:' : 'Budget:'}
                       status={job.status}
-                      statusLabel={jobPillLabel(lifecycleOf(job), payments[job.id]?.status)}
-                      nextAction={myJobsNextAction({
-                        perspective: 'worker',
-                        state: lifecycleOf(job),
-                        reviewedByMe: reviewedJobIds.has(job.id),
-                        releaseDeadline: isRefundFailureRecorded(payments[job.id]) ? null : releaseDeadlineMs(job),
-                        nowMs,
-                      })}
+                      statusLabel={jobPillLabel(state, payments[job.id]?.status)}
+                      // A2-M5 A4: one place per fact. The pill says "Issue reported"; the worker's job
+                      // page has no next-step line for that state (only on my way, here, start and
+                      // complete float there), so the row has no line under it either.
+                      nextAction={
+                        state === 'disputed'
+                          ? undefined
+                          : myJobsNextAction({
+                              perspective: 'worker',
+                              state,
+                              reviewedByMe: reviewedJobIds.has(job.id),
+                              releaseDeadline: isRefundFailureRecorded(payments[job.id]) ? null : releaseDeadlineMs(job),
+                              nowMs,
+                            })
+                      }
                       onPress={() =>
                         navigation.navigate('WorkerJob', { jobId: job.id })
                       }
                     />
-                  ))}
+                    );
+                  })}
                 </View>
                 </EntranceView>
               )}
@@ -421,11 +449,9 @@ export function MyJobsHubScreen() {
                   <SectionHeading title="You posted" count={postedItems.length} />
                   {postedItems.map((job) => {
                     // 2026-09-28 (LUX-LIST-64 #19): the person's name alone.
-                    const worker = job.assigned_worker_id
-                      ? names[job.assigned_worker_id] ?? 'Worker'
-                      : job.bid_count > 0
-                      ? `${job.bid_count} ${job.bid_count === 1 ? 'bid' : 'bids'} received`
-                      : 'Awaiting bids';
+                    // M5 (T1): with no one hired there is no name; the row's hint line
+                    // already says the bid count ("Awaiting bids", "2 bids to review").
+                    const worker = job.assigned_worker_id ? names[job.assigned_worker_id] ?? 'Worker' : '';
                     const state = lifecycleOf(job);
                     // #45: the rail, the chat words and the held note — the one
                     // rule the Home's cards read too (lib/liveJobStatus.ts).
@@ -440,13 +466,14 @@ export function MyJobsHubScreen() {
                     return (
                       <HubCard
                         key={`posted-${job.id}`}
+                        layout="row"
                         icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                         category={job.category}
                         title={job.title}
                         subtitle={worker}
                         thumbnailUrl={jobThumbnailUrl(job)}
                         metaLine={metaLineFor(job)}
-                        timeLabel={formatTimeAgo(job.created_at)}
+                        timeLabel={openJobAge(state === 'open', job.created_at)}
                         priceCents={job.final_amount_cents ?? job.budget_cents}
                         status={job.status}
                         statusLabel={jobPillLabel(state, payments[job.id]?.status)}
@@ -461,7 +488,9 @@ export function MyJobsHubScreen() {
                           reviewedByMe: reviewedJobIds.has(job.id),
                           releaseDeadline: isRefundFailureRecorded(payments[job.id]) ? null : releaseDeadlineMs(job),
                           nowMs,
+                          checkoutOpen,
                         })}
+                        notice={pausedPaymentNotice({ state, checkoutOpen })}
                         onPress={() =>
                           navigation.navigate('ClientJobDetail', { job })
                         }
@@ -497,17 +526,20 @@ export function MyJobsHubScreen() {
                     return (
                       <HubCard
                         key={`bid-${bid.id}`}
+                        layout="row"
                         icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                         category={job.category}
                         title={job.title}
+                        // A2-M5 A5: the pill says the state ("Respond"), the hint line is the one
+                        // action ("Respond to the counteroffer"); this line names who sent what.
                         subtitle={
                           awaitingMe
-                            ? `${clientFirstName} sent you a counter-offer — respond`
+                            ? `${clientFirstName} sent you a ${COUNTER_OFFER_WORD}`
                             : clientName
                         }
                         thumbnailUrl={jobThumbnailUrl(job)}
                         metaLine={metaLineFor(job)}
-                        timeLabel={formatTimeAgo(job.created_at)}
+                        timeLabel={openJobAge(job.status === 'open', job.created_at)}
                         priceCents={bid.amount_cents}
                         priceLabel={
                           awaitingMe
@@ -538,13 +570,14 @@ export function MyJobsHubScreen() {
                     return (
                       <HubCard
                         key={`settled-${bid.id}`}
+                        layout="row"
                         icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                         category={job.category}
                         title={job.title}
                         subtitle={names[job.client_id] ?? 'Customer'}
                         thumbnailUrl={jobThumbnailUrl(job)}
                         metaLine={metaLineFor(job)}
-                        timeLabel={formatTimeAgo(bid.created_at)}
+                        timeLabel={openJobAge(job.status === 'open', job.created_at)}
                         priceCents={bid.amount_cents}
                         priceLabel="Your bid:"
                         status={status}
@@ -616,7 +649,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     height: 22,
     backgroundColor: colors.mint,
     paddingHorizontal: 7,
-    borderRadius: 11,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -624,55 +657,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: withAlpha(colors.emerald, 0.14),
   },
   countBadgeText: {
-    fontSize: 12,
+    ...textScale.footnote,
     fontWeight: '800',
     color: colors.emerald,
-  },
-  empty: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surface,
-  },
-  emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.mint,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    textAlign: 'center',
-    maxWidth: 280,
-  },
-  primaryCta: {
-    minHeight: 52,
-    minWidth: 220,
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    backgroundColor: colors.forest,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  primaryCtaText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.onForest,
   },
   draftDiscard: {
     alignSelf: 'flex-end',
@@ -681,7 +668,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.xs,
   },
   draftDiscardText: {
-    fontSize: 13,
+    ...textScale.label,
     fontWeight: '700',
     color: colors.danger,
   },
@@ -709,27 +696,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: 2,
   },
   errorTitle: {
-    fontSize: 14,
+    ...textScale.body,
     fontWeight: '800',
     color: colors.danger,
   },
   errorText: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.danger,
-  },
-  retryButton: {
-    minWidth: 60,
-    minHeight: 44,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  retryText: {
-    fontSize: 14,
-    fontWeight: '800',
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.danger,
   },
   pressed: {

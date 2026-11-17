@@ -185,12 +185,12 @@ test('B12 · flow 01 walks the live-phone build: no email sign-up is offered, an
   // The e2e build has phone sign-in live, so Welcome and the phone form offer no email sign-up.
   assert.equal(JSON.parse(read('eas.json')).build['e2e-test'].env.EXPO_PUBLIC_PHONE_AUTH_MODE, 'supabase');
   const flow = read('.maestro/01-auth.yml');
-  assert.match(flow, /^- assertNotVisible: "Continue with email"$/m);
+  assert.match(flow, /^- assertNotVisible: "Continue with Email"$/m);
   for (const { rel, text } of allFlows()) {
-    assert.doesNotMatch(text, /(TAP|tapOn): "Continue with email"/, `${rel} taps a button the e2e build does not show`);
+    assert.doesNotMatch(text, /(TAP|tapOn): "Continue with Email"/, `${rel} taps a button the e2e build does not show`);
   }
   // On the phone form: no "Use Email Instead", and Create with empty fields names both.
-  const form = flow.slice(flow.indexOf('TAP: "Continue with phone"'));
+  const form = flow.slice(flow.indexOf('TAP: "Continue with Phone"'));
   const at = (s) => form.indexOf(s);
   assert.ok(at('- assertNotVisible: "Use Email Instead"') > 0, 'the phone form offers no email sign-up');
   assert.ok(at('- assertNotVisible: "Use Email Instead"') < at('- assertVisible: "Enter your full name."'));

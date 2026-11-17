@@ -57,12 +57,14 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpIn
   const styles = stylesFor();
   const { palette, isDark } = useThemeColors();
   const surface = authSurface(palette, isDark);
-  // One resolved set per render, read only when the screen opted in.
+  // One resolved set per render, read only when the screen opted in. The cells
+  // are the family's field wells: white at .06 in dark, cream inside the white
+  // card in light (components/AuthField.tsx).
   const tone = themed
     ? {
         cell: {
           borderColor: surface.line,
-          backgroundColor: isDark ? withAlpha(palette.white, 0.06) : surface.surface,
+          backgroundColor: isDark ? withAlpha(palette.white, 0.06) : surface.bg,
         },
         filled: { borderColor: surface.line },
         active: { borderColor: palette.emerald },

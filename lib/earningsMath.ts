@@ -8,14 +8,15 @@ import type { Payment } from './payments';
  */
 
 /**
- * `job_completed_at` is OPTIONAL (a6, 2026-09-05): it feeds the ledger line's
- * release clock through lib/jobLifecycle.ts's releaseDeadlineMs, and a row
- * built without it — a legacy job with no completed_at, or a fixture — simply
- * has no clock and keeps the plain sentence.
+ * `job_release_due_at` is OPTIONAL (A4 wiring P1; a6, 2026-09-05, was
+ * job_completed_at): the server's automatic approval time, fed to the ledger
+ * line's release clock through lib/jobLifecycle.ts's releaseDeadlineMs, and a
+ * row built without it (no time from the server, or a fixture) simply has no
+ * clock and keeps the plain sentence.
  */
 export type EarningsRow = Payment & {
   job_title: string | null;
-  job_completed_at?: string | null;
+  job_release_due_at?: string | null;
   /** B23: the job's status, off the same jobs read as the title. */
   job_status?: string | null;
 };

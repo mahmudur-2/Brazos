@@ -106,35 +106,35 @@ export function isPayoutOnItsWay(payment: Pick<Payment, 'payoutOnItsWay'>): bool
  * Whether the funding CTA (Checkout) may be offered for this job — THE one
  * derivation for every surface that can show it (AUD-P1-02; the lifecycle
  * derivation drifted into a duplicate once already, so this predicate exists
- * exactly once). It mirrors the server contract of
- * begin_job_payment: the job's
- * owner, an accepted assignment, status assigned/in_progress/completed — the
- * worker starting or even finishing must never destroy the customer's path
- * to fund.
+ * exactly once). It is never WIDER than the server contract of
+ * begin_job_payment (20261115000100_payer_money_rpcs.sql): the job's owner,
+ * an assigned worker, status 'assigned' and nothing else — the server refuses
+ * a job already in progress or completed with 'Accept an offer before
+ * protecting a payment', so offering it there was a button that could only
+ * fail (C23).
  *
  * The payment side is a strict WHITELIST: offer only on
- *   - no active row (checkout never ran; failed/voided rows read as null),
- *   - an 'authorized' row (checkout stopped before the hold), or
+ *   - no active row (checkout never ran; failed/voided rows read as null), or
  *   - an 'unfunded' row whose funding window has not closed.
- * held, released, paid_out, refunded, partially_refunded, the legacy
- * 'pending', and anything unrecognized mean money already moved — or a state
- * this client cannot positively classify — and the answer is NO for all of
- * them: a wrongly-shown checkout here is a double-charge surface. An open
- * dispute also suppresses the offer; it exists to freeze money movement.
+ * Every other row — 'authorized' included, which the server answers with
+ * 'This job already has a protected payment' — held, released, paid_out,
+ * refunded, partially_refunded, the legacy 'pending', and anything
+ * unrecognized mean money already moved — or a state this client cannot
+ * positively classify — and the answer is NO for all of them: a wrongly-shown
+ * checkout here is a double-charge surface. An open dispute also suppresses
+ * the offer; it exists to freeze money movement.
  *
- * D9 — WHY 'unfunded' JOINED THE WHITELIST, AND WHY THE WINDOW IS CHECKED.
- * Both halves are defect fixes. (1) create-payment mints a stripe row as
- * `unfunded` before the card sheet opens; a customer who closes the sheet
- * leaves that row behind, and without this arm they had no path back to
- * checkout for 24 hours. (2) `begin_job_payment` reuses an existing unfunded
- * row and sets `funding_due_at` only when it is null, so a lapsed window is
- * NEVER extended: inviting a charge into a lapsed row means the customer pays,
- * `expire_unfunded_payments` voids the row, and the money comes back only
- * through the `funded_after_void` refund. So an unfunded row PAST its
- * funding_due_at is refused — the screen says the window closed and a fresh
- * checkout follows once the row is voided. A window this client cannot parse
- * is refused for the same reason; a null window (no due date recorded) is not
- * a lapsed one.
+ * D9 — WHY 'unfunded' IS ON THE WHITELIST, AND WHY THE WINDOW IS CHECKED.
+ * (1) create-payment mints a stripe row as `unfunded` before the card sheet
+ * opens; a customer who closes the sheet leaves that row behind, and without
+ * this arm they had no path back to checkout for 24 hours. (2) Past its
+ * funding_due_at the server never resumes that row: begin_job_payment voids
+ * it ('funding window expired') and starts a fresh one (A2), and the sweeper
+ * (expire_unfunded_payments, every 15 minutes) voids it on its own. The app
+ * still refuses a lapsed row — narrower than the server, so never a button
+ * that fails — and the checkout comes back once the row is voided (decided
+ * 2026-11-16, choice 1). A window this client cannot parse is refused for the
+ * same reason; a null window (no due date recorded) is not a lapsed one.
  */
 export function canOfferJobFunding({
   viewerId,
@@ -151,16 +151,9 @@ export function canOfferJobFunding({
 }): boolean {
   if (!viewerId || viewerId !== job.client_id) return false;
   if (!job.assigned_worker_id) return false;
-  if (
-    job.status !== 'assigned' &&
-    job.status !== 'in_progress' &&
-    job.status !== 'completed'
-  ) {
-    return false;
-  }
+  if (job.status !== 'assigned') return false;
   if (hasOpenDispute) return false;
   if (payment == null) return true;
-  if (payment.status === 'authorized') return true;
   if (payment.status === 'unfunded') {
     if (payment.funding_due_at == null) return true;
     const due = Date.parse(payment.funding_due_at);
@@ -209,6 +202,11 @@ const CANCEL_GRACE_MS = 15 * 60_000;
 const CANCEL_FREE_BEFORE_MS = 24 * 3_600_000;
 /** How close to a free/fee switch the preview is flagged as possibly different by the time it runs. */
 const CANCEL_NEAR_BOUNDARY_MS = 2 * 60_000;
+/**
+ * Mirrors MARKET_TIME_ZONE in lib/time.ts (the one home of the market's day). It is a copy, not an import,
+ * because this file imports types only (D24), so nine tests can load it directly.
+ * tests/marketDay.test.mjs fails if the two ever differ.
+ */
 const CANCEL_MARKET_TIME_ZONE = 'America/New_York';
 
 /** The fee terms of a hire: the `job_agreements` snapshot, as cancel_job() reads it through job_terms(). */
@@ -259,6 +257,16 @@ export function marketWallClockMs(dateKey: string, hours: number): number | null
   }
 }
 
+/**
+ * job_window_end() (20261111100000_lifecycle_shared.sql): a dated job's arrival window ends at its day
+ * plus the end hour (24 when open-ended), New York wall time, as epoch ms. Null for an undated job or an
+ * unreadable day. THE one home of this formula: the window checks below all read it.
+ */
+export function jobWindowEndMs(job: { scheduled_date: string | null; arrival_end_hour: number | null }): number | null {
+  if (!job.scheduled_date) return null;
+  return marketWallClockMs(job.scheduled_date, job.arrival_end_hour ?? 24);
+}
+
 export type CustomerCancelPreview =
   /** Nothing was charged (no payment, or one never funded): no money moves. */
   | { kind: 'no_charge' }
@@ -281,7 +289,7 @@ type CancelJobFacts = {
 /** worker_missed_window(): assigned, never arrived, dated, now past the window end plus the reported delay. */
 function workerMissedWindow(job: CancelJobFacts, nowMs: number): boolean {
   if (job.status !== 'assigned' || job.arrived_at || !job.scheduled_date) return false;
-  const windowEnd = marketWallClockMs(job.scheduled_date, job.arrival_end_hour ?? 24);
+  const windowEnd = jobWindowEndMs(job);
   return windowEnd != null && nowMs > windowEnd + (job.late_minutes ?? 0) * 60_000;
 }
 
@@ -351,6 +359,38 @@ export function noShowReportable({
   nowMs?: number;
 }): boolean {
   if (job.status !== 'assigned' || !job.arrived_at || !job.scheduled_date) return false;
-  const windowEnd = marketWallClockMs(job.scheduled_date, job.arrival_end_hour ?? 24);
+  const windowEnd = jobWindowEndMs(job);
   return windowEnd != null && nowMs > windowEnd;
 }
+
+/**
+ * A4 wiring (A4) — job_window_over() (20261116200400_post_window.sql): a dated
+ * job's arrival window (its day plus the end hour, 24 when open-ended, New York)
+ * has ended, from its end instant on. From then accept_offer refuses a new
+ * acceptance, and a new bid or counter on an open market job is refused
+ * (refuse_offer_after_window). An undated job has no cutoff. An unreadable day
+ * is not "over": the server answers that one with its own sentence.
+ */
+export function jobWindowOver({
+  job,
+  nowMs = Date.now(),
+}: {
+  job: { scheduled_date: string | null; arrival_end_hour: number | null };
+  nowMs?: number;
+}): boolean {
+  const windowEnd = jobWindowEndMs(job);
+  return windowEnd != null && windowEnd <= nowMs;
+}
+
+/** The server's refusals once the window is over, word for word (post_window.sql: accept_offer, refuse_offer_after_window). */
+export const BOOKED_TIME_PASSED = {
+  /** accept_offer, the customer. */
+  customerAccept: "This job's booked time has passed, so it can no longer be accepted. Post it again with a new time.",
+  /** accept_offer, the worker. */
+  workerAccept:
+    "This job's booked time has passed, so it can no longer be accepted. Ask the customer to post it again with a new time.",
+  /** A new bid, or the worker's counter. */
+  newBid: "This job's booked time has passed, so it is closed to new bids.",
+  /** The customer's counter. */
+  customerCounter: "This job's booked time has passed. Post it again with a new time.",
+} as const;

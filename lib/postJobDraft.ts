@@ -132,8 +132,25 @@ function answersFrom(value: unknown): PostAnswers {
  */
 let draftSaveFailureAnnounced = false;
 
+/**
+ * A4 wiring (A2), THE DRAFT RACE: whose draft this phone may still write.
+ * lib/signOut.ts forgetDevice sets it before it sweeps, so a save that starts
+ * after a sign-out (the retry below, or a write still on its way) never puts a
+ * removed draft — and its exact address — back on the phone. Undefined until
+ * the first sweep, which runs at launch.
+ */
+let draftWriter: string | null | undefined;
+
+export function setDraftWriter(userId: string | null): void {
+  draftWriter = userId;
+}
+
 export async function savePostJobDraft(userId: string, draft: PostJobDraft): Promise<void> {
-  const write = () => AsyncStorage.setItem(draftStorageKey(userId), JSON.stringify(draft));
+  const write = async () => {
+    // Refused without a word: the person this draft belongs to is no longer signed in here.
+    if (draftWriter !== undefined && draftWriter !== userId) return;
+    await AsyncStorage.setItem(draftStorageKey(userId), JSON.stringify(draft));
+  };
   try {
     await write();
     draftSaveFailureAnnounced = false;
@@ -158,12 +175,21 @@ export async function savePostJobDraft(userId: string, draft: PostJobDraft): Pro
   }
 }
 
-export async function clearPostJobDraft(userId: string): Promise<void> {
+/**
+ * Removes the person's draft (it holds the job's exact address). True only
+ * when a read finds it gone; false when the removal failed or could not be
+ * checked, so a caller can try again (A4-M2, 2b). lib/signOut.ts forgetDevice
+ * also sweeps every other person's draft at each launch.
+ */
+export async function clearPostJobDraft(userId: string): Promise<boolean> {
   try {
     await AsyncStorage.removeItem(draftStorageKey(userId));
+    if ((await AsyncStorage.getItem(draftStorageKey(userId))) === null) return true;
+    throw new Error('the draft is still on this device after its removal');
   } catch (e) {
     console.error('[postJobDraft] failed to clear draft', e);
     Sentry?.captureException(e, { extra: { site: 'postJobDraft.clearPostJobDraft' } });
+    return false;
   }
 }
 

@@ -40,7 +40,7 @@ const PANEL_WIDTH = 240;
 /** The Filters popover's row (PickerPopover): 44pt, five showing. */
 const ROW_HEIGHT = 44;
 const VISIBLE_ROWS = 5;
-/** "Select country" and the search well above the rows. */
+/** "Select Country" and the search well above the rows. */
 const HEAD_HEIGHT = 86;
 const SEARCH_HEIGHT = 36;
 /** Between the pill and the panel, and the panel's nearest approach to an edge. */
@@ -68,7 +68,7 @@ type CountryPickerProps = {
  *
  * It opens right under the "US +1" pill, its left edge on the pill's, floating
  * over the fields below: ~240 wide, five rows showing and the rest scrolling
- * inside, "Select country" and a "Country or code" search on top, each row a
+ * inside, "Select Country" and a "Country or code" search on top, each row a
  * flag, the country's name (ending in "…" when long) and its +code, the chosen
  * one ticked in the mint. No X — a tap anywhere outside closes it. When the
  * keyboard leaves no room below the pill it opens UPWARD instead. It wears the
@@ -164,11 +164,11 @@ export function CountryPicker({ visible, anchor, selected, onSelect, onClose }: 
       <Animated.View
         style={[styles.panel, { left, top, width, height }, panelStyle]}
         accessibilityViewIsModal
-        accessibilityLabel="Select country"
+        accessibilityLabel="Select Country"
       >
         <Surface material="menu" radius={radius.lg} corners="all" style={styles.material}>
           <View style={styles.head}>
-            <Text style={styles.title}>Select country</Text>
+            <Text style={styles.title}>Select Country</Text>
             <View
               style={[
                 styles.search,

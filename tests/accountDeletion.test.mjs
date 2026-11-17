@@ -136,18 +136,20 @@ test('neither RPC wrapper passes a user id', async () => {
 
 test('a successful delete signs out locally and can never surface an error', async () => {
   const src = await read('screens/DeleteAccountScreen.tsx');
-  assert.match(src, /signOut\(\{\s*scope:\s*'local'\s*\}\)/);
-  // The sign-out is wrapped, and its failure is swallowed on purpose.
-  const signOutIndex = src.indexOf("signOut({ scope: 'local' })");
-  assert.ok(signOutIndex > -1);
-  const tryIndex = src.lastIndexOf('try {', signOutIndex);
-  assert.ok(tryIndex > -1, 'the local sign-out must sit inside a try/catch');
-  assert.ok(
-    src.indexOf('} catch {', signOutIndex) > signOutIndex,
-    'the local sign-out must have a catch that swallows the error'
+  // A4 wiring (A2): the sign-out goes through lib/signOut.ts (it never throws and reads each removal back);
+  // no sign-out here goes around it.
+  assert.match(src, /import \{ signOutLocally, SIGN_OUT_UNFINISHED_MESSAGE \} from '\.\.\/lib\/signOut';/);
+  assert.doesNotMatch(src, /supabase\.auth\.signOut\(/);
+  const signOutIndex = src.indexOf('const signedOut = await signOutLocally();');
+  const failedIndex = src.indexOf("await alertAsync('Could not delete this account', `${userMessage(error)}${cardsNote}`);");
+  assert.ok(failedIndex > -1 && signOutIndex > failedIndex, 'the sign-out runs only after the deletion succeeded');
+  // The stack is reset regardless of what sign-out did, and the deletion is always confirmed; an unproven
+  // sign-out adds the one sign-out sentence and never says the deletion failed.
+  assert.ok(src.indexOf('navigation.popToTop();', signOutIndex) > signOutIndex);
+  assert.match(
+    src,
+    /void alertAsync\('Account deleted', signedOut \? deletedBody : `\$\{deletedBody\} \$\{SIGN_OUT_UNFINISHED_MESSAGE\}`\);/
   );
-  // And the stack is reset regardless of what sign-out did.
-  assert.match(src, /navigation\.popToTop\(\)/);
 });
 
 test('the deletion screen says what is kept, not only what is removed', async () => {

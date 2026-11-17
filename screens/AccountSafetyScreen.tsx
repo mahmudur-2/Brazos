@@ -87,10 +87,10 @@ export function AccountSafetyScreen() {
             style={({ pressed }) => [styles.adminCard, pressed && styles.rowPressed]}
             onPress={() => navigation.navigate('AdminReports')}
             accessibilityRole="button"
-            accessibilityLabel="Review reports"
+            accessibilityLabel="Review Reports"
           >
             <Ionicons name="shield-checkmark-outline" size={20} color={colors.warning} />
-            <Text style={styles.adminLabel}>Review reports</Text>
+            <Text style={styles.adminLabel}>Review Reports</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.warning} />
           </Pressable>
         ) : null}
@@ -102,10 +102,10 @@ export function AccountSafetyScreen() {
           style={({ pressed }) => [styles.deleteRow, pressed && styles.rowPressed]}
           onPress={() => navigation.navigate('DeleteAccount')}
           accessibilityRole="button"
-          accessibilityLabel="Delete account"
+          accessibilityLabel="Delete Account"
         >
           <Ionicons name="trash-outline" size={18} color={colors.danger} />
-          <Text style={styles.deleteLabel}>Delete account</Text>
+          <Text style={styles.deleteLabel}>Delete Account</Text>
         </Pressable>
 
         <View style={[styles.noteCard, litCardStyle(isDark)]}>

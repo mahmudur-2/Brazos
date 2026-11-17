@@ -174,7 +174,7 @@ test('A7 (2026-10-03) — the worker reads one vocabulary for one job: the budge
   }
   assert.match(stripComments(await read('components/WorkerJobCard.tsx')), />BUDGET</);
   assert.match(stripComments(await read('screens/JobDetailScreen.tsx')), /\? 'You get, after the fee'\s*: 'You get'\}/);
-  assert.match(stripComments(await read('screens/WorkerJobScreen.tsx')), />You get</);
+  assert.match(stripComments(await read('screens/WorkerJobScreen.tsx')), />You Get</);
   assert.match(stripComments(await read('lib/payments.ts')), /return `You get \$\{formatBudget\(cents\)\} after the fee`;/);
   // The hub names its figure: the agreed price once hired, else the budget — never a take.
   assert.match(stripComments(await read('screens/MyJobsHubScreen.tsx')), /priceLabel=\{job\.final_amount_cents != null \? 'Agreed price:' : 'Budget:'\}/);

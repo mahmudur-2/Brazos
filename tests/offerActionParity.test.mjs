@@ -43,6 +43,8 @@ const offersModule = (async () => {
       /import \{ moneyCeilingError \} from '\.\/validation';/,
       'const moneyCeilingError = () => null;'
     )
+    // A4-R1: the server's clock (lib/serverClock.ts, executed in tests/serverClock.test.mjs) at offset 0.
+    .replace(/import \{ serverNowMs \} from '\.\/serverClock';/, 'const serverNowMs = () => Date.now();')
     // Same for the location-shape guard — executed in
     // tests/locationPrivacy.test.mjs.
     .replace(
@@ -394,7 +396,10 @@ test('the actionable card uses the required labels, order and icons', async () =
     acceptOfferActionLabel,
     acceptOfferConfirmText,
     COUNTER_OFFER_ACTION_LABEL,
+    COUNTER_OFFER_WORD,
+    COUNTER_OPENER_LABEL,
     declineOfferActionLabel,
+    DECLINE_OPENER_LABEL,
     offerNoun,
     offerResponseHeading,
     acceptOfferConfirmTitle,
@@ -409,19 +414,25 @@ test('the actionable card uses the required labels, order and icons', async () =
   // Offer', 'sent you a Counteroffer' / 'an Offer', whichever side read them.)
   assert.equal(offerNoun(true), 'offer');
   assert.equal(offerNoun(false), 'bid');
-  assert.equal(acceptOfferActionLabel('$110', true), 'Accept offer ($110)');
-  assert.equal(acceptOfferActionLabel('$110', false), 'Accept bid ($110)');
-  assert.equal(acceptOfferConfirmText(true), 'Accept offer');
-  assert.equal(acceptOfferConfirmText(false), 'Accept bid');
+  assert.equal(acceptOfferActionLabel('$110', true), 'Accept Offer ($110)');
+  assert.equal(acceptOfferActionLabel('$110', false), 'Accept Bid ($110)');
+  assert.equal(acceptOfferConfirmText(true), 'Accept Offer');
+  assert.equal(acceptOfferConfirmText(false), 'Accept Bid');
   // 2026-09-30 (decision C): with the server's quote the customer's button names the total;
   // a worker's never does, whatever it is handed.
-  assert.equal(acceptOfferConfirmText(false, '$129'), 'Accept & pay $129');
-  assert.equal(acceptOfferConfirmText(true, '$129'), 'Accept offer');
-  assert.equal(acceptOfferConfirmText(false, undefined), 'Accept bid');
-  assert.equal(COUNTER_OFFER_ACTION_LABEL, 'Send counter-offer');
-  assert.equal(declineOfferActionLabel(true), 'Decline offer');
-  assert.equal(declineOfferActionLabel(false), 'Decline bid');
-  assert.equal(offerResponseHeading('Mahmudur', true, true), 'Mahmudur sent you a counter-offer');
+  assert.equal(acceptOfferConfirmText(false, '$129'), 'Accept & Pay $129');
+  assert.equal(acceptOfferConfirmText(true, '$129'), 'Accept Offer');
+  assert.equal(acceptOfferConfirmText(false, undefined), 'Accept Bid');
+  // The counter form's submit and the confirm pop-ups keep these words...
+  assert.equal(COUNTER_OFFER_ACTION_LABEL, 'Send Counter-Offer');
+  assert.equal(declineOfferActionLabel(true), 'Decline Offer');
+  assert.equal(declineOfferActionLabel(false), 'Decline Bid');
+  // ...and A2-M4b: the bid card's and the reply card's OPENERS are one word each (owner P3).
+  assert.equal(COUNTER_OPENER_LABEL, 'Counter');
+  assert.equal(DECLINE_OPENER_LABEL, 'Decline');
+  // LOOK-R L-3b: a word joiner (U+2060) after the hyphen, so the title never breaks "counter-" / "offer".
+  assert.equal(offerResponseHeading('Mahmudur', true, true), 'Mahmudur sent you a counter-⁠offer');
+  assert.equal(COUNTER_OFFER_WORD, 'counter-⁠offer');
   assert.equal(offerResponseHeading('Mahmudur', false, true), 'Mahmudur sent you an offer');
   assert.equal(offerResponseHeading('Sam', true, false), 'Sam sent you a new bid');
   assert.equal(offerResponseHeading('Sam', false, false), 'Sam sent you a bid');
@@ -468,20 +479,25 @@ ${CANCELLATION_DISCLOSURE}`;
   assert.match(bid, /quoteJobPrice\(offerAmountCents\)/, 'the quote is the server’s, never a rate computed here');
 
   const actions = stripComments(await read('components/OfferResponseActions.tsx'));
-  // Order is Accept, Counter, Decline, each led by its glyph. Measured inside
+  // A2-M4 (direction §7, the bid card's order — replaces "Accept, Counter, Decline, each led by
+  // its glyph"): the quiet pair Decline | Counter, then the main Accept under it. Measured inside
   // the rendered block, so the import list at the top cannot satisfy it.
   const rendered = actions.slice(actions.indexOf('<View style={styles.actions}>'));
   assert.ok(rendered.length > 0, 'the actions block must exist');
-  const order = ['acceptOfferActionLabel(', 'COUNTER_OFFER_ACTION_LABEL', 'declineOfferActionLabel(']
+  const order = ['DECLINE_OPENER_LABEL', 'COUNTER_OPENER_LABEL', 'acceptOfferActionLabel(']
     .map((needle) => rendered.indexOf(needle));
   assert.ok(order.every((i) => i > 0), 'all three actions must render');
-  assert.deepEqual([...order].sort((a, b) => a - b), order, 'Accept, then Counter, then Decline');
+  assert.deepEqual([...order].sort((a, b) => a - b), order, 'Decline, then Counter, then Accept');
 
-  assert.match(actions, /icon="checkmark"/);
-  assert.match(actions, /icon="swap-horizontal"/);
-  assert.match(actions, /icon="close"/);
-  assert.match(actions, /variant="destructive"/);
-  assert.doesNotMatch(actions, /iconPosition="trailing"/);
+  // The pair is one row of two quiet buttons with one share each (equal width; Button's `fill`
+  // gives them one height); the one red is not here, and no glyph crowds a half-width label.
+  assert.match(rendered, /^<View style=\{styles\.actions\}>\s*<View style=\{styles\.pair\}>/);
+  assert.equal((rendered.match(/variant="quiet"/g) ?? []).length, 2, 'Decline and Counter are the quiet pair');
+  assert.equal((rendered.match(/style=\{styles\.pairButton\}/g) ?? []).length, 2);
+  assert.match(actions, /pair: \{\s*flexDirection: 'row',\s*gap: spacing\.sm,\s*\}/);
+  assert.match(actions, /pairButton: \{\s*flex: 1,\s*minWidth: 0,\s*\}/);
+  assert.doesNotMatch(actions, /variant="destructive"/);
+  assert.doesNotMatch(actions, /icon=/);
 
   // No hardcoded colours, and no Message control on an actionable card.
   assert.doesNotMatch(actions, /#[0-9a-fA-F]{3,8}\b/);

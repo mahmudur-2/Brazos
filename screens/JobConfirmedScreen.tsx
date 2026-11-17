@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Avatar } from '../components/Avatar';
+import { Card } from '../components/Card';
 import { SuccessScreen } from '../ui/templates/SuccessScreen';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { DetailScreen } from '../ui/templates/DetailScreen';
@@ -12,7 +13,7 @@ import { invalidateJobs } from '../lib/queryClient';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { arrivalWindowLabel } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { spacing, textScale, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 
@@ -106,7 +107,7 @@ export function JobConfirmedScreen() {
       icon="shield-checkmark"
       body={`${workerName} is hired and your payment is protected. Funds stay held until the work is done and approved — nothing has been released.`}
       details={
-        <View style={styles.details}>
+        <Card style={styles.details}>
           <View style={styles.workerRow}>
             <Avatar name={worker?.full_name} uri={worker?.avatar_url} size={48} />
             <View style={styles.workerCopy}>
@@ -144,11 +145,11 @@ export function JobConfirmedScreen() {
               Your card was charged. Nothing reaches the worker until you approve the finished work.
             </Text>
           </View>
-        </View>
+        </Card>
       }
       actions={[
         {
-          label: 'View job',
+          label: 'View Job',
           onPress: () => navigation.popTo('ClientJobDetail', { job }),
         },
         {
@@ -163,13 +164,9 @@ export function JobConfirmedScreen() {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // The lit Card (its own radius, rim, ground and padding), as on the posting flow's cards.
   details: {
     gap: spacing.md,
-    padding: spacing.lg,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
   },
   workerRow: {
     flexDirection: 'row',
@@ -182,12 +179,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: 2,
   },
   workerName: {
-    fontSize: 17,
+    ...textScale.headline,
     fontWeight: '800',
     color: colors.ink,
   },
   workerMeta: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   scheduleRow: {
@@ -197,15 +195,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.md,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.mint2,
+    borderTopColor: colors.border,
   },
   scheduleLabel: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   scheduleValue: {
     flexShrink: 1,
-    fontSize: 14,
+    ...textScale.body,
     fontWeight: '700',
     color: colors.ink,
     textAlign: 'right',
@@ -214,12 +213,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.mint2,
+    borderTopColor: colors.border,
   },
   paymentNote: {
-    fontSize: 12,
-    color: colors.textMuted,
+    ...textScale.footnote,
+    fontWeight: '400',
     lineHeight: 17,
+    color: colors.textMuted,
   },
   }),
 );

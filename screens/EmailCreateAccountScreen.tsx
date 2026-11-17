@@ -5,15 +5,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthButton } from '../components/AuthButton';
 import { AuthField } from '../components/AuthField';
 import { AuthScaffold } from '../components/AuthScaffold';
+import { Card } from '../components/Card';
 import { PhoneNumberInput } from '../components/PhoneNumberInput';
 import { useAuth } from '../hooks/useAuth';
-import { authRadius, authSpacing, authType } from '../lib/authTheme';
+import { authSizes, authSpacing, authType } from '../lib/authTheme';
 import {
   authSurface,
   fonts,
   themedStyles,
   useThemeColors,
-  withAlpha,
   type ColorPalette,
 } from '../lib/theme';
 import { DEFAULT_COUNTRY, type Country } from '../lib/countries';
@@ -113,18 +113,50 @@ export function EmailCreateAccountScreen() {
     }
   }
 
+  // The sign-in family's two controls, pinned by the scaffold (see its
+  // `footer`): Create Account on top, and the phone route under it as the
+  // family's quiet well with its glyph — the same pair on every sign-in screen.
+  // The footer rides the keyboard until Create Account sits flush on it, so an
+  // error line never moves it; the phone route goes under the keyboard.
+  const footer = (
+    <View style={styles.footer}>
+      <AuthButton title="Create Account" themed onPress={handleCreateAccount} loading={loading} />
+      {/* Only while phone sign-up is live (B2): with SMS off, the phone
+          screen would end on "not switched on yet". */}
+      {PHONE_ENTRY.live && (
+        <AuthButton
+          title="Use Phone Number Instead"
+          variant="quiet"
+          themed
+          icon="phone-portrait-outline"
+          // popTo(), not navigate(): React Navigation 7's navigate() pushes
+          // when the target isn't current, which would stack a second
+          // CreateAccount over the one the user came from and throw away what
+          // they had already typed there.
+          onPress={() => navigation.popTo('CreateAccount')}
+          disabled={loading}
+          accessibilityHint="Go back to signing up with your phone number"
+        />
+      )}
+    </View>
+  );
+
   return (
     <AuthScaffold
       title="Create Account"
       onBack={() => navigation.goBack()}
       backdrop="soft"
+      lift={authSpacing.xl}
+      footer={footer}
+      footerBelowLead={FOOTER_BELOW_LEAD}
       themed
     >
       {/* 2026-09-28 (LUX-LIST-64 #3, #4): no CREATE ACCOUNT eyebrow (the bar
-          already says it) and no privacy pill — the form and both buttons fit
-          one screen at rest; the keyboard may still slide the focused field
-          into view (native-ui). */}
+          already says it) and no privacy pill. 2026-11-16 (G4): the sign-in
+          family's measure — the GET STARTED eyebrow CreateAccount carries, the
+          serif headline, the fields in one card, the pinned pair. */}
       <View style={styles.body}>
+        <Text style={[styles.eyebrow, { color: surface.accent }]}>GET STARTED</Text>
         <Text style={styles.title} maxFontSizeMultiplier={1.5}>
           Sign up with your email
         </Text>
@@ -133,6 +165,7 @@ export function EmailCreateAccountScreen() {
         </Text>
 
         <View style={styles.form}>
+          <Card style={styles.card}>
           <AuthField
             label="Full name"
             themed
@@ -227,6 +260,7 @@ export function EmailCreateAccountScreen() {
             returnKeyType="go"
             onSubmitEditing={handleCreateAccount}
           />
+          </Card>
 
           {formError ? (
             <View style={styles.formError} accessibilityLiveRegion="polite">
@@ -235,73 +269,57 @@ export function EmailCreateAccountScreen() {
             </View>
           ) : null}
         </View>
-
-
-        <View style={styles.actions}>
-          <AuthButton
-            title="Create account"
-            themed
-            onPress={handleCreateAccount}
-            loading={loading}
-          />
-          {/* Only while phone sign-up is live (B2): with SMS off, the phone
-              screen would end on "not switched on yet". */}
-          {PHONE_ENTRY.live && (
-            <AuthButton
-              title="Use Phone Number Instead"
-              variant="ghost"
-              themed
-              // popTo(), not navigate(): React Navigation 7's navigate() pushes
-              // when the target isn't current, which would stack a second
-              // CreateAccount over the one the user came from and throw away what
-              // they had already typed there.
-              onPress={() => navigation.popTo('CreateAccount')}
-              disabled={loading}
-              accessibilityHint="Go back to signing up with your phone number"
-            />
-          )}
-        </View>
       </View>
     </AuthScaffold>
   );
 }
 
+/** The footer under its lead: the 12 gap and the phone route — what goes
+ *  under the keyboard when Create Account lands on it. */
+const FOOTER_BELOW_LEAD = authSpacing.md + authSizes.button;
+
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // The sign-in family's measure (screens/EmailSignInScreen.tsx): the same top
+  // distance, eyebrow, serif headline, subtitle and card rhythm.
   body: {
     flexGrow: 1,
-    paddingBottom: authSpacing.lg,
+    paddingTop: authSpacing.sm,
+    paddingBottom: authSpacing.xxl,
   },
-  // Master 4's display headline is the serif.
+  eyebrow: {
+    ...authType.heroEyebrow,
+    marginTop: authSpacing.xl,
+  },
   title: {
-    ...authType.title,
+    ...authType.heroTitle,
     fontFamily: fonts.display,
     color: colors.ink,
-    marginTop: authSpacing.md,
+    marginTop: authSpacing.sm,
   },
   subtitle: {
     ...authType.body,
     color: colors.textMuted,
-    marginTop: authSpacing.xs + 2,
+    marginTop: authSpacing.sm,
   },
   form: {
-    marginTop: authSpacing.xl - 4,
-    gap: authSpacing.md,
+    marginTop: authSpacing.xl,
+    gap: authSpacing.lg,
   },
+  card: {
+    gap: authSpacing.lg,
+  },
+  // The sign-in family's error: one red line under the card, in from its edge
+  // like a field's own line — no box.
   formError: {
-    padding: authSpacing.md,
-    borderRadius: authRadius.field,
-    // The pale wash this carried as a literal, expressed as the palette's own
-    // danger at wash strength so it reads in either theme.
-    backgroundColor: withAlpha(colors.danger, 0.14),
+    paddingHorizontal: authSpacing.xs,
   },
   formErrorText: {
     ...authType.note,
     color: colors.danger,
   },
-  actions: {
-    marginTop: 'auto',
-    paddingTop: authSpacing.xl - 4,
+  // The pinned pair: Create Account, 12, the phone route.
+  footer: {
     gap: authSpacing.md,
   },
   }),

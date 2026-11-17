@@ -30,22 +30,22 @@ export const NOTIFICATION_TOGGLES = [
   },
   {
     key: 'bids',
-    label: 'Bids on my jobs',
+    label: 'Bids on My Jobs',
     hint: 'New bids and rival bids.',
   },
   {
     key: 'job_updates',
-    label: 'Job updates',
+    label: 'Job Updates',
     hint: 'Hires, finished work, reviews.',
   },
   {
     key: 'hire_requests',
-    label: 'Hire Again requests',
+    label: 'Hire Again Requests',
     hint: 'Offers, counters, outcomes.',
   },
   {
     key: 'nearby_jobs',
-    label: 'New jobs nearby',
+    label: 'New Jobs Nearby',
     hint: 'Nearby jobs, your categories.',
   },
 ] as const;

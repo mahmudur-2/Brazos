@@ -101,34 +101,35 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: 'Send a \$50 bid\?'
     timeout: 15000
-- tapOn: "Send bid"
+- tapOn: "Send Bid"
 - extendedWaitUntil:
-    visible: 'Bid Sent|Get notified\?|Could not place bid'
+    visible: 'Bid sent|Get notified\?|Could not place bid'
     timeout: 60000
 - assertNotVisible: "Could not place bid"
 - runFlow: subflows/dismiss-permission-prompts.yml
 - extendedWaitUntil:
-    visible: "Bid Sent"
+    visible: "Bid sent"
     timeout: 30000
 - takeScreenshot: 03-main-bid-sent
-- tapOn: "Keep browsing"
 - extendedWaitUntil:
-    visible: "Your bid"
+    visible: "Your Bid"
     timeout: 30000
-# Report this job: the dialog opens; nothing is sent.
+# Report this job: the dialog opens; nothing is sent. Centred: with no bid bar left the floating tab bar is
+# back, and a link that only just scrolled into view sits under it.
 - scrollUntilVisible:
     element:
-      text: "Report this job"
+      text: "Report This Job"
     direction: DOWN
     timeout: 60000
-- tapOn: "Report this job"
+    centerElement: true
+- tapOn: "Report This Job"
 - extendedWaitUntil:
-    visible: "Send report"
+    visible: "Send Report"
     timeout: 15000
 - takeScreenshot: 03-report-job
 - tapOn: "Cancel"
 - extendedWaitUntil:
-    notVisible: "Send report"
+    notVisible: "Send Report"
     timeout: 15000
 
 # ─── Side job: a written bid, the pitch rule, withdraw, then bid again ───
@@ -179,60 +180,90 @@ appId: app.brazos.mobile.preview
     text: '${output.marker} side(, needed today)?'
     index: 0
 - extendedWaitUntil:
-    visible: "Write a bid"
+    visible: "Write a Bid"
     timeout: 30000
-- tapOn: "Write a bid"
+# P7: "Write a Bid" opens the bid form in a sheet over the job page (the sheet's title is the button's
+# own words, so the form's eyebrow proves the sheet). "Send Bid" ends the sheet's scrolling form, below
+# its fold once the form is filled: each "Send Bid" is scrolled to first, and the pitch and the eyebrow
+# (the tap that closes the keyboard) are scrolled back to.
+- tapOn: "Write a Bid"
 - extendedWaitUntil:
-    visible: "Submit a Bid"
+    visible: "YOU.RE BIDDING ON"
     timeout: 30000
 - tapOn: "e.g. 45"
 - inputText: "40"
 - tapOn: "YOU.RE BIDDING ON"
 - runFlow: subflows/keyboard-settle.yml
 # A bid needs a pitch (components/OfferComposer.tsx).
-- tapOn: "Send bid"
+- scrollUntilVisible:
+    element:
+      text: "Send Bid"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Send Bid"
 - extendedWaitUntil:
     visible: "Add a pitch"
     timeout: 15000
 - tapOn: "OK"
+- scrollUntilVisible:
+    element:
+      text: 'Why should the customer pick you\?'
+    direction: UP
+    timeout: 30000
 - tapOn: 'Why should the customer pick you\?'
 - inputText: "I have a dolly and can do it tomorrow morning."
+- scrollUntilVisible:
+    element:
+      text: "YOU.RE BIDDING ON"
+    direction: UP
+    timeout: 30000
 - tapOn: "YOU.RE BIDDING ON"
 - runFlow: subflows/keyboard-settle.yml
+- scrollUntilVisible:
+    element:
+      text: "Tomorrow"
+    direction: DOWN
+    timeout: 30000
 - tapOn: "Tomorrow"
 - takeScreenshot: 03-side-bid-form
-- tapOn: "Send bid"
+- scrollUntilVisible:
+    element:
+      text: "Send Bid"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Send Bid"
 - extendedWaitUntil:
-    visible: 'Bid Sent|Get notified\?|Could not send bid'
+    visible: 'Bid sent|Get notified\?|Could not send bid'
     timeout: 60000
 - assertNotVisible: "Could not send bid"
 - runFlow: subflows/dismiss-permission-prompts.yml
 - extendedWaitUntil:
-    visible: "Bid Sent"
+    visible: "Bid sent"
     timeout: 30000
-- tapOn: "Keep browsing"
 - extendedWaitUntil:
-    visible: "Your bid"
+    visible: "Your Bid"
     timeout: 30000
+# Centred, as "Report This Job" above: the button ends the bid card, and the tab bar floats over the foot.
 - scrollUntilVisible:
     element:
-      text: "Withdraw bid"
+      text: "Withdraw Bid"
     direction: DOWN
     timeout: 60000
-- tapOn: "Withdraw bid"
+    centerElement: true
+- tapOn: "Withdraw Bid"
 - extendedWaitUntil:
     visible: 'Withdraw your bid\?'
     timeout: 15000
 - tapOn:
-    text: "Withdraw bid"
-    rightOf: "Keep bid"
+    text: "Withdraw Bid"
+    rightOf: "Cancel"
 - extendedWaitUntil:
-    visible: "Write a bid"
+    visible: "Write a Bid"
     timeout: 30000
-- assertNotVisible: "Your bid"
-- tapOn: "Write a bid"
+- assertNotVisible: "Your Bid"
+- tapOn: "Write a Bid"
 - extendedWaitUntil:
-    visible: "Submit a Bid"
+    visible: "YOU.RE BIDDING ON"
     timeout: 30000
 - tapOn: "e.g. 45"
 - inputText: "40"
@@ -240,26 +271,30 @@ appId: app.brazos.mobile.preview
 - runFlow: subflows/keyboard-settle.yml
 - tapOn: 'Why should the customer pick you\?'
 - inputText: "I have a dolly and can do it tomorrow morning."
+- scrollUntilVisible:
+    element:
+      text: "YOU.RE BIDDING ON"
+    direction: UP
+    timeout: 30000
 - tapOn: "YOU.RE BIDDING ON"
 - runFlow: subflows/keyboard-settle.yml
-- tapOn: "Send bid"
+- scrollUntilVisible:
+    element:
+      text: "Send Bid"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Send Bid"
 - extendedWaitUntil:
-    visible: 'Bid Sent|Get notified\?|Could not send bid'
+    visible: 'Bid sent|Get notified\?|Could not send bid'
     timeout: 60000
 - assertNotVisible: "Could not send bid"
 - runFlow: subflows/dismiss-permission-prompts.yml
 - extendedWaitUntil:
-    visible: "Bid Sent"
+    visible: "Bid sent"
     timeout: 30000
-- tapOn: "View in My Jobs"
-# Run 13: a 30 s wait for "Pending bids" expired. Once B has accepted work (run 12 onwards) the hub
-# lists it above the bids, so the heading is scrolled to; and should the button's tap ever miss,
-# the My Jobs tab opens the same hub.
-- runFlow:
-    when:
-      visible: "View in My Jobs"
-    commands:
-      - tapOn: "My Jobs"
+# P6: no Bid Sent screen; the My Jobs tab opens the hub. Run 13: once B has accepted work (run 12
+# onwards) the hub lists it above the bids, so the heading is scrolled to.
+- tapOn: "My Jobs"
 - extendedWaitUntil:
     notVisible: "Loading your jobs…"
     timeout: 30000

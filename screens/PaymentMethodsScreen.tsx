@@ -3,18 +3,19 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
+import { Card } from '../components/Card';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { cardLabel, listSavedCards, removeSavedCard, startCardSetup, type SavedCard } from '../lib/paymentMethods';
 import { presentCardSetupSheet } from '../lib/payments/stripe';
 import { DetailScreen } from '../ui/templates/DetailScreen';
+import { EmptyState } from '../ui/primitives';
 import { paymentsMode } from '../lib/adapters/payments';
 import { goBackOrHome } from '../lib/navigationRef';
 import {
   EYEBROW_TYPE,
-  litCardStyle, fonts,
-  radius,
   spacing,
+  textScale,
   themedStyles,
   useThemeColors,
   type ColorPalette,
@@ -62,7 +63,6 @@ export function PaymentMethodsScreen() {
       title: `Remove ${cardLabel(card)}?`,
       message: 'One-tap hiring stops until you save a card again. Payments you’ve already protected aren’t affected.',
       confirmText: 'Remove',
-      cancelText: 'Keep it',
       destructive: true,
     });
     if (!ok) return;
@@ -104,11 +104,10 @@ export function PaymentMethodsScreen() {
       state={{ kind: 'ready' }}
       sections={[
         {
-          // Master 40's protection card: the ghost B, a green eyebrow (this
-          // whole card is a live-state claim about the build's payment mode),
-          // and a display headline.
+          // Master 40's protection card: a green eyebrow (this whole card is a
+          // live-state claim about the build's payment mode) and a display headline.
           content: (
-            <View style={[styles.heroCard, litCardStyle(isDark)]}>
+            <Card style={styles.stack}>
               <Text style={styles.eyebrow}>PAYMENT PROTECTION</Text>
               <Text style={styles.heroTitle}>Honest by design.</Text>
               <Text style={styles.bodyText}>
@@ -116,19 +115,13 @@ export function PaymentMethodsScreen() {
                   ? 'Your card is charged only when you protect a payment, and the funds stay held until you approve the finished work.'
                   : 'Payments aren’t available right now, so nothing here can move money.'}
               </Text>
-            </View>
+            </Card>
           ),
         },
         {
           content: (
-            <View style={[styles.modeCard, litCardStyle(isDark)]}>
-              <View style={[styles.modeGlyph, isDark && styles.modeGlyphDark]}>
-                <Ionicons
-                  name="card-outline"
-                  size={22}
-                  color={isDark ? colors.gold : colors.textMuted}
-                />
-              </View>
+            <Card style={styles.modeCard}>
+              <Ionicons name="card-outline" size={24} color={isDark ? colors.emerald : colors.mark} />
               <View style={styles.modeCopy}>
                 <Text style={styles.modeTitle}>
                   {stripe ? 'Card payments' : 'Payments are off'}
@@ -139,26 +132,22 @@ export function PaymentMethodsScreen() {
                     : 'Payments aren’t available right now. Nothing can be authorized, held or moved.'}
                 </Text>
               </View>
-            </View>
+            </Card>
           ),
         },
         {
-          // Master 40 CARDS every section on this screen. These last two were
-          // still riding the DetailScreen `title` + bare content shape, which
-          // draws a heading straight onto the page ground — on a dark device
-          // the screen visibly stopped being a stack of cards halfway down.
-          // They take the same card the two above already use, with the
-          // master's own eyebrows and its serif headings.
+          // The section label sits on the ground over its one lit card; an empty or
+          // failed read is the shared empty state inside it.
+          title: 'Funding Source',
           content: (
-            <View style={[styles.sectionCard, litCardStyle(isDark)]}>
-              <Text style={styles.eyebrow}>FUNDING SOURCE</Text>
+            <Card style={styles.stack}>
               {stripe ? (
                 // Idea 20: the card saved for one-tap hiring — kept by the provider, never by Brazos.
                 cards === null ? (
                   <ActivityIndicator color={colors.emerald} />
                 ) : cards.length > 0 ? (
                   <>
-                    <Text accessibilityRole="header" style={styles.sectionTitle}>Saved for one-tap hiring</Text>
+                    <Text accessibilityRole="header" style={styles.sectionTitle}>Saved for One-Tap Hiring</Text>
                     {cards.map((card) => (
                       <View key={card.id} style={styles.cardRow}>
                         <Ionicons name="card-outline" size={20} color={colors.emerald} />
@@ -186,34 +175,35 @@ export function PaymentMethodsScreen() {
                   </>
                 ) : cardsError ? (
                   // A failed read is not "no card": it says so, and tries again.
-                  <>
-                    <Text accessibilityRole="header" style={styles.sectionTitle}>Couldn’t read your cards</Text>
-                    <Text style={styles.bodyText}>{cardsError}</Text>
-                    <Button
-                      title="Try again"
-                      variant="secondary"
-                      onPress={() => {
-                        setCards(null);
-                        void loadCards();
-                      }}
-                    />
-                  </>
+                  <EmptyState
+                    icon="cloud-offline-outline"
+                    tone="attention"
+                    title="Couldn’t read your cards"
+                    body={cardsError}
+                    actionLabel="Try Again"
+                    onAction={() => {
+                      setCards(null);
+                      void loadCards();
+                    }}
+                  />
                 ) : (
                   <>
-                    <Text accessibilityRole="header" style={styles.sectionTitle}>No card saved</Text>
-                    <Text style={styles.bodyText}>Save a card for one-tap hiring: accept and pay from a bid’s notification.</Text>
-                    <Button title="Add a card" variant="secondary" onPress={() => void addCard()} loading={busy} disabled={busy} />
+                    <EmptyState
+                      icon="card-outline"
+                      title="No Card Saved"
+                      body="Save a card for one-tap hiring: accept and pay from a bid’s notification."
+                    />
+                    <Button title="Add a Card" variant="secondary" onPress={() => void addCard()} loading={busy} disabled={busy} />
                   </>
                 )
               ) : (
-                <>
-                  <Text accessibilityRole="header" style={styles.sectionTitle}>No stored payment methods</Text>
-                  <Text style={styles.bodyText}>
-                    Payments aren’t available right now, so there’s no card to store. When they are, the cards you save will appear here.
-                  </Text>
-                </>
+                <EmptyState
+                  icon="card-outline"
+                  title="No Stored Payment Methods"
+                  body="Payments aren’t available right now, so there’s no card to store. When they are, the cards you save will appear here."
+                />
               )}
-            </View>
+            </Card>
           ),
         },
       ]}
@@ -223,16 +213,9 @@ export function PaymentMethodsScreen() {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
-  heroCard: {
+  stack: {
     gap: spacing.sm,
-    padding: spacing.lg,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
   },
-  cardDark: { borderColor: colors.border },
   // Idea 20: one saved card's row.
   cardRow: {
     flexDirection: 'row',
@@ -245,12 +228,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: 2,
   },
   cardText: {
-    fontSize: 15,
+    ...textScale.callout,
     fontWeight: '700',
     color: colors.ink,
   },
   removeText: {
-    fontSize: 13,
+    ...textScale.label,
     fontWeight: '700',
     color: colors.danger,
   },
@@ -261,50 +244,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.eyebrow,
   },
   heroTitle: {
-    fontFamily: fonts.display,
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '800',
+    ...textScale.display,
     color: colors.ink,
-  },
-  modeGlyph: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.mint,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  modeGlyphDark: {
-    backgroundColor: 'transparent',
-    borderColor: colors.gold,
   },
   modeCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
-    padding: spacing.lg,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
-  },
-  // Same card as the hero and the mode card above it — master 40 draws every
-  // section on this screen inside one.
-  sectionCard: {
-    gap: spacing.sm,
-    padding: spacing.lg,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
   },
   sectionTitle: {
-    fontFamily: fonts.display,
-    fontSize: 20,
-    fontWeight: '800',
+    ...textScale.title,
     color: colors.ink,
   },
   modeCopy: {
@@ -312,20 +261,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.xs,
   },
   modeTitle: {
-    fontFamily: fonts.display,
-    fontSize: 20,
-    fontWeight: '800',
+    ...textScale.title,
     color: colors.ink,
   },
   modeNote: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
-    lineHeight: 19,
   },
   bodyText: {
-    fontSize: 14,
+    ...textScale.body,
     color: colors.textMuted,
-    lineHeight: 20,
   },
   }),
 );

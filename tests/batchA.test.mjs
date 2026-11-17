@@ -36,7 +36,8 @@ test('A8 · the chat offer response is guarded by a ref, not stale state', () =>
 test('A9 · no developer words in the profile, a failed photo is not "Saved", the phone is E.164, the form avoids the keyboard', () => {
   const src = read('screens/ProfileScreen.tsx');
   assert.doesNotMatch(src, /phase7|"avatars"|42703/);
-  assert.match(src, /photoFailed/);
+  // A4 wiring (A1): the failed photo's own reason (lib/uploadRules uploadErrorMessage), never "Saved" alone.
+  assert.match(src, /await \(photoError\s*\?\s*alertAsync\(\s*'Saved, but your photo didn’t upload',\s*`Your other changes are saved and your current photo is unchanged\. \$\{uploadErrorMessage\(photoError\)\}`/);
   assert.match(src, /toE164\(split\.country, split\.national\)/);
   assert.match(src, /<KeyboardAvoid style=\{styles\.flex\}/);
 });

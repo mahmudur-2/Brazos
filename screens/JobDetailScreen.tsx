@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -47,6 +48,8 @@ import { useOpenJobDetail } from '../hooks/useJobDetail';
 import { useMode } from '../modes';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { revealShift } from '../lib/scrollReveal';
 import { deriveMatchReasons } from '../lib/matchReasons';
 import { invalidateJobs } from '../lib/queryClient';
 import { type DistanceFilterMiles } from '../lib/discoveryFilter';
@@ -85,19 +88,22 @@ import { formatTimeAgo } from '../lib/time';
 import { useShellGround } from '../lib/shellGround';
 import type { JobDetailRouteParamList } from '../lib/navigation';
 import { quoteJobPrice, type JobPriceQuote } from '../lib/payments';
+import { BOOKED_TIME_PASSED, jobWindowOver } from '../lib/paymentRules';
+import { serverNowMs } from '../lib/serverClock';
 import {
   EYEBROW_TYPE,
-  fonts,
+  layout,
   radius,
   spacing,
+  textScale,
   themedStyles,
-  litCardStyle,
   useThemeColors,
+  wellStyle,
   withAlpha,
   type ColorPalette,
   screenGround,
 } from '../lib/theme';
-import { usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
+import { FloatingAction, Sheet, useScrollClearance } from '../ui/primitives';
 import { STATE_COPY } from '../ui/templates/ScreenStates';
 
 /**
@@ -118,12 +124,8 @@ type PayoutQuote =
 export function JobDetailScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
-  // RUN T2 (C8) — THE WORKER'S VIEW OF A JOB, ITS OWN FOUR. Each falls back to
-  // the value this file drew before the dial existed, spelled here and nowhere
-  // else; the three token-backed ones take the `theme.*` scale this file
-  // imports spacing/radius from.
-  const detailPaddingX = spacing.xl;
-  const detailPaddingY = spacing.lg;
+  // RUN T2 (C8) — THE WORKER'S VIEW OF A JOB. G2: the job is one lit card on the ground; the
+  // cards under it keep the same gap.
   const detailGap = spacing.lg;
   const iconCircleSize = 54;
   // RUN H3 (C3): the same declaration customer Home makes, and for the same
@@ -133,7 +135,6 @@ export function JobDetailScreen() {
   useShellGround('homeBackground');
   // emerald(3): the floating pill's real footprint.
   const navClearance = useScrollClearance();
-  const footerPad = usePinnedFooterPadding();
   // The shared meta-glyph rule (prestige 3c, WorkerJobCard): gold in dark,
   // Heritage muted in light.
   const metaGlyph = isDark ? colors.gold : colors.textMuted;
@@ -167,6 +168,55 @@ export function JobDetailScreen() {
   const [responding, setResponding] = useState<'accept' | 'decline' | null>(null);
   const [confirmResponse, setConfirmResponse] = useState<'accept' | 'decline' | null>(null);
   const [showCounterForm, setShowCounterForm] = useState(false);
+  // PART 5b T1: the counter form opens under the reply card's buttons, which on a short page is the
+  // foot of the screen, under the tab bar. Once it opens, and again once the keyboard is up, the page
+  // scrolls (the scroller's own animation; none with reduced motion) just enough that the form's
+  // heading and its amount field sit above the tab bar or the keyboard, never past the heading.
+  // Closing the form moves nothing.
+  const reducedMotion = useReducedMotion();
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollBandRef = useRef<View>(null);
+  const contentTopRef = useRef<View>(null);
+  const counterFormRef = useRef<View>(null);
+  const counterAmountRef = useRef<View>(null);
+  useEffect(() => {
+    if (!showCounterForm) return;
+    let frame: number | null = null;
+    const box = (ref: { current: View | null }) =>
+      new Promise<{ top: number; bottom: number } | null>((resolve) => {
+        if (!ref.current) return resolve(null);
+        ref.current.measureInWindow((_x, top, _width, height) => resolve({ top, bottom: top + height }));
+      });
+    // The keyboard covers the tab bar, and the keyboard-avoiding view already ends the band at it.
+    const reveal = (keyboardUp: boolean) => {
+      if (frame != null) cancelAnimationFrame(frame);
+      // One frame for the opened form's layout — a frame, never a timer.
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        void Promise.all([box(scrollBandRef), box(contentTopRef), box(counterFormRef), box(counterAmountRef)]).then(
+          ([band, contentTop, form, field]) => {
+            if (!band || !contentTop || !form || !field) return;
+            const shift = revealShift({
+              visibleTop: band.top,
+              visibleBottom: band.bottom - (keyboardUp ? 0 : navClearance),
+              headingTop: form.top,
+              fieldBottom: field.bottom,
+              margin: spacing.md,
+            });
+            if (shift > 0) {
+              scrollRef.current?.scrollTo({ y: band.top - contentTop.top + shift, animated: reducedMotion === false });
+            }
+          }
+        );
+      });
+    };
+    reveal(false);
+    const shown = Keyboard.addListener('keyboardDidShow', () => reveal(true));
+    return () => {
+      shown.remove();
+      if (frame != null) cancelAnimationFrame(frame);
+    };
+  }, [showCounterForm, navClearance, reducedMotion]);
   // Sync guard: two fast taps both read the old state before React paints.
   const respondingRef = useRef(false);
   const [confirmWithdrawVisible, setConfirmWithdrawVisible] = useState(false);
@@ -187,6 +237,12 @@ export function JobDetailScreen() {
   const [posterReadAttempt, setPosterReadAttempt] = useState(0);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [confirmBidVisible, setConfirmBidVisible] = useState(false);
+  // P6 (owner, 2026-11-16): no Bid Sent screen. The bid was just sent from here, or from the bid
+  // form that went back here; the bid card says "Bid sent".
+  const [bidJustSent, setBidJustSent] = useState(false);
+  // P7 (owner, 2026-11-16): the bid form opens as a sheet over this page.
+  const [bidSheetOpen, setBidSheetOpen] = useState(false);
+  const bidSentShown = bidJustSent || params.bidSent === true;
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const { width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -250,9 +306,16 @@ export function JobDetailScreen() {
   // even when the CUSTOMER authored it as a counter (AUD-P1-01). The RPCs
   // re-check both server-side; these only decide what to render.
   const viewerAuthoredBid = !!activeBid && !!user && activeBid.author_id === user.id;
+  // A4 wiring (priority 2): once a dated job's booked window has ended, a new bid is refused
+  // (job_window_over, refuse_offer_after_window), so no bid is offered: neither "Write a Bid" nor the
+  // listed-price bid, nor the payout card that stands in for them. The page says the server's
+  // sentence instead (BOOKED_TIME_PASSED.newBid); the hourly closer then closes the job.
+  const windowOver = jobWindowOver({ job, nowMs: serverNowMs() });
   // 2026-09-26 (the refresh, audit M-2 / M-4): the bid decision is pinned in a bar
   // whenever the entry cards would render — the same condition, read once.
-  const showBidBar = !isOwnJob && !checking && !activeBid;
+  const showBidBar = !isOwnJob && !checking && !activeBid && !windowOver;
+  // G2: the bid pair floats at the foot with no plate (FloatingAction), and the bar steps aside.
+  const floatingBid = showBidBar && !payoutsGateShown;
   const viewerOwesResponse =
     !!activeBid && !!user && !viewerAuthoredBid && activeBid.awaiting_id === user.id;
   const countersLeft = user ? countersRemaining(chain, user.id) : 0;
@@ -494,18 +557,22 @@ export function JobDetailScreen() {
     setConfirmBidVisible(false);
     if (!offerId) return;
 
-    // 2026-09-26 (the refresh, audit M-2): both bid paths end on the same Bid
-    // sent screen SubmitBid lands on — the OS alert and the tab hop are gone.
+    // P6 (owner, 2026-11-16): both bid paths end on this page, the bid card saying "Bid sent".
     // Fire-and-forget, as SubmitBid does: the prompt never holds the screen.
     void maybePromptForPush(
       'Get told the moment this customer accepts your bid — and when new jobs like this are posted.'
     );
-    (navigation as unknown as {
-      navigate: (
-        screen: 'BidSent',
-        params: { jobTitle: string; amountCents: number; offerId: string }
-      ) => void;
-    }).navigate('BidSent', { jobTitle: job.title, amountCents, offerId });
+    setBidJustSent(true);
+  }
+
+  /** P7: the sheet's bid went through: close it and show the bid on this page. */
+  async function bidSentFromSheet() {
+    setBidSheetOpen(false);
+    void maybePromptForPush(
+      'Get told the moment this customer accepts your bid — and when new jobs like this are posted.'
+    );
+    await refreshMyOffer();
+    setBidJustSent(true);
   }
 
   /**
@@ -609,7 +676,7 @@ export function JobDetailScreen() {
           <Text style={styles.missingText}>
             The person who posted it has taken it down.
           </Text>
-          <Button title="Go back" variant="secondary" onPress={goBackOrHome} />
+          <Button title="Go Back" variant="secondary" onPress={goBackOrHome} />
         </View>
       </SafeAreaView>
     );
@@ -627,21 +694,26 @@ export function JobDetailScreen() {
     // bottom edge is the tab bar's (2026-09-26, the refresh): asking for it
     // here too drew a blank band between the bid bar and the tabs.
     <SafeAreaView
-      style={styles.safe}
+      style={[styles.safe, screenGround(colors, isDark)]}
       edges={galleryPhotos.length > 0 ? [] : ['top']}
     >
       <KeyboardAvoid
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        {/* PART 5b T1: the scroller's frame (the visible band) and the content's first point, measured
+            when the counter form opens. */}
+        <View ref={scrollBandRef} collapsable={false} style={styles.flex}>
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={[
             styles.content,
-            showBidBar ? { paddingBottom: spacing.xl } : { paddingBottom: navClearance },
+            floatingBid ? { paddingBottom: spacing.xl } : { paddingBottom: navClearance },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <View ref={contentTopRef} collapsable={false} />
           {galleryPhotos.length > 0 ? (
             <View style={[styles.heroMedia, { height: heroHeight }]}>
               <ScrollView
@@ -690,20 +762,21 @@ export function JobDetailScreen() {
             <ScreenHeader title="Job Details" onBack={goBackOrHome} />
           )}
 
-          <View style={[styles.detailContent, { gap: detailGap }]}>
-            <View
-              style={[
-                styles.detailSurface,
-                { paddingHorizontal: detailPaddingX, paddingVertical: detailPaddingY },
-              ]}
-            >
+          <View
+            style={[
+              styles.detailContent,
+              { gap: detailGap },
+              galleryPhotos.length > 0 ? styles.detailContentUnderHero : null,
+            ]}
+          >
+            <Card>
             <View style={styles.jobHeader}>
               <View
                 style={[
                   styles.iconCircle,
                   { width: iconCircleSize, height: iconCircleSize },
-                  // LUX-LIST-2 #6: the lit tile in dark; light keeps the category colour.
-                  isDark ? [styles.iconCircleDark, litCardStyle(true, 'tile')] : { backgroundColor: accent.bg },
+                  // G2: inside the lit card the tile is a well in dark; light keeps the category colour.
+                  isDark ? wellStyle(colors, true) : { backgroundColor: accent.bg },
                 ]}
               >
                 <CategoryGlyph
@@ -801,13 +874,13 @@ export function JobDetailScreen() {
                 reportedId={job.client_id}
                 reportedName={poster?.full_name ?? 'this customer'}
                 jobId={job.id}
-                label="Report this job"
+                label="Report This Job"
               />
             )}
-            </View>
+            </Card>
 
           {isOwnJob ? (
-            <Card style={[styles.noticeCard, styles.secondaryCard]}>
+            <Card style={styles.noticeCard}>
               <Ionicons name="information-circle-outline" size={20} color={colors.textMuted} />
               <Text style={styles.noticeText}>This is your job — you can’t bid on it.</Text>
             </Card>
@@ -819,7 +892,7 @@ export function JobDetailScreen() {
               // them, answered with the three server actions — never labeled
               // "Your bid", never offered Withdraw (author-only, and the
               // author is the customer here). AUD-P1-01.
-              <Card style={styles.secondaryCard}>
+              <Card>
                 {/* THE shared actionable presentation — the same component
                     the chat thread renders, so the two surfaces cannot show
                     different labels, a different action order or a different
@@ -830,10 +903,17 @@ export function JobDetailScreen() {
                   senderFirstName={posterFirstName}
                   isCounter={activeBid.parent_offer_id !== null}
                   amountLabel={formatBudget(activeBid.amount_cents)}
-                  note={offerResponseNote({
-                    viewerIsWorker: true,
-                    expiresLabel: offerExpiryLabel(activeBid.expires_at),
-                  })}
+                  // A2-M5 A11: past the booked time the server refuses accept and counter, so no
+                  // "Respond by <date>" and no buttons: the facts, and accept_offer's own sentence.
+                  note={
+                    windowOver
+                      ? BOOKED_TIME_PASSED.workerAccept
+                      : offerResponseNote({
+                          viewerIsWorker: true,
+                          expiresLabel: offerExpiryLabel(activeBid.expires_at),
+                        })
+                  }
+                  actionsClosed={windowOver}
                   // Job detail is the worker's side of an open job.
                   viewerIsWorker
                   // The control stays available while the form is open so the
@@ -844,21 +924,25 @@ export function JobDetailScreen() {
                   onCounter={() => setShowCounterForm((visible) => !visible)}
                   onDecline={() => setConfirmResponse('decline')}
                 />
-                {/* B11: accept and counter need payouts on; decline never does. */}
-                {payoutsGateShown ? (
+                {/* B11: accept and counter need payouts on; decline never does. Past the booked
+                    time neither is offered (A2-M5 A11), so neither is the gate nor the form. */}
+                {payoutsGateShown && !windowOver ? (
                   <View style={styles.counterFormWrap}>
                     <PayoutsGateCard status={payouts} />
                   </View>
                 ) : null}
-                {showCounterForm ? (
-                  <View style={styles.counterFormWrap}>
+                {showCounterForm && !windowOver ? (
+                  <View ref={counterFormRef} collapsable={false} style={styles.counterFormWrap}>
                     <OfferComposer
+                      amountFieldRef={counterAmountRef}
                       context={{
                         kind: 'counter',
                         offer: activeBid,
                         counterpartyName: poster?.full_name ?? 'The customer',
                         jobTitle: job.title,
                         countersRemaining: countersLeft,
+                        // A4 wiring (priority 2): a market job, so its window decides the counter.
+                        jobWindow: job,
                       }}
                       onSubmitted={async () => {
                         // The chain moved: their revision is superseded and
@@ -872,19 +956,31 @@ export function JobDetailScreen() {
                 ) : null}
               </Card>
             ) : viewerAuthoredBid ? (
-              <Card style={styles.secondaryCard}>
+              <Card>
+                {bidSentShown ? (
+                  <View style={styles.bidSentRow}>
+                    <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                    <Text style={styles.bidSentText}>Bid sent</Text>
+                  </View>
+                ) : null}
                 <View style={styles.bidHeader}>
                   <Text accessibilityRole="header" style={styles.sectionTitle}>
-                    {activeBid.parent_offer_id ? 'Your counter-offer' : 'Your bid'}
+                    {activeBid.parent_offer_id ? 'Your Counter-Offer' : 'Your Bid'}
                   </Text>
                   <StatusBadge status={activeBid.status} />
                 </View>
                 <Text style={styles.bidAmount}>{formatBudget(activeBid.amount_cents)}</Text>
                 {activeBid.message ? (
-                  <Text style={styles.bidMessage}>“{activeBid.message}”</Text>
+                  <Card level="well" style={styles.bidMessageWell}>
+                    <Text style={styles.bidMessage}>“{activeBid.message}”</Text>
+                  </Card>
                 ) : null}
                 <Text style={styles.bidNote}>
-                  {activeBid.expires_at
+                  {/* A2-M5 A9: past the booked time nothing is accepted, so no "until <date>" promise:
+                      accept_offer's own sentence for the worker says what is true. */}
+                  {windowOver
+                    ? BOOKED_TIME_PASSED.workerAccept
+                    : activeBid.expires_at
                     ? `The customer can accept it until ${offerExpiryLabel(activeBid.expires_at)} — after that it expires on its own. Check My Jobs for updates.`
                     : 'You’ve already bid on this job. Check My Jobs for updates.'}
                 </Text>
@@ -893,14 +989,18 @@ export function JobDetailScreen() {
                     is the whole conversation, and the server refuses a
                     pre-confirmation message regardless of what any screen
                     offers (phase66). */}
-                <Button
-                  title="Withdraw bid"
-                  variant="secondary"
-                  onPress={() => setConfirmWithdrawVisible(true)}
-                  loading={withdrawing}
-                  disabled={withdrawing}
-                  style={styles.withdrawAction}
-                />
+                {/* G2: the way out stays red but small, at the card's foot behind a hairline, so a
+                    waiting bid reads as its status and amount first. */}
+                <View style={styles.withdrawFoot}>
+                  <Button
+                    title={activeBid.parent_offer_id ? 'Withdraw Counter-Offer' : 'Withdraw Bid'}
+                    variant="destructive"
+                    size="sm"
+                    onPress={() => setConfirmWithdrawVisible(true)}
+                    loading={withdrawing}
+                    disabled={withdrawing}
+                  />
+                </View>
               </Card>
             ) : (
               // Pending, but neither authored by nor awaiting this viewer —
@@ -908,9 +1008,9 @@ export function JobDetailScreen() {
               // chains should make it unreachable). Render it attributed and
               // actionless rather than guessing at an action the server
               // would refuse.
-              <Card style={styles.secondaryCard}>
+              <Card>
                 <View style={styles.bidHeader}>
-                  <Text accessibilityRole="header" style={styles.sectionTitle}>Offer in negotiation</Text>
+                  <Text accessibilityRole="header" style={styles.sectionTitle}>Offer in Negotiation</Text>
                   <StatusBadge status={activeBid.status} />
                 </View>
                 <Text style={styles.bidAmount}>{formatBudget(activeBid.amount_cents)}</Text>
@@ -922,8 +1022,14 @@ export function JobDetailScreen() {
             )
           ) : (
             <>
-              {bidLapsed ? (
-                <Card style={[styles.noticeCard, styles.secondaryCard]}>
+              {windowOver ? (
+                // A4 wiring (priority 2): the page's own notice card, with the server's sentence.
+                <Card style={styles.noticeCard}>
+                  <Ionicons name="time-outline" size={20} color={colors.textMuted} />
+                  <Text style={styles.noticeText}>{BOOKED_TIME_PASSED.newBid}</Text>
+                </Card>
+              ) : bidLapsed ? (
+                <Card style={styles.noticeCard}>
                   <Ionicons name="time-outline" size={20} color={colors.textMuted} />
                   <Text style={styles.noticeText}>
                     Your earlier bid expired without a response. You can send a
@@ -936,7 +1042,7 @@ export function JobDetailScreen() {
                   a FAILED read says so with a retry rather than posing as a
                   job with no poster (F-026). */}
               {posterReadFailed ? (
-                <Card style={[styles.noticeCard, styles.secondaryCard]}>
+                <Card style={styles.noticeCard}>
                   <Ionicons name="cloud-offline-outline" size={20} color={colors.danger} />
                   <Text style={styles.noticeText}>
                     Couldn’t load who posted this job. Check your connection
@@ -950,8 +1056,8 @@ export function JobDetailScreen() {
                   />
                 </Card>
               ) : poster ? (
-                <Card style={[styles.posterCard, styles.secondaryCard]}>
-                  <Text accessibilityRole="header" style={styles.sectionTitle}>Posted by</Text>
+                <Card style={styles.posterCard}>
+                  <Text accessibilityRole="header" style={styles.sectionTitle}>Posted By</Text>
                   <View style={styles.posterRow}>
                     <Avatar name={poster.full_name} uri={poster.avatar_url} size={48} />
                     <View style={styles.posterCopy}>
@@ -978,7 +1084,7 @@ export function JobDetailScreen() {
                   charges and the ledger records, so this card cannot drift
                   from what the worker is actually paid. */}
               {payoutEstimateLabel(job) ? (
-                <Card style={[styles.payoutCard, styles.secondaryCard]}>
+                <Card style={styles.payoutCard}>
                   {/* Master 10 sets a shield against this card's copy —
                       decoration beside a claim the words already make. The
                       refresh draws it as the plain shield-check the worker's
@@ -1010,52 +1116,17 @@ export function JobDetailScreen() {
                 </Card>
               ) : null}
 
-              {/* Happy with the advertised price? One tap, no retyping the
-                  number and no inventing a pitch. Still an ordinary bid the
-                  poster has to accept. */}
-              {job.budget_cents != null && (
-                <Card style={[styles.listedPriceCard, styles.secondaryCard]}>
-                  <Text style={styles.priceEyebrow}>Take it at the listed price</Text>
-                  <View style={styles.listedPriceInfo}>
-                    <View style={[styles.priceIcon, isDark && litCardStyle(true, 'tile')]}>
-                      <Ionicons
-                        name="cash-outline"
-                        size={22}
-                        color={isDark ? colors.gold : colors.primary}
-                      />
-                    </View>
-                    <View style={styles.priceCopy}>
-                      <Text style={styles.listedPriceTitle}>
-                        You’ll offer {formatBudget(job.budget_cents)}
-                      </Text>
-                      <Text style={styles.quickBidText}>
-                        The customer still chooses.
-                      </Text>
-                    </View>
-                  </View>
-                </Card>
-              )}
-
-              {/* The custom-terms path is the OfferComposer's SubmitBid route
-                  (screen 52) — one canonical offer form for bids, counters
-                  and direct offers, rather than a second form living here. */}
-              <Card style={styles.secondaryCard}>
-                <Text accessibilityRole="header" style={styles.sectionTitle}>
-                  {job.budget_cents != null ? 'Or name your own price' : 'Place a bid'}
-                </Text>
-                <Text style={styles.quickBidText}>
-                  Your price, and why you’re the right pick.
-                </Text>
-                {/* Master 10 gives this a GOLD serif label — decision 3's
-                    ghost. Its own hairline box in the master is the shape
-                    decision 3 reserves for the standard control, so the ghost
-                    ships bare inside the card that already frames it. */}
-              </Card>
+              {/* G2 RESTRUCTURE: the two cards that named the bid paths ("Take it at the listed
+                  price", "Place a Bid") are gone; the floating pair says both, once. */}
+              {/* B11: in place of the bid buttons, the payout card sits in the page (no pinned plate). */}
+              {showBidBar && payoutsGateShown ? (
+                <PayoutsGateCard status={payouts} framed />
+              ) : null}
             </>
           )}
 
           {similarJobs.length > 0 && (
-            <View style={[styles.similarSection, styles.secondarySection]}>
+            <View style={styles.similarSection}>
               <Text style={styles.similarTitle}>Similar open jobs</Text>
               <View style={styles.similarList}>
                 {similarJobs.map((sj) => (
@@ -1074,40 +1145,27 @@ export function JobDetailScreen() {
           )}
           </View>
         </ScrollView>
-        {showBidBar && payoutsGateShown ? (
-          <View style={[styles.bidBar, { paddingBottom: footerPad }]}>
-            <PayoutsGateCard status={payouts} />
-          </View>
-        ) : null}
-        {showBidBar && !payoutsGateShown ? (
-          <View style={[styles.bidBar, { paddingBottom: footerPad }]}>
-            <View style={styles.bidBarRow}>
-              {job.budget_cents != null ? (
-                <Button
-                  title={`I’ll do it for ${formatBudget(job.budget_cents)}`}
-                  onPress={handleTakeListedPrice}
-                  loading={takingListedPrice}
-                  style={styles.bidBarPrimary}
-                />
-              ) : null}
-              <Button
-                title="Write a bid"
-                variant={job.budget_cents != null ? 'secondary' : 'primary'}
-                onPress={() =>
-                  (navigation as unknown as {
-                    navigate: (screen: 'SubmitBid', params: { job: OpenJob }) => void;
-                  }).navigate('SubmitBid', { job })
-                }
-                disabled={takingListedPrice}
-                style={job.budget_cents != null ? styles.bidBarSecondary : styles.bidBarPrimary}
-              />
-            </View>
-            <Text style={styles.bidBarNote}>
-              Questions go in your bid; chat opens once hired.
-            </Text>
-          </View>
-        ) : null}
+        </View>
       </KeyboardAvoid>
+      {/* G2: no plate. The pair floats where the bar's pill sat; "Write a Bid" is the one main
+          action, the listed-price bid its quiet partner of the same size. */}
+      {showBidBar && !payoutsGateShown ? (
+        <FloatingAction
+          title="Write a Bid"
+          onPress={() => setBidSheetOpen(true)}
+          disabled={takingListedPrice}
+          secondary={
+            job.budget_cents != null
+              ? {
+                  title: `I’ll Do It for ${formatBudget(job.budget_cents)}`,
+                  onPress: handleTakeListedPrice,
+                  disabled: takingListedPrice,
+                }
+              : undefined
+          }
+          hint="Questions go in your bid; chat opens once hired."
+        />
+      ) : null}
 
       <PhotoViewer
         visible={!!viewerUri}
@@ -1124,8 +1182,7 @@ export function JobDetailScreen() {
               ? `You’d receive ${formatBudget(payoutQuote.max)} after the fee. The customer will receive your bid and decide who gets the job.`
               : 'The customer will receive your bid and decide who gets the job.'
           }
-          confirmText="Send bid"
-          cancelText="Cancel"
+          confirmText="Send Bid"
           loading={takingListedPrice}
           onConfirm={confirmTakeListedPrice}
           onCancel={() => setConfirmBidVisible(false)}
@@ -1134,10 +1191,12 @@ export function JobDetailScreen() {
 
       <ConfirmDialog
         visible={confirmWithdrawVisible}
-        title="Withdraw your bid?"
-        message="This withdraws your pending bid — the customer will no longer be able to accept it. You can send a new bid afterwards if you change your mind."
-        confirmText="Withdraw bid"
-        cancelText="Keep bid"
+        // A2-M5 W8: the dialog says what the button said: a counter-offer (a parent offer) or a bid.
+        // withdraw_offer frees the one live chain either way, so a new bid can follow.
+        title={activeBid?.parent_offer_id ? 'Withdraw your counter-offer?' : 'Withdraw your bid?'}
+        message={`This withdraws your pending ${activeBid?.parent_offer_id ? 'counter-offer' : 'bid'} — the customer will no longer be able to accept it. You can send a new bid afterwards if you change your mind.`}
+        confirmText={activeBid?.parent_offer_id ? 'Withdraw Counter' : 'Withdraw Bid'}
+        destructive
         loading={withdrawing}
         onConfirm={handleWithdraw}
         onCancel={() => setConfirmWithdrawVisible(false)}
@@ -1148,7 +1207,6 @@ export function JobDetailScreen() {
         title={acceptOfferConfirmTitle(formatBudget(activeBid?.amount_cents ?? null), true)}
         message="This takes the job at the customer’s countered amount and closes the negotiation. The job is assigned to you and moves into My Jobs."
         confirmText={acceptOfferConfirmText(true)}
-        cancelText="Cancel"
         loading={responding === 'accept'}
         onConfirm={handleAcceptCounter}
         onCancel={() => setConfirmResponse(null)}
@@ -1159,20 +1217,30 @@ export function JobDetailScreen() {
         title={declineOfferConfirmTitle(formatBudget(activeBid?.amount_cents ?? null), true)}
         message="This closes the negotiation — the customer’s counter can’t be accepted afterwards. You can send a new bid unless the job is filled."
         confirmText={declineOfferActionLabel(true)}
-        cancelText="Cancel"
+        destructive
         loading={responding === 'decline'}
         onConfirm={handleDeclineCounter}
         onCancel={() => setConfirmResponse(null)}
       />
+      <Sheet
+        visible={bidSheetOpen}
+        title="Write a Bid"
+        dismissWord="Cancel"
+        onClose={() => setBidSheetOpen(false)}
+        avoidKeyboard
+      >
+        <OfferComposer layout="inline" context={{ kind: 'bid', job }} onSubmitted={() => void bidSentFromSheet()} />
+      </Sheet>
     </SafeAreaView>
   );
 }
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // The page ground is customer Home's own (declared to the shell above).
   safe: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.homeBackground,
   },
   flex: {
     flex: 1,
@@ -1213,15 +1281,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: withAlpha(colors.black, 0.58),
   },
   photoCountText: {
+    ...textScale.label,
     color: colors.white,
-    fontSize: 13,
     fontWeight: '800',
   },
+  // G2: the page is the ground; the job and each group under it are lit cards in one column.
   detailContent: {
-    backgroundColor: colors.surface,
+    paddingHorizontal: layout.screenGutter,
+    paddingTop: spacing.xs,
   },
-  detailSurface: {
-    backgroundColor: colors.surface,
+  detailContentUnderHero: {
+    paddingTop: spacing.lg,
   },
   jobHeader: {
     flexDirection: 'row',
@@ -1237,31 +1307,24 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderWidth: 1,
     borderColor: colors.border,
   },
-  // D2: one category tile everywhere — deep-green surface, gold hairline,
-  // gold glyph. The saturated per-category fills are retired in dark; light
-  // keeps them.
-  iconCircleDark: {
-    backgroundColor: colors.mint,
-  },
   jobHeaderText: {
     flex: 1,
     gap: 2,
   },
   category: {
-    fontSize: 15,
-    fontWeight: '700',
+    ...textScale.headline,
     color: colors.text,
   },
   time: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   title: {
-    fontSize: 30,
-    fontWeight: '800',
+    ...textScale.display,
     color: colors.ink,
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
   },
   detailRow: {
     flexDirection: 'row',
@@ -1270,18 +1333,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     marginTop: spacing.sm,
   },
   detailText: {
+    ...textScale.callout,
     flex: 1,
-    fontSize: 16,
     color: colors.textMuted,
   },
   detailTextDark: { color: colors.ink },
   description: {
-    fontSize: 16,
+    ...textScale.callout,
+    fontWeight: '400',
     color: colors.text,
-    lineHeight: 24,
     // Snug under the title since 4D-2 B4 moved the scope of work above the
     // logistics rows; the title's own marginBottom provides the separation.
-    marginTop: spacing.xs,
     marginBottom: spacing.sm,
   },
   matchReasons: {
@@ -1294,8 +1356,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
   },
   matchReasonText: {
+    ...textScale.callout,
     flex: 1,
-    fontSize: 15,
     fontWeight: '600',
     color: colors.text,
   },
@@ -1308,26 +1370,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     gap: spacing.sm,
   },
-  secondaryCard: {
-    marginHorizontal: spacing.lg,
-  },
-  secondarySection: {
-    marginHorizontal: spacing.lg,
-  },
   noticeText: {
+    ...textScale.body,
     flex: 1,
-    fontSize: 14,
     color: colors.textMuted,
   },
   // Decision 9: a card heading is display type.
   sectionTitle: {
-    fontFamily: fonts.display,
-    fontSize: 20,
-    fontWeight: '700',
+    ...textScale.title,
     color: colors.ink,
-  },
-  listedPriceCard: {
-    gap: spacing.md,
   },
   posterCard: {
     gap: spacing.md,
@@ -1342,12 +1393,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: 2,
   },
   posterName: {
-    fontSize: 16,
-    fontWeight: '800',
+    ...textScale.headline,
     color: colors.text,
   },
   posterMeta: {
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   payoutCard: {
@@ -1360,17 +1411,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     top: spacing.md,
     right: spacing.md,
   },
-  // Master 10's figure: the serif, at display weight.
   payoutAmount: {
-    fontFamily: fonts.display,
-    fontSize: 38,
-    lineHeight: 44,
-    fontWeight: '800',
+    ...textScale.hero,
     color: colors.money,
+    fontVariant: ['tabular-nums'],
   },
   payoutNote: {
-    fontSize: 12,
-    lineHeight: 17,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   // Eyebrow law: a structural card label is gold small-caps.
@@ -1379,39 +1427,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // 2026-09-29 (LUX-LIST-2 #4): one of the 25 labels kept antique gold in light.
     color: colors.eyebrowGold,
   },
-  listedPriceInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.homeBackground,
-  },
-  // Master 10's icon squircle: sage fill inside a gold hairline.
-  priceIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.mint,
-  },
-  priceCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  listedPriceTitle: {
-    fontFamily: fonts.display,
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.ink,
-  },
   similarSection: {
     gap: spacing.md,
+    marginTop: spacing.sm,
   },
   // Master 10 sets SIMILAR OPEN JOBS as a gold small-caps section eyebrow.
   similarTitle: {
@@ -1421,46 +1439,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   similarList: {
     gap: spacing.md,
   },
-  quickBidText: {
-    fontSize: 13,
-    color: colors.textMuted,
-    lineHeight: 19,
-  },
-  bidBar: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    gap: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  bidBarRow: {
+  bidSentRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
   },
-  bidBarPrimary: {
-    flex: 1.4,
-  },
-  bidBarSecondary: {
-    flex: 1,
-  },
-  bidBarNote: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  quickBidAction: {
-    marginTop: spacing.xs,
-  },
-  form: {
-    gap: spacing.lg,
-    marginTop: spacing.lg,
-  },
-  multiline: {
-    height: 90,
-    paddingTop: spacing.md,
-    textAlignVertical: 'top',
+  bidSentText: {
+    ...textScale.body,
+    fontWeight: '700',
+    color: colors.success,
   },
   bidHeader: {
     flexDirection: 'row',
@@ -1468,24 +1456,31 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'space-between',
   },
   bidAmount: {
-    fontSize: 24,
-    fontWeight: '800',
+    ...textScale.heading,
     color: colors.money,
+    fontVariant: ['tabular-nums'],
     marginTop: spacing.sm,
+  },
+  bidMessageWell: {
+    marginTop: spacing.sm,
+    padding: spacing.md,
   },
   bidMessage: {
-    fontSize: 14,
-    color: colors.textMuted,
+    ...textScale.body,
+    color: colors.text,
     fontStyle: 'italic',
-    marginTop: spacing.xs,
   },
   bidNote: {
-    fontSize: 13,
-    color: colors.textSubtle,
+    ...textScale.label,
+    fontWeight: '400',
+    color: colors.textMuted,
     marginTop: spacing.md,
   },
-  withdrawAction: {
-    marginTop: spacing.sm,
+  withdrawFoot: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   counterFormWrap: {
     marginTop: spacing.md,
@@ -1498,13 +1493,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     padding: spacing.xl,
   },
   missingTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    ...textScale.headline,
     color: colors.text,
     textAlign: 'center',
   },
   missingText: {
-    fontSize: 14,
+    ...textScale.body,
     color: colors.textMuted,
     textAlign: 'center',
     marginBottom: spacing.md,

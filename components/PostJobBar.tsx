@@ -1,16 +1,23 @@
-import { useRef, type ComponentProps, type Ref } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { PressScale } from './PressScale';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { USE_NATIVE_DRIVER } from '../lib/motion';
-import { spacing, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
-import { usePinnedFooterPadding } from '../ui/primitives';
+import type { ComponentProps, Ref } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { Ionicons } from '@expo/vector-icons';
+import { Button } from './Button';
+import { pillBottomOffset } from '../lib/meltBarGeometry';
+import { meltBar, metricStyles, spacing } from '../lib/theme';
+import { useHideTabBar } from '../ui/primitives';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-/** refs/bottom-bar.html: both buttons 52 tall, fully round. */
+/** Both buttons are the built `Button` at its default size, 52 tall (components/Button.tsx `md`). */
 export const POST_BAR_BUTTON = 52;
+
+/** Where the bar's buttons stand: the tab bar's own offset from the screen's edge, the safe area
+ *  kept (ui/primitives/FloatingAction). The screen reads it to float its note above the pair. */
+export function usePostBarFoot(): number {
+  const insets = useSafeAreaInsets();
+  return pillBottomOffset(insets.bottom, meltBar.bottomTuck, meltBar.bottomMin);
+}
 
 type Action = {
   label: string;
@@ -20,17 +27,20 @@ type Action = {
 
 /**
  * 2026-09-28 (LUX-LIST-64 #41, #42) — THE POSTING BAR, right above the tab bar
- * (refs/bottom-bar.html): no space above or below the buttons, 16 at the sides,
- * 14 between. The quiet left button (flex 3 — "Save draft" on the review step,
- * "Back to Home" on the live page) in its dark fill and green rim, and the
- * commitment on the right (flex 4 — "Publish" with its rocket, which nudges up
- * and right under the finger; "View job and bids" with its arrow): the one flat
- * mint under a faint white rim and its soft glow. A waiting commitment is grey
- * on the deep green (#909594 on #073328). Light takes the light bar and the
- * light primary.
+ * (refs/bottom-bar.html): no space above or below the buttons, 16 at the sides.
+ * The quiet left button ("Save Draft" on the review step, "Back to Home" on the
+ * live page) and the commitment on the right ("Publish" with its rocket, "View
+ * Job" with its arrow).
  *
- * `primaryRef` hands the screen the commitment's box, which the Seal transition
- * measures to shrink it where it stands (#42).
+ * G1a (2026-11-16): both are the built `Button` — the quiet well beside the main
+ * mint (dark green in light), one width each and one height, the labels allowed
+ * their two lines rather than cut. A waiting commitment is the Button's own
+ * disabled look. `primaryRef` hands the screen the commitment's box, which the
+ * Seal transition measures to shrink it where it stands (#42).
+ *
+ * G1a RESTRUCTURE (2026-11-16, the bottom rule: one floating thing at the foot): the bar takes the
+ * tab bar's place, as ui/primitives/FloatingAction does. It hides the tab bar while its screen is
+ * focused and floats the pair where the pill sat, with no plate behind it.
  */
 export function PostJobBar({
   secondary,
@@ -54,133 +64,55 @@ export function PostJobBar({
   hidePrimary?: boolean;
   hideSecondary?: boolean;
 }) {
-  const { palette: colors } = useThemeColors();
-  const styles = stylesFor(colors);
-  const reducedMotion = useReducedMotion();
-  const nudge = useRef(new Animated.Value(0)).current;
-
-  function press(to: number) {
-    Animated.timing(nudge, {
-      toValue: to,
-      duration: reducedMotion === false ? 250 : 0,
-      useNativeDriver: USE_NATIVE_DRIVER,
-    }).start();
-  }
-
-  const ink = primaryDisabled ? colors.waitingInk : colors.publishInk;
-
-  // 2026-09-30: the tab bar floats; the bar's ground runs on under the pill and its buttons sit
-  // above it, a pinned footer's breathing room clear.
-  const footerPad = usePinnedFooterPadding();
+  useHideTabBar();
+  const foot = usePostBarFoot();
+  const styles = stylesFor();
 
   return (
-    <View style={[styles.bar, { paddingBottom: footerPad }]}>
+    <View style={[styles.bar, { paddingBottom: foot }]}>
       {secondary ? (
-        <PressScale
-          onPress={secondary.onPress}
-          style={[styles.button, styles.secondary, hideSecondary && styles.hidden]}
-          accessibilityRole="button"
-          accessibilityLabel={secondary.accessibilityLabel ?? secondary.label}
-          disabled={hideSecondary}
-        >
-          {secondaryIcon ? <Ionicons name={secondaryIcon} size={20} color={colors.draftIcon} /> : null}
-          <Text style={styles.secondaryText} numberOfLines={1}>
-            {secondary.label}
-          </Text>
-        </PressScale>
+        <View style={styles.share}>
+          <Button
+            title={secondary.label}
+            onPress={secondary.onPress}
+            variant="quiet"
+            icon={secondaryIcon}
+            iconPosition="leading"
+            disabled={hideSecondary}
+            accessibilityLabel={secondary.accessibilityLabel ?? secondary.label}
+            style={[styles.share, hideSecondary && styles.hidden]}
+          />
+        </View>
       ) : null}
-      <View ref={primaryRef} collapsable={false} style={styles.primarySlot}>
-        <PressScale
+      <View ref={primaryRef} collapsable={false} style={styles.share}>
+        <Button
+          title={primary.label}
           onPress={primary.onPress}
-          onPressIn={() => press(1)}
-          onPressOut={() => press(0)}
+          icon={primaryIcon ?? primaryTrailingIcon}
+          iconPosition={primaryIcon ? 'leading' : 'trailing'}
           disabled={primaryDisabled || hidePrimary}
-          style={[
-            styles.button,
-            styles.primary,
-            primaryDisabled ? styles.primaryWaiting : styles.primaryLive,
-            hidePrimary && styles.hidden,
-          ]}
-          accessibilityRole="button"
           accessibilityLabel={primary.accessibilityLabel ?? primary.label}
-          accessibilityState={{ disabled: !!primaryDisabled }}
-        >
-          {primaryIcon ? (
-            <Animated.View
-              style={{
-                transform: [
-                  { translateX: nudge.interpolate({ inputRange: [0, 1], outputRange: [0, 2] }) },
-                  { translateY: nudge.interpolate({ inputRange: [0, 1], outputRange: [0, -2] }) },
-                ],
-              }}
-            >
-              <Ionicons name={primaryIcon} size={23} color={ink} />
-            </Animated.View>
-          ) : null}
-          <Text style={[styles.primaryText, { color: ink }]} numberOfLines={1}>
-            {primary.label}
-          </Text>
-          {primaryTrailingIcon ? <Ionicons name={primaryTrailingIcon} size={18} color={ink} /> : null}
-        </PressScale>
+          style={[styles.share, hidePrimary && styles.hidden]}
+        />
       </View>
     </View>
   );
 }
 
-const stylesFor = themedStyles((colors: ColorPalette) =>
+const stylesFor = metricStyles(() =>
   StyleSheet.create({
     bar: {
       flexDirection: 'row',
-      alignItems: 'center',
-      gap: 14,
+      alignItems: 'stretch',
+      gap: spacing.md,
       paddingHorizontal: spacing.lg,
-      borderTopWidth: 1,
-      borderTopColor: colors.barRim,
-      backgroundColor: colors.barGround,
+      // The floating foot's breathing room under the scroller's end (ui/primitives/FloatingAction).
+      paddingTop: spacing.sm,
     },
-    button: {
-      height: POST_BAR_BUTTON,
-      borderRadius: POST_BAR_BUTTON / 2,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    secondary: {
-      flex: 3,
-      gap: 12,
-      borderWidth: 1.5,
-      borderColor: colors.draftRim,
-      backgroundColor: colors.draftFill,
-    },
-    secondaryText: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.draftInk,
-    },
-    primarySlot: {
-      flex: 4,
-    },
-    primary: {
-      gap: 10,
-    },
-    // `0 0 22px rgba(79,197,140,.24)` — the primary's own soft glow, one
-    // geometry in both themes; only its colour is the palette's.
-    primaryLive: {
-      backgroundColor: colors.primary,
-      borderWidth: 1,
-      borderColor: withAlpha(colors.white, 0.09),
-      shadowColor: colors.primary,
-      shadowOpacity: 0.24,
-      shadowRadius: 11,
-      shadowOffset: { width: 0, height: 0 },
-    },
-    primaryWaiting: {
-      backgroundColor: colors.waitingFill,
-    },
-    primaryText: {
-      fontSize: 16,
-      fontWeight: '700',
-      letterSpacing: -0.2,
+    // One plain slot each, so the pair is one width whatever its labels; the Button fills its slot,
+    // so the pair is one height too.
+    share: {
+      flex: 1,
     },
     hidden: {
       opacity: 0,

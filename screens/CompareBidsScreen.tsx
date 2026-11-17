@@ -18,6 +18,8 @@ import {
   type CompareWorker,
 } from '../lib/compareBids';
 import { effectiveOfferStatus, type OfferWithWorker } from '../lib/offers';
+import { BOOKED_TIME_PASSED, jobWindowOver } from '../lib/paymentRules';
+import { serverNowMs } from '../lib/serverClock';
 import { formatBudget } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
@@ -66,6 +68,9 @@ export function CompareBidsScreen() {
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'CompareBids'>>();
   const job = params.job;
+  // A4 wiring (priority 2): once the job's booked window has ended, no bid can be accepted
+  // (accept_offer, job_window_over): the framing line says the server's sentence instead.
+  const windowOver = jobWindowOver({ job, nowMs: serverNowMs() });
 
   // n7 — ONE profile_review_summaries() call for the offers' worker ids
   // (worker role, REVEALED reviews only), issued by the shared hook whenever
@@ -134,12 +139,14 @@ export function CompareBidsScreen() {
                       the protection flow, which is what the pill names — no
                       per-job claim is made. */}
                   <View style={styles.protectedPill}>
-                    <Text style={styles.protectedPillText}>Protected job</Text>
+                    <Text style={styles.protectedPillText}>Protected Job</Text>
                   </View>
                 </View>
                 <Text style={styles.headerTitle}>Compare each bid in full.</Text>
                 <Text style={styles.headerFraming}>
-                  Price matters, but fit, reliability and included work determine value.
+                  {windowOver
+                    ? BOOKED_TIME_PASSED.customerAccept
+                    : 'Price matters, but fit, reliability and included work determine value.'}
                 </Text>
               </View>
               {/* §5.4 — the order is deterministic and stated. */}
@@ -263,7 +270,7 @@ function CompareRow({
       {highestRated ? (
         <View style={styles.highestTag}>
           <Ionicons name="star" size={11} color={colors.emerald} />
-          <Text style={styles.highestTagText}>Highest rated</Text>
+          <Text style={styles.highestTagText}>Highest Rated</Text>
         </View>
       ) : null}
 
@@ -275,7 +282,8 @@ function CompareRow({
           </Text>
           {rating != null ? (
             <View style={styles.rowRating}>
-              <Ionicons name="star" size={13} color={starColors(colors, isDark).filled} />
+              {/* F11 (owner, 2026-11-16): no star beside "New". */}
+              {reputation?.is_new ? null : <Ionicons name="star" size={13} color={starColors(colors, isDark).filled} />}
               <Text style={styles.rowRatingStrong}>
                 {reputation?.is_new ? 'New' : rating.toFixed(1)}
               </Text>

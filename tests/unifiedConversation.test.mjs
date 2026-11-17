@@ -347,7 +347,8 @@ test('every entry point from the audit still opens Chat with a shape Chat accept
     // Stage 4A: the feed stopped opening Chat itself and delegates to the same
     // router the push tap uses, so its entry point IS the delegation — since
     // Stage 4D carrying ModeContext for the router's cross-mode gate.
-    ['screens/NotificationsScreen.tsx', /handleNotificationData\(notification\.data, modeBridge\)/],
+    // B6: the row's type rides with its data, as in a push.
+    ['screens/NotificationsScreen.tsx', /handleNotificationData\(\{ \.\.\.notification\.data, type: notification\.type \}, modeBridge\)/],
     // Both Chat shapes are still built — now as resolved targets rather than
     // at the call site — and dispatched by the single navigateChecked below.
     ['lib/notificationRoutes.ts', /screen: 'Chat',\s*params: \{ directThreadId: data\.directThreadId \}/],

@@ -251,7 +251,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       alignItems: 'center',
       justifyContent: 'center',
       gap: spacing.xs + 2,
-      paddingHorizontal: 2,
+      // M5 (T5): the name wraps inside its tile ("TV mounting"), never touching the rim.
+      paddingHorizontal: spacing.xs + 2,
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,

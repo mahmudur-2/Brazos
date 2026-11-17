@@ -50,7 +50,7 @@ export type JobLifecycleInput = {
     status: string;
     en_route_at?: string | null;
     arrived_at?: string | null;
-    /** Feeds the 72h auto-release clock (phase51). Absent/null = no clock. */
+    /** When the job reached `completed`. The release time is not derived from it: see releaseDeadlineMs. */
     completed_at?: string | null;
   };
   /** The job's active job_payment row, or null when checkout never ran. */
@@ -65,18 +65,19 @@ export type JobLifecycleInput = {
   hasOpenDispute?: boolean | 'unknown';
 };
 
-/** phase51's on-read auto-release clock, from jobs.completed_at. */
-export const AUTO_RELEASE_HOURS = 72;
-
 /**
- * When phase51's clock releases this job's held payment, in epoch ms — or
- * null when the clock never runs (jobs completed before phase51 carry no
- * completed_at, deliberately).
+ * A4 wiring (P1): when the automatic approval is due for this job's held payment, in epoch ms, as
+ * the server states it: jobs.release_due_at (20261116200000_release_clock.sql, the same deadline
+ * the timer acts on: 72 hours after the customer is told the work is complete, 7 days after it was
+ * marked complete at the latest). The app derives no time of its own. Null, absent or unreadable =
+ * no time and no promise (a job not completed, a reader who is not a party, an open issue, a read
+ * without the field). The timer runs every 10 minutes, so the time can pass before the money
+ * moves: every caller shows a time only while it is still ahead.
  */
-export function releaseDeadlineMs(job: { completed_at?: string | null }): number | null {
-  if (!job.completed_at) return null;
-  const completed = Date.parse(job.completed_at);
-  return Number.isFinite(completed) ? completed + AUTO_RELEASE_HOURS * 3_600_000 : null;
+export function releaseDeadlineMs(job: { release_due_at?: string | null }): number | null {
+  if (!job.release_due_at) return null;
+  const due = Date.parse(job.release_due_at);
+  return Number.isFinite(due) ? due : null;
 }
 
 /**
@@ -366,6 +367,12 @@ export function myJobsNextAction(input: {
   /** From releaseDeadlineMs(); null when the clock never runs. */
   releaseDeadline?: number | null;
   nowMs?: number;
+  /**
+   * A4 wiring (A5, G1b-4): the owner's payments pause (remote paymentsEnabled). False while it is
+   * on: no checkout opens, so a hire waiting for its payment is not told to complete one. Absent
+   * (a caller that does not read it) is open, as before.
+   */
+  checkoutOpen?: boolean;
 }): string {
   const { perspective, state, bidCount = 0, reviewedByMe = false } = input;
   const nowMs = input.nowMs ?? Date.now();
@@ -382,9 +389,10 @@ export function myJobsNextAction(input: {
         ? `${bidCount} ${bidCount === 1 ? 'bid' : 'bids'} to review`
         : 'Awaiting bids';
     case 'pending_payment':
-      return perspective === 'customer'
-        ? 'Complete checkout — protect the payment'
-        : 'Waiting on payment protection';
+      if (perspective !== 'customer') return 'Waiting on payment protection';
+      return input.checkoutOpen === false
+        ? 'Payments are paused — check back shortly'
+        : 'Complete checkout — protect the payment';
     case 'confirmed':
       return perspective === 'customer'
         ? 'Booked — waiting on your worker'
@@ -419,4 +427,20 @@ export function myJobsNextAction(input: {
     default:
       return 'View details';
   }
+}
+
+/**
+ * A2-M5 F1: the line a customer's LIVE card must still show while the owner's payments pause is
+ * on — a hire waiting for its payment. A live card draws its stage rail in place of the
+ * next-action line, so without this the pause would never reach Home's attention card or the
+ * My Jobs row. The words are myJobsNextAction's own (the job page's paused line). Undefined when
+ * payments are open, so every other card is unchanged.
+ */
+export function pausedPaymentNotice(input: {
+  state: JobLifecycleState;
+  checkoutOpen?: boolean;
+}): string | undefined {
+  return input.state === 'pending_payment' && input.checkoutOpen === false
+    ? myJobsNextAction({ perspective: 'customer', state: input.state, checkoutOpen: false })
+    : undefined;
 }

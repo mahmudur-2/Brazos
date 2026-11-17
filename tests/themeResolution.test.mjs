@@ -6,6 +6,7 @@ import { inflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
+import ts from 'typescript';
 
 // ---------------------------------------------------------------------------
 // 4D-4 — Light/Dark/System resolution, executed rather than restated.
@@ -368,6 +369,220 @@ test('[static] no raw colour literal in screens/, components/, ui/, hooks/, navi
     else if (fn) offenders.push(`${path}: ${fn[0]}`);
   }
   assert.deepEqual(offenders, [], `raw colour literals crept in:\n${offenders.join('\n')}`);
+});
+
+// ---------------------------------------------------------------------------
+// A2-M1 — THE DRIFT RATCHET. A file in screens/ or components/ may not write a
+// number for a font size, a corner or a shadow: those come from lib/theme.ts
+// (`textScale`, `radius`, `litCardStyle`, `wellStyle`, `shadows`, ...). Raw
+// colours are fenced by the test above.
+//
+// THE RULE, on the parsed source (not a regex): a property assignment named
+// `fontSize` whose value holds a number; a corner (`borderRadius`, or any
+// `border...Radius`) whose value holds a number other than 0; `shadowRadius`,
+// `shadowOpacity`, `shadowOffset` or `elevation` whose value holds a number;
+// `boxShadow` whose value holds a string. One hit per property.
+//
+// A RATCHET, NOT A ZERO. Every file is held at or under its count of the day
+// the fence went in (DRIFT_CEILING); a file that is not listed must be 0. A
+// builder who restyles a file lowers its count and never edits this table, so
+// the screen groups never collide here. The loved files (DRIFT_LOVED) are not
+// scanned: their pixels are frozen, and the picture compare is their fence.
+// ---------------------------------------------------------------------------
+
+/** Frozen: the dark customer Home, the bottom bar and its motion, the mode switch, the map and its panels. */
+const DRIFT_LOVED = [
+  'screens/HomeScreen.tsx',
+  'screens/MapScreen.tsx',
+  'components/CreateSheet.tsx',
+  'components/DraftCard.tsx',
+  'components/HomeAtmosphere.tsx',
+  'components/HomeAvatarButton.tsx',
+  'components/HomeLiveBar.tsx',
+  'components/HotspotMap.tsx',
+  'components/HowBrazosWorks.tsx',
+  'components/HubCard.tsx',
+  'components/JobFilterSheet.tsx',
+  'components/MapPinIcon.tsx',
+  'components/MeltTabBar.tsx',
+  'components/MeltTabBar.shared.tsx',
+  'components/MeltTabBar.motion120.tsx',
+  'components/ModeTransitionOverlay.tsx',
+  'components/ModeTransitionOverlay.shared.tsx',
+  'components/ModeTransitionOverlay.motion120.tsx',
+  'components/NotificationBell.tsx',
+  'components/PeekSheet.tsx',
+  'components/PeekSheet.shared.tsx',
+  'components/PeekSheet.motion120.tsx',
+  'components/ServicePickerSheet.tsx',
+  'components/ServiceTileRow.tsx',
+  'components/SheetCard.tsx',
+  'components/SheetCard.shared.tsx',
+  'components/SheetCard.motion120.tsx',
+  'components/StageRail.tsx',
+  'components/TodayPill.tsx',
+  'components/WorkerJobCard.tsx',
+];
+
+/** The count of each file on 2026-11-16 (workshop 65ed4ae). It may only go down. */
+const DRIFT_CEILING = {
+  'components/ActionSheet.tsx': 1,
+  'components/AmountPrompt.tsx': 5,
+  'components/AppErrorBoundary.tsx': 3,
+  'components/AuthBackdrop.tsx': 2,
+  'components/AuthButton.tsx': 2,
+  'components/AuthField.tsx': 1,
+  'components/AuthScaffold.tsx': 1,
+  'components/Avatar.tsx': 2,
+  'components/BrowseJobCard.tsx': 6,
+  'components/Button.tsx': 3,
+  'components/CategoryAccordion.tsx': 4,
+  'components/CategoryTileRow.tsx': 2,
+  'components/ChatBubble.tsx': 8,
+  'components/ChatComposer.tsx': 3,
+  'components/Chip.tsx': 2,
+  'components/ConfirmDialog.tsx': 2,
+  'components/ConversationRow.tsx': 10,
+  'components/CountryPicker.tsx': 7,
+  'components/DictationMic.tsx': 2,
+  'components/DrawnCheck.tsx': 1,
+  'components/DropMenu.shared.tsx': 1,
+  'components/GlassDropdown.tsx': 2,
+  'components/JobLivePage.tsx': 15,
+  'components/JobOwnerActions.tsx': 1,
+  'components/JobProgress.tsx': 3,
+  'components/JobSummaryCard.tsx': 19,
+  'components/JobVideo.tsx': 1,
+  'components/LiveDot.tsx': 2,
+  'components/MarkdownText.tsx': 6,
+  'components/MarketJobPreview.tsx': 7,
+  'components/MediaViewer.tsx': 4,
+  'components/ModeSwitchRow.tsx': 2,
+  'components/OfferCard.tsx': 25,
+  'components/OfferComposer.tsx': 8,
+  'components/OfferResponseActions.tsx': 7,
+  'components/OfflineBanner.tsx': 1,
+  'components/OtpInput.tsx': 1,
+  'components/PayoutNudge.tsx': 1,
+  'components/PayoutsGateCard.tsx': 2,
+  'components/PhoneNumberInput.tsx': 4,
+  'components/PhotoViewer.tsx': 1,
+  'components/PickerPopover.tsx': 4,
+  'components/PostJobBar.tsx': 6,
+  'components/PostQuestions.tsx': 3,
+  'components/PriceDropdown.tsx': 8,
+  'components/RepeatNote.tsx': 3,
+  'components/ReportContentLink.tsx': 1,
+  'components/ReportDialog.tsx': 8,
+  'components/ReviewSection.tsx': 10,
+  'components/RimLight.shared.tsx': 1,
+  'components/ScreenHeader.tsx': 8,
+  'components/SealTransition.tsx': 3,
+  'components/SegmentedControl.tsx': 1,
+  'components/SetupChoiceCard.tsx': 1,
+  'components/SetupRow.tsx': 2,
+  'components/StatusBadge.tsx': 1,
+  'components/SuccessMark.shared.tsx': 1,
+  'components/TextField.tsx': 4,
+  'components/UndoToast.tsx': 7,
+  'screens/AccountSafetyScreen.tsx': 5,
+  'screens/AdminReportsScreen.tsx': 9,
+  'screens/ApproveOrDisputeScreen.tsx': 11,
+  'screens/BidDetailScreen.tsx': 8,
+  'screens/BidSentScreen.tsx': 3,
+  'screens/CellJobsScreen.tsx': 4,
+  'screens/ChatScreen.tsx': 10,
+  'screens/CheckoutScreen.tsx': 6,
+  'screens/ClientJobDetailScreen.tsx': 6,
+  'screens/CompareBidsScreen.tsx': 16,
+  'screens/CreateAccountScreen.tsx': 1,
+  'screens/DeleteAccountScreen.tsx': 6,
+  'screens/EarningsScreen.tsx': 6,
+  'screens/JobConfirmedScreen.tsx': 5,
+  'screens/JobDetailScreen.tsx': 22,
+  'screens/LaunchScreen.tsx': 2,
+  'screens/LegalDocumentScreen.tsx': 2,
+  'screens/LegalGateScreen.tsx': 7,
+  'screens/MessagesInboxScreen.tsx': 5,
+  'screens/MyJobsHubScreen.tsx': 10,
+  'screens/NotificationSettingsScreen.tsx': 8,
+  'screens/NotificationsScreen.tsx': 8,
+  'screens/PaymentMethodsScreen.tsx': 7,
+  'screens/PayoutsScreen.tsx': 6,
+  'screens/PostJobScreen.tsx': 19,
+  'screens/ProfileDetailsScreen.tsx': 8,
+  'screens/ProfileReviewsScreen.tsx': 12,
+  'screens/ProfileScreen.tsx': 22,
+  'screens/ReviewAndTipScreen.tsx': 5,
+  'screens/ServicesPricingScreen.tsx': 10,
+  'screens/SetupScreen.tsx': 2,
+  'screens/SubmitBidScreen.tsx': 2,
+  'screens/VerifyPhoneScreen.tsx': 2,
+  'screens/WelcomeScreen.tsx': 4,
+  'screens/WorkerHomeScreen.tsx': 17,
+  'screens/WorkerJobScreen.tsx': 28,
+  'screens/WorkerProfileScreen.tsx': 13,
+  'screens/WorkerResultsScreen.tsx': 7,
+  'screens/WorkerSearchScreen.tsx': 12,
+};
+
+const DRIFT_SHADOW_NUMBERS = new Set(['shadowRadius', 'shadowOpacity', 'shadowOffset', 'elevation']);
+
+/** One file's raw style numbers: { font, corner, shadow }. */
+function driftOf(path, source) {
+  const kind = path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, kind);
+  const holds = (node, isHit) => isHit(node) || ts.forEachChild(node, (child) => holds(child, isHit) || undefined) === true;
+  const isNumber = (node) => ts.isNumericLiteral(node);
+  const isNonZero = (node) => ts.isNumericLiteral(node) && Number(node.text) !== 0;
+  const isString = (node) => ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node);
+  const count = { font: 0, corner: 0, shadow: 0 };
+  const visit = (node) => {
+    if (ts.isPropertyAssignment(node) && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name))) {
+      const name = node.name.text;
+      const value = node.initializer;
+      if (name === 'fontSize' && holds(value, isNumber)) count.font += 1;
+      else if (/^border[A-Za-z]*Radius$/.test(name) && holds(value, isNonZero)) count.corner += 1;
+      else if (name === 'boxShadow' ? holds(value, isString) : DRIFT_SHADOW_NUMBERS.has(name) && holds(value, isNumber)) count.shadow += 1;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return count;
+}
+
+test('[static] A2 drift ratchet: screens/ and components/ write no new font size, corner or shadow number', async () => {
+  const repoRoot = fileURLToPath(new URL('../', import.meta.url));
+  const files = [];
+  for (const root of ['screens', 'components']) {
+    const entries = await readdir(join(repoRoot, root), { withFileTypes: true, recursive: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !/\.(ts|tsx)$/.test(entry.name)) continue;
+      files.push(relative(repoRoot, join(entry.parentPath, entry.name)).replace(/\\/g, '/'));
+    }
+  }
+  assert.ok(files.length > 150, `the scan must enumerate screens/ and components/ (saw ${files.length})`);
+  for (const path of DRIFT_LOVED) assert.ok(files.includes(path), `${path} is listed as loved but does not exist`);
+
+  const over = [];
+  let found = 0;
+  for (const path of files) {
+    if (DRIFT_LOVED.includes(path)) continue;
+    const count = driftOf(path, await read(path));
+    const total = count.font + count.corner + count.shadow;
+    const ceiling = DRIFT_CEILING[path] ?? 0;
+    found += total;
+    if (total > ceiling) {
+      over.push(`${path}: ${total} > ${ceiling} (fontSize ${count.font}, corner ${count.corner}, shadow ${count.shadow})`);
+    }
+  }
+  // Not vacuous: the parser really finds the numbers the table records.
+  assert.ok(found > 0, 'the scan found no style number at all: the parser is not reading the files');
+  assert.deepEqual(
+    over,
+    [],
+    `a style number crept in; take it from lib/theme.ts (textScale, radius, litCardStyle, wellStyle, shadows):\n${over.join('\n')}`,
+  );
 });
 
 // ---------------------------------------------------------------------------

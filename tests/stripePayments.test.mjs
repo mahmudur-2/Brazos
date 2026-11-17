@@ -127,6 +127,27 @@ test('D4 · four malformed payloads are refused with the one honest sentence', (
   assert.equal(validateCheckoutResponse([GOOD]).data, null);
 });
 
+test('R3-1 · the job path passes { paymentId, confirmed: true } on; without the flag it reads as validateCheckoutResponse', () => {
+  const { readJobCheckoutResponse } = rules;
+  // With the flag: the settled intent, no sheet strings needed.
+  assert.deepEqual(readJobCheckoutResponse({ paymentId: 'pay-1', confirmed: true }), { data: { paymentId: 'pay-1', confirmed: true }, error: null });
+  // With the flag but no usable paymentId: refused.
+  for (const payload of [{ confirmed: true }, { paymentId: '  ', confirmed: true }, { paymentId: 7, confirmed: true }]) {
+    assert.deepEqual(readJobCheckoutResponse(payload), { data: null, error: { message: CHECKOUT_RESPONSE_MALFORMED } }, JSON.stringify(payload));
+  }
+  // Without the flag (absent, false, a string): exactly the strict reading.
+  for (const payload of [GOOD, { ...GOOD, confirmed: false }, { ...GOOD, confirmed: 'true' }, { paymentId: 'pay-1' }, { paymentId: 'pay-1', confirmed: 'true' }, null, [GOOD], 'ok']) {
+    assert.deepEqual(readJobCheckoutResponse(payload), validateCheckoutResponse(payload), JSON.stringify(payload));
+  }
+  assert.deepEqual(readJobCheckoutResponse(GOOD).data, GOOD);
+  assert.equal(readJobCheckoutResponse({ paymentId: 'pay-1' }).error.message, CHECKOUT_RESPONSE_MALFORMED);
+});
+
+test('[static] R3-1 · only the job path reads the flag; the tip path stays strict', () => {
+  const code = stripComments(read('lib/payments/stripe.ts'));
+  assert.match(code, /return tipAmountCents != null \? validateCheckoutResponse\(invoked\.data\) : readJobCheckoutResponse\(invoked\.data\);/);
+});
+
 // ---------------------------------------------------------------------------
 // 4. The invoke-error extractor (D6)
 // ---------------------------------------------------------------------------
@@ -313,7 +334,7 @@ test('[static] the adapter selects two ways, and the stripe provider refuses whe
   assert.match(adapter, /env\.EXPO_PUBLIC_PAYMENTS_MODE === 'stripe'/);
   // D4: the interface gained beginJobCheckout, and every provider answers it.
   // Idea 20: the customer's opt-in to save the card rides along.
-  assert.match(adapter, /beginJobCheckout\(jobId: string, options\?: \{ saveCard\?: boolean \}\): Promise<CheckoutSessionResult>;/);
+  assert.match(adapter, /beginJobCheckout\(jobId: string, options\?: \{ saveCard\?: boolean \}\): Promise<JobCheckoutResult>;/);
   assert.equal((adapter.match(/beginJobCheckout: async/g) ?? []).length, 2, 'stripe and disabled each carry an arm');
   // The stripe provider reaches the card path through the one boundary and
   // never names the SDK itself.
@@ -392,14 +413,14 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
   assert.ok(closedBlock.length > 0, 'the closed-window section exists');
   assert.match(closedBlock, /The time to pay ran out, and the app hasn’t seen a\s+payment confirm\. Check back shortly\./);
   assert.doesNotMatch(closedBlock, /Nothing was charged/);
-  assert.match(code, /phase === 'timeout' \|\| windowClosed \? \(\s*<Button title="Check again"/);
+  assert.match(code, /phase === 'timeout' \|\| windowClosed \? \(\s*<FloatingAction title="Check Again"/);
   // D13 / D22: the all-in total is the headline — the row's charge_amount_cents
   // or the quote's total_cents — and the bare agreed price is never the total.
   assert.match(code, /quoteJobPrice\(amountCents\)/);
   assert.match(code, /total: payment\.charge_amount_cents/);
   assert.match(code, /total: quote\.total_cents/);
-  assert.match(code, /Total charged to your card/);
-  assert.match(code, /`Protect \$\{formatBudget\(figures\.total\)\} by card`/);
+  assert.match(code, /Total Charged to Your Card/);
+  assert.match(code, /`Protect \$\{formatBudget\(figures\.total\)\} by Card`/);
   // Idea 20: the confirm names the saved card when that is the path; otherwise "your card".
   assert.match(code, /`Charge \$\{formatBudget\(figures\?\.total \?\? null\)\} to \$\{dialogPath === 'saved' && savedCard \? cardLabel\(savedCard\) : 'your card'\}\?`/);
   assert.match(code, /disabled=\{funding \|\| !figures \|\| state\.kind !== 'ready'\}/);
@@ -408,11 +429,11 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
   assert.doesNotMatch(code, /platformFeeCents|PLATFORM_FEE_RATE|workerPayoutCents|\* 0\.|\/ 100 \*/);
   // D14: the countdown reuses the one formatter; a closed window has no CTA.
   // C6: the window names the moment it closes, off the one formatter.
-  assert.match(code, />Pay by<\/Text>\s*<Text style=\{styles\.summaryValue\}>\s*\{releaseAtLabel\(fundingDueMs as number, nowMs\)\}/);
+  assert.match(code, />Pay By<\/Text>\s*<Text style=\{styles\.summaryValue\}>\s*\{releaseAtLabel\(fundingDueMs as number, nowMs\)\}/);
   assert.match(code, /canOfferJobFunding\(\{ viewerId: user\?\.id, job, payment, nowMs \}\)/);
   assert.match(code, /windowClosed = hasWindow && nowMs >= /);
   // D15: the kill switch is read on focus and hides the CTA in every mode.
-  assert.match(code, /fetchRemoteConfig\(\)\.then\(\(config\) => \{\s*if \(active\) setPaymentsEnabled\(config\.paymentsEnabled\);/);
+  assert.match(code, /fetchRemoteConfig\(\)\.then\(\(config\) => \{\s*if \(!active\) return;\s*setPaymentsEnabled\(config\.paymentsEnabled\);\s*setConfigRead\(true\);/);
   assert.match(code, /!paymentsEnabled \? undefined/);
   // Lean D4: the sandbox strings are gone with the sandbox mode.
   assert.doesNotMatch(code, /TEST MODE|test mode|\(test\)/);
@@ -454,8 +475,8 @@ test('[static] a held row with release_requested_at cannot bounce between Review
   // C4: the eyebrow is PAYMENT; the caption under the charge says "Approved — on its way".
   assert.match(approve, /releaseRequested=\{releaseRequested\}/);
   assert.match(approve, /You approved the work\. The payment is on its way to the worker and shows as released when the transfer lands\./);
-  assert.match(approve, /Approved automatically after 72 hours with no issue reported\. The payment is on its way/);
-  assert.doesNotMatch(approve, /Released automatically after 72 hours with no issue reported\. The payment is on its way/, 'requested is never called released');
+  assert.match(approve, /Approved automatically with no issue reported\. The payment is on its way/);
+  assert.doesNotMatch(approve, /Released automatically with no issue reported\. The payment is on its way/, 'requested is never called released');
   assert.match(review, /releaseRequested=\{!!payment\.release_requested_at\}/);
   // "can’t be paid early / until …" are honest negations; an affirmed "paid" is not.
   for (const [name, src] of [['ReviewAndTip', review], ['ApproveOrDispute', approve]]) {
@@ -466,11 +487,11 @@ test('[static] a held row with release_requested_at cannot bounce between Review
   assert.match(review, /fetchRemoteConfig\(\)\.then\(\(config\) => \{\s*if \(active\) setPaymentsEnabled\(config\.paymentsEnabled\);/);
   assert.match(approve, /const releaseAllowed = paymentsMode !== 'disabled' && paymentsEnabled;/);
   // Codex R12: a payment with a recorded refund failure reads the owner's shorter label (tests/payoutPromise.test.mjs).
-  assert.match(approve, /held\s*\?\s*releaseAllowed\s*\?\s*isRefundFailureRecorded\(payment\) \? 'Approve the work' : `Approve & release/);
+  assert.match(approve, /held\s*\?\s*releaseAllowed\s*\?\s*isRefundFailureRecorded\(payment\) \? 'Approve the Work' : `Approve & Release/);
   // D3 (R6c): stripe mode shows the CARD tip controls behind the kill switch
   // and the release gate, and keeps the review section.
   assert.match(review, /\) : stripe \? \([\s\S]{0,400}!paymentsEnabled \?/);
-  assert.match(review, /tip by card/);
+  assert.match(review, /Tip by Card/);
   assert.match(review, /<ReviewSection/);
   assert.doesNotMatch(review, /paymentsMode !== 'sandbox'/);
   // C4: one eyebrow (lean D4: no sandbox arm).
@@ -489,7 +510,7 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   const requestedAt = completed.indexOf('isPayoutOnItsWay(payment) ? (');
   const legacyAt = completed.indexOf('<ReviewSection');
   assert.ok(releasedAt > 0 && requestedAt > releasedAt && legacyAt > requestedAt);
-  assert.match(completed, /Work approved — payout on its way/);
+  assert.match(completed, /Work Approved — Payout on Its Way/);
   assert.match(completed, /shows as released when the transfer\s+lands/);
   // 2026-09-26 (the refresh, audit M-1): the review is the page's pinned primary,
   // offered on a released OR requested row — the card keeps its copy.
@@ -499,7 +520,7 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   );
   // D14: the countdown reuses the one formatter; a closed window has no CTA
   // and a re-read.
-  assert.match(code, /releaseAtLabel\(\s*fundingDueMs as number,\s*Date\.now\(\)\s*\)/);
+  assert.match(code, /releaseAtLabel\(\s*fundingDueMs as number,\s*serverNowMs\(\)\s*\)/);
   assert.match(code, /payment && fundingWindowClosed \? \(/);
   // The slice ends at the card's OWN `: payment ? (` — the cancelled branch above it (final
   // sweep) has one of its own, so the search starts at the card.
@@ -511,11 +532,11 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
   // refunded once the row is voided), so the card never says nothing was charged.
   assert.match(closedCard, /The time to pay ran out, and the app hasn’t seen a payment confirm\.\s+Tap Check again in a moment\./);
   assert.doesNotMatch(closedCard, /Nothing was charged/);
-  assert.match(closedCard, /title="Check again"/);
+  assert.match(closedCard, /title="Check Again"/);
   assert.doesNotMatch(closedCard, /navigate\('Checkout'/);
   // D15: the checkout CTA is behind the kill switch.
   // 2026-09-26: the checkout CTA is the pinned primary, still behind the kill switch.
-  assert.match(code, /canFundNow \? \(paymentsEnabled \? \{ label: 'Protect payment in checkout'/);
+  assert.match(code, /canFundNow \? \(paymentsEnabled \? \{ label: 'Protect Payment in Checkout'/);
   // D16 → C4: one eyebrow in every state — the protected,
   // window-closed and approved cards, and (final sweep) the cancelled job's.
   assert.equal((code.match(/paymentEyebrow\(\)/g) ?? []).length, 4);
@@ -594,9 +615,124 @@ test('D15 · paymentsEnabled falls back to true, and a failed config read never 
     console.log = log;
   }
 
-  // The merge honours a seeded false and ignores a wrongly-typed value — as
-  // source, since merge() is not exported.
+  // A4-05: the merge reads the switch as the server does (executed in tests/remoteConfig.test.mjs).
   const source = stripComments(read('lib/remoteConfig.ts'));
-  assert.match(source, /paymentsEnabled: asBoolean\(byKey\.get\('paymentsEnabled'\), FALLBACK\.paymentsEnabled\)/);
+  assert.match(source, /paymentsEnabled: asSwitch\(byKey, 'paymentsEnabled', FALLBACK\.paymentsEnabled\)/);
   assert.match(source, /paymentsEnabled: boolean;/);
+});
+
+test('R3-1 (UA-01): after a sheet error only a held row goes to the poll; every other read says "The payment did not finish", never "not charged"', async () => {
+  const { isHeld } = await import(pathToFileURL(join(root, 'lib/paymentRules.ts')).href);
+  const src = read('screens/CheckoutScreen.tsx').replace(/\r\n/g, '\n');
+  const start = src.indexOf('  async function fundByCard() {');
+  const end = src.indexOf('\n  /**\n   * The manual re-read', start);
+  assert.ok(start > 0 && end > start, 'fundByCard');
+  const CLAIM = /not charged|nothing (was|has been) charged/i;
+  assert.doesNotMatch(stripComments(src.slice(start, end)), CLAIM, 'no claim about a charge anywhere in fundByCard');
+  const NAMES = ['fundingRef', 'setFunding', 'setConfirmVisible', 'paymentProvider', 'job', 'saveCard', 'savedCard', 'alertAsync',
+    'userMessage', 'loadPayment', 'presentCheckoutSheet', 'fetchJobPayment', 'isHeld', 'confirmPayment'];
+  const build = new Function(...NAMES, `${src.slice(start, end)}\nreturn fundByCard;`);
+  const run = async (readAnswer, session = { data: { paymentId: 'p1' }, error: null }) => {
+    const log = [];
+    const fundByCard = build(
+      { current: false }, () => {}, () => {},
+      { beginJobCheckout: async () => session },
+      { id: 'j1' }, false, null,
+      async (title, body) => log.push(`alert ${title}`, body),
+      (e, fallback) => e?.message ?? fallback,
+      async () => log.push('reload'),
+      async () => (log.push('sheet'), { outcome: 'failed', error: { message: 'Something went wrong.' } }),
+      async () => (log.push('read'), readAnswer),
+      isHeld,
+      async () => log.push('poll')
+    );
+    await fundByCard();
+    return log;
+  };
+  // The ledger already says held: the confirmed path, as before.
+  assert.deepEqual(await run({ data: { status: 'held' }, error: null }), ['sheet', 'read', 'poll']);
+  // Every other read: one alert, then the page re-reads; no poll.
+  const BODY = 'Something went wrong.\n\nYour accepted offer is unchanged. You can try again. If this payment already went through, you will not pay twice: Brazos refunds any extra charge in full.';
+  for (const answer of [
+    { data: { status: 'unfunded' }, error: null },
+    { data: null, error: null },
+    { data: null, error: { message: 'offline' } },
+    { data: { status: 'pending' }, error: null },
+    { data: { status: 'authorized' }, error: null },
+  ]) {
+    const log = await run(answer);
+    assert.deepEqual(log, ['sheet', 'read', 'alert The payment did not finish', BODY, 'reload'], JSON.stringify(answer));
+    assert.ok(log[3].includes('If this payment already went through, you will not pay twice: Brazos refunds any extra charge in full.'));
+    assert.ok(!log.some((entry) => CLAIM.test(entry)), 'never a claim about a charge');
+  }
+  // R3-1 (c): a stored intent already settled: no sheet, straight to the poll.
+  assert.deepEqual(await run(null, { data: { paymentId: 'p1', confirmed: true }, error: null }), ['poll']);
+  // PAY-R T1 (PC-01): create-payment refuses or fails. A held read goes to the poll, with no alert.
+  const refused = { data: null, error: { message: 'This job already has a protected payment' } };
+  assert.deepEqual(await run({ data: { status: 'held' }, error: null }, refused), ['read', 'poll']);
+  // Every other read: the server's own sentence, no claim about a charge, then the page re-reads.
+  for (const answer of [{ data: { status: 'unfunded' }, error: null }, { data: null, error: { message: 'offline' } }]) {
+    const log = await run(answer, refused);
+    assert.deepEqual(log, ['read', 'alert Could not start the payment',
+      'This job already has a protected payment\n\nYour accepted offer is unchanged.', 'reload'], JSON.stringify(answer));
+    assert.ok(!log.some((entry) => CLAIM.test(entry)), 'never a claim about a charge');
+  }
+});
+
+test('PAY-R T3 (PC-03): "Check Again" on an unfunded row inside its window brings the pay button back', async () => {
+  const { isHeld, canOfferJobFunding } = await import(pathToFileURL(join(root, 'lib/paymentRules.ts')).href);
+  const src = read('screens/CheckoutScreen.tsx').replace(/\r\n/g, '\n');
+  const start = src.indexOf('  async function recheck() {');
+  const end = src.indexOf('\n  const stripeCtaTitle', start);
+  assert.ok(start > 0 && end > start, 'recheck');
+  const NAMES = ['loadPayment', 'isHeld', 'setPhase', 'navigation', 'job', 'phase', 'stripe', 'loadQuote',
+    'canOfferJobFunding', 'user', 'serverNowMs'];
+  const build = new Function(...NAMES, `${src.slice(start, end)}\nreturn recheck;`);
+  const NOW = Date.parse('2026-11-17T12:00:00Z');
+  const job = { id: 'j1', client_id: 'c1', status: 'assigned', assigned_worker_id: 'w1' };
+  const run = async (row, phase = 'timeout') => {
+    const phases = [];
+    const recheck = build(async () => row, isHeld, (p) => phases.push(p), { replace: () => phases.push('confirmed') },
+      job, phase, true, async () => {}, canOfferJobFunding, { id: 'c1' }, () => NOW);
+    await recheck();
+    return phases;
+  };
+  const unfunded = (due) => ({ status: 'unfunded', funding_due_at: due, charge_amount_cents: 1000 });
+  assert.deepEqual(await run(unfunded('2026-11-17T13:00:00Z')), ['idle'], 'inside the window: the pay button returns');
+  assert.deepEqual(await run(unfunded('2026-11-17T11:00:00Z')), [], 'a lapsed row keeps Check Again');
+  assert.deepEqual(await run({ status: 'held' }), ['idle', 'confirmed']);
+  assert.deepEqual(await run(null), ['gone']);
+});
+
+test('PAY-R T4 (PC-05): the tip screen makes no claim about a charge it cannot know', async () => {
+  const CLAIM = /not charged|nothing (was|has been) charged/i;
+  const src = read('screens/ReviewAndTipScreen.tsx').replace(/\r\n/g, '\n');
+  assert.doesNotMatch(src, CLAIM, 'no claim about a charge anywhere on the tip screen');
+  const slice = (from, to) => {
+    const start = src.indexOf(from);
+    const end = src.indexOf(to, start);
+    assert.ok(start > 0 && end > start, from);
+    return src.slice(start, end);
+  };
+  const alerts = [];
+  const alertAsync = async (title, body) => alerts.push(title, body);
+  const userMessage = (e, fallback) => e?.message ?? fallback;
+  // A refusal of create-payment: the server's own sentence alone.
+  const startCardTip = new Function('tipValid', 'tipCents', 'sendingTipRef', 'setSendingTip', 'paymentProvider', 'job',
+    'alertAsync', 'userMessage', 'load',
+    `${slice('  async function startCardTip() {', '\n  /** Step two')}\nreturn startCardTip;`)(
+    true, 500, { current: false }, () => {},
+    { beginTipCheckout: async () => ({ data: null, error: { message: 'A tip was already added to this job' } }) },
+    { id: 'j1' }, alertAsync, userMessage, async () => alerts.push('reload'));
+  await startCardTip();
+  assert.deepEqual(alerts.splice(0), ['Could not start the tip', 'A tip was already added to this job', 'reload']);
+  // A sheet error that is not a plain cancel: the sheet's own error, then "You can try again."
+  const chargeTip = new Function('tipSessionRef', 'sendingTipRef', 'setSendingTip', 'setConfirmTip', 'presentCheckoutSheet',
+    'activeRef', 'load', 'alertAsync', 'userMessage', 'confirmCardTip',
+    `${slice('  async function chargeTip() {', '\n  /**\n   * The poll')}\nreturn chargeTip;`)(
+    { current: { paymentId: 't1' } }, { current: false }, () => {}, () => {},
+    async () => ({ outcome: 'failed', error: { message: 'Your card was declined.' } }),
+    { current: true }, async () => alerts.push('reload'), alertAsync, userMessage, async () => alerts.push('poll'));
+  await chargeTip();
+  assert.deepEqual(alerts.splice(0), ['The payment did not finish', 'Your card was declined.\n\nYou can try again.', 'reload']);
 });

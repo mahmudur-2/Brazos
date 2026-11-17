@@ -13,8 +13,10 @@ import { PressScale } from '../../components/PressScale';
 import { StepHeader, usePillReserve, usePinnedFooterPadding, useScrollClearance } from '../primitives';
 import {
   controls,
+  dangerBright,
   layout,
   radius,
+  shadows,
   spacing,
   type EmeraldPalette,
   type as typeScale,
@@ -100,6 +102,9 @@ export function FormScreen({
   const pillReserve = usePillReserve();
 
   const destructiveUnarmed = submitVariant === 'destructive' && submitDisabled && !submitLoading;
+  // A2-M2 (one red): an armed destructive submit is Button's `destructive` — #F83641 under black,
+  // the red glow in dark, the soft card shadow in light.
+  const destructiveArmed = submitVariant === 'destructive' && !destructiveUnarmed;
 
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
@@ -152,9 +157,12 @@ export function FormScreen({
             >
               {footerNote ? <View style={styles.footerNote}>{footerNote}</View> : null}
               <View style={styles.footerRow}>
+                {/* A2-M2 (direction B): the pair keeps one height (PressScale `fill`); a label
+                    takes at most two lines, centred. */}
                 {secondaryLabel && onSecondary ? (
                   <PressScale
                     onPress={onSecondary}
+                    fill
                     style={({ pressed }) => [
                       styles.button,
                       styles.secondary,
@@ -163,7 +171,7 @@ export function FormScreen({
                     accessibilityRole="button"
                     accessibilityLabel={secondaryLabel}
                   >
-                    <Text style={[styles.buttonLabel, styles.secondaryLabel]}>
+                    <Text style={[styles.buttonLabel, styles.secondaryLabel]} {...LABEL_FIT}>
                       {secondaryLabel}
                     </Text>
                   </PressScale>
@@ -171,9 +179,11 @@ export function FormScreen({
                 <PressScale
                   onPress={onSubmit}
                   disabled={submitDisabled || submitLoading}
+                  fill
                   style={({ pressed }) => [
                     styles.button,
                     submitVariant === 'destructive' ? styles.destructive : styles.primary,
+                    destructiveArmed && (isDark ? dangerBright.glow : shadows.card),
                     // flex:2 so the primary always reads as the main action
                     // even next to a secondary with a longer label.
                     secondaryLabel ? styles.primaryWithSecondary : null,
@@ -191,7 +201,15 @@ export function FormScreen({
                   accessibilityLabel={submitLabel}
                   accessibilityState={{ disabled: submitDisabled || submitLoading }}
                 >
-                  <Text style={[styles.buttonLabel, styles.primaryLabel, destructiveUnarmed && styles.destructiveUnarmedLabel]}>
+                  <Text
+                    style={[
+                      styles.buttonLabel,
+                      styles.primaryLabel,
+                      destructiveArmed && styles.destructiveLabel,
+                      destructiveUnarmed && styles.destructiveUnarmedLabel,
+                    ]}
+                    {...LABEL_FIT}
+                  >
                     {submitLoading ? 'Working…' : submitLabel}
                   </Text>
                 </PressScale>
@@ -203,6 +221,9 @@ export function FormScreen({
     </SafeAreaView>
   );
 }
+
+/** A2-M2 (direction B): a footer label is never cut: up to two lines, smaller only past two. */
+const LABEL_FIT = { numberOfLines: 2, adjustsFontSizeToFit: true, minimumFontScale: 0.8 } as const;
 
 const stylesFor = themedStyles((colors: EmeraldPalette) =>
   StyleSheet.create({
@@ -243,7 +264,10 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     backgroundColor: colors.forest,
   },
   destructive: {
-    backgroundColor: colors.danger,
+    backgroundColor: dangerBright.fill,
+  },
+  destructiveLabel: {
+    color: dangerBright.label,
   },
   destructiveUnarmed: {
     backgroundColor: 'transparent',
@@ -263,6 +287,9 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   },
   buttonLabel: {
     ...typeScale.title,
+    textAlign: 'center',
+    // As Button's label: the two-line limit never clips a glyph's edge (react-native-web's `overflow: clip`).
+    overflow: 'visible',
   },
   primaryLabel: {
     color: colors.onForest,

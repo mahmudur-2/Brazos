@@ -10,14 +10,14 @@ appId: app.brazos.mobile.preview
 - repeat:
     times: 80
     while:
-      notVisible: "Agree and continue"
+      notVisible: "Agree and Continue"
     commands:
       - swipe:
           start: 50%, 68%
           end: 50%, 38%
           duration: 250
 - tapOn: '.*I have read and agree.*'
-- tapOn: "Agree and continue"
+- tapOn: "Agree and Continue"
 - extendedWaitUntil:
     notVisible: "BEFORE YOU START"
     timeout: 30000

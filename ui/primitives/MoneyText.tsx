@@ -120,11 +120,14 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   wrap: {
     gap: spacing.xs / 2,
   },
+  // A2-M2: equal-width digits, so a figure that changes does not jiggle its row.
   amount: {
     ...typeScale.title,
+    fontVariant: ['tabular-nums'],
   },
   amountLg: {
     ...typeScale.h2,
+    fontVariant: ['tabular-nums'],
   },
   caption: {
     ...typeScale.sub,

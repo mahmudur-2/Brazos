@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
+import { Card } from '../components/Card';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { DetailScreen } from '../ui/templates/DetailScreen';
-import { STATE_COPY, type ScreenState } from '../ui/templates/ScreenStates';
+import { EntranceView } from '../components/EntranceView';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { entranceSlot, useEntered } from '../hooks/useEntrance';
+import type { DetailSection } from '../ui/templates/DetailScreen';
+import { STATE_COPY, ScreenStateView, isReady, type ScreenState } from '../ui/templates/ScreenStates';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
@@ -15,6 +20,7 @@ import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
 import { CANCELLATION_DISCLOSURE, FEE_NAME, PAY_AND_PROTECT, PAYMENT_HELD_NOT_INSURANCE } from '../lib/moneyCopy';
 import { customerChargeCents, isRefundArranged, isRefundFailed } from '../lib/paymentRules';
+import { serverNowMs } from '../lib/serverClock';
 import {
   canOfferJobFunding,
   fetchJobPayment,
@@ -25,18 +31,18 @@ import {
 } from '../lib/payments';
 import { confirmWithSavedCard, presentCheckoutSheet, stripeReady, STRIPE_UNAVAILABLE_MESSAGE } from '../lib/payments/stripe';
 import { cardLabel, listSavedCards, type SavedCard } from '../lib/paymentMethods';
-import { Toggle } from '../ui/primitives';
+import { FloatingAction, Toggle, useHideTabBar } from '../ui/primitives';
 import {
   CHECKOUT_POLL_INTERVAL_MS,
   CHECKOUT_POLL_TIMEOUT_MS,
   classifyCheckoutPoll,
 } from '../lib/payments/stripeRules';
-import { releaseAtLabel } from '../lib/jobLifecycle';
+import { deriveJobLifecycle, jobPillLabel, releaseAtLabel } from '../lib/jobLifecycle';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { fetchProfileById } from '../lib/profiles';
 import { arrivalWindowLabel, formatBudget } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { layout, screenGround, spacing, textScale, themedStyles, useThemeColors, eyebrowStyle, type ColorPalette } from '../lib/theme';
 
 /**
  * Screen 31 — Protected Checkout, over the payment ADAPTER
@@ -76,8 +82,11 @@ type CustomerFigures = {
 };
 
 export function CheckoutScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // A task screen (UI-DIRECTION §7): the bar steps aside; the pay action floats at the foot.
+  useHideTabBar();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'Checkout'>>();
   const { job, missing } = useOwnedJobDetail(params.job);
@@ -103,10 +112,12 @@ export function CheckoutScreen() {
   const [quoteLoading, setQuoteLoading] = useState(false);
   // The kill switch (D15): read on focus; a failed read falls back to true.
   const [paymentsEnabled, setPaymentsEnabled] = useState(true);
+  // A4-06: one-tap pay waits for that answer, as ClientJobDetailScreen's jump to Checkout does.
+  const [configRead, setConfigRead] = useState(false);
   const [phase, setPhase] = useState<CheckoutPhase>('idle');
   // One clock reading per load (and one per minute while a funding window is
   // showing), so the countdown and the D9 gate agree with each other.
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [nowMs, setNowMs] = useState(() => serverNowMs());
   const activeRef = useRef(true);
 
   const amountCents = job.final_amount_cents ?? job.budget_cents;
@@ -122,7 +133,7 @@ export function CheckoutScreen() {
   const loadPayment = useCallback(async (): Promise<Payment | null> => {
     setPaymentError(null);
     const { data, error } = await fetchJobPayment(job.id);
-    setNowMs(Date.now());
+    setNowMs(serverNowMs());
     if (error) {
       setPaymentError(userMessage(error));
       setPaymentLoaded(true);
@@ -196,7 +207,9 @@ export function CheckoutScreen() {
     useCallback(() => {
       let active = true;
       fetchRemoteConfig().then((config) => {
-        if (active) setPaymentsEnabled(config.paymentsEnabled);
+        if (!active) return;
+        setPaymentsEnabled(config.paymentsEnabled);
+        setConfigRead(true);
       });
       return () => {
         active = false;
@@ -228,10 +241,15 @@ export function CheckoutScreen() {
 
   useEffect(() => {
     if (!windowOpen) return;
-    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    const id = setInterval(() => setNowMs(serverNowMs()), 60_000);
     return () => clearInterval(id);
   }, [windowOpen]);
 
+  // A4-08: a hired job that a stale route brings here names its own stage, as the job card's pill does
+  // ("Paid" only once the ledger says released), instead of asking for an offer it already has.
+  const hiredLabel = job.assigned_worker_id
+    ? jobPillLabel(deriveJobLifecycle({ job, payment }, nowMs), payment?.status)
+    : undefined;
   const state: ScreenState = missing
     ? {
         kind: 'empty',
@@ -260,11 +278,14 @@ export function CheckoutScreen() {
               title: 'Only the job’s owner can check out',
               body: 'The person who posted this job funds its protected payment.',
             }
-          : job.status !== 'assigned' && job.status !== 'in_progress' && job.status !== 'completed'
+          : // A4 wiring (A2): the server protects a payment only on an assigned job ('Accept an offer before
+            // protecting a payment', begin_job_payment), the rule canOfferJobFunding keeps. A job past
+            // assigned whose payment is held keeps its held page; the decision waits for the payment read.
+            job.status !== 'assigned' && paymentLoaded && !paymentError && !(payment && isHeld(payment))
             ? {
                 kind: 'empty',
-                title: 'Nothing to check out yet',
-                body: 'Accept an offer first — checkout protects the payment for an accepted offer.',
+                title: hiredLabel ?? 'Nothing to check out yet',
+                body: hiredLabel ? undefined : 'Accept an offer first — checkout protects the payment for an accepted offer.',
                 actionLabel: 'Back to the job',
                 onAction: goBackOrHome,
               }
@@ -372,7 +393,7 @@ export function CheckoutScreen() {
         result.declined ? 'Your card was declined' : 'Could not pay with your saved card',
         result.declined
           ? 'Nothing was charged.\n\nYour accepted offer is unchanged — pay with another card below.'
-          : `${userMessage(result.error, 'The card could not be charged.')}\n\nYour accepted offer is unchanged — pay with another card below.`
+          : `${userMessage(result.error, 'The payment could not be completed.')}\n\nYour accepted offer is unchanged — pay with another card below.`
       );
       await loadPayment();
     } finally {
@@ -387,7 +408,7 @@ export function CheckoutScreen() {
   // the amount; the charge runs only from that confirm. No charge ever happens out of sight (the
   // build run's ruling 1). Without a saved card, this is ordinary Checkout.
   useEffect(() => {
-    if (!params.oneTap || oneTapRef.current || !stripe || !cardsRead || !savedCard) return;
+    if (!params.oneTap || oneTapRef.current || !stripe || !cardsRead || !savedCard || !configRead) return;
     if (!canFund || !figures || !paymentsEnabled || phase !== 'idle' || funding) return;
     oneTapRef.current = true;
     // The card the accept's confirm named, and no other, pays without a second confirm.
@@ -399,7 +420,7 @@ export function CheckoutScreen() {
     setConfirmVisible(true);
     // fundBySavedCard is this render's own; the gate above is what the effect waits on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.oneTap, cardsRead, savedCard, canFund, figures, paymentsEnabled, phase, funding]);
+  }, [params.oneTap, cardsRead, savedCard, configRead, canFund, figures, paymentsEnabled, phase, funding]);
 
   /** The stripe funding action (D5): create-payment → sheet → poll. */
   async function fundByCard() {
@@ -411,11 +432,22 @@ export function CheckoutScreen() {
       // Idea 20: the customer's own opt-in — the card the sheet takes is kept for one-tap hiring.
       const session = await paymentProvider.beginJobCheckout(job.id, { saveCard: saveCard && !savedCard });
       if (session.error || !session.data) {
+        // PAY-R (PC-01): a refusal can mean the payment is already held, so the app reads it first.
+        const read = await fetchJobPayment(job.id);
+        if (read.data && isHeld(read.data)) {
+          await confirmPayment();
+          return;
+        }
         await alertAsync(
           'Could not start the payment',
-          `${userMessage(session.error, 'Check your connection and try again.')}\n\nYour accepted offer is unchanged — nothing was charged.`
+          `${userMessage(session.error, 'Check your connection and try again.')}\n\nYour accepted offer is unchanged.`
         );
         await loadPayment();
+        return;
+      }
+      // R3-1: the stored intent is already settled: no sheet; the poll waits for held.
+      if ('confirmed' in session.data) {
+        await confirmPayment();
         return;
       }
       const sheet = await presentCheckoutSheet(session.data);
@@ -426,9 +458,17 @@ export function CheckoutScreen() {
         return;
       }
       if (sheet.outcome === 'failed') {
+        // R3-1 (UA-01): the row stays unfunded until the webhook moves it to held, so a read right
+        // after the sheet cannot prove the card was not charged. Only a held row is known; every other
+        // read says the payment did not finish, and a retry resumes the same intent (no second charge).
+        const read = await fetchJobPayment(job.id);
+        if (read.data && isHeld(read.data)) {
+          await confirmPayment();
+          return;
+        }
         await alertAsync(
-          'The card was not charged',
-          `${userMessage(sheet.error, 'The card could not be charged.')}\n\nYour accepted offer is unchanged — you can try again.`
+          'The payment did not finish',
+          `${userMessage(sheet.error, 'The payment could not be completed.')}\n\nYour accepted offer is unchanged. You can try again. If this payment already went through, you will not pay twice: Brazos refunds any extra charge in full.`
         );
         await loadPayment();
         return;
@@ -453,76 +493,63 @@ export function CheckoutScreen() {
       return;
     }
     if (phase === 'timeout' && row == null) setPhase('gone');
+    // PAY-R (PC-03): a row that may still be funded brings the pay button back.
+    if (phase === 'timeout' && row && canOfferJobFunding({ viewerId: user?.id, job, payment: row, nowMs: serverNowMs() })) {
+      setPhase('idle');
+    }
     if (stripe && (!row || row.charge_amount_cents == null)) await loadQuote();
   }
 
   const stripeCtaTitle = figures
-    ? `Protect ${formatBudget(figures.total)} by card`
+    ? `Protect ${formatBudget(figures.total)} by Card`
     : quoteLoading
       ? 'Working out the price…'
       : 'Protect payment by card';
 
   const actionBar = held ? (
-    <Button
-      title="Continue — job confirmed"
+    <FloatingAction
+      title="Continue — Job Confirmed"
       onPress={() => navigation.replace('JobConfirmed', { job })}
     />
   ) : !paymentsEnabled ? undefined : !stripe ? undefined : phase === 'timeout' || windowClosed ? (
-    <Button title="Check again" onPress={() => void recheck()} disabled={funding} />
+    <FloatingAction title="Check Again" onPress={() => void recheck()} disabled={funding} />
   ) : canFund && savedCard && figures ? (
     // Idea 20: the saved card first; another card, through the sheet, one tap away.
-    <View style={styles.cardActions}>
-      <Button
-        // The sheet's verb; the card by its last four, so the title never runs out of room (the
-        // brand is in the confirm and the explainer).
-        title={`Protect ${formatBudget(figures.total)} with card ···· ${savedCard.last4}`}
-        onPress={() => {
-          setDialogPath('saved');
-          setConfirmVisible(true);
-        }}
-        loading={funding}
-        disabled={funding || state.kind !== 'ready'}
-      />
-      <Button
-        title="Use another card"
-        variant="ghost"
-        onPress={() => {
-          setDialogPath('sheet');
-          setConfirmVisible(true);
-        }}
-        disabled={funding || state.kind !== 'ready'}
-      />
-    </View>
-  ) : canFund ? (
-    <Button
-      title={stripeCtaTitle}
+    <FloatingAction
+      // The sheet's verb; the card by its last four, so the title never runs out of room (the
+      // brand is in the confirm and the explainer).
+      title={`Protect ${formatBudget(figures.total)} with Card ···· ${savedCard.last4}`}
       onPress={() => {
-        setDialogPath('sheet');
+        setDialogPath('saved');
         setConfirmVisible(true);
       }}
+      loading={funding}
+      disabled={funding || state.kind !== 'ready'}
+    />
+  ) : canFund ? (
+    <FloatingAction
+      title={stripeCtaTitle}
+      // P16 (owner, 2026-11-16): straight to the card sheet, which shows the amount and can be cancelled.
+      onPress={() => void fundByCard()}
       loading={funding}
       disabled={funding || !figures || state.kind !== 'ready'}
     />
   ) : undefined;
+  // The saved-card branch above, as one fact: its card row in the summary carries "Use Another Card".
+  const savedCardPath =
+    !held && paymentsEnabled && stripe && !(phase === 'timeout' || windowClosed) && canFund && !!savedCard && !!figures;
 
-  return (
-    <>
-      <DetailScreen
-        title="Protected Checkout"
-        subtitle={phase === 'confirming' ? 'Confirming your payment…' : job.title}
-        onBack={goBackOrHome}
-        state={state}
-        sections={[
+  const sections: DetailSection[] = [
           ...(!paymentsEnabled
             ? [
                 {
                   content: (
-                    <View style={styles.paymentState}>
+                    <Card>
                       <Text style={styles.explainText}>
                         Payments are paused right now. Your accepted offer is
                         unchanged — check back shortly to protect the payment.
                       </Text>
-                    </View>
+                    </Card>
                   ),
                 },
               ]
@@ -530,14 +557,14 @@ export function CheckoutScreen() {
           ...(phase === 'gone'
             ? [
                 {
-                  title: 'The payment did not go through',
+                  title: 'The Payment Did Not Go Through',
                   content: (
-                    <View style={styles.paymentState}>
+                    <Card>
                       <Text style={styles.explainText}>
                         Nothing is held for this job. Your accepted offer is
                         unchanged — you can check out again below.
                       </Text>
-                    </View>
+                    </Card>
                   ),
                 },
               ]
@@ -545,13 +572,13 @@ export function CheckoutScreen() {
           ...(phase === 'timeout'
             ? [
                 {
-                  title: 'Still confirming',
+                  title: 'Still Confirming',
                   content: (
-                    <View style={styles.paymentState}>
+                    <Card>
                       <Text style={styles.explainText}>
                         The app hasn’t seen your payment confirm yet. Check back shortly.
                       </Text>
-                    </View>
+                    </Card>
                   ),
                 },
               ]
@@ -559,32 +586,26 @@ export function CheckoutScreen() {
           ...(stripe && windowClosed && phase === 'idle'
             ? [
                 {
-                  title: 'Payment timed out',
+                  title: 'Payment Timed Out',
                   content: (
-                    <View style={styles.paymentState}>
+                    <Card>
                       <Text style={styles.explainText}>
                         The time to pay ran out, and the app hasn’t seen a
                         payment confirm. Check back shortly.
                       </Text>
-                    </View>
+                    </Card>
                   ),
                 },
               ]
             : []),
           {
-            title: 'What you’re protecting',
+            title: 'What You’re Protecting',
             content: (
-              <View style={styles.summaryCard}>
+              <Card style={styles.summaryCard}>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Accepted offer</Text>
+                  <Text style={styles.summaryLabel}>Accepted Offer</Text>
                   <Text style={styles.summaryValue}>
                     {workerName ?? 'Your hired worker'}
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>{stripe ? 'Agreed price' : 'Agreed amount'}</Text>
-                  <Text style={styles.summaryValue}>
-                    {formatBudget(stripe && figures ? figures.price : amountCents)}
                   </Text>
                 </View>
                 {arrivalWindowLabel(job) ? (
@@ -593,29 +614,57 @@ export function CheckoutScreen() {
                     <Text style={styles.summaryValue}>{arrivalWindowLabel(job)}</Text>
                   </View>
                 ) : null}
+                {/* The money in its own well: each line, then the total under a hairline. */}
+                <Card level="well" style={styles.priceBox}>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>{stripe ? 'Agreed Price' : 'Agreed Amount'}</Text>
+                    <Text style={styles.summaryValue}>
+                      {formatBudget(stripe && figures ? figures.price : amountCents)}
+                    </Text>
+                  </View>
+                  {stripe ? (
+                    <>
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>{FEE_NAME}</Text>
+                        <Text style={styles.summaryValue}>
+                          {figures ? formatBudget(figures.fee) : quoteLoading ? '…' : '—'}
+                        </Text>
+                      </View>
+                      {figures && figures.tax > 0 ? (
+                        <View style={styles.summaryRow}>
+                          <Text style={styles.summaryLabel}>Tax</Text>
+                          <Text style={styles.summaryValue}>{formatBudget(figures.tax)}</Text>
+                        </View>
+                      ) : null}
+                      <View style={[styles.summaryRow, styles.totalRow]}>
+                        <Text style={styles.totalLabel}>Total Charged to Your Card</Text>
+                        <Text style={styles.totalValue}>
+                          {figures ? formatBudget(figures.total) : quoteLoading ? '…' : '—'}
+                        </Text>
+                      </View>
+                    </>
+                  ) : null}
+                </Card>
+                {/* Idea 20: the saved card as its own row; another card, through the sheet, one tap away. */}
+                {savedCardPath && savedCard ? (
+                  <View style={styles.cardRow}>
+                    <Ionicons name="card-outline" size={18} color={colors.emerald} />
+                    <Text style={styles.cardRowLabel} numberOfLines={1}>{cardLabel(savedCard)}</Text>
+                    <Button
+                      title="Use Another Card"
+                      variant="quiet"
+                      size="sm"
+                      // P16 (owner, 2026-11-16): straight to the card sheet, which shows the amount and can be cancelled.
+                      onPress={() => void fundByCard()}
+                      disabled={funding || state.kind !== 'ready'}
+                    />
+                  </View>
+                ) : null}
                 {stripe ? (
                   <>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>{FEE_NAME}</Text>
-                      <Text style={styles.summaryValue}>
-                        {figures ? formatBudget(figures.fee) : quoteLoading ? '…' : '—'}
-                      </Text>
-                    </View>
-                    {figures && figures.tax > 0 ? (
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Tax</Text>
-                        <Text style={styles.summaryValue}>{formatBudget(figures.tax)}</Text>
-                      </View>
-                    ) : null}
-                    <View style={[styles.summaryRow, styles.totalRow]}>
-                      <Text style={styles.totalLabel}>Total charged to your card</Text>
-                      <Text style={styles.totalValue}>
-                        {figures ? formatBudget(figures.total) : quoteLoading ? '…' : '—'}
-                      </Text>
-                    </View>
                     {windowOpen ? (
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Pay by</Text>
+                        <Text style={styles.summaryLabel}>Pay By</Text>
                         <Text style={styles.summaryValue}>
                           {releaseAtLabel(fundingDueMs as number, nowMs)}
                         </Text>
@@ -626,12 +675,12 @@ export function CheckoutScreen() {
                     {quoteError && !figures ? (
                       <>
                         <Text style={styles.explainText}>{quoteError}</Text>
-                        <Button title={STATE_COPY.retry} onPress={() => void loadQuote()} loading={quoteLoading} />
+                        <Button title={STATE_COPY.retry} variant="quiet" onPress={() => void loadQuote()} loading={quoteLoading} />
                       </>
                     ) : null}
                   </>
                 ) : null}
-              </View>
+              </Card>
             ),
           },
           // Idea 20: the opt-in, off by default — only while no card is saved and the sheet is the way.
@@ -639,28 +688,30 @@ export function CheckoutScreen() {
             ? [
                 {
                   content: (
-                    // The whole row answers a tap, as Need it today's does; the switch stays the control.
-                    <Pressable
-                      onPress={() => setSaveCard(!saveCard)}
-                      style={({ pressed }) => [styles.saveRow, pressed && styles.saveRowPressed]}
-                      accessible={false}
-                    >
-                      <View style={styles.saveCopy}>
-                        <Text style={styles.saveTitle}>Save this card for one-tap hiring</Text>
-                        <Text style={styles.explainText}>
-                          Next time, accept and pay from a bid’s notification. Remove it any time in Payment methods.
-                        </Text>
-                      </View>
-                      <Toggle value={saveCard} onValueChange={setSaveCard} accessibilityLabel="Save this card for one-tap hiring" />
-                    </Pressable>
+                    <Card>
+                      {/* The whole row answers a tap, as Need it today's does; the switch stays the control. */}
+                      <Pressable
+                        onPress={() => setSaveCard(!saveCard)}
+                        style={({ pressed }) => [styles.saveRow, pressed && styles.saveRowPressed]}
+                        accessible={false}
+                      >
+                        <View style={styles.saveCopy}>
+                          <Text style={styles.saveTitle}>Save This Card for One-Tap Hiring</Text>
+                          <Text style={styles.explainText}>
+                            Next time, accept and pay from a bid’s notification. Remove it any time in Payment methods.
+                          </Text>
+                        </View>
+                        <Toggle value={saveCard} onValueChange={setSaveCard} accessibilityLabel="Save This Card for One-Tap Hiring" />
+                      </Pressable>
+                    </Card>
                   ),
                 },
               ]
             : []),
           {
-            title: 'How protection works',
+            title: 'How Protection Works',
             content: (
-              <View style={styles.explainer}>
+              <Card style={styles.explainer}>
                 {stripe ? (
                   <ExplainRow
                     icon="card-outline"
@@ -682,17 +733,17 @@ export function CheckoutScreen() {
                 <ExplainRow
                   icon="checkmark-done-outline"
                   strong="Release"
-                  text="happens only after you approve the completed work — or automatically 72 hours after completion if you don’t respond. Reporting an issue holds the funds instead."
+                  text="happens only after you approve the completed work — or automatically 72 hours after you’re told the work is complete (7 days after the work is marked complete at the latest) if you don’t respond. Reporting an issue holds the funds instead."
                 />
-              </View>
+              </Card>
             ),
           },
           ...(payment
             ? [
                 {
-                  title: 'Current payment state',
+                  title: 'Current Payment State',
                   content: (
-                    <View style={styles.paymentState}>
+                    <Card>
                       <MoneyText
                         cents={customerChargeCents(payment)}
                         state={payment.status}
@@ -700,14 +751,53 @@ export function CheckoutScreen() {
                         refundFailed={isRefundFailed(payment)}
                         refundArranged={isRefundArranged(payment)}
                       />
-                    </View>
+                    </Card>
                   ),
                 },
               ]
             : []),
-        ]}
-        actionBar={actionBar}
-      />
+  ];
+  // The sections arrive once, in reading order, as the detail template drew them.
+  const sectionsEntered = useEntered(isReady(state) && sections.length > 0);
+
+  return (
+    <>
+      <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
+        <ScreenHeader
+          title="Protected Checkout"
+          subtitle={phase === 'confirming' ? 'Confirming your payment…' : job.title}
+          onBack={goBackOrHome}
+        />
+        {state.kind !== 'ready' ? (
+          <ScreenStateView state={state} />
+        ) : (
+          <>
+            <ScrollView
+              style={styles.flex}
+              // With no floating action, the end clears the home indicator itself (the bar is hidden).
+              contentContainerStyle={[styles.content, !actionBar && { paddingBottom: insets.bottom + spacing.lg }]}
+              showsVerticalScrollIndicator={false}
+            >
+              {sections.map((section, index) => (
+                <EntranceView
+                  key={section.title ?? `section-${index}`}
+                  index={entranceSlot(index)}
+                  skip={sectionsEntered}
+                  style={styles.section}
+                >
+                  {section.title ? (
+                    <Text accessibilityRole="header" style={styles.sectionTitle}>
+                      {section.title}
+                    </Text>
+                  ) : null}
+                  {section.content}
+                </EntranceView>
+              ))}
+            </ScrollView>
+            {actionBar}
+          </>
+        )}
+      </SafeAreaView>
 
       <ConfirmDialog
         visible={confirmVisible}
@@ -718,7 +808,6 @@ export function CheckoutScreen() {
             : 'Your card is charged the all-in total now, through the secure payment sheet. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
         }
         confirmText={PAY_AND_PROTECT}
-        cancelText="Not now"
         loading={funding}
         onConfirm={dialogPath === 'saved' && savedCard ? fundBySavedCard : fundByCard}
         onCancel={() => setConfirmVisible(false)}
@@ -750,13 +839,26 @@ function ExplainRow({
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  flex: {
+    flex: 1,
+  },
+  content: {
+    padding: layout.screenGutter,
+    gap: spacing.lg + spacing.xs,
+  },
+  section: {
+    gap: spacing.md,
+  },
+  sectionTitle: eyebrowStyle(colors),
   summaryCard: {
+    gap: spacing.md,
+  },
+  priceBox: {
     gap: spacing.sm,
-    padding: spacing.lg,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -764,30 +866,44 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'space-between',
     gap: spacing.md,
   },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  cardRowLabel: {
+    ...textScale.callout,
+    flex: 1,
+    fontWeight: '700',
+    color: colors.ink,
+  },
   summaryLabel: {
-    fontSize: 14,
+    ...textScale.body,
     color: colors.textMuted,
   },
   summaryValue: {
+    ...textScale.body,
     flexShrink: 1,
-    fontSize: 14,
     fontWeight: '700',
     color: colors.ink,
     textAlign: 'right',
   },
   totalRow: {
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.mint2,
+    marginTop: spacing.xs,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   totalLabel: {
-    fontSize: 15,
+    ...textScale.callout,
+    flexShrink: 1,
     fontWeight: '800',
     color: colors.ink,
   },
   totalValue: {
-    fontSize: 18,
+    ...textScale.title,
     fontWeight: '800',
+    fontVariant: ['tabular-nums'],
     color: colors.money,
   },
   explainer: {
@@ -799,45 +915,30 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
   },
   explainText: {
+    ...textScale.label,
     flex: 1,
-    fontSize: 13,
+    fontWeight: '400',
     color: colors.textMuted,
-    lineHeight: 19,
   },
   explainStrong: {
     fontWeight: '800',
     color: colors.ink,
   },
-  paymentState: {
-    padding: spacing.lg,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
-  },
-  // Idea 20: the saved card's two buttons, and the opt-in row.
-  cardActions: {
-    gap: spacing.xs,
-  },
+  // Idea 20: the opt-in row.
   saveRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.lg,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
   },
   saveRowPressed: {
     opacity: 0.7,
   },
   saveCopy: {
     flex: 1,
-    gap: 2,
+    gap: spacing.xs,
   },
   saveTitle: {
-    fontSize: 15,
+    ...textScale.callout,
     fontWeight: '700',
     color: colors.ink,
   },

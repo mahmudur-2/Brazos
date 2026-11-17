@@ -9,17 +9,12 @@ import {
   type Conversation,
 } from '../lib/conversations';
 import { countUnseen, type UnseenThread } from '../lib/conversationVisibility';
-import { fetchMyModerationLists } from '../lib/moderation';
+import { fetchMyModerationLists, moderationAfterRead, type ModerationLists } from '../lib/moderation';
 import { fetchProfilesByIds, type Profile } from '../lib/profiles';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
 
 type CounterpartyInfo = Pick<Profile, 'id' | 'full_name' | 'avatar_url'>;
-
-type ModerationLists = {
-  blocking: Set<string>;
-  blockedBy: Set<string>;
-};
 
 /**
  * The trailing window a burst of realtime inserts collapses into. Shorter than
@@ -53,6 +48,8 @@ export function useConversations() {
   const [error, setError] = useState<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** C7: the last block lists a read returned for this person (null: none yet). */
+  const moderationRef = useRef<{ userId: string; lists: ModerationLists } | null>(null);
   // See useOpenJobs.ts for why the channel topic needs both a per-instance id
   // and a per-effect-run counter: supabase.channel() dedupes by topic string,
   // and removeChannel() tears down asynchronously, so a fast remount can
@@ -122,7 +119,18 @@ export function useConversations() {
     // and shows no number, rather than a number that is not true.
     setUnseenByKey(unseenRes.error ? {} : countUnseen(unseenRes.data, unseenThreads));
 
-    setModeration(moderationLists);
+    // C7: a failed block-list read keeps the last good lists. With none yet,
+    // nothing is known: no thread rows and the load error, rather than rows
+    // from people who may be blocked.
+    const kept = moderationRef.current?.userId === user.id ? moderationRef.current.lists : null;
+    const known = moderationAfterRead(kept, moderationLists);
+    moderationRef.current = known ? { userId: user.id, lists: known } : null;
+    if (known) {
+      setModeration(known);
+    } else {
+      setConversations([]);
+      setError(moderationLists.error?.message ?? null);
+    }
 
     const map: Record<string, CounterpartyInfo> = {};
     for (const p of people) map[p.id] = p;

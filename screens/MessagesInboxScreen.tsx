@@ -3,7 +3,6 @@ import { Divider, useScrollClearance } from '../ui/primitives';
 import {
   Animated,
   FlatList,
-  Linking,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -21,7 +20,7 @@ import { SelectionText, SelectionTint } from '../components/Selection';
 import { GlassDropdown, type GlassDropdownItem, type GlassDropdownRequest } from '../components/GlassDropdown';
 import { personSafetyItems } from '../lib/chatMenus';
 import { Button } from '../components/Button';
-import { SUPPORT_EMAIL, supportMailtoUrl } from '../lib/appLinks';
+import { openSupportMail } from '../lib/appLinks';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ReportDialog } from '../components/ReportDialog';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -95,16 +94,6 @@ import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
  * 2026-09-28 (LUX-LIST-64 #55): 34, the approved clean list's own chip.
  */
 const FILTER_PILL_HEIGHT = 34;
-
-/** The Support pill's Contact support (FIX-RUN B3): the Profile hub's opener,
- *  the house shape — a failure still publishes the address, through lib/dialog. */
-async function openSupportMail(): Promise<void> {
-  try {
-    await Linking.openURL(supportMailtoUrl());
-  } catch {
-    await alertAsync('Could not open your mail app', `Write to ${SUPPORT_EMAIL}.`);
-  }
-}
 
 /**
  * What the sheets act on. `jobId` is null in a direct thread (phase36), so
@@ -418,7 +407,6 @@ export function MessagesInboxScreen() {
       message:
         "You won't be able to message each other on any job. You can undo this later.",
       confirmText: 'Block',
-      cancelText: 'Cancel',
       destructive: true,
     });
     if (!ok) return;
@@ -663,6 +651,7 @@ export function MessagesInboxScreen() {
                   title={emptyStateFor(filter).action ?? ''}
                   variant="secondary"
                   icon="mail-outline"
+                  // The Support pill's Contact support (FIX-RUN B3): the app's one opener (T5).
                   onPress={() => void openSupportMail()}
                   style={styles.emptyAction}
                 />

@@ -14,10 +14,14 @@ import {
   starColors,
   themedStyles,
   useThemeColors,
+  wellStyle,
   type ColorPalette,
 } from '../lib/theme';
 import {
+  acceptOfferActionLabel,
   acceptOfferConfirmText,
+  COUNTER_OPENER_LABEL,
+  DECLINE_OPENER_LABEL,
   firstNameOf,
   offerExpiryLabel,
   offerNoun,
@@ -26,6 +30,8 @@ import {
 import { formatBudget, JOB_CATEGORY_LABELS } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
 import { completionPercent } from '../lib/profiles';
+import { onTimePercent, trustRowFor } from '../lib/compareBids';
+import { DropdownBody, DropdownChevron } from './DropdownReveal';
 import {
   countersRemaining,
   effectiveOfferStatus,
@@ -91,6 +97,19 @@ type ListProps = {
    *  look than navigating to the full profile. */
   onLongPressAvatar?: () => void;
   palette?: ColorPalette;
+  /** P3 (owner, 2026-11-16): the bid opens in place on the job page with its own Decline, Counter and Accept. */
+  inPlace?: {
+    open: boolean;
+    onToggle: () => void;
+    /** The bid is pending and it is the customer's turn (isOfferActionableBy). */
+    canDecide: boolean;
+    countersLeft: number;
+    onDecline: () => void;
+    onCounter: () => void;
+    /** A2-M5 A9: the job's booked time has passed (jobWindowOver): nothing is accepted any more, so the
+     *  card makes no "Open until …" promise. Absent is false. */
+    windowOver?: boolean;
+  };
 };
 
 type ThreadProps = {
@@ -130,6 +149,16 @@ type ThreadProps = {
 
 export type OfferCardProps = ListProps | ThreadProps;
 
+/**
+ * A2-M4 (P3, the owner's picture): how far the open bid's full-width Accept sits inside the
+ * card's outer edge — the card's padding plus Surface's 1 pt rim. A full-width button placed
+ * under the card at the same gutter (the job page's Cancel Job) takes it as its side margin, so
+ * the two share one width; Button already gives them one height and one corner.
+ */
+export function offerActionInset(): number {
+  return spacing.lg + 1;
+}
+
 /** F3: memoised — a card re-renders only when its own props change. */
 export const OfferCard = memo(function OfferCard(props: OfferCardProps) {
   return props.variant === 'list' ? <OfferListCard {...props} /> : <OfferThreadCard {...props} />;
@@ -153,6 +182,7 @@ function OfferListCard({
   onOpenDetail,
   onLongPressAvatar,
   palette: paletteProp,
+  inPlace,
 }: ListProps) {
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
@@ -178,6 +208,171 @@ function OfferListCard({
   // it in. Gating this on the app's current mode instead is what hid the
   // button on the shared My Jobs stack — see the note at the top of the file.
   const canAcceptThisOffer = canAccept && offer.status === 'pending';
+
+  // P3: closed = who and what price; open (in place, downward) = the whole bid and its three
+  // actions. Accept is the host's onAccept: the same "Accept this bid?" pop-up, then Checkout.
+  if (inPlace) {
+    const pendingNow = effectiveOfferStatus(offer) === 'pending';
+    // A2-M5 A9: no "Open until" once the booked time has passed (the job page's notice says why).
+    const expiry = pendingNow && !inPlace.windowOver ? offerExpiryLabel(offer.expires_at) : null;
+    // A2-M4b (the coordinator's rule on F11): the "New" tag only for a worker with no reviews and
+    // no completed jobs; under the star threshold the review count stands alone; a star only beside
+    // a rating.
+    const jobs = summary?.completedJobs ?? null;
+    const showNewTag = summary?.isNew === true && summary.total === 0 && jobs === 0;
+    const rated = summary?.isNew === false && ratingText !== '';
+    const reviewCount = `${ratingCount} ${ratingCount === 1 ? 'review' : 'reviews'}`;
+    const reviewsText =
+      ratingCount == null || showNewTag ? '' : ratingCount === 0 ? 'No reviews yet' : rated ? `(${reviewCount})` : reviewCount;
+    // Compare Bids' trust line moves onto every card: the known facts; unknown stays blank.
+    const trust = trustRowFor(onTimePercent(summary?.onTimePct), jobs);
+    const trustLine =
+      trust.kind === 'new'
+        ? // A2-M4b: the jobs line, never "New worker" ("New" is the tag's, for no reviews and no jobs).
+          jobs != null && jobs > 0
+          ? `${jobs} completed ${jobs === 1 ? 'job' : 'jobs'}`
+          : ''
+        : [
+            trust.onTimePct != null ? `${trust.onTimePct}% on time` : null,
+            trust.completedJobs != null
+              ? `${trust.completedJobs} completed ${trust.completedJobs === 1 ? 'job' : 'jobs'}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+    return (
+      <Card palette={palette} style={styles.card}>
+        <PressScale
+          haptic={false}
+          style={({ pressed }) => [styles.headerRow, pressed && styles.profilePressed]}
+          onPress={inPlace.onToggle}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: inPlace.open }}
+          accessibilityLabel={`${name}, ${formatBudget(offer.amount_cents)}`}
+        >
+          <AvatarPressable name={name} uri={worker?.avatar_url} size={52} onLongPress={onLongPressAvatar} />
+          <View style={styles.headerText}>
+            {/* A2-M4 (direction §7): the open bid's name is the way to the profile (no "View
+                Profile" row); closed, the whole header opens the bid. */}
+            {inPlace.open && onViewProfile ? (
+              <PressScale
+                haptic={false}
+                onPress={onViewProfile}
+                disabled={disabled}
+                hitSlop={spacing.sm}
+                style={({ pressed }) => [styles.nameLinkHit, pressed && styles.profilePressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${name}'s profile`}
+              >
+                <Text style={[styles.name, { color: colors.emerald }]} numberOfLines={2}>
+                  {name}
+                </Text>
+              </PressScale>
+            ) : (
+              <Text style={styles.name} numberOfLines={2}>
+                {name}
+              </Text>
+            )}
+            <View style={styles.proofRow}>
+              {/* A2-M4 (F11): "New" is a small tag, never big type, never beside a star. */}
+              {showNewTag ? (
+                <View style={styles.tag}>
+                  <Text style={styles.tagText}>{ratingText}</Text>
+                </View>
+              ) : rated ? (
+                <>
+                  <Ionicons name="star" size={14} color={starColors(colors, isDark).filled} />
+                  <Text style={styles.proofStrong}>{ratingText}</Text>
+                </>
+              ) : null}
+              {reviewsText ? <Text style={styles.proofMuted}>{reviewsText}</Text> : null}
+              {completion != null && (
+                <>
+                  <Text style={styles.dot}>·</Text>
+                  <Text style={styles.proofMuted}>{completion}% completed</Text>
+                </>
+              )}
+            </View>
+            {/* A2-M4: the facts wrap beside the price instead of ending in "14 co…". */}
+            {trustLine ? <Text style={styles.proofMuted}>{trustLine}</Text> : null}
+          </View>
+          <View style={styles.priceBlock}>
+            {/* A2-M4: the chevron takes the eyebrow's place, so the name keeps the row's width
+                (the section above already says these are bids). */}
+            <DropdownChevron open={inPlace.open}>
+              <Ionicons name="chevron-down" size={15} color={colors.textSubtle} />
+            </DropdownChevron>
+            <Text style={styles.price}>{formatBudget(offer.amount_cents)}</Text>
+            {allInCents != null ? (
+              <Text style={styles.allIn}>You’d pay {formatBudget(allInCents)} all-in</Text>
+            ) : null}
+          </View>
+        </PressScale>
+
+        <DropdownBody open={inPlace.open}>
+          {canRehire && (
+            <View style={styles.trustRow}>
+              <View style={styles.tag}>
+                <Ionicons name="repeat" size={12} color={colors.emerald} />
+                <Text style={styles.tagText}>Worked for You Before</Text>
+              </View>
+            </View>
+          )}
+          {offer.message ? (
+            <Text style={[styles.pitch, wellStyle(palette, isDark)]} selectable>
+              “{offer.message}”
+            </Text>
+          ) : null}
+          {expiry ? <Text style={styles.inPlaceNote}>Open until {expiry} — then it expires on its own.</Text> : null}
+          {/* A2-M4 (direction §7): no "Hire Again" on a live bid — "Worked for You Before" says
+              it, and Accept is the hire. It stays on the profile and on a finished job. */}
+          {isAccepted ? (
+            <View style={styles.acceptedRow}>
+              <StatusBadge status="accepted" />
+            </View>
+          ) : canAcceptThisOffer && inPlace.canDecide ? (
+            <View style={styles.inPlaceActions}>
+              {/* A2-M4 (P3, the owner's picture): two filled quiet buttons of one width and one
+                  height, the glowing main Accept under them. */}
+              <View style={styles.inPlaceActionRow}>
+                <Button
+                  title={DECLINE_OPENER_LABEL}
+                  variant="quiet"
+                  palette={palette}
+                  onPress={inPlace.onDecline}
+                  disabled={disabled || accepting}
+                  style={styles.actionButton}
+                />
+                <Button
+                  title={COUNTER_OPENER_LABEL}
+                  variant="quiet"
+                  palette={palette}
+                  onPress={inPlace.onCounter}
+                  disabled={disabled || accepting || inPlace.countersLeft === 0}
+                  style={styles.actionButton}
+                />
+              </View>
+              <Button
+                title={acceptOfferActionLabel(formatBudget(offer.amount_cents), false)}
+                onPress={onAccept}
+                palette={palette}
+                loading={accepting}
+                disabled={disabled}
+              />
+            </View>
+          ) : pendingNow && !inPlace.canDecide ? (
+            // A2-M5 F2: only while the bid waits on the worker (the customer's own counter is the
+            // newest offer). A bid that waits on the customer but cannot be decided here (the booked
+            // time has passed) shows its facts and no waiting line; the job page's notice says why.
+            <View style={styles.inPlaceWaiting}>
+              <Ionicons name="hourglass-outline" size={18} color={colors.textMuted} />
+              <Text style={styles.inPlaceWaitingText}>You countered — waiting for {name} to respond.</Text>
+            </View>
+          ) : null}
+        </DropdownBody>
+      </Card>
+    );
+  }
 
   return (
     <Card palette={palette} style={styles.card}>
@@ -207,7 +402,8 @@ function OfferListCard({
               )}
             </View>
             <View style={styles.proofRow}>
-              <Ionicons name="star" size={14} color={starColors(colors, isDark).filled} />
+              {/* F11 (owner, 2026-11-16): no star beside "New". */}
+              {summary?.isNew ? null : <Ionicons name="star" size={14} color={starColors(colors, isDark).filled} />}
               <Text style={styles.proofStrong}>{ratingText}</Text>
               <Text style={styles.proofMuted}>
                 {ratingCount == null
@@ -241,9 +437,9 @@ function OfferListCard({
 
       {canRehire && (
         <View style={styles.trustRow}>
-          <View style={styles.rehireTag}>
+          <View style={styles.tag}>
             <Ionicons name="repeat" size={12} color={colors.emerald} />
-            <Text style={styles.rehireText}>Worked for you before</Text>
+            <Text style={styles.tagText}>Worked for You Before</Text>
           </View>
         </View>
       )}
@@ -262,7 +458,7 @@ function OfferListCard({
         <View style={styles.actionRow}>
           {onViewProfile ? (
             <Button
-              title="View profile"
+              title="View Profile"
               variant="secondary"
               palette={palette}
               onPress={onViewProfile}
@@ -301,7 +497,7 @@ function OfferListCard({
           accessibilityRole="button"
           accessibilityLabel="Open full bid detail with counter and decline options"
         >
-          <Text style={styles.detailLinkText}>Full bid · counter or decline</Text>
+          <Text style={styles.detailLinkText}>Full Bid · Counter or Decline</Text>
           <Ionicons name="chevron-forward" size={14} color={colors.emerald} />
         </PressScale>
       ) : null}
@@ -491,8 +687,9 @@ function OfferThreadCard({
 
       {canWithdraw && (
         <Button
-          title="Withdraw offer"
-          variant="secondary"
+          // F10: the worker's price is a bid, the customer's reply a counter-offer.
+          title={currentUserId === offer.worker_id ? 'Withdraw Bid' : 'Withdraw Counter-Offer'}
+          variant="destructive"
           onPress={onWithdraw}
           disabled={busy}
           style={styles.counterBtn}
@@ -559,6 +756,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  // A2-M4: the open bid's name as the profile link — the hit hugs the name.
+  nameLinkHit: {
+    alignSelf: 'flex-start',
+    flexShrink: 1,
+    borderRadius: radius.sm,
   },
   name: {
     flexShrink: 1,
@@ -637,7 +840,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'flex-end',
     marginTop: spacing.lg,
   },
-  rehireTag: {
+  // A2-M4: one small tag look — "Worked for You Before" and the new worker's "New".
+  tag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
@@ -647,7 +851,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingVertical: spacing.xs,
     borderRadius: radius.pill,
   },
-  rehireText: {
+  tagText: {
     fontSize: 11,
     fontWeight: '700',
     color: colors.emerald,
@@ -798,6 +1002,31 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   counterBtn: {
     width: '100%',
+  },
+  // P3: the open bid's own lines.
+  inPlaceNote: {
+    marginTop: spacing.md,
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  inPlaceActions: {
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  inPlaceActionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  inPlaceWaiting: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  inPlaceWaitingText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.textMuted,
   },
   }),
 );

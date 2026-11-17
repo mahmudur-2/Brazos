@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { PressScale } from '../components/PressScale';
+import { Card } from '../components/Card';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { GlowTextInput } from '../components/GlowTextInput';
@@ -29,8 +30,8 @@ import {
   fonts,
   radius,
   spacing,
+  textScale,
   themedStyles,
-  litCardStyle,
   useThemeColors,
   type ColorPalette,
   disabledControl,
@@ -170,7 +171,7 @@ export function ServicesPricingScreen() {
       title: 'Remove this service?',
       message: `“${service.title}” will no longer appear on your profile.`,
       confirmText: 'Remove',
-      cancelText: 'Keep',
+      destructive: true,
     });
     if (!sure) return;
     setBusyId(service.id);
@@ -204,10 +205,10 @@ export function ServicesPricingScreen() {
       onBack={goBackOrHome}
       state={state}
     >
-      <View style={[styles.card, litCardStyle(isDark)]}>
+      <Card style={styles.card}>
         <View style={styles.availabilityRow}>
           <View style={styles.availabilityCopy}>
-            <Text style={styles.cardTitle}>Taking new work</Text>
+            <Text style={styles.cardTitle}>Taking New Work</Text>
             <Text style={styles.cardNote}>
               Shown on your profile. Turning it off doesn’t stop new offers.
             </Text>
@@ -216,7 +217,7 @@ export function ServicesPricingScreen() {
             value={accepting}
             onValueChange={(value) => void saveAvailability({ accepting_work: value })}
             disabled={savingAvailability}
-            accessibilityLabel="Taking new work"
+            accessibilityLabel="Taking New Work"
           />
         </View>
         <GlowTextInput
@@ -226,23 +227,25 @@ export function ServicesPricingScreen() {
           value={note}
           onChangeText={setNote}
           onEndEditing={() => void saveAvailability({ availability_note: note.trim() || null })}
-          placeholder="Availability note — e.g. Weekday evenings, weekends"
+          // A2-M5 A7: a short example, so the hint ends inside the field on a 320 pt phone.
+          placeholder="Availability note — e.g. Weekends"
           placeholderTextColor={colors.textSubtle}
           maxLength={140}
           accessibilityLabel="Availability note"
         />
-      </View>
+      </Card>
 
-      <Text accessibilityRole="header" style={styles.sectionTitle}>Your services</Text>
+      <Text accessibilityRole="header" style={styles.sectionTitle}>Your Services</Text>
       {services.length === 0 ? (
         <Text style={styles.cardNote}>
           List what you do and what it costs, so customers can hire you with
           the right expectations. A draft is visible only to you.
         </Text>
       ) : (
-        <View style={styles.list}>
-          {services.map((service) => (
-            <View key={service.id} style={[styles.serviceRow, litCardStyle(isDark)]}>
+        // G2: the services are rows in one lit group, a hairline between rows.
+        <Card style={styles.serviceGroup}>
+          {services.map((service, index) => (
+            <View key={service.id} style={[styles.serviceRow, index > 0 && styles.serviceDivider]}>
               <View style={styles.serviceCopy}>
                 <Text style={styles.serviceTitle} numberOfLines={1}>
                   {service.title}
@@ -280,11 +283,11 @@ export function ServicesPricingScreen() {
               </Pressable>
             </View>
           ))}
-        </View>
+        </Card>
       )}
 
-      <View style={[styles.card, litCardStyle(isDark)]}>
-        <Text style={styles.cardTitle}>Add a service</Text>
+      <Card style={styles.card}>
+        <Text style={styles.cardTitle}>Add a Service</Text>
         <GlowTextInput
               glowRadius={radius.pill}
           keyboardAppearance={isDark ? 'dark' : 'light'}
@@ -298,8 +301,8 @@ export function ServicesPricingScreen() {
         />
         <SegmentedControl
           options={[
-            { label: 'Flat price', value: 'flat' },
-            { label: 'Ask me', value: 'ask' },
+            { label: 'Flat Price', value: 'flat' },
+            { label: 'Ask Me', value: 'ask' },
           ]}
           value={priceMode}
           onChange={changePriceMode}
@@ -326,7 +329,7 @@ export function ServicesPricingScreen() {
               accessibilityLabel={`Price unit ${priceUnit}`}
             >
               <Text style={styles.unitToggleText}>
-                {priceUnit === 'flat' ? 'flat' : '/hr'}
+                {priceUnit === 'flat' ? 'Flat' : '/hr'}
               </Text>
             </PressScale>
           </View>
@@ -372,37 +375,32 @@ export function ServicesPricingScreen() {
           onPress={addService}
           disabled={!canAdd}
           accessibilityRole="button"
-          accessibilityLabel="Add service"
+          accessibilityLabel="Add Service"
         >
           <Text style={[styles.addButtonText, !canAdd && styles.addButtonTextDisabled]}>
-            {adding ? 'Adding…' : 'Add service'}
+            {adding ? 'Adding…' : 'Add Service'}
           </Text>
         </PressScale>
-      </View>
+      </Card>
     </FormScreen>
   );
 }
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // G2: the availability card and the add card are lit cards (components/Card).
   card: {
-    padding: spacing.lg,
     gap: spacing.md,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
   },
   cardTitle: {
+    ...textScale.title,
     fontFamily: fonts.display,
-    fontSize: 22,
     fontWeight: '800',
     color: colors.ink,
   },
   cardNote: {
-    fontSize: 13,
+    ...textScale.body,
     color: colors.textMuted,
-    lineHeight: 19,
   },
   availabilityRow: {
     flexDirection: 'row',
@@ -414,37 +412,38 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.xs,
   },
   sectionTitle: {
+    ...textScale.title,
     fontFamily: fonts.display,
-    fontSize: 22,
     fontWeight: '800',
     color: colors.ink,
   },
-  list: {
-    gap: spacing.sm,
+  serviceGroup: {
+    padding: 0,
+    overflow: 'hidden',
   },
   serviceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     minHeight: 56,
+  },
+  serviceDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   serviceCopy: {
     flex: 1,
-    gap: 2,
+    gap: spacing.xs / 2,
   },
   serviceTitle: {
+    ...textScale.headline,
     fontFamily: fonts.display,
-    fontSize: 18,
-    fontWeight: '700',
     color: colors.ink,
   },
   serviceMeta: {
-    fontSize: 12,
+    ...textScale.footnote,
     color: colors.textMuted,
   },
   input: {
@@ -453,7 +452,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
-    fontSize: 15,
+    fontSize: textScale.callout.fontSize,
     color: colors.ink,
     backgroundColor: colors.surface,
   },
@@ -465,8 +464,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flex: 1,
   },
   priceProblem: {
-    fontSize: 12,
-    lineHeight: 17,
+    ...textScale.footnote,
     color: colors.danger,
   },
   unitToggle: {
@@ -481,7 +479,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     minHeight: 44,
   },
   unitToggleText: {
-    fontSize: 14,
+    ...textScale.body,
     fontWeight: '800',
     color: colors.emerald,
   },
@@ -518,7 +516,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: selectedInDark(colors).fill,
   },
   categoryChipText: {
-    fontSize: 12,
+    ...textScale.footnote,
     fontWeight: '600',
     color: colors.textMuted,
   },
@@ -548,7 +546,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderWidth: 0,
   },
   addButtonText: {
-    fontSize: 15,
+    ...textScale.callout,
     fontWeight: '800',
     color: colors.onPrimary,
   },

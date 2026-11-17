@@ -64,7 +64,8 @@ export const AuthField = forwardRef<TextInput, AuthFieldProps>(function AuthFiel
           styles.field,
           // 2026-09-27 (the Lux remake): in dark the field is the Lux well —
           // white at .06 — inside the pop-out card it sits in, not the ground.
-          themed && { backgroundColor: isDark ? withAlpha(palette.white, 0.06) : surface.surface },
+          // In light it is cream inside the white card, as the app's TextField.
+          themed && { backgroundColor: isDark ? withAlpha(palette.white, 0.06) : surface.bg },
           { borderColor },
         ]}
       >

@@ -11,7 +11,7 @@
  * out, with no mask library. A cut-out does the reverse: a circle of the pill's own ground and the
  * grey row, carving the concave waist of a neck.
  */
-import { useEffect, useMemo, useRef, type ComponentProps, type ComponentType } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ComponentType } from 'react';
 import { Animated, Image, Pressable, StyleSheet, Text, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CommonActions } from '@react-navigation/native';
@@ -19,7 +19,14 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { tap } from '../lib/haptics';
 import { edgeFade, litCardStyle, meltBar, metricStyles, useThemeColors, withAlpha } from '../lib/theme';
-import { BOTTOM_NAV_TABS, CUSTOMER_CREATE_SLOT, usePinnedFootActive, type BottomNavTabKey } from '../ui/primitives/BottomNav';
+import {
+  BOTTOM_NAV_TABS,
+  CUSTOMER_CREATE_SLOT,
+  usePinnedFootActive,
+  useTabBarHidden,
+  type BottomNavTabKey,
+} from '../ui/primitives/BottomNav';
+import { useNavInset } from '../hooks/useNavInset';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { pillBottomOffset, slotCentres, underBarFade } from '../lib/meltBarGeometry';
@@ -193,6 +200,53 @@ export function pillGround(isDark: boolean): ViewStyle {
 }
 
 /**
+ * A2-M3 — THE BAR STEPS ASIDE (the bottom rule, ui/primitives/BottomNav.tsx `useHideTabBar`). While
+ * a focused screen asks, the pill slides below the screen's edge on the bar's own middle spring
+ * (`meltBar.springs.circles[1]`, on the native driver) and comes back the same way when that screen
+ * blurs; Reduce Motion fades it over `meltBar.reducedMs` instead of sliding. Each path's ROOT wears
+ * the returned style, never a wrapper (a wrapper view changes how the pill draws even at rest), and
+ * at rest the style is null: it is put on with the first hide and taken off once the bar is home
+ * again, so a bar no screen hides draws exactly as before. A hidden bar takes no touch and is
+ * hidden from the screen reader.
+ */
+export function useStepAside(reduced: boolean) {
+  const hidden = useTabBarHidden();
+  const away = useRef(new Animated.Value(hidden ? 1 : 0)).current;
+  const [home, setHome] = useState(!hidden);
+  const placed = useRef(false);
+  // Far enough that the pill and its shadow are below the edge: the footprint and one pill more.
+  const distance = useNavInset() + meltBar.height;
+  useEffect(() => {
+    if (!placed.current) {
+      placed.current = true;
+      return;
+    }
+    if (hidden) setHome(false);
+    const [stiffness, damping] = meltBar.springs.circles[1];
+    const toValue = hidden ? 1 : 0;
+    const motion = reduced
+      ? Animated.timing(away, { toValue, duration: meltBar.reducedMs, useNativeDriver: USE_NATIVE_DRIVER })
+      : Animated.spring(away, { toValue, stiffness, damping, mass: 1, useNativeDriver: USE_NATIVE_DRIVER });
+    motion.start(({ finished }) => {
+      if (finished && !hidden) setHome(true);
+    });
+    return () => motion.stop();
+  }, [hidden, reduced, away]);
+  const moved = hidden || !home;
+  const aside = !moved
+    ? null
+    : reduced
+    ? { opacity: away.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }
+    : { transform: [{ translateY: away.interpolate({ inputRange: [0, 1], outputRange: [0, distance] }) }] };
+  return {
+    aside,
+    pointerEvents: hidden ? ('none' as const) : ('box-none' as const),
+    accessibilityElementsHidden: hidden || undefined,
+    importantForAccessibility: hidden ? ('no-hide-descendants' as const) : undefined,
+  };
+}
+
+/**
  * Fix run D13 (pick a) — THE SOFT FADE BEHIND THE FLOATING BAR. Every scene runs full height under
  * the pill, so a scroller's rows showed in the margins round it — a second outline under the bar.
  * This strip, drawn by the bar BEFORE the pill (so the pill sits on it), ramps from nothing at the
@@ -204,7 +258,8 @@ export function pillGround(isDark: boolean): ViewStyle {
  *
  * OFF where it would cover something: the Map tab (no page ground, the map is the ground), and any
  * focused screen that pins a footer or composer over the pill (`usePinnedFootActive()`). It takes
- * no touch. Its opacity rides the native driver; Reduce Motion lands it at once.
+ * no touch. Its opacity rides the native driver; Reduce Motion lands it at once. A2-M3: OFF too
+ * while a focused screen has hidden the bar (`useTabBarHidden()`): there is no pill to sit on it.
  */
 export function UnderBarFade({ state }: { state: BottomTabBarProps['state'] }) {
   const styles = stylesFor();
@@ -212,9 +267,10 @@ export function UnderBarFade({ state }: { state: BottomTabBarProps['state'] }) {
   const insets = useSafeAreaInsets();
   const fadeStops = underBarFade(insets.bottom, meltBar);
   const footPinned = usePinnedFootActive();
+  const barHidden = useTabBarHidden();
   const reduceMotion = useReducedMotion();
   const onMap = state.routes[state.index]?.name === 'Map';
-  const shown = !onMap && !footPinned;
+  const shown = !onMap && !footPinned && !barHidden;
   const opacity = useRef(new Animated.Value(shown ? 1 : 0)).current;
   useEffect(() => {
     if (reduceMotion !== false) {

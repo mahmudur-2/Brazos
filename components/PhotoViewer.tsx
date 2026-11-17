@@ -84,7 +84,7 @@ export function PhotoViewer({
               hitSlop={12}
               accessibilityLabel="Close"
             >
-              <Ionicons name="close" size={26} color={colors.onPrimary} />
+              <Ionicons name="close" size={26} color={colors.white} />
             </Pressable>
 
             {allowShare && (
@@ -96,12 +96,12 @@ export function PhotoViewer({
                 accessibilityLabel="Share photo"
               >
                 {sharing ? (
-                  <ActivityIndicator size="small" color={colors.onPrimary} />
+                  <ActivityIndicator size="small" color={colors.white} />
                 ) : (
                   <Ionicons
                     name={Platform.OS === 'ios' ? 'share-outline' : 'share-social-outline'}
                     size={24}
-                    color={colors.onPrimary}
+                    color={colors.white}
                   />
                 )}
               </Pressable>
@@ -118,7 +118,7 @@ export function PhotoViewer({
                 accessibilityRole="button"
                 accessibilityLabel="Report photo"
               >
-                <Ionicons name="flag-outline" size={22} color={colors.onPrimary} />
+                <Ionicons name="flag-outline" size={22} color={colors.white} />
               </Pressable>
             ) : null}
           </>

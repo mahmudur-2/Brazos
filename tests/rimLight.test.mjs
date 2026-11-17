@@ -161,7 +161,7 @@ test('[static] the Welcome screen is the ship page: its numbers, its wiring, the
   const buttons = [...welcome.slice(actionsAt).matchAll(/<AuthButton\b([\s\S]*?)\/>/g)].map((m) => m[1]);
   assert.equal(buttons.length, 3);
   // The lead: phone (the operator's ruling, DECISIONS 19), lit, with the glyph, the chevron and the light.
-  assert.match(buttons[0], /title="Continue with phone"/);
+  assert.match(buttons[0], /title="Continue with Phone"/);
   assert.match(buttons[0], /\bhero\b/);
   assert.match(buttons[0], /\blit\b/);
   assert.match(buttons[0], /icon="phone-portrait-outline"/);
@@ -169,16 +169,16 @@ test('[static] the Welcome screen is the ship page: its numbers, its wiring, the
   assert.match(buttons[0], /light=\{rimLight\}/);
   assert.match(welcome, /const rimLight = <RimLight radius=\{authRadius\.heroButton\} \/>;/);
   // Email: the same shape and glyph treatment, NOT lit and without the light.
-  assert.match(buttons[1], /title="Continue with email"/);
+  assert.match(buttons[1], /title="Continue with Email"/);
   assert.match(buttons[1], /\bhero\b/);
   assert.match(buttons[1], /icon="mail-outline"/);
   assert.doesNotMatch(buttons[1], /\blit\b/);
   assert.doesNotMatch(buttons[1], /light=/);
-  // Sign-in: the ghost as the page's text link, with the chevron.
-  assert.match(buttons[2], /title="I already have an account"/);
-  assert.match(buttons[2], /variant="ghost"/);
+  // Sign-in: the family's quiet well (G4: one main, one quiet), the hero shape, no arrow.
+  assert.match(buttons[2], /title="I Already Have an Account"/);
+  assert.match(buttons[2], /variant="quiet"/);
   assert.match(buttons[2], /\bhero\b/);
-  assert.match(buttons[2], /\bchevron\b/);
+  assert.doesNotMatch(buttons[2], /\bchevron\b/);
   // The page's own numbers — the art canvas and the copy's distances.
   assert.match(welcome, /width: 353,\s*height: 300,/);
   assert.match(welcome, /top: 60,/);
@@ -216,7 +216,8 @@ test('[static] the hero dress on AuthButton is opt-in and absent renders the con
   assert.match(button, /hero = false,\s*lit = false,\s*icon,\s*chevron = false,\s*light,/);
   // The plain label stays the Pressable's direct child; only a glyph takes the row.
   assert.match(button, /return icon \? \(\s*<View style=\{styles\.group\}>/);
-  assert.match(button, /\{light \?\? null\}/);
+  // F4: the dark main button is the app's mint CTA, which has no rim light of its own.
+  assert.match(button, /\{appCta \? null : light \?\? null\}/);
   // The shape and dress read the auth roles and the page's numbers, never a literal colour.
   assert.match(button, /litBetween\(\{ top: palette\.authCtaTop, bottom: palette\.authCtaBottom, flat: !isDark \}\)/);
   assert.match(button, /borderColor: withAlpha\(palette\.authGold, HERO\.hairlineAlpha\)/);

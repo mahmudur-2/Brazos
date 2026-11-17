@@ -92,11 +92,22 @@ export function SetupChoiceCard({
         {/* 2026-09-28 (LUX-LIST-64 #9): the tile NOT chosen shows its glyph and
             title in the operator's grey (the `grey` role); the chosen one keeps its white title
             and mint glyph. */}
-        <Ionicons
-          name={icon}
-          size={26}
-          color={selected ? colors.forest : colors.grey}
-        />
+        {/* The glyph, and in the top corner the radio's own mark: the chosen
+            tile's filled tick, the other's empty ring. */}
+        <View style={styles.top}>
+          <Ionicons
+            name={icon}
+            size={26}
+            color={selected ? colors.forest : colors.grey}
+          />
+          <Ionicons
+            name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+            size={22}
+            color={selected ? colors.forest : colors.grey}
+            importantForAccessibility="no"
+            accessibilityElementsHidden
+          />
+        </View>
         <Text style={[styles.title, !selected && { color: colors.grey }]} numberOfLines={1}>
           {title}
         </Text>
@@ -130,6 +141,11 @@ const stylesFor = themedStyles((colors: ColorPalette) => StyleSheet.create({
   cardSelected: {
     borderColor: colors.forest,
     backgroundColor: colors.mint,
+  },
+  top: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   fill: {
     position: 'absolute',

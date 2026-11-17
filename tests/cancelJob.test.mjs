@@ -186,7 +186,7 @@ test('the customer confirm states the money exactly, and that it cannot be undon
   const fee = copy.customerCancelConfirm({ kind: 'fee', feeCents: 2000, refundCents: 8750, nearBoundary: false }, opts);
   assert.match(fee.message, /A \$20\.00 cancellation fee goes to Sam; \$87\.50 comes back to you\./);
   assert.match(fee.message, /can’t be undone/);
-  assert.equal(fee.confirmText, 'Cancel job');
+  assert.equal(fee.confirmText, 'Cancel Job');
   const none = copy.customerCancelConfirm({ kind: 'no_charge' }, opts);
   assert.match(none.message, /no money moves/);
   const unknown = copy.customerCancelConfirm(null, opts);
@@ -219,7 +219,7 @@ test('the screens wire the actions through cancelJob with a ref guard, a confirm
   const worker = read('screens/WorkerJobScreen.tsx');
   assert.match(worker, /handleExit\('worker_cancelled'\)/);
   assert.match(worker, /handleExit\('customer_no_show'\)/);
-  assert.match(worker, /noShowReportable\(\{ job \}\)/);
+  assert.match(worker, /noShowReportable\(\{ job, nowMs: serverNowMs\(\) \}\)/);
   assert.match(worker, /exitingRef\.current/);
   for (const text of [customer, worker]) assert.doesNotMatch(text, /Alert\.alert/);
   const del = read('screens/DeleteAccountScreen.tsx');

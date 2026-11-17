@@ -173,16 +173,36 @@ export function usePillReserve(): number {
  * a stable callback; only the bar's fade reads the count, so nothing else re-renders for it.
  * Outside a navigator (the catalog, a fixture) there is no NavigationContext and nothing registers.
  */
-const PinnedFootRegistry = createContext<((delta: 1 | -1) => void) | null>(null);
+type Registry = (delta: 1 | -1) => void;
+const PinnedFootRegistry = createContext<Registry | null>(null);
 const PinnedFootCount = createContext(0);
+
+/**
+ * A2-M3 — THE BOTTOM RULE (UI-DIRECTION §7): at most one floating thing at the foot of a screen. A
+ * task screen that floats its own action hides the bar with `useHideTabBar()`; the bar
+ * (components/MeltTabBar.tsx) reads `useTabBarHidden()` and slides away, and back when that screen
+ * loses focus. The same focus-scoped COUNT as the pinned foot above, for the same push order.
+ */
+const BarHiddenRegistry = createContext<Registry | null>(null);
+const BarHiddenCount = createContext(0);
+
+function useCount(): [number, Registry] {
+  const [count, setCount] = useState(0);
+  const register = useCallback((delta: 1 | -1) => setCount((current) => Math.max(0, current + delta)), []);
+  return [count, register];
+}
 
 /** Mounted once above both trees (navigation/ModeShell.tsx), so the screens and the bar share it. */
 export function PinnedFootProvider({ children }: PropsWithChildren) {
-  const [count, setCount] = useState(0);
-  const register = useCallback((delta: 1 | -1) => setCount((current) => Math.max(0, current + delta)), []);
+  const [count, register] = useCount();
+  const [hidden, registerHidden] = useCount();
   return (
     <PinnedFootRegistry.Provider value={register}>
-      <PinnedFootCount.Provider value={count}>{children}</PinnedFootCount.Provider>
+      <PinnedFootCount.Provider value={count}>
+        <BarHiddenRegistry.Provider value={registerHidden}>
+          <BarHiddenCount.Provider value={hidden}>{children}</BarHiddenCount.Provider>
+        </BarHiddenRegistry.Provider>
+      </PinnedFootCount.Provider>
     </PinnedFootRegistry.Provider>
   );
 }
@@ -192,8 +212,25 @@ export function usePinnedFootActive(): boolean {
   return useContext(PinnedFootCount) > 0;
 }
 
+/**
+ * A2-M3 — the screen calling this hides the bottom bar while it is focused (pass `false` to keep
+ * it). Nothing else: no navigation file changes, and the bar comes back on its own when the screen
+ * blurs or unmounts. `ui/primitives/FloatingAction` calls it for you.
+ */
+export function useHideTabBar(hidden = true): void {
+  useFocusedRegistration(useContext(BarHiddenRegistry), hidden);
+}
+
+/** True while a focused screen has hidden the bar (components/MeltTabBar.tsx reads it). */
+export function useTabBarHidden(): boolean {
+  return useContext(BarHiddenCount) > 0;
+}
+
 function useRegisterPinnedFoot(active: boolean) {
-  const register = useContext(PinnedFootRegistry);
+  useFocusedRegistration(useContext(PinnedFootRegistry), active);
+}
+
+function useFocusedRegistration(register: Registry | null, active: boolean) {
   const navigation = useContext(NavigationContext);
   useEffect(() => {
     if (!active || !register || !navigation) return;

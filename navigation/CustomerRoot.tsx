@@ -36,6 +36,8 @@ import {
   MapStackNavigator,
   MessagesStackNavigator,
   MyJobsStackNavigator,
+  CLIENT_JOB_SCREENS,
+  jobPageScreens,
   ProfileStackNavigator,
 } from './sharedStacks';
 
@@ -95,8 +97,7 @@ import {
  *     and JobDetail through the `MyJobs` tab in BOTH trees
  * Hiding the item (HIDDEN_TAB_ITEM_OPTIONS) removes the slot from the bar's
  * layout without removing the route, which is why no deep link needed
- * retargeting. The Home stack still mounts WorkerSearch for the
- * pushed-from-Home search path, exactly as before.
+ * retargeting.
  */
 
 const CustomerHomeStack = createNativeStackNavigator<CustomerHomeStackParamList>();
@@ -123,7 +124,6 @@ function CustomerHomeStackNavigator() {
         component={PostJobScreen}
         getId={({ params }) => params?.reuseJobId}
       />
-      <CustomerHomeStack.Screen name="WorkerSearch" component={WorkerSearchScreen} />
       <CustomerHomeStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <CustomerHomeStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
       {/* E5: a notification's job opens here when the person is on Home (the feed), so Back returns
@@ -144,8 +144,7 @@ function CustomerHomeStackNavigator() {
 /**
  * The Discover tab: the existing customer worker-browse surface
  * (WorkerSearchScreen — real worker profiles, categories, services) mounted as
- * a tab root. `autoFocus: false` keeps the keyboard down on a plain tab visit;
- * pushed-from-Home search keeps its open-focused behaviour.
+ * a tab root. `autoFocus: false` keeps the keyboard down on a plain tab visit.
  */
 function DiscoverStackNavigator() {
   return (
@@ -158,6 +157,7 @@ function DiscoverStackNavigator() {
       <DiscoverStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <DiscoverStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
       <DiscoverStack.Screen name="PostJob" component={PostJobScreen} />
+      {jobPageScreens([...CLIENT_JOB_SCREENS, 'Chat'])}
     </DiscoverStack.Navigator>
   );
 }
@@ -255,13 +255,13 @@ export function CustomerRoot() {
         items={[
           {
             key: 'post-job',
-            label: 'Post a job',
+            label: 'Post a Job',
             primary: true,
             onPress: () => runCreateAction(() => navigateAcrossTabs('Home', 'PostJob')),
           },
           {
             key: 'my-jobs',
-            label: 'My jobs',
+            label: 'My Jobs',
             icon: 'briefcase-outline',
             onPress: () => runCreateAction(() => navigateAcrossTabs('MyJobs')),
           },

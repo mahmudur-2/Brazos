@@ -14,12 +14,29 @@ export type RelationState = {
   blocking: boolean;
   /** The other party has blocked this user. */
   blockedBy: boolean;
+  /**
+   * C7: the read failed, so neither "blocked" nor "not blocked" is known.
+   * Both flags are false then; ask relationStatus(), never the flags alone.
+   */
+  readFailed: boolean;
 };
 
 export const EMPTY_RELATION: RelationState = {
   blocking: false,
   blockedBy: false,
+  readFailed: false,
 };
+
+/**
+ * C7 (A4-M2, 2d): the three answers a chat must tell apart. 'unknown' is a
+ * failed read: the chat hides its composer and shows its load-error state
+ * with Try Again — never the blocked state, which would say something false
+ * about a person.
+ */
+export function relationStatus(relation: RelationState): 'unknown' | 'blocked' | 'clear' {
+  if (relation.readFailed) return 'unknown';
+  return relation.blocking || relation.blockedBy ? 'blocked' : 'clear';
+}
 
 /** Block state between the signed-in user and one other person. */
 export async function fetchRelation(
@@ -34,15 +51,25 @@ export async function fetchRelation(
         `and(blocker_id.eq.${otherId},blocked_id.eq.${userId})`
     );
 
+  if (blocksRes.error) return { blocking: false, blockedBy: false, readFailed: true };
   const blocks = blocksRes.data ?? [];
   return {
     blocking: blocks.some((b) => b.blocker_id === userId),
     blockedBy: blocks.some((b) => b.blocker_id === otherId),
+    readFailed: false,
   };
 }
 
-/** Every user the signed-in user has blocked or is blocked by (for the inbox list). */
-export async function fetchMyModerationLists(userId: string) {
+export type ModerationLists = { blocking: Set<string>; blockedBy: Set<string> };
+
+/**
+ * Every user the signed-in user has blocked or is blocked by (for the inbox
+ * list). C7: a failed read says so — empty sets beside an error, which no
+ * caller may read as "nobody is blocked".
+ */
+export async function fetchMyModerationLists(
+  userId: string
+): Promise<ModerationLists & { error: { message: string } | null }> {
   const blocksRes = await supabase
     .from('blocks')
     .select('blocker_id, blocked_id')
@@ -50,12 +77,26 @@ export async function fetchMyModerationLists(userId: string) {
 
   const blocking = new Set<string>();
   const blockedBy = new Set<string>();
+  if (blocksRes.error) return { blocking, blockedBy, error: { message: blocksRes.error.message } };
   for (const b of blocksRes.data ?? []) {
     if (b.blocker_id === userId) blocking.add(b.blocked_id);
     else blockedBy.add(b.blocker_id);
   }
 
-  return { blocking, blockedBy };
+  return { blocking, blockedBy, error: null };
+}
+
+/**
+ * C7: the inbox's lists after a read. A failed read keeps the last good
+ * lists; with none yet, nothing is known (null) and the inbox shows no rows
+ * until a read succeeds, because a row from a blocked person is the harm.
+ */
+export function moderationAfterRead(
+  previous: ModerationLists | null,
+  read: ModerationLists & { error: unknown }
+): ModerationLists | null {
+  if (!read.error) return { blocking: read.blocking, blockedBy: read.blockedBy };
+  return previous;
 }
 
 export async function blockUser(userId: string, otherId: string) {
@@ -116,11 +157,17 @@ export function loadHiddenUsers(userId: string): Promise<void> {
     if (hiddenIds.size) setHidden(new Set());
   }
   const load = fetchMyModerationLists(userId)
-    .then(({ blocking, blockedBy }) => {
+    .then(({ blocking, blockedBy, error }) => {
       if (hiddenFor !== userId) return;
+      // C7: a failed read keeps the set it has (the comment above was not
+      // true: it used to set the empty sets) and is tried again by the next
+      // ensureHiddenUsers instead of being shared for the whole session.
+      if (error) throw new Error(error.message);
       setHidden(new Set([...blocking, ...blockedBy]));
     })
-    .catch(() => undefined);
+    .catch(() => {
+      if (hiddenLoad === load) hiddenLoad = null;
+    });
   hiddenLoad = load;
   return load;
 }
@@ -202,10 +249,32 @@ export type AdminReport = {
   description: string | null;
   status: 'open' | 'actioned' | 'dismissed';
   created_at: string;
+  /** admin_open_reports_v2: what was reported ('job', 'profile', 'review', 'portfolio_item' or
+   *  'message'), its id, and for a review or a message the server's first 200 characters of it
+   *  (the job's title for a job; null for a profile or a portfolio item). */
+  subject_kind: string | null;
+  subject_id: string | null;
+  subject_text: string | null;
 };
 
+const SUBJECT_LABELS: Record<string, string> = {
+  review: 'Reported Review',
+  message: 'Reported Message',
+};
+
+/**
+ * T2: the reported review or message, quoted on the report card under its label. Nothing for a job
+ * (its title is already on the card), a profile or a portfolio item, or when there is no text. The
+ * server already cut the text at 200 characters; it is shown as it came.
+ */
+export function reportSubject(report: Pick<AdminReport, 'subject_kind' | 'subject_text'>): { label: string; text: string } | null {
+  const label = report.subject_kind ? SUBJECT_LABELS[report.subject_kind] : undefined;
+  if (!label || typeof report.subject_text !== 'string' || report.subject_text.length === 0) return null;
+  return { label, text: report.subject_text };
+}
+
 export async function fetchAdminReports() {
-  const { data, error } = await supabase.rpc('admin_open_reports');
+  const { data, error } = await supabase.rpc('admin_open_reports_v2');
   return { data: (data ?? []) as AdminReport[], error };
 }
 
@@ -222,11 +291,12 @@ export async function unbanUser(targetId: string) {
   return { error };
 }
 
+/**
+ * B2: dismiss_report() answers true when it closed the report and false, with no error, when the
+ * report was already closed. Either way the caller reads the list again and shows no error.
+ */
 export async function dismissReport(reportId: string) {
-  const { error } = await supabase
-    .from('reports')
-    .update({ status: 'dismissed' })
-    .eq('id', reportId);
+  const { error } = await supabase.rpc('dismiss_report', { p_report_id: reportId });
   return { error };
 }
 

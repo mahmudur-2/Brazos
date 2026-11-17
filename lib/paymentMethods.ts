@@ -55,27 +55,40 @@ function cardsFrom(raw: unknown): SavedCard[] {
     }));
 }
 
-/** The function's own sentence, from a non-2xx body ({ error }), when there is one. */
+/**
+ * The function's own sentence, from a non-2xx body ({ error }), when there is one. A4 wiring (P2,
+ * G3-2): only a sentence written for people (a capital first, a full stop last) counts; the shared
+ * refusal of an unconfigured function ("not configured") is engine text and gives the fallback.
+ */
 async function sentenceOf(error: unknown): Promise<string | null> {
   const context = error && typeof error === 'object' ? (error as { context?: unknown }).context : null;
   const text = context && typeof context === 'object' ? (context as { text?: unknown }).text : null;
   if (typeof text !== 'function') return null;
   try {
     const parsed = JSON.parse(await (text as () => Promise<string>).call(context)) as { error?: unknown };
-    return typeof parsed.error === 'string' ? parsed.error : null;
+    return typeof parsed.error === 'string' && /^[A-Z].*[.!?]$/s.test(parsed.error) ? parsed.error : null;
   } catch {
     return null;
   }
 }
 
-async function invoke(body: Record<string, unknown>): Promise<{ data: unknown; error: { message: string } | null }> {
+/** The HTTP status of a non-2xx answer (the error's context is the Response), when there is one. */
+function statusOf(error: unknown): number | null {
+  const context = error && typeof error === 'object' ? (error as { context?: unknown }).context : null;
+  const status = context && typeof context === 'object' ? (context as { status?: unknown }).status : null;
+  return typeof status === 'number' ? status : null;
+}
+
+async function invoke(
+  body: Record<string, unknown>
+): Promise<{ data: unknown; error: { message: string; status: number | null } | null }> {
   const fallback = 'Could not reach your cards right now.';
   try {
     const { data, error } = await supabase.functions.invoke('payment-methods', { body });
-    if (error) return { data: null, error: { message: userMessage(await sentenceOf(error), fallback) } };
+    if (error) return { data: null, error: { message: userMessage(await sentenceOf(error), fallback), status: statusOf(error) } };
     return { data, error: null };
   } catch (err) {
-    return { data: null, error: { message: userMessage(err instanceof Error ? err.message : null, fallback) } };
+    return { data: null, error: { message: userMessage(err instanceof Error ? err.message : null, fallback), status: null } };
   }
 }
 
@@ -89,6 +102,70 @@ export async function listSavedCards(): Promise<{ data: SavedCard[]; error: { me
 export async function removeSavedCard(paymentMethodId: string): Promise<{ error: { message: string } | null }> {
   const { error } = await invoke({ action: 'remove', paymentMethodId });
   return { error };
+}
+
+/** A4 wiring (P2): list-and-remove rounds before an account deletion gives up (five cards a round). */
+export const MAX_CARD_ROUNDS = 10;
+
+export type CardSweepFailure =
+  /** The list failed or could not be read: whether a card is left is unknown. */
+  | { kind: 'list'; message: string }
+  /** A remove failed for a reason other than "already gone". */
+  | { kind: 'remove'; message: string }
+  /** Cards were still listed after MAX_CARD_ROUNDS rounds. */
+  | { kind: 'rounds' };
+
+/**
+ * A4 wiring (P2): before an account on the card path is deleted, every saved card leaves the
+ * provider, and only an empty list proves it. A round lists the caller's cards (the function lists
+ * at most five, and never creates a provider customer: no customer is `{ cards: [] }`) and removes
+ * each one; the next round lists again. A remove answered 404 ("That card is not on your
+ * account.") right after the fresh list means the card is already gone, so it is no failure. Any
+ * other failure, a list that cannot be read, or cards still listed after MAX_CARD_ROUNDS rounds
+ * returns a failure, and the caller deletes nothing. `removed` counts the cards this call really
+ * removed (a 404 is not counted), so the caller can say the cards are gone when it keeps the account.
+ */
+export async function removeEverySavedCard(): Promise<{ error: CardSweepFailure | null; removed: number }> {
+  let count = 0;
+  for (let round = 0; round < MAX_CARD_ROUNDS; round += 1) {
+    const listed = await invoke({ action: 'list' });
+    if (listed.error) return { error: { kind: 'list', message: listed.error.message }, removed: count };
+    const raw = (listed.data as { cards?: unknown } | null)?.cards;
+    const ids = Array.isArray(raw) ? raw.map((c) => (c && typeof c === 'object' ? (c as { id?: unknown }).id : null)) : null;
+    if (!ids || !ids.every((id): id is string => typeof id === 'string')) {
+      return { error: { kind: 'list', message: 'Could not reach your cards right now.' }, removed: count };
+    }
+    if (ids.length === 0) return { error: null, removed: count };
+    for (const id of ids) {
+      const removed = await invoke({ action: 'remove', paymentMethodId: id });
+      if (removed.error && removed.error.status !== 404) return { error: { kind: 'remove', message: removed.error.message }, removed: count };
+      if (!removed.error) count += 1;
+    }
+  }
+  return { error: { kind: 'rounds' }, removed: count };
+}
+
+/** A4 wiring (P2): what the delete screen says when the card step keeps the account. */
+export function cardSweepMessage(failure: CardSweepFailure): string {
+  if (failure.kind === 'list') {
+    return `Brazos couldn’t check your saved cards, so your account was not deleted. ${failure.message}`;
+  }
+  if (failure.kind === 'remove') {
+    return `A saved card couldn’t be removed from the payment provider, so your account was not deleted. ${failure.message}`;
+  }
+  return 'Some saved cards are still on your account, so it was not deleted.';
+}
+
+/**
+ * B7 (R5): the one line the suspended screen shows after "Remove Saved Cards" (removeEverySavedCard:
+ * list and remove only, both allowed for a suspended account). No account is deleted there, so the
+ * line says only what happened to the cards.
+ */
+export function cardRemovalMessage(failure: CardSweepFailure | null): string {
+  if (!failure) return 'Your saved cards are removed.';
+  if (failure.kind === 'list') return `Brazos couldn’t check your saved cards. ${failure.message}`;
+  if (failure.kind === 'remove') return `A saved card couldn’t be removed from the payment provider. ${failure.message}`;
+  return 'Some saved cards are still on your account. Try again.';
 }
 
 /** The strings the provider's sheet needs to save a card for later — nothing is charged. */

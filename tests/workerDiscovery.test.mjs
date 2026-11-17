@@ -319,6 +319,13 @@ test('[static] B2 · the no-photo state is the category-glyph tile, never stock 
   assert.doesNotMatch(stripComments(card), /https?:\/\//);
 });
 
+test('[static] the peek card chip shrinks inside the meta row when the day is not beside it', async () => {
+  const card = await read('components/WorkerJobCard.tsx');
+  // A long category ("Handyman / Repairs") drew past the row's pay clearance and under "Open".
+  assert.match(card, /style=\{\[styles\.peekCategory, !dayBeside && styles\.peekCategoryAlone, isDark && styles\.peekCategoryDark\]\}/);
+  assert.match(card, /peekCategoryAlone: \{\s*flexShrink: 1,\s*\}/);
+});
+
 test('[static] the Map screen structure holds: no header card, sheet-filtered, the jobs sheet peeks', async () => {
   // 2026-08-22 restructure, each half pinned; 2026-09-19 redrawn to the
   // approved Map design, and re-pinned here:

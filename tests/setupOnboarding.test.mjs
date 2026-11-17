@@ -137,7 +137,7 @@ test('nothing authenticated renders until both gates have answered', () => {
   // away when the real answer lands a tick later.
   assert.match(
     app,
-    /if \(loading \|\| \(user && \(legal\.state === 'loading' \|\| setup\.state === 'loading'\)\)\)/
+    /if \(loading \|\| \(user && \(suspended === null \|\| legal\.state === 'loading' \|\| setup\.state === 'loading'\)\)\)/
   );
   // Order matters: signed out is answered before either gate is consulted.
   assert.ok(

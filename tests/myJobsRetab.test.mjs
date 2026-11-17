@@ -53,7 +53,8 @@ test('perspective is ModeContext, and worker mode has no posting affordance', ()
   assert.doesNotMatch(hubCode, /Post another job/);
   assert.match(
     hubCode,
-    /\{isCustomer && posted\.length === 0 && !draft \? \(\s*<Pressable\s+onPress=\{openPostJob\}/,
+    // G1b: the button is the shared EmptyState's one action, behind the same gate.
+    /actionLabel=\{isCustomer && posted\.length === 0 && !draft \? 'Post a Job' : undefined\}\s+onAction=\{openPostJob\}/,
     'the empty-state "Post a job" must be customer-gated'
   );
   const gateCount = [...hubCode.matchAll(/isCustomer \?/g)].length;

@@ -93,7 +93,8 @@ test('[static] the predicates are re-exported, and both job screens and MoneyTex
   // neither the gold eyebrow nor the "held" breakdown describes a refund going home.
   const worker = code('screens/WorkerJobScreen.tsx');
   // Codex R8-A1: then the payout fact and the fee's sent fact.
-  assert.match(worker, /refundQueued=\{isRefundQueued\(payment\)\} feeKept=\{isCancellationFeeKept\(payment\)\} payoutOnItsWay=\{isPayoutOnItsWay\(payment\)\} feeSent=\{!!payment\.released_at\} \/>/);
+  // A2-M5 4d-1: a cancelled job still held for review draws no take at all (tests/a2m5Repairs.test.mjs).
+  assert.match(worker, /refundQueued=\{isRefundQueued\(payment\)\} feeKept=\{isCancellationFeeKept\(payment\)\} payoutOnItsWay=\{isPayoutOnItsWay\(payment\)\} feeSent=\{!!payment\.released_at\} \/> \)\}/);
   const note = worker.slice(worker.indexOf("if (lifecycle === 'cancelled') {"));
   assert.ok(note.indexOf('isCancellationFeeKept(payment)') < note.indexOf('isReleased(payment)'), 'the cancelled branch comes before every live sentence');
   assert.match(note, /This job was cancelled late\. The cancellation fee is on its way to you; the rest goes back to \$\{clientName\}\./);

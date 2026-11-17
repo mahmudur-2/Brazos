@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoid } from './KeyboardAvoid';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,6 +36,8 @@ import {
   type Offer,
 } from '../lib/offers';
 import { quoteJobPrice, workerTakeLine, type JobPriceQuote } from '../lib/payments';
+import { BOOKED_TIME_PASSED, jobWindowOver } from '../lib/paymentRules';
+import { serverNowMs } from '../lib/serverClock';
 import { EYEBROW_TYPE, radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { usePillReserve, usePinnedFooterPadding } from '../ui/primitives';
 
@@ -74,6 +76,11 @@ export type OfferComposerContext =
       jobTitle: string;
       /** Counters left for the current user on this chain (server enforces). */
       countersRemaining: number;
+      /**
+       * A4 wiring (priority 2): the market job's booked window, when the host has it. Past it the
+       * server refuses the counter (refuse_offer_after_window), so the form says so without the call.
+       */
+      jobWindow?: { scheduled_date: string | null; arrival_end_hour: number | null };
     };
 
 type OfferComposerProps = {
@@ -89,6 +96,11 @@ type OfferComposerProps = {
    * the keyboard-avoiding view, so the commit never hides under the keyboard.
    */
   layout?: 'inline' | 'screen';
+  /**
+   * PART 5b T1: the host's handle on the amount field, for a host that scrolls the inline form into
+   * view when it opens (the job page's counter form). The field's own layout is unchanged.
+   */
+  amountFieldRef?: RefObject<View | null>;
 };
 
 /**
@@ -128,8 +140,8 @@ export function OfferAmountField({
   return (
     <TextField
       label={label}
-      // 2026-09-29 (LUX-LIST-2 #4): the amount label — bid and counter-offer alike — stays gold.
-      labelTone="gold"
+      // A2-M4 (F5, brief E): the amount label is mint like every field label ("Pitch" beside
+      // it) — the gold label was the "golden outline" the owner saw on Submit a Bid.
       value={value}
       onChangeText={onChangeText}
       placeholder="e.g. 45"
@@ -146,6 +158,7 @@ export function OfferComposer({
   onSubmitted,
   palette: paletteProp,
   layout = 'inline',
+  amountFieldRef,
 }: OfferComposerProps) {
   const footerPad = usePinnedFooterPadding();
   // With the keyboard up the pill is under it, so the footer's reserve for the pill comes off the
@@ -225,6 +238,20 @@ export function OfferComposer({
 
   async function handleSubmit() {
     if (submittingRef.current) return;
+
+    // A4 wiring (priority 2): past the booked window the server refuses a new bid or counter on a market
+    // job (refuse_offer_after_window) with these sentences; the form says the same one first, whatever
+    // is typed, and sends nothing. The counterer is the side the answered offer awaits: the customer's
+    // sentence, or the worker's.
+    if (context.kind === 'bid' ? jobWindowOver({ job: context.job, nowMs: serverNowMs() }) : !!context.jobWindow && jobWindowOver({ job: context.jobWindow, nowMs: serverNowMs() })) {
+      await alertAsync(
+        isBid ? 'Could not send bid' : 'Could not send counter-offer',
+        context.kind === 'counter' && context.offer.awaiting_id === context.offer.customer_id
+          ? BOOKED_TIME_PASSED.customerCounter
+          : BOOKED_TIME_PASSED.newBid
+      );
+      return;
+    }
 
     const { amountCents, problem } = validateOfferAmount(amount);
     if (problem || amountCents == null) {
@@ -336,12 +363,14 @@ export function OfferComposer({
         </Card>
       )}
 
-      <OfferAmountField
-        value={amount}
-        onChangeText={setAmount}
-        label={isBid ? 'Your bid (USD)' : 'Your counter-offer (USD)'}
-        editable={!submitting}
-      />
+      <View ref={amountFieldRef} collapsable={false}>
+        <OfferAmountField
+          value={amount}
+          onChangeText={setAmount}
+          label={isBid ? 'Your bid (USD)' : 'Your counter-offer (USD)'}
+          editable={!submitting}
+        />
+      </View>
 
       {isBid && takeLine ? (
         <Text style={styles.chipReason}>{takeLine}</Text>
@@ -403,7 +432,7 @@ export function OfferComposer({
                   }}
                 />
                 <Chip
-                  label="Pick a day"
+                  label="Pick a Day"
                   variant="filter"
                   selected={startMode === 'pick'}
                   onPress={() => {
@@ -479,7 +508,7 @@ export function OfferComposer({
       </View>
 
       <Button
-        title={isBid ? 'Send bid' : 'Send counter-offer'}
+        title={isBid ? 'Send Bid' : 'Send Counter-Offer'}
         onPress={handleSubmit}
         loading={submitting}
         disabled={submitting}

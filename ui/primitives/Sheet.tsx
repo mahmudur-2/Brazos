@@ -1,7 +1,8 @@
 import { useModalPresence } from '../../hooks/useModalPresence';
 import { useSheetPresence } from '../../hooks/useSheetPresence';
 import { SheetCard } from '../../components/SheetCard';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoid } from '../../components/KeyboardAvoid';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { PropsWithChildren, ReactNode } from 'react';
 import {
@@ -82,6 +83,9 @@ type SheetProps = PropsWithChildren<{
    * re-composited to a different tint while it is up.
    */
   overlay?: ReactNode;
+  /** P4 (owner, 2026-11-16): a sheet with fields rises with the keyboard, so the field
+   *  being typed in stays above it (the counter-offer sheet). */
+  avoidKeyboard?: boolean;
 }>;
 
 export function Sheet({
@@ -99,6 +103,7 @@ export function Sheet({
   rim,
   fill,
   overlay,
+  avoidKeyboard = false,
   children,
 }: SheetProps) {
   const { emerald: colors, isDark } = useThemeColors();
@@ -111,6 +116,14 @@ export function Sheet({
   const topRadius = topRadiusProp ?? radius.xl;
   const headerHairline = hairline != null ? { borderBottomColor: hairline } : null;
   const footerHairline = hairline != null ? { borderTopColor: hairline } : null;
+  const wrapCard = (card: ReactNode) =>
+    avoidKeyboard ? (
+      <KeyboardAvoid behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.cardFrame}>
+        {card}
+      </KeyboardAvoid>
+    ) : (
+      card
+    );
 
   return (
     <Modal
@@ -142,11 +155,13 @@ export function Sheet({
         </Pressable>
         ) : null}
         {/* The card's frame carries the height cap now (a percentage of the screen), so the card
-            inside can shrink to it while the frame moves. */}
+            inside can shrink to it while the frame moves. With the keyboard, the cap moves to the
+            keyboard's wrapper and the card shrinks inside it. */}
+        {wrapCard(
         <SheetCard
           visible={visible}
           onClosed={presence.onClosed}
-          style={styles.cardFrame}
+          style={avoidKeyboard ? styles.cardShrink : styles.cardFrame}
         >
         {/* G1 (C5): the docked card wears the sheet material — the top
             corners keep their xl radius via the props; in light this adds
@@ -190,6 +205,7 @@ export function Sheet({
           {footer ? <View style={[styles.footer, footerHairline]}>{footer}</View> : null}
         </Surface>
         </SheetCard>
+        )}
         {overlay ? (
           <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
             {overlay}
@@ -218,6 +234,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   // G1 (C5): fill, top radius and hairline are the sheet material's now.
   // Never taller than most of the screen, whatever the content — on the moving frame (#3).
   cardFrame: { maxHeight: '88%' },
+  cardShrink: { flexShrink: 1 },
   sheet: {
     flexShrink: 1,
     paddingTop: spacing.sm,

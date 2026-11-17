@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { openModalCount } from './modalPresence';
 
 /**
@@ -10,7 +10,6 @@ type ConfirmOptions = {
   title: string;
   message?: string;
   confirmText?: string;
-  cancelText?: string;
   destructive?: boolean;
 };
 
@@ -72,10 +71,9 @@ export async function confirmAsync({
   title,
   message = '',
   confirmText = 'OK',
-  cancelText = 'Cancel',
   destructive = false,
 }: ConfirmOptions): Promise<boolean> {
-  const options = { title, message, confirmText, cancelText, destructive };
+  const options = { title, message, confirmText, destructive };
   const host = hosts.length > 0 ? await settledHost() : null;
   return host ? host.present(options) : nativeConfirm(options);
 }
@@ -85,7 +83,6 @@ export function nativeConfirm({
   title,
   message,
   confirmText,
-  cancelText,
   destructive,
 }: ResolvedConfirm): Promise<boolean> {
   return new Promise((resolve) => {
@@ -93,7 +90,8 @@ export function nativeConfirm({
       title,
       message,
       [
-        { text: cancelText, style: 'cancel', onPress: () => resolve(false) },
+        // F9 (owner, 2026-11-16): every pop-up's way out is the one word "Cancel".
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
         {
           text: confirmText,
           style: destructive ? 'destructive' : 'default',
@@ -106,6 +104,14 @@ export function nativeConfirm({
 }
 
 export function alertAsync(title: string, message?: string): Promise<void> {
+  // T2: react-native-web's Alert.alert draws nothing and never calls back, so
+  // an awaited alert there never ended and a caller's `finally` never ran (the
+  // checkout spinner that kept turning). The browser's own alert blocks until
+  // it is closed, then the promise resolves.
+  if (Platform.OS === 'web') {
+    (globalThis as { alert?: (text: string) => void }).alert?.(message ? `${title}\n\n${message}` : title);
+    return Promise.resolve();
+  }
   return new Promise((resolve) => {
     Alert.alert(title, message, [{ text: 'OK', onPress: () => resolve() }], {
       cancelable: true,

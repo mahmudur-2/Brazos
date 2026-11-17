@@ -150,7 +150,7 @@ export function MarketJobPreview({ job, poster, onBack }: MarketJobPreviewProps)
                         contentContainerStyle={styles.mediaRow}
                       >
                         {job.videos.map((url) => (
-                          <JobVideo key={url} uri={url} label="Job video" />
+                          <JobVideo key={url} uri={url} label="Job Video" />
                         ))}
                       </ScrollView>
                     ) : null}
@@ -177,7 +177,7 @@ export function MarketJobPreview({ job, poster, onBack }: MarketJobPreviewProps)
                       reportedId={job.client_id}
                       reportedName={poster.full_name ?? 'this customer'}
                       jobId={job.id}
-                      label="Report this job"
+                      label="Report This Job"
                     />
                   </View>
                 ),
@@ -198,7 +198,7 @@ export function MarketJobPreview({ job, poster, onBack }: MarketJobPreviewProps)
       ]}
       actionBar={
         <Button
-          title="Switch to Worker Mode and open this job"
+          title="Switch to Worker Mode and Open This Job"
           variant="secondary"
           onPress={() => void switchAndOpen()}
           loading={switching}

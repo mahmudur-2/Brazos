@@ -5,7 +5,7 @@ import { DropdownBody } from './DropdownReveal';
 import { EntranceView } from './EntranceView';
 import { JOB_CATEGORY_LABELS, type JobCategory } from '../lib/jobs';
 import { POST_QUESTIONS, type PostAnswers } from '../lib/postQuestions';
-import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { spacing, textScale, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type PostQuestionsProps = {
   category: JobCategory | null;
@@ -110,7 +110,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     headText: {
       flex: 1,
-      fontSize: 13,
+      ...textScale.label,
       fontWeight: '700',
       color: colors.ink,
     },
@@ -121,8 +121,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     pressed: { opacity: 0.7 },
     // The one small text action in the section, in the eyebrow's colour — gold in dark.
     skipText: {
-      fontSize: 13,
-      fontWeight: '600',
+      ...textScale.label,
       color: colors.eyebrow,
     },
     question: {
@@ -133,7 +132,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       borderTopColor: colors.border,
     },
     ask: {
-      fontSize: 14,
+      ...textScale.body,
       fontWeight: '700',
       color: colors.ink,
     },

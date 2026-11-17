@@ -64,9 +64,10 @@ import {
 } from '../lib/jobs';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { paymentsMode } from '../lib/adapters/payments';
-import { noShowConfirm, paymentEyebrow, workerCancelConfirm } from '../lib/moneyCopy';
+import { bookedDayCancelLine, isBookedDayRefusal, noShowConfirm, paymentEyebrow, workerCancelConfirm } from '../lib/moneyCopy';
 import { workerReceivesCents } from '../lib/earningsMath';
 import { isPayoutOnItsWay, isRefundArranged, isRefundFailed, noShowReportable } from '../lib/paymentRules';
+import { serverNowMs } from '../lib/serverClock';
 import {
   brazosFeeCents,
   fetchJobPaymentState,
@@ -91,16 +92,20 @@ import {
   isRefundFailureRecorded,
   jobPillLabel,
   nextWorkerStep,
+  releaseAtLabel,
+  releaseDeadlineMs,
   trackStepIndex,
 } from '../lib/jobLifecycle';
 import { MoneyText } from '../ui/primitives/MoneyText';
-import { usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
+import { FloatingAction, useScrollClearance } from '../ui/primitives';
 import {
   deleteJobPhoto,
   rejectionForPickedVideo,
   uploadCompletionVideo,
   uploadJobPhoto,
 } from '../lib/storage';
+import { PICKER_MEDIA_OPTIONS } from '../lib/pickerOptions';
+import { uploadErrorMessage } from '../lib/uploadRules';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 
@@ -108,18 +113,19 @@ import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 const STAGE_FILL_MS = 220;
 import {
   EYEBROW_TYPE,
-  fonts,
   radius,
   spacing,
+  textScale,
   themedStyles,
-  litCardStyle,
   useThemeColors,
+  wellStyle,
   withAlpha,
   type ColorPalette,
   screenGround,
   slopRoom,
   touchSlop,
 } from '../lib/theme';
+import { titleCase } from '../lib/titleCase';
 
 /** The done-photo ⨯ button: drawn 30, slopped to 44 (E3), and its row makes room for that slop
  *  (E3 review: a ScrollView rejects a touch outside its own frame). */
@@ -131,12 +137,6 @@ const MAX_DONE_PHOTOS = 5;
 /** One clip is the evidence; a second is a second opinion nobody asked for.
  *  Matches the cap transition_job_status() enforces server-side (phase35). */
 const MAX_DONE_VIDEOS = 1;
-/** Two minutes — long enough to walk a client through finished work, short
- *  enough to upload from a job site. */
-const MAX_DONE_VIDEO_DURATION_MS = 120_000;
-/** Roughly two minutes of phone video at default quality, with headroom. Past
- *  this the upload becomes the worst part of finishing a job. */
-const MAX_DONE_VIDEO_BYTES = 100 * 1024 * 1024;
 
 /** mm:ss for a picked clip's length, so the worker can see what they attached. */
 function formatDuration(ms: number): string {
@@ -159,7 +159,6 @@ export function WorkerJobScreen() {
   const photoHeight = 180;
   // emerald(3): the floating pill's real footprint.
   const navClearance = useScrollClearance();
-  const footerPad = usePinnedFooterPadding();
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'WorkerJob'>>();
   const { user } = useAuth();
@@ -205,8 +204,7 @@ export function WorkerJobScreen() {
     const ok = await confirmAsync({
       title: 'Drop future visits?',
       message: `${clientName} will post the next visits for bids. This visit stays yours.`,
-      confirmText: 'Drop future visits',
-      cancelText: 'Keep them',
+      confirmText: 'Drop Future Visits',
       destructive: true,
     });
     if (!ok) return;
@@ -288,6 +286,13 @@ export function WorkerJobScreen() {
     }, [job?.id, job?.status])
   );
 
+  // A4 wiring (A4): a refusal reads as the server wrote it; before the job's day (trip_day) one line
+  // follows it, pointing to the worker's own Cancel This Job for a real change of date.
+  function refusalText(error: { message?: string | null }): string {
+    const text = userMessage(error);
+    return isBookedDayRefusal(error) ? `${text} ${bookedDayCancelLine(clientFirstName)}` : text;
+  }
+
   async function handleStart() {
     setWorking(true);
     const { error } = await updateJobStatus(params.jobId, 'in_progress');
@@ -295,7 +300,7 @@ export function WorkerJobScreen() {
     invalidateJobs();
     setWorking(false);
     if (error) {
-      await alertAsync('Could not start job', userMessage(error));
+      await alertAsync('Could not start job', refusalText(error));
       return;
     }
     await refresh();
@@ -371,7 +376,7 @@ export function WorkerJobScreen() {
     invalidateJobs();
     setMarking(null);
     if (markError) {
-      await alertAsync('Could not update your status', userMessage(markError));
+      await alertAsync('Could not update your status', refusalText(markError));
       return;
     }
     await refresh();
@@ -395,7 +400,7 @@ export function WorkerJobScreen() {
   const uploadingMedia = uploadingPhoto || uploadingVideo;
 
   /**
-   * One "Add photos or video" control rather than two pickers: the worker
+   * One "Add Photos or Video" control rather than two pickers: the worker
    * opens the library once and picks whatever shows the finished job best —
    * photos, a clip, or both. Everything over a limit is refused with a reason,
    * and everything under it is still kept, so a rejected extra never costs the
@@ -405,14 +410,10 @@ export function WorkerJobScreen() {
     if (!canAddMedia) return;
 
     const result = await ImagePicker.launchImageLibraryAsync({
+      ...PICKER_MEDIA_OPTIONS,
       mediaTypes: ['images', 'videos'],
-      quality: 0.7,
       allowsMultipleSelection: true,
       selectionLimit: photoSlots + videoSlots,
-      // Caps recording length where the picker offers to record. A clip chosen
-      // from the library isn't covered by it, so the real check is
-      // rejectionForPickedVideo below — this just stops the obvious case sooner.
-      videoMaxDuration: MAX_DONE_VIDEO_DURATION_MS / 1000,
     });
     if (result.canceled || result.assets.length === 0) return;
 
@@ -435,10 +436,13 @@ export function WorkerJobScreen() {
       setUploadingPhoto(true);
       const uploaded: string[] = [];
       let failures = 0;
+      let lastError: unknown = null;
       for (const asset of acceptedImages) {
         const { url, error: uploadError } = await uploadJobPhoto(params.jobId, asset);
-        if (uploadError || !url) failures++;
-        else uploaded.push(url);
+        if (uploadError || !url) {
+          failures++;
+          lastError = uploadError;
+        } else uploaded.push(url);
       }
       setUploadingPhoto(false);
 
@@ -447,7 +451,7 @@ export function WorkerJobScreen() {
       }
       if (failures > 0) {
         skipped.push(
-          `${failures} ${failures === 1 ? 'photo' : 'photos'} couldn’t be uploaded.`
+          `${failures} ${failures === 1 ? 'photo' : 'photos'} couldn’t be uploaded. ${uploadErrorMessage(lastError)}`
         );
       }
     }
@@ -460,10 +464,7 @@ export function WorkerJobScreen() {
           skipped.push('Only one video can be attached, so the first clip was used.');
         }
         const clip = clips[0];
-        const rejection = rejectionForPickedVideo(clip, {
-          maxDurationMs: MAX_DONE_VIDEO_DURATION_MS,
-          maxBytes: MAX_DONE_VIDEO_BYTES,
-        });
+        const rejection = rejectionForPickedVideo(clip);
         if (rejection) {
           skipped.push(rejection.message);
         } else {
@@ -476,9 +477,7 @@ export function WorkerJobScreen() {
           // Only a successful upload is kept, so the job can never be completed
           // referencing something that is not in storage.
           if (uploadError || !url) {
-            skipped.push(
-              'The video couldn’t be uploaded. On a slow connection a shorter clip uploads more reliably.'
-            );
+            skipped.push(`The video couldn’t be uploaded. ${uploadErrorMessage(uploadError)}`);
           } else {
             setDoneVideo({ url, durationMs: clip.duration ?? null });
           }
@@ -533,11 +532,10 @@ export function WorkerJobScreen() {
     // sentence is shown below, unchanged.
     if (donePhotos.length === 0) {
       const addNow = await confirmAsync({
-        title: 'Add a photo of the finished work',
+        title: 'Add a Photo of the Finished Work',
         message:
           'At least one photo of the finished work is required to mark this job complete — it’s what the customer approves against. Add one now?',
-        confirmText: 'Add photos',
-        cancelText: 'Not yet',
+        confirmText: 'Add Photos',
       });
       if (addNow) await pickCompletionMedia();
       return; // Let them review what was picked, then tap Mark complete again.
@@ -586,14 +584,17 @@ export function WorkerJobScreen() {
       : step === 'message'
         ? { title: `Message ${clientName}`, onPress: () => navigation.navigate('Chat', { jobId: job.id }), loading: false }
       : step === 'complete'
-        ? { title: 'Mark complete', onPress: handleComplete, loading: working, disabled: uploadingMedia }
+        ? { title: 'Mark Complete', onPress: handleComplete, loading: working, disabled: uploadingMedia }
         : step === 'en_route'
-          ? { title: 'I’m on my way', onPress: () => void handleMark('en_route'), loading: marking === 'en_route', disabled: marking !== null || working }
+          ? { title: 'I’m on My Way', onPress: () => void handleMark('en_route'), loading: marking === 'en_route', disabled: marking !== null || working }
           : step === 'arrived'
-            ? { title: 'I’m here', onPress: () => void handleMark('arrived'), loading: marking === 'arrived', disabled: marking !== null || working }
-            : { title: 'Start job', onPress: handleStart, loading: working, disabled: marking !== null };
+            ? { title: 'I’m Here', onPress: () => void handleMark('arrived'), loading: marking === 'arrived', disabled: marking !== null || working }
+            : { title: 'Start Job', onPress: handleStart, loading: working, disabled: marking !== null };
   // Declaring the trip is optional, never a gate: before arriving, "Start job"
   // stays one tap away under the primary — once the payment is held (A8).
+  // G2 RESTRUCTURE: only a real next step (on my way, here, start, complete) floats; hired and not
+  // yet paid has none, so the bar stays and the GETTING THERE card's Message is the way to talk.
+  const floatingStep = stageAction && !awaitingProtection ? stageAction : null;
   const beforeArrival = step === 'en_route' || step === 'arrived';
   const canSkipToStart = beforeArrival;
   const addressLine = location?.address_line ?? null;
@@ -635,6 +636,17 @@ export function WorkerJobScreen() {
   // #63 — the ONE rule (payoutSetupNotice): the card path, a read status that
   // is not enabled, this held stripe row approved. Null everywhere else.
   const waitingOnSetup = payment ? payoutSetupNotice(payouts, [payment]) !== null : false;
+  // A4 wiring (A4): a cancelled job whose payment is still held with no refund and no fee directed
+  // (a suspended customer's started job, a no-show claim). Brazos decides; the card promises nothing.
+  // A2-M5 T3: "directed nowhere" as the server's own list has it (payment_attention, job_closed_money_held):
+  // held, no refund, no transfer and no release asked. The worker's job_payment_state row carries all four.
+  const heldForReview =
+    lifecycle === 'cancelled' &&
+    !!payment &&
+    isHeld(payment) &&
+    !isRefundQueued(payment) &&
+    (payment.transfer_cents ?? 0) === 0 &&
+    !isReleaseRequested(payment);
 
   const paymentCard =
     isWorker && payment && job ? (
@@ -664,24 +676,35 @@ export function WorkerJobScreen() {
         </View>
         {/* B23: the figure a worker reads as "yours" is what the row puts in their hands
             (workerReceivesCents): the take on a live job, the cancellation fee or nothing on a
-            row sent home. */}
-        <MoneyText
-          cents={workerReceivesCents({ ...payment, job_status: job.status }, workerTakeCents)}
-          state={payment.status}
-          releaseRequested={isReleaseRequested(payment)}
-          issueOpen={issueOpen}
-          waitingOnPayoutSetup={waitingOnSetup}
-          // Codex R7-A3: no payout or refund promised beside a failed or arranged refund.
-          refundFailed={isRefundFailed(payment)}
-          refundArranged={isRefundArranged(payment)}
-          // Final sweep: the cancellation shape outranks every held sentence
-          // (lib/paymentRules.ts) — a cancelled job's row is money going home.
-          refundQueued={isRefundQueued(payment)}
-          feeKept={isCancellationFeeKept(payment)}
-          // Codex R8-A1: the payout and the fee are promised under the fact; a fee sent says so.
-          payoutOnItsWay={isPayoutOnItsWay(payment)}
-          feeSent={!!payment.released_at}
-        />
+            row sent home. A2-M5 4d-1: a cancelled job held for Brazos's review has no such figure
+            yet (Brazos decides it). Its one fact stands there instead: the customer's payment, held,
+            in the breakdown row's own words; no fee and no take. */}
+        {heldForReview ? (
+          payment.charge_amount_cents != null ? (
+            <View style={styles.heldFact}>
+              <MoneyText cents={payment.charge_amount_cents} state={payment.status} captionHidden />
+              <Text style={styles.heldFactLabel}>Customer’s Payment · Held</Text>
+            </View>
+          ) : null
+        ) : (
+          <MoneyText
+            cents={workerReceivesCents({ ...payment, job_status: job.status }, workerTakeCents)}
+            state={payment.status}
+            releaseRequested={isReleaseRequested(payment)}
+            issueOpen={issueOpen}
+            waitingOnPayoutSetup={waitingOnSetup}
+            // Codex R7-A3: no payout or refund promised beside a failed or arranged refund.
+            refundFailed={isRefundFailed(payment)}
+            refundArranged={isRefundArranged(payment)}
+            // Final sweep: the cancellation shape outranks every held sentence
+            // (lib/paymentRules.ts) — a cancelled job's row is money going home.
+            refundQueued={isRefundQueued(payment)}
+            feeKept={isCancellationFeeKept(payment)}
+            // Codex R8-A1: the payout and the fee are promised under the fact; a fee sent says so.
+            payoutOnItsWay={isPayoutOnItsWay(payment)}
+            feeSent={!!payment.released_at}
+          />
+        )}
         <Text style={styles.paymentNote}>
           {(() => {
             // A7: the disputed/awaiting fork comes from THE derivation
@@ -700,11 +723,14 @@ export function WorkerJobScreen() {
               if (isRefundQueued(payment) || payment.status === 'refunded' || payment.status === 'partially_refunded') {
                 return `This job was cancelled. ${clientName}’s payment goes back to them.`;
               }
+              // A4 wiring (A4): still held with no refund and no fee directed (a suspended customer's
+              // started job, a no-show claim): Brazos decides, and nothing is called refunded or paid.
+              if (heldForReview) return 'This job’s payment is held until Brazos reviews it.';
               return 'This job was cancelled. Nothing is held for it.';
             }
             if (isReleased(payment)) {
               return payment.release_reason === 'auto_approved'
-                ? 'Released automatically after 72 hours with no response from the customer.'
+                ? 'Released automatically with no response from the customer.'
                 : `${clientName} approved the finished work and the payment was released.`;
             }
             if (lifecycle === 'disputed') {
@@ -720,25 +746,29 @@ export function WorkerJobScreen() {
             }
             if (isPayoutOnItsWay(payment) && waitingOnSetup) {
               return payment.release_reason === 'auto_approved'
-                ? `Approved automatically after 72 hours with no response from ${clientName}. ${PAYOUT_SETUP_NOTICE}`
+                ? `Approved automatically with no response from ${clientName}. ${PAYOUT_SETUP_NOTICE}`
                 : `${clientName} approved the finished work. ${PAYOUT_SETUP_NOTICE}`;
             }
             if (isPayoutOnItsWay(payment)) {
               return payment.release_reason === 'auto_approved'
-                ? `Approved automatically after 72 hours with no response from ${clientName}. Your payout is on its way and shows as released when the transfer lands.`
+                ? `Approved automatically with no response from ${clientName}. Your payout is on its way and shows as released when the transfer lands.`
                 : `${clientName} approved the finished work. Your payout is on its way and shows as released when the transfer lands.`;
             }
             // Codex R7-A3: approved, but a refund of it failed or was arranged another way: the approval alone.
             if (isReleaseRequested(payment)) {
               return payment.release_reason === 'auto_approved'
-                ? `Approved automatically after 72 hours with no response from ${clientName}.`
+                ? `Approved automatically with no response from ${clientName}.`
                 : `${clientName} approved the finished work.`;
             }
             if (lifecycle === 'awaiting_approval') {
               // Codex R11-A2: a refund of it failed: neither approval nor the clock sends the payout.
               const waiting = `Waiting on ${clientName} to approve the finished work.`;
-              if (isRefundFailureRecorded(payment)) return waiting;
-              return `${waiting} If they don’t respond within 72 hours, the funds release automatically.`;
+              // A4 wiring (P1): the server's release time (release_due_at). None, or one already passed
+              // (the timer runs every 10 minutes), promises no time: the first sentence alone.
+              const releaseAt = isRefundFailureRecorded(payment) ? null : releaseDeadlineMs(job);
+              const now = serverNowMs();
+              if (releaseAt == null || releaseAt <= now) return waiting;
+              return `${waiting} If they don’t respond, the funds release automatically ${releaseAtLabel(releaseAt, now)}.`;
             }
             if (isHeld(payment)) {
               return `${clientName} placed the funds in protection. They’re released only after the finished work is approved.`;
@@ -767,8 +797,9 @@ export function WorkerJobScreen() {
         {/* R6c (D7): the three-line breakdown, off the row's own
             columns, once the customer's charge has actually landed
             (held or later) — never on an unfunded row. Card path
-            only. */}
-        {paymentsMode === 'stripe' &&
+            only. A2-M5 4d-1: none while held for review; the held payment stands in the hero place. */}
+        {!heldForReview &&
+        paymentsMode === 'stripe' &&
         payment.charge_amount_cents != null &&
         ((isHeld(payment) && !isRefundQueued(payment)) || isReleased(payment)) ? (
           <View style={styles.breakdown}>
@@ -776,18 +807,18 @@ export function WorkerJobScreen() {
               {/* A2 — held is held: the money is the customer's until it is
                   released, so "paid" is never written on a held row. */}
               <Text style={styles.breakdownLabel}>
-                {isHeld(payment) ? 'Customer’s payment · held' : 'Customer paid'}
+                {isHeld(payment) ? 'Customer’s Payment · Held' : 'Customer Paid'}
               </Text>
               <Text style={styles.breakdownValue}>
                 {formatBudget(payment.charge_amount_cents)}
               </Text>
             </View>
             <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>Protection fee</Text>
+              <Text style={styles.breakdownLabel}>Protection Fee</Text>
               <Text style={styles.breakdownValue}>{formatBudget(brazosFeeCents(payment))}</Text>
             </View>
             <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownStrongLabel}>You get</Text>
+              <Text style={styles.breakdownStrongLabel}>You Get</Text>
               <Text style={styles.breakdownStrongValue}>
                 {formatBudget(workerTakeCents(payment))}
               </Text>
@@ -799,10 +830,10 @@ export function WorkerJobScreen() {
     ) : null;
 
   return (
-    // M-3 — the tab bar owns the bottom inset (tests/layout.test.mjs), so the
-    // pinned bar sits flush on it rather than above a blank band.
+    // M-3 — the tab bar owns the bottom inset (tests/layout.test.mjs); the floating
+    // next step keeps the pill's offset itself.
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
-      <ScreenHeader title="Your Job" onBack={goBackOrHome} />
+      <ScreenHeader title="Job Details" onBack={goBackOrHome} />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -813,6 +844,7 @@ export function WorkerJobScreen() {
           <Text style={styles.muted}>Job not found.</Text>
         </View>
       ) : (
+        <>
         <KeyboardAvoid
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -822,7 +854,7 @@ export function WorkerJobScreen() {
           contentContainerStyle={[
             styles.content,
             { padding: contentPadding, gap: contentGap },
-            stageAction ? { paddingBottom: contentGap } : { paddingBottom: navClearance },
+            floatingStep ? { paddingBottom: contentGap } : { paddingBottom: navClearance },
           ]}
           keyboardShouldPersistTaps="handled"
           // Swiping the list down puts the keyboard away, so it never has to
@@ -838,9 +870,9 @@ export function WorkerJobScreen() {
                 style={[
                   styles.iconCircle,
                   { width: iconCircleSize, height: iconCircleSize },
-                  // LUX-LIST-2 #6: the lit tile in dark; light keeps the category colour.
+                  // G2: a well in dark (never a lit tile inside the lit card); light keeps the category colour.
                   isDark
-                    ? [styles.iconCircleDark, litCardStyle(true, 'tile')]
+                    ? wellStyle(colors, isDark)
                     : { backgroundColor: categoryAccent(job.category).bg },
                 ]}
               >
@@ -852,7 +884,10 @@ export function WorkerJobScreen() {
                   bare
                 />
               </View>
+              {/* G2: the status pill sits on its own line above the title in every state, so a long
+                  pill ("Awaiting payment") never squeezes the title or the place line. */}
               <View style={styles.jobHeaderText}>
+                <StatusBadge status={job.status} label={lifecycle ? jobPillLabel(lifecycle, payment?.status) : undefined} />
                 <Text style={styles.jobTitle} numberOfLines={2}>
                   {job.title}
                 </Text>
@@ -861,7 +896,6 @@ export function WorkerJobScreen() {
                   {job.location ? ` · ${job.location}` : ''}
                 </Text>
               </View>
-              <StatusBadge status={job.status} label={lifecycle ? jobPillLabel(lifecycle, payment?.status) : undefined} />
             </View>
             <View style={styles.jobFooter}>
               <Text style={styles.amount}>
@@ -944,7 +978,7 @@ export function WorkerJobScreen() {
                 <View style={styles.stageHead} accessibilityRole="header">
                   <View style={styles.thereCopy}>
                     <Text style={[styles.stageEyebrow, isDark && styles.stageEyebrowDark, styles.eyebrowGold]}>YOUR PROGRESS</Text>
-                    <Text style={styles.stageTitle}>{lifecycle ? JOB_LIFECYCLE_LABELS[lifecycle] : ''}</Text>
+                    <Text style={styles.stageTitle}>{lifecycle ? titleCase(JOB_LIFECYCLE_LABELS[lifecycle]) : ''}</Text>
                   </View>
                 </View>
                 <View style={styles.stepper}>
@@ -971,7 +1005,7 @@ export function WorkerJobScreen() {
                           </View>
                         </View>
                         <Text style={[styles.stepperLabel, (done || current) && styles.stepperLabelOn]} numberOfLines={1}>
-                          {label}
+                          {titleCase(label)}
                         </Text>
                       </View>
                     );
@@ -979,7 +1013,7 @@ export function WorkerJobScreen() {
                 </View>
                 {/* 2026-09-30 (idea 5): before arriving, three chips say how late — one tap tells the
                     customer and moves the arrival time; the words then say they were told. */}
-                {beforeArrival && isLateDay(job.scheduled_date) ? (
+                {beforeArrival && isLateDay(job.scheduled_date, new Date(serverNowMs())) ? (
                   <View style={styles.lateBlock}>
                     <Text style={[styles.lateLabel, job.late_minutes != null && styles.lateLabelTold]} numberOfLines={1}>
                       {job.late_minutes != null ? `${clientFirstName} was told ✓` : 'Running late?'}
@@ -1006,6 +1040,20 @@ export function WorkerJobScreen() {
                     ? `Waiting for ${clientName} to protect the payment. If it isn’t protected within 24 hours of the hire, the job is closed. Until it’s held, sort out the details in chat.`
                     : `Each tap tells ${clientName} where things stand — nothing tracks your location.`}
                 </Text>
+                {/* G2 RESTRUCTURE: the optional shortcut sits with the stages it skips, so the
+                    floating next step stands alone at the foot. */}
+                {canSkipToStart ? (
+                  <PressScale
+                    onPress={handleStart}
+                    disabled={working || marking !== null}
+                    hitSlop={8}
+                    style={({ pressed }) => [styles.skipLink, pressed && styles.pressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Already There? Start the Job"
+                  >
+                    <Text style={styles.skipLinkText}>Already There? Start the Job</Text>
+                  </PressScale>
+                ) : null}
               </Card>
 
               {/* A10 (2026-10-03): the nudge at the hire — before any payment row exists — so
@@ -1017,18 +1065,18 @@ export function WorkerJobScreen() {
                   onPress={() => navigateAcrossTabs('Profile', 'Payouts', {})}
                   style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
                   accessibilityRole="button"
-                  accessibilityLabel="Set up payouts"
+                  accessibilityLabel="Set Up Payouts"
                   accessibilityHint="Opens Payouts so the payment can reach you"
                 >
                   <Ionicons name="wallet-outline" size={20} color={colors.emerald} />
-                  <Text style={styles.linkRowText}>Set up payouts so the payment can reach you</Text>
+                  <Text style={styles.linkRowText}>Set Up Payouts</Text>
                   <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                 </Pressable>
               ) : null}
 
               {job.status === 'in_progress' ? (
                 <Card>
-                  <Text style={styles.actionTitle}>Finish up</Text>
+                  <Text style={styles.actionTitle}>Finish Up</Text>
                   {/* C8: the counter says the limit and the line by the button
                       says a photo is required — this hint says neither again. */}
                   <Text style={styles.actionText}>
@@ -1038,7 +1086,7 @@ export function WorkerJobScreen() {
 
                   {doneVideo && (
                     <View style={styles.videoWrap}>
-                      <JobVideo uri={doneVideo.url} label="Finished work" />
+                      <JobVideo uri={doneVideo.url} label="Finished Work" />
                       <Pressable
                         style={styles.photoRemove}
                         onPress={removeDoneVideo}
@@ -1101,7 +1149,7 @@ export function WorkerJobScreen() {
                         <Ionicons name="camera-outline" size={22} color={colors.primary} />
                       )}
                       <Text style={styles.photoPickerText}>
-                        {uploadingMedia ? 'Uploading…' : 'Add photos or video'}
+                        {uploadingMedia ? 'Uploading…' : 'Add Photos or Video'}
                       </Text>
                     </PressScale>
                   )}
@@ -1127,18 +1175,20 @@ export function WorkerJobScreen() {
                   would accept it (noShowReportable mirrors its four gates). */}
               {isWorker ? (
                 <View style={styles.exitRow}>
-                  {job && noShowReportable({ job }) ? (
+                  {job && noShowReportable({ job, nowMs: serverNowMs() }) ? (
                     <Button
-                      title="Customer wasn’t there"
-                      variant="secondary"
+                      title="Customer Wasn’t There"
+                      variant="quiet"
+                      size="sm"
                       onPress={() => void handleExit('customer_no_show')}
                       loading={exiting === 'customer_no_show'}
                       disabled={exiting !== null || working}
                     />
                   ) : null}
                   <Button
-                    title="Cancel this job"
+                    title="Cancel This Job"
                     variant="destructive"
+                    size="sm"
                     onPress={() => void handleExit('worker_cancelled')}
                     loading={exiting === 'worker_cancelled'}
                     disabled={exiting !== null || working}
@@ -1159,7 +1209,7 @@ export function WorkerJobScreen() {
                   title={`Message ${clientName}`}
                   icon="chatbubble-outline"
                   iconPosition="leading"
-                  variant="secondary"
+                  variant="quiet"
                   onPress={() => navigation.navigate('Chat', { jobId: job.id })}
                 />
               )}
@@ -1175,7 +1225,7 @@ export function WorkerJobScreen() {
                 <>
                   {completionPhotosOf(job).length > 0 || completionVideosOf(job).length > 0 ? (
                     <Card>
-                      <Text style={styles.actionTitle}>Finished work</Text>
+                      <Text style={styles.actionTitle}>Finished Work</Text>
                       {completionPhotosOf(job).length > 0 && (
                         <ScrollView
                           horizontal
@@ -1203,7 +1253,7 @@ export function WorkerJobScreen() {
                           style={styles.donePhotoScroll}
                         >
                           {completionVideosOf(job).map((url) => (
-                            <JobVideo key={url} uri={url} label="Finished work" />
+                            <JobVideo key={url} uri={url} label="Finished Work" />
                           ))}
                         </ScrollView>
                       )}
@@ -1233,32 +1283,20 @@ export function WorkerJobScreen() {
             </>
           )}
         </ScrollView>
-
-        {/* M-3 — THE ONE PINNED PRIMARY: always the next step, never two
-            buttons of equal weight. */}
-        {stageAction ? (
-          <View style={[styles.actionBar, { paddingBottom: footerPad }]}>
-            <Button
-              title={stageAction.title}
-              onPress={stageAction.onPress}
-              loading={stageAction.loading}
-              disabled={stageAction.disabled}
-            />
-            {canSkipToStart ? (
-              <PressScale
-                onPress={handleStart}
-                disabled={working || marking !== null}
-                hitSlop={8}
-                style={({ pressed }) => [styles.skipLink, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Start job now"
-              >
-                <Text style={styles.skipLinkText}>Already there? Start the job</Text>
-              </PressScale>
-            ) : null}
-          </View>
-        ) : null}
         </KeyboardAvoid>
+
+        {/* M-3 — THE ONE PRIMARY: always the next step, never two buttons of equal weight.
+            G2 RESTRUCTURE: it floats with no plate (ui/primitives/FloatingAction) and the bar
+            steps aside while the job is live. */}
+        {floatingStep ? (
+          <FloatingAction
+            title={floatingStep.title}
+            onPress={floatingStep.onPress}
+            loading={floatingStep.loading}
+            disabled={floatingStep.disabled}
+          />
+        ) : null}
+        </>
       )}
 
       <PhotoViewer
@@ -1272,8 +1310,13 @@ export function WorkerJobScreen() {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // G2: the way out sits apart, behind a hairline, smaller than the one main action.
   exitRow: {
     gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingTop: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   // M-3 — the stage screen: getting there, your progress, and the one pinned
   // primary.
@@ -1297,7 +1340,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.border,
   },
   messagePillText: {
-    fontSize: 13,
+    ...textScale.label,
     fontWeight: '700',
     color: colors.emerald,
   },
@@ -1311,13 +1354,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: 2,
   },
   thereText: {
-    fontSize: 15,
+    ...textScale.callout,
     fontWeight: '700',
     color: colors.ink,
   },
   thereCaption: {
-    fontSize: 12,
-    lineHeight: 17,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   directions: {
@@ -1331,7 +1374,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.border,
   },
   directionsText: {
-    fontSize: 13,
+    ...textScale.label,
     fontWeight: '700',
     color: colors.emerald,
   },
@@ -1349,9 +1392,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     gap: spacing.md,
   },
+  // G2: the stage is the page's one status line, in the title step.
   stageTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    ...textScale.title,
     color: colors.ink,
   },
   stepper: {
@@ -1402,8 +1445,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.primary,
   },
   stepperLabel: {
-    fontSize: 11,
-    fontWeight: '600',
+    ...textScale.footnote,
     color: colors.textMuted,
   },
   stepperLabelOn: {
@@ -1411,8 +1453,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.ink,
   },
   stageNote: {
-    fontSize: 12,
-    lineHeight: 17,
+    ...textScale.body,
     color: colors.textMuted,
   },
   // Idea 5: the words over the three chips, so a longer "<name> was told ✓" and the chosen chip's
@@ -1427,7 +1468,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
   },
   lateLabel: {
-    fontSize: 13,
+    ...textScale.label,
     fontWeight: '700',
     color: colors.ink,
   },
@@ -1447,17 +1488,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   linkRowText: {
     flex: 1,
-    fontSize: 15,
+    ...textScale.callout,
     fontWeight: '700',
     color: colors.ink,
-  },
-  actionBar: {
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
   },
   skipLink: {
     alignSelf: 'center',
@@ -1465,7 +1498,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
   },
   skipLinkText: {
-    fontSize: 13,
+    ...textScale.label,
     fontWeight: '700',
     color: colors.textMuted,
   },
@@ -1491,9 +1524,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
   },
   paymentNote: {
-    fontSize: 13,
+    ...textScale.body,
     color: colors.textMuted,
-    lineHeight: 19,
+  },
+  // A2-M5 4d-1: the held payment in the hero place, its words where MoneyText puts a caption.
+  heldFact: {
+    gap: spacing.xs / 2,
+  },
+  heldFactLabel: {
+    ...textScale.caption,
+    color: colors.textMuted,
   },
   // #63 — the nudge sits under the note, above the breakdown.
   payoutNudge: {
@@ -1514,22 +1554,22 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.md,
   },
   breakdownLabel: {
-    fontSize: 13,
+    ...textScale.body,
     color: colors.textMuted,
   },
   breakdownValue: {
-    fontSize: 13,
+    ...textScale.body,
     fontWeight: '700',
     color: colors.ink,
     fontVariant: ['tabular-nums'],
   },
   breakdownStrongLabel: {
-    fontSize: 14,
+    ...textScale.control,
     fontWeight: '800',
     color: colors.ink,
   },
   breakdownStrongValue: {
-    fontSize: 16,
+    ...textScale.control,
     fontWeight: '800',
     color: colors.money,
     fontVariant: ['tabular-nums'],
@@ -1565,22 +1605,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderWidth: 1,
     borderColor: colors.border,
   },
-  iconCircleDark: {
-    backgroundColor: colors.mint,
-  },
   jobHeaderText: {
     flex: 1,
-    gap: 2,
+    gap: spacing.xs,
   },
   // Decision 9: card titles and prices are display type.
   jobTitle: {
-    fontFamily: fonts.display,
-    fontSize: 20,
-    fontWeight: '700',
+    ...textScale.title,
     color: colors.ink,
   },
   jobMeta: {
-    fontSize: 13,
+    ...textScale.body,
     color: colors.textMuted,
   },
   jobFooter: {
@@ -1600,26 +1635,22 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderTopColor: colors.border,
   },
   amount: {
-    fontFamily: fonts.display,
-    fontSize: 24,
-    fontWeight: '800',
+    ...textScale.heading,
+    letterSpacing: 0,
     color: colors.money,
   },
   muted: {
-    fontSize: 13,
+    ...textScale.body,
     color: colors.textMuted,
   },
   actionTitle: {
-    fontFamily: fonts.display,
-    fontSize: 20,
-    fontWeight: '700',
+    ...textScale.title,
     color: colors.ink,
   },
   actionText: {
-    fontSize: 14,
+    ...textScale.body,
     color: colors.textMuted,
     marginTop: spacing.xs,
-    lineHeight: 20,
   },
   action: {
     marginTop: spacing.lg,
@@ -1638,9 +1669,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.primarySoft,
   },
   photoPickerText: {
+    ...textScale.body,
     color: colors.primary,
     fontWeight: '700',
-    fontSize: 14,
   },
   photoWrap: {
     marginTop: spacing.lg,
@@ -1652,7 +1683,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     position: 'relative',
   },
   mediaCount: {
-    fontSize: 13,
+    ...textScale.body,
     color: colors.textMuted,
     marginTop: spacing.sm,
   },
@@ -1700,7 +1731,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   noticeText: {
     flex: 1,
-    fontSize: 14,
+    ...textScale.body,
     color: colors.textMuted,
   },
   error: {
@@ -1708,7 +1739,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.dangerBg,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
-    fontSize: 14,
+    ...textScale.body,
   },
   }),
 );

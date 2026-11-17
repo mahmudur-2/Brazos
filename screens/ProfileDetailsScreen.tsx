@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { Chip } from '../components/Chip';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
@@ -18,10 +19,9 @@ import { skillCategoryLabel } from '../lib/skillCategories';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import {
   EYEBROW_TYPE,
-  litCardStyle, fonts,
-  radius,
   spacing,
   starColors,
+  textScale,
   themedStyles,
   useThemeColors,
   type ColorPalette,
@@ -29,6 +29,7 @@ import {
 } from '../lib/theme';
 import { useScrollClearance } from '../ui/primitives';
 import { formatMonthYear } from '../lib/time';
+import { titleCase } from '../lib/titleCase';
 
 const LANGUAGE_LABELS: Record<string, string> = { en: 'English', es: 'Español' };
 
@@ -115,10 +116,10 @@ export function ProfileDetailsScreen() {
 
   // 2026-09-28 (LUX-LIST-64 #2): the phone row's label is the mint (`accent`).
   const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; muted?: boolean; accent?: boolean }[] = [
-    { icon: 'person-outline', label: 'Full name', value: profile?.full_name?.trim() || 'Not set', muted: !profile?.full_name?.trim() },
+    { icon: 'person-outline', label: 'Full Name', value: profile?.full_name?.trim() || 'Not set', muted: !profile?.full_name?.trim() },
     {
       icon: 'call-outline',
-      label: 'Phone number',
+      label: 'Phone Number',
       value: profile?.phone ? formatPhoneDisplay(profile.phone) : 'Not set',
       muted: !profile?.phone,
       accent: true,
@@ -142,15 +143,15 @@ export function ProfileDetailsScreen() {
         title="Profile Details"
         onBack={goBackOrHome}
         right={
-          <Pressable
+          <Button
+            title="Edit"
+            variant="ghost"
+            size="sm"
+            icon="pencil"
+            iconPosition="leading"
             onPress={() => navigation.navigate('ProfileMain', { edit: true })}
-            hitSlop={10}
-            accessibilityRole="button"
             accessibilityLabel="Edit profile"
-            style={[styles.squircle, isDark && styles.squircleDark]}
-          >
-            <Ionicons name="pencil" size={18} color={isDark ? colors.gold : colors.primary} />
-          </Pressable>
+          />
         }
       />
 
@@ -174,16 +175,19 @@ export function ProfileDetailsScreen() {
           {user?.email ? <Text style={styles.email}>{user.email}</Text> : null}
 
           <View style={styles.metaRow}>
-            {/* D1 (R8b-c): the worker role's shown_average, or the word New —
-                nothing at all with zero revealed worker reviews, and nothing
-                while the read is unanswered. */}
+            {/* D1 (R8b-c): the worker role's shown_average with its count, or the
+                count alone while the rating is young — nothing at all with zero
+                revealed worker reviews, and nothing while the read is unanswered. */}
             {workerSummary && workerReviewTotal > 0 ? (
               <View style={styles.metaItem}>
-                <Ionicons name="star" size={15} color={starColors(colors, isDark).filled} />
+                {/* F11 (owner, 2026-11-16): no star beside a young rating. */}
+                {workerSummary.isNew || workerSummary.shownAverage == null ? null : (
+                  <Ionicons name="star" size={15} color={starColors(colors, isDark).filled} />
+                )}
                 <Text style={styles.metaStrong}>
                   {workerSummary.isNew || workerSummary.shownAverage == null
-                    ? 'New'
-                    : workerSummary.shownAverage.toFixed(1)}
+                    ? `${workerReviewTotal} ${workerReviewTotal === 1 ? 'review' : 'reviews'}`
+                    : `${workerSummary.shownAverage.toFixed(1)} (${workerReviewTotal})`}
                 </Text>
               </View>
             ) : null}
@@ -207,7 +211,7 @@ export function ProfileDetailsScreen() {
 
           {reviewTotal > 0 && user ? (
             <Button
-              title="See all your reviews"
+              title="See All Your Reviews"
               variant="secondary"
               icon="star-outline"
               iconPosition="leading"
@@ -224,55 +228,36 @@ export function ProfileDetailsScreen() {
           ) : null}
         </View>
 
-        <Card style={[styles.card, litCardStyle(isDark)]}>
-          <View style={styles.cardHead}>
-            <View style={[styles.cardGlyph, isDark && styles.cardGlyphDark]}>
-              <Ionicons
-                name="person-outline"
-                size={18}
-                color={isDark ? colors.gold : colors.primary}
-              />
-            </View>
-            <View style={styles.cardHeadCopy}>
-              <Text style={styles.eyebrow}>BOTH MODES</Text>
-              <Text style={styles.cardTitle}>Profile details</Text>
-            </View>
-            {/* F20: the card's own "Edit profile" chip was the third door to the same editor;
-                the header pencil above and the Profile hub's Edit pill stay. */}
-          </View>
-
-          {rows.map((row) => (
-            <View key={row.label} style={styles.detailRow}>
-              <View style={[styles.rowGlyph, isDark && styles.cardGlyphDark]}>
-                <Ionicons
-                  name={row.icon}
-                  size={16}
-                  color={isDark ? colors.gold : colors.textMuted}
-                />
+        {/* One lit group under its section label: the stored value right of each label.
+            F20: the header's Edit is the one door to the editor. */}
+        <View style={styles.section}>
+          <Text accessibilityRole="header" style={styles.sectionLabel}>Both Modes</Text>
+          <Card style={styles.card}>
+            {rows.map((row, index) => (
+              <View key={row.label} style={[styles.detailRow, index > 0 && styles.rowDivider]}>
+                <Ionicons name={row.icon} size={20} color={isDark ? colors.emerald : colors.mark} />
+                <Text style={[styles.rowLabel, row.accent && { color: colors.emerald }, isDark && styles.rowLabelDark]}>{row.label}</Text>
+                <Text
+                  style={[styles.rowValue, row.muted && styles.rowValueMuted]}
+                  numberOfLines={2}
+                >
+                  {row.value}
+                </Text>
               </View>
-              <Text style={[styles.rowLabel, row.accent && { color: colors.emerald }]}>{row.label}</Text>
-              <Text
-                style={[styles.rowValue, row.muted && styles.rowValueMuted]}
-                numberOfLines={2}
-              >
-                {row.value}
-              </Text>
-            </View>
-          ))}
+            ))}
 
-          {categories.length > 0 ? (
-            <View style={styles.categoryBlock}>
-              <Text style={styles.eyebrow}>JOB CATEGORIES</Text>
-              <View style={styles.categoryRow}>
-                {categories.map((key) => (
-                  <View key={key} style={styles.chip}>
-                    <Text style={styles.chipText}>{skillCategoryLabel(key)}</Text>
-                  </View>
-                ))}
+            {categories.length > 0 ? (
+              <View style={[styles.categoryBlock, styles.rowDivider]}>
+                <Text accessibilityRole="header" style={styles.eyebrow}>Job Categories</Text>
+                <View style={styles.categoryRow}>
+                  {categories.map((key) => (
+                    <Chip key={key} variant="soft" size="sm" label={titleCase(skillCategoryLabel(key))} />
+                  ))}
+                </View>
               </View>
-            </View>
-          ) : null}
-        </Card>
+            ) : null}
+          </Card>
+        </View>
       </ScrollView>
 
       <PhotoViewer
@@ -291,33 +276,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   content: {
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
-    gap: spacing.lg,
-  },
-  squircle: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  squircleDark: {
-    borderColor: colors.gold,
+    gap: spacing.xl,
   },
   identity: {
     alignItems: 'center',
     gap: spacing.sm,
   },
   name: {
-    fontFamily: fonts.display,
-    fontSize: 30,
-    fontWeight: '800',
+    ...textScale.display,
     color: colors.ink,
     textAlign: 'center',
+    marginTop: spacing.xs,
   },
   email: {
-    fontSize: 15,
+    ...textScale.callout,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   metaRow: {
@@ -333,94 +306,52 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.xs,
   },
   metaStrong: {
-    fontSize: 15,
+    ...textScale.callout,
     fontWeight: '700',
     color: colors.ink,
   },
   metaText: {
-    fontSize: 14,
+    ...textScale.body,
     color: colors.textMuted,
   },
   reviewsAction: {
     alignSelf: 'stretch',
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
   },
-  card: { gap: spacing.md },
-  cardDark: { borderColor: colors.border },
-  cardHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+  section: { gap: spacing.sm },
+  sectionLabel: {
+    ...EYEBROW_TYPE,
+    color: colors.eyebrow,
+    marginHorizontal: 2,
   },
-  cardHeadCopy: { flex: 1, gap: 2 },
-  cardGlyph: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.mint,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cardGlyphDark: {
-    backgroundColor: 'transparent',
-  },
-  rowGlyph: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.mint,
-  },
+  card: { paddingVertical: spacing.xs },
   eyebrow: {
     ...EYEBROW_TYPE,
     color: colors.eyebrow,
-  },
-  cardTitle: {
-    fontFamily: fonts.display,
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  chip: {
-    flexShrink: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    minHeight: 34,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    // 2026-09-28 (LUX-LIST-64 #47, the operator's follow-up on the gold sheet):
-    // the "Edit profile" outline and the JOB CATEGORIES chips are the MARK — the
-    // gold in dark, as they were; the forest green #064C3B in light.
-    borderColor: colors.mark,
-  },
-  chipText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.mark,
   },
   // Master 42's value-right row.
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    minHeight: 48,
-    paddingTop: spacing.sm,
+    minHeight: 52,
+    paddingVertical: spacing.md,
+  },
+  rowDivider: {
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
   rowLabel: {
     flexShrink: 0,
-    fontSize: 15,
+    ...textScale.callout,
+    fontWeight: '400',
     color: colors.textMuted,
   },
+  // F5: in dark a field label is the main button's mint.
+  rowLabelDark: { color: colors.primary },
   rowValue: {
     flex: 1,
-    fontSize: 15,
+    ...textScale.callout,
     fontWeight: '700',
     color: colors.ink,
     textAlign: 'right',
@@ -431,9 +362,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   categoryBlock: {
     gap: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    paddingVertical: spacing.md,
   },
   categoryRow: {
     flexDirection: 'row',

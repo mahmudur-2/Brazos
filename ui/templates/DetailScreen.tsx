@@ -31,6 +31,8 @@ export type DetailSection = {
 type DetailScreenProps = {
   title: string;
   subtitle?: string;
+  /** M5: the header subtitle's lines (components/ScreenHeader.tsx `subtitleLines`). */
+  subtitleLines?: 1 | 2;
   onBack?: () => void;
   /** 2026-09-29 (LUX-LIST-2 #8): the header's back label; '' draws the disc alone (the feed). */
   backLabel?: string;
@@ -53,6 +55,7 @@ type DetailScreenProps = {
 export function DetailScreen({
   title,
   subtitle,
+  subtitleLines,
   onBack,
   backLabel,
   headerRight,
@@ -74,7 +77,14 @@ export function DetailScreen({
   const footerPad = usePinnedFooterPadding();
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
-      <ScreenHeader title={title} subtitle={subtitle} onBack={onBack} backLabel={backLabel} right={headerRight} />
+      <ScreenHeader
+        title={title}
+        subtitle={subtitle}
+        subtitleLines={subtitleLines}
+        onBack={onBack}
+        backLabel={backLabel}
+        right={headerRight}
+      />
 
       {!isReady(state) ? (
         <ScreenStateView state={state as Exclude<ScreenState, { kind: 'ready' }>} />

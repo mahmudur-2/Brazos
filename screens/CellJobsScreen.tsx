@@ -4,13 +4,11 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  View,
 } from 'react-native';
 import { EntranceView } from '../components/EntranceView';
 import { entranceSlot, useEntered } from '../hooks/useEntrance';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import { BrowseJobCard } from '../components/BrowseJobCard';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useOfferCounts } from '../hooks/useOfferCounts';
@@ -20,10 +18,10 @@ import { goBackOrHome } from '../lib/navigationRef';
 import type { OpenJob } from '../lib/jobs';
 import type { MapStackNavigation, MapStackParamList } from '../lib/navigation';
 import { supabase } from '../lib/supabase';
-import { spacing, themedStyles, useThemeColors, type ColorPalette,
+import { spacing, textScale, themedStyles, useThemeColors, type ColorPalette,
   screenGround,
 } from '../lib/theme';
-import { useScrollClearance } from '../ui/primitives';
+import { EmptyState, useScrollClearance } from '../ui/primitives';
 import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 
 const REFRESH_DEBOUNCE_MS = 1500;
@@ -136,15 +134,12 @@ export function CellJobsScreen() {
           }
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <View style={styles.emptyIcon}>
-                <Ionicons name="briefcase-outline" size={30} color={colors.primary} />
-              </View>
-              <Text style={styles.emptyTitle}>No jobs here anymore</Text>
-              <Text style={styles.emptyText}>
-                These jobs may have just been filled. Pull to refresh.
-              </Text>
-            </View>
+            // G2: the shared "nothing here" surface, same words.
+            <EmptyState
+              icon="briefcase-outline"
+              title="No jobs here anymore"
+              body="These jobs may have just been filled. Pull to refresh."
+            />
           }
         />
       )}
@@ -164,41 +159,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   emptyContainer: {
     flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  empty: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    maxWidth: 300,
-  },
-  emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 20,
   },
   error: {
+    ...textScale.body,
     color: colors.danger,
     backgroundColor: colors.dangerBg,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
-    fontSize: 14,
   },
   }),
 );

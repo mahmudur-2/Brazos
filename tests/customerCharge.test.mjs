@@ -48,7 +48,7 @@ test('2 · JobConfirmed, ClientJobDetail and ApproveOrDispute show the customer 
   const approve = stripComments(read('screens/ApproveOrDisputeScreen.tsx'));
   // 2026-09-26 (the refresh, audit M-6): the CTA names the act; the dialog names
   // the charge — still the charge, never amount_cents.
-  assert.match(approve, /`Approve & release payment`/);
+  assert.match(approve, /`Approve & Release Payment`/);
   assert.match(approve, /`Your card was charged \$\{formatBudget\(payment \? customerChargeCents\(payment\) : null\)\} at checkout/);
   const detail = stripComments(read('screens/ClientJobDetailScreen.tsx'));
   // Pack 1, Codex R5-A4: the cancelled card reads cancelledPayment (payment ?? refundIssue), still the charge.

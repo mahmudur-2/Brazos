@@ -177,8 +177,11 @@ test('[static] F12: the most-pressed controls sink on the one press spring, the 
   assert.match(fast, /const animated = useReducedMotion\(\) === false;/);
   assert.match(fast, /animated \? motion : undefined/);
   // The wrapper takes the caller's place and its layout callback; the Pressable keeps what draws it.
+  // A2-M2: the caller's style passes through `withPressDim` (the dim as a pressed style) where no
+  // UI-thread value carries the dim, and `fill` reaches the split.
+  assert.match(fallback, /pressStyles\(withPressDim\(style, dim\), fill\)/);
+  assert.match(fast, /pressStyles\(animated \? style : withPressDim\(style, dim\), fill\)/);
   for (const source of [fallback, fast]) {
-    assert.match(source, /pressStyles\(style\)/);
     // The wrapper also carries the slop: on the New Architecture a view its children do not
     // overflow hit-tests as clipped, so a slop on the Pressable alone dies at the wrapper's edge.
     assert.match(source, /onLayout=\{onLayout\} hitSlop=\{hitSlop\}>/);
@@ -189,20 +192,26 @@ test('[static] F12: the most-pressed controls sink on the one press spring, the 
   // wrapper takes the wrapper's whole available height (the header's Back link grew to the
   // screen, and every screen with a header link went blank). Web flexbox never shows it.
   assert.match(shared, /const FILL: ViewStyle = \{\};/);
-  assert.doesNotMatch(shared, /flexGrow: 1/);
+  // A2-M2: the one growing share is `fill`'s — a ROW wrapper (the grow runs along the width the
+  // caller's `flex` share gives it), applied only when `fill` is set; Button sets it only for a flex share.
+  assert.equal(shared.match(/flexGrow: 1/g)?.length, 1, 'flexGrow: 1 appears once, in FILL_SHARE');
+  assert.match(shared, /const FILL_ROW: ViewStyle = \{ flexDirection: 'row' \};\s*const FILL_SHARE: ViewStyle = \{ flexGrow: 1, flexShrink: 1, flexBasis: 0 \};/);
+  assert.match(shared, /return fill \? \{ outer: \{ \.\.\.outer, \.\.\.FILL_ROW \}, inner: \{ \.\.\.inner, \.\.\.FILL_SHARE \} \} : \{ outer, inner \};/);
   // A sized or flexed wrapper wears the Pressable's border and padding, and the Pressable steps
   // back over them, so the share each sibling gets is the share it always got.
   assert.match(shared, /if \(SIZING_KEYS\.some\(\(key\) => key in outer\)\) mirrorBox\(flat, outer, inner\);/);
   assert.match(shared, /inner\[`margin\$\{side\}`\] = -\(border \+ pad\);/);
   assert.match(shared, /if \(any\) outer\.borderColor = 'transparent';/);
-  // The haptic is the hook's option: rows inside a scroller pass false.
-  assert.match(strip(read('hooks/usePressFeedback.ts')), /if \(haptic\) tap\(\);/);
+  // The haptic is the hook's option: rows inside a scroller pass false; A2-M2: 'select' ticks.
+  assert.match(strip(read('hooks/usePressFeedback.ts')), /if \(haptic === 'select'\) select\(\);\s*else if \(haptic\) tap\(\);/);
+  assert.match(strip(read('hooks/usePressFeedback.ts')), /pressHaptic\(haptic\);\s*spring\(PRESS_SCALE\);/);
+  assert.match(fast, /pressHaptic\(haptic\);/);
 
   const WEARERS = {
     'components/Button.tsx': /<PressScale\s+onPress=\{onPress\}/,
     'components/Chip.tsx': /<PressScale\s+onPress=\{onPress\}\s+onLayout=\{onLayout\}/,
     'components/ScreenHeader.tsx': /const backControl = onBack \? \(\s*<PressScale/,
-    'components/PostJobBar.tsx': /<PressScale\s+onPress=\{primary\.onPress\}/,
+    'components/PostJobBar.tsx': /<Button\s+title=\{primary\.label\}\s+onPress=\{primary\.onPress\}/ /* G1a: through the built Button */,
     'ui/templates/FormScreen.tsx': /<PressScale\s+onPress=\{onSubmit\}/,
     'components/JobFilterSheet.tsx': /<PressScale\s+onPress=\{onPress\}\s+hitSlop=\{touchSlop\(PILL_HEIGHT\)\}/,
     'screens/MessagesInboxScreen.tsx': /<PressScale\s+key=\{pill\.key\}\s+haptic=\{false\}/,

@@ -38,12 +38,14 @@ import {
 import { NotificationBell } from '../components/NotificationBell';
 import { alertAsync } from '../lib/dialog';
 import { ATTENTION_CAP, attentionItems } from '../lib/homeAttention';
-import { deriveJobLifecycle, isRefundFailureRecorded, jobPillLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
+import { deriveJobLifecycle, isRefundFailureRecorded, jobPillLabel, pausedPaymentNotice, releaseDeadlineMs } from '../lib/jobLifecycle';
 import { firstNameOf, liveJobStatus, pickLiveBarItem, postedCardLive } from '../lib/liveJobStatus';
 import { navigateAcrossTabs } from '../lib/navigationRef';
 import { openOwnJob } from '../lib/ownJobCard';
+import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { ALL_SERVICES } from '../lib/skillCategories';
 import { formatTimeAgo, greetingFor } from '../lib/time';
+import { serverNowMs } from '../lib/serverClock';
 import type { CustomerHomeStackNavigation } from '../lib/navigation';
 import { useShellGround } from '../lib/shellGround';
 import { EntranceView } from '../components/EntranceView';
@@ -473,13 +475,29 @@ export function HomeScreen() {
     }, [refreshMyJobs])
   );
 
+  // A4 wiring (A5, G1b-4): the owner's payments pause, read on each focus as My Jobs reads it
+  // (fetchRemoteConfig; a failed read is open), so a hire waiting for its payment is not told to
+  // complete a checkout that cannot open.
+  const [checkoutOpen, setCheckoutOpen] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      void fetchRemoteConfig().then((config) => {
+        if (active) setCheckoutOpen(config.paymentsEnabled);
+      });
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
   // One clock reading per data load — the hub's rule, so a card's countdown
   // and its rank cannot be read at two different instants.
   // Keyed on the read itself (F13 review): a cached read keeps the rows' identity.
-  const nowMs = useMemo(() => Date.now(), [myJobsReadAt]);
+  const nowMs = useMemo(() => serverNowMs(), [myJobsReadAt]);
   const items = useMemo(
-    () => attentionItems({ posted, payments, openDisputeJobIds, reviewedJobIds, nowMs }),
-    [posted, payments, openDisputeJobIds, reviewedJobIds, nowMs]
+    () => attentionItems({ posted, payments, openDisputeJobIds, reviewedJobIds, nowMs, checkoutOpen }),
+    [posted, payments, openDisputeJobIds, reviewedJobIds, nowMs, checkoutOpen]
   );
 
   // 2026-09-17 — "YOUR JOBS": the three most recent postings, whatever state
@@ -942,6 +960,7 @@ export function HomeScreen() {
                       status={job.status}
                       statusLabel={jobPillLabel(state, payments[job.id]?.status)}
                       nextAction={line}
+                      notice={pausedPaymentNotice({ state, checkoutOpen })}
                       live={live}
                       onChat={live ? () => openChat(job) : undefined}
                       chatLabel={chatLabel}

@@ -29,7 +29,7 @@ test('[static] a moment is news: fresh (two minutes), once per payment, haptic k
 test('[static] both sides feel it: the customer\'s held card and release, the worker\'s card and eyebrow', () => {
   const customer = flat(read('screens/ClientJobDetailScreen.tsx'));
   assert.match(customer, /<HeldPulse paymentId=\{payment\.id\} heldAt=\{payment\.held_at\}> <Card palette=\{emeraldColors\} style=\{\[styles\.paymentCard/);
-  assert.match(customer, /<Text style=\{styles\.approvalTitle\}>Payment released<\/Text> <ReleasedTick paymentId=\{payment\.id\} releasedAt=\{payment\.released_at\}/);
+  assert.match(customer, /<Text style=\{styles\.approvalTitle\}>Payment Released<\/Text> <ReleasedTick paymentId=\{payment\.id\} releasedAt=\{payment\.released_at\}/);
   const worker = flat(read('screens/WorkerJobScreen.tsx'));
   assert.match(worker, /<HeldPulse paymentId=\{payment\.id\} heldAt=\{isHeld\(payment\) \? payment\.held_at : null\}> <Card style=\{styles\.paymentCard\}>/);
   assert.match(worker, /\{isReleased\(payment\) \? \( <ReleasedTick paymentId=\{payment\.id\} releasedAt=\{payment\.released_at\}/);

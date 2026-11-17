@@ -8,13 +8,12 @@ import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
 import { Card } from '../components/Card';
 import { useAuth } from '../hooks/useAuth';
-import { authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
+import { authSizes, authSpacing, authType } from '../lib/authTheme';
 import {
   authSurface,
   fonts,
   themedStyles,
   useThemeColors,
-  withAlpha,
   type ColorPalette,
 } from '../lib/theme';
 import type { AuthStackNavigation } from '../lib/navigation';
@@ -62,10 +61,13 @@ import { Announce } from '../hooks/useAnnounce';
  * column LIFTS 24 (the air between the bar and the eyebrow) so the button
  * clears the password field on every phone; the back control is the iOS
  * circle with its press.
+ *
+ * 2026-11-16 (G4): the footer is the sign-in family's pair — Continue, then the
+ * phone route as the quiet well — and the form error is one red line, no box.
  */
 export function EmailSignInScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
-  const { login, bannedNotice } = useAuth();
+  const { login } = useAuth();
   const passwordRef = useRef<TextInput>(null);
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -133,24 +135,22 @@ export function EmailSignInScreen() {
     if (error) setFormError(authMessage(error));
   }
 
-  // The ship page's two controls, pinned by the scaffold (see its `footer`):
-  // Continue ON TOP — lit, the gold chevron — and the phone route under it,
-  // outlined with its glyph (`hero` without `lit`, not `ghost`, because a
-  // ghost hero is the Welcome's text link and the page draws a box). The
-  // footer rides the keyboard until Continue sits flush on it; the phone
+  // The sign-in family's two controls, pinned by the scaffold (see its
+  // `footer`): the main Continue on top, and the phone route under it as the
+  // family's quiet well with its glyph — the same pair on every sign-in screen.
+  // The footer rides the keyboard until Continue sits flush on it; the phone
   // route goes under the keyboard while a field is being typed in.
   const footer = (
     <View style={styles.footer}>
-      <AuthButton title="Continue" themed hero lit chevron onPress={handleContinue} loading={loading} />
+      <AuthButton title="Continue" themed onPress={handleContinue} loading={loading} />
       {/* Only while phone sign-in is live (B2): with SMS off, the phone
           screen would end on "not switched on yet". */}
       {PHONE_ENTRY.live && (
         <AuthButton
           title="Use Phone Number Instead"
+          variant="quiet"
           themed
-          hero
           icon="phone-portrait-outline"
-          chevron
           // popTo(), not navigate(): React Navigation 7 changed navigate() to
           // push when the target isn't the current route, which would stack a
           // second SignIn on top of the one the user came from and throw away
@@ -181,15 +181,6 @@ export function EmailSignInScreen() {
         <Text style={styles.subtitle}>
           The email and password on your account.
         </Text>
-
-        {bannedNotice ? (
-          <View style={styles.notice}>
-            <AuthNotice tone="danger">
-              This account has been suspended for violating the Brazos community
-              rules. Contact support if you think this is a mistake.
-            </AuthNotice>
-          </View>
-        ) : null}
 
         <View style={styles.form}>
           {/* 2026-09-27 (the Lux remake, the operator's pic 3): ONE lifted
@@ -287,7 +278,7 @@ export function EmailSignInScreen() {
 
 /** The footer under its lead: the 12 gap and the phone route — what goes
  *  under the keyboard when Continue lands on it. */
-const FOOTER_BELOW_LEAD = authSpacing.md + authSizes.heroButton;
+const FOOTER_BELOW_LEAD = authSpacing.md + authSizes.button;
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
@@ -319,9 +310,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.textMuted,
     marginTop: authSpacing.sm,
   },
-  notice: {
-    marginTop: authSpacing.lg,
-  },
   form: {
     marginTop: authSpacing.xl,
     gap: authSpacing.lg,
@@ -330,13 +318,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   fields: {
     gap: authSpacing.lg,
   },
+  // The sign-in family's error: one red line under the card, in from its edge
+  // like a field's own line — no box. The footer is pinned, so it never moves
+  // the button.
   formError: {
-    padding: authSpacing.md,
-    borderRadius: authRadius.field,
-    // Was the literal #F5E7E4 — a pale Heritage wash that stayed pale on a
-    // near-black ground. Expressed as the palette's own danger at wash
-    // strength, the same resolution sibling 4 reached.
-    backgroundColor: withAlpha(colors.danger, 0.14),
+    paddingHorizontal: authSpacing.xs,
   },
   formErrorText: {
     ...authType.note,

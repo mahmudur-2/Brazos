@@ -44,9 +44,12 @@ import { AuthFlow } from './screens/AuthFlow';
 import { OnboardingFlow } from './screens/OnboardingFlow';
 import { LaunchScreen } from './screens/LaunchScreen';
 import { LegalGateScreen } from './screens/LegalGateScreen';
+import { SuspendedAccountFlow } from './screens/SuspendedAccountScreen';
 import { ScreenStateView } from './ui/templates';
 import { useLegalGate } from './hooks/useLegalGate';
 import { useSetupStatus } from './hooks/useSetupStatus';
+import { useUpdateStop } from './hooks/useUpdateStop';
+import { UpdateStopScreen } from './components/StopNotice';
 import { initSentry, wrapApp } from './lib/observability/sentry';
 
 /**
@@ -78,12 +81,48 @@ function MainTabs() {
   );
 }
 
+/**
+ * B1: the cold-start URL is read once per PROCESS, not once per mount: RootNavigator mounts again
+ * when a suspension ends, and must not dispatch the launch link a second time.
+ */
+const handledInitialUrl = { current: false };
+
+/**
+ * B1 (production-36h) — THE SUSPENDED GATE, before every other gate. While the server says the
+ * signed-in account is suspended (lib/AuthContext.tsx `suspended`, current_user_is_banned), the
+ * suspended screen and its delete flow show IN PLACE of RootNavigator: no legal or setup gate,
+ * no Setup, no main tree, no push sync and no link handler is mounted. The update stop still
+ * comes first. When the suspension ends, RootNavigator mounts fresh: the normal app.
+ *
+ * Until this account's first answer, RootNavigator holds its loader (below), so nothing of the app
+ * shows before the answer; the answer is read beside the legal and setup reads, not before them.
+ */
+function AccountGate() {
+  const { user, suspended } = useAuth();
+  if (user && suspended === true) return <SuspendedGate />;
+  return <RootNavigator />;
+}
+
+function SuspendedGate() {
+  // U1: before everything, as in RootNavigator (one read: RootNavigator is not mounted here).
+  const updateStop = useUpdateStop();
+  // F1: both branches are drawn content the launch layer can lift onto.
+  const reportLaunchReady = useReportLaunchReady();
+  useEffect(() => {
+    reportLaunchReady();
+  }, [reportLaunchReady]);
+  if (updateStop) return <UpdateStopScreen />;
+  return <SuspendedAccountFlow />;
+}
+
 function RootNavigator() {
-  const { user, loading } = useAuth();
+  const { user, loading, suspended } = useAuth();
   const { palette } = useThemeColors();
   const legal = useLegalGate();
   const setup = useSetupStatus();
   const online = useOnline();
+  // U1 (A4-M5): a build below the server's minimum version stops here, signed in or not.
+  const updateStop = useUpdateStop();
 
   // Lives inside NavigationContainer so a tapped notification always has a
   // mounted container to route through.
@@ -98,7 +137,6 @@ function RootNavigator() {
   const linkBridge = useNotificationModeBridge();
   const [recoveryPending, setRecoveryPendingState] = useState(isRecoveryPending());
   useEffect(() => subscribeRecovery(setRecoveryPendingState), []);
-  const handledInitialUrl = useRef(false);
   const signedInUserIdRef = useRef<string | null>(null);
   signedInUserIdRef.current = user?.id ?? null;
   useEffect(() => {
@@ -113,7 +151,6 @@ function RootNavigator() {
           title: 'Reset another account’s password?',
           message: `This link resets the password for ${subject?.email ?? 'another account'}. Continue and sign out of your current account?`,
           confirmText: 'Continue',
-          cancelText: 'Cancel',
           destructive: true,
         });
         if (!ok || !active) return;
@@ -164,15 +201,20 @@ function RootNavigator() {
   // F1: every branch below but the tabs is real content the launch layer can
   // lift onto; the tabs report from ModeShell once the mode's tree has laid out.
   const reportLaunchReady = useReportLaunchReady();
-  const holdsLoader = loading || (!!user && (legal.state === 'loading' || setup.state === 'loading'));
+  // B1: and until this account's suspension answer is in (AccountGate swaps this out when it is yes).
+  const holdsLoader = loading || (!!user && (suspended === null || legal.state === 'loading' || setup.state === 'loading'));
   const reachesTabs = !!user && !recoveryPending && setup.state === 'complete' && legal.state === 'accepted';
-  // Reset-password, sign-in, Setup, the legal error and the legal re-prompt.
-  const drawsContent = !holdsLoader && !reachesTabs;
+  // The update stop, reset-password, sign-in, Setup, the legal error and the legal re-prompt.
+  const drawsContent = updateStop || (!holdsLoader && !reachesTabs);
   useEffect(() => {
     if (drawsContent) reportLaunchReady();
   }, [drawsContent, reportLaunchReady]);
 
-  if (loading || (user && (legal.state === 'loading' || setup.state === 'loading'))) {
+  // U1: before everything, sign-in included. The launch never waits for this read, and a failed
+  // or malformed one never stops anyone (lib/remoteConfig.ts mustUpdate).
+  if (updateStop) return <UpdateStopScreen />;
+
+  if (loading || (user && (suspended === null || legal.state === 'loading' || setup.state === 'loading'))) {
     return (
       <View style={[styles.loader, { backgroundColor: palette.background }]}>
         <ActivityIndicator size="large" color={palette.primary} />
@@ -359,7 +401,7 @@ function ThemedNavigation() {
               re-render of the crashed state. The launch overlay sits
               entirely outside it. */}
           <AppErrorBoundary>
-            <RootNavigator />
+            <AccountGate />
           </AppErrorBoundary>
           <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={palette.background} />
         </NavigationContainer>

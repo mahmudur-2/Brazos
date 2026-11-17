@@ -31,6 +31,7 @@ import {
   pressTab,
   UnderBarFade,
   useMeltMetrics,
+  useStepAside,
   type MeltTabBarProps,
 } from './MeltTabBar.shared';
 
@@ -45,6 +46,7 @@ function MeltTabBarFallback(props: MeltTabBarProps) {
   const slots = useMemo(() => meltSlots(tabs, hasCreate), [tabs, hasCreate]);
   const m = useMeltMetrics(slots.length);
   const reduced = useReducedMotion() === true;
+  const stepAside = useStepAside(reduced);
   const focused = focusedSlotIndex(state, slots);
   const home = focused >= 0 ? m.centres[focused] : m.centres[0];
   const styles = stylesFor();
@@ -99,7 +101,13 @@ function MeltTabBarFallback(props: MeltTabBarProps) {
       : Animated.spring(plusScale, { toValue, stiffness: 900, damping: 40, mass: 1, useNativeDriver: USE_NATIVE_DRIVER }).start();
 
   return (
-    <View pointerEvents="box-none" style={[styles.root, { height: m.bottom + meltBar.height }]}>
+    // A2-M3: the root wears the step-aside (MeltTabBar.shared `useStepAside`); at rest it wears nothing.
+    <Animated.View
+      pointerEvents={stepAside.pointerEvents}
+      accessibilityElementsHidden={stepAside.accessibilityElementsHidden}
+      importantForAccessibility={stepAside.importantForAccessibility}
+      style={[styles.root, { height: m.bottom + meltBar.height }, stepAside.aside]}
+    >
       <View style={pillStyle(m.isDark, m.pillWidth, m.bottom)}>
         <MeltRow
           slots={slots}
@@ -156,7 +164,7 @@ function MeltTabBarFallback(props: MeltTabBarProps) {
           onCreatePressOut={() => squish(1)}
         />
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

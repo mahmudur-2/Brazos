@@ -194,9 +194,13 @@ test('R4-A5, P3 · [static] every customer card passes both facts; the worker ca
   // Codex R7-A3: the worker's job card passes both facts, so it promises no payout beside a failed or
   // arranged refund (tests/payoutPromise.test.mjs); paymentCaption never gives the worker the customer's
   // sentences (P3 above). The Earnings figure shows no caption and carries neither.
+  // A2-M5 4d-1: before it, the held payment of a cancelled job held for review, which (as the Earnings
+  // figure) shows no caption and carries neither.
   const workerCards = cards('screens/WorkerJobScreen.tsx');
-  assert.equal(workerCards.length, 1, 'the worker job card is found');
-  assert.ok(workerCards[0].includes('refundFailed={isRefundFailed(payment)}') && workerCards[0].includes('refundArranged={isRefundArranged(payment)}'),
+  assert.equal(workerCards.length, 2, 'the held-for-review figure and the worker job card are found');
+  assert.ok(workerCards[0].startsWith('<MoneyText cents={payment.charge_amount_cents} state={payment.status} captionHidden ') && !/refundFailed|refundArranged/.test(workerCards[0]),
+    'the held-for-review figure shows no caption');
+  assert.ok(workerCards[1].includes('refundFailed={isRefundFailed(payment)}') && workerCards[1].includes('refundArranged={isRefundArranged(payment)}'),
     'the worker job card passes both facts');
   const earningsCards = cards('screens/EarningsScreen.tsx');
   assert.ok(earningsCards.length >= 1, 'the Earnings figure is found');
@@ -272,9 +276,9 @@ test('R5-A5, R7-A3 · [static] no "on its way to the worker" beside a refund (qu
   assert.ok(approve, 'ApproveOrDispute: the refund branch, then the approval sentences');
   // R7-A3: on a refund row an issue can have been reported after the timer: RT's existing first sentence.
   // Codex R8-A1: so on every row not on its way (an issue after the timer is Failure A, refund or not).
-  assert.deepEqual(approve.slice(1, 3), ['Approved automatically after 72 hours.', 'You approved the work.']);
+  assert.deepEqual(approve.slice(1, 3), ['Approved automatically.', 'You approved the work.']);
   assert.deepEqual(approve.slice(3, 5), [
-    `Approved automatically after 72 hours with no issue reported.${ON_ITS_WAY}`,
+    `Approved automatically with no issue reported.${ON_ITS_WAY}`,
     `You approved the work.${ON_ITS_WAY}`,
   ], 'control: without a refund issue the sentences are as before');
 
@@ -282,9 +286,9 @@ test('R5-A5, R7-A3 · [static] no "on its way to the worker" beside a refund (qu
     /: !isPayoutOnItsWay\(payment\) \? (?:\/\/[^']*)?payment\.release_reason === 'auto_approved' \? '([^']*)' : '([^']*)' : payment\.release_reason === 'auto_approved' \? '([^']*)' : '([^']*)'/
   );
   assert.ok(review, 'ReviewAndTip: the refund branch, then the approval sentences');
-  assert.deepEqual(review.slice(1, 3), ['Approved automatically after 72 hours.', 'Approved on your say-so.']);
+  assert.deepEqual(review.slice(1, 3), ['Approved automatically.', 'Approved on your say-so.']);
   assert.deepEqual(review.slice(3, 5), [
-    `Approved automatically after 72 hours.${ON_ITS_WAY}`,
+    `Approved automatically.${ON_ITS_WAY}`,
     `Approved on your say-so.${ON_ITS_WAY}`,
   ], 'control: without a refund issue the sentences are as before');
 });

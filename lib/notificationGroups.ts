@@ -1,4 +1,5 @@
 import type { AppNotification } from './notifications';
+import { marketDaysBetween } from './time';
 
 /**
  * 2026-09-29 (LUX-LIST-2 #8) — THE FEED'S SHAPE: day groups, and bids on one job folded into one row.
@@ -24,17 +25,19 @@ export type FeedEntry = {
 export type FeedGroup = { label: FeedDayLabel; entries: FeedEntry[] };
 export type FeedDayLabel = 'Today' | 'Yesterday' | 'This week' | 'Earlier';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+/** The days a "This week" group spans before Yesterday: today and the six days before it. */
+const WEEK_DAYS_BACK = 6;
 
-const startOfDay = (at: Date): number => new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
-
-/** Which day group a timestamp falls in, on the device's own calendar. */
+/**
+ * Which day group a timestamp falls in, on the market's calendar (C9, A4-M4: lib/time.ts), as
+ * every other "today" in the app. Calendar days are counted, never 24-hour blocks, so the day a
+ * clock changes (a 23- or 25-hour day) is still one day.
+ */
 export function feedDayLabel(iso: string, now: Date): FeedDayLabel {
-  const today = startOfDay(now);
-  const day = startOfDay(new Date(iso));
-  if (day >= today) return 'Today';
-  if (day >= today - DAY_MS) return 'Yesterday';
-  if (day >= today - 6 * DAY_MS) return 'This week';
+  const days = marketDaysBetween(new Date(iso), now);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days <= WEEK_DAYS_BACK) return 'This week';
   return 'Earlier';
 }
 

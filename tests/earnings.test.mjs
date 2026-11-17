@@ -375,7 +375,8 @@ test('a6 · the two reads carry the columns the sentences need, and the copy liv
     earnings.indexOf(".from('jobs')"),
     earnings.indexOf(".in('id', jobIds)")
   );
-  assert.match(jobsSelect, /completed_at/);
+  // A4 wiring (P1): the server's release time, the clock's one input.
+  assert.match(jobsSelect, /release_due_at/);
 
   const screen = await read('screens/EarningsScreen.tsx');
   assert.equal(

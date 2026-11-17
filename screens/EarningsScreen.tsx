@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
+import { Card } from '../components/Card';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { MoneyText } from '../ui/primitives/MoneyText';
@@ -21,16 +22,18 @@ import { isRefundFailureRecorded, releaseAtLabel, releaseDeadlineMs } from '../l
 import { formatBudget } from '../lib/jobs';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import { formatTimeAgo } from '../lib/time';
+import { serverNowMs } from '../lib/serverClock';
 import {
   EYEBROW_TYPE,
   fonts,
   radius,
   spacing,
+  textScale,
   themedStyles,
-  litCardStyle,
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
+import { titleCase } from '../lib/titleCase';
 
 /**
  * Screens 59 + 60 (Phase 11, consolidated) — the worker's wallet and the
@@ -43,7 +46,7 @@ import {
  * (D10): no rate lives on the client any more.
  */
 export function EarningsScreen() {
-  const { palette: colors, isDark } = useThemeColors();
+  const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   const { user } = useAuth();
   const navigation = useNavigation<ProfileStackNavigation>();
@@ -91,13 +94,15 @@ export function EarningsScreen() {
   // already sums into the buckets; the fee card below still sums the fees themselves.
   // One clock reading per load, so every ledger line below is measured
   // against the same instant rather than each drifting on its own render.
-  const nowMs = useMemo(() => Date.now(), [summary]);
+  const nowMs = useMemo(() => serverNowMs(), [summary]);
 
   return (
     <>
       <DetailScreen
         title="Earnings & Payouts"
         subtitle={'What you’ve earned, what’s held, what’s been paid'}
+        // M5: one line cut this sentence ("what's bee…"); it takes two.
+        subtitleLines={2}
         onBack={goBackOrHome}
         state={state}
         sections={
@@ -114,30 +119,33 @@ export function EarningsScreen() {
                         icon="shield-outline"
                         cents={s.pendingCents}
                         note="Held in protection"
+                        state="held"
                       />
                       <Bucket
                         label="AVAILABLE"
                         icon="wallet-outline"
                         cents={s.availableCents}
                         note="Released to you"
+                        state="released"
                       />
                       <Bucket
                         label="TRANSFERRED"
                         icon="arrow-up-circle-outline"
                         cents={s.transferredCents}
                         note="Transferred to you"
+                        state="paid_out"
                       />
                     </View>
                   ),
                 },
                 {
                   content: (
-                    <View style={[styles.feeCard, litCardStyle(isDark)]}>
+                    <Card style={styles.feeCard}>
                       <Ionicons name="receipt-outline" size={16} color={colors.textMuted} />
                       <Text style={styles.feeText}>
                         Protection fees on these jobs: {formatBudget(s.feeCents)}.
                       </Text>
-                    </View>
+                    </Card>
                   ),
                 },
                 {
@@ -150,8 +158,9 @@ export function EarningsScreen() {
                         payment appears here.
                       </Text>
                     ) : (
-                      <View style={styles.list}>
-                        {s.rows.map((row) => (
+                      // G2: the ledger is one lit group, a hairline between rows.
+                      <Card style={styles.ledger}>
+                        {s.rows.map((row, index) => (
                           <Pressable
                             key={row.id}
                             onPress={
@@ -160,7 +169,11 @@ export function EarningsScreen() {
                                 : undefined
                             }
                             disabled={!(mode === 'worker' && row.job_id)}
-                            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                            style={({ pressed }) => [
+                              styles.row,
+                              index > 0 && styles.rowDivider,
+                              pressed && styles.rowPressed,
+                            ]}
                             accessibilityRole={mode === 'worker' && row.job_id ? 'button' : undefined}
                           >
                             <View style={styles.rowCopy}>
@@ -187,7 +200,7 @@ export function EarningsScreen() {
                                     // Codex R11-A2: a refund of it failed: no release clock.
                                     releaseDeadlineMs: isRefundFailureRecorded(row)
                                       ? null
-                                      : releaseDeadlineMs({ completed_at: row.job_completed_at ?? null }),
+                                      : releaseDeadlineMs({ release_due_at: row.job_release_due_at ?? null }),
                                     waitingOnPayoutSetup: payoutSetupNotice(payouts, [row]) !== null,
                                     payoutOnItsWay: isPayoutOnItsWay(row),
                                   },
@@ -202,7 +215,7 @@ export function EarningsScreen() {
                             ) : null}
                           </Pressable>
                         ))}
-                      </View>
+                      </Card>
                     ),
                 },
               ]
@@ -216,9 +229,9 @@ export function EarningsScreen() {
             // by the stored status when it was readable (the same status → CTA
             // mapping the screen uses).
             <Button
-              title={payouts ? payoutsCta(payouts).cta ?? payoutsCta(payouts).headline : 'Payouts'}
+              title={payouts ? titleCase(payoutsCta(payouts).cta ?? payoutsCta(payouts).headline) : 'Payouts'}
               variant={payouts && payoutsCta(payouts).cta ? 'primary' : 'secondary'}
-              icon="chevron-forward"
+              // M5 (T8): a button carries no trailing arrow; the tap is the action.
               onPress={() => navigation.navigate('Payouts')}
             />
           ) : undefined
@@ -233,16 +246,19 @@ function Bucket({
   icon,
   cents,
   note,
+  state,
 }: {
   label: string;
   icon: ComponentProps<typeof Ionicons>['name'];
   cents: number;
   note: string;
+  /** G2: the bucket's payment state, for the figure's colour only (a waiting figure reads muted); no caption. */
+  state: ComponentProps<typeof MoneyText>['state'];
 }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   return (
-    <View style={[styles.bucket, isDark && styles.bucketDark]}>
+    <Card style={styles.bucket}>
       <View style={[styles.bucketGlyph, isDark && styles.bucketGlyphDark]}>
         <Ionicons name={icon} size={16} color={isDark ? colors.gold : colors.emerald} />
       </View>
@@ -251,9 +267,9 @@ function Bucket({
       <Text style={styles.bucketLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
         {label}
       </Text>
-      <Text style={styles.bucketAmount}>{formatBudget(cents)}</Text>
+      <MoneyText cents={cents} state={state} size="lg" captionHidden />
       <Text style={styles.bucketNote}>{note}</Text>
-    </View>
+    </Card>
   );
 }
 
@@ -263,20 +279,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexDirection: 'row',
     gap: spacing.sm,
   },
+  // G2: master 25's three stat cards, each a lit card in both themes; light keeps the
+  // approved Heritage sage on the glyph.
   bucket: {
     flex: 1,
-    padding: spacing.md,
-    gap: 2,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.mint,
-  },
-  // Master 25 draws these as hairlined cards, not a sage wash; light keeps
-  // the approved Heritage sage.
-  bucketDark: {
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    gap: spacing.xs / 2,
   },
   bucketGlyph: {
     width: 30,
@@ -285,9 +294,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xs,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.mint,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.mint2,
   },
   bucketGlyphDark: {
     backgroundColor: 'transparent',
@@ -299,15 +308,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
-  bucketAmount: {
-    fontFamily: fonts.display,
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.money,
-    fontVariant: ['tabular-nums'],
-  },
   bucketNote: {
-    fontSize: 10,
+    ...textScale.caption,
+    fontWeight: '500',
     color: colors.textMuted,
   },
   feeCard: {
@@ -315,52 +318,47 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'flex-start',
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
   },
   feeText: {
+    ...textScale.footnote,
     flex: 1,
-    fontSize: 12,
     color: colors.textMuted,
-    lineHeight: 17,
   },
-  list: {
-    gap: spacing.sm,
+  ledger: {
+    padding: 0,
+    overflow: 'hidden',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     minHeight: 56,
+  },
+  rowDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   rowPressed: {
     opacity: 0.7,
   },
   rowCopy: {
     flex: 1,
-    gap: 2,
+    gap: spacing.xs / 2,
   },
   rowTitle: {
+    ...textScale.headline,
     fontFamily: fonts.display,
-    fontSize: 17,
-    fontWeight: '700',
     color: colors.ink,
   },
   rowMeta: {
-    fontSize: 12,
+    ...textScale.footnote,
     color: colors.textMuted,
   },
   emptyText: {
-    fontSize: 14,
+    ...textScale.body,
     color: colors.textMuted,
-    lineHeight: 20,
   },
   }),
 );

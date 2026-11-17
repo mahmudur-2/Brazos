@@ -8,13 +8,14 @@ import type { ComponentType } from 'react';
 import { Animated, Pressable } from 'react-native';
 import { usePressFeedback } from '../hooks/usePressFeedback';
 import { motionCapability, resolveMotion120 } from '../lib/motion120';
-import { pressStyles, type PressScaleProps } from './PressScale.shared';
+import { pressStyles, withPressDim, type PressScaleProps } from './PressScale.shared';
 
 export type { PressScaleProps } from './PressScale.shared';
 
-function PressScaleFallback({ haptic = true, style, onPressIn, onPressOut, onLayout, hitSlop, ...rest }: PressScaleProps) {
+/** A2-M2: here the `dim` is the Pressable's pressed style (the native-driver scale is the hook's). */
+function PressScaleFallback({ haptic = true, dim, fill, style, onPressIn, onPressOut, onLayout, hitSlop, ...rest }: PressScaleProps) {
   const press = usePressFeedback({ haptic });
-  const { outer, inner } = pressStyles(style);
+  const { outer, inner } = pressStyles(withPressDim(style, dim), fill);
   return (
     <Animated.View style={[outer, press.style]} onLayout={onLayout} hitSlop={hitSlop}>
       <Pressable

@@ -115,6 +115,8 @@ type RankInput = {
   openDisputeJobIds: ReadonlySet<string>;
   reviewedJobIds: ReadonlySet<string>;
   nowMs?: number;
+  /** A4 wiring (A5, G1b-4): remote paymentsEnabled, passed to myJobsNextAction; absent is open. */
+  checkoutOpen?: boolean;
 };
 
 /**
@@ -158,6 +160,7 @@ function rankJobs(
           reviewedByMe,
           releaseDeadline: isRefundFailureRecorded(input.payments[job.id]) ? null : releaseDeadlineMs(job),
           nowMs,
+          checkoutOpen: input.checkoutOpen,
         }),
       },
     });

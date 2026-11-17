@@ -6,8 +6,8 @@ Every flow: clean launch → sign in (subflows/sign-in-phone.yml) → its screen
 - 02-customer-post-job: Home (bell, avatar, tiles, All services), wizard (category, questions, photo add/remove, area + GPS + address, Flexible day and window, set price $50, Repeat Off), draft save + resume, open bids, Edit job.
 - 03-worker-discover-bid: Map tab, search, Filters sheet, JobDetail with no exact address, $50 bid at the set price, written $40 bid (pitch rule), withdraw + rebid, report dialog.
 - 04-customer-accept-pay: saved cards cleared, Bid Detail counter $45, accept $50, Checkout (save card), Stripe sheet 4242, Job Confirmed held copy, saved card listed + removed.
-- 05-worker-start-complete: worker counter $42, Your Job (exact address), on my way, 10 min late, start, photo rule, Mark complete.
-- 06-customer-approve-review: Review tab, Finished Work photo, report + withdraw, approve and release, 5 stars + comment, tip skipped, decline $42, Reuse a past job, Delete job.
+- 05-worker-start-complete: worker counter $42, Job Details (exact address), on my way, 10 min late, start, photo rule, Mark complete.
+- 06-customer-approve-review: Review tab, Review & Approve photo, report + withdraw, approve and release, 5 stars + comment, tip skipped, decline $42, Reuse a past job, Delete job.
 - 07-messages: Inbox pills, send text + photo, viewer, unsend, Block / Report (cancelled), reviews list, Worker Profile report; B reads the unread row.
 - 08-notifications-settings: feed → job, mark read, every switch + quiet hours, Dark / Light / Auto, Legal docs, Profile Details, Account & Safety, mode round trip.
 - 09-worker-profile-payout: Earnings buckets + the main job row, Payouts status, add + remove a priced service.

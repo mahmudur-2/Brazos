@@ -55,6 +55,7 @@ import type { WorkerHomeStackNavigation } from '../lib/navigation';
 import { updateProfile } from '../lib/profiles';
 import { MORE_SERVICES } from '../lib/skillCategories';
 import { greetingFor } from '../lib/time';
+import { serverNowMs } from '../lib/serverClock';
 import {
   litCardStyle, EYEBROW_TYPE,
   fonts,
@@ -71,6 +72,7 @@ import {
 } from '../lib/theme';
 import { Divider, SearchBar, Toggle, useScrollClearance } from '../ui/primitives';
 import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
+import { COUNTER_OFFER_WORD } from '../lib/offerCopy';
 
 // Master 43's hero crop, mounted in BOTH themes since the 2026-08-22 parity
 // pass (light previously omitted it and kept a full-width copy block). It is
@@ -85,7 +87,7 @@ type NearbyState = 'checking' | 'unavailable' | 'loading' | 'ready';
 /**
  * Worker Home (Stage 4D) — the worker tree's initial route.
  *
- * Every job-list intent here lands on WorkerResultsScreen — "View all" is
+ * Every job-list intent here lands on WorkerResultsScreen — "View All" is
  * mode 'all', the search field is mode 'search', the two pills are 'skills'
  * and 'nearby' — one list surface, not a chain of them. The search field
  * keeps the retired atlas-48 browse screen's exact dispatch shape.
@@ -172,7 +174,7 @@ export function WorkerHomeScreen() {
           bid.author_id !== user.id
       )
       .map((bid) => ({ kind: 'counter' as const, bid }));
-    const moves = workerAttentionItems({ working, payments, openDisputeJobIds, reviewedJobIds }).map(
+    const moves = workerAttentionItems({ working, payments, openDisputeJobIds, reviewedJobIds, nowMs: serverNowMs() }).map(
       (item) => ({ kind: 'job' as const, item })
     );
     return [...counters, ...moves];
@@ -259,7 +261,7 @@ export function WorkerHomeScreen() {
   const potential = useMemo(() => openJobsPotential(jobs, profile?.id), [jobs, profile?.id]);
 
   // A taste of the feed: skill matches first, then newest — enough to make
-  // "View all" worth tapping, not a second marketplace.
+  // "View All" worth tapping, not a second marketplace.
   const previewJobs = useMemo(() => {
     const byNewest = (a: OpenJob, b: OpenJob) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -353,14 +355,14 @@ export function WorkerHomeScreen() {
   // M-29 — with no skills the pill names the fix and opens it: the profile
   // editor, where the categories are picked. With skills it is the count.
   const matchLabel = hasSkills
-    ? `${skillMatchCount} match your skills`
-    : 'Add your skills';
+    ? `${skillMatchCount} Match Your Skills`
+    : 'Add Your Skills';
   const nearbyLabel =
     nearbyState === 'ready'
-      ? `${nearbyCount} within ${NEARBY_RADIUS_MILES} miles`
+      ? `${nearbyCount} Within ${NEARBY_RADIUS_MILES} Miles`
       : nearbyState === 'unavailable'
-        ? 'Enable location'
-        : `Within ${NEARBY_RADIUS_MILES} miles`;
+        ? 'Enable Location'
+        : `Within ${NEARBY_RADIUS_MILES} Miles`;
 
   return (
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
@@ -466,7 +468,7 @@ export function WorkerHomeScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="See all in My Jobs"
                   >
-                    <Text style={styles.needsYouAll}>See all ({needsYou.length})</Text>
+                    <Text style={styles.needsYouAll}>See All ({needsYou.length})</Text>
                   </PressScale>
                 ) : null}
               </View>
@@ -502,7 +504,7 @@ export function WorkerHomeScreen() {
                   const job = isCounter ? toOpenJob(entry.bid.job!) : entry.item.job;
                   const client = names[job.client_id] ?? 'Customer';
                   const move = isCounter
-                    ? `${client.split(/\s+/)[0] || client} sent you a counter-offer — respond`
+                    ? `${client.split(/\s+/)[0] || client} sent you a ${COUNTER_OFFER_WORD} — respond`
                     : entry.item.line;
                   return (
                     <PressScale
@@ -724,11 +726,12 @@ export function WorkerHomeScreen() {
                 accessibilityLabel={matchLabel}
               >
                 <Ionicons name="sparkles-outline" size={16} color={glyph} />
-                <Text style={styles.pillText} numberOfLines={1}>
+                {/* G2: on a narrower phone the label steps down a little rather than lose "Skills". */}
+                <Text style={styles.pillText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
                   {hasSkills ? (
                     <>
                       <Text style={styles.pillCount}>{skillMatchCount}</Text>
-                      {' match your skills'}
+                      {' Match Your Skills'}
                     </>
                   ) : (
                     matchLabel
@@ -754,7 +757,7 @@ export function WorkerHomeScreen() {
                   {nearbyState === 'ready' ? (
                     <>
                       <Text style={styles.pillCount}>{nearbyCount}</Text>
-                      {` within ${NEARBY_RADIUS_MILES} miles`}
+                      {` Within ${NEARBY_RADIUS_MILES} Miles`}
                     </>
                   ) : (
                     nearbyLabel
@@ -794,7 +797,7 @@ export function WorkerHomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="View all open jobs"
             >
-              <Text style={[styles.viewAllText, isDark && styles.viewAllTextDark]}>View all</Text>
+              <Text style={[styles.viewAllText, isDark && styles.viewAllTextDark]}>View All</Text>
               <Ionicons name="chevron-forward" size={18} color={accent} />
             </PressScale>
           </View>
@@ -808,7 +811,7 @@ export function WorkerHomeScreen() {
             <View style={styles.notice}>
               <Text style={styles.noticeError}>Couldn’t load open jobs.</Text>
               <PressScale onPress={() => void onRefresh()} hitSlop={touchSlop(textLine(styles.retry))} accessibilityRole="button">
-                <Text style={[styles.retry, isDark && styles.retryDark]}>Try again</Text>
+                <Text style={[styles.retry, isDark && styles.retryDark]}>Try Again</Text>
               </PressScale>
             </View>
           ) : previewJobs.length === 0 ? (
@@ -1036,7 +1039,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
     gap: spacing.sm,
     height: 40,
-    paddingHorizontal: spacing.md,
+    // G2: the side room is the small step, so "2 Match Your Skills" shows whole in its half.
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.mint2,

@@ -58,8 +58,8 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       id: 'tools',
       ask: 'Do you have the tools?',
       options: [
-        { label: 'I have them', line: 'I have tools' },
-        { label: 'Bring tools', line: 'Bring tools' },
+        { label: 'I Have Them', line: 'I have tools' },
+        { label: 'Bring Tools', line: 'Bring tools' },
       ],
     },
     STAIRS,
@@ -69,9 +69,9 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       id: 'size',
       ask: 'How much is moving?',
       options: [
-        { label: 'A few items', line: 'A few items' },
-        { label: 'One room', line: 'One room' },
-        { label: 'Whole home', line: 'A whole home' },
+        { label: 'A Few Items', line: 'A few items' },
+        { label: 'One Room', line: 'One room' },
+        { label: 'Whole Home', line: 'A whole home' },
       ],
     },
     STAIRS,
@@ -79,8 +79,8 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       id: 'vehicle',
       ask: 'Need a vehicle?',
       options: [
-        { label: 'I have one', line: 'I have a vehicle' },
-        { label: 'Bring a van', line: 'Bring a van or truck' },
+        { label: 'I Have One', line: 'I have a vehicle' },
+        { label: 'Bring a Van', line: 'Bring a van or truck' },
       ],
     },
     {
@@ -109,15 +109,15 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       options: [
         { label: 'Regular', line: 'Regular clean' },
         { label: 'Deep', line: 'Deep clean' },
-        { label: 'Move-out', line: 'Move-out clean' },
+        { label: 'Move-Out', line: 'Move-out clean' },
       ],
     },
     {
       id: 'supplies',
       ask: 'Do you have supplies?',
       options: [
-        { label: 'I have them', line: 'I have supplies' },
-        { label: 'Bring them', line: 'Bring supplies' },
+        { label: 'I Have Them', line: 'I have supplies' },
+        { label: 'Bring Them', line: 'Bring supplies' },
       ],
     },
     {
@@ -136,7 +136,7 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       options: [
         { label: 'A TV', line: 'Mounting a TV' },
         { label: 'Shelves', line: 'Mounting shelves' },
-        { label: 'Art or mirror', line: 'Hanging art or a mirror' },
+        { label: 'Art or Mirror', line: 'Hanging art or a mirror' },
       ],
     },
     {
@@ -144,16 +144,16 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       ask: 'What is the wall?',
       options: [
         { label: 'Drywall', line: 'Drywall' },
-        { label: 'Brick or concrete', line: 'Brick or concrete wall' },
-        { label: 'Not sure', line: 'Not sure of the wall' },
+        { label: 'Brick or Concrete', line: 'Brick or concrete wall' },
+        { label: 'Not Sure', line: 'Not sure of the wall' },
       ],
     },
     {
       id: 'hardware',
       ask: 'Mount and hardware?',
       options: [
-        { label: 'I have them', line: 'I have the mount and hardware' },
-        { label: 'Bring them', line: 'Bring the mount and hardware' },
+        { label: 'I Have Them', line: 'I have the mount and hardware' },
+        { label: 'Bring Them', line: 'Bring the mount and hardware' },
       ],
     },
   ],
@@ -171,9 +171,9 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       id: 'parts',
       ask: 'Parts and materials?',
       options: [
-        { label: 'I have them', line: 'I have the parts' },
-        { label: 'Bring them', line: 'Bring parts' },
-        { label: 'Not sure', line: 'Not sure what parts are needed' },
+        { label: 'I Have Them', line: 'I have the parts' },
+        { label: 'Bring Them', line: 'Bring parts' },
+        { label: 'Not Sure', line: 'Not sure what parts are needed' },
       ],
     },
     {
@@ -209,8 +209,8 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       id: 'tools',
       ask: 'Do you have the tools?',
       options: [
-        { label: 'I have them', line: 'I have tools' },
-        { label: 'Bring tools', line: 'Bring tools' },
+        { label: 'I Have Them', line: 'I have tools' },
+        { label: 'Bring Tools', line: 'Bring tools' },
       ],
     },
     {
@@ -227,9 +227,9 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       id: 'size',
       ask: 'How much painting?',
       options: [
-        { label: 'Touch-ups', line: 'Touch-ups' },
-        { label: 'One wall', line: 'One wall' },
-        { label: 'One room', line: 'One room' },
+        { label: 'Touch-Ups', line: 'Touch-ups' },
+        { label: 'One Wall', line: 'One wall' },
+        { label: 'One Room', line: 'One room' },
         { label: 'More', line: 'More than one room' },
       ],
     },
@@ -237,8 +237,8 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       id: 'paint',
       ask: 'Do you have the paint?',
       options: [
-        { label: 'I have it', line: 'I have paint' },
-        { label: 'Bring it', line: 'Bring paint' },
+        { label: 'I Have It', line: 'I have paint' },
+        { label: 'Bring It', line: 'Bring paint' },
       ],
     },
     {
@@ -264,17 +264,17 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       id: 'size',
       ask: 'How much?',
       options: [
-        { label: 'A few boxes', line: 'A few boxes' },
-        { label: 'One room', line: 'One room' },
-        { label: 'Whole home', line: 'A whole home' },
+        { label: 'A Few Boxes', line: 'A few boxes' },
+        { label: 'One Room', line: 'One room' },
+        { label: 'Whole Home', line: 'A whole home' },
       ],
     },
     {
       id: 'boxes',
       ask: 'Boxes and tape?',
       options: [
-        { label: 'I have them', line: 'I have boxes and tape' },
-        { label: 'Bring them', line: 'Bring boxes and tape' },
+        { label: 'I Have Them', line: 'I have boxes and tape' },
+        { label: 'Bring Them', line: 'Bring boxes and tape' },
       ],
     },
   ],
@@ -312,10 +312,10 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       id: 'kind',
       ask: 'What kind of errand?',
       options: [
-        { label: 'Pick-up', line: 'A pick-up' },
-        { label: 'Drop-off', line: 'A drop-off' },
+        { label: 'Pick-Up', line: 'A pick-up' },
+        { label: 'Drop-Off', line: 'A drop-off' },
         { label: 'Shopping', line: 'Shopping' },
-        { label: 'Waiting in line', line: 'Waiting in line' },
+        { label: 'Waiting in Line', line: 'Waiting in line' },
       ],
     },
     {
@@ -331,7 +331,7 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       ask: 'How far?',
       options: [
         { label: 'Nearby', line: 'Nearby' },
-        { label: 'Across town', line: 'Across town' },
+        { label: 'Across Town', line: 'Across town' },
       ],
     },
   ],
@@ -340,18 +340,18 @@ export const POST_QUESTIONS: Readonly<Record<JobCategory, readonly PostQuestion[
       id: 'length',
       ask: 'How long might it take?',
       options: [
-        { label: 'Under an hour', line: 'Under an hour' },
+        { label: 'Under an Hour', line: 'Under an hour' },
         { label: '1–3 hours', line: '1–3 hours' },
-        { label: 'Half a day+', line: 'Half a day or more' },
+        { label: 'Half a Day+', line: 'Half a day or more' },
       ],
     },
     {
       id: 'tools',
       ask: 'Tools or supplies?',
       options: [
-        { label: 'I have them', line: 'I have what is needed' },
-        { label: 'Bring them', line: 'Bring tools or supplies' },
-        { label: 'None needed', line: 'No tools needed' },
+        { label: 'I Have Them', line: 'I have what is needed' },
+        { label: 'Bring Them', line: 'Bring tools or supplies' },
+        { label: 'None Needed', line: 'No tools needed' },
       ],
     },
   ],

@@ -507,7 +507,7 @@ test('a customer can still reach My Jobs after D1 took its tab', () => {
     source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
   const sheet = codeOnly(customerRoot);
   assert.match(sheet, /key: 'my-jobs'/);
-  assert.match(sheet, /label: 'My jobs'/);
+  assert.match(sheet, /label: 'My Jobs'/);
   assert.match(sheet, /navigateAcrossTabs\('MyJobs'\)/);
   // 3. Notification routing still lands there in BOTH trees: TAB_FOR_SCREEN
   //    sends all three job destinations through the MyJobs tab, and that only

@@ -19,7 +19,8 @@ import { Sentry } from './observability/sentry';
 
 /** Cache subdirectory for share staging, kept separate so it's easy to reason
  *  about — these files are disposable and the OS may evict them at any time. */
-const SHARE_DIR_NAME = 'share-cache';
+/** The cache folder shared photos are copied into (lib/signOut.ts forgetDevice empties it). */
+export const SHARE_DIR_NAME = 'share-cache';
 
 /** Derives a safe, extension-bearing filename from a remote photo URL. iOS uses
  *  the extension to infer the UTI, and without one the share sheet degrades to

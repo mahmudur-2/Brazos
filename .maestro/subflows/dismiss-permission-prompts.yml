@@ -10,7 +10,7 @@ appId: app.brazos.mobile.preview
       visible: 'Get notified\?'
     commands:
       - tapOn:
-          text: "Not now"
+          text: "Cancel"
           optional: true
       - extendedWaitUntil:
           notVisible: 'Get notified\?'
@@ -22,7 +22,7 @@ appId: app.brazos.mobile.preview
       visible: '(Camera|Microphone|Speech|Location) is off'
     commands:
       - tapOn:
-          text: "Not now"
+          text: "Cancel"
           optional: true
       - extendedWaitUntil:
           notVisible: '(Camera|Microphone|Speech|Location) is off'

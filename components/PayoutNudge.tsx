@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatBudget } from '../lib/jobs';
-import { radius, spacing, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import { radius, spacing, textScale, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 
 /**
  * 2026-09-28 (LUX-LIST-64 #63, audit M-14) — "SET UP PAYOUTS TO RECEIVE $X ›":
@@ -49,7 +49,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     pressed: { opacity: 0.7 },
     text: {
       flex: 1,
-      fontSize: 14,
+      ...textScale.body,
       fontWeight: '600',
       color: colors.ink,
     },

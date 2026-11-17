@@ -23,12 +23,43 @@ const E164_MAX_DIGITS = 15;
 /** NANP national numbers are always exactly 10 digits (NPA + NXX + line). */
 const NANP_NATIONAL_DIGITS = 10;
 
+/** The NANP number after its 3-digit area code (NXX + line): 7 digits. */
+const NANP_LOCAL_DIGITS = 7;
+
+/** The one country calling code of the whole NANP, US and Canada and every territory alike. */
+const NANP_COUNTRY_CODE = '1';
+
 export function digitsOf(text: string): string {
   return text.replace(/\D/g, '');
 }
 
 export function isNanp(country: Country): boolean {
-  return country.dial.startsWith('1');
+  return country.dial.startsWith(NANP_COUNTRY_CODE);
+}
+
+/**
+ * C8 (A4-M4): a NANP entry such as Trinidad and Tobago lists '1868', but its
+ * country code is still '1' — the '868' is the number's area code. This is
+ * that area code ('' for the entries on plain '1': the US and Canada).
+ */
+function nanpAreaCode(country: Country): string {
+  return isNanp(country) ? country.dial.slice(NANP_COUNTRY_CODE.length) : '';
+}
+
+/**
+ * The full 10-digit NANP number the field names, or null. Under a pill that
+ * already shows the area code ('+1868'), the field may hold the 7 digits after
+ * it, or the whole 10-digit number again — but only with that same area code,
+ * so '+1868' followed by ten more digits is refused rather than sent as some
+ * other number.
+ */
+function nanpNational(country: Country, input: string): string | null {
+  const d = nationalDigits(country, input);
+  const area = nanpAreaCode(country);
+  if (!area) return d.length === NANP_NATIONAL_DIGITS ? d : null;
+  if (d.length === NANP_LOCAL_DIGITS) return area + d;
+  if (d.length === NANP_NATIONAL_DIGITS && d.startsWith(area)) return d;
+  return null;
 }
 
 // Longest-first so '+1868' resolves to Trinidad and Tobago rather than the US,
@@ -80,9 +111,14 @@ export function nationalDigits(country: Country, input: string): string {
  * The canonical value handed to the backend: '+' followed by calling code and
  * national digits, with no spaces, parentheses or hyphens. Returns null when
  * the number isn't complete enough to be one — callers surface
- * `phoneValidationError` instead of sending a half-number.
+ * `phoneValidationError` instead of sending a half-number. A NANP number is
+ * always '+1' and ten digits, whichever NANP entry is picked.
  */
 export function toE164(country: Country, input: string): string | null {
+  if (isNanp(country)) {
+    const nanp = nanpNational(country, input);
+    return nanp ? `+${NANP_COUNTRY_CODE}${nanp}` : null;
+  }
   const national = nationalDigits(country, input);
   if (!national) return null;
   const full = country.dial + national;
@@ -100,8 +136,10 @@ export function phoneValidationError(country: Country, input: string): string | 
   if (!national) return 'Enter your phone number.';
 
   if (isNanp(country)) {
-    return national.length === NANP_NATIONAL_DIGITS
-      ? null
+    if (nanpNational(country, input)) return null;
+    // Under a '+1868' pill the number left to type is the 7 digits after the area code.
+    return nanpAreaCode(country)
+      ? 'Enter a 7-digit phone number.'
       : 'Enter a 10-digit phone number.';
   }
 
@@ -121,6 +159,8 @@ export function formatNational(country: Country, digits: string): string {
   if (!isNanp(country)) return digits;
   const d = digits.slice(0, NANP_NATIONAL_DIGITS);
   if (d.length <= 3) return d;
+  // After an area code in the pill, the 7 local digits group as they are dialled there: '555 0123'.
+  if (nanpAreaCode(country) && d.length <= NANP_LOCAL_DIGITS) return `${d.slice(0, 3)} ${d.slice(3)}`;
   if (d.length <= 6) return `${d.slice(0, 3)} ${d.slice(3)}`;
   return `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`;
 }

@@ -40,7 +40,7 @@ test('n5 · Welcome leads with Continue with phone (the operator\'s ruling); ema
   assert.equal(buttons.length, 3, 'the actions block holds exactly three AuthButtons');
 
   // FIRST: phone, primary treatment, to CreateAccount — the operator's ruling.
-  assert.match(buttons[0], /title="Continue with phone"/);
+  assert.match(buttons[0], /title="Continue with Phone"/);
   // FIX-RUN B2: the destination follows the phone-auth mode — the phone screen
   // only while `supabase` is live, the email sign-up otherwise (phoneEntryRoutes).
   assert.match(buttons[0], /navigation\.navigate\(PHONE_ENTRY\.createAccount\)/);
@@ -50,15 +50,15 @@ test('n5 · Welcome leads with Continue with phone (the operator\'s ruling); ema
 
   // SECOND: email, primary treatment, to the registered EmailCreateAccount route — shown only while
   // phone sign-in is not live (B12, tests/authPhone.test.mjs).
-  assert.match(buttons[1], /title="Continue with email"/);
+  assert.match(buttons[1], /title="Continue with Email"/);
   assert.match(buttons[1], /navigation\.navigate\('EmailCreateAccount'\)/);
   assert.match(buttons[1], /accessibilityHint="Create an account with your email"/);
   assert.match(buttons[1], /\bthemed\b/);
-  assert.doesNotMatch(buttons[1], /variant=/, 'the email button is not demoted');
+  assert.match(buttons[1], /variant="quiet"/, 'the email button is the family\'s quiet second, shown, not hidden');
 
   // THIRD: unchanged.
-  assert.match(buttons[2], /title="I already have an account"/);
-  assert.match(buttons[2], /variant="ghost"/);
+  assert.match(buttons[2], /title="I Already Have an Account"/);
+  assert.match(buttons[2], /variant="quiet"/);
   assert.match(buttons[2], /navigation\.navigate\(PHONE_ENTRY\.signIn\)/);
 
   // The route the first button names is a registered signed-out route.

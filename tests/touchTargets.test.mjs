@@ -37,7 +37,6 @@ const NAMED = [
   ['components/JobFilterSheet.tsx', 'onPress={reset}', 'Reset filters'],
   ['screens/MapScreen.tsx', 'onPress={toggleToday}', 'the Map’s Today chip'],
   ['screens/MapScreen.tsx', 'onPress={() => setSelected(null)}', 'the Map card’s close'],
-  ['screens/WorkerProfileScreen.tsx', 'onPress={() => bookService(service)}', 'Book'],
   ['screens/WorkerHomeScreen.tsx', 'accessibilityLabel="See all in My Jobs"', 'See all (Needs you)'],
   ['components/PriceDropdown.tsx', 'onPress={finishEntry}', 'the price Done pill'],
   ['screens/ChatScreen.tsx', 'accessibilityLabel="Cancel reply"', 'Cancel reply'],

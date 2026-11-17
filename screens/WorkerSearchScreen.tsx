@@ -27,7 +27,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
-import { Chip } from '../components/Chip';
 import { FadeIn } from '../components/FadeIn';
 import { KeyboardAway, KeyboardShift } from '../components/KeyboardAway';
 import { KEYBOARD_FALLBACK_MS } from '../hooks/useKeyboardOffset';
@@ -53,11 +52,11 @@ import type {
 import {
   litCardStyle, EYEBROW_TYPE,
   emeraldColorsFor,
-  fonts,
   radius,
   shadows,
   spacing,
   starColors,
+  textScale,
   themedStyles,
   useThemeColors,
   type ColorPalette,
@@ -378,7 +377,7 @@ export function WorkerSearchScreen() {
 
           <KeyboardAway hidden={keyboardVisible} durationMs={keyboardMs} style={styles.serviceSection}>
               <View style={styles.serviceHeadingRow}>
-                <Text style={styles.serviceHeading}>Popular services</Text>
+                <Text style={styles.serviceHeading}>Popular Services</Text>
                 <Text style={[styles.serviceHint, isDark && styles.serviceHintDark]}>
                   Swipe to explore
                 </Text>
@@ -463,7 +462,7 @@ export function WorkerSearchScreen() {
               tone="danger"
             >
               <Button
-                title="Try again"
+                title="Try Again"
                 variant="secondary"
                 palette={EMERALD_PALETTE}
                 onPress={submit}
@@ -487,10 +486,10 @@ export function WorkerSearchScreen() {
               icon="search-outline"
               eyebrow="NO MATCHES YET"
               title={emptyResultTitle(appliedCategoryLabel)}
-              message="We couldn’t find a relevant profile for this search. A public job lets workers who can help come to you."
+              message="Try fewer words, or pick another service above. A public job lets workers who can help come to you."
             >
               <Button
-                title="Post a job"
+                title="Post a Job"
                 palette={EMERALD_PALETTE}
                 onPress={() => navigation.navigate('PostJob')}
                 style={styles.stateAction}
@@ -581,12 +580,12 @@ function SearchStateCard({
   tone?: 'brand' | 'danger';
   children?: ReactNode;
 }) {
-  const { palette: colors, isDark } = useThemeColors();
+  const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   const EMERALD_PALETTE = emeraldColorsFor(colors);
   const danger = tone === 'danger';
   return (
-    <Card palette={EMERALD_PALETTE} style={[styles.stateCard, isDark && styles.cardBorderDark]}>
+    <Card palette={EMERALD_PALETTE} style={styles.stateCard}>
       <View style={[styles.stateIcon, danger && styles.stateIconDanger]}>
         {busy ? (
           <ActivityIndicator size="small" color={colors.emerald} />
@@ -611,9 +610,10 @@ function SearchStateCard({
 }
 
 /**
- * One result. Every line is something the database actually holds — a worker
- * with no reviews says "New", not a made-up score, and the completed-jobs line
- * is simply absent when there is nothing to report.
+ * One result, one calm row: the person, the rating with its count, what the
+ * ranking can stand behind, and what they do. Every line is something the
+ * database actually holds — a young rating shows its count alone, and a line
+ * with nothing to report is simply absent.
  */
 function WorkerResultCard({
   match,
@@ -630,24 +630,25 @@ function WorkerResultCard({
   const EMERALD_PALETTE = emeraldColorsFor(colors);
   const { profile, matchedCategories } = match;
   const name = profile.full_name?.trim() || 'Worker';
-  // The rating line reads the summary and nothing else (R8b-c D1): the word
-  // "New" while the reputation is under three revealed reviews, the shrunk
-  // shown_average to one decimal once it is not, and nothing while the row is
-  // unknown. The count beside it is REVEALED reviews only.
+  // The rating line reads the summary and nothing else (R8b-c D1): the shrunk
+  // shown_average to one decimal once the reputation is past three revealed
+  // reviews, the count alone while it is young (F11), and nothing while the
+  // row is unknown. The count is REVEALED reviews only.
   const ratingCount = summary?.total ?? null;
   const ratingText =
-    summary == null
+    summary == null || summary.isNew
       ? ''
-      : summary.isNew
-        ? 'New'
-        : summary.shownAverage != null && summary.total > 0
-          ? summary.shownAverage.toFixed(1)
-          : '';
+      : summary.shownAverage != null && summary.total > 0
+        ? summary.shownAverage.toFixed(1)
+        : '';
+  const reviews = `${ratingCount} ${ratingCount === 1 ? 'review' : 'reviews'}`;
+  const countText =
+    ratingCount == null ? '' : ratingCount === 0 ? 'No reviews yet' : ratingText === '' ? reviews : `(${reviews})`;
   // Whatever the ranking can actually support, or nothing at all. Never a
   // claim about skill, availability or standing that isn't a stored count.
   const reason = matchReasonText(match);
   // Falls back to what they advertise when the search was by name and nothing
-  // intersected, so the card still says what this person does.
+  // intersected, so the row still says what this person does.
   const shownCategories = (
     matchedCategories.length > 0 ? matchedCategories : profile.categories ?? []
   ).slice(0, 3);
@@ -656,72 +657,45 @@ function WorkerResultCard({
     <Card
       onPress={onPress}
       palette={EMERALD_PALETTE}
-      style={[styles.resultCard, isDark && styles.cardBorderDark]}
+      accessibilityHint="Opens the full profile"
+      style={styles.resultCard}
     >
-      <View style={styles.resultTopRow}>
-        <Avatar name={name} uri={profile.avatar_url} size={56} />
-        <View style={styles.resultText}>
-          <Text style={styles.profileEyebrow}>WORKER PROFILE</Text>
-          <View style={styles.nameRow}>
-            <Text style={styles.name} numberOfLines={1}>
-              {name}
+      <Avatar name={name} uri={profile.avatar_url} size={52} />
+      <View style={styles.resultText}>
+        <Text style={styles.name} numberOfLines={1}>
+          {name}
+        </Text>
+
+        {/* Fix run D11: no lone star. The star and its figure draw only when
+            there is a figure; an unknown summary draws no proof row at all. */}
+        {summary != null ? (
+          <View style={styles.proofRow}>
+            {ratingText !== '' ? (
+              <>
+                {/* F11 (owner, 2026-11-16): no star beside a young rating. */}
+                {summary.isNew ? null : <Ionicons name="star" size={13} color={starColors(colors, isDark).filled} />}
+                <Text style={styles.proofStrong}>{ratingText}</Text>
+              </>
+            ) : null}
+            <Text style={styles.proofMuted} numberOfLines={1}>
+              {countText}
             </Text>
           </View>
+        ) : null}
 
-          {/* Fix run D11: no lone star. The star and its figure draw only when
-              there is a figure; an unknown summary draws no proof row at all. */}
-          {summary != null ? (
-            <View style={styles.proofRow}>
-              {ratingText !== '' ? (
-                <>
-                  <Ionicons name="star" size={13} color={starColors(colors, isDark).filled} />
-                  <Text style={styles.proofStrong}>{ratingText}</Text>
-                </>
-              ) : null}
-              <Text style={styles.proofMuted} numberOfLines={1}>
-                {ratingCount == null
-                  ? ''
-                  : ratingCount > 0
-                    ? `(${ratingCount} ${ratingCount === 1 ? 'review' : 'reviews'})`
-                    : 'no reviews yet'}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      </View>
-
-      {reason ? (
-        <View style={styles.experienceRow}>
-          <Ionicons name="ribbon-outline" size={17} color={colors.emerald} />
-          <Text style={[styles.experience, isDark && styles.experienceDark]} numberOfLines={2}>
+        {reason ? (
+          <Text style={[styles.experience, isDark && styles.experienceDark]} numberOfLines={1}>
             {reason}
           </Text>
-        </View>
-      ) : null}
+        ) : null}
 
-      {shownCategories.length > 0 ? (
-        <View style={styles.tagRow}>
-          {shownCategories.map((key) => (
-            <Chip
-              key={key}
-              label={skillCategoryLabel(key)}
-              variant="soft"
-              size="sm"
-              style={styles.resultTag}
-            />
-          ))}
-        </View>
-      ) : null}
-
-      {/* Master 1's card foot: gold serif label, gold-outline circle-arrow. */}
-      <View style={styles.resultActionRow}>
-        <Text style={[styles.resultActionText, isDark && styles.resultActionTextDark]}>
-          View full profile
-        </Text>
-        <View style={[styles.resultActionIcon, isDark && styles.resultActionIconDark]}>
-          <Ionicons name="arrow-forward" size={17} color={isDark ? colors.emerald : colors.forest} />
-        </View>
+        {shownCategories.length > 0 ? (
+          <Text style={styles.categoryLine} numberOfLines={1}>
+            {shownCategories.map((key) => skillCategoryLabel(key)).join(' · ')}
+          </Text>
+        ) : null}
       </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
     </Card>
   );
 }
@@ -743,17 +717,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   intro: {
     gap: spacing.xs,
   },
-  // Eyebrow law: a structural section label is gold in dark; light keeps the
-  // Heritage emerald.
-  eyebrow: {
-    ...EYEBROW_TYPE,
-    color: colors.eyebrow,
-  },
   eyebrowDark: { color: colors.eyebrow },
   introText: {
     maxWidth: 420,
-    fontSize: 14,
-    lineHeight: 20,
+    ...textScale.body,
     color: colors.textMuted,
   },
   searchRow: {
@@ -814,7 +781,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   serviceHint: {
     flexShrink: 1,
-    fontSize: 14,
+    ...textScale.body,
     color: colors.textMuted,
   },
   serviceHintDark: {
@@ -847,9 +814,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     opacity: 0.82,
   },
   serviceTileLabel: {
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '600',
+    ...textScale.label,
     color: colors.ink,
   },
   stateScrollContent: {
@@ -863,7 +828,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.xl,
-    borderColor: colors.mint2,
   },
   stateIcon: {
     width: 64,
@@ -887,19 +851,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.danger,
   },
   stateTitle: {
-    fontFamily: fonts.display,
-    fontSize: 25,
-    lineHeight: 31,
-    fontWeight: '700',
+    ...textScale.heading,
     color: colors.ink,
     textAlign: 'center',
   },
   stateMessage: {
     maxWidth: 340,
-    fontSize: 14,
+    ...textScale.body,
     color: colors.textMuted,
     textAlign: 'center',
-    lineHeight: 21,
   },
   stateMessageDanger: {
     color: colors.danger,
@@ -928,121 +888,57 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.eyebrow,
   },
   resultCount: {
-    fontFamily: fonts.display,
-    fontSize: 26,
-    lineHeight: 32,
-    fontWeight: '700',
+    ...textScale.heading,
     color: colors.ink,
     fontVariant: ['tabular-nums'],
   },
   resultsHint: {
-    fontSize: 13,
-    lineHeight: 19,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
   },
+  // One calm row: avatar, the person's lines, a chevron.
   resultCard: {
-    gap: spacing.md,
-    borderColor: colors.mint2,
-  },
-  // Every dark master rings a card in gold hairline; light keeps the sage.
-  cardBorderDark: { borderColor: colors.border },
-  resultTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
   },
   resultText: {
     flex: 1,
-    gap: spacing.xs,
-  },
-  profileEyebrow: {
-    ...EYEBROW_TYPE,
-    color: colors.eyebrow,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+    minWidth: 0,
+    gap: 2,
   },
   name: {
-    flexShrink: 1,
-    fontFamily: fonts.display,
-    fontSize: 20,
-    fontWeight: '700',
+    ...textScale.headline,
     color: colors.ink,
   },
   proofRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: spacing.xs,
   },
   proofStrong: {
-    fontSize: 13,
+    ...textScale.label,
     fontWeight: '700',
     color: colors.ink,
   },
   proofMuted: {
     flexShrink: 1,
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
   },
-  experienceRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.mint,
-  },
   experience: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
+    ...textScale.footnote,
     fontWeight: '600',
-    color: colors.forest,
+    color: colors.mark,
   },
   // Forest on the sage wash is invisible under the v2 dark palette.
   experienceDark: { color: colors.emerald },
-  tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  resultTag: {
-    maxWidth: '100%',
-  },
-  resultActionRow: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.mint2,
-  },
-  resultActionText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.forest,
-  },
-  resultActionTextDark: {
-    color: colors.gold,
-  },
-  resultActionIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.mint,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  resultActionIconDark: {
-    backgroundColor: 'transparent',
-    borderColor: colors.gold,
+  categoryLine: {
+    ...textScale.footnote,
+    fontWeight: '400',
+    color: colors.textMuted,
   },
   }),
 );

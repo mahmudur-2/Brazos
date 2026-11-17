@@ -10,7 +10,7 @@ import { themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../l
 import { formatInboxStamp } from '../lib/time';
 
 /** The photo, and the right column the time and the ••• share (refs/inbox-clean-list.html). */
-const PHOTO = 58;
+const PHOTO = 52;
 const RIGHT_COLUMN = 44;
 /** A count this large is "99+". */
 const COUNT_CAP = 99;
@@ -47,15 +47,15 @@ type ConversationRowProps = {
 /**
  * 2026-09-28 (LUX-LIST-64 #54–#58) — AN INBOX ROW, the approved clean list
  * (docs/mockups/html/refs/inbox-clean-list.html, version 9): no card — the rows
- * sit on the page, a hairline between them (the list draws it), 13 above and
- * below. The top line is the 58 photo; the name at 16 bold with the unread count
- * beside it (or a 19pt blocked glyph); the message 2 under it at 15/20,
- * the brighter ink, full strength and bolder when unread; and a 44-wide right
- * column — the time over the ••• with their right edges lined up, the time in
- * the accent when unread. Ten under that, from the row's left edge: the job
- * chip — the live stage (a breathing dot and the word in its colour: Assigned
- * gold, In progress orange, Review work lavender), then the job's title; a
- * finished job shows the title alone.
+ * sit on the page, a hairline between them (the list draws it), 12 above and
+ * below. One line of the row: the 52 photo; beside it three lines — the name at
+ * 16 bold with the unread count beside it (or a 19pt blocked glyph), the job
+ * line, and the message at 15/20, the brighter ink, full strength and bolder
+ * when unread; and a 44-wide right column — the time over the ••• with their
+ * right edges lined up, the time in the accent when unread. The job line is the
+ * live stage (a breathing dot and the word in its colour: Assigned gold, In
+ * progress orange, Review work lavender), then the job's title; a finished job
+ * shows the title alone, and a waiting hire request takes the line.
  */
 export function ConversationRow({
   name,
@@ -95,8 +95,38 @@ export function ConversationRow({
     <Ionicons name="ban-outline" size={19} color={colors.textSubtle} accessibilityLabel="Blocked" />
   ) : null;
 
-  const chipFill = withAlpha(isDark ? colors.white : colors.emerald, isDark ? 0.045 : 0.055);
   const stageColor = job?.stage ? toneColor(colors, job.stage.tone) : null;
+
+  // The job line, between the name and the message. A hire request waiting on
+  // this user outranks the job's stage: it is the one thing on the row that
+  // needs an answer.
+  const jobLine = awaitingRequest ? (
+    <View style={styles.chip}>
+      <View style={styles.stage}>
+        <LiveDot color={colors.emerald} size={6} motion="breathe" />
+        <Text style={[styles.stageWord, { color: colors.emerald }]}>Job request</Text>
+      </View>
+      <Text style={styles.separator}>·</Text>
+      <Text style={styles.chipTitle} numberOfLines={1}>
+        needs your reply
+      </Text>
+    </View>
+  ) : job ? (
+    <View style={styles.chip}>
+      {job.stage && stageColor ? (
+        <>
+          <View style={styles.stage}>
+            <LiveDot color={stageColor} size={6} motion="breathe" />
+            <Text style={[styles.stageWord, { color: stageColor }]}>{job.stage.word}</Text>
+          </View>
+          <Text style={styles.separator}>·</Text>
+        </>
+      ) : null}
+      <Text style={styles.chipTitle} numberOfLines={1}>
+        {job.title}
+      </Text>
+    </View>
+  ) : null;
 
   return (
     <PressScale
@@ -124,7 +154,7 @@ export function ConversationRow({
       accessibilityHint={accessibilityHint}
     >
       <View style={styles.top}>
-        <AvatarPressable name={name} uri={avatarUrl} size={PHOTO} initialsSize={20} onLongPress={onLongPressAvatar} />
+        <AvatarPressable name={name} uri={avatarUrl} size={PHOTO} initialsSize={18} onLongPress={onLongPressAvatar} />
 
         <View style={styles.text}>
           <View style={styles.line}>
@@ -133,6 +163,7 @@ export function ConversationRow({
             </Text>
             {mark}
           </View>
+          {jobLine}
           <Text style={[styles.preview, unread && styles.previewUnread]} numberOfLines={1}>
             {preview}
           </Text>
@@ -159,47 +190,18 @@ export function ConversationRow({
           )}
         </View>
       </View>
-
-      {awaitingRequest ? (
-        // A hire request waiting on this user outranks the job's stage: it is
-        // the one thing on the row that needs an answer.
-        <View style={[styles.chip, { backgroundColor: chipFill }]}>
-          <View style={styles.stage}>
-            <LiveDot color={colors.emerald} size={6} motion="breathe" />
-            <Text style={[styles.stageWord, { color: colors.emerald }]}>Job request</Text>
-          </View>
-          <Text style={styles.separator}>·</Text>
-          <Text style={styles.chipTitle} numberOfLines={1}>
-            needs your reply
-          </Text>
-        </View>
-      ) : job ? (
-        <View style={[styles.chip, { backgroundColor: chipFill }]}>
-          {job.stage && stageColor ? (
-            <>
-              <View style={styles.stage}>
-                <LiveDot color={stageColor} size={6} motion="breathe" />
-                <Text style={[styles.stageWord, { color: stageColor }]}>{job.stage.word}</Text>
-              </View>
-              <Text style={styles.separator}>·</Text>
-            </>
-          ) : null}
-          <Text style={styles.chipTitle} numberOfLines={1}>
-            {job.title}
-          </Text>
-        </View>
-      ) : null}
     </PressScale>
   );
 }
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
-    // `.row` — 13 above and below, 4 in from the list's left edge.
+    // `.row` — 12 above and below, 4 in from the list's left edge: with the
+    // 52 photo, more threads on one phone screen.
     row: {
       gap: 10,
-      paddingTop: 13,
-      paddingBottom: 13,
+      paddingTop: 12,
+      paddingBottom: 12,
       paddingLeft: 4,
     },
     // `.top` — photo · text · the 44 column, 12 between, centred.
@@ -257,7 +259,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       fontWeight: '600',
       color: colors.ink,
     },
+    // At the top of the row, so the time stays on the name's line however many
+    // lines the text column has.
     right: {
+      alignSelf: 'flex-start',
       width: RIGHT_COLUMN,
       alignItems: 'flex-end',
       gap: 2,
@@ -278,17 +283,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       justifyContent: 'center',
     },
     morePressed: { opacity: 0.6 },
-    // `.jb` — the job chip, from the row's left edge.
+    // The job line: one quiet line under the name, no fill of its own.
     chip: {
       alignSelf: 'flex-start',
       maxWidth: '100%',
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      minHeight: 24,
-      paddingLeft: 8,
-      paddingRight: 9,
-      borderRadius: 12,
+      minHeight: 18,
       overflow: 'hidden',
     },
     stage: {

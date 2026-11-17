@@ -23,6 +23,8 @@ import {
 } from '../lib/offers';
 import { fetchJobById, formatBudget } from '../lib/jobs';
 import { quoteJobPrice, type JobPriceQuote } from '../lib/payments';
+import { BOOKED_TIME_PASSED, jobWindowOver } from '../lib/paymentRules';
+import { serverNowMs } from '../lib/serverClock';
 import {
   COUNTER_OFFER_ACTION_LABEL,
   acceptOfferActionLabel,
@@ -36,6 +38,7 @@ import {
 import { fetchProfileReviewSummary, type ReviewSummary } from '../lib/reviews';
 import { formatTimeAgo } from '../lib/time';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
+import { CounterOfferSheet } from './CounterofferScreen';
 import {
   emeraldColorsFor,
   radius,
@@ -75,6 +78,8 @@ export function BidDetailScreen() {
   );
 
   const [confirming, setConfirming] = useState<'accept' | 'decline' | null>(null);
+  // P4: the bid being countered in the sheet; null = closed.
+  const [counterSheet, setCounterSheet] = useState<MyJobsStackParamList['Counteroffer'] | null>(null);
   const [acting, setActing] = useState(false);
   const actingRef = useRef(false);
   // R8b-c: the worker's rating comes from the worker-role revealed summary,
@@ -117,6 +122,10 @@ export function BidDetailScreen() {
   const effective = offer ? effectiveOfferStatus(offer) : null;
   const isMyTurn = !!offer && !!user && offer.awaiting_id === user.id;
   const canDecide = effective === 'pending' && isMyTurn;
+  // A4 wiring (priority 2): once the job's booked window has ended, accept_offer and the customer's
+  // counter are refused (job_window_over), so neither is offered and the server's sentence says why.
+  // Decline stays: the server still takes it.
+  const windowOver = jobWindowOver({ job, nowMs: serverNowMs() });
   const countersLeft = user ? countersRemaining(chain, user.id) : 0;
   const workerName = offer?.worker?.full_name ?? 'this worker';
 
@@ -224,7 +233,7 @@ export function BidDetailScreen() {
                   ),
                 },
                 {
-                  title: 'Who you’d be hiring',
+                  title: 'Who You’d Be Hiring',
                   content: (
                     <Pressable
                       style={({ pressed }) => [
@@ -257,6 +266,12 @@ export function BidDetailScreen() {
                         <Text style={styles.workerMeta}>
                           {workerRatingSummary ? (
                             workerRatingSummary.total > 0 ? (
+                              // F11 (owner, 2026-11-16): no star beside "New".
+                              workerRatingSummary.isNew || workerRatingSummary.shownAverage == null ? (
+                                `New (${workerRatingSummary.total} ${
+                                  workerRatingSummary.total === 1 ? 'review' : 'reviews'
+                                })`
+                              ) : (
                               <>
                                 {/* One star treatment, BOTH palettes: gold in
                                     dark, the Heritage `star` gold in light. The
@@ -266,15 +281,11 @@ export function BidDetailScreen() {
                                 <Text style={{ color: starColors(colors, isDark).filled }}>
                                   ★
                                 </Text>
-                                {` ${
-                                  workerRatingSummary.isNew ||
-                                  workerRatingSummary.shownAverage == null
-                                    ? 'New'
-                                    : workerRatingSummary.shownAverage.toFixed(1)
-                                } (${workerRatingSummary.total} ${
+                                {` ${workerRatingSummary.shownAverage.toFixed(1)} (${workerRatingSummary.total} ${
                                   workerRatingSummary.total === 1 ? 'review' : 'reviews'
                                 })`}
                               </>
+                              )
                             ) : (
                               'No reviews yet'
                             )
@@ -297,7 +308,7 @@ export function BidDetailScreen() {
                 ...(offer.message
                   ? [
                       {
-                        title: 'Their pitch',
+                        title: 'Their Pitch',
                         content: (
                           <Text style={styles.pitch} selectable>
                             “{offer.message}”
@@ -330,7 +341,19 @@ export function BidDetailScreen() {
                       },
                     ]
                   : []),
-                ...(canDecide
+                ...(canDecide && windowOver
+                  ? [
+                      {
+                        // A4 wiring (priority 2): the waiting card's own form, with accept_offer's sentence.
+                        content: (
+                          <View style={[styles.waitingCard, litCardStyle(isDark)]}>
+                            <Ionicons name="time-outline" size={18} color={colors.textMuted} />
+                            <Text style={styles.waitingText}>{BOOKED_TIME_PASSED.customerAccept}</Text>
+                          </View>
+                        ),
+                      },
+                    ]
+                  : canDecide
                   ? [
                       {
                         content: (
@@ -360,42 +383,44 @@ export function BidDetailScreen() {
         actionBar={
           offer && canDecide ? (
             <View style={styles.actions}>
+              {/* A2-M5 (sweep, plain defect 2): Decline | Counter is the quiet pair of the bid card
+                  (OfferCard's in-place pair), not an outline in a second red. */}
               <View style={styles.actionRow}>
                 <Button
                   title={declineOfferActionLabel(false)}
-                  variant="secondary"
-                  palette={{
-                    ...colors,
-                    primary: colors.danger,
-                    border: colors.danger,
-                  }}
+                  variant="quiet"
+                  palette={emeraldColors}
                   onPress={() => setConfirming('decline')}
                   disabled={acting}
                   style={styles.actionButton}
                 />
-                <Button
-                  title={COUNTER_OFFER_ACTION_LABEL}
-                  variant="secondary"
-                  palette={emeraldColors}
-                  onPress={() =>
-                    navigation.navigate('Counteroffer', {
-                      job,
-                      offer,
-                      counterpartyName: workerName,
-                      countersRemaining: countersLeft,
-                    })
-                  }
-                  disabled={acting || countersLeft === 0}
-                  style={styles.actionButton}
-                />
+                {windowOver ? null : (
+                  <Button
+                    title={COUNTER_OFFER_ACTION_LABEL}
+                    variant="quiet"
+                    palette={emeraldColors}
+                    onPress={() =>
+                      setCounterSheet({
+                        job,
+                        offer,
+                        counterpartyName: workerName,
+                        countersRemaining: countersLeft,
+                      })
+                    }
+                    disabled={acting || countersLeft === 0}
+                    style={styles.actionButton}
+                  />
+                )}
               </View>
-              <Button
-                title={acceptOfferActionLabel(formatBudget(offer.amount_cents), false)}
-                palette={emeraldColors}
-                onPress={() => setConfirming('accept')}
-                loading={acting && confirming === 'accept'}
-                disabled={acting}
-              />
+              {windowOver ? null : (
+                <Button
+                  title={acceptOfferActionLabel(formatBudget(offer.amount_cents), false)}
+                  palette={emeraldColors}
+                  onPress={() => setConfirming('accept')}
+                  loading={acting && confirming === 'accept'}
+                  disabled={acting}
+                />
+              )}
             </View>
           ) : undefined
         }
@@ -417,7 +442,6 @@ export function BidDetailScreen() {
         })}
         // With the quote the button says what the tap does — "Accept & pay $129" — as on the job page.
         confirmText={acceptOfferConfirmText(false, quote ? formatBudget(quote.total_cents) : undefined)}
-        cancelText="Cancel"
         loading={acting}
         palette={emeraldColors}
         onConfirm={doAccept}
@@ -429,11 +453,21 @@ export function BidDetailScreen() {
         title={declineOfferConfirmTitle(formatBudget(offer?.amount_cents ?? null), false)}
         message="This declines this bid. It will no longer be available to accept. They can send a new bid unless the job is filled."
         confirmText={declineOfferActionLabel(false)}
-        cancelText="Cancel"
+        destructive
         loading={acting}
         palette={emeraldColors}
         onConfirm={doDecline}
         onCancel={() => setConfirming(null)}
+      />
+
+      <CounterOfferSheet
+        params={counterSheet}
+        onCancel={() => setCounterSheet(null)}
+        onSubmitted={() => {
+          // The same landing as the counter screen: the chain moved, back to the job.
+          setCounterSheet(null);
+          navigation.popTo('ClientJobDetail', { job });
+        }}
       />
     </>
   );

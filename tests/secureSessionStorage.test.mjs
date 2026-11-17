@@ -277,3 +277,67 @@ test('a production build without the native module fails hard rather than silent
   assert.equal(legacy.reads, 0, 'plain storage must never be touched in this state');
   assert.equal(legacy.map.size, 0);
 });
+
+// ---------------------------------------------------------------------------
+// R7-a (A4-M2) — a removal is proven by reading back, never trusted
+// ---------------------------------------------------------------------------
+
+/** iOS: SecItemDelete's status is ignored, so a delete can report done and leave the item. */
+class KeepOnDeleteStore extends FakeSecureStore {
+  constructor(keep = () => true) {
+    super();
+    this.keep = keep;
+  }
+  async deleteItemAsync(key) {
+    this.assertKey(key);
+    if (!this.keep(key)) this.map.delete(key);
+  }
+}
+
+test('R7-a: a delete the keychain only claimed makes the removal fail out loud', async () => {
+  const secure = new KeepOnDeleteStore();
+  const { adapter } = makeAdapter({ secure });
+  await adapter.setItem(KEY, bigSession('a'));
+  await assert.rejects(() => adapter.removeItem(KEY), /still on this device/);
+});
+
+test('R7-a: a chunk that stays keeps its manifest, so the next removal finds it and finishes', async () => {
+  let stubborn = true;
+  const secure = new KeepOnDeleteStore((key) => stubborn && /\.c\d+\.1$/.test(key));
+  const { adapter } = makeAdapter({ secure });
+  await adapter.setItem(KEY, bigSession('a'));
+  await assert.rejects(() => adapter.removeItem(KEY), /still on this device/);
+  assert.ok(secure.map.has(sanitizeStorageKey(KEY)), 'the manifest stays while a chunk it names is left');
+  assert.equal(await adapter.getItem(KEY), null, 'a manifest with a missing chunk reads as absent, never partial');
+  stubborn = false;
+  await adapter.removeItem(KEY);
+  assert.equal(secure.map.size, 0, `left: ${[...secure.map.keys()].join(', ')}`);
+});
+
+test('R7-a: a read-back the keychain refuses is no proof', async () => {
+  const secure = new FakeSecureStore();
+  const { adapter } = makeAdapter({ secure });
+  await adapter.setItem(KEY, bigSession('a'));
+  secure.failReadsFor.add(sanitizeStorageKey(KEY) + '.c1.0');
+  await assert.rejects(() => adapter.removeItem(KEY), /could not check/);
+});
+
+test('R7-a: the chunks of an interrupted next write are swept with the session', async () => {
+  const secure = new FakeSecureStore();
+  const { adapter } = makeAdapter({ secure });
+  await adapter.setItem(KEY, bigSession('a'));
+  const base = sanitizeStorageKey(KEY);
+  secure.map.set(`${base}.c2.0`, 'strand'); // a write of generation 2 that never reached its manifest
+  secure.map.set(`${base}.c2.1`, 'strand');
+  await adapter.removeItem(KEY);
+  assert.equal(secure.map.size, 0, `left: ${[...secure.map.keys()].join(', ')}`);
+});
+
+test('R7-a: a pre-keychain copy is removed with the session', async () => {
+  const legacy = new FakeLegacyStorage({ [KEY]: 'old-session' });
+  const secure = new FakeSecureStore();
+  const { adapter } = makeAdapter({ secure, legacy });
+  await adapter.setItem(KEY, 'new-session'); // the keychain has it; the old copy was never cleared
+  await adapter.removeItem(KEY);
+  assert.equal(legacy.map.has(KEY), false);
+});

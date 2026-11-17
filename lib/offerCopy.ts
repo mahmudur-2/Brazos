@@ -42,12 +42,22 @@ export function offerNoun(viewerIsWorker: boolean): 'offer' | 'bid' {
 
 /** Secondary action — the outlined counter control, and its confirmation. The
  *  viewer's own counter is a counter-offer on either side. */
-export const COUNTER_OFFER_ACTION_LABEL = 'Send counter-offer';
+export const COUNTER_OFFER_ACTION_LABEL = 'Send Counter-Offer';
+
+/** LOOK-R L-3b: the noun inside a sentence that may wrap. The word joiner (U+2060) after the hyphen
+ *  keeps "counter-offer" whole: a line may otherwise break after the hyphen ("counter-" / "offer"). */
+export const COUNTER_OFFER_WORD = 'counter-⁠offer';
 
 /** Destructive action, and its confirmation's word. */
 export function declineOfferActionLabel(viewerIsWorker: boolean): string {
-  return `Decline ${offerNoun(viewerIsWorker)}`;
+  return viewerIsWorker ? 'Decline Offer' : 'Decline Bid';
 }
+
+/** A2-M4b (the owner's P3, the coordinator's yes): the OPENER buttons of the bid card and the
+ *  reply card are one word each, so their half-width pair stays on one line. The counter form's
+ *  submit and the confirm pop-ups keep the two labels above. */
+export const COUNTER_OPENER_LABEL = 'Counter';
+export const DECLINE_OPENER_LABEL = 'Decline';
 
 /** Shown in place of the counter control once this side's cap is spent.
  *  Mirrors components/OfferCard.tsx's long-standing sentence. */
@@ -68,7 +78,7 @@ export function firstNameOf(
 
 /** Primary action. `amountLabel` is formatBudget()'s output, e.g. "$110". */
 export function acceptOfferActionLabel(amountLabel: string, viewerIsWorker: boolean): string {
-  return `Accept ${offerNoun(viewerIsWorker)} (${amountLabel})`;
+  return `${viewerIsWorker ? 'Accept Offer' : 'Accept Bid'} (${amountLabel})`;
 }
 
 /**
@@ -78,8 +88,8 @@ export function acceptOfferActionLabel(amountLabel: string, viewerIsWorker: bool
  * client made. Only the customer pays, so a worker's confirmation never carries a total.
  */
 export function acceptOfferConfirmText(viewerIsWorker: boolean, totalLabel?: string): string {
-  if (totalLabel && !viewerIsWorker) return `Accept & pay ${totalLabel}`;
-  return `Accept ${offerNoun(viewerIsWorker)}`;
+  if (totalLabel && !viewerIsWorker) return `Accept & Pay ${totalLabel}`;
+  return viewerIsWorker ? 'Accept Offer' : 'Accept Bid';
 }
 
 /**
@@ -123,7 +133,7 @@ export function offerResponseHeading(
   // counter's own notification uses); a customer reads a worker's counter as a
   // new bid — "bid" is the one noun a customer sees for what a worker sent.
   if (viewerIsWorker) {
-    return isCounter ? `${senderFirstName} sent you a counter-offer` : `${senderFirstName} sent you an offer`;
+    return isCounter ? `${senderFirstName} sent you a ${COUNTER_OFFER_WORD}` : `${senderFirstName} sent you an offer`;
   }
   return isCounter ? `${senderFirstName} sent you a new bid` : `${senderFirstName} sent you a bid`;
 }
@@ -188,9 +198,9 @@ export type PayoutsGateView = { title: string | null; body: string; cta: string 
 export function payoutsGateCard(status: PayoutsStatus | null): PayoutsGateView | null {
   if (status === 'none' || status === 'action_needed') {
     return {
-      title: 'Finish payout set-up first',
+      title: 'Finish Payout Set-Up First',
       body: 'You need a payout account before you can send offers.',
-      cta: 'Set up payouts',
+      cta: 'Set Up Payouts',
     };
   }
   if (status === 'under_review') {

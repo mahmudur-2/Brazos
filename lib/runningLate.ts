@@ -1,3 +1,5 @@
+import { MARKET_TIME_ZONE, marketDayKey } from './time';
+
 /**
  * 2026-09-30 (the build run, idea 5) — RUNNING LATE, ONE TAP. The hired worker's 10 / 20 / 30 min
  * chips (report_running_late(), migration 20260930000700) tell the customer and MOVE the arrival
@@ -23,8 +25,11 @@ export function lateShiftMinutes(job: Lateable): number {
   return (LATE_CHOICES as readonly number[]).includes(minutes) ? minutes : 0;
 }
 
-/** The market's clock. report_running_late() and the reminders read `America/New_York`; so does the app. */
-export const MARKET_TIME_ZONE = 'America/New_York';
+/**
+ * The market's clock. report_running_late() and the reminders read `America/New_York`; so does the
+ * app — through lib/time.ts (C9, A4-M4), the one home of the zone and of the market's day.
+ */
+export { MARKET_TIME_ZONE, marketDayKey };
 
 /**
  * A20 (2026-10-03): today's calendar date IN THE MARKET'S TIME ZONE, "2026-09-30". The server
@@ -33,22 +38,7 @@ export const MARKET_TIME_ZONE = 'America/New_York';
  * back to the device's local date only where Intl cannot answer.
  */
 export function marketDate(now: Date = new Date()): string {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: MARKET_TIME_ZONE,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(now);
-    const part = (type: string) => parts.find((p) => p.type === type)?.value;
-    const year = part('year');
-    const month = part('month');
-    const day = part('day');
-    if (year && month && day) return `${year}-${month}-${day}`;
-  } catch {
-    // Intl without time-zone data: the local date below.
-  }
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return marketDayKey(now);
 }
 
 /**

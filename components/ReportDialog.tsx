@@ -29,6 +29,7 @@ import {
   scrimInDark,
   selectedInDark,
 } from '../lib/theme';
+import { titleCase } from '../lib/titleCase';
 
 /** How long the confirmation holds before the sheet closes itself. Long
  *  enough to read six words, short enough not to feel stuck. */
@@ -161,7 +162,7 @@ export function ReportDialog({
                 <View style={styles.sentMark}>
                   <Ionicons name="checkmark" size={26} color={colors.onPrimary} />
                 </View>
-                <Text style={styles.sentTitle}>Sent to the Brazos team</Text>
+                <Text style={styles.sentTitle}>Sent to the Brazos Team</Text>
                 <Text style={styles.sentNote}>
                   {alsoBlock
                     ? `They can no longer message you. We may follow up if we need more detail.`
@@ -202,7 +203,7 @@ export function ReportDialog({
                             (isDark ? styles.reasonTextSelectedDark : styles.reasonTextSelected),
                         ]}
                       >
-                        {r.label}
+                        {titleCase(r.label)}
                       </Text>
                     </Pressable>
                   );
@@ -226,7 +227,7 @@ export function ReportDialog({
                   separate trips through two different menus. */}
               <View style={styles.blockRow}>
                 <View style={styles.blockCopy}>
-                  <Text style={styles.blockLabel}>Also block this person</Text>
+                  <Text style={styles.blockLabel}>Also Block This Person</Text>
                   <Text style={styles.blockNote}>
                     They can’t message you.
                   </Text>
@@ -242,7 +243,7 @@ export function ReportDialog({
 
             <View style={styles.actions}>
               <Button
-                title="Send report"
+                title="Send Report"
                 onPress={handleSubmit}
                 loading={submitting}
               />
@@ -317,9 +318,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
+  // F3: light's chosen reason takes the one ring-with-soft-tint look (the chip's).
   reasonSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
+    borderColor: colors.forest,
+    backgroundColor: colors.mint,
   },
   // emerald D6: one selection treatment — gold line, gold label, no fill.
   reasonSelectedDark: {
@@ -332,7 +334,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.text,
   },
   reasonTextSelected: {
-    color: colors.primary,
+    color: colors.forest,
   },
   reasonTextSelectedDark: {
     color: selectedInDark(colors).line,

@@ -10,6 +10,7 @@ import {
   radius,
   spacing,
   type as tokenType,
+  wells,
   withAlpha as alpha,
   type EmeraldPalette,
 } from '../ui/tokens';
@@ -19,8 +20,9 @@ import {
 // ui/tokens.ts directly. `emeraldRadius` is the one corner scale under its
 // older name — since fix run D8 it IS `radius` (8/12/16/24), and the VALUES
 // live in exactly one place.
-export { withAlpha, layout, controls, glow, paneEdges, paneFills, PANE_HALO_RING, wells, discs, meltBar, postTiles, fieldAccessory } from '../ui/tokens';
+export { withAlpha, layout, controls, glow, paneEdges, paneFills, PANE_HALO_RING, wells, discs, meltBar, postTiles, fieldAccessory, textScale } from '../ui/tokens';
 export type { PaneRim, PaneHalo, PaneFill } from '../ui/tokens';
+export { dangerBright } from '../ui/tokens';
 export { radius as emeraldRadius } from '../ui/tokens';
 // The ONE reactive palette read (4D-4): re-exported here so screens can take
 // it from their standard import surface. The implementation lives in
@@ -907,6 +909,41 @@ export function litCardStyle(isDark: boolean, kind: 'card' | 'tile' = 'card'): V
  */
 export function litCardGround(isDark: boolean): string {
   return (isDark ? tokenLitCard.dark : tokenLitCard.light).bottom;
+}
+
+/**
+ * A2-M1 — THE WELL (depth -1): a part inside a lit card (a field, a quote, a price box, a quiet
+ * button). A fill a little darker than the card and a 1pt rim; no gradient, no shadow ("lift the
+ * container, not each outline"). Dark is the search field's well (ui/tokens.ts `wells.field`); light
+ * is the cream ground inside the palette's border.
+ */
+export function wellStyle(palette: { background: string; border: string }, isDark: boolean): ViewStyle {
+  if (!isDark) return { backgroundColor: palette.background, borderWidth: 1, borderColor: palette.border };
+  const well = wells.field;
+  return {
+    backgroundColor: alpha(well.ink, well.inkAlpha),
+    borderWidth: 1,
+    borderColor: alpha(well.rim, well.rimAlpha),
+  };
+}
+
+/**
+ * A2-M1 — THE LIT ROW: the lit card for a row of a long list, where a measurement shows the full
+ * recipe dropping frames. The card's lower stop as a solid fill, its rim, and ONE shadow layer: in
+ * dark the top edge (inset), in light the tile's soft lift. No gradient.
+ */
+export function litRowStyle(isDark: boolean): ViewStyle {
+  const look = isDark ? tokenLitCard.dark : tokenLitCard.light;
+  const lift = look.tileShadow;
+  const shadow = look.edge
+    ? `inset 0 1px 0 ${alpha(look.edge.color, look.edge.alpha)}`
+    : `0 ${lift.y}px ${lift.radius * 2}px ${alpha(lift.color, lift.alpha)}`;
+  return {
+    backgroundColor: look.bottom,
+    borderWidth: 1,
+    borderColor: alpha(look.rim.color, look.rim.alpha),
+    boxShadow: shadow,
+  } as ViewStyle;
 }
 
 export function screenGround(

@@ -88,6 +88,55 @@ export function formatDayKey(key: string | null | undefined, opts?: DateFormatOp
   return date ? formatDay(date, opts) : null;
 }
 
+/**
+ * C9 (A4-M4) — THE MARKET'S DAY. The server decides a job's day in this zone
+ * (report_running_late(), the reminders, cancel_job()), so every "today" the
+ * app shows or filters by is that same day, whatever clock the phone is set
+ * to. Which zone the market uses is the owner's question, never this file's.
+ */
+export const MARKET_TIME_ZONE = 'America/New_York';
+
+const DAY_KEY_SHAPE: Intl.DateTimeFormatOptions = { year: 'numeric', month: '2-digit', day: '2-digit' };
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** 'YYYY-MM-DD' of a calendar date given as UTC midnight (a UTC day is always 24 hours long). */
+function keyOfUtcDay(utcMidnight: number): string {
+  const day = new Date(utcMidnight);
+  const month = String(day.getUTCMonth() + 1).padStart(2, '0');
+  return `${day.getUTCFullYear()}-${month}-${String(day.getUTCDate()).padStart(2, '0')}`;
+}
+
+/** The market's calendar date of an instant as [year, month 1-12, day]; the device's own where Intl cannot answer. */
+function marketYmd(now: Date): [number, number, number] {
+  try {
+    const parts = formatter(DAY_KEY_SHAPE, MARKET_TIME_ZONE).formatToParts(now);
+    const part = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+    const ymd: [number, number, number] = [part('year'), part('month'), part('day')];
+    if (ymd.every((n) => n > 0)) return ymd;
+  } catch {
+    // Intl without time-zone data: the device's date below.
+  }
+  return [now.getFullYear(), now.getMonth() + 1, now.getDate()];
+}
+
+/**
+ * The market's calendar day as a 'YYYY-MM-DD' key — `plusDays` calendar days
+ * on from the day `now` falls on there. It steps the calendar date itself,
+ * never 24-hour blocks, so a clock change can neither skip a day nor repeat one.
+ */
+export function marketDayKey(now: Date = new Date(), plusDays = 0): string {
+  const [year, month, day] = marketYmd(now);
+  return keyOfUtcDay(Date.UTC(year, month - 1, day + plusDays));
+}
+
+/** How many market calendar days `earlier` lies before `later` (0 on the same day; negative when after). */
+export function marketDaysBetween(earlier: Date, later: Date): number {
+  const [y1, m1, d1] = marketYmd(earlier);
+  const [y2, m2, d2] = marketYmd(later);
+  return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / MS_PER_DAY);
+}
+
 /** Compact relative time, e.g. "just now", "5 min ago", "2 h ago", "3 d ago". */
 export function formatTimeAgo(iso: string): string {
   return relativeAge(iso, 'long');

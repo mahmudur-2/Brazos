@@ -262,16 +262,48 @@ export function createSecureSessionStorage(
     }
   }
 
+  /**
+   * R7-a: delete one entry and READ IT BACK. iOS reports a delete as done even
+   * when the item stays (SecItemDelete's status is ignored), so a removal is
+   * never trusted until a read finds nothing. A read that fails is no proof
+   * either: it throws, unlike readNative, which treats it as absent.
+   */
+  async function deleteProven(store: SecureStoreLike, key: string): Promise<void> {
+    await deleteNative(store, key);
+    let left: string | null;
+    try {
+      left = await store.getItemAsync(key);
+    } catch {
+      throw new Error(`[secureSessionStorage] could not check that ${key} was removed`);
+    }
+    if (left !== null) throw new Error(`[secureSessionStorage] ${key} is still on this device after its delete`);
+  }
+
+  /** Chunks of one generation: the `known` count, then any further ones still present (a strand). */
+  async function deleteChunksProven(store: SecureStoreLike, base: string, gen: number, known: number) {
+    for (let index = 0; ; index++) {
+      const key = chunkKeyFor(base, gen, index);
+      if (index >= known && (await readNative(store, key)) === null) return;
+      await deleteProven(store, key);
+    }
+  }
+
   async function removeValue(store: SecureStoreLike, base: string): Promise<void> {
     const manifest = parseManifest(await readNative(store, base));
-    // Manifest first: from this point the value reads as absent, and the
-    // chunk deletes below can never expose a partial set.
-    await deleteNative(store, base);
+    // R7-a: the chunks FIRST, each proven gone, and the manifest LAST. A chunk
+    // that will not go keeps the manifest that names it, so the removal fails
+    // out loud and the next attempt finds it again. A reader in between sees a
+    // manifest with a missing chunk: absent, never a partial session. The
+    // neighbouring generations are swept too: an interrupted write strands
+    // gen + 1, a failed surplus delete strands gen - 1.
     if (manifest) {
-      for (let index = 0; index < manifest.chunks; index++) {
-        await deleteNative(store, chunkKeyFor(base, manifest.gen, index));
-      }
+      await deleteChunksProven(store, base, manifest.gen, manifest.chunks);
+      await deleteChunksProven(store, base, manifest.gen + 1, 0);
+      if (manifest.gen > 1) await deleteChunksProven(store, base, manifest.gen - 1, 0);
+    } else {
+      await deleteChunksProven(store, base, 1, 0);
     }
+    await deleteProven(store, base);
   }
 
   async function migrateOnMiss(
@@ -347,6 +379,10 @@ export function createSecureSessionStorage(
       const store = active.store;
       const base = sanitizeStorageKey(key);
       await enqueueWrite(base, () => removeValue(store, base));
+      // R7-a: a pre-keychain copy the migration could not clear goes too. A
+      // failed AsyncStorage removal rejects (unlike the keychain's delete), so
+      // it needs no read back — and the old store is never read again.
+      await legacyStorage.removeItem(key);
     },
   };
 }

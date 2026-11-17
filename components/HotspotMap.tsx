@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Circle, Marker, Polygon } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -36,7 +36,14 @@ export function HotspotMap({
   selectedPinKey = null,
   hideLocateButton = false,
   legalLabelInsetBottom,
-}: HotspotMapProps) {
+  fallbackInsetTop = 0,
+  fallbackInsetBottom = 0,
+}: HotspotMapProps & {
+  /** LOOK-R L-2: the location-off block centres between what floats over the map: the chrome above
+   *  (its measured foot) and the worker's jobs sheet below (its footprint). 0 = the screen's edge. */
+  fallbackInsetTop?: number;
+  fallbackInsetBottom?: number;
+}) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const [perm, setPerm] = useState<PermState>('loading');
@@ -127,8 +134,18 @@ export function HotspotMap({
   }
 
   if (perm === 'denied') {
+    // LOOK-R L-2: a scroller, so both buttons stay reachable where the free band is shorter than the block.
     return (
-      <View style={[styles.fallback, { backgroundColor: colors.background }]}>
+      <ScrollView
+        style={[styles.flex, { backgroundColor: colors.background }]}
+        contentContainerStyle={[
+          styles.fallback,
+          {
+            paddingTop: Math.max(spacing.xl, fallbackInsetTop),
+            paddingBottom: Math.max(spacing.xl, fallbackInsetBottom),
+          },
+        ]}
+      >
         <MapPinIcon size={88} />
         <Text style={[styles.fallbackTitle, { color: colors.text }]}>
           Location is off
@@ -140,12 +157,12 @@ export function HotspotMap({
         <View style={styles.fallbackActions}>
           <Button title="Open Settings" onPress={() => Linking.openSettings()} />
           <Button
-            title="View map without location"
+            title="View Map Without Location"
             variant="secondary"
             onPress={() => setPerm('skipped')}
           />
         </View>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -335,7 +352,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
   },
   fallback: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,

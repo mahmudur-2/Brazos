@@ -28,13 +28,33 @@
  * shape so the two views never disagree.
  */
 import { StyleSheet, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import type { PressHaptic } from '../hooks/usePressFeedback';
 
 export type PressScaleProps = PressableProps & {
   /**
    * The light tap as the finger lands. Default true; rows inside a scroller pass false, so the
-   * start of a scroll that happens to begin on a row does not buzz.
+   * start of a scroll that happens to begin on a row does not buzz. A2-M2: 'select' gives the
+   * selection tick instead, for a control that CHOOSES (a choice chip, a choice row).
    */
-  haptic?: boolean;
+  haptic?: PressHaptic;
+  /**
+   * A2-M2 — the opacity the control dims to while the finger is down (Button: .85). On the 120 Hz
+   * path it rides the press spring's own shared value on the UI thread, in the same frame as the
+   * scale; under Reduce Motion and on the native-driver fallback it is the Pressable's pressed style.
+   */
+  dim?: number;
+  /**
+   * A2-M2 — for a control given a share of a ROW (`flex`), beside siblings that may be taller (a
+   * pair of buttons whose labels wrap differently): the wrapper lays the Pressable out as a row, so
+   * the row's stretch carries the Pressable's height with the wrapper's and the pair keeps one
+   * height; the Pressable takes exactly the wrapper's width. Only with a `flex` share: a growing
+   * child of an unsized box takes the box's whole available room on iOS (see FILL below).
+   *
+   * A2-M3 — `'height'`: the row wrapper alone, for a control that keeps its OWN width beside a
+   * share in a ROW (ConfirmDialog's Cancel beside its action): nothing grows, and the row's stretch
+   * gives it the row's height. Only inside a row: in a column the Pressable would shrink to its text.
+   */
+  fill?: boolean | 'height';
 };
 
 /** The keys that place a box among its siblings — the wrapper's, never the Pressable's. */
@@ -146,18 +166,36 @@ export function splitPressStyle(style: StyleProp<ViewStyle>): { outer: ViewStyle
   return { outer: outer as ViewStyle, inner: inner as ViewStyle };
 }
 
+/** `fill` (above): the wrapper lays the Pressable out as a row and the Pressable takes its width. */
+const FILL_ROW: ViewStyle = { flexDirection: 'row' };
+const FILL_SHARE: ViewStyle = { flexGrow: 1, flexShrink: 1, flexBasis: 0 };
+
 /**
  * The wrapper's place and the Pressable's own style. A style that is a function of the press
  * state keeps being one for the Pressable; its place is read at rest (a box does not move
  * among its siblings because it is pressed).
  */
-export function pressStyles(style: PressableProps['style']): {
+export function pressStyles(
+  style: PressableProps['style'],
+  fill: boolean | 'height' = false,
+): {
   outer: ViewStyle;
   inner: PressableProps['style'];
 } {
-  if (typeof style !== 'function') return splitPressStyle(style);
-  return {
-    outer: splitPressStyle(style({ pressed: false })).outer,
-    inner: (state) => splitPressStyle(style(state)).inner,
+  const split = (resolved: StyleProp<ViewStyle>) => {
+    const { outer, inner } = splitPressStyle(resolved);
+    if (fill === 'height') return { outer: { ...outer, ...FILL_ROW }, inner };
+    return fill ? { outer: { ...outer, ...FILL_ROW }, inner: { ...inner, ...FILL_SHARE } } : { outer, inner };
   };
+  if (typeof style !== 'function') return split(style);
+  return {
+    outer: split(style({ pressed: false })).outer,
+    inner: (state) => split(style(state)).inner,
+  };
+}
+
+/** `dim` (above) as the Pressable's pressed style: the path where no UI-thread value carries it. */
+export function withPressDim(style: PressableProps['style'], dim: number | undefined): PressableProps['style'] {
+  if (dim == null) return style;
+  return (state) => [typeof style === 'function' ? style(state) : style, state.pressed && { opacity: dim }];
 }

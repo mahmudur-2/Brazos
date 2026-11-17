@@ -129,6 +129,6 @@ test('the public profile shows availability truth and gates drafts', async () =>
 
 test('PaymentMethods never renders a fake stored method', async () => {
   const src = await read('screens/PaymentMethodsScreen.tsx');
-  assert.match(src, /No stored payment methods/);
+  assert.match(src, /No Stored Payment Methods/);
   assert.ok(!/\*{4}|ending in|Visa|Mastercard/i.test(src), 'no fabricated card UI');
 });

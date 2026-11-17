@@ -44,7 +44,7 @@ export function BidSentScreen() {
           onPress: () => navigateAcrossTabs('MyJobs'),
         },
         {
-          label: 'Keep browsing',
+          label: 'Keep Browsing',
           variant: 'secondary',
           // The form replaced itself with this screen, so one pop lands back
           // on the job detail — not on a re-submittable bid form. Guarded:

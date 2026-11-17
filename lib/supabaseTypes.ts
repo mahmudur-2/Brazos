@@ -34,3 +34,11 @@ export type Database = {
 
 /** The app's job status vocabulary, as the database enum spells it. */
 export type JobStatusEnum = GeneratedDatabase['public']['Enums']['job_status'];
+
+/**
+ * C5 / A9 — the most rows the API returns for one read (PostgREST `max_rows`,
+ * supabase/config.toml). A longer answer is cut there in silence, so a read
+ * that can grow past it pages (lib/earnings.ts) or says it was cut
+ * (lib/messages.ts). tests/listPaging.test.mjs ties this to the config file.
+ */
+export const API_MAX_ROWS = 1000;

@@ -37,9 +37,9 @@ const { deriveWorkerHeroTrust } = await (async () => {
 // C3 — executed trust derivation
 // ---------------------------------------------------------------------------
 
-test('C3 · full known facts render all three rows', () => {
+test('C3 · full known facts render every row but "Responds in" (C14: no unit named yet)', () => {
   const trust = deriveWorkerHeroTrust({
-    profile: { on_time_pct: 0.9, response_time: '2 hours' },
+    profile: { on_time_pct: 0.9, response_time: 120 },
     ratingSummary: { shownAverage: 4.7, isNew: false, total: 12 },
     stats: [{ count: 20 }, { count: 7 }],
   });
@@ -47,7 +47,7 @@ test('C3 · full known facts render all three rows', () => {
     rating: { shownAverage: 4.7, isNew: false, count: 12 },
     newWorker: false,
     completedJobs: 27,
-    respondsIn: '2 hours',
+    respondsIn: null,
   });
 });
 
@@ -81,7 +81,7 @@ test('C3 · an unanswered or failed stats read is UNKNOWN: no completed row, no 
 
 test('C3 · the "New worker" verdict is compareBids\' — KNOWN sub-3 completed with null on-time — and replaces the fact rows', () => {
   const trust = deriveWorkerHeroTrust({
-    profile: { on_time_pct: null, response_time: '1 hour' },
+    profile: { on_time_pct: null, response_time: 60 },
     ratingSummary: { shownAverage: 5, isNew: true, total: 1 },
     stats: [{ count: 1 }],
   });
@@ -103,19 +103,25 @@ test('C3 · a KNOWN zero completed with a known on-time renders nothing — neve
   assert.equal(trust.completedJobs, null);
 });
 
-test('C3 · responds-in is the real column value, trimmed; blank is null', () => {
-  const blank = deriveWorkerHeroTrust({
-    profile: { on_time_pct: 0.5, response_time: '   ' },
-    ratingSummary: null,
-    stats: [{ count: 9 }],
-  });
-  assert.equal(blank.respondsIn, null);
-  const real = deriveWorkerHeroTrust({
-    profile: { on_time_pct: 0.5, response_time: ' about a day ' },
-    ratingSummary: null,
-    stats: [{ count: 9 }],
-  });
-  assert.equal(real.respondsIn, 'about a day');
+test('C14 · response_time is an integer with no named unit: any value gives no "Responds in", and nothing throws', () => {
+  // The SQL column is an integer (baseline profiles.response_time); the old code called .trim() on it.
+  for (const response_time of [12, 0, null, undefined]) {
+    const trust = deriveWorkerHeroTrust({
+      profile: { on_time_pct: 0.5, response_time },
+      ratingSummary: null,
+      stats: [{ count: 9 }],
+    });
+    assert.equal(trust.respondsIn, null, String(response_time));
+    assert.equal(trust.completedJobs, 9, 'the other rows still render');
+  }
+});
+
+test('C14 · the public profile read no longer selects response_time', async () => {
+  const profiles = stripComments(await read('lib/profiles.ts'));
+  const projection = profiles.match(/export const PUBLIC_PROFILE_COLUMNS =\s*'([^']*)'/)?.[1];
+  assert.ok(projection, 'PUBLIC_PROFILE_COLUMNS is one string literal');
+  assert.ok(!projection.split(',').map((c) => c.trim()).includes('response_time'));
+  assert.match(profiles, /response_time\?: number \| null;/);
 });
 
 test('C3 · the module composes compareBids rather than copying its rules', async () => {
@@ -147,7 +153,8 @@ test('[static] 4E · the hero renders the module output; the old placeholders ar
   assert.match(screen, /heroTrust\.rating \?/);
   assert.match(screen, /heroTrust\.newWorker \?/);
   assert.match(screen, /jobs?'\s*} completed|} completed/);
-  assert.match(screen, /Responds in \$\{heroTrust\.respondsIn\}/);
+  // G3: profiles.response_time is measured from nothing (no writer), so the screen never shows it.
+  assert.doesNotMatch(screen, /Responds in|heroTrust\.respondsIn/);
   // C3: no placeholder where a fact would go.
   assert.ok(!screen.includes('no reviews yet'));
   assert.ok(!screen.includes(": 'New'"));

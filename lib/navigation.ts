@@ -159,13 +159,6 @@ export type CustomerHomeStackParamList = {
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
   ProfileReviews: { userId: string; name?: string; role: 'worker' | 'customer' | 'both' };
-  /**
-   * Worker search. Opened blank from Home's search field, or pre-run with a
-   * typed query / a tapped service chip. `autoFocus: false` suppresses the
-   * open-with-keyboard behaviour for the Discover tab's root mount, where a
-   * keyboard popping on every first tab visit would be noise.
-   */
-  WorkerSearch: { query?: string; category?: string; autoFocus?: boolean } | undefined;
   /** E5: a notification's job opens on this stack when the person is on Home (the feed), with every
    *  screen it leads to; the same params as on My Jobs. */
   ClientJobDetail: MyJobsStackParamList['ClientJobDetail'];
@@ -184,7 +177,7 @@ export type CustomerHomeStackNavigation =
 
 /**
  * The customer Discover tab (Stage 4D) — the customer's browse surface, rooted
- * at the same WorkerSearchScreen the Home stack pushes. Mode purity: this tab
+ * at WorkerSearchScreen. Mode purity: this tab
  * lists WORKERS and services, never job postings. WorkerProfile / PostJob /
  * ProfileReviews ride along per the standing every-stack-that-surfaces-a-user
  * rule (WorkerSearch opens profiles; a profile offers "Send an offer").
@@ -230,7 +223,8 @@ export type WorkerHomeStackParamList = {
   Notifications: undefined;
   /** 2026-09-29 (LUX-LIST-2 #8) — the feed's settings gear. */
   NotificationSettings: undefined;
-  JobDetail: { job: OpenJob };
+  /** P6: `bidSent` — the bid form went back here after sending; the bid card says so. */
+  JobDetail: { job: OpenJob; bidSent?: boolean };
   /** Phase 7 — pre-hire chat from the worker's own-bid card. Registered
    *  alongside JobDetail in every stack that mounts it (the SubmitBid rule):
    *  an offer links the pair, and the chat entry lives on the offer surface. */
@@ -312,7 +306,8 @@ export type MyJobsStackParamList = {
   ClientJobDetail: { job: Job; intent?: 'checkout' | 'accept' | 'pay'; offerId?: string };
   /** Idea 6: `intent: 'route'` — the reminder's Route button — opens directions once on arrival. */
   WorkerJob: { jobId: string; intent?: 'route' };
-  JobDetail: { job: OpenJob };
+  /** P6: `bidSent` — the bid form went back here after sending; the bid card says so. */
+  JobDetail: { job: OpenJob; bidSent?: boolean };
   SubmitBid: { job: OpenJob };
   BidSent: { jobTitle: string; amountCents: number; offerId: string };
   /** Screen 28 — the comparison surface over a job's pending bids (Phase 5). */
@@ -409,7 +404,8 @@ export type MessagesStackNavigation = NativeStackNavigationProp<MessagesStackPar
 export type MapStackParamList = {
   MapMain: undefined;
   CellJobs: { ilat: number; ilng: number; count: number };
-  JobDetail: { job: OpenJob };
+  /** P6: `bidSent` — the bid form went back here after sending; the bid card says so. */
+  JobDetail: { job: OpenJob; bidSent?: boolean };
   SubmitBid: { job: OpenJob };
   BidSent: { jobTitle: string; amountCents: number; offerId: string };
   /** Phase 7 — pre-hire chat from the worker's own-bid card (the JobDetail
@@ -455,6 +451,8 @@ export type ProfileStackParamList = {
   /** Golden master 41 — the hub's account & safety page (decision 10). */
   AccountSafety: undefined;
   AdminReports: undefined;
+  /** B6 (production-36h): the owner's list of what needs attention (an admin account only). */
+  AdminAttention: undefined;
   NotificationSettings: undefined;
   /** Screens 64+66 (Phase 9): the worker's services & pricing manager with
    *  the availability toggle and the honest verification state. */
@@ -596,7 +594,7 @@ export type ChatRouteParamList = { Chat: ChatTargetParams };
 // JobDetail (the worker bid screen) is registered in HomeStack, MyJobsStack,
 // and MapStack — reached from browsing, a hotspot drill-down, etc. Same
 // standalone-type treatment as Chat, for the same reason.
-export type JobDetailRouteParamList = { JobDetail: { job: OpenJob } };
+export type JobDetailRouteParamList = { JobDetail: { job: OpenJob; bidSent?: boolean } };
 
 // PostJob is registered in HomeStack, MyJobsStack, MessagesStack and MapStack
 // (posting normally, editing from any customer detail entry point, plus "Hire
@@ -616,8 +614,7 @@ export type ProfileReviewsRouteParamList = {
   ProfileReviews: { userId: string; name?: string; role: 'worker' | 'customer' | 'both' };
 };
 
-// Registered in the customer Home stack (pushed from Home's search/chips) and
-// as the Discover tab's root; its own route-param type for the same reason as
+// Registered as the Discover tab's root; its own route-param type for the same reason as
 // the others: the screen needs its params and goBack(), not the whole parent
 // stack.
 export type WorkerSearchRouteParamList = {

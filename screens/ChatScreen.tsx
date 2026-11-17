@@ -72,6 +72,7 @@ import {
   blockUser,
   EMPTY_RELATION,
   fetchRelation,
+  relationStatus,
   unblockUser,
   type RelationState,
 } from '../lib/moderation';
@@ -101,6 +102,8 @@ import {
 import { useThreadOffers } from '../hooks/useJobOffers';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { uploadChatPhoto } from '../lib/storage';
+import { PICKER_MEDIA_OPTIONS } from '../lib/pickerOptions';
+import { uploadErrorMessage } from '../lib/uploadRules';
 import type { ChatRouteParamList } from '../lib/navigation';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette,
@@ -108,7 +111,7 @@ import { radius, spacing, themedStyles, useThemeColors, type ColorPalette,
   touchSlop,
 } from '../lib/theme';
 import { Divider, usePillReserve } from '../ui/primitives';
-import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
+import { loadErrorTitle, SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
 
 /** One entry in the merged timeline: a message, or the job it belongs to. */
 type TimelineItem =
@@ -510,6 +513,9 @@ export function ChatScreen() {
   const counterpartyDeleted = isTombstonedName(counterparty?.full_name);
   // Whether this user may write here at all: a block either way, or nobody left to write to.
   const isBlocked = relation.blocking || relation.blockedBy || counterpartyDeleted;
+  // A4 wiring (A2, C7): a failed block read is neither "blocked" nor "clear" — the chat shows its
+  // load-error state with a retry and offers no composer, and never the blocked notice.
+  const relationUnknown = relationStatus(relation) === 'unknown';
 
   // "Hire Again" only ever shows to the client side of a past completed job —
   // a worker never sees it for their client. It used to also require a
@@ -557,7 +563,6 @@ export function ChatScreen() {
       title: `Block ${counterpartyName}?`,
       message: "You won't be able to message each other on any job. You can undo this later.",
       confirmText: 'Block',
-      cancelText: 'Cancel',
       destructive: true,
     });
     if (!ok) return;
@@ -917,7 +922,6 @@ export function ChatScreen() {
       title: 'Unsend this message?',
       message: 'It will be replaced with "This message was unsent" for both of you.',
       confirmText: 'Unsend',
-      cancelText: 'Cancel',
       destructive: true,
     });
     if (!ok) return;
@@ -956,10 +960,7 @@ export function ChatScreen() {
     );
     if (uploadError || !url) {
       setSending(false);
-      await alertAsync(
-        'Photo upload failed',
-        'Please try again. You may need to set up the chat-photos storage bucket.'
-      );
+      await alertAsync('Photo upload failed', uploadErrorMessage(uploadError));
       return;
     }
     const { data, error } = await sendMessage({
@@ -978,8 +979,8 @@ export function ChatScreen() {
 
   async function pickFromLibrary() {
     const result = await ImagePicker.launchImageLibraryAsync({
+      ...PICKER_MEDIA_OPTIONS,
       mediaTypes: ['images'],
-      quality: 0.7,
     });
     if (!result.canceled && result.assets[0]) {
       await sendPhoto(result.assets[0]);
@@ -993,7 +994,7 @@ export function ChatScreen() {
       await askOpenSettings('camera');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+    const result = await ImagePicker.launchCameraAsync({ ...PICKER_MEDIA_OPTIONS });
     if (!result.canceled && result.assets[0]) {
       await sendPhoto(result.assets[0]);
     }
@@ -1255,6 +1256,10 @@ export function ChatScreen() {
         >
           {loading || (threadsLoading && targets.length === 0) ? (
             <ScreenStateView state={SPINNER_STATE} />
+          ) : relationUnknown ? (
+            <ScreenStateView
+              state={{ kind: 'error', title: loadErrorTitle('this conversation'), onRetry: () => void rereadRelation() }}
+            />
           ) : (
             <FlatList
               ref={listRef}
@@ -1299,7 +1304,7 @@ export function ChatScreen() {
                   <View style={styles.emptyIcon}>
                     <Ionicons name="chatbubbles-outline" size={28} color={colors.primary} />
                   </View>
-                  <Text style={styles.emptyTitle}>Say hello</Text>
+                  <Text style={styles.emptyTitle}>Say Hello</Text>
                   <Text style={styles.emptyText}>
                     Messages and photos here are only visible to you and{' '}
                     {counterparty?.full_name ?? 'the other person'}.
@@ -1309,7 +1314,7 @@ export function ChatScreen() {
             />
           )}
 
-          {isBlocked ? (
+          {relationUnknown ? null : isBlocked ? (
             <View style={styles.blockedNotice}>
               <Ionicons name="ban-outline" size={18} color={colors.danger} />
               <Text style={styles.blockedText}>
@@ -1435,7 +1440,7 @@ export function ChatScreen() {
 
       <AmountPrompt
         visible={!!counterTarget}
-        title="Counter-offer"
+        title="Counter-Offer"
         message={
           counterTarget
             ? `Currently ${formatBudget(counterTarget.amount_cents)}. Propose a different amount.`
@@ -1484,7 +1489,6 @@ export function ChatScreen() {
                 ? declineOfferActionLabel(confirmResponse.request.worker_id === user?.id)
                 : ''
         }
-        cancelText="Cancel"
         destructive={
           confirmResponse?.action === 'decline' || confirmResponse?.action === 'withdraw'
         }

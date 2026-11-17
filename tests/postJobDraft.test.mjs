@@ -167,7 +167,7 @@ test('the draft is cleared on publish and on an empty abandon, kept on Back with
   // …and a kept draft has its one explicit delete on the My Jobs card, which
   // takes the draft's never-published media with it.
   const hub = codeOnly(await read('screens/MyJobsHubScreen.tsx'));
-  assert.match(hub, /accessibilityLabel="Discard draft"/);
+  assert.match(hub, /accessibilityLabel="Discard Draft"/);
   assert.match(
     hub,
     /await Promise\.all\(\[\.\.\.draft\.photos, \.\.\.draft\.videos\]\.map\(\(url\) => deleteJobPhoto\(url\)\)\);\s*await clearPostJobDraft\(userId\);/

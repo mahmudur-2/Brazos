@@ -139,7 +139,7 @@ appId: app.brazos.mobile.preview
     timeout: 15000
 - tapOn: "Report"
 - extendedWaitUntil:
-    visible: "Send report"
+    visible: "Send Report"
     timeout: 15000
 - tapOn: "Cancel"
 # The worker as the customer sees them: the reviews list (06's review stays hidden until B reviews
@@ -165,14 +165,17 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "Worker Profile"
     timeout: 30000
+# The link ends the list, right above the floating "Send an Offer": centred (at the list's end it stops
+# above the button), so a link that only just scrolled into view is not tapped through the button.
 - scrollUntilVisible:
     element:
       text: "Report this profile"
     direction: DOWN
     timeout: 60000
+    centerElement: true
 - tapOn: "Report this profile"
 - extendedWaitUntil:
-    visible: "Send report"
+    visible: "Send Report"
     timeout: 15000
 - takeScreenshot: 07-worker-profile-report
 - tapOn: "Cancel"
@@ -217,7 +220,7 @@ appId: app.brazos.mobile.preview
 - assertVisible: "Block"
 - tapOn: "Report"
 - extendedWaitUntil:
-    visible: "Send report"
+    visible: "Send Report"
     timeout: 15000
 - tapOn: "Cancel"
 - tapOn:

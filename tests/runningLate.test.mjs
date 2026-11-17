@@ -5,7 +5,11 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { LATE_CHOICES, MARKET_TIME_ZONE, clockLabel, isLateDay, lateShiftMinutes, marketDate, movedWindow } from '../lib/runningLate.ts';
+import { loadModule } from './loadModule.mjs';
+
+// C9 (A4-M4): the market's zone and day live in lib/time.ts (import-free), which runningLate re-exports.
+const { LATE_CHOICES, MARKET_TIME_ZONE, clockLabel, isLateDay, lateShiftMinutes, marketDate, movedWindow } =
+  await loadModule('lib/runningLate.ts', { './time': await import('../lib/time.ts') });
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
@@ -80,11 +84,11 @@ test('[static] the app: the three chips inside the progress card, before arrivin
   const jobs = read('lib/jobs.ts');
   assert.match(jobs, /\.rpc\('report_running_late', \{ p_job_id: jobId, p_minutes: minutes \}\)/);
   // Idea 14 added series_id beside them.
-  assert.match(jobs, /en_route_at, arrived_at, late_minutes, late_reported_at, series_id, completed_at`;/);
+  assert.match(jobs, /en_route_at, arrived_at, late_minutes, late_reported_at, series_id, completed_at, release_due_at`;/);
   const screen = flat(read('screens/WorkerJobScreen.tsx'));
   // F6: before arriving, once held — nextWorkerStep's 'en_route' / 'arrived' (lib/jobLifecycle.ts).
   assert.match(screen, /const beforeArrival = step === 'en_route' \|\| step === 'arrived';/);
-  assert.match(screen, /\{beforeArrival && isLateDay\(job\.scheduled_date\) \? \( <View style=\{styles\.lateBlock\}>/);
+  assert.match(screen, /\{beforeArrival && isLateDay\(job\.scheduled_date, new Date\(serverNowMs\(\)\)\) \? \( <View style=\{styles\.lateBlock\}>/);
   assert.match(screen, /const clientFirstName = client\?\.full_name\?\.trim\(\)\.split\(\/\\s\+\/\)\[0\] \|\| 'Your customer';/, 'never "They was told"');
   // The words sit over the chips, so the told line and the chosen check never push a chip down.
   assert.match(screen, /'Running late\?'\} <\/Text> <View style=\{styles\.lateRow\}>/);

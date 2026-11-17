@@ -265,7 +265,7 @@ test('[static] 6 · PayoutsScreen opens the link in the system browser, refreshe
   // review offers "Check again" (fix run E7: a status re-check, not a failed
   // load, so not the retry word); enabled offers nothing.
   assert.match(code, /view\?\.cta \? \(\s*<Button title=\{view\.cta\} onPress=\{\(\) => void openSetup\(\)\}/);
-  assert.match(code, /\) : view\?\.refresh \? \(\s*<Button\s*title="Check again"/);
+  assert.match(code, /\) : view\?\.refresh \? \(\s*<Button\s*title="Check Again"/);
   assert.match(code, /payoutsCta\(status\)/);
 
   // Outside the card path the screen says why there is nothing here.
@@ -277,7 +277,7 @@ test('[static] 7 · Earnings leads to Payouts in stripe mode only, and offers no
   const src = read('screens/EarningsScreen.tsx');
   const code = stripComments(src);
   assert.match(code, /s && paymentsMode === 'stripe' \? \([\s\S]{0,700}navigation\.navigate\('Payouts'\)/);
-  assert.match(code, /title=\{payouts \? payoutsCta\(payouts\)\.cta \?\? payoutsCta\(payouts\)\.headline : 'Payouts'\}/);
+  assert.match(code, /title=\{payouts \? titleCase\(payoutsCta\(payouts\)\.cta \?\? payoutsCta\(payouts\)\.headline\) : 'Payouts'\}/);
   assert.match(code, /if \(paymentsMode === 'stripe'\) \{\s*const payoutsRes = await fetchMyPayoutsStatus\(\);/);
   // Lean D4: the sandbox cash-out is gone; money leaves only through Stripe payouts.
   assert.doesNotMatch(code, /Cash out|cashOut|setConfirmCashOut|paymentsMode === 'sandbox'/);
@@ -426,8 +426,10 @@ test('[static] 11 · App.tsx listens for the URL beside the push listener, reads
   assert.match(rootNavigator, /Linking\.getInitialURL\(\)/);
   assert.match(rootNavigator, /Linking\.addEventListener\('url', \(\{ url \}\) => dispatch\(url\)\);/);
   assert.match(rootNavigator, /void handleAppLink\(url, linkBridge\);/);
-  // The cold-start URL is consumed once per process.
-  assert.match(rootNavigator, /const handledInitialUrl = useRef\(false\);/);
+  // The cold-start URL is consumed once per process (B1: at module level, so a RootNavigator mounted
+  // again after a suspension ends never dispatches it twice).
+  assert.match(code, /^const handledInitialUrl = \{ current: false \};$/m);
+  assert.doesNotMatch(rootNavigator, /handledInitialUrl = useRef/);
   assert.match(rootNavigator, /if \(!handledInitialUrl\.current\) \{\s*handledInitialUrl\.current = true;/);
   // The subscription is removed on cleanup.
   assert.match(rootNavigator, /subscription\.remove\(\);/);

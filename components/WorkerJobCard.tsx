@@ -63,6 +63,8 @@ import { TodayPill } from './TodayPill';
  * estimate.
  */
 const THUMB_SIZE = 120;
+/** M5 (T2): the results row's square, as tall as its three lines. */
+const FULL_THUMB_SIZE = 80;
 const PAY_CLEAR = 96;
 const PAY_AIR = 8;
 const META_GLYPH = 16;
@@ -206,6 +208,121 @@ export function WorkerJobCard({
     return <PeekRow job={job} onPress={onPress} />;
   }
 
+  // M5 (T2, the row rule of plan/UI-DIRECTION.md §7): the results list's row. The title on one line,
+  // the category chip row as before, ONE hint line (the location and the same facts, in the same
+  // words; it wraps rather than cut a time), "Break the ice" at its end, and the budget in a narrow
+  // column on the right. A job with no budget says "Open" quietly. 'compact' (Worker Home) is unchanged.
+  if (variant === 'full') {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.card,
+          styles.fullCard,
+          isDark && styles.cardDark,
+          litCardStyle(isDark),
+          pressed && styles.cardPressed,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={showsTodayPill(job) ? `${job.title}, needed today` : job.title}
+      >
+        <View>
+          {showImage ? (
+            <RemoteImage
+              uri={thumbUrl}
+              style={[styles.thumb, styles.fullThumb, isDark && styles.thumbDark]}
+              contentFit="cover"
+              onError={() => setImageFailed(true)}
+              accessible
+              accessibilityLabel={`Photo for ${job.title}`}
+            />
+          ) : (
+            <View
+              style={[
+                styles.thumb,
+                styles.fullThumb,
+                styles.thumbFallback,
+                isDark ? [styles.thumbFallbackDark, litCardStyle(true, 'tile')] : { backgroundColor: accent.bg },
+              ]}
+            >
+              <CategoryGlyph
+                name={icon}
+                size={Math.round(FULL_THUMB_SIZE * 0.38)}
+                color={isDark ? colors.emerald : accent.icon}
+                bare
+              />
+            </View>
+          )}
+          {showsTodayPill(job) ? <TodayPill size="xs" solid style={styles.todayOnThumb} /> : null}
+        </View>
+
+        <View style={styles.fullInfo}>
+          <Text style={[styles.title, { paddingRight: payClear }]} numberOfLines={1}>
+            {job.title}
+          </Text>
+          <View style={[styles.chipRow, { paddingRight: payClear }]} onLayout={onChipRowLayout}>
+            <Chip
+              label={fullFits === false ? shortLabel : fullLabel}
+              variant="soft"
+              size="sm"
+              style={[styles.categoryChip, fullFits === null && styles.chipUnmeasured]}
+              onLayout={onChipLayout}
+            />
+            {isOwn ? (
+              <Chip
+                label="Your Job"
+                variant="soft"
+                size="sm"
+                onLayout={(event) => setOwnWidth(event.nativeEvent.layout.width)}
+              />
+            ) : null}
+          </View>
+          {job.location || facts.length > 0 || showBreakIce ? (
+            <View style={styles.fullHint}>
+              <Ionicons
+                name={job.location ? 'location-outline' : 'calendar-outline'}
+                size={META_GLYPH}
+                color={metaGlyph}
+                style={styles.fullHintGlyph}
+              />
+              {/* Each part keeps its own spaces unbreakable (U+00A0 looks the same) and a word joiner
+                  after its dash, so a wrap falls only at a " · " — never inside "8 AM–11 AM".
+                  "Break the ice" leads, so it is never the part a long line cuts. */}
+              <Text style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={2}>
+                {showBreakIce ? (
+                  <Text style={styles.breakIceText}>
+                    <Ionicons name="sparkles" size={12} color={colors.mark} />
+                    {' Break the ice'}
+                    {job.location || facts.length > 0 ? <Text style={styles.factsDot}> · </Text> : null}
+                  </Text>
+                ) : null}
+                {[job.location, ...facts]
+                  .filter((part): part is string => !!part)
+                  .map((part, index) => (
+                    <Text key={`${index}-${part}`}>
+                      {index > 0 ? <Text style={styles.factsDot}> · </Text> : null}
+                      {part.replace(/ /g, ' ').replace(/–/g, '–⁠')}
+                    </Text>
+                  ))}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* A7: BUDGET over the customer's figure, as before, in a narrow column. */}
+        <View style={[styles.payBlock, styles.fullPay]} onLayout={(event) => setPayWidth(event.nativeEvent.layout.width)}>
+          <Text style={[styles.payCaption, isDark && styles.payCaptionDark]}>BUDGET</Text>
+          <Text
+            style={job.budget_cents != null ? styles.fullPayValue : styles.fullPayOpen}
+            numberOfLines={1}
+          >
+            {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  }
+
   return (
     <Pressable
       onPress={onPress}
@@ -267,7 +384,7 @@ export function WorkerJobCard({
           />
           {isOwn ? (
             <Chip
-              label="Your job"
+              label="Your Job"
               variant="soft"
               size="sm"
               onLayout={(event) => setOwnWidth(event.nativeEvent.layout.width)}
@@ -387,7 +504,7 @@ function PeekRow({ job, onPress }: { job: OpenJob; onPress: () => void }) {
           {job.title}
         </Text>
         <View style={[styles.peekMeta, { paddingRight: payClear }]} onLayout={onMetaLayout}>
-          <View style={[styles.peekCategory, isDark && styles.peekCategoryDark]}>
+          <View style={[styles.peekCategory, !dayBeside && styles.peekCategoryAlone, isDark && styles.peekCategoryDark]}>
             <Text style={styles.peekCategoryText} numberOfLines={1}>
               {category}
             </Text>
@@ -578,6 +695,48 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.money,
   },
   payValueDark: { color: colors.money },
+  // M5 (T2): the results row ('full').
+  fullCard: {
+    alignItems: 'center',
+  },
+  fullThumb: {
+    width: FULL_THUMB_SIZE,
+    height: FULL_THUMB_SIZE,
+  },
+  fullInfo: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.xs + 1,
+  },
+  fullHint: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 5,
+  },
+  fullHintGlyph: {
+    marginTop: 1,
+  },
+  // Narrow: the title keeps the row; the figure is a step under the title's weight.
+  fullPay: {
+    maxWidth: 84,
+  },
+  fullPayValue: {
+    marginTop: 2,
+    fontFamily: fonts.display,
+    fontSize: 19,
+    lineHeight: 23,
+    fontWeight: '800',
+    color: colors.money,
+    fontVariant: ['tabular-nums'],
+  },
+  // No budget: a quiet word, never louder than the title.
+  fullPayOpen: {
+    marginTop: 2,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
   // The peek row. Light: the page's cream ground under a gold hairline at a
   // quarter strength — the operator's "subtle, not too cream"; dark: the page
   // ink at half, ringed in the sage line. The category pill takes the same
@@ -636,6 +795,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: withAlpha(colors.gold, 0.26),
     backgroundColor: withAlpha(colors.emerald, 0.1),
     justifyContent: 'center',
+  },
+  peekCategoryAlone: {
+    flexShrink: 1,
   },
   peekCategoryDark: {
     borderColor: colors.mint2,

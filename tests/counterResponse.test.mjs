@@ -28,6 +28,8 @@ const offersModule = (async () => {
       /import \{ moneyCeilingError \} from '\.\/validation';/,
       'const moneyCeilingError = () => null;'
     )
+    // A4-R1: the server's clock (lib/serverClock.ts, executed in tests/serverClock.test.mjs) at offset 0.
+    .replace(/import \{ serverNowMs \} from '\.\/serverClock';/, 'const serverNowMs = () => Date.now();')
     // Same for the location-shape guard — executed in
     // tests/locationPrivacy.test.mjs.
     .replace(
@@ -109,10 +111,10 @@ test('withdraw renders only for the pending revision the viewer authored', async
 
   // The authored card keeps Withdraw, and names counters as counters.
   const afterAuthored = detail.slice(authoredStart);
-  assert.match(afterAuthored, /Withdraw bid/);
+  assert.match(afterAuthored, /Withdraw Bid/);
   assert.match(
     afterAuthored,
-    /activeBid\.parent_offer_id \? 'Your counter-offer' : 'Your bid'/
+    /activeBid\.parent_offer_id \? 'Your Counter-Offer' : 'Your Bid'/
   );
 });
 
@@ -215,7 +217,9 @@ test('the hub’s pending-offer card reads a counter awaiting the user as requir
   assert.match(hub, /bid\.awaiting_id === user\.id/);
   assert.match(hub, /bid\.author_id !== user\.id/);
   // 2026-09-28 (LUX-LIST-64 #64, audit M-17): the card's own spelling, sentence case.
-  assert.match(hub, /sent you a counter-offer — respond/);
+  // A2-M5 A5: the "Respond" is the pill's and the hint line's; the name line no longer repeats it.
+  assert.match(hub, /`\$\{clientFirstName\} sent you a \$\{COUNTER_OFFER_WORD\}`/);
+  assert.doesNotMatch(hub, /sent you a (counter-offer|\$\{COUNTER_OFFER_WORD\}) — respond/);
   assert.match(hub, /'Their counter:'/);
   // It routes to the response surface (the worker job detail), same as before.
   assert.match(hub, /navigation\.navigate\('JobDetail', \{ job \}\)/);

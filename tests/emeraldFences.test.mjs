@@ -1605,8 +1605,9 @@ test('home(6) fence: nothing sits between the Post a Job scroller and its bar', 
     [],
     'a NEW element between the scroller and the bar must be given its own seam decision'
   );
-  // The bar's ground is its own palette role, in both themes.
-  assert.match(stripComments(read('components/PostJobBar.tsx')), /backgroundColor: colors\.barGround,/);
+  // G1a RESTRUCTURE (2026-11-16): the bar floats where the tab bar's pill sat, with no plate (the
+  // bottom rule, as ui/primitives/FloatingAction), so it paints no ground and no rim of its own.
+  assert.doesNotMatch(stripComments(read('components/PostJobBar.tsx')), /backgroundColor|borderTop/);
 });
 
 // ---------------------------------------------------------------------------
@@ -1750,7 +1751,7 @@ test('map(1) fence: the map is the ground and the chrome floats on it, on the pa
     /<SafeAreaView style=\{styles\.safe\} edges=\{\['top'\]\} pointerEvents="box-none">/,
     'the chrome layer must be box-none or the map stops panning'
   );
-  assert.match(flat, /<View style=\{styles\.headerBlock\} pointerEvents="box-none">/);
+  assert.match(flat, /<View style=\{styles\.headerBlock\} pointerEvents="box-none" onLayout=\{onHeaderLayout\}>/);
 
   // NO PANE NAMES ITS OWN GROUND. The search pill, the chip and the customer
   // count capsule are `pane` Surfaces; the field inside the pill hands its

@@ -70,9 +70,9 @@ test('[static] one state → stage mapping, read by the rail, the Home bar and t
 
 test('[static] the row: the count or the mark, the stamp, the 44 column, the chip from the left edge', () => {
   const row = stripComments(read('components/ConversationRow.tsx'));
-  assert.match(row, /const PHOTO = 58;/);
+  assert.match(row, /const PHOTO = 52;/);
   assert.match(row, /const RIGHT_COLUMN = 44;/);
-  assert.match(row, /initialsSize=\{20\}/);
+  assert.match(row, /initialsSize=\{18\}/);
   assert.match(row, /formatInboxStamp\(lastMessageAt\)/);
   assert.match(row, /accessibilityLabel=\{`Manage conversation with \$\{name\}`\}/, 'the ••• the E2E and the viewer press');
   assert.match(row, /<LiveDot color=\{stageColor\} size=\{6\} motion="breathe" \/>/, 'the stage dot breathes');

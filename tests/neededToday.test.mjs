@@ -6,16 +6,20 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { showsTodayPill } from '../lib/neededToday.ts';
+import { loadModule } from './loadModule.mjs';
+
+// C9 (A4-M4): the day is the market's, from lib/time.ts (import-free).
+const { showsTodayPill } = await loadModule('lib/neededToday.ts', { './time': await import('../lib/time.ts') });
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
 const flat = (source) => source.replace(/\s+/g, ' ');
 
 test('[executed] the pill shows only for a job needed today, and only on the day it was posted', () => {
-  const now = new Date(2026, 8, 30, 15, 0);
-  const postedThisMorning = new Date(2026, 8, 30, 8, 30).toISOString();
-  const postedYesterday = new Date(2026, 8, 29, 23, 50).toISOString();
+  // C9 (A4-M4): fixed instants, read on the market's clock (EDT, UTC-4) whatever zone runs the test.
+  const now = new Date('2026-09-30T19:00:00Z'); // 3 pm in New York
+  const postedThisMorning = '2026-09-30T12:30:00.000Z'; // 8:30 am in New York
+  const postedYesterday = '2026-09-30T03:50:00.000Z'; // 11:50 pm on the 29th in New York
   assert.equal(showsTodayPill({ needed_today: true, created_at: postedThisMorning }, now), true);
   assert.equal(showsTodayPill({ needed_today: true, created_at: postedYesterday }, now), false, 'after midnight "today" has passed');
   assert.equal(showsTodayPill({ needed_today: false, created_at: postedThisMorning }, now), false);
@@ -46,10 +50,12 @@ test('[static] the app: sent only when on, read on both shapes, a fresh post\'s 
   assert.match(screen, /neededToday: isFreshPost && neededToday,/);
   // The Fable review: the whole row answers a tap.
   assert.match(screen, /<Pressable onPress=\{\(\) => setNeedItToday\(!neededToday\)\} style=\{\(\{ pressed \}\) => \[styles\.todayRow, pressed && styles\.repeatPressed\]\}/);
-  assert.match(screen, /<Toggle value=\{neededToday\} onValueChange=\{setNeedItToday\} accessibilityLabel="Need it today" \/>/);
+  assert.match(screen, /<Toggle value=\{neededToday\} onValueChange=\{setNeedItToday\} accessibilityLabel="Need It Today" \/>/);
   // The toggle and the day agree (group 2's review): on sets the day to today; another day turns it off.
-  assert.match(screen, /if \(on\) setScheduledDate\(toLocalIsoDate\(new Date\(\)\)\);/);
-  assert.match(screen, /if \(neededToday && scheduledDate && scheduledDate !== toLocalIsoDate\(new Date\(\)\)\) setNeededToday\(false\);/);
+  // A4 wiring (A3), C9: "today" is the market's day (lib/time marketDayKey), never the phone's.
+  assert.match(screen, /if \(on\) setScheduledDate\(marketDayKey\(\)\);/);
+  assert.match(screen, /if \(neededToday && scheduledDate && scheduledDate !== marketDayKey\(\)\) setNeededToday\(false\);/);
+  assert.doesNotMatch(screen, /toLocalIsoDate|getFullYear\(\)/, 'no local-calendar day is left in Post a job');
   assert.doesNotMatch(read('lib/postJobDraft.ts'), /neededToday|needed_today/, 'never resumed from a draft: today is the day it goes out');
   // Group 2's review: the radius search's RPC has a fixed column list, so its rows are re-read
   // through the feed's allowlist (the pill survives); and a screen reader hears "needed today" on the

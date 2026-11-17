@@ -288,8 +288,11 @@ test('every client map over the outbox is reconciled against the inventory', asy
   assert.ok(iconKeys.length > 0, 'KIND_ICONS must not be empty');
 
   const declaredTypes = new Set(OUTBOX.map(([, type]) => type));
+  // B6: emitted by the server lane's attention migration (the frozen B6 contract: type 'admin_attention',
+  // category 'jobs', data { screen: 'ProfileMain', key }), which is not in the baseline this inventory reads.
+  const LATER_TYPES = new Set(['admin_attention']);
   for (const key of iconKeys) {
-    assert.ok(declaredTypes.has(key), `KIND_ICONS.${key} is a type no migration emits`);
+    assert.ok(declaredTypes.has(key) || LATER_TYPES.has(key), `KIND_ICONS.${key} is a type no migration emits`);
   }
   assert.ok(iconKeys.includes('review_received'), 'the review glyph must key on the emitted type');
   assert.ok(!iconKeys.includes('review'), 'no trigger emits the type `review`');
@@ -307,7 +310,7 @@ test('tap-through stays inside the shared tabs', async () => {
   // the push tap uses, so its destinations ARE TAB_FOR_SCREEN's — the exact
   // set is asserted in tests/offerCopyAndRouting.test.mjs. What must hold
   // here is that the feed kept none of its own cross-tab dispatch.
-  assert.match(screen, /handleNotificationData\(notification\.data, modeBridge\)/);
+  assert.match(screen, /handleNotificationData\(\{ \.\.\.notification\.data, type: notification\.type \}, modeBridge\)/);
   assert.doesNotMatch(screen, /navigateAcrossTabs\(/);
 
   // And that nothing on the tap path can reach the mode-defining Home tab,

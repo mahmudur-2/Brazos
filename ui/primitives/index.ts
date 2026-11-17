@@ -128,12 +128,18 @@ export {
   HIDDEN_TAB_ITEM_OPTIONS,
   PINNED_FOOTER_BOTTOM_PADDING,
   useFloatingNavClearance,
+  useHideTabBar,
   usePinnedFooterPadding,
   usePillReserve,
   useScrollClearance,
+  useTabBarHidden,
   WORKER_BAR_TABS,
   type BottomNavTabKey,
 } from './BottomNav';
+
+/** A2-M3 — the action pill that floats at a task screen's foot with no plate behind it. */
+export { FloatingAction } from './FloatingAction';
+export type { FloatingActionProps } from './FloatingAction';
 
 // --- DEFERRED, with the phase each is genuinely blocked on ----------------
 //

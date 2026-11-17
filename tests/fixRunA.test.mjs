@@ -41,7 +41,8 @@ test('A10 · "payout on its way" says what it waits for; the tip opens once the 
     worker,
     /\{live && paymentsMode === 'stripe' && payouts !== null && payouts !== 'enabled' && !waitingOnSetup \? \( <Pressable onPress=\{\(\) => navigateAcrossTabs\('Profile', 'Payouts', \{\}\)\}/
   );
-  assert.match(worker, /<Text style=\{styles\.linkRowText\}>Set up payouts so the payment can reach you<\/Text>/);
+  // F10 (owner, 2026-11-16): the link says what it opens; the hint keeps the reason.
+  assert.match(worker, /<Text style=\{styles\.linkRowText\}>Set Up Payouts<\/Text>/);
   // The held-row rule is untouched: payoutSetupNotice stays the ONE derivation of "waiting on setup".
   assert.match(worker, /const waitingOnSetup = payment \? payoutSetupNotice\(payouts, \[payment\]\) !== null : false;/);
 });
@@ -50,7 +51,7 @@ test('A12 · a reported issue says who decides and how fast; the operator has a 
   // Pick A12a, verbatim.
   const approve = code('screens/ApproveOrDisputeScreen.tsx');
   assert.ok(
-    approve.includes('The payment stays held while this report is open — including the automatic release timer. Brazos will look at it and reply by email within 2 business days. Withdraw it below if things get sorted out.'),
+    approve.includes('The payment stays held while this report is open — including the automatic release timer. Brazos will look at it and reply within 2 business days. Withdraw it below if things get sorted out.'),
     'the dispute note names who decides and the reply time'
   );
   // The resolver stays service_role only — the app never calls it.
@@ -198,16 +199,17 @@ test('A15 · a declined saved card never retries into the cached decline, and th
 
 test('A18 · deleting the account removes the saved cards and keeps the payout account open for money still owed (pick A18a)', () => {
   const screen = code('screens/DeleteAccountScreen.tsx');
-  assert.match(screen, /import \{ listSavedCards, removeSavedCard \} from '\.\.\/lib\/paymentMethods';/);
-  // Before the row goes, on the card path, every saved card is detached through payment-methods —
-  // best effort, never a reason to keep the account alive. A18a review: the server's own gate is
-  // read again first, so a block raised since the list loaded leaves the cards in place; a read
-  // that fails keeps the user here, cards intact; and no card is touched on a blocked account.
+  assert.match(screen, /import \{ cardSweepMessage, removeEverySavedCard \} from '\.\.\/lib\/paymentMethods';/);
+  // Before the row goes, on the card path, every saved card is detached through payment-methods.
+  // A18a review: the server's own gate is read again first, so a block raised since the list loaded
+  // leaves the cards in place; a read that fails keeps the user here, cards intact; and no card is
+  // touched on a blocked account. A4 wiring (P2): no longer best effort: a card step that is not
+  // proven by an empty list keeps the account (executed in tests/deleteCards.test.mjs).
   assert.match(
     screen,
-    /setDeleting\(true\); const gate = await fetchAccountDeletionBlockers\(\); if \(gate\.error\) \{ setDeleting\(false\); await alertAsync\('Could not delete this account', userMessage\(gate\.error\)\); return; \} if \(gate\.data\.length === 0 && paymentsMode === 'stripe'\) \{ const \{ data: cards \} = await listSavedCards\(\); await Promise\.all\(cards\.map\(\(card\) => removeSavedCard\(card\.id\)\.catch\(\(\) => null\)\)\); \} const \{ blocked, error \} = gate\.data\.length > 0 \? \{ blocked: true, error: null \} : await deleteMyAccount\(\);/
+    /setDeleting\(true\); const gate = await fetchAccountDeletionBlockers\(\); if \(gate\.error\) \{ setDeleting\(false\); await alertAsync\('Could not delete this account', userMessage\(gate\.error\)\); return false; \} let cardsNote = ''; if \(gate\.data\.length === 0 && paymentsMode === 'stripe'\) \{ const cards = await removeEverySavedCard\(\); if \(cards\.error\) \{ setDeleting\(false\); return confirmAsync\(\{ title: 'Could not delete this account', message: `\$\{cardSweepMessage\(cards\.error\)\}\$\{cards\.removed > 0 \? ' Some of your saved cards were removed\.' : ''\}`, confirmText: 'Try Again', \}\); \} if \(cards\.removed > 0\) cardsNote = ' Your saved cards were removed\.'; \} const \{ blocked, error \} = gate\.data\.length > 0 \? \{ blocked: true, error: null \} : await deleteMyAccount\(\);/
   );
-  assert.ok(screen.indexOf('await fetchAccountDeletionBlockers();') < screen.indexOf('await listSavedCards();'), 'the gate is read before any card is touched');
+  assert.ok(screen.indexOf('await fetchAccountDeletionBlockers();') < screen.indexOf('await removeEverySavedCard();'), 'the gate is read before any card is touched');
   // The copy says both halves.
   assert.match(screen, /Any card you saved for one-tap hiring\. It is removed from the payment provider before the account goes\./);
   assert.match(screen, /Your payout account stays open until every payment still owed to you has reached it/);
@@ -223,8 +225,12 @@ test('A18 · deleting the account removes the saved cards and keeps the payout a
 
 test('A20 · the running-late day is the market\'s (America/New_York), as the server decides it', () => {
   const late = read('lib/runningLate.ts');
-  assert.match(late, /export const MARKET_TIME_ZONE = 'America\/New_York';/);
-  assert.match(late, /timeZone: MARKET_TIME_ZONE,/);
+  // C9 (A4-M4): the zone and the market's day moved to lib/time.ts, the one home every "today" reads.
+  const time = read('lib/time.ts');
+  assert.match(time, /export const MARKET_TIME_ZONE = 'America\/New_York';/);
+  assert.match(time, /formatter\(DAY_KEY_SHAPE, MARKET_TIME_ZONE\)\.formatToParts\(now\)/);
+  assert.match(late, /^import \{ MARKET_TIME_ZONE, marketDayKey \} from '\.\/time';$/m);
+  assert.match(late, /export function marketDate\(now: Date = new Date\(\)\): string \{\s*return marketDayKey\(now\);\s*\}/);
   assert.match(late, /export function isLateDay\(scheduledDate: string \| null \| undefined, now: Date = new Date\(\)\): boolean \{\s*if \(!scheduledDate\) return true;\s*return scheduledDate === marketDate\(now\);\s*\}/);
   // The server's clock, for the record.
   assert.match(read('supabase/migrations/20260930000700_running_late.sql'), /America\/New_York/);

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,11 +13,13 @@ import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-
 import { Ionicons } from '@expo/vector-icons';
 import { GlowTextInput } from '../components/GlowTextInput';
 import { Button } from '../components/Button';
+import { Card } from '../components/Card';
+import { Chip } from '../components/Chip';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ReviewSection } from '../components/ReviewSection';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ScreenStateView } from '../ui/templates/ScreenStates';
-import { usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
+import { FloatingAction, useScrollClearance } from '../ui/primitives';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
@@ -64,10 +65,11 @@ import {
   emeraldColorsFor,
   radius,
   spacing,
+  textScale,
   themedStyles,
   useThemeColors,
+  wellStyle,
   type ColorPalette,
-  selectedInDark,
   screenGround,
 } from '../lib/theme';
 
@@ -110,9 +112,8 @@ const isTipConfirmed = (outcome: TipPollState) => outcome === 'charged' || outco
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export function ReviewAndTipScreen() {
-  const footerPad = usePinnedFooterPadding();
-  // Until the review is sent there is no done bar, so the scroller's last control (the tip's Send)
-  // must end above the floating tab bar; once it is sent, the done bar clears it.
+  // Until the review is sent there is no Done, so the scroller's last control (the tip's Send)
+  // must end above the floating tab bar; once it is sent, Done floats and the bar steps aside.
   const navClearance = useScrollClearance();
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -248,7 +249,7 @@ export function ReviewAndTipScreen() {
         // the ceiling's dollar sentence.
         await alertAsync(
           'Could not start the tip',
-          `${userMessage(session.error, 'Check your connection and try again.')}\n\nNo tip was sent and nothing was charged.`
+          `${userMessage(session.error, 'Check your connection and try again.')}`
         );
         await load();
         return;
@@ -282,8 +283,8 @@ export function ReviewAndTipScreen() {
       }
       if (sheet.outcome === 'failed') {
         await alertAsync(
-          'The card was not charged',
-          `${userMessage(sheet.error, 'The card could not be charged.')}\n\nNo tip was sent — you can try again.`
+          'The payment did not finish',
+          `${userMessage(sheet.error, 'The payment could not be completed.')}\n\nYou can try again.`
         );
         await load();
         return;
@@ -393,59 +394,30 @@ export function ReviewAndTipScreen() {
               }
             : null;
 
-  // The amount controls — three presets and a custom field.
+  // The amount controls — three presets and a custom field. G1b: each choice is the built Chip
+  // (its chosen ring and check, the same in both themes), so the screen paints no selection itself.
   const amountControls = (
     <>
       <View style={styles.presetRow}>
         {TIP_PRESETS_CENTS.map((cents) => (
-          <Pressable
+          <Chip
             key={cents}
-            style={[
-              styles.preset,
-              tipChoice === cents &&
-                (isDark ? styles.presetActiveDark : styles.presetActive),
-            ]}
+            label={formatBudget(cents)}
+            selected={tipChoice === cents}
             onPress={() => setTipChoice(tipChoice === cents ? null : cents)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: tipChoice === cents }}
-          >
-            <Text
-              style={[
-                styles.presetText,
-                tipChoice === cents &&
-                  (isDark ? styles.presetTextActiveDark : styles.presetTextActive),
-              ]}
-            >
-              {formatBudget(cents)}
-            </Text>
-          </Pressable>
+          />
         ))}
-        <Pressable
-          style={[
-            styles.preset,
-            tipChoice === 'custom' &&
-              (isDark ? styles.presetActiveDark : styles.presetActive),
-          ]}
+        <Chip
+          label="Other"
+          selected={tipChoice === 'custom'}
           onPress={() => setTipChoice(tipChoice === 'custom' ? null : 'custom')}
-          accessibilityRole="button"
-          accessibilityState={{ selected: tipChoice === 'custom' }}
-        >
-          <Text
-            style={[
-              styles.presetText,
-              tipChoice === 'custom' &&
-                (isDark ? styles.presetTextActiveDark : styles.presetTextActive),
-            ]}
-          >
-            Other
-          </Text>
-        </Pressable>
+        />
       </View>
       {tipChoice === 'custom' ? (
         <GlowTextInput
-              glowRadius={radius.lg}
+          glowRadius={radius.md}
           keyboardAppearance={isDark ? 'dark' : 'light'}
-          style={styles.customInput}
+          style={[styles.customInput, wellStyle(colors, isDark)]}
           value={customTip}
           onChangeText={setCustomTip}
           placeholder="Amount in dollars, up to $1,000"
@@ -504,7 +476,7 @@ export function ReviewAndTipScreen() {
   })();
 
   return (
-    // The tab bar owns the bottom inset, so the pinned bar sits on it.
+    // The tab bar owns the bottom inset until Done floats; FloatingAction keeps its own.
     <SafeAreaView style={[styles.safe, screenGround(colors, isDark)]} edges={['top']}>
       <ScreenHeader
         title="Review & Tip"
@@ -527,20 +499,37 @@ export function ReviewAndTipScreen() {
             showsVerticalScrollIndicator={false}
           >
             {reviewed ? (
-              <View style={styles.thanksCard} accessibilityLiveRegion="polite">
-                <Announce message={`Thanks — ${workerName ?? 'the worker'} has been rated.`} />
-                <Ionicons name="checkmark-circle" size={26} color={colors.emerald} />
-                <View style={styles.thanksCopy}>
-                  <Text style={styles.thanksTitle}>
-                    Thanks — {workerName ?? 'the worker'} has been rated.
-                  </Text>
-                  <Text style={styles.cardNote}>That closes the job. A tip is still open below.</Text>
+              <Card style={styles.thanksCard} palette={emeraldColors}>
+                <View style={styles.thanksRow} accessibilityLiveRegion="polite">
+                  <Announce message={`Thanks — ${workerName ?? 'the worker'} has been rated.`} />
+                  <Ionicons name="checkmark-circle" size={26} color={colors.emerald} />
+                  <View style={styles.thanksCopy}>
+                    <Text style={styles.thanksTitle}>
+                      Thanks — {workerName ?? 'the worker'} has been rated.
+                    </Text>
+                    <Text style={styles.cardNote}>That closes the job. A tip is still open below.</Text>
+                  </View>
                 </View>
-              </View>
+                {/* G1b RESTRUCTURE: the second way out sits with the thanks; Done floats as the one main action. */}
+                {job.assigned_worker_id ? (
+                  <Button
+                    title={`Hire ${(workerName ?? 'them').split(/\s+/)[0]} Again`}
+                    variant="quiet"
+                    size="sm"
+                    palette={emeraldColors}
+                    onPress={() =>
+                      navigation.navigate('PostJob', {
+                        hireWorkerId: job.assigned_worker_id!,
+                        hireWorkerName: workerName ?? 'this worker',
+                      })
+                    }
+                  />
+                ) : null}
+              </Card>
             ) : null}
 
             {payment ? (
-              <View style={styles.paymentCard}>
+              <Card style={styles.paymentCard} palette={emeraldColors}>
                 {/* D23: a stripe row is either released or approved with the
                     payout on its way — MoneyText keeps the row's real status
                     either way. */}
@@ -560,18 +549,18 @@ export function ReviewAndTipScreen() {
                 <Text style={styles.cardNote}>
                   {released
                     ? payment.release_reason === 'auto_approved'
-                      ? 'Released automatically after 72 hours.'
+                      ? 'Released automatically.'
                       : 'Released on your approval.'
                     : !isPayoutOnItsWay(payment)
                       ? // Codex R5-A5, R7-A3: never "on its way" beside a refund of this payment (queued, failed or arranged).
                         payment.release_reason === 'auto_approved'
-                        ? 'Approved automatically after 72 hours.'
+                        ? 'Approved automatically.'
                         : 'Approved on your say-so.'
                       : payment.release_reason === 'auto_approved'
-                        ? 'Approved automatically after 72 hours. The payment is on its way to the worker and shows as released when the transfer lands.'
+                        ? 'Approved automatically. The payment is on its way to the worker and shows as released when the transfer lands.'
                         : 'Approved on your say-so. The payment is on its way to the worker and shows as released when the transfer lands.'}
                 </Text>
-              </View>
+              </Card>
             ) : null}
 
             {user && job.assigned_worker_id ? (
@@ -591,7 +580,8 @@ export function ReviewAndTipScreen() {
               />
             ) : null}
 
-            <View style={styles.tipCard}>
+            {/* G1b: the cards take the review card's palette, so the three read as one family. */}
+            <Card style={styles.tipCard} palette={emeraldColors}>
               <Text accessibilityRole="header" style={styles.sectionTitle}>Add a tip?</Text>
               {/* Codex R5-A4: a replaced tip, charged late, whose refund failed or was arranged. */}
               {tipIssue ? (
@@ -663,7 +653,7 @@ export function ReviewAndTipScreen() {
                       here.
                     </Text>
                     <Button
-                      title="Check again"
+                      title="Check Again"
                       palette={emeraldColors}
                       onPress={() => void recheckTip()}
                       disabled={sendingTip}
@@ -673,20 +663,22 @@ export function ReviewAndTipScreen() {
                   <>
                     <Text style={styles.cardNote}>
                       {tipPhase === 'gone'
-                        ? 'The tip did not go through. Nothing was charged for it — you can try again below.'
+                        ? 'The tip did not go through. You can try again below.'
                         : tipPending && tip
-                          ? `A ${formatBudget(tip.amount_cents)} tip is started but not sent — nothing has been charged. Finish it below, or choose another amount.`
+                          ? `A ${formatBudget(tip.amount_cents)} tip is started but not sent. Finish it below, or choose another amount.`
                           : `Entirely optional — every cent of the tip goes to ${workerName ?? 'the worker'}.`}
                     </Text>
                     {amountControls}
                     {/* M-26 — always here, so the next step is visible
                         before an amount is chosen; it enables with one. */}
+                    {/* G1b: secondary, so the screen keeps one main action (Submit Review, then Done). */}
                     <Button
                       title={
                         tipValid
-                          ? `Send ${formatBudget(tipCents)} tip by card`
-                          : 'Send tip by card'
+                          ? `Send ${formatBudget(tipCents)} Tip by Card`
+                          : 'Send Tip by Card'
                       }
+                      variant="secondary"
                       palette={emeraldColors}
                       onPress={() => void startCardTip()}
                       disabled={tipChoice === null || !tipValid || sendingTip}
@@ -695,29 +687,12 @@ export function ReviewAndTipScreen() {
                   </>
                 )
               ) : null}
-            </View>
+            </Card>
           </ScrollView>
-          {reviewed ? (
-            <View style={[styles.doneBar, { paddingBottom: footerPad }]}>
-              {job.assigned_worker_id ? (
-                <Button
-                  title={`Hire ${(workerName ?? 'them').split(/\s+/)[0]} again`}
-                  variant="secondary"
-                  palette={emeraldColors}
-                  onPress={() =>
-                    navigation.navigate('PostJob', {
-                      hireWorkerId: job.assigned_worker_id!,
-                      hireWorkerName: workerName ?? 'this worker',
-                    })
-                  }
-                  style={styles.doneAction}
-                />
-              ) : null}
-              <Button title="Done" palette={emeraldColors} onPress={goBackOrHome} style={styles.doneAction} />
-            </View>
-          ) : null}
         </KeyboardAvoid>
       )}
+      {/* G1b RESTRUCTURE: once the review is sent, Done floats full width with no plate; the bar steps aside. */}
+      {!gateState && reviewed ? <FloatingAction title="Done" onPress={goBackOrHome} /> : null}
 
       <ConfirmDialog
         visible={confirmTip}
@@ -727,8 +702,7 @@ export function ReviewAndTipScreen() {
             : `Send a ${formatBudget(tipCents ?? null)} tip?`
         }
         message={cardTipMessage}
-        confirmText={stripe ? 'Pay & send tip' : 'Send tip'}
-        cancelText="Not now"
+        confirmText={stripe ? 'Pay & Send Tip' : 'Send Tip'}
         loading={sendingTip}
         palette={emeraldColors}
         onConfirm={chargeTip}
@@ -757,54 +731,34 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
-  // M-26 — the completion moment and its pinned way out.
-  thanksCard: {
+  // M-26 — the completion moment; Done floats under it (G1b).
+  thanksCard: { gap: spacing.md },
+  thanksRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
   },
   thanksCopy: { flex: 1, gap: 2 },
   thanksTitle: {
-    fontSize: 16,
+    ...textScale.headline,
     fontWeight: '800',
     color: colors.ink,
   },
-  doneBar: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  doneAction: { flex: 1 },
   eyebrow: {
     ...EYEBROW_TYPE,
     color: colors.eyebrow,
   },
+  // G1b: the card heading in the review card's display type, so the two card titles match.
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    ...textScale.title,
     color: colors.ink,
   },
   paymentCard: {
-    padding: spacing.lg,
     gap: spacing.sm,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
   },
   cardNote: {
-    fontSize: 13,
+    ...textScale.body,
     color: colors.textMuted,
-    lineHeight: 19,
   },
   confirmingRow: {
     flexDirection: 'row',
@@ -812,58 +766,19 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
   },
   tipCard: {
-    padding: spacing.lg,
     gap: spacing.md,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
   },
   presetRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-  preset: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  presetActive: {
-    borderColor: colors.emerald,
-    backgroundColor: colors.mint,
-  },
-  // emerald D6: one selection treatment — gold line, gold label, no fill.
-  presetActiveDark: {
-    borderColor: selectedInDark(colors).line,
-    backgroundColor: selectedInDark(colors).fill,
-  },
-  presetText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-  presetTextActive: {
-    color: colors.emerald,
-  },
-  presetTextActiveDark: {
-    color: selectedInDark(colors).line,
-  },
   customInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
-    fontSize: 15,
+    fontSize: textScale.callout.fontSize,
     color: colors.ink,
-    backgroundColor: colors.surface,
   },
   }),
 );

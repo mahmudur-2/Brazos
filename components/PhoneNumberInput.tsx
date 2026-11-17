@@ -100,7 +100,8 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
     // 2026-09-27 (the Lux remake, the operator's pic 2): the field is the Lux
     // well — white at .06 in dark — inside the lifted phone-number card; the
     // label stays gold (surface.accent) and the dial and chevron read muted.
-    const fill = themed ? (isDark ? withAlpha(palette.white, 0.06) : surface.surface) : authColors.surface;
+    // In light: cream inside the white card, as the app's TextField.
+    const fill = themed ? (isDark ? withAlpha(palette.white, 0.06) : surface.bg) : authColors.surface;
     const line = themed ? surface.line : authColors.line;
     const muted = themed ? surface.muted : authColors.muted;
     const ink = themed ? surface.ink : authColors.ink;

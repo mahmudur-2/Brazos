@@ -10,6 +10,16 @@ import { useNotificationModeBridge } from './useNotificationModeBridge';
 import { invalidateAfterPush } from '../lib/queryClient';
 
 /**
+ * A cold-start tap must only be consumed once per PROCESS. Without this guard,
+ * any re-render that re-ran the effect would re-navigate to the same screen,
+ * because getLastNotificationResponseAsync() keeps returning that response
+ * for the lifetime of the process. B7 (R8): process-wide, like App.tsx's
+ * handledInitialUrl, because RootNavigator (and this hook with it) mounts
+ * again when a suspension ends, and must not replay an old tap then.
+ */
+const handledColdStart = { current: false };
+
+/**
  * Wires push notification taps to navigation, and keeps the device's token
  * fresh for the signed-in user.
  *
@@ -17,16 +27,11 @@ import { invalidateAfterPush } from '../lib/queryClient';
  * it triggers always has a container to talk to.
  */
 export function usePushNotifications() {
-  const { user } = useAuth();
+  const { user, suspended } = useAuth();
   // ModeContext for the router's cross-mode gate — a stable object reading
   // the LATEST mode at tap time, so the [] -deps listener effects below never
   // capture a stale mode.
   const modeBridge = useNotificationModeBridge();
-  // A cold-start tap must only be consumed once. Without this guard, any
-  // re-render that re-ran the effect would re-navigate to the same screen,
-  // because getLastNotificationResponseAsync() keeps returning that response
-  // for the lifetime of the process.
-  const handledColdStart = useRef(false);
 
   // --- Token upkeep --------------------------------------------------------
   // A failed sync is retried once, and the failure is HELD (F-042): the sync
@@ -36,9 +41,13 @@ export function usePushNotifications() {
   // of an already-granted permission, and an alert would misfire on every
   // routine offline launch. 'denied'/'unsupported'/'no_project_id' are
   // terminal answers, not failures — they neither retry nor re-arm.
+  //
+  // B7 (R9): only once the server has answered "not suspended" (lib/AuthContext.tsx `suspended`).
+  // While the answer is unknown (the launch loader) or yes, register_push_token is refused by the
+  // server's guard; a sync then would only retry and report "token sync failed" at every launch.
   const syncFailedRef = useRef(false);
   useEffect(() => {
-    if (!user) return;
+    if (!user || suspended !== false) return;
     let active = true;
     const sync = async () => {
       // A deactivation owed from a previous sign-out settles first, so this
@@ -75,7 +84,7 @@ export function usePushNotifications() {
       active = false;
       subscription.remove();
     };
-  }, [user?.id]);
+  }, [user?.id, suspended]);
 
   // --- Cold start: app was closed, tapping the notification launched it ----
   useEffect(() => {
@@ -84,8 +93,11 @@ export function usePushNotifications() {
     let active = true;
     Notifications.getLastNotificationResponseAsync()
       .then((response) => {
-        if (!active || !response || handledColdStart.current) return;
+        if (!active || handledColdStart.current) return;
+        // UB-05: the first answer, with or without a tap, closes the cold start for the process, so a
+        // later mount (sign-in again, a suspension ended) never routes an old tap as a launch tap.
         handledColdStart.current = true;
+        if (!response) return;
         // Idea 6: a reminder's button (Message, Route) leads where it says.
         handleNotificationData(dataForAction(response.notification.request.content.data, response.actionIdentifier), modeBridge);
       })

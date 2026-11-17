@@ -35,7 +35,6 @@ export async function askOpenSettings(kind: PermissionKind, message?: string): P
     title: copy.title,
     message: message ?? copy.message,
     confirmText: 'Open Settings',
-    cancelText: 'Not now',
   });
   if (open) {
     try {

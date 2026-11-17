@@ -58,9 +58,9 @@ test('a4 · [executed] the read is an allow-list: only posted_price is a posted 
 test('a4 · [executed] open bids is the default, and the first segment', () => {
   assert.equal(DEFAULT_PRICING_MODE, 'open_bids');
   assert.equal(PRICING_MODE_OPTIONS[0].value, 'open_bids');
-  assert.equal(PRICING_MODE_OPTIONS[0].label, 'Ask for bids');
+  assert.equal(PRICING_MODE_OPTIONS[0].label, 'Ask for Bids');
   assert.equal(PRICING_MODE_OPTIONS[1].value, 'posted_price');
-  assert.equal(PRICING_MODE_OPTIONS[1].label, 'Set a price');
+  assert.equal(PRICING_MODE_OPTIONS[1].label, 'Set a Price');
   assert.equal(PRICING_MODE_OPTIONS.length, 2, 'two modes, and no third');
 });
 
@@ -203,7 +203,7 @@ test('a4 · the wizard sends the mode and writes one figure to the right column'
   assert.match(screen, /const priceMissing = !isHiring && postedPrice && validMax == null;/);
 
   // The labels the mode decides.
-  assert.match(flatten(read('components/PriceDropdown.tsx')), /<FieldLabel palette=\{palette\} tone="gold">\{priceFieldLabel\(mode\)\}<\/FieldLabel>/ /* 2026-09-29 (LUX-LIST-2 #4) */);
+  assert.match(flatten(read('components/PriceDropdown.tsx')), /<FieldLabel palette=\{palette\}>\{priceFieldLabel\(mode\)\}<\/FieldLabel>/ /* G1a 2026-11-16: the field label's own tone, mint in dark, dark green in light ("no keep mint") */);
   assert.match(screen, /budgetLabel=\{isHiring \? 'Offer' : priceRowLabel\(pricingMode\)\}/);
   // The live page reads the mode back off the SAVED row.
   assert.match(flatten(read('components/JobLivePage.tsx')), /const mode = pricingModeFrom\(job\.pricing_mode\);/);
@@ -231,7 +231,7 @@ test('a4 · the money walk’s selectors are the ones the app renders, in the de
     [drop, "'Workers can bid up to this amount.'"],
     [screen, "'Publish'"],
     [live, "'Back to Home'"],
-    [live, "'View job and bids'"],
+    [live, "'View Job'"],
     [live, 'Your job is live.'],
   ]) {
     assert.ok(source.includes(selector), `${selector} is an E2E selector and must not move`);
@@ -248,7 +248,7 @@ test('a4 · the money walk’s selectors are the ones the app renders, in the de
     'STEP 4 OF 4',
     'Your job is live.',
     'Back to Home',
-    'View job and bids',
+    'View job',
     'Get notified?',
     'Not now',
   ];

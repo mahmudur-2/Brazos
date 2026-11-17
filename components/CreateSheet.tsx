@@ -27,6 +27,7 @@ import { attentionItems } from '../lib/homeAttention';
 import { budgetRangeLabel, JOB_CATEGORY_ICONS, type Job } from '../lib/jobs';
 import { reusableJobs, reuseCardFigure, reuseCardInstant, reuseCardWidth } from '../lib/reuseJobs';
 import { formatDay } from '../lib/time';
+import { serverNowMs } from '../lib/serverClock';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -47,7 +48,7 @@ type CreateSheetProps = {
   /** The "Needs you" card's tap — the job that is waiting on the customer. */
   onOpenJob: (job: Job) => void;
   /**
-   * 2026-09-30 (idea 2): "Reuse a past job" — a past job's card, tapped. The tree opens a fresh
+   * 2026-09-30 (idea 2): "Reuse a Past Job" — a past job's card, tapped. The tree opens a fresh
    * post filled from it; the sheet only draws.
    */
   onReuseJob?: (job: Job) => void;
@@ -155,8 +156,8 @@ export function CreateSheet({
           corners="top"
           style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}
         >
-          {/* #64 (M-31) — the one sheet header; "Close": a row is the action. */}
-          <SheetHeader title={title} dismissWord="Close" onDismiss={onClose} />
+          {/* #64 (M-31) — the one sheet header; "Cancel" (F9): a row is the action. */}
+          <SheetHeader title={title} dismissWord="Cancel" onDismiss={onClose} />
 
           <NeedsYou hub={hub} ready={hubReady} onOpen={onOpenJob} />
 
@@ -248,7 +249,7 @@ function NeedsYou({ hub, ready, onOpen }: { hub: Hub; ready: boolean; onOpen: (j
   // One clock reading per data load — the hub's rule, so the item's rank and
   // its next-action line cannot be read at two different instants.
   // Keyed on the read itself (F13 review): a cached read keeps the rows' identity.
-  const nowMs = useMemo(() => Date.now(), [hub.readAt]);
+  const nowMs = useMemo(() => serverNowMs(), [hub.readAt]);
   const first = useMemo(
     () =>
       attentionItems({ posted, payments, openDisputeJobIds, reviewedJobIds, nowMs })[0] ?? null,
@@ -297,7 +298,7 @@ function NeedsYou({ hub, ready, onOpen }: { hub: Hub; ready: boolean; onOpen: (j
 
 /**
  * 2026-09-30 (the build run, idea 2) — REUSE A PAST JOB. A row in the same white as the others,
- * "Reuse a past job" over the grey "Start from one you posted before", CLOSED until tapped (popup
+ * "Reuse a Past Job" over the grey "Start from one you posted before", CLOSED until tapped (popup
  * 12); its chevron opens, in place, a sideways strip of compact cards — about two and a half across,
  * each 128 to 160 wide, just wide enough for its own words: the full title (three lines at most),
  * the worker's full name and the date on lines of their own, the price at the bottom right (the
@@ -331,7 +332,7 @@ function ReusePastJob({
         onPress={() => setOpen((current) => !current)}
         style={({ pressed }) => [styles.row, pressed && styles.pressed]}
         accessibilityRole="button"
-        accessibilityLabel="Reuse a past job"
+        accessibilityLabel="Reuse a Past Job"
         accessibilityHint="Start from one you posted before"
         accessibilityState={{ expanded: open }}
       >
@@ -339,7 +340,7 @@ function ReusePastJob({
           <Ionicons name="repeat-outline" size={20} color={colors.emerald} />
         </View>
         <View style={styles.reuseCopy}>
-          <Text style={styles.rowLabel}>Reuse a past job</Text>
+          <Text style={styles.rowLabel}>Reuse a Past Job</Text>
           <Text style={styles.reuseCaption} numberOfLines={1}>
             Start from one you posted before
           </Text>

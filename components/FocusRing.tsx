@@ -2,15 +2,19 @@ import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
-import { metricStyles, withAlpha } from '../lib/theme';
+import { metricStyles, useThemeColors, withAlpha } from '../lib/theme';
 
 /** How long the glow takes to come up and go down — the field's old crossfade. */
 export const FOCUS_RING_MS = 160;
 /** The soft ring outside the field (sim.html `.in:focus-within`, 3px at .14). */
 const HALO = 3;
 const HALO_ALPHA = 0.14;
-/** The field's own edge while typing — the accent at .55 over its 1pt rim. */
-const EDGE_ALPHA = 0.55;
+/**
+ * The field's own edge while typing — the accent over its 1pt rim: .55 in dark; in light the
+ * accent itself (A2-M2: at .55 the light edge was 2.41:1 on the cream and 2.50:1 on white, under
+ * the 3:1 a mark needs; tests/themeTokens.test.mjs A2-E3 reads these two numbers).
+ */
+const EDGE_ALPHA = { dark: 0.55, light: 1 } as const;
 
 /**
  * 2026-09-28 (LUX-LIST-64 #8) — THE FIELD YOU ARE TYPING IN GLOWS.
@@ -39,6 +43,7 @@ export function FocusRing({
   borderWidth?: number;
 }) {
   const styles = stylesFor();
+  const { isDark } = useThemeColors();
   const reducedMotion = useReducedMotion();
   const progress = useRef(new Animated.Value(focused ? 1 : 0)).current;
 
@@ -80,7 +85,7 @@ export function FocusRing({
             bottom: edgeInset,
             borderRadius: radius,
             borderWidth,
-            borderColor: withAlpha(color, EDGE_ALPHA),
+            borderColor: withAlpha(color, isDark ? EDGE_ALPHA.dark : EDGE_ALPHA.light),
           },
         ]}
       />

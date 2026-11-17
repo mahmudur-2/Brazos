@@ -42,13 +42,15 @@ import { supabase } from '../supabase';
 import {
   classifySheetError,
   extractInvokeError,
+  readJobCheckoutResponse,
   validateCheckoutResponse,
   type CheckoutSession,
   type CheckoutSessionResult,
   type InvokeErrorLike,
+  type JobCheckoutResult,
 } from './stripeRules';
 
-export type { CheckoutSession, CheckoutSessionResult } from './stripeRules';
+export type { CheckoutSession, CheckoutSessionResult, JobCheckoutResult } from './stripeRules';
 
 type SheetError = { code: string; message: string; localizedMessage?: string };
 
@@ -118,6 +120,37 @@ export const STRIPE_UNAVAILABLE_MESSAGE =
   'This version of Brazos can’t take card payments yet. Update the app to protect a payment.';
 export const SHEET_UNSHOWN_MESSAGE =
   'The payment sheet could not be shown. Nothing was charged — you can try again.';
+
+/**
+ * T2: the longest the app waits for the card sheet to get ready. Every other
+ * step of checkout is bounded (a request at 15 s, lib/fetchTimeout.ts; the
+ * poll at 30 s, stripeRules.ts); the native initPaymentSheet was not, so a
+ * sheet that never got ready spun forever. 20 s is above the 15 s request
+ * bound, so a slow network that works still shows the sheet. Nothing can be
+ * charged before the sheet is shown, so giving up here charges nothing, and
+ * a retry reuses the same unfunded row (begin_job_payment).
+ */
+export const SHEET_INIT_TIMEOUT_MS = 20_000;
+
+/** initPaymentSheet, or a throw at SHEET_INIT_TIMEOUT_MS (the callers' catch says SHEET_UNSHOWN_MESSAGE). */
+function initSheetWithin(
+  vendor: StripeModule,
+  params: Parameters<StripeModule['initPaymentSheet']>[0]
+): Promise<{ error?: SheetError }> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('the payment sheet did not get ready')), SHEET_INIT_TIMEOUT_MS);
+    vendor.initPaymentSheet(params).then(
+      (result) => {
+        clearTimeout(timer);
+        resolve(result);
+      },
+      (reason) => {
+        clearTimeout(timer);
+        reject(reason);
+      }
+    );
+  });
+}
 
 /** True when the native module loaded — false on web and on a binary predating it. */
 export function stripeSdkAvailable(): boolean {
@@ -190,8 +223,16 @@ async function readInvokeErrorBody(error: unknown): Promise<string | null> {
  */
 export async function createPaymentSession(
   jobId: string,
+  options: { tipAmountCents: number }
+): Promise<CheckoutSessionResult>;
+export async function createPaymentSession(
+  jobId: string,
+  options?: { saveCard?: boolean }
+): Promise<JobCheckoutResult>;
+export async function createPaymentSession(
+  jobId: string,
   options?: { tipAmountCents?: number; saveCard?: boolean }
-): Promise<CheckoutSessionResult> {
+): Promise<JobCheckoutResult> {
   const tipAmountCents = options?.tipAmountCents;
   let invoked: { data: unknown; error: unknown };
   try {
@@ -214,7 +255,8 @@ export async function createPaymentSession(
     return { data: null, error: { message: userMessage(message) } };
   }
 
-  return validateCheckoutResponse(invoked.data);
+  // R3-1: only a job payment may answer { paymentId, confirmed: true }; a tip stays strict.
+  return tipAmountCents != null ? validateCheckoutResponse(invoked.data) : readJobCheckoutResponse(invoked.data);
 }
 
 // ---------------------------------------------------------------------------
@@ -360,7 +402,7 @@ export async function presentCardSetupSheet(session: {
     return { outcome: 'failed', error: { message: STRIPE_UNAVAILABLE_MESSAGE } };
   }
   try {
-    const initialised = await stripe.initPaymentSheet({
+    const initialised = await initSheetWithin(stripe, {
       merchantDisplayName: STRIPE_MERCHANT_DISPLAY_NAME,
       customerId: session.customerId,
       customerEphemeralKeySecret: session.ephemeralKeySecret,
@@ -391,7 +433,7 @@ export async function presentCheckoutSheet(session: CheckoutSession): Promise<Sh
     return { outcome: 'failed', error: { message: STRIPE_UNAVAILABLE_MESSAGE } };
   }
   try {
-    const initialisedSheet = await stripe.initPaymentSheet({
+    const initialisedSheet = await initSheetWithin(stripe, {
       merchantDisplayName: STRIPE_MERCHANT_DISPLAY_NAME,
       customerId: session.customerId,
       customerEphemeralKeySecret: session.ephemeralKeySecret,

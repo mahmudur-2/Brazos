@@ -3,9 +3,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-const { groupFeed, feedDayLabel } = await import('../lib/notificationGroups.ts');
+import { loadModule } from './loadModule.mjs';
 
-const NOW = new Date(2026, 8, 29, 15, 0, 0); // 29 Sep 2026, 3 pm local
+// C9 (A4-M4): the day groups are the market's calendar, from lib/time.ts (import-free).
+const { groupFeed, feedDayLabel } = await loadModule('lib/notificationGroups.ts', { './time': await import('../lib/time.ts') });
+
+const NOW = new Date('2026-09-29T19:00:00Z'); // 29 Sep 2026, 3 pm in New York, whatever zone runs the test
 const at = (hoursAgo) => new Date(NOW.getTime() - hoursAgo * 3600e3).toISOString();
 const row = (id, type, title, body, jobId, hoursAgo, read = false) => ({
   id,
@@ -19,7 +22,7 @@ const row = (id, type, title, body, jobId, hoursAgo, read = false) => ({
   created_at: at(hoursAgo),
 });
 
-test('day labels follow the local calendar: Today, Yesterday, This week, Earlier', () => {
+test('day labels follow the market calendar: Today, Yesterday, This week, Earlier', () => {
   assert.equal(feedDayLabel(at(1), NOW), 'Today');
   assert.equal(feedDayLabel(at(20), NOW), 'Yesterday');
   assert.equal(feedDayLabel(at(24 * 4), NOW), 'This week');

@@ -22,11 +22,14 @@ export type Profile = {
   language?: string | null;
   categories?: string[] | null;
   completion_rate?: number | null;
-  // Both are in PUBLIC_PROFILE_COLUMNS and so come back on every public read,
-  // but are null for almost every account — treat null as "unknown", never as
-  // zero, anywhere they are used to rank or describe someone.
+  // In PUBLIC_PROFILE_COLUMNS and so back on every public read, but null for
+  // almost every account — treat null as "unknown", never as zero, anywhere
+  // it is used to rank or describe someone.
   on_time_pct?: number | null;
-  response_time?: string | null;
+  // C14 (A4-M4): an integer in SQL with no named unit, which nothing writes.
+  // NOT in PUBLIC_PROFILE_COLUMNS: "Responds in" stays hidden until the owner
+  // names the unit (lib/workerHeroCard.ts).
+  response_time?: number | null;
   // Moderation (phase13). Optional so the app still works if the migration
   // hasn't been run yet — both default to false/absent.
   is_admin?: boolean | null;
@@ -50,7 +53,7 @@ export type ProfileUpdate = {
 };
 
 export const PUBLIC_PROFILE_COLUMNS =
-  'id, full_name, avatar_url, role, bio, language, categories, completion_rate, on_time_pct, response_time, accepting_work, availability_note';
+  'id, full_name, avatar_url, role, bio, language, categories, completion_rate, on_time_pct, accepting_work, availability_note';
 
 const SELF_PROFILE_COLUMNS = `${PUBLIC_PROFILE_COLUMNS}, phone, is_admin, banned`;
 

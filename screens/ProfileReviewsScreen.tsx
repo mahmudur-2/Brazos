@@ -21,6 +21,7 @@ import { PhotoViewer } from '../components/PhotoViewer';
 import { ReportContentLink } from '../components/ReportContentLink';
 import { useHiddenUserIds } from '../hooks/useHiddenUserIds';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { SegmentedControl } from '../components/SegmentedControl';
 import { StarRating } from '../components/StarRating';
 import { userMessage } from '../lib/errorMessage';
 import { JOB_CATEGORY_LABELS } from '../lib/jobs';
@@ -36,21 +37,24 @@ import {
 import { formatTimeAgo } from '../lib/time';
 import type { ProfileReviewsRouteParamList } from '../lib/navigation';
 import {
-  fonts,
   radius,
-  selectedInDark,
   spacing,
   starColors,
+  textScale,
   themedStyles,
   useThemeColors,
   type ColorPalette,
   screenGround,
 } from '../lib/theme';
-import { useScrollClearance } from '../ui/primitives';
+import { EmptyState, useScrollClearance } from '../ui/primitives';
 import { SPINNER_STATE, ScreenStateView, loadErrorTitle } from '../ui/templates/ScreenStates';
 
 const PAGE_SIZE = 20;
 const STARS = [5, 4, 3, 2, 1] as const;
+const ROLE_OPTIONS: { label: string; value: ReviewRole }[] = [
+  { label: 'Work', value: 'worker' },
+  { label: 'Hiring', value: 'customer' },
+];
 
 /**
  * Every review written about one person, reached by tapping the rating row on
@@ -246,56 +250,35 @@ export function ProfileReviewsScreen() {
             <>
               {paramRole === 'both' ? (
                 // The own-account entries land here with 'both': one page,
-                // two reputations, never mixed (R8b-c D2). Same local
-                // pressable-pair treatment as the review form's Yes/No.
+                // two reputations, never mixed (R8b-c D2).
                 <View style={styles.roleRow}>
-                  {(['worker', 'customer'] as const).map((role) => {
-                    const selected = activeRole === role;
-                    return (
-                      <Pressable
-                        key={role}
-                        style={[
-                          styles.rolePill,
-                          selected &&
-                            (isDark ? styles.rolePillActiveDark : styles.rolePillActive),
-                        ]}
-                        onPress={() => void switchRole(role)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                      >
-                        <Text
-                          style={[
-                            styles.rolePillText,
-                            selected &&
-                              (isDark
-                                ? styles.rolePillTextActiveDark
-                                : styles.rolePillTextActive),
-                          ]}
-                        >
-                          {role === 'worker' ? 'Work' : 'Hiring'}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                  <SegmentedControl
+                    options={ROLE_OPTIONS}
+                    value={activeRole}
+                    onChange={(role) => void switchRole(role)}
+                  />
                 </View>
               ) : null}
               {total > 0 ? (
               <Card style={styles.summaryCard}>
                 <View style={styles.summaryTop}>
-                  {/* D1 (R8b-c): the one number any surface shows —
-                      shown_average, or the word New while the reputation is
-                      too young for a number. The raw mean never renders. */}
+                  {/* D1 (R8b-c): the one number any surface shows is
+                      shown_average. While the reputation is too young for one,
+                      the count stands alone (F11: no big "New", no stars).
+                      The raw mean never renders. */}
                   <Text style={styles.average}>
                     {summary?.isNew
-                      ? 'New'
+                      ? total
                       : summary?.shownAverage != null
                         ? summary.shownAverage.toFixed(1)
                         : '—'}
                   </Text>
                   <View style={styles.summaryTopText}>
-                    <StarRating value={Math.round(summary?.shownAverage ?? 0)} size={18} />
+                    {summary?.isNew ? null : <StarRating value={Math.round(summary?.shownAverage ?? 0)} size={16} />}
                     <Text style={styles.summaryCount}>
-                      {total} {total === 1 ? 'review' : 'reviews'}
+                      {summary?.isNew
+                        ? total === 1 ? 'review' : 'reviews'
+                        : `${total} ${total === 1 ? 'review' : 'reviews'}`}
                     </Text>
                   </View>
                 </View>
@@ -325,16 +308,11 @@ export function ProfileReviewsScreen() {
             </>
           }
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <View style={styles.emptyIcon}>
-                <Ionicons name="star-outline" size={30} color={colors.primary} />
-              </View>
-              <Text style={styles.emptyTitle}>No reviews yet</Text>
-              <Text style={styles.emptyText}>
-                Reviews appear here once {firstName ?? 'this person'} has finished a
-                job with someone.
-              </Text>
-            </View>
+            <EmptyState
+              icon="star-outline"
+              title="No Reviews Yet"
+              body={`Reviews appear here once ${firstName ?? 'this person'} has finished a job with someone.`}
+            />
           }
           ListFooterComponent={
             loadingMore ? (
@@ -344,26 +322,7 @@ export function ProfileReviewsScreen() {
           renderItem={({ item, index }) => (
             <EntranceView index={entranceSlot(index)} skip={reviewsEntered}>
             <Card style={styles.reviewCard}>
-              <View style={styles.reviewHeader}>
-                <Avatar name={item.reviewer_name} uri={item.reviewer_avatar_url} size={36} />
-                <View style={styles.reviewHeaderText}>
-                  <Text style={styles.reviewerName} numberOfLines={1}>
-                    {item.reviewer_name ?? 'Someone'}
-                  </Text>
-                  <Text style={styles.reviewMeta} numberOfLines={1}>
-                    {formatTimeAgo(item.created_at)}
-                    {item.job_category
-                      ? ` · ${
-                          JOB_CATEGORY_LABELS[
-                            item.job_category as keyof typeof JOB_CATEGORY_LABELS
-                          ] ?? item.job_category
-                        }`
-                      : ''}
-                  </Text>
-                </View>
-                <StarRating value={item.rating} size={15} />
-              </View>
-
+              {/* The words lead; who wrote it, when, and the stars stay quiet under them. */}
               {item.comment ? (
                 <Text style={styles.comment}>{item.comment}</Text>
               ) : null}
@@ -373,7 +332,6 @@ export function ProfileReviewsScreen() {
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.photoRow}
-                  style={styles.photoScroll}
                 >
                   {item.photos.map((url) => (
                     <Pressable
@@ -389,6 +347,26 @@ export function ProfileReviewsScreen() {
                   ))}
                 </ScrollView>
               )}
+
+              <View style={styles.reviewFooter}>
+                <Avatar name={item.reviewer_name} uri={item.reviewer_avatar_url} size={32} />
+                <View style={styles.reviewFooterText}>
+                  <Text style={styles.reviewerName} numberOfLines={1}>
+                    {item.reviewer_name ?? 'Someone'}
+                  </Text>
+                  <Text style={styles.reviewMeta} numberOfLines={1}>
+                    {formatTimeAgo(item.created_at)}
+                    {item.job_category
+                      ? ` · ${
+                          JOB_CATEGORY_LABELS[
+                            item.job_category as keyof typeof JOB_CATEGORY_LABELS
+                          ] ?? item.job_category
+                        }`
+                      : ''}
+                  </Text>
+                </View>
+                <StarRating value={item.rating} size={12} />
+              </View>
 
               {/* FIX-RUN B3 (Apple 1.2): a review can be reported, and its
                   writer blocked, from the review. Never on your own. */}
@@ -426,99 +404,34 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   emptyContainer: {
     flexGrow: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  empty: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    maxWidth: 300,
-  },
-  emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 20,
+    padding: spacing.lg,
   },
   summaryCard: {
     marginBottom: spacing.xs,
   },
-  // The Work / Hiring toggle copies ReviewAndTipScreen's tip preset row
-  // locally (R8b-c D6: no new shared component) — the same selected
-  // treatment the review form's Yes/No pair carries.
   roleRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
     marginBottom: spacing.md,
-  },
-  rolePill: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rolePillActive: {
-    borderColor: colors.emerald,
-    backgroundColor: colors.mint,
-  },
-  // emerald D6: one selection treatment — gold line, gold label, no fill.
-  rolePillActiveDark: {
-    borderColor: selectedInDark(colors).line,
-    backgroundColor: selectedInDark(colors).fill,
-  },
-  rolePillText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-  rolePillTextActive: {
-    color: colors.emerald,
-  },
-  rolePillTextActiveDark: {
-    color: selectedInDark(colors).line,
   },
   summaryTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.lg,
   },
-  // Master 27 sets the aggregate as a large display serif.
   average: {
-    fontFamily: fonts.display,
-    fontSize: 48,
-    fontWeight: '800',
-    color: colors.text,
+    ...textScale.hero,
+    color: colors.ink,
+    fontVariant: ['tabular-nums'],
   },
   summaryTopText: {
     gap: spacing.xs,
   },
   summaryCount: {
-    fontSize: 13,
+    ...textScale.label,
     color: colors.textMuted,
   },
   distribution: {
-    gap: spacing.xs,
+    gap: spacing.sm,
     marginTop: spacing.lg,
   },
   distRow: {
@@ -527,7 +440,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.xs,
   },
   distStar: {
-    fontSize: 12,
+    ...textScale.footnote,
     fontWeight: '700',
     color: colors.textMuted,
     width: 10,
@@ -535,8 +448,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Master 27 runs the distribution on a deep track with a gold fill.
   distTrack: {
     flex: 1,
-    height: 10,
-    borderRadius: 5,
+    height: spacing.sm,
+    borderRadius: radius.xs,
     backgroundColor: colors.mint,
     overflow: 'hidden',
     marginHorizontal: spacing.xs,
@@ -546,42 +459,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.gold,
   },
   distCount: {
-    fontSize: 12,
+    ...textScale.footnote,
     color: colors.textSubtle,
     minWidth: 18,
     textAlign: 'right',
   },
   reviewCard: {
-    gap: 0,
-  },
-  reviewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing.md,
   },
-  reviewHeaderText: {
-    flex: 1,
-    gap: 2,
-  },
-  // Master 27 sets reviewer names in the serif and their meta line green.
-  reviewerName: {
-    fontFamily: fonts.display,
-    fontSize: 19,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  reviewMeta: {
-    fontSize: 12,
-    color: colors.emerald,
-  },
   comment: {
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
-    marginTop: spacing.md,
-  },
-  photoScroll: {
-    marginTop: spacing.md,
+    ...textScale.headline,
+    fontWeight: '500',
+    color: colors.ink,
   },
   photoRow: {
     gap: spacing.sm,
@@ -591,6 +480,22 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     height: 88,
     borderRadius: radius.md,
     backgroundColor: colors.neutralBg,
+  },
+  reviewFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  reviewFooterText: {
+    flex: 1,
+  },
+  reviewerName: {
+    ...textScale.label,
+    color: colors.ink,
+  },
+  reviewMeta: {
+    ...textScale.footnote,
+    color: colors.textMuted,
   },
   footerSpinner: {
     marginVertical: spacing.lg,

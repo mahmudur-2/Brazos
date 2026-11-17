@@ -79,20 +79,31 @@ test('the completed fork follows the payment and the dispute', () => {
   assert.equal(deriveJobLifecycle({ job: done, payment: null }), 'completed');
 });
 
-test('the 72h clock: the deadline is derived, a dispute freezes the job, no completed_at means no clock', () => {
+test('the release clock: the deadline is the server’s release_due_at, a dispute freezes the job, no release_due_at means no clock', () => {
   // Lean D4: the client-side on-read release mirror went with the sandbox; an
   // elapsed hold is never advanced here (see the D23 test below).
   const HOUR = 3_600_000;
   const completedAt = '2026-08-01T00:00:00Z';
-  const deadline = Date.parse(completedAt) + 72 * HOUR;
+  // A4 wiring (P1): the server states the time (20261116200000_release_clock.sql); it is not 72 hours
+  // after completed_at (here 5 days, a notice that reached its final state 2 days late).
+  const dueAt = '2026-08-06T00:00:00.000Z';
+  const deadline = Date.parse(dueAt);
   const done = {
     status: 'completed',
     en_route_at: null,
     arrived_at: null,
     completed_at: completedAt,
+    release_due_at: dueAt,
   };
 
   assert.equal(releaseDeadlineMs(done), deadline);
+  // The app derives no time of its own: completed_at alone, an absent, a null or an unreadable field is no clock.
+  assert.equal(releaseDeadlineMs({ completed_at: completedAt }), null);
+  assert.equal(releaseDeadlineMs({ completed_at: completedAt, release_due_at: null }), null);
+  assert.equal(releaseDeadlineMs({ completed_at: completedAt, release_due_at: '' }), null);
+  assert.equal(releaseDeadlineMs({ completed_at: completedAt, release_due_at: 'soon' }), null);
+  // PostgREST writes timestamptz with an offset: read as the same instant.
+  assert.equal(releaseDeadlineMs({ release_due_at: '2026-08-05T20:00:00-04:00' }), deadline);
   // Inside the window: still awaiting approval.
   assert.equal(
     deriveJobLifecycle({ job: done, payment: { status: 'held' } }, deadline - HOUR),
@@ -107,8 +118,8 @@ test('the 72h clock: the deadline is derived, a dispute freezes the job, no comp
     ),
     'disputed'
   );
-  // Pre-phase51 jobs carry no completed_at: the clock never runs.
-  const legacy = { ...done, completed_at: null };
+  // No time from the server (none will come, or the read did not carry it): the clock never runs.
+  const legacy = { ...done, release_due_at: null };
   assert.equal(releaseDeadlineMs(legacy), null);
   assert.equal(
     deriveJobLifecycle({ job: legacy, payment: { status: 'held', provider: 'sandbox' } }, deadline + HOUR),

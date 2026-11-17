@@ -2,6 +2,7 @@ import { useState, type ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { select } from '../lib/haptics';
 import { SelectionText, SelectionThumb } from './Selection';
 import {
   metricStyles,
@@ -103,7 +104,11 @@ export function SegmentedControl<T extends string>({
         return (
           <Pressable
             key={option.value}
-            onPress={() => onChange(option.value)}
+            onPress={() => {
+              // A2-M2: the selection tick when the choice moves.
+              if (!selected) select();
+              onChange(option.value);
+            }}
             style={({ pressed }) => [
               styles.cell,
               // The cell is the touch target: never under the 44pt floor,

@@ -38,7 +38,7 @@ type HubCardProps = {
   thumbnailUrl?: string | null;
   /** "Cleaning · Bushwick" — category and neighborhood, matching the feed card. */
   metaLine?: string;
-  /** Posting age, e.g. "2h ago". */
+  /** Posting age, e.g. "2h ago". A row draws it after the meta line, and only when given. */
   timeLabel?: string;
   priceCents: number | null;
   priceLabel?: string;
@@ -67,6 +67,23 @@ type HubCardProps = {
   chatLabel?: string;
   /** A word after the price — "held" while the payment sits in protection. */
   moneyNote?: string;
+  /**
+   * A2-M5 F1: a line that shows even on a live card, in the next-action line's place, the rail
+   * kept: the payments pause on a hire waiting for its payment (lib/jobLifecycle.ts
+   * pausedPaymentNotice). Absent, the card is exactly as it was.
+   */
+  notice?: string;
+  /**
+   * M5 (T1, plan/UI-DIRECTION.md §7 "Job row"): 'row' draws the compact My Jobs row —
+   * the picture or icon tile on the left, the title on one line, the StatusBadge
+   * with the other person's name, the price on the right (nothing when there is
+   * no budget), ONE hint line (`nextAction`, the same words), the thin stage rail
+   * for a hired job, and one chevron; the whole card is the tap target. A2-M5 A6:
+   * the meta line is the row's quiet second line, with `timeLabel` after it when
+   * given (the screen gives it for an open job only). 'card' (the default) is the
+   * card the customer Home draws, unchanged.
+   */
+  layout?: 'card' | 'row';
 };
 
 /**
@@ -100,6 +117,8 @@ export function HubCard({
   onChat,
   chatLabel,
   moneyNote,
+  notice,
+  layout = 'card',
 }: HubCardProps) {
   const { palette: colors, isDark } = useThemeColors();
   // 2026-09-27 (the Lux remake): the next-action link is the one mint action
@@ -111,7 +130,85 @@ export function HubCard({
   // on error keeps a broken image from rendering as a grey hole in the list.
   const [imageFailed, setImageFailed] = useState(false);
   const showImage = !!thumbnailUrl && !imageFailed;
-  const [actionHead, actionTail] = splitNextAction(nextAction ?? '');
+  // The one action line: a notice when given (a live card keeps its rail too), else the
+  // next-action line, which a live card's rail replaces.
+  const actionLine = notice ?? (live ? undefined : nextAction);
+  const [actionHead, actionTail] = splitNextAction(actionLine ?? '');
+
+  if (layout === 'row') {
+    return (
+      <Card onPress={onPress} style={styles.rowCard}>
+        <View style={styles.rowTop}>
+          {showImage ? (
+            <RemoteImage
+              uri={thumbnailUrl!}
+              style={styles.rowTile}
+              contentFit="cover"
+              onError={() => setImageFailed(true)}
+              accessible
+              accessibilityLabel={`Photo for ${title}`}
+            />
+          ) : (
+            <View
+              style={[
+                styles.rowTile,
+                styles.iconCircle,
+                isDark ? [styles.iconCircleDark, litCardStyle(true, 'tile')] : { backgroundColor: accent.bg },
+              ]}
+            >
+              <CategoryGlyph name={icon} size={22} color={isDark ? colors.emerald : accent.icon} />
+            </View>
+          )}
+          <View style={styles.rowMain}>
+            <Text style={styles.rowTitle} numberOfLines={1}>
+              {title}
+            </Text>
+            {/* A2-M5 A6: the quiet second line, the category · area the old card showed, and the
+                posting age after it only where the caller gives one (an open job). A long one wraps
+                rather than lose its area to "…" (as the bid card's facts do, A2-M4); the age is held
+                together with its dot by no-break spaces, so a wrap never splits "1h ago". */}
+            {metaLine ? (
+              <Text style={styles.rowWho} numberOfLines={2}>
+                {timeLabel ? `${metaLine}\u00A0· ${timeLabel.replace(/ /g, '\u00A0')}` : metaLine}
+              </Text>
+            ) : null}
+            <View style={styles.rowStatus}>
+              <StatusBadge status={status} label={statusLabel} />
+              {/* Wraps rather than cut "… sent you a counter-offer" to "counter-…" (A2-M5 A5). */}
+              {subtitle ? (
+                <Text style={styles.rowWho} numberOfLines={2}>
+                  {subtitle}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+          {/* No budget, no figure: the row never prints "No budget set" in the price's place. */}
+          {priceCents != null ? (
+            <View style={styles.rowPrice}>
+              {priceLabel ? (
+                <Text style={[styles.priceLabel, styles.rowPriceLabel]} numberOfLines={2}>
+                  {priceLabel}
+                </Text>
+              ) : null}
+              <Text style={styles.rowPriceText} numberOfLines={1}>
+                {formatBudget(priceCents)}
+                {moneyNote ? <Text style={styles.rowMoneyNote}>{` ${moneyNote}`}</Text> : null}
+              </Text>
+            </View>
+          ) : null}
+          <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+        </View>
+        {live ? <StageRail status={live} onChat={onChat} chatLabel={chatLabel} thin /> : null}
+        {actionLine ? (
+          // The one hint line. A long one (a release time) wraps rather than lose its time to "…".
+          <Text style={[styles.rowHint, isDark && styles.chromeTextDark]} numberOfLines={2}>
+            {actionHead}
+            {actionTail ? <Text style={styles.rowHintTail}>{` — ${actionTail}`}</Text> : null}
+          </Text>
+        ) : null}
+      </Card>
+    );
+  }
 
   return (
     <Card onPress={onPress} style={styles.card}>
@@ -175,7 +272,7 @@ export function HubCard({
             arrow after it — no circle, no outlined pill. An action line above it
             carries no arrow of its own, and under one "View details" is the
             quiet grey; alone it is the mint link. The target stays 44 tall. */}
-        {nextAction && !live ? (
+        {actionLine ? (
           <View style={styles.nextActionWrap}>
             <View style={styles.nextActionLines}>
               <Text
@@ -366,6 +463,81 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 13,
     fontWeight: '800',
     color: colors.forest,
+  },
+  // M5 (T1): the My Jobs row. About 104pt tall (a hired job's rail adds about 40), so
+  // at least four rows stand on a 393 x 852 screen.
+  rowCard: {
+    gap: spacing.md,
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.lg,
+  },
+  rowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  rowTile: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.md,
+    backgroundColor: colors.neutralBg,
+  },
+  rowMain: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.xs + 2,
+  },
+  rowTitle: {
+    fontFamily: fonts.display,
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  // A name that does not fit beside a long badge goes under it whole, never cut to "C…".
+  rowStatus: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: spacing.sm,
+    rowGap: spacing.xs,
+  },
+  rowWho: {
+    flexShrink: 1,
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  // Narrow, so the title keeps the row: a two-word label ("Agreed price:") stacks over the figure.
+  rowPrice: {
+    alignItems: 'flex-end',
+    alignSelf: 'flex-start',
+    gap: 1,
+    maxWidth: 58,
+  },
+  rowPriceLabel: {
+    textAlign: 'right',
+  },
+  rowPriceText: {
+    fontFamily: fonts.display,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: colors.money,
+    fontVariant: ['tabular-nums'],
+  },
+  rowMoneyNote: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  rowHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+    color: colors.forest,
+  },
+  rowHintTail: {
+    fontWeight: '600',
   },
   }),
 );

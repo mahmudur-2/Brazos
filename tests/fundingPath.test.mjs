@@ -37,16 +37,18 @@ const fundableJob = (status) => ({
 const NOW = Date.parse('2026-08-29T12:00:00Z');
 const HOUR = 3_600_000;
 
-test('funding is offered exactly on {assigned,in_progress,completed} × {no ledger, authorized, unfunded-in-window}', () => {
+test('funding is offered exactly on assigned × {no ledger, unfunded-in-window}: never wider than begin_job_payment', () => {
   const OFFER = [
     null,
-    { status: 'authorized' },
     // D9: the row create-payment mints before the sheet opens. A customer who
     // closes the sheet must have a way back to checkout.
     { status: 'unfunded' },
     { status: 'unfunded', funding_due_at: new Date(NOW + 23 * HOUR).toISOString() },
   ];
   const NEVER = [
+    // C23: begin_job_payment answers an existing non-unfunded row with
+    // 'This job already has a protected payment'.
+    { status: 'authorized' },
     { status: 'held' },
     { status: 'released' },
     { status: 'paid_out' },
@@ -62,7 +64,19 @@ test('funding is offered exactly on {assigned,in_progress,completed} × {no ledg
   ];
 
   let asserted = 0;
-  for (const status of ['assigned', 'in_progress', 'completed']) {
+  // C23: the server refuses a job in progress or completed ('Accept an offer before protecting a
+  // payment'), so every row there answers NO.
+  for (const status of ['in_progress', 'completed']) {
+    for (const payment of [...OFFER, ...NEVER]) {
+      assert.equal(
+        canOfferJobFunding({ viewerId: OWNER, job: fundableJob(status), payment, nowMs: NOW }),
+        false,
+        `${status} + ${payment ? payment.status : 'no ledger'} must not offer funding — the server refuses it`
+      );
+      asserted++;
+    }
+  }
+  for (const status of ['assigned']) {
     for (const payment of OFFER) {
       assert.equal(
         canOfferJobFunding({ viewerId: OWNER, job: fundableJob(status), payment, nowMs: NOW }),
@@ -82,6 +96,11 @@ test('funding is offered exactly on {assigned,in_progress,completed} × {no ledg
   }
   // Anti-vacuity: the whole matrix genuinely ran.
   assert.equal(asserted, 3 * (OFFER.length + NEVER.length));
+  assert.deepEqual(
+    [OFFER.length, NEVER.length],
+    [3, 11],
+    'C23: authorized moved from OFFER to NEVER; nothing else changed'
+  );
 });
 
 test('D9 · an unfunded row is offered inside its funding window and refused past it', () => {
@@ -159,7 +178,8 @@ test('funding is never offered outside the fundable statuses or to the wrong vie
   assert.equal(
     canOfferJobFunding({
       viewerId: OWNER,
-      job: fundableJob('completed'),
+      // C23: 'assigned', the one fundable status, so only the dispute can answer NO here.
+      job: fundableJob('assigned'),
       payment: null,
       hasOpenDispute: true,
     }),
@@ -212,7 +232,7 @@ test('every funding CTA renders from canOfferJobFunding, and the replaced condit
     );
     assert.match(
       src,
-      /Protect payment in checkout/,
+      /Protect Payment in Checkout/,
       `${name} must carry the funding CTA`
     );
   }
@@ -268,11 +288,44 @@ test('the direct-offer accept routes the payer into funding', async () => {
   assert.match(chat, /navigateAcrossTabs\('MyJobs', 'Checkout', \{ job: acceptedJob \}\)/);
 });
 
-test('checkout itself admits every fundable status (the phase58 contract)', async () => {
+test('checkout turns away every status the server refuses, and a held payment keeps its page (A4 wiring A2)', async () => {
   const checkout = stripComments(await read('screens/CheckoutScreen.tsx'));
+  // begin_job_payment protects a payment only on an assigned job; in_progress and completed are no longer let in.
   assert.match(
     checkout,
-    /job\.status !== 'assigned' && job\.status !== 'in_progress' && job\.status !== 'completed'/,
-    'CheckoutScreen must turn away only the statuses the server also refuses'
+    /job\.status !== 'assigned' && paymentLoaded && !paymentError && !\(payment && isHeld\(payment\)\)\s*\?\s*\{\s*kind: 'empty',\s*title: hiredLabel \?\? 'Nothing to check out yet',/,
+    'CheckoutScreen must turn away exactly the statuses the server refuses, once the payment is read'
   );
+  assert.doesNotMatch(checkout, /job\.status !== 'in_progress'|job\.status !== 'completed'/);
+});
+
+test('A4-08: a hired job reached through a stale route names its stage (the job card pill), and an unhired one keeps the offer words', async () => {
+  const src = (await read('screens/CheckoutScreen.tsx')).replace(/\r\n/g, '\n');
+  const labelStart = src.indexOf('  const hiredLabel = ');
+  const labelEnd = src.indexOf('  const state: ScreenState', labelStart);
+  const litStart = src.indexOf('{', src.indexOf("!(payment && isHeld(payment))\n", labelEnd));
+  const litEnd = src.indexOf('\n              }', litStart) + '\n              }'.length;
+  assert.ok(labelStart > 0 && labelEnd > labelStart && litEnd > litStart, 'the label and the empty state');
+  const body = `${src.slice(labelStart, labelEnd)}\nreturn ${src.slice(litStart, litEnd)};`;
+  const { deriveJobLifecycle, jobPillLabel } = await import(pathToFileURL(join(root, 'lib/jobLifecycle.ts')).href);
+  const empty = (job, payment) =>
+    new Function('job', 'payment', 'nowMs', 'jobPillLabel', 'deriveJobLifecycle', 'goBackOrHome', body)(
+      job, payment, 0, jobPillLabel, deriveJobLifecycle, () => {}
+    );
+  const words = (s) => ({ title: s.title, body: s.body, action: s.actionLabel });
+  const hired = { status: 'completed', assigned_worker_id: 'w1' };
+  // Hired, completed and paid: the pill's own word, and no claim that an offer is still to accept.
+  assert.deepEqual(words(empty(hired, { status: 'released' })), { title: 'Paid', body: undefined, action: 'Back to the job' });
+  assert.deepEqual(words(empty(hired, { status: 'paid_out' })).title, 'Paid');
+  // Completed with no released payment: Done, never Paid.
+  assert.deepEqual(words(empty(hired, { status: 'refunded' })).title, 'Done');
+  assert.deepEqual(words(empty(hired, null)).title, 'Done');
+  assert.deepEqual(words(empty({ status: 'in_progress', assigned_worker_id: 'w1' }, null)).title, 'Working');
+  assert.deepEqual(words(empty({ status: 'cancelled', assigned_worker_id: 'w1' }, { status: 'refunded' })).title, 'Cancelled');
+  // No worker hired: the words as before.
+  assert.deepEqual(words(empty({ status: 'open', assigned_worker_id: null }, null)), {
+    title: 'Nothing to check out yet',
+    body: 'Accept an offer first — checkout protects the payment for an accepted offer.',
+    action: 'Back to the job',
+  });
 });

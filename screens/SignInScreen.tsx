@@ -6,7 +6,6 @@ import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
 import { Card } from '../components/Card';
 import { PhoneNumberInput } from '../components/PhoneNumberInput';
-import { useAuth } from '../hooks/useAuth';
 import { authSizes, authSpacing, authType } from '../lib/authTheme';
 import {
   authSurface,
@@ -70,7 +69,6 @@ import { phoneAuth } from '../lib/phoneAuth';
  */
 export function SignInScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
-  const { bannedNotice } = useAuth();
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const surface = authSurface(colors, isDark);
@@ -130,30 +128,25 @@ export function SignInScreen() {
     setNotice(result.message);
   }
 
-  // The ship page's two controls, pinned by the scaffold (see its `footer`):
-  // Continue ON TOP — lit, the gold chevron — and the email route under it,
-  // outlined with its glyph (`hero` without `lit`, not `ghost`, because a
-  // ghost hero is the Welcome's text link and the page draws a box). The
-  // footer rides the keyboard until Continue sits flush on it; the email
+  // The sign-in family's two controls, pinned by the scaffold (see its
+  // `footer`): the main Continue on top, and the email route under it as the
+  // family's quiet well with its glyph — the same pair on every sign-in screen.
+  // The footer rides the keyboard until Continue sits flush on it; the email
   // route goes under the keyboard while the number is being typed.
   const footer = (
     <View style={styles.footer}>
       <AuthButton
         title="Continue"
         themed
-        hero
-        lit
-        chevron
         onPress={handleContinue}
         loading={loading}
         accessibilityHint="Send a verification code to this phone number"
       />
       <AuthButton
         title="Use Email Instead"
+        variant="quiet"
         themed
-        hero
         icon="mail-outline"
-        chevron
         onPress={() => navigation.navigate('EmailSignIn')}
         disabled={loading}
         accessibilityHint="Sign in with your email address and password"
@@ -179,15 +172,6 @@ export function SignInScreen() {
         <Text style={styles.subtitle}>
           The number connected to your account.
         </Text>
-
-        {bannedNotice ? (
-          <View style={styles.notice}>
-            <AuthNotice tone="danger">
-              This account has been suspended for violating the Brazos community
-              rules. Contact support if you think this is a mistake.
-            </AuthNotice>
-          </View>
-        ) : null}
 
         <View style={styles.form}>
           {/* 2026-09-27 (the Lux remake, the operator's pic 2): the phone-
@@ -222,7 +206,7 @@ export function SignInScreen() {
 
 /** The footer under its lead: the 12 gap and the email route — what goes
  *  under the keyboard when Continue lands on it. */
-const FOOTER_BELOW_LEAD = authSpacing.md + authSizes.heroButton;
+const FOOTER_BELOW_LEAD = authSpacing.md + authSizes.button;
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
@@ -253,9 +237,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     ...authType.body,
     color: colors.textMuted,
     marginTop: authSpacing.sm,
-  },
-  notice: {
-    marginTop: authSpacing.lg,
   },
   form: {
     marginTop: authSpacing.xl,

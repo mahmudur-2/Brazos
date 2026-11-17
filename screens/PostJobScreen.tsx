@@ -34,7 +34,7 @@ import { JobSummaryCard, type SummaryTarget } from '../components/JobSummaryCard
 import { OfferAmountField, validateOfferAmount } from '../components/OfferComposer';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { PostQuestions } from '../components/PostQuestions';
-import { POST_BAR_BUTTON, PostJobBar } from '../components/PostJobBar';
+import { POST_BAR_BUTTON, PostJobBar, usePostBarFoot } from '../components/PostJobBar';
 import { PriceDropdown, type PriceDropdownHandle, type PriceViewport } from '../components/PriceDropdown';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SealTransition, type SealFrom, type SealPhase } from '../components/SealTransition';
@@ -45,6 +45,8 @@ import { EntranceView } from '../components/EntranceView';
 import { invalidateJobs } from '../lib/queryClient';
 import { Sentry } from '../lib/observability/sentry';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { usePostingPaused } from '../hooks/usePostingPaused';
+import { PostingPausedNotice } from '../components/StopNotice';
 import {
   arrivalWindowLabel,
   createJob,
@@ -94,31 +96,25 @@ import { goBackOrHome, navigateAcrossTabs, originLabel } from '../lib/navigation
 import {
   EYEBROW_TYPE,
   emeraldColorsFor,
-  fonts,
   radius,
   spacing,
   themedStyles,
   useThemeColors,
   type ColorPalette,
   screenGround,
+  textScale,
 } from '../lib/theme';
-import { MediaUploader, Toggle, usePinnedFooterPadding, useScrollClearance } from '../ui/primitives';
+import { MediaUploader, Toggle, useHideTabBar, useScrollClearance } from '../ui/primitives';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 import { Announce } from '../hooks/useAnnounce';
 import { SPINNER_STATE, ScreenStateView } from '../ui/templates/ScreenStates';
-import { formatDay } from '../lib/time';
+import { dateOfDayKey, formatDay, marketDayKey } from '../lib/time';
 
 // Ten per the screen-13 spec; phase49 raised create_job's server cap to match.
 const MAX_PHOTOS = 10;
 // Screen 13 asks for ONE video ≤60s. The server still tolerates the old cap
 // of two (so an already-installed build keeps working); this UI offers one.
 const MAX_VIDEOS = 1;
-// A minute is long enough to walk through a job and short enough to upload on
-// a phone connection without the poster giving up on it.
-const MAX_VIDEO_DURATION_MS = 60_000;
-// Roughly a minute of phone video at default quality, with headroom. Past
-// this the upload is the worst part of posting a job.
-const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 // Titles show as a single line (sometimes two) on job cards throughout the
 // app — 80 chars is generous room for a real title while still fitting
 // there without wrapping into an unreadable wall of text.
@@ -148,23 +144,20 @@ const SCHEDULE_DAYS = 14;
 /** The progress bar's crossfade into its next segment (2026-09-27, ruling 14). */
 const PROGRESS_FILL_MS = 220;
 
-function toLocalIsoDate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate()
-  ).padStart(2, '0')}`;
-}
-
+// A4 wiring (A3), C9: the days are the market's (lib/time marketDayKey), the zone the server dates a
+// job in, so "Today" is the server's today on a phone in any zone.
 function upcomingDates(): { iso: string; label: string }[] {
   const now = new Date();
   return Array.from({ length: SCHEDULE_DAYS }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    const iso = marketDayKey(now, i);
+    const d = dateOfDayKey(iso)!;
     const label =
       i === 0
         ? 'Today'
         : i === 1
           ? 'Tomorrow'
           : formatDay(d, { now });
-    return { iso: toLocalIsoDate(d), label };
+    return { iso, label };
   });
 }
 
@@ -267,28 +260,24 @@ export function PostJobScreen() {
   // against theme's 24, so the wrong parent would move the gutter by four
   // points the moment the operator turned it.
   //
-  // RUN N3 (2026-09-08) — FOUR OF THESE ARE NOW LITERALS THAT WERE TOKEN
-  // READS, and that is the change rather than a slip. The operator dialled
-  // the gutter to 20, the section gap to 21 and the field gap to 20; the
-  // gutter and the section gap had been ONE number (`spacing.xl`, 24) and are
-  // now two, and 21 is on no scale at all. A dial may not keep a parent it no
-  // longer ships at — the registry fences that — so the three left theirs,
-  // and the reason 20 is written out rather than taken from ui/tokens'
-  // `spacing.xl` (also 20) is the paragraph above: this file reads the theme
-  // scale, and a parent off the Emerald one would sit right until it moved.
-  // `reviewCardRadius` is the one that still inherits.
+  // RUN N3 (2026-09-08): the operator dialled the gutter to 20 — Home's own
+  // column (HomeScreen `design.screenPadding`), which the category tiles share.
+  // G1a (2026-11-16): the gaps are back on the theme scale — one 24 between the
+  // step's blocks (the step pane's own gap), one 16 between the fields of a card.
   const contentPaddingX = 20;
-  const contentGap = 21;
+  const contentGap = spacing.xl;
   const progressHeight = 6;
-  const stepFieldsGap = 20;
+  const stepFieldsGap = spacing.lg;
   const descriptionHeight = 120;
-  const reviewCardRadius = radius.xl;
-  // 2026-09-30: the tab bar floats over this screen. Steps 1-3 have no footer (the Lux remake,
-  // ruling 13), so their scroller ends above the pill; the last step's bar (PostJobBar) lifts its
-  // own buttons over it and the scroller ends on the bar, as before.
+  // G1a RESTRUCTURE (2026-11-16): posting is one task, so the tab bar steps aside for the whole
+  // flow; the header's back is the way out at every step (step 1's leaves to where the flow was
+  // opened from). Steps 1-3 have no footer (the Lux remake, ruling 13) and still end with the
+  // scroll clearance; the last step's bar (PostJobBar) stands where the pill sat and the scroller
+  // ends on it, as before.
+  useHideTabBar();
   const navClearance = useScrollClearance();
-  // The last step's bar lifts its buttons over the pill by this much; its note floats above them.
-  const footerPad = usePinnedFooterPadding();
+  // The last step's bar stands this far from the screen's edge; its note floats above it.
+  const barFoot = usePostBarFoot();
   const emeraldColors = emeraldColorsFor(colors);
   // Registered in four stacks (Home, MyJobs, Messages, Map) for posting, edit,
   // and Hire Again entry points, so its types are standalone rather than tied
@@ -324,9 +313,14 @@ export function PostJobScreen() {
   // resuming.
   const isFreshPost = !isEditing && !isHiring;
   // 2026-09-30 (idea 2, group 2's review): a REUSED post never touches the draft slot — it neither
-  // restores, saves nor clears it, and offers no "Save draft" — so an unfinished draft survives a
+  // restores, saves nor clears it, and offers no "Save Draft" — so an unfinished draft survives a
   // reuse, untouched, for My Jobs and Home to resume.
   const usesDraft = isFreshPost && !reuseJobId;
+  // A4 wiring (A3), U3: while the server pauses posting, a post (fresh or reused) and an offer to a
+  // worker (it makes a new job) wait behind the one paused notice, before any upload; an edit does not
+  // (create_job and a direct create_offer refuse while paused, update_job_details never does).
+  const posting = usePostingPaused();
+  const postingPaused = !isEditing && posting.paused;
   // Gates the autosave effect until the one-time restore-or-skip check below
   // finishes, so autosave can never race ahead of it and overwrite a
   // not-yet-read draft with the screen's still-blank initial state.
@@ -360,7 +354,7 @@ export function PostJobScreen() {
   // before this run. The ONE typed figure above is the price in posted mode and
   // the maximum in open mode — one field, one dialog, never two amounts.
   const [pricingMode, setPricingMode] = useState<PricingMode>(DEFAULT_PRICING_MODE);
-  // 2026-09-30 (idea 12) — "Need it today", off by default, a fresh post's alone: on, nearby workers'
+  // 2026-09-30 (idea 12) — "Need It Today", off by default, a fresh post's alone: on, nearby workers'
   // alert says so and their cards show a Today pill on the day it is posted. Not kept in the draft —
   // "today" is the day the post goes out, so a resumed draft starts with it off.
   const [neededToday, setNeededToday] = useState(false);
@@ -368,11 +362,11 @@ export function PostJobScreen() {
   // choosing another day turns it off — the alert never says "today" for Saturday's job.
   function setNeedItToday(on: boolean) {
     setNeededToday(on);
-    if (on) setScheduledDate(toLocalIsoDate(new Date()));
+    if (on) setScheduledDate(marketDayKey());
   }
-  // 2026-09-30 (idea 14) — "Repeat this job", a fresh post's alone, off by default: every week, every
+  // 2026-09-30 (idea 14) — "Repeat This Job", a fresh post's alone, off by default: every week, every
   // 2 weeks or every month. The job posts as it always does; the series starts from it once it is
-  // live (start_job_series()). Not kept in the draft, as "Need it today" is not.
+  // live (start_job_series()). Not kept in the draft, as "Need It Today" is not.
   const [repeatCadence, setRepeatCadence] = useState<SeriesCadence | null>(null);
   const [repeatOpen, setRepeatOpen] = useState(false);
   const repeatRef = useRef<View>(null);
@@ -389,8 +383,7 @@ export function PostJobScreen() {
       const again = await confirmAsync({
         title: 'The repeat didn’t save',
         message: `Your job is posted. ${userMessage(seriesError)}`,
-        confirmText: 'Try again',
-        cancelText: 'Not now',
+        confirmText: 'Try Again',
       });
       if (!again) return;
       ({ error: seriesError } = await startJobSeries(jobId, cadence));
@@ -404,9 +397,9 @@ export function PostJobScreen() {
   const [scheduledDate, setScheduledDate] = useState<string | null>(null);
   const [arrivalStartHour, setArrivalStartHour] = useState<number | null>(null);
   const [arrivalEndHour, setArrivalEndHour] = useState<number | null>(null);
-  // Idea 12 (group 2's review): choosing another day turns "Need it today" off.
+  // Idea 12 (group 2's review): choosing another day turns "Need It Today" off.
   useEffect(() => {
-    if (neededToday && scheduledDate && scheduledDate !== toLocalIsoDate(new Date())) setNeededToday(false);
+    if (neededToday && scheduledDate && scheduledDate !== marketDayKey()) setNeededToday(false);
   }, [neededToday, scheduledDate]);
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -609,7 +602,7 @@ export function PostJobScreen() {
         // dropped rather than restored — publishing yesterday is never right.
         // ISO date strings compare lexicographically.
         setScheduledDate(
-          draft.scheduledDate && draft.scheduledDate >= toLocalIsoDate(new Date())
+          draft.scheduledDate && draft.scheduledDate >= marketDayKey()
             ? draft.scheduledDate
             : null
         );
@@ -731,7 +724,7 @@ export function PostJobScreen() {
   // Header Back, Android Back, and the iOS edge gesture all mean the same
   // thing inside the wizard: move back one step. A write in flight cannot be
   // removed from the stack, which also protects its referenced uploads.
-  // 2026-09-28 (LUX-LIST-64 #41): "Save draft" leaves on purpose, so while it
+  // 2026-09-28 (LUX-LIST-64 #41): "Save Draft" leaves on purpose, so while it
   // does the guard steps aside — the draft is already kept (see the unmount).
   usePreventRemove(!leaving && (submitting || (step > 0 && !showSuccess)), () => {
     if (!submitting) setStep((current) => Math.max(0, current - 1));
@@ -1403,7 +1396,7 @@ export function PostJobScreen() {
     }) ?? 'Flexible';
   // F18: the fourteen day labels change only when the day turns over, so they
   // are not rebuilt on every keystroke.
-  const dayKey = toLocalIsoDate(new Date());
+  const dayKey = marketDayKey();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- dayKey is the dependency
   const scheduleDates = useMemo(upcomingDates, [dayKey]);
 
@@ -1480,9 +1473,9 @@ export function PostJobScreen() {
   const primaryLabel = uploadingNow
     ? 'Uploading…'
     : isEditing
-      ? 'Save changes'
+      ? 'Save Changes'
       : isHiring
-        ? 'Send request'
+        ? 'Send Request'
         : 'Publish';
 
   return (
@@ -1491,8 +1484,9 @@ export function PostJobScreen() {
         title={isEditing ? 'Edit Job' : isHiring ? 'Send an Offer' : 'Post a Job'}
         onBack={handleBack}
         backLabel={backLabel}
-        rightLabel={advanceLabel}
-        onPressRight={handleContinue}
+        // A3: the step link waits with the form while posting is paused.
+        rightLabel={postingPaused ? undefined : advanceLabel}
+        onPressRight={postingPaused ? undefined : handleContinue}
         rightDisabled={advanceDisabled || stepBlocker != null}
         centerTitle
         palette={emeraldColors}
@@ -1500,6 +1494,8 @@ export function PostJobScreen() {
 
       {loadingJob ? (
         <ScreenStateView state={SPINNER_STATE} />
+      ) : postingPaused ? (
+        <PostingPausedNotice checking={posting.checking} onRetry={posting.recheck} />
       ) : (
       <KeyboardAvoid
         style={styles.flex}
@@ -1590,7 +1586,7 @@ export function PostJobScreen() {
                   title and the description sit in ONE pop-out card, and the
                   category chips under it on the ground — the reference's
                   grouping, nothing else moved. */}
-              <Card style={[styles.fieldCard, { gap: stepFieldsGap }]}>
+              <Card style={styles.fieldCard}>
               <TextField
                 palette={emeraldColors}
                 label="Title"
@@ -1693,7 +1689,9 @@ export function PostJobScreen() {
               {/* The one canonical MediaUploader primitive (§O never-duplicate
                   list; §N risk 9). It owns the pick + append-only-on-success
                   rule; this screen supplies the bucket calls and the
-                  ownership rule for removals. */}
+                  ownership rule for removals. G1a (2026-11-16): the photos and
+                  the clip are one field group, so one lit card holds both. */}
+              <Card style={styles.fieldCard}>
               <MediaUploader
                 kind="photo"
                 label="Photos (optional)"
@@ -1730,13 +1728,7 @@ export function PostJobScreen() {
                   onUpload={handleUploadVideo}
                   onDelete={handleDeleteMedia}
                   shouldDeleteOnRemove={(url) => !originalVideosRef.current.has(url)}
-                  validate={(asset) =>
-                    rejectionForPickedVideo(asset, {
-                      maxDurationMs: MAX_VIDEO_DURATION_MS,
-                      maxBytes: MAX_VIDEO_BYTES,
-                    })
-                  }
-                  videoMaxDurationSec={MAX_VIDEO_DURATION_MS / 1000}
+                  validate={(asset) => rejectionForPickedVideo(asset)}
                   onUploadError={(message) => void alertAsync('Video upload failed', message)}
                 />
                 {/* PJ1 (C4) — the badge beside the counter says the minute
@@ -1749,6 +1741,7 @@ export function PostJobScreen() {
                   A short clip explains an awkward job fast.
                 </Text>
               </View>
+              </Card>
             </View>
           )}
 
@@ -1757,7 +1750,7 @@ export function PostJobScreen() {
               {/* 2026-09-27 (the operator's review, the Lux "Where and when"
                   page): the area, the locate disc and the private address in
                   ONE pop-out card; the day and the arrival window under it. */}
-              <Card style={[styles.fieldCard, { gap: stepFieldsGap }]}>
+              <Card style={styles.fieldCard}>
               <View style={styles.locationRow}>
                 <View style={styles.locationField}>
                   <TextField
@@ -1834,13 +1827,17 @@ export function PostJobScreen() {
               )}
               </Card>
 
+              {/* G1a (2026-11-16): the day and the arrival window are the "when"
+                  group: one lit card, each label the shared field label, the
+                  day row sliding out to the card's own edges. */}
               {!isHiring && (
-                <>
+                <Card style={styles.fieldCard}>
                   <View style={styles.field}>
-                    <Text style={styles.fieldLabel}>Which day?</Text>
+                    <FieldLabel palette={emeraldColors}>Which day?</FieldLabel>
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
+                      style={styles.chipScroller}
                       contentContainerStyle={styles.chipRow}
                       keyboardShouldPersistTaps="handled"
                     >
@@ -1863,7 +1860,7 @@ export function PostJobScreen() {
                   </View>
 
                   <View style={styles.field}>
-                    <Text style={styles.fieldLabel}>Arrival window</Text>
+                    <FieldLabel palette={emeraldColors}>Arrival window</FieldLabel>
                     <View style={styles.chips}>
                       <Chip
                         label="Flexible"
@@ -1888,7 +1885,7 @@ export function PostJobScreen() {
                       ))}
                     </View>
                   </View>
-                </>
+                </Card>
               )}
             </View>
           )}
@@ -1900,6 +1897,9 @@ export function PostJobScreen() {
                   price" (with its two glyphs) and the one field that opens the
                   price list (components/PriceDropdown.tsx) — the pencil and its
                   budget dialog are gone. A direct offer keeps its own amount. */}
+              {/* G1a (2026-11-16): the price is one field group — one lit card,
+                  the price box its well. */}
+              <Card style={styles.fieldCard}>
               {isHiring ? (
                 // The direct-offer terms field is OfferComposer's shared one
                 // (Phase 5): bids, counters and this hire request present and
@@ -1912,23 +1912,24 @@ export function PostJobScreen() {
                   hint={`${hireWorkerName} can accept or suggest a different price.`}
                 />
               ) : (
-                <View style={styles.field}>
-                  <PriceDropdown
-                    ref={priceRef}
-                    mode={pricingMode}
-                    amount={budgetMax}
-                    onModeChange={setPricingMode}
-                    onAmountChange={setBudgetMax}
-                    viewport={priceViewport}
-                    palette={emeraldColors}
-                  />
-                </View>
+                <PriceDropdown
+                  ref={priceRef}
+                  mode={pricingMode}
+                  amount={budgetMax}
+                  onModeChange={setPricingMode}
+                  onAmountChange={setBudgetMax}
+                  viewport={priceViewport}
+                  palette={emeraldColors}
+                />
               )}
+              </Card>
 
-              {/* 2026-09-30 (idea 12): "Need it today", a fresh post's own — the drawn row: the
-                  flash, the words, the switch, off until turned on. */}
+              {/* 2026-09-30 (idea 12): "Need It Today", a fresh post's own — the drawn row: the
+                  flash, the words, the switch, off until turned on. G1a: it and the repeat row
+                  are the post's two options, one lit card, a hairline between them. */}
               {isFreshPost ? (
-                // The Fable review: the whole row answers a tap, as the repeat row below does.
+                <Card style={styles.optionsCard}>
+                {/* The Fable review: the whole row answers a tap, as the repeat row below does. */}
                 <Pressable
                   onPress={() => setNeedItToday(!neededToday)}
                   style={({ pressed }) => [styles.todayRow, pressed && styles.repeatPressed]}
@@ -1936,17 +1937,15 @@ export function PostJobScreen() {
                 >
                   <Ionicons name="flash-outline" size={18} color={colors.emerald} />
                   <View style={styles.todayCopy}>
-                    <Text style={styles.todayTitle}>Need it today</Text>
+                    <Text style={styles.todayTitle}>Need It Today</Text>
                     <Text style={styles.todayCaption}>Nearby workers get an instant alert</Text>
                   </View>
-                  <Toggle value={neededToday} onValueChange={setNeedItToday} accessibilityLabel="Need it today" />
+                  <Toggle value={neededToday} onValueChange={setNeedItToday} accessibilityLabel="Need It Today" />
                 </Pressable>
-              ) : null}
 
               {/* 2026-09-30 (idea 14): "Repeat this job · Every 2 weeks" — the drawn row, a fresh post's
                   own: the words and the choice at the right; it opens in place to the four choices. */}
-              {isFreshPost ? (
-                <View>
+                <View style={styles.optionSplit}>
                   <Pressable
                     onPress={() => {
                       const opening = !repeatOpen;
@@ -1955,13 +1954,13 @@ export function PostJobScreen() {
                     }}
                     style={({ pressed }) => [styles.todayRow, pressed && styles.repeatPressed]}
                     accessibilityRole="button"
-                    accessibilityLabel="Repeat this job"
+                    accessibilityLabel="Repeat This Job"
                     accessibilityValue={{ text: repeatCadence ? CADENCE_LABELS[repeatCadence] : 'Off' }}
                     accessibilityState={{ expanded: repeatOpen }}
                   >
                     <Ionicons name="repeat-outline" size={18} color={colors.emerald} />
                     <View style={styles.todayCopy}>
-                      <Text style={styles.todayTitle}>Repeat this job</Text>
+                      <Text style={styles.todayTitle}>Repeat This Job</Text>
                       <Text style={styles.todayCaption} numberOfLines={1}>
                         Same worker gets first pick
                       </Text>
@@ -2003,6 +2002,7 @@ export function PostJobScreen() {
                     </Text>
                   </DropdownBody>
                 </View>
+                </Card>
               ) : null}
 
               {/* #38 — the summary, rebuilt from refs/job-summary.html: every
@@ -2032,19 +2032,12 @@ export function PostJobScreen() {
                 uploadVideo={handleUploadVideo}
                 deleteMedia={handleDeleteMedia}
                 shouldDeleteOnRemove={(url) => !originalPhotosRef.current.has(url) && !originalVideosRef.current.has(url)}
-                validateVideo={(asset) =>
-                  rejectionForPickedVideo(asset, {
-                    maxDurationMs: MAX_VIDEO_DURATION_MS,
-                    maxBytes: MAX_VIDEO_BYTES,
-                  })
-                }
-                videoMaxDurationSec={MAX_VIDEO_DURATION_MS / 1000}
+                validateVideo={(asset) => rejectionForPickedVideo(asset)}
                 onUploadingChange={setSummaryUploading}
                 onUploadError={(message) => void alertAsync('Upload failed', message)}
                 onToast={setToast}
                 onEdit={onSummaryEdit}
                 disabled={submitting || !user}
-                cornerRadius={reviewCardRadius}
               />
 
               {/* #41 — above the bar, one line: what Publish does. */}
@@ -2068,8 +2061,8 @@ export function PostJobScreen() {
 
         {/* 2026-09-27 (the Lux remake, ruling 13): NO pinned Continue on steps
             1-3 — the way forward is the header's link. 2026-09-28 (LUX-LIST-64
-            #41) — THE LAST STEP'S BAR (components/PostJobBar.tsx), right above
-            the tab bar: "Save draft" (a fresh post's) beside the commitment —
+            #41) — THE LAST STEP'S BAR (components/PostJobBar.tsx), where the
+            tab bar's pill sat (G1a RESTRUCTURE): "Save Draft" (a fresh post's) beside the commitment —
             Publish with its rocket, "Save changes", "Send request". Publish
             waits, grey on the deep green, while a file uploads ("Uploading…")
             or a set price is still missing. */}
@@ -2077,7 +2070,7 @@ export function PostJobScreen() {
           <PostJobBar
             secondary={
               usesDraft
-                ? { label: 'Save draft', onPress: () => setLeaving(true), accessibilityLabel: 'Save draft and go Home' }
+                ? { label: 'Save Draft', onPress: () => setLeaving(true), accessibilityLabel: 'Save draft and go Home' }
                 : undefined
             }
             secondaryIcon="save-outline"
@@ -2145,7 +2138,7 @@ export function PostJobScreen() {
 
               <View style={styles.successActions}>
                 <Button
-                  title={isEditing ? 'Back to job' : 'Done'}
+                  title={isEditing ? 'View Job' : 'Done'}
                   onPress={() => leaveAfterSuccess(true)}
                   palette={emeraldColors}
                   style={styles.successButton}
@@ -2166,13 +2159,13 @@ export function PostJobScreen() {
           gone — the price list on the step is the one way to set the amount. */}
 
       {/* #38 — the summary's note ("Photo removed · Undo"), above the bar. */}
-      {/* It floats over the bar — its button and its 1pt line — with the
-          column's own breathing room, read at use time (T1). */}
+      {/* It floats over the bar's buttons with the column's own breathing
+          room, read at use time (T1). */}
       <UndoToast
         message={toast?.message ?? null}
         onUndo={toast?.undo}
         onExpire={() => setToast(null)}
-        bottom={footerPad + POST_BAR_BUTTON + 1 + spacing.md}
+        bottom={barFoot + POST_BAR_BUTTON + spacing.md}
       />
 
       {/* #42 — the Seal, over everything while it runs. */}
@@ -2188,8 +2181,7 @@ export function PostJobScreen() {
             : ''
         }
         message={`Only ${hireWorkerName} sees this. They can accept, decline, or suggest a different price before anything is booked.`}
-        confirmText="Send offer"
-        cancelText="Cancel"
+        confirmText="Send Offer"
         loading={submitting}
         palette={emeraldColors}
         onConfirm={() => confirmOfferCents != null && sendOffer(confirmOfferCents)}
@@ -2239,15 +2231,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Decision 9: a display heading speaks the serif, in both themes — the same
   // treatment every converted screen's hero title already carries.
   stepTitle: {
-    fontFamily: fonts.display,
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '800',
+    ...textScale.display,
     color: colors.ink,
   },
   stepSubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
+    ...textScale.body,
     color: colors.textMuted,
     maxWidth: 420,
   },
@@ -2259,7 +2247,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   stepSubtitleUnder: {
     marginTop: 0,
   },
-  // Idea 12: the "Need it today" row — the flash, the two lines, the switch.
+  // Idea 12: the "Need It Today" row — the flash, the two lines, the switch.
   todayRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2268,18 +2256,29 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   todayCopy: { flex: 1, gap: 1 },
   todayTitle: {
-    fontSize: 14,
+    ...textScale.body,
     fontWeight: '700',
     color: colors.ink,
   },
   todayCaption: {
-    fontSize: 12,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textMuted,
+  },
+  // G1a: the two options in one lit card, the card's rows a little tighter than
+  // its fields, a hairline between them.
+  optionsCard: {
+    paddingVertical: spacing.sm,
+  },
+  optionSplit: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   // Idea 14: the repeat row's choice at the right, and what opens under it.
   repeatValue: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...textScale.label,
     color: colors.textMuted,
   },
   repeatValueOn: {
@@ -2307,12 +2306,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
   },
   repeatOptionText: {
-    fontSize: 15,
+    ...textScale.callout,
     fontWeight: '600',
     color: colors.ink,
   },
   repeatHint: {
-    fontSize: 12,
+    ...textScale.footnote,
+    fontWeight: '400',
     lineHeight: 17,
     color: colors.textMuted,
     paddingTop: spacing.sm,
@@ -2340,8 +2340,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.wizardProgress,
   },
   progressLabel: {
-    fontSize: 11,
-    fontWeight: '600',
+    ...textScale.caption,
     color: colors.textSubtle,
   },
   progressLabelActive: {
@@ -2365,10 +2364,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // deep green on another. Cream ink in dark; light untouched.
   hireBannerText: {
     flex: 1,
-    fontSize: 13,
-    color: colors.forest,
-    fontWeight: '600',
+    ...textScale.label,
     lineHeight: 19,
+    color: colors.forest,
   },
   hireBannerTextDark: { color: colors.ink },
   multiline: {
@@ -2378,11 +2376,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   field: {
     gap: spacing.sm,
   },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.ink,
-  },
   // M-7 — a label row that is not a TextField (Category) carries its Required
   // mark where TextField puts a hint: the right end of the label's own row.
   labelRow: {
@@ -2391,42 +2384,46 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
   },
   requiredHint: {
-    fontSize: 12,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   swipeHint: {
     marginLeft: 'auto',
-    fontSize: 12,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   // 2026-09-27 (the Lux remake): the reason a step cannot advance, under the
   // field that blocks it — the pinned footer that carried it is gone.
   fieldReason: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
+    ...textScale.label,
     color: colors.textMuted,
     marginTop: -spacing.sm,
   },
   fieldHint: {
-    fontSize: 12,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textMuted,
-    lineHeight: 17,
     marginTop: -spacing.xs,
   },
-  // C5 — the media caption's share of the section's 20% scale, capped by
-  // C4's one-line rule (see the call site). 13pt, tracked -0.3.
+  // C4's one-line rule: inside the media card the column is ~319pt, so the
+  // caption takes the field hint's 12pt, untracked (~305pt).
   videoHint: {
-    fontSize: 13,
-    lineHeight: 18,
-    letterSpacing: -0.3,
+    ...textScale.footnote,
+    fontWeight: '400',
     color: colors.textMuted,
     marginTop: -spacing.xs,
+  },
+  // The day row runs to the lit card's inner edges (components/Card.tsx pads
+  // spacing.lg) and keeps its first chip on the card's column.
+  chipScroller: {
+    marginHorizontal: -spacing.lg,
   },
   chipRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    paddingRight: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
   chips: {
     flexDirection: 'row',
@@ -2461,9 +2458,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.md,
     padding: spacing.md,
   },
-  // The Lux step cards: the field group in one pop-out, 14pt of padding.
+  // The Lux step cards: one field group in one lit card, on the card's own padding.
   fieldCard: {
-    padding: 14,
+    gap: spacing.lg,
   },
   infoIcon: {
     width: 40,
@@ -2475,7 +2472,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   infoText: {
     flex: 1,
-    fontSize: 13,
+    ...textScale.label,
+    fontWeight: '400',
     lineHeight: 19,
     color: colors.forest,
   },
@@ -2488,8 +2486,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   publishNoticeText: {
     flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
+    ...textScale.label,
+    fontWeight: '400',
     color: colors.textMuted,
   },
   // D0 — OPAQUE GROUND, AND NO OPACITY ON THIS NODE. Both halves matter and
@@ -2528,16 +2526,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.eyebrow,
   },
   successTitle: {
-    fontFamily: fonts.display,
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '800',
+    ...textScale.display,
     color: colors.ink,
     textAlign: 'center',
   },
   successBody: {
     maxWidth: 360,
-    fontSize: 15,
+    ...textScale.callout,
+    fontWeight: '400',
     lineHeight: 22,
     color: colors.textMuted,
     textAlign: 'center',
@@ -2550,7 +2546,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   successButton: {
     width: '100%',
-    borderRadius: radius.lg,
   },
   }),
 );

@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
 import { secureSessionStorage } from './secureSessionStorage';
 import { withRequestTimeout } from './fetchTimeout';
+import { watchSuspension } from './suspension';
+import { watchServerClock } from './serverClock';
 import type { Database } from './supabaseTypes';
 
 // The URL and the publishable key come from config/env.ts and nowhere else.
@@ -26,6 +28,8 @@ export const supabase = createClient<Database>(env.EXPO_PUBLIC_SUPABASE_URL, env
     detectSessionInUrl: false,
   },
   // A6: every REST / auth / function call ends after 15 s (storage transfers and the realtime
-  // socket are exempt - lib/fetchTimeout.ts).
-  global: { fetch: withRequestTimeout(fetch) },
+  // socket are exempt - lib/fetchTimeout.ts). B1: every answer goes back untouched; a copy of a
+  // refusal for a suspended account asks AuthContext for its check (lib/suspension.ts). A4-R1: each
+  // answer's Date header sets the server's clock (lib/serverClock.ts), measured inside the timeout.
+  global: { fetch: watchSuspension(withRequestTimeout(watchServerClock(fetch))) },
 });

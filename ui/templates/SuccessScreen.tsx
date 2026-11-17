@@ -13,6 +13,7 @@ import {
   type as typeScale,
 } from '../tokens';
 import { screenGround, themedStyles, useThemeColors } from '../../lib/theme';
+import { Button } from '../../components/Button';
 import { EntranceView } from '../../components/EntranceView';
 import { confirm } from '../../lib/haptics';
 
@@ -163,6 +164,19 @@ export function SuccessScreen({
         <EntranceView index={3} style={[styles.actions, actionsLayout === 'row' && styles.actionsRow]}>
           {actions.map((action) => {
             const secondary = action.variant === 'secondary';
+            // A2-M5 A2: the main action is the app's one main Button (its fill, its corner and, in
+            // dark, its glow), as on every other screen; the secondary keeps this template's form at
+            // the Button's height, so a stacked pair or a row stays one height.
+            if (!secondary) {
+              return (
+                <Button
+                  key={action.label}
+                  title={action.label}
+                  onPress={action.onPress}
+                  style={actionsLayout === 'row' ? styles.buttonInRow : undefined}
+                />
+              );
+            }
             return (
               <Pressable
                 key={action.label}
@@ -170,25 +184,19 @@ export function SuccessScreen({
                 style={({ pressed }) => [
                   styles.button,
                   actionsLayout === 'row' && styles.buttonInRow,
-                  secondary ? styles.secondary : styles.primary,
+                  styles.secondary,
                   // Decision 3's standard control: surface fill, gold
                   // hairline, cream serif label. The Heritage pair it
                   // replaces put a forest label on a mint fill, which under
                   // dark is one deep green on another — "Keep browsing" was
                   // legible only as a shape.
-                  secondary && isDark && styles.secondaryDark,
+                  isDark && styles.secondaryDark,
                   pressed && styles.pressed,
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel={action.label}
               >
-                <Text
-                  style={[
-                    styles.buttonLabel,
-                    secondary && styles.secondaryLabel,
-                    secondary && isDark && styles.secondaryLabelDark,
-                  ]}
-                >
+                <Text style={[styles.buttonLabel, styles.secondaryLabel, isDark && styles.secondaryLabelDark]}>
                   {action.label}
                 </Text>
               </Pressable>
@@ -255,21 +263,20 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   actionsRow: {
     flexDirection: 'row',
   },
+  // A2-M5 A2: the secondary, at the main Button's floor (52), so the pair is one height.
   button: {
-    minHeight: controls.buttonHeight,
+    minHeight: controls.buttonHeightDefault,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.pill,
+    // M5 (T4): one corner for buttons, the Button's 12.
+    borderRadius: radius.md,
     paddingHorizontal: spacing.lg + spacing.xs,
   },
-  // A row's buttons share the width; the label shrinks rather than the pill,
+  // A row's buttons share the width; the label shrinks rather than the button,
   // so the two keep one height and one radius.
   buttonInRow: {
     flex: 1,
     paddingHorizontal: spacing.md,
-  },
-  primary: {
-    backgroundColor: colors.forest,
   },
   secondary: {
     backgroundColor: colors.mint,

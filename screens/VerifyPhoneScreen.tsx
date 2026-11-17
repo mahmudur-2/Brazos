@@ -13,17 +13,17 @@ import {
   useRoute,
   type RouteProp,
 } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import { AuthButton } from '../components/AuthButton';
 import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
+import { Card } from '../components/Card';
 import { OtpInput, type OtpInputHandle } from '../components/OtpInput';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { authRadius, authSpacing, authType } from '../lib/authTheme';
+import { authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
 import type { AuthStackNavigation, AuthStackParamList } from '../lib/navigation';
 import { OTP_LENGTH, isOtpToken, phoneAuth } from '../lib/phoneAuth';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
-import { authSurface, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { authSurface, fonts, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { Announce } from '../hooks/useAnnounce';
 
 /**
@@ -279,39 +279,79 @@ export function VerifyPhoneScreen() {
     ],
   };
 
-  return (
-    <AuthScaffold
-      title="Verify Phone"
-      titleVariant="large"
-      onBack={() => leaveChallenge(() => navigation.goBack())}
-      backdrop="soft"
-      themed
-    >
-      <Animated.View style={[styles.body, animatedStyle]}>
-        <View style={styles.icon}>
-          <Ionicons
-            name={mockVerified ? 'checkmark' : 'lock-closed-outline'}
-            size={30}
-            color={colors.emerald}
-          />
-        </View>
+  const goBack = () => leaveChallenge(() => navigation.goBack());
 
-        {mockVerified ? (
-          <MockComplete
-            intent={params.intent}
-            onContinue={() =>
+  // The sign-in family's actions, pinned by the scaffold (see its `footer`): the
+  // main one rides the keyboard until it sits flush on it, the quiet one goes
+  // under it, and an error line in the card above never moves either.
+  const footer = (
+    <Animated.View style={[styles.footer, { opacity: enter }]}>
+      {mockVerified ? (
+        <>
+          <AuthButton
+            title={params.intent === 'sign-up' ? 'Continue with Email Sign Up' : 'Continue with Email Sign In'}
+            themed
+            onPress={() =>
               navigation.navigate(
                 params.intent === 'sign-up' ? 'EmailCreateAccount' : 'EmailSignIn'
               )
             }
-            onWelcome={() => navigation.popTo('Welcome')}
           />
+          <AuthButton
+            title="Back to Welcome"
+            variant="quiet"
+            themed
+            onPress={() => navigation.popTo('Welcome')}
+          />
+        </>
+      ) : stale ? (
+        <>
+          <AuthButton title="Back to Phone Number" themed onPress={goBack} />
+          <AuthButton
+            title="Back to Welcome"
+            variant="quiet"
+            themed
+            onPress={() => leaveChallenge(() => navigation.popTo('Welcome'))}
+          />
+        </>
+      ) : (
+        <>
+          <AuthButton
+            title="Verify and Continue"
+            themed
+            onPress={handleVerify}
+            loading={submitting}
+            disabled={resending}
+          />
+          <AuthButton
+            title="Change Phone Number"
+            variant="quiet"
+            themed
+            onPress={goBack}
+            disabled={busy}
+            accessibilityHint="Go back and enter a different phone number"
+          />
+        </>
+      )}
+    </Animated.View>
+  );
+
+  return (
+    <AuthScaffold
+      title="Verify Phone"
+      titleVariant="large"
+      onBack={goBack}
+      backdrop="soft"
+      lift={authSpacing.xl}
+      footer={footer}
+      footerBelowLead={BELOW_LEAD}
+      themed
+    >
+      <Animated.View style={[styles.body, animatedStyle]}>
+        {mockVerified ? (
+          <MockComplete />
         ) : stale ? (
-          <StaleChallenge
-            message={error}
-            onRestart={() => leaveChallenge(() => navigation.goBack())}
-            onWelcome={() => leaveChallenge(() => navigation.popTo('Welcome'))}
-          />
+          <StaleChallenge message={error} />
         ) : (
           <>
             <Text style={[styles.eyebrow, { color: surface.accent }]}>VERIFY YOUR NUMBER</Text>
@@ -332,7 +372,9 @@ export function VerifyPhoneScreen() {
               </View>
             ) : null}
 
-            <View style={styles.otp}>
+            {/* The sign-in family's one lit card: the code cells, the one red
+                line of an error under them, and the resend control. */}
+            <Card style={styles.card}>
               <OtpInput
                 ref={otpRef}
                 value={code}
@@ -345,29 +387,13 @@ export function VerifyPhoneScreen() {
                 onSubmitEditing={handleVerify}
                 themed
               />
-            </View>
 
-            {/* Reserved by the layout rather than inserted on demand: an error
-                appearing must not shove the CTA out from under a thumb. */}
-            <View style={styles.messageSlot}>
               {error ? (
                 <Text style={styles.error} accessibilityLiveRegion="assertive">
                   {error}
                   <Announce message={error} />
                 </Text>
-              ) : notice ? (
-                <AuthNotice tone="info">{notice}</AuthNotice>
               ) : null}
-            </View>
-
-            <View style={styles.actions}>
-              <AuthButton
-                title="Verify and continue"
-                themed
-                onPress={handleVerify}
-                loading={submitting}
-                disabled={resending}
-              />
 
               <Pressable
                 onPress={handleResend}
@@ -392,16 +418,13 @@ export function VerifyPhoneScreen() {
                       : 'Resend code'}
                 </Text>
               </Pressable>
+            </Card>
 
-              <AuthButton
-                title="Change phone number"
-                variant="ghost"
-                themed
-                onPress={() => leaveChallenge(() => navigation.goBack())}
-                disabled={busy}
-                accessibilityHint="Go back and enter a different phone number"
-              />
-            </View>
+            {!error && notice ? (
+              <View style={styles.notice}>
+                <AuthNotice tone="info">{notice}</AuthNotice>
+              </View>
+            ) : null}
           </>
         )}
       </Animated.View>
@@ -412,17 +435,10 @@ export function VerifyPhoneScreen() {
 /**
  * What mock mode is allowed to claim. The flow was exercised; nobody was
  * authenticated. Saying so plainly is the whole point of the mode — the
- * alternative is a screen that looks like it signed someone in.
+ * alternative is a screen that looks like it signed someone in. Its two
+ * actions are the pinned footer's (above).
  */
-function MockComplete({
-  intent,
-  onContinue,
-  onWelcome,
-}: {
-  intent: 'sign-in' | 'sign-up';
-  onContinue: () => void;
-  onWelcome: () => void;
-}) {
+function MockComplete() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const surface = authSurface(colors, isDark);
@@ -436,29 +452,13 @@ function MockComplete({
         Phone verification flow passed in mock mode. Real app access still requires
         email sign in until SMS is activated.
       </Text>
-
-      <View style={styles.actions}>
-        <AuthButton
-          title={intent === 'sign-up' ? 'Continue with email sign up' : 'Continue with email sign in'}
-          themed
-          onPress={onContinue}
-        />
-        <AuthButton title="Back to welcome" variant="ghost" themed onPress={onWelcome} />
-      </View>
     </>
   );
 }
 
-/** The challenge is gone — a reload, a cancel, or a burned attempt limit. */
-function StaleChallenge({
-  message,
-  onRestart,
-  onWelcome,
-}: {
-  message: string | null;
-  onRestart: () => void;
-  onWelcome: () => void;
-}) {
+/** The challenge is gone — a reload, a cancel, or a burned attempt limit.
+ *  Its two actions are the pinned footer's (above). */
+function StaleChallenge({ message }: { message: string | null }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const surface = authSurface(colors, isDark);
@@ -471,51 +471,39 @@ function StaleChallenge({
       <Text style={styles.subtitle}>
         {message ?? 'Request a new code from your phone number to carry on.'}
       </Text>
-
-      <View style={styles.actions}>
-        <AuthButton title="Back to phone number" themed onPress={onRestart} />
-        <AuthButton title="Back to welcome" variant="ghost" themed onPress={onWelcome} />
-      </View>
     </>
   );
 }
 
+/** The footer under its lead: the 12 gap and the quiet second — what goes
+ *  under the keyboard when the main action lands on it. */
+const BELOW_LEAD = authSpacing.md + authSizes.button;
+
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
-  // alignItems:center is the reference's `.auth.center`; the children that
-  // must span the column set their own width:'100%'.
+  // The sign-in family's measure (screens/SignInScreen.tsx): the same top
+  // distance, eyebrow, serif headline, subtitle and card rhythm; the bottom
+  // padding is the least air above the pinned footer on a short phone.
   body: {
     flexGrow: 1,
-    alignItems: 'center',
-    paddingTop: authSpacing.xl,
-    paddingBottom: authSpacing.xl,
-  },
-  // .verify-icon — 66pt mint tile, 23pt radius.
-  icon: {
-    width: 66,
-    height: 66,
-    borderRadius: 23,
-    backgroundColor: colors.mint,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: authSpacing.md,
+    paddingTop: authSpacing.sm,
+    paddingBottom: authSpacing.xxl,
   },
   // Colour comes from surface.accent at render — emerald in light, gold in dark.
   eyebrow: {
-    ...authType.eyebrow,
-    textAlign: 'center',
+    ...authType.heroEyebrow,
+    marginTop: authSpacing.xl,
   },
   title: {
-    ...authType.title,
+    ...authType.heroTitle,
+    fontFamily: fonts.display,
     color: colors.ink,
     marginTop: authSpacing.sm,
-    textAlign: 'center',
   },
   subtitle: {
     ...authType.body,
     color: colors.textMuted,
     marginTop: authSpacing.sm,
-    textAlign: 'center',
   },
   devBanner: {
     width: '100%',
@@ -537,34 +525,23 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     ...authType.note,
     color: colors.eyebrowGold,
   },
-  otp: {
-    width: '100%',
+  card: {
     marginTop: authSpacing.xl,
-  },
-  // A fixed floor, so the block between the cells and the CTA doesn't change
-  // height when a one-line error appears.
-  messageSlot: {
-    width: '100%',
-    minHeight: 44,
-    justifyContent: 'center',
-    marginTop: authSpacing.md,
+    gap: authSpacing.md,
   },
   error: {
     ...authType.note,
     color: colors.danger,
-    textAlign: 'center',
   },
-  // marginTop:'auto' — spare height on a tall phone falls between the copy and
-  // the CTA rather than under it.
-  actions: {
-    width: '100%',
-    marginTop: 'auto',
-    paddingTop: authSpacing.lg,
+  notice: {
+    marginTop: authSpacing.lg,
+  },
+  footer: {
     gap: authSpacing.md,
   },
   resend: {
     minHeight: 44,
-    alignItems: 'center',
+    alignSelf: 'flex-start',
     justifyContent: 'center',
   },
   // Available: the reference's danger token, not the emerald used for every

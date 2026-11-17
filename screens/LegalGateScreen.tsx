@@ -276,8 +276,7 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
     const ok = await confirmAsync({
       title: 'Sign out?',
       message: 'You need to accept these before you can use Brazos.',
-      confirmText: 'Sign out',
-      cancelText: 'Back',
+      confirmText: 'Sign Out',
       destructive: true,
     });
     if (ok) await logout();
@@ -400,9 +399,12 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
             </Text>
           ) : null}
 
+          {/* The family's main action (screens/SetupScreen.tsx's Finish Setup): the
+              mint with its glow in dark, the forest in light, the same muted
+              well while it waits. */}
           <AuthButton
-            accent
-            title={bothSeen || !reviewTarget ? 'Agree and continue' : `Review ${reviewTarget.title}`}
+            themed
+            title={bothSeen || !reviewTarget ? 'Agree and Continue' : `Review ${reviewTarget.title}`}
             weight="semibold"
             onPress={
               bothSeen || !reviewTarget ? handleContinue : () => switchTab(reviewTarget.key)
@@ -667,19 +669,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 11,
     color: colors.textSubtle,
   },
+  // The reader's own foot: a band inside the card's rim, its lower corners
+  // the card's, so no half-cut line of the document shows under the hint.
   guidance: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: authSpacing.md,
+    left: 1,
+    right: 1,
+    bottom: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'center',
     justifyContent: 'center',
     gap: 4,
     paddingHorizontal: authSpacing.md,
-    paddingVertical: 6,
-    borderRadius: authRadius.chip,
+    paddingVertical: authSpacing.sm + 2,
+    borderBottomLeftRadius: authRadius.card,
+    borderBottomRightRadius: authRadius.card,
     backgroundColor: colors.mint,
   },
   guidanceText: {

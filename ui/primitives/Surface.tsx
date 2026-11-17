@@ -1,4 +1,4 @@
-import { useEffect, useState, type PropsWithChildren } from 'react';
+import { useSyncExternalStore, type PropsWithChildren } from 'react';
 import {
   AccessibilityInfo,
   StyleSheet,
@@ -111,26 +111,35 @@ export const SURFACE_GLOW_ALPHA = 0.55;
 /**
  * Whether the person has asked iOS for Reduce Transparency — subscribed, so a
  * change in Settings reaches every mounted Surface without a relaunch.
+ *
+ * A2-M1: ONE query and ONE listener for the whole app, made by the first
+ * Surface that mounts and kept for the app's life, shared through
+ * useSyncExternalStore. It was one of each per mounted Surface, so a list of
+ * cards paid a native round trip and a listener per row.
  */
+let reduceTransparency = false;
+let reduceTransparencyStarted = false;
+const reduceTransparencyReaders = new Set<() => void>();
+
+function setReduceTransparency(enabled: boolean): void {
+  reduceTransparency = enabled === true;
+  reduceTransparencyReaders.forEach((notify) => notify());
+}
+
+function subscribeReduceTransparency(notify: () => void): () => void {
+  reduceTransparencyReaders.add(notify);
+  if (!reduceTransparencyStarted) {
+    reduceTransparencyStarted = true;
+    void AccessibilityInfo.isReduceTransparencyEnabled().then(setReduceTransparency).catch(() => {});
+    AccessibilityInfo.addEventListener('reduceTransparencyChanged', setReduceTransparency);
+  }
+  return () => {
+    reduceTransparencyReaders.delete(notify);
+  };
+}
+
 function useReduceTransparency(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    void AccessibilityInfo.isReduceTransparencyEnabled()
-      .then((enabled) => {
-        if (alive) setReduced(enabled === true);
-      })
-      .catch(() => {});
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceTransparencyChanged',
-      (enabled) => setReduced(enabled === true),
-    );
-    return () => {
-      alive = false;
-      subscription.remove();
-    };
-  }, []);
-  return reduced;
+  return useSyncExternalStore(subscribeReduceTransparency, () => reduceTransparency);
 }
 
 export function Surface({
