@@ -1,6 +1,6 @@
 appId: app.brazos.mobile.preview
 # F2 customer home and post a job (account A): Home bell/avatar/tiles/All services, the four-step wizard twice, Save draft + resume; F3 Edit job.
-# Proves A publishes the main job (set price $50, needed today, exact address) and the side job (open bids up to $50) the later flows use.
+# Proves A publishes the main job (set price $50, flexible day and window, exact address) and the side job (open bids up to $50) the later flows use.
 ---
 - launchApp:
     clearState: true
@@ -149,20 +149,25 @@ appId: app.brazos.mobile.preview
 - inputText: "2017 Emmons Ave, Brooklyn, NY 11235"
 - tapOn: "STEP 3 OF 4"
 - runFlow: subflows/keyboard-settle.yml
+# Flexible day and window: an undated job is never "over" (post_window) and its trip and start never wait
+# for a day (trip_day), so the run passes at any hour, across New York's midnight too. Both rows have a
+# "Flexible": the day's sits above the "Arrival window" label, the window's below it.
 - scrollUntilVisible:
     element:
-      text: "Today"
+      text: "Evening.*"
     direction: DOWN
     timeout: 60000
-- tapOn: "Today"
-- scrollUntilVisible:
-    element:
-      text: "Morning.*"
-    direction: DOWN
-    timeout: 60000
-- tapOn: "Morning.*"
+# Both taps are optional: Flexible is the wizard's default for a fresh post, so a tap that finds no chip changes nothing.
+- tapOn:
+    text: "Flexible"
+    above: "Arrival window"
+    optional: true
+- tapOn:
+    text: "Flexible"
+    below: "Arrival window"
+    optional: true
 - tapOn: "Continue to Review"
-# Review: set a price from the presets, needed today, repeat left Off.
+# Review: set a price from the presets, repeat left Off. "Need it today" stays off: it dates the job today.
 - extendedWaitUntil:
     visible: "STEP 4 OF 4"
     timeout: 30000
@@ -175,12 +180,6 @@ appId: app.brazos.mobile.preview
 - tapOn: "Edit budget"
 - tapOn: '\$50'
 - assertVisible: "Workers can request the job at this price. You still choose who gets it."
-- scrollUntilVisible:
-    element:
-      text: "Need it today"
-    direction: DOWN
-    timeout: 60000
-- tapOn: "Need it today"
 - scrollUntilVisible:
     element:
       text: "Repeat this job"
@@ -260,16 +259,10 @@ appId: app.brazos.mobile.preview
     env:
       TAP: '.*Not published yet.*'
       NEXT: "STEP 4 OF 4"
-# The draft reopens on the step it was saved at; "Need it today" is not part of a draft.
+# The draft reopens on the step it was saved at; the side job keeps the Flexible day and window.
 - extendedWaitUntil:
     visible: "STEP 4 OF 4"
     timeout: 30000
-- scrollUntilVisible:
-    element:
-      text: "Need it today"
-    direction: DOWN
-    timeout: 60000
-- tapOn: "Need it today"
 - scrollUntilVisible:
     element:
       text: "Edit budget"
