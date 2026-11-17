@@ -71,7 +71,7 @@ export function PostJobBar({
   return (
     <View style={[styles.bar, { paddingBottom: foot }]}>
       {secondary ? (
-        <View style={styles.share}>
+        <View style={styles.slot}>
           <Button
             title={secondary.label}
             onPress={secondary.onPress}
@@ -84,7 +84,7 @@ export function PostJobBar({
           />
         </View>
       ) : null}
-      <View ref={primaryRef} collapsable={false} style={styles.share}>
+      <View ref={primaryRef} collapsable={false} style={styles.slot}>
         <Button
           title={primary.label}
           onPress={primary.onPress}
@@ -110,8 +110,19 @@ const stylesFor = metricStyles(() =>
       // The floating foot's breathing room under the scroller's end (ui/primitives/FloatingAction).
       paddingTop: spacing.sm,
     },
-    // One plain slot each, so the pair is one width whatever its labels; the Button fills its slot,
-    // so the pair is one height too.
+    // One slot each in the bar's row, so the pair is one width whatever its labels. A slot is itself a
+    // ROW with one button's height as its floor: the Button's `flex: 1` is then a share of a row (the
+    // Button's own contract), and the slot can never measure 0 tall. As a plain column box of automatic
+    // height it did on the iPhone: while the layout engine measures such a box, a `flex: 1` child counts
+    // with its basis 0, not with its minHeight (the web gives the box its content's height). The bar came
+    // out 32 tall in place of 84, and the button hung below it, mostly under the screen's edge
+    // (2026-11-17, robot phone run 6, the edit form's "Save Changes").
+    slot: {
+      flex: 1,
+      flexDirection: 'row',
+      minHeight: POST_BAR_BUTTON,
+    },
+    // The Button fills its slot (both slots stretch to the bar's height), so the pair is one height too.
     share: {
       flex: 1,
     },

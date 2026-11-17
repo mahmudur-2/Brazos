@@ -302,6 +302,26 @@ test('every tab-contained scroll surface clears the floating pill', async () => 
   assert.match(shared, /return Math\.max\(0, keyboardHeight - insetBelow\);/);
 });
 
+test('the posting bar: each slot is a ROW with a floor, so the bar never measures 0 tall on the iPhone', async () => {
+  // 2026-11-17, robot phone run 6 (two plain pictures of the edit form's last step): the bar came out
+  // 32 tall in place of 84, and "Save Changes" hung below it, mostly under the screen's edge. Each slot
+  // was a plain column box of automatic height around a Button with `flex: 1`. While the iPhone's
+  // layout engine measures such a box, the `flex: 1` child counts with its basis 0 (its minHeight is
+  // not counted), so the slot measured 0 tall. The web gives such a slot its content's height, which is
+  // why no browser picture showed it. The rule now: a slot is a ROW (the Button's `flex: 1` is then a
+  // share of a row, the Button's own contract) and it carries the button's height as its own floor.
+  const bar = (await read('components/PostJobBar.tsx')).replace(/\s+/g, ' ');
+  const slot = / slot: \{([^}]*)\}/.exec(bar);
+  assert.ok(slot, 'the posting bar keeps a flat slot style');
+  assert.match(slot[1], /flex: 1,/, 'one share of the bar each');
+  assert.match(slot[1], /flexDirection: 'row',/, "a ROW, so the Button's flex is a share of a row");
+  assert.match(slot[1], /minHeight: POST_BAR_BUTTON,/, 'and never under one button tall');
+  assert.match(bar, /\{secondary \? \( <View style=\{styles\.slot\}> <Button title=\{secondary\.label\}/, 'the quiet button stands in a slot');
+  assert.match(bar, /<View ref=\{primaryRef\} collapsable=\{false\} style=\{styles\.slot\}> <Button title=\{primary\.label\}/, 'the commitment stands in a slot');
+  assert.doesNotMatch(bar, /<View[^>]*style=\{styles\.share\}/, "no box of automatic height carries the Button's share style");
+  assert.equal((bar.match(/style=\{\[styles\.share, /g) || []).length, 2, 'each Button keeps its share of its slot');
+});
+
 test('a PINNED footer takes its own padding, never the scroll clearance', async () => {
   // home(7)'s rule, redone 2026-09-30: a pinned footer sits at the foot of a full-height scene now
   // the pill floats, so it lifts its controls over the pill and keeps its own breathing room above
