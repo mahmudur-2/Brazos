@@ -740,8 +740,12 @@ comment on function public.active_guard_problem(oid) is
 
 -- 6a. Every column of the guarded functions' pg_proc rows except the body, copied aside before they
 --     are re-created; the proof (8) compares them.
+--     The body is copied with carriage returns removed, and the proof (8a) reads the new body the
+--     same way: a body that an early push from a Windows work tree left on a hosted project still has
+--     CRLF line ends there (the schema proof, scripts/verify-schema.mjs, removes CR for this reason).
 create temp table active_account_rule_before on commit drop as
-select p.oid as fn, p.oid::regprocedure::text as sig, public.function_shape(p.oid) as shape, p.prosrc as src
+select p.oid as fn, p.oid::regprocedure::text as sig, public.function_shape(p.oid) as shape,
+       replace(p.prosrc, E'\r', '') as src
 from pg_catalog.pg_proc p
 where p.oid = any (array[
   'public.admin_open_reports_v2()',
@@ -3904,10 +3908,10 @@ begin
   left join pg_catalog.pg_proc p on p.oid = b.fn
   where p.oid is null
      or public.function_shape(p.oid) is distinct from b.shape
-     or length(p.prosrc) - length(b.src)
+     or length(replace(p.prosrc, E'\r', '')) - length(b.src)
         <> length(case (b.shape ->> 'language') when 'sql' then E'\nselect public.require_active_caller();'
                                                  else E'\n  perform public.require_active_caller();' end)
-     or replace(p.prosrc,
+     or replace(replace(p.prosrc, E'\r', ''),
                 case (b.shape ->> 'language') when 'sql' then E'\nselect public.require_active_caller();'
                                                else E'\n  perform public.require_active_caller();' end,
                 '') is distinct from b.src;
