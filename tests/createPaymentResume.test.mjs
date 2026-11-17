@@ -56,6 +56,7 @@ async function run({ payment = PAYMENT, body = { jobId: 'job-1' }, stored } = {}
     calls.push(call);
     const at = call.url;
     if (at === `${ENV.SUPABASE_URL}/rest/v1/rpc/begin_job_payment`) return Response.json(payment);
+    if (at === `${ENV.SUPABASE_URL}/rest/v1/rpc/begin_tip_payment`) return Response.json(payment);
     if (at === `${ENV.SUPABASE_URL}/rest/v1/rpc/get_payment_customer`) return Response.json('cus_test');
     if (at === `${ENV.SUPABASE_URL}/rest/v1/rpc/attach_provider_ref`) return Response.json(null);
     if (at === `${STRIPE}/v1/ephemeral_keys`) return Response.json({ secret: 'ek_test' });
@@ -169,9 +170,10 @@ test('A2 · Confirm with a saved card mints no ephemeral key (only the sheet use
 // Pinned as it is. A terminal branch in the saved-card path's shape ({ paymentId, confirmed }) would
 // be refused by the app's validateCheckoutResponse with "Nothing was charged", a wrong sentence for a
 // succeeded intent, so none is built: open.
-test('A2 (pinned, open) · a stored intent that succeeded, needs the bank, or was cancelled: the sheet path hands back its secret as it is', async () => {
+// P-1 took the settled states out of this pin (the tests below); the challenged and cancelled stay open.
+test('A2 (pinned, open) · a stored intent that needs the bank, or was cancelled: the sheet path hands back its secret as it is', async () => {
   const payment = { ...PAYMENT, provider_ref: 'pi_stored' };
-  for (const status of ['succeeded', 'requires_action', 'canceled']) {
+  for (const status of ['requires_action', 'canceled']) {
     const r = await run({ payment, stored: { id: 'pi_stored', client_secret: 'pi_stored_secret', status } });
     assert.equal(r.status, 200, `${status}: 200`);
     assert.deepEqual(r.json, { paymentId: 'pay-1', customerId: 'cus_test', clientSecret: 'pi_stored_secret', ephemeralKeySecret: 'ek_test' },
@@ -182,4 +184,57 @@ test('A2 (pinned, open) · a stored intent that succeeded, needs the bank, or wa
     assert.equal(r.calls.filter((c) => c.url === `${STRIPE}/v1/payment_intents/pi_stored` && c.method === 'POST').length, 0,
       `${status}: no update without saveCard`);
   }
+});
+
+// P-1: a resumed intent the provider already settled (the sheet lost its answer, the webhook is late)
+// is never written again. Before, the job sheet's setup_future_usage update was refused by the
+// provider for a settled intent and the customer read a 502 that said nothing was charged.
+const SETTLED = ['succeeded', 'processing', 'requires_capture'];
+const stripePosts = (calls) => calls.filter((c) => c.url.startsWith(STRIPE) && c.method === 'POST');
+
+test('P-1 · sheet path, a stored intent already settled: { paymentId, confirmed: true }, and no write reaches the provider', async () => {
+  const payment = { ...PAYMENT, provider_ref: 'pi_stored' };
+  for (const status of SETTLED) {
+    for (const body of [{ jobId: 'job-1', saveCard: true }, { jobId: 'job-1', saveCard: false }, { jobId: 'job-1' }]) {
+      const label = `${status}, saveCard ${String(body.saveCard)}`;
+      const r = await run({ payment, body, stored: { id: 'pi_stored', client_secret: 'pi_stored_secret', status } });
+      assert.equal(r.status, 200, `${label}: 200`);
+      assert.deepEqual(r.json, { paymentId: 'pay-1', confirmed: true }, `${label}: the saved-card path's answer`);
+      assert.equal(stripePosts(r.calls).length, 0, `${label}: no POST to the provider at all`);
+      assert.equal(reads(r.calls, 'pi_stored').length, 1, `${label}: the one read of the stored intent`);
+      assert.equal(attaches(r.calls).length, 0, `${label}: nothing attached`);
+    }
+  }
+});
+
+test('P-1 · saved-card path, a stored intent already settled: the same answer, nothing confirmed or written', async () => {
+  const payment = { ...PAYMENT, provider_ref: 'pi_stored' };
+  const body = { jobId: 'job-1', useSavedCard: true, paymentMethodId: 'pm_saved' };
+  for (const status of SETTLED) {
+    const r = await run({ payment, body, stored: { id: 'pi_stored', client_secret: 'pi_stored_secret', status } });
+    assert.equal(r.status, 200, `${status}: 200`);
+    assert.deepEqual(r.json, { paymentId: 'pay-1', confirmed: true }, `${status}: confirmed`);
+    assert.equal(stripePosts(r.calls).length, 0, `${status}: no POST to the provider at all`);
+    assert.equal(reads(r.calls, 'pi_stored').length, 1, `${status}: answered from the first read, not a second one`);
+  }
+});
+
+test('P-1 (control) · sheet path, a stored intent still payable: the opt-in is sent and the sheet gets its four fields', async () => {
+  const payment = { ...PAYMENT, provider_ref: 'pi_stored' };
+  const r = await run({ payment, body: { jobId: 'job-1', saveCard: true }, stored: { id: 'pi_stored', client_secret: 'pi_stored_secret', status: 'requires_payment_method' } });
+  assert.equal(r.status, 200);
+  const updates = r.calls.filter((c) => c.url === `${STRIPE}/v1/payment_intents/pi_stored` && c.method === 'POST');
+  assert.equal(updates.length, 1, 'one update of the stored intent');
+  assert.equal(new URLSearchParams(updates[0].body).get('setup_future_usage'), 'off_session');
+  assert.deepEqual(r.json, { paymentId: 'pay-1', customerId: 'cus_test', clientSecret: 'pi_stored_secret', ephemeralKeySecret: 'ek_test' });
+});
+
+test('P-1 (control) · a TIP resume whose stored intent succeeded: unchanged, the sheet gets its four fields', async () => {
+  const payment = { ...PAYMENT, provider_ref: 'pi_stored' };
+  const r = await run({ payment, body: { jobId: 'job-1', tipAmountCents: 500 }, stored: { id: 'pi_stored', client_secret: 'pi_stored_secret', status: 'succeeded' } });
+  assert.equal(r.status, 200);
+  assert.ok(r.calls.some((c) => c.url.endsWith('/rest/v1/rpc/begin_tip_payment')), 'the tip row');
+  assert.deepEqual(r.json, { paymentId: 'pay-1', customerId: 'cus_test', clientSecret: 'pi_stored_secret', ephemeralKeySecret: 'ek_test' });
+  assert.deepEqual(r.calls.filter((c) => c.url.startsWith(STRIPE)).map((c) => `${c.method} ${c.url.slice(STRIPE.length)}`),
+    ['GET /v1/payment_intents/pi_stored', 'POST /v1/ephemeral_keys'], 'the same provider calls as before P-1');
 });

@@ -321,6 +321,13 @@ Deno.serve(async (req) => {
       console.error(`create-payment: intent ${intent.status}: ${JSON.stringify(intent.body).slice(0, 300)}`);
       return json({ error: 'The payment provider is unavailable right now.' }, 502);
     }
+    // P-1: a resumed job payment whose intent the provider already settled (a lost sheet answer, a late
+    // webhook) is never written again; both paths get the saved-card path's answer and the webhook marks
+    // the row held. A tip is left out: the app's tip path does not read this answer.
+    const resumedStatus = storedRef && tipAmountCents == null ? intent.body.status : undefined;
+    if (resumedStatus === 'succeeded' || resumedStatus === 'processing' || resumedStatus === 'requires_capture') {
+      return json({ paymentId, confirmed: true });
+    }
 
     // --- 4. Record a new intent on the ledger row ----------------------------
     // attach_provider_ref only writes where provider_ref is still null, so a

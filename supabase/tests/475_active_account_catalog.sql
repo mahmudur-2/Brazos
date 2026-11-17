@@ -304,11 +304,14 @@ select is(
      from unnest(array['public.require_active_caller()', 'public.function_shape(oid)', 'public.active_guard_problem(oid)',
                        'public.function_fingerprint(regprocedure)',
                        'public.caller_is_trusted_active()', 'public.cancel_job_core(uuid,text,uuid)',
-                       'public.settle_offers_of_suspended(uuid)', 'public.notify_admins(text,text,text,jsonb,text)']) f
+                       'public.settle_offers_of_suspended(uuid)', 'public.notify_admins(text,text,text,jsonb,text)',
+                       'public.record_job_work_start()', 'public.admin_attention_lines()',
+                       'public.admin_issue_options(uuid,uuid)', 'public.notify_attention_admins()',
+                       'public.install_admin_attention_schedule()', 'public.refuse_admin_decision_change()']) f
      cross join unnest(array['anon', 'authenticated']) r
     where to_regprocedure(f) is null or has_function_privilege(r, to_regprocedure(f), 'execute')),
   null,
-  '5a: no client may call the guard, the catalog helpers, the trust helper, the cancel core, the offer settler or notify_admins'
+  '5a: no client may call the guard, the catalog helpers, the trust helper, the cancel core, the offer settler, notify_admins, or O1''s recorder, list helpers, notice timer, installer and record guard'
 );
 
 -- The functions the money list and the lifecycle lane made new (attention_plain, release_clock,
@@ -343,7 +346,8 @@ select is(
 
 -- ---------------------------------------------------------------------------
 -- 6. A8-06: every function the access lane writes on purpose (ban_switch, ban_hides_content,
---    report_push, active_account_rule, account_deletion_process), pinned by function_fingerprint()
+--    report_push, active_account_rule, account_deletion_process, job_work_starts, admin_attention),
+--    pinned by function_fingerprint()
 --    (ban_switch 0b): body, settings and shape (arguments with their defaults, result, language,
 --    kind, security, leakproof, strict, set-returning, volatility, parallel), read from the catalog,
 --    so the same on every session and server (6c, 6d, 6e). The 45 guard-only functions are proven by
@@ -386,7 +390,20 @@ insert into access_pins values
   ('public.delete_my_account()',                                            '6b2f3f2edf774b58a360230e77721262'),
   ('public.claim_account_cleanups(integer)',                                '38c19cbd9e08d261f9634b28101e0ab8'),
   ('public.record_account_cleanup(uuid,boolean,text)',                      'd50d86621a0ecfb4f36cd339b921aa68'),
-  ('public.set_payment_customer(uuid,text)',                                '016debb8b327dbd955633cb2695c635a');
+  ('public.set_payment_customer(uuid,text)',                                '016debb8b327dbd955633cb2695c635a'),
+  -- O1 (job_work_starts, admin_attention): the recorder, the list, the decision and the notice timer.
+  ('public.record_job_work_start()',                                        'f0f18115bbad15b8592396b962d8038c'),
+  ('public.admin_attention_lines()',                                        '0056ed15b5338e5ba70bd48978030b5e'),
+  ('public.admin_issue_options(uuid,uuid)',                                 '9cb81252e7d2cf0e67753d753a7cb696'),
+  ('public.admin_attention()',                                              'e2f74c9383eb46e3376431320eed1a17'),
+  ('public.admin_decide_issue(uuid,text)',                                  '7f5fa48481d00a380426ed2ef381a97d'),
+  ('public.notify_attention_admins()',                                      '6468d643eb6777a0951de47589ae4171'),
+  ('public.install_admin_attention_schedule()',                             'ed9b8d5a3175ada46c79f1859fb80842'),
+  ('public.refuse_admin_decision_change()',                                 'fff2268ca62a2c4cea9b310a97c0da54'),
+  -- O1 (admin_attention) restates the money list's code map with five lines changed
+  -- (job_closed_money_held, transfer_reversed; O1-G: tip_payee_gone, refund_failed,
+  -- refund_failed_several), pinned here from that file on.
+  ('public.payment_attention_codes()',                                      '81c2e22374c1a04789f9fac517c4010d');
 
 create function pg_temp.access_pins_broken() returns text language sql as $f$
   select string_agg(a.sig || ' found=' || coalesce(public.function_fingerprint(to_regprocedure(a.sig)), 'none'),
@@ -398,8 +415,8 @@ $f$;
 
 select is(
   (select count(*) || ' pinned; broken: ' || coalesce(pg_temp.access_pins_broken(), 'none') from access_pins),
-  '35 pinned; broken: none',
-  '6a: A8-06: each of the 35 functions the access lane writes on purpose (the fingerprint helper included) has the definition (body, settings, shape) it was reviewed with'
+  '44 pinned; broken: none',
+  '6a: A8-06: each of the 44 functions the access lane writes on purpose (the fingerprint helper included; O1''s eight and the code map O1 restates) has the definition (body, settings, shape) it was reviewed with'
 );
 
 -- The red control: one setting added to begin_tip_payment, its body untouched, is named.

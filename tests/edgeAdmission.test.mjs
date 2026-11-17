@@ -19,6 +19,7 @@ const AUTH_IMPORT =
   /^import \{ notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser \} from '\.\.\/_shared\/serviceAuth\.ts';$/m;
 const ADMIT_IMPORT = /^import \{ refuseUnadmitted \} from '\.\.\/_shared\/rateLimit\.ts';$/m;
 const LOCAL_IMPORT = /^(import \{[^}]+\} from )'\.\/([a-z]+\.mjs)';$/m;
+const SHARED_MJS_IMPORT = /^(import \{[^}]+\} from )'\.\.\/_shared\/([A-Za-z]+\.mjs)';$/m;
 
 const admission = await import(toModule(stripTypeScriptTypes(read('supabase/functions/_shared/rateLimit.ts'), { mode: 'strip' })));
 const { ACCOUNT_SUSPENDED, ACCOUNT_INACTIVE, ACCOUNT_UNCHECKED } = admission;
@@ -52,6 +53,8 @@ async function loadOnce(fn) {
     .replace(ADMIT_IMPORT, 'const { refuseUnadmitted } = globalThis.__admitStubs;');
   // A function's own helper module (account.mjs, classify.mjs) is imported from its real file.
   js = js.replace(LOCAL_IMPORT, (_, head, name) => `${head}'${pathToFileURL(join(root, 'supabase/functions', fn, name)).href}';`);
+  // A shared plain-JavaScript module (stripeCustomer.mjs, A4-02) too.
+  js = js.replace(SHARED_MJS_IMPORT, (_, head, name) => `${head}'${pathToFileURL(join(root, 'supabase/functions/_shared', name)).href}';`);
   let handler = null;
   globalThis.Deno = { env: { get: (name) => ENV[name] }, serve: (h) => { handler = h; } };
   await import(toModule(stripTypeScriptTypes(js, { mode: 'strip' })));

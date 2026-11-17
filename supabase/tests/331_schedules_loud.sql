@@ -134,8 +134,8 @@ begin
   end;
 end $f$;
 select is(tests.b7_skip_outcome(),
-  'P0001: install_schedules: install_lifecycle_schedules() returned "skipped: pg_cron absent"',
-  'B7 alarm: an installer that skips makes install_schedules() raise, naming it — never a quiet notice');
+  'P0001: install_schedules: install_admin_attention_schedule() returned "skipped: pg_cron absent"',
+  'B7 alarm: an installer that skips makes install_schedules() raise, naming it (the first by name: O1''s installer) — never a quiet notice');
 select ok(public.pg_function_present('cron', 'schedule'), 'B7: the real probe is back after the fake was rolled back');
 
 -- ---------------------------------------------------------------------------

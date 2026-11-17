@@ -1,5 +1,6 @@
-// production-36h S1, M3: the account cleanup pass (supabase/functions/_shared/accountCleanup.ts, no
-// imports), executed under node against a stubbed fetch that plays PostgREST and Stripe. What must
+// production-36h S1, M3: the account cleanup pass (supabase/functions/_shared/accountCleanup.ts, one
+// import: the shared test of a deleted customer, stripeCustomer.mjs, loaded from its real file since
+// A4-02), executed under node against a stubbed fetch that plays PostgREST and Stripe. What must
 // stay true: a Stripe customer is gone for ever once deleted, so the pass deletes only the customer
 // its claimed row names, and it makes no other request: no file removal, nothing toward a payout
 // account, even when a claimed row carries more fields; the step is safe to repeat; an answer that
@@ -14,13 +15,16 @@ import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { join } from 'node:path';
 import test from 'node:test';
+import { pathToFileURL } from 'node:url';
 
 const root = join(import.meta.dirname, '..');
 const HELPER = 'supabase/functions/_shared/accountCleanup.ts';
 const source = readFileSync(join(root, HELPER), 'utf8').replace(/\r\n/g, '\n');
+const SHARED_IMPORT = "\nimport { isDeletedCustomer } from './stripeCustomer.mjs';\n";
+const sharedUrl = pathToFileURL(join(root, 'supabase/functions/_shared/stripeCustomer.mjs')).href;
 const { runAccountCleanups, ...others } = await import(
   'data:text/javascript;charset=utf-8;base64,' +
-    Buffer.from(stripTypeScriptTypes(source, { mode: 'strip' }), 'utf8').toString('base64')
+    Buffer.from(stripTypeScriptTypes(source.replace(SHARED_IMPORT, `\nimport { isDeletedCustomer } from '${sharedUrl}';\n`), { mode: 'strip' }), 'utf8').toString('base64')
 );
 
 const SUPABASE = 'https://proj.supabase.test';
@@ -85,10 +89,10 @@ async function run(w, mayStart = () => true, logs = []) {
 const keys = (calls) => calls.map((c) => c.key);
 const recorded = (calls) => calls.filter((c) => c.key === 'record').map((c) => c.body);
 
-test('one exported function, no imports', () => {
+test('one exported function, one import: the shared test of a deleted customer (A4-02)', () => {
   assert.equal(typeof runAccountCleanups, 'function');
   assert.deepEqual(Object.keys(others), []);
-  assert.doesNotMatch(source, /^\s*import\s/m);
+  assert.deepEqual(source.match(/^[ \t]*import\s.*$/gm), [SHARED_IMPORT.trim()]);
   assert.equal(source.match(/^export /gm).length, 1);
 });
 

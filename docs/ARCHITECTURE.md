@@ -259,7 +259,9 @@ unfunded --payment_intent.succeeded--> held --release--> held + release_requeste
 never a WebView): `connect-onboarding`, `connect-return`, `connect-status` (records
 `payouts_status`). `payouts_enabled` is not identity verification: no copy may claim "ID-verified
 workers" from it. **Saved cards** live on the Stripe customer
-(`payment_accounts.stripe_customer_id`); `payment-methods` lists, adds and removes them. Hiring
+(`payment_accounts.stripe_customer_id`); `payment-methods` lists, adds and removes them. When the
+list fails and a read of the stored customer says Stripe deleted it, the list is empty (A4-02), so
+the account can still be deleted in the app; every other failure of the list stays an error. Hiring
 from a push opens an in-app confirm ("Accept & pay"), never pays silently, and a declined saved
 card alerts in-app and pushes a Checkout link. **Tips** are a second `payments` row
 (`kind = tip`, `begin_tip_payment()`), opened after release. A charged tip takes the job payment's
@@ -275,8 +277,14 @@ and mints a new one, through the ceiling trigger), and a tip is queued only when
 A reported issue is a `job_disputes` row, opened from `ApproveOrDispute` (customer) or by a worker
 no-show claim. While one is open the payment stays held and `transfers_due` excludes the job. The
 app promises: "Brazos will look at it and reply by email within 2 business days." The clock starts
-at `job_disputes.created_at`. There is no admin UI for resolution: the operator resolves by hand.
-`resolve_job_dispute()` is service_role only; the app never calls it. A cancelled job is terminal;
+at `job_disputes.created_at`. `resolve_job_dispute()` is service_role only; the app never calls it.
+An active admin decides an issue between two people with `admin_decide_issue(job, side)`
+(`20261116420000_admin_attention.sql`): a security definer wrapper, guard first, active admins only,
+never on the admin's own job, only a side that a line of `admin_attention()` offers now; it calls
+`resolve_job_dispute()` with a note that names no one and writes one insert-only `admin_decisions`
+row. The same path refunds the customer of a cancelled job whose held payment is directed nowhere.
+The app never pays the worker of such a job (the owner's decision: refund only); paying that worker
+is the developer's. Everything else is the operator's runbook below. A cancelled job is terminal;
 a no-show claim moves no money until it is resolved or withdrawn (withdrawal refunds by trigger).
 
 ### Operator runbook
@@ -432,6 +440,18 @@ when a timer skips or is missing, `schedule_health()` names missing timers and a
 and `set_drain_secrets()` writes the Vault secrets the drains read. `drain_probe()` makes one real
 call to each drain and `drain_probe_status()` shows its HTTP status.
 
+The owner's list in the app (`20261116420000_admin_attention.sql`): `admin_attention()` gives an
+active admin every line of `payment_attention` and `account_cleanup_attention` (one row per key; the
+key never holds a Stripe id). `decisions` lists the sides `admin_decide_issue()` accepts now, only on
+issue lines and on a cancelled job's held payment, never on the admin's own job; names, the issue's
+words, the sign-in phone and email (`auth.users`; none for a deleted account) and the job's times
+come only on a line with a decision, and `decision_note` says why a side is not offered. pg_cron
+runs `notify_attention_admins()` every 10 minutes (`brazos-admin-attention`): each line whose finish
+is app, stripe or developer is told to every active admin once per episode (new, or back after it
+left; never twice within 24 hours), the 5 oldest owed lines each with a notice of type
+`admin_attention` and the rest in one summary. A notice holds the line's plain sentence and its key,
+never a contact, a name, an amount or a Stripe id; `admin_attention_seen` holds keys and times only.
+
 ## Account deletion
 
 `delete_my_account()` is the only path. delete_my_account requires only a signed-in caller, so a
@@ -452,9 +472,10 @@ After the auth row goes, one `account_cleanups` row records the person's Stripe 
 settlements run deletes it at Stripe. The speed: at most one row a run (every 5 minutes), and only
 in a quiet run, one whose money passes end within its first 10 seconds; while the money passes use
 the run, none. A row whose customer step is still open after 1 hour gets a line on
-`account_cleanup_attention`. Only the service role can read that view (no client role, no admin in
-the app), and it is not part of `payment_attention`: the owner's payment list does not show it and
-nothing pushes it.
+`account_cleanup_attention`. No client role can read that view, and it is not part of
+`payment_attention`. Since `20261116420000_admin_attention.sql` an active admin reads its lines in
+the app through `admin_attention()`, and the notice timer pushes them (finish stripe; see
+Notifications).
 
 Check after a change: delete a throwaway staging account that has an open posting; expect the auth
 row gone, the tombstone present, `phone` null, the posting `cancelled`, a completed job untouched.
@@ -503,6 +524,8 @@ bios, services, offers, reviews and messages.
 | `banned_phones`, `blocked_terms` | ban list; content-filter list | `ban_user()`; operator | service_role |
 | `legal_acceptances` | Terms and Privacy acceptance | owner | owner |
 | `rate_counters` | per account and action, the current window and its hits | `rate_limit_take()` | nobody (no grant) |
+| `job_work_starts` | when the work on a job started; kept after a cancel | trigger on `jobs` | service_role |
+| `admin_decisions`, `admin_attention_seen` | each decision made in the app (insert only); the notice timer's memory | `admin_decide_issue()`; `notify_attention_admins()` | service_role |
 
 Plus views `conversations`, `transfers_due`, `refunds_due`, `transfers_ready`, `refunds_ready`,
 `payment_money` and `payment_attention` (service_role), `account_cleanup_attention` (service_role;
@@ -514,7 +537,9 @@ pipeline's list-after step is.
 ## Edge functions (9)
 
 House style: plain `fetch` to PostgREST and Stripe, no `supabase-js`, no import map, no
-shared module beyond `_shared/serviceAuth.ts` and `_shared/rateLimit.ts` (below), no function
+shared module beyond `_shared/serviceAuth.ts` and `_shared/rateLimit.ts` (below),
+`_shared/accountCleanup.ts` (the settlement run's cleanup pass) and `_shared/stripeCustomer.mjs`
+(the one test that Stripe deleted a customer, shared by that pass and `payment-methods`), no function
 computes a monetary amount (every cent sent to Stripe is read verbatim from a `payments` column). The other imports:
 a function's own sibling `.mjs` file of pure logic, because a Node test runs it (`stripe-webhook/verify.mjs`,
 `process-settlements/classify.mjs`, `connect-status/classify.mjs`, `connect-return/page.mjs`,

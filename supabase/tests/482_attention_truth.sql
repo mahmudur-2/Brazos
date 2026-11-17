@@ -4,7 +4,7 @@
 -- as code/ref/amount/finish, the sentence where it was the wrong part, and the money columns where a
 -- finish is run.
 --
---   T1  a tip for a deleted worker, payouts off: tip_payee_gone, refunded in the app (resolve_tip).
+--   T1  a tip for a deleted worker, payouts off: tip_payee_gone, refunded by the developer (resolve_tip, service_role only).
 --   T2  a tip for a deleted worker, payouts on: no line, the tip is sent (finding 1, the owner's call).
 --   T3  a failed refund, then a refund by hand that went through: the line never asks to pay again,
 --       and resolve_refund_failure records "nothing more owed" without moving money (A4-03).
@@ -203,11 +203,11 @@ end $$;
 -- ---------------------------------------------------------------------------
 select tests.at_tip_for_deleted('AT-T1 tip off', :'c1', :'w2', true) as t1 \gset
 select charge_amount_cents as t1c from public.payments where id = :'t1' \gset
-select is(tests.at_rows(:'t1'), 'held :: tip_payee_gone/' || :'t1' || '/500/app',
-  'T1a: payouts off: tip_payee_gone, decided in the app (was transfer_payee_gone for the developer)');
+select is(tests.at_rows(:'t1'), 'held :: tip_payee_gone/' || :'t1' || '/500/developer',
+  'T1a: payouts off: tip_payee_gone, for the developer (resolve_tip is service_role only; was transfer_payee_gone)');
 select is(tests.at_reason(:'t1', 'tip_payee_gone'),
-  'The worker''s account was suspended or deleted, so this tip cannot be sent. You can refund the tip to the customer here.',
-  'T1b: the sentence names the way that works');
+  'The worker''s account was suspended or deleted, so this tip cannot be sent. To refund the tip to the customer, ask your developer.',
+  'T1b: the sentence names the way that works, and who takes it');
 select is(tests.at_try(format('select (public.resolve_tip(%L, %L)).refund_cents::text', :'t1', 'refund')), 'ok: ' || :t1c,
   'T1c: resolve_tip refunds the whole tip charge');
 select is((select status::text || '/' || refund_cents || '/' || transfer_cents || '/' || refund_reason
@@ -234,10 +234,10 @@ select tests.at_refunded('evt_at_t3_ref1', :'t3', :t3c, 're_at_t3_app');
 select tests.at_failed('evt_at_t3_fail', :'t3', 're_at_t3_app', :t3c, true);
 -- The owner refunds again by hand in Stripe, and that refund goes through.
 select tests.at_refunded('evt_at_t3_ref2', :'t3', :t3c, 're_at_t3_hand');
-select is(tests.at_rows(:'t3'), 'refunded :: refund_failed/' || :'t3' || '/' || :t3c || '/app',
+select is(tests.at_rows(:'t3'), 'refunded :: refund_failed/' || :'t3' || '/' || :t3c || '/developer',
   'T3b: the failure is still listed (a later success does not clear it)');
 select is(tests.at_reason(:'t3', 'refund_failed'),
-  'Stripe could not return money to the customer''s card. The amount shown is what that refund tried to return, not always what the customer is still owed. Before you pay anything, check in Stripe for a later refund of this payment that went through, a card dispute, or a payment you already made to the customer. Pay only what is still owed, another way. Then mark it done here, also when nothing more was owed.',
+  'Stripe could not return money to the customer''s card. The amount shown is what that refund tried to return, not always what the customer is still owed. Before you pay anything, check in Stripe for a later refund of this payment that went through, a card dispute, or a payment you already made to the customer. Pay only what is still owed, another way. Then ask your developer to mark it done, also when nothing more was owed.',
   'T3c (A4-03): the line no longer says "pay the customer that amount": it says to check for the refund that went through');
 select ok((select a.detail from public.payment_attention a where a.payment_id = :'t3' and a.code = 'refund_failed')
           like '%resolve_refund_failure(payment id, note); it moves no money, so use it also when the refund was already settled another way%',
@@ -271,8 +271,8 @@ select is(tests.at_try(format('select (public.resolve_job_dispute(%L, %L)).statu
   'error: This payment is under review by the card issuer and cannot be released',
   'T4b: the sentence is true: paying the worker again is refused while the dispute is open');
 select tests.at_dispute('evt_at_t4_won', 'charge.dispute.closed', :'t4', 'dp_at_t4', 'won');
-select is(tests.at_rows(:'t4'), 'held :: transfer_reversed/' || :'t4' || '/' || :t4t || '/app',
-  'T4c: the bank closed it as won: transfer_reversed, decided in the app');
+select is(tests.at_rows(:'t4'), 'held :: transfer_reversed/' || :'t4' || '/' || :t4t || '/developer',
+  'T4c: the bank closed it as won: transfer_reversed, for the developer');
 select is(tests.at_try(format('select (public.resolve_job_dispute(%L, %L)).transfer_attempts::text', :'t4j', 'worker')), 'ok: 1',
   'T4d: now the worker''s side works: the payout is asked again under a new attempt');
 select is((select transfer_cents || '/' || (transfer_reversed_at is null)::text || '/' || (release_requested_at is not null)::text
@@ -450,7 +450,7 @@ select charge_amount_cents as t11c from public.payments where id = :'t11' \gset
 select tests.at_refunded('evt_at_t11_ref', :'t11', 1000, 're_at_t11_hand');
 select tests.at_failed('evt_at_t11_fail', :'t11', 're_at_t11_hand', 1000, false);
 select is(tests.at_rows(:'t11'),
-  'partially_refunded :: refund_failed/' || :'t11' || '/1000/app | refund_outside_app/' || :'t11' || '/' || (:t11c - 1000) || '/developer',
+  'partially_refunded :: refund_failed/' || :'t11' || '/1000/developer | refund_outside_app/' || :'t11' || '/' || (:t11c - 1000) || '/developer',
   'T11a: the hand refund failed, but the refunded total still counts it, so the rest shown is 1000 short');
 select is(tests.at_reason(:'t11', 'refund_outside_app'),
   'Part of this payment was refunded in Stripe, outside the app, and the app has not decided what happens to the rest. The amount shown may be wrong if a refund failed. Ask your developer.',
@@ -517,7 +517,7 @@ select is((select count(*)::integer from public.payment_attention a where a.paym
 select tests.at_failed_refund('AT-T13 won', :'c1', :'w1') as t13w \gset
 select tests.at_dispute('evt_at_t13w_dp', 'charge.dispute.created', :'t13w', 'dp_at_t13w', 'needs_response');
 select tests.at_dispute('evt_at_t13w_won', 'charge.dispute.closed', :'t13w', 'dp_at_t13w', 'won');
-select is(tests.at_rows(:'t13w'), 'refunded :: refund_failed/' || :'t13w' || '/' || :t13c || '/app', 'T13e: closed and won: the failed-refund line of a payment with no dispute');
+select is(tests.at_rows(:'t13w'), 'refunded :: refund_failed/' || :'t13w' || '/' || :t13c || '/developer', 'T13e: closed and won: the failed-refund line of a payment with no dispute');
 
 select tests.at_failed_refund('AT-T13 unclear', :'c1', :'w1') as t13u \gset
 select tests.at_dispute('evt_at_t13u_dp', 'charge.dispute.created', :'t13u', 'dp_at_t13u', 'needs_response');

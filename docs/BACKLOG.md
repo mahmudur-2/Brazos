@@ -117,6 +117,32 @@ From the lean security verdict (archived 2026-11-08, `_archive/2026-11-lean/SECU
   along with its unit tests.
 - Maestro's iOS driver bug (mobile-dev-inc/maestro#3538) can still end other flows: the fix in
   `ff0784b` (a pause after each step that closes the keyboard) covers flow 03 only.
+- At the next Expo SDK upgrade: close the four dismissed Dependabot alerts (glob, minimatch,
+  image-size, deepmerge). Their repairs need major versions that Expo SDK 54 cannot use; the packages
+  run only on the build machine.
+- The screens BidDetail and CompareBids have no route that opens them: remove them or wire them.
+- The access lane's open review items (run ledger C14-06 to C14-08): one corrective migration file
+  whose recipe is in the run ledger, and two proofs that can be fooled and need a stronger form.
+- Captions of sets that mix photos and a video: check the wording (found in a picture read).
+- A check from outside the database that the cron timers still run: the admin notice timer cannot
+  push about its own stop.
+- Remove old rows from `admin_attention_seen` (the table only grows).
+- Pay the worker of a cancelled job by an admin decision in the app (today: refund only; the worker
+  side is a developer step).
+- Remove the unused Button size 64 and the unused `buttonVariants`.
+- App buttons for the admin lines that are developer steps today: `transfer_reversed` (job transfers;
+  tips apart), `tip_payee_gone` (refund a tip whose worker is gone), `refund_failed` and
+  `refund_failed_several` (mark a failed refund done).
+- Run the 5-break proof (ban, deleted account, completion photos, money state change, admin-only
+  path: each break must turn a test red) as a CI check.
+- The word "Open" has two sizes on the worker's cards (compact card, full row): pick one.
+- The server clock for the post wizard's day list and the "needed today" chip: both read the phone's
+  clock today; the server refuses a wrong day.
+- Before `begin_job_payment` starts a new payment row after the time to pay has ended, read the old
+  row's intent at Stripe: today a customer whose first payment settles late can pay twice, and the
+  server refunds the first charge later (`funded_after_void`).
+- Test `504_admin_attention_notice.sql` part 0c proves its point through the helper `tests.o1n_run`,
+  not by a direct call of `notify_attention_admins()`.
 
 ## Parked operator decisions
 

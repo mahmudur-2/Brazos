@@ -26,8 +26,8 @@ $$;
 
 -- E. The expected rows: the three tasks whose first caller is in this commit, and the lifecycle's three sweeps.
 select is((select string_agg(name || '=' || stale_after::text, ',' order by name) from public.timer_runs where expected_from is not null),
-  'auto-release-due-payments=00:40:00,brazos-job-series=04:00:00,brazos-process-settlements=00:20:00,brazos-prune-payment-events=25:00:00,close-unpaid-hires=01:00:00,expire-unfunded-payments=01:00:00',
-  'E1: six expected rows, each with its interval (A9 PART 2 c: the lifecycle''s sweeps, late after 40 minutes, 60 minutes and 4 hours)');
+  'auto-release-due-payments=00:40:00,brazos-admin-attention=00:40:00,brazos-job-series=04:00:00,brazos-process-settlements=00:20:00,brazos-prune-payment-events=25:00:00,close-unpaid-hires=01:00:00,expire-unfunded-payments=01:00:00',
+  'E1: seven expected rows, each with its interval (A9 PART 2 c: the lifecycle''s sweeps, late after 40 minutes, 60 minutes and 4 hours; O1: the admin notice timer, late after 40 minutes)');
 -- M2-3: the database's own scheduler runs the two SQL tasks every 15 minutes and every day, so a report
 -- can already exist when this file runs; one made before its expected_from cannot.
 select is((select count(*)::integer from public.timer_runs

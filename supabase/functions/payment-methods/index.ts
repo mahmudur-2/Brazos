@@ -10,6 +10,8 @@
 //   Deploy:  the staging pipeline deploys every function (.github/workflows/staging.yml)
 //
 //   POST { "action": "list" }                               → { cards: [{ id, brand, last4, expMonth, expYear }] }
+//     (A4-02: a stored customer that Stripe says is deleted lists no card, so the account can still be
+//     deleted in the app; every other failure stays a failure: listedCards below)
 //   POST { "action": "setup" }                              → { customerId, setupIntentClientSecret, ephemeralKeySecret }
 //   POST { "action": "remove", "paymentMethodId": "pm_…" }  → { removed: true }
 //
@@ -26,6 +28,7 @@
 
 import { notConfigured, PUBLISHABLE_KEY, SECRET_KEY, serviceHeaders, verifiedUser } from '../_shared/serviceAuth.ts';
 import { refuseUnadmitted } from '../_shared/rateLimit.ts';
+import { isDeletedCustomer } from '../_shared/stripeCustomer.mjs';
 
 const STRIPE_API = 'https://api.stripe.com';
 // The version the mobile SDK speaks, pinned on the ephemeral key only (create-payment's own).
@@ -98,6 +101,24 @@ async function listCards(customerId: string): Promise<Card[]> {
     }));
 }
 
+/**
+ * The list action's cards (A4-02). The app deletes an account only after this list shows no card
+ * (lib/legal/privacyPolicy.ts section 7), so a list that failed for ever was a dead end. A failed list
+ * stays a failure, unless a READ of the stored customer with the same key answers that this very
+ * customer is deleted (isDeletedCustomer, the account cleanup's own test): a deleted customer holds no
+ * card, so the empty list is true. Any other answer, "no such customer" included (this key may not
+ * know the customer), throws as before: no card is reported gone unless Stripe said so.
+ */
+async function listedCards(customerId: string): Promise<Card[]> {
+  try {
+    return await listCards(customerId);
+  } catch (failed) {
+    const read = await stripe('GET', `/v1/customers/${encodeURIComponent(customerId)}`);
+    if (isDeletedCustomer(read.status, read.body, customerId)) return [];
+    throw failed;
+  }
+}
+
 Deno.serve(async (req) => {
   const unset = notConfigured('payment-methods', { SUPABASE_URL, PUBLISHABLE_KEY, SECRET_KEY, STRIPE_SECRET_KEY });
   if (unset) return unset;
@@ -126,7 +147,7 @@ Deno.serve(async (req) => {
   try {
     if (action === 'list') {
       const customerId = await storedCustomer(userId);
-      return json({ cards: customerId ? await listCards(customerId) : [] });
+      return json({ cards: customerId ? await listedCards(customerId) : [] });
     }
 
     if (action === 'remove') {

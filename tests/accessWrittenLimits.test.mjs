@@ -47,9 +47,24 @@ test('F5 (a), (b): docs/ARCHITECTURE.md names the view, its readers, that it is 
     'at most one row a run (every 5 minutes), and only in a quiet run',
     'while the money passes use the run, none.',
     'A row whose customer step is still open after 1 hour gets a line on `account_cleanup_attention`.',
-    'Only the service role can read that view (no client role, no admin in the app), and it is not part of `payment_attention`',
+    'No client role can read that view, and it is not part of `payment_attention`.',
     '`account_cleanup_attention` (service_role; not part of `payment_attention`)',
   ]) has(text, words, DOC);
+});
+
+test('O1: admin_attention supersedes the cleanup view\'s "no admin in the app, nothing pushes it", in its header and in the doc', () => {
+  const text = header('supabase/migrations/20261116420000_admin_attention.sql');
+  for (const words of [
+    'SUPERSEDES the written limit of 20261116410000_account_deletion_process.sql (its header, section 5: "no admin in the app ... nothing pushes it")',
+    'an active admin reads the cleanup line in the app (admin_attention) and the notice timer pushes it (finish stripe)',
+  ]) has(text, words, 'the admin_attention header');
+  const doc = fold(read(DOC));
+  for (const words of [
+    'an active admin reads its lines in the app through `admin_attention()`, and the notice timer pushes them (finish stripe; see Notifications).',
+    'never a contact, a name, an amount or a Stripe id; `admin_attention_seen` holds keys and times only.',
+    'An active admin decides an issue between two people with `admin_decide_issue(job, side)`',
+  ]) has(doc, words, DOC);
+  assert.doesNotMatch(doc, /no admin in the app/, 'the doc no longer says no admin in the app');
 });
 
 test('F5 (c): the ban file says a suspended worker\'s finished job follows the normal approval and payout, and where Terms stops', () => {

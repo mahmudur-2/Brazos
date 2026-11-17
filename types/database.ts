@@ -56,6 +56,130 @@ export type Database = {
           },
         ]
       }
+      admin_attention_seen: {
+        Row: {
+          episode: number
+          episode_at: string
+          first_seen: string
+          gone_at: string | null
+          key: string
+          last_seen: string
+          notified_at: string | null
+          notified_episode: number | null
+        }
+        Insert: {
+          episode?: number
+          episode_at: string
+          first_seen: string
+          gone_at?: string | null
+          key: string
+          last_seen: string
+          notified_at?: string | null
+          notified_episode?: number | null
+        }
+        Update: {
+          episode?: number
+          episode_at?: string
+          first_seen?: string
+          gone_at?: string | null
+          key?: string
+          last_seen?: string
+          notified_at?: string | null
+          notified_episode?: number | null
+        }
+        Relationships: []
+      }
+      admin_decisions: {
+        Row: {
+          admin_id: string
+          decided_at: string
+          id: string
+          job_id: string
+          payment_id: string | null
+          side: string
+        }
+        Insert: {
+          admin_id: string
+          decided_at?: string
+          id?: string
+          job_id: string
+          payment_id?: string | null
+          side: string
+        }
+        Update: {
+          admin_id?: string
+          decided_at?: string
+          id?: string
+          job_id?: string
+          payment_id?: string | null
+          side?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_decisions_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_decisions_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_decisions_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "intents_to_cancel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_decisions_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payment_money"
+            referencedColumns: ["payment_id"]
+          },
+          {
+            foreignKeyName: "admin_decisions_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_decisions_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "refunds_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_decisions_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "refunds_ready"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_decisions_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "transfers_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_decisions_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "transfers_ready"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_config: {
         Row: {
           key: string
@@ -823,6 +947,29 @@ export type Database = {
             columns: ["worker_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_work_starts: {
+        Row: {
+          job_id: string
+          started_at: string
+        }
+        Insert: {
+          job_id: string
+          started_at?: string
+        }
+        Update: {
+          job_id?: string
+          started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_work_starts_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "jobs"
             referencedColumns: ["id"]
           },
         ]
@@ -3374,6 +3521,62 @@ export type Database = {
         }[]
       }
       active_guard_problem: { Args: { p_fn: unknown }; Returns: string }
+      admin_attention: {
+        Args: never
+        Returns: {
+          arrived_at: string
+          cancelled_at: string
+          cents: number
+          code: string
+          completed_at: string
+          customer_email: string
+          customer_first_name: string
+          customer_phone: string
+          decision_note: string
+          decisions: string[]
+          detail: string
+          finish: string
+          job_id: string
+          job_title: string
+          key: string
+          overdue: boolean
+          payment_id: string
+          reason: string
+          report_at: string
+          report_details: string
+          report_reason: string
+          since: string
+          what: string
+          work_started_at: string
+          worker_email: string
+          worker_first_name: string
+          worker_phone: string
+        }[]
+      }
+      admin_attention_lines: {
+        Args: never
+        Returns: {
+          cents: number
+          code: string
+          detail: string
+          finish: string
+          job_id: string
+          key: string
+          overdue: boolean
+          payment_id: string
+          reason: string
+          since: string
+          what: string
+        }[]
+      }
+      admin_decide_issue: {
+        Args: { p_in_favour_of: string; p_job_id: string }
+        Returns: undefined
+      }
+      admin_issue_options: {
+        Args: { p_admin: string; p_job_id: string }
+        Returns: Record<string, unknown>
+      }
       admin_open_reports: {
         Args: never
         Returns: {
@@ -4008,6 +4211,7 @@ export type Database = {
       }
       get_payment_account: { Args: { p_user_id: string }; Returns: string }
       get_payment_customer: { Args: { p_user_id: string }; Returns: string }
+      install_admin_attention_schedule: { Args: never; Returns: string }
       install_lifecycle_schedules: { Args: never; Returns: string }
       install_payment_events_prune: { Args: never; Returns: string }
       install_push_schedule: { Args: never; Returns: string }
@@ -4258,6 +4462,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      notify_attention_admins: { Args: never; Returns: number }
       notify_display_name: { Args: { p_user: string }; Returns: string }
       notify_nearby_for_job: { Args: { p_job_id: string }; Returns: undefined }
       offer_post_event: {

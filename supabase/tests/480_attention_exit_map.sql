@@ -18,11 +18,11 @@
 --   (M1b: the corrected sentences and their histories are in 482_attention_truth.sql.)
 --   refund_outside_app       a person; no function directs the rest of the payment today (H2).
 --   refund_unconfirmed       charge.refunded covering the refund (H3), or refund.failed (H4).
---   refund_failed(_several)  resolve_refund_failure (H4).
+--   refund_failed(_several)  resolve_refund_failure, by the developer: service_role only (H4).
 --   transfer_stopped         a person in Stripe, then record_settlement_sent or settlement_send_reopen (H5).
 --   transfer_no_payout_account  the worker finishes setup (payouts enabled), H6a. No time bound.
 --   transfer_payee_gone      a person (developer): the payee cannot come back (H6d).
---   tip_payee_gone           resolve_tip(id, 'refund') (H6e; the refund itself: 482 T1).
+--   tip_payee_gone           resolve_tip(id, 'refund'), by the developer: service_role only (H6e; the refund itself: 482 T1).
 --   job_closed_money_held    resolve_job_dispute in the customer's favour (H7).
 --   job_stuck                a person (developer); no function moves it today (H8).
 --   issue_no_show/issue_open resolve_job_dispute (H9, H10).
@@ -246,11 +246,11 @@ select tests.ax_worker_cancel(:'h4p');
 select is(tests.ax_refund_sent(:'h4p', 're_ax_h4_app'), 'true/true', 'H4a: the drain began the refund and recorded its id');
 select tests.ax_refunded('evt_ax_h4_ref1', :'h4p', :h4c, 're_ax_h4_app');
 select tests.ax_failed('evt_ax_h4_fail1', :'h4p', 're_ax_h4_app', :h4c, true);
-select is(tests.ax_rows(:'h4p'), 'refunded :: refund_failed/' || :'h4p' || '/' || :h4c || '/app',
-  'H4b: one failed refund: refund_failed, ref the payment, its amount, decided in the app');
+select is(tests.ax_rows(:'h4p'), 'refunded :: refund_failed/' || :'h4p' || '/' || :h4c || '/developer',
+  'H4b: one failed refund: refund_failed, ref the payment, its amount, marked done by the developer');
 select tests.ax_refunded('evt_ax_h4_ref2', :'h4p', :h4c, 're_ax_h4_hand');
 select tests.ax_failed('evt_ax_h4_fail2', :'h4p', 're_ax_h4_hand', :h4c, false);
-select is(tests.ax_rows(:'h4p'), 'refunded :: refund_failed_several/' || :'h4p' || '/' || :h4c || '/app',
+select is(tests.ax_rows(:'h4p'), 'refunded :: refund_failed_several/' || :'h4p' || '/' || :h4c || '/developer',
   'H4c (A2-04): two failures are ONE line with the other sentence; the sum (twice the charge) is capped at the charge');
 select ok((select a.detail from public.payment_attention a where a.payment_id = :'h4p')
           like 'refund re_ax_h4_app failed at the provider (expired_or_canceled_card), ' || :h4c || ' cents; '
@@ -353,8 +353,8 @@ select public.attach_provider_ref(:'h6et', 'pi_ax_h6e_tip');
 select tests.ax_event('evt_ax_h6e_tip', 'payment_intent.succeeded', jsonb_build_object(
   'id', 'pi_ax_h6e_tip', 'object', 'payment_intent',
   'amount_received', (select charge_amount_cents from public.payments where id = :'h6et')));
-select is(tests.ax_rows(:'h6et'), 'held :: tip_payee_gone/' || :'h6et' || '/500/app',
-  'H6e (M1b): a held tip never sent, for a deleted worker: tip_payee_gone, refunded in the app (resolve_tip, 482 T1)');
+select is(tests.ax_rows(:'h6et'), 'held :: tip_payee_gone/' || :'h6et' || '/500/developer',
+  'H6e (M1b): a held tip never sent, for a deleted worker: tip_payee_gone, refunded by the developer (resolve_tip, service_role only, 482 T1)');
 
 -- ---------------------------------------------------------------------------
 -- H7. A held payment on a cancelled job (R6): an admin bans the customer of a job in progress. The

@@ -4,7 +4,8 @@
 // account, which stays in payment_accounts so a payment still owed to the person reaches it.
 // process-settlements calls this pass once per run (S1 decision 12), after its money passes and
 // before its report, and only while the claim, two Stripe requests and the record fit in the run
-// (fits(run, 4)); it is never one of the passes that take turns. No imports, so
+// (fits(run, 4)); it is never one of the passes that take turns. One import, the plain-JavaScript test
+// of a deleted customer that payment-methods' list action shares (stripeCustomer.mjs, A4-02), so
 // tests/accountCleanup.test.mjs runs it under node.
 //
 // Per run: one claim (claim_account_cleanups, at most 1 row, leased for 10 minutes), then per
@@ -39,6 +40,8 @@
 // before each row and before each Stripe request, so there is always room for that request and the
 // row's one write-back; a request it refuses leaves its step not done ("out of time"). A row it leaves
 // is claimed again when its lease ends.
+
+import { isDeletedCustomer } from './stripeCustomer.mjs';
 
 type CleanupFetch = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -100,25 +103,20 @@ function codeOf(body: Fields): string {
   return error && typeof error === 'object' && typeof error.code === 'string' ? error.code : 'no code';
 }
 
-/** Stripe's word that this very customer is deleted. */
-function deletedAnswer(a: { status: number; body: Fields }, id: string): boolean {
-  return a.status === 200 && a.body.deleted === true && a.body.id === id;
-}
-
 async function deleteCustomer(run: CleanupRun, id: string): Promise<string | null> {
   const url = `${STRIPE_API}/v1/customers/${encodeURIComponent(id)}`;
   const headers = { Authorization: `Bearer ${run.stripeKey}` };
   const del = await stripeAnswer(run, url, { method: 'DELETE', headers });
   if (del === 'late') return 'customer: out of time';
   if (del === null) return 'customer: no answer';
-  if (deletedAnswer(del, id)) return null;
+  if (isDeletedCustomer(del.status, del.body, id)) return null;
   const said = `customer: ${del.status} ${codeOf(del.body)}`;
   if (del.status < 400) return said;
   // (ii) the DELETE answered an error: a read with the same key decides.
   const read = await stripeAnswer(run, url, { method: 'GET', headers });
   if (read === 'late') return `${said}; read: out of time`;
   if (read === null) return `${said}; read: no answer`;
-  if (deletedAnswer(read, id)) return null;
+  if (isDeletedCustomer(read.status, read.body, id)) return null;
   if (del.status === 404 && read.status === 404) {
     return 'customer: this Stripe key does not know this customer (another account or another mode)';
   }
