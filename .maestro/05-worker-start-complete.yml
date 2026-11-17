@@ -85,6 +85,15 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "COUNTERING"
     timeout: 15000
+# Phone run 2: with nothing below the reply card the page could not centre the opener, so the form opened at the
+# screen's foot and its amount field below it (Maestro drops an element less than 10% on screen). A person
+# scrolls down to it too.
+- scrollUntilVisible:
+    element:
+      text: "e.g. 45"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
 - tapOn: "e.g. 45"
 - inputText: "42"
 - tapOn: "COUNTERING"
