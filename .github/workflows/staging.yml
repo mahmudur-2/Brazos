@@ -16,15 +16,13 @@ name: Staging pipeline
 # orders those two steps, so the migration and the deployment became jobs of a
 # single pipeline rather than two files listening to the same event.
 #
-# WHAT "SAFE" MEANS HERE, WHICH IS NOT THE OBVIOUS THING. Staging is what the
-# operator's and the co-founder's TestFlight builds read. Production has no
-# users; staging effectively does. So safety here is not about protecting
-# production — it is about never leaving an installed build talking to a
-# database that no longer matches it. Additive SQL (new tables, columns,
-# functions) cannot break an installed build, which ignores what it does not
-# know about; removing or renaming something a build still reads breaks it the
-# moment it lands. Hence: additive migrations flow automatically, destructive
-# ones stop and wait for a human. See `scripts/staging-scan.sh`.
+# WHAT THE SCAN GUARDS. Staging is what the operator's and the co-founder's
+# TestFlight builds read, so the aim is never leaving an installed build talking
+# to a database that no longer matches it. A migration with a statement that
+# may remove, rename or change something a build still uses, or that runs code
+# at once, stops and waits for a person to review it; the rest flows
+# automatically. The scan is a risk detector, not a proof: see
+# `scripts/staging-scan.sh` and `scripts/migration-scan.mjs`.
 #
 # PRODUCTION HAS ITS OWN BUTTON: .github/workflows/production.yml, which only
 # the owner starts and approves (docs/production/owner-steps.md). No job in
@@ -173,9 +171,9 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
-      # ── THE SAFETY GATE ───────────────────────────────────────────────────
+      # ── THE REVIEW GATE ───────────────────────────────────────────────────
       # BOTH halves now live in scripts/staging-scan.sh: it derives WHICH files
-      # are pending AND decides WHETHER they are safe. This step only
+      # are pending AND flags WHICH of them need review. This step only
       # orchestrates. The scan lived in a repo script from the start for one
       # reason — it is proven by being EXECUTED against fixture files before it
       # ships, and a proof is only a proof if it runs the same bytes CI runs.

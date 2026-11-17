@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# staging-scan.sh — the destructive-migration tripwire for the staging pipeline
-# and for the Production button (.github/workflows/production.yml).
+# staging-scan.sh — the migration risk detector for the staging pipeline and
+# for the Production button (.github/workflows/production.yml).
 #
 # THE PRODUCTION BUTTON RUNS THE SAME SCAN. It reads the same table, calls the
 # same modes and gets the same flags. One difference is decided outside this
@@ -16,31 +16,16 @@
 # locally without transcribing it, at which point the thing proven is the
 # transcription and not the thing that runs.
 #
-# WHAT THIS IS FOR. Staging is what the operator's and the co-founder's
-# TestFlight builds read. Production has no users; staging effectively does. So
-# "safe" here does not mean protecting production — it means never leaving an
-# installed build talking to a database that no longer matches it.
+# WHAT THIS IS FOR. Installed builds read these databases (TestFlight builds
+# read staging; store builds read production). A migration that removes,
+# renames or changes something a build still uses, or that runs code the moment
+# it is applied, waits for a person to read it; the rest flows automatically.
 #
-#   Additive SQL — new tables, new columns, new functions — cannot break an
-#   installed build, which simply ignores what it does not know about.
-#   Removing or renaming something a build still reads breaks it immediately.
-#
-# This script separates those two shapes so the first flows automatically and
-# the second stops and waits for a human.
-#
-# WHAT THIS IS NOT. It is a tripwire for the obvious shapes, not a proof of
-# compatibility. SQL that breaks an installed build without matching one of the
-# six rules below passes this scan: a function whose return shape changed, a
-# constraint that now rejects rows the app still writes, a default that alters
-# what a read returns. The real protection is the local suite that had to be
-# green before the migration was ever committed. This exists to catch the one
-# class of change that is both catastrophic and trivially detectable.
-#
-# AND IT DELIBERATELY DOES NOT FIRE ON EVERYTHING. `drop policy`, `drop
-# trigger`, `drop index` and `drop constraint` are this repository's ordinary
-# idempotent idiom and are not matched — not by an exemption, but because none
-# of the six rules contains those words. A gate that fires on every migration
-# trains the operator to bypass it, which destroys the gate.
+# A RISK DETECTOR, NOT A PROOF (R-M4, F01). The statement-level reading lives in
+# scripts/migration-scan.mjs, which lists what it flags and what it does not.
+# A file it does not flag can still break an installed build (a changed return
+# type, a new constraint, a replaced view); the local suite is the proof. So its
+# words say "review required" on a flag and never call a file safe.
 #
 # USAGE
 #   staging-scan.sh <allow_destructive: true|false> [migration file ...]
@@ -48,11 +33,13 @@
 #   staging-scan.sh --applied-count <migration-list output file | ->
 #
 #   Zero migration files is success: nothing pending is nothing to scan.
-#   exit 0 — safe; or flagged with allow_destructive=true, in which case every
+#   exit 0 — nothing flagged; or flagged with allow_destructive=true, in which case every
 #            hit is still printed. A silent bypass is not a bypass, it is a
 #            blind spot.
 #   exit 1 — flagged with allow_destructive=false, BEFORE anything is applied.
-#   exit 2 — the script was called wrongly (bad flag value, missing file).
+#   exit 2 — the script was called wrongly (bad flag value, missing file), or
+#            the scan itself failed (scripts/migration-scan.mjs threw or did not
+#            run); never read as a flag, so allow_destructive cannot pass it.
 # ---------------------------------------------------------------------------
 
 set -euo pipefail
@@ -260,92 +247,11 @@ if [ "$#" -eq 0 ]; then
   exit 0
 fi
 
-# THE SIX RULES. Case-insensitive and whitespace-tolerant: GNU grep ERE, with
-# [[:space:]]+ between keywords so `DROP   Column` matches, and \b at the word
-# edges so a longer identifier never matches by accident.
-#
-# TRUNCATE IS ANCHORED TO STATEMENT POSITION — start of line, or just after a
-# `;` — and this is not decoration. TRUNCATE is ALSO the name of a table
-# PRIVILEGE, and this repository's baseline grants it eleven times:
-#
-#     GRANT SELECT,REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN ON TABLE ...
-#
-# A bare \btruncate\b flags every one of those. A GRANT adds a privilege and
-# removes nothing; flagging it is precisely the false positive that trains an
-# operator to check the override box by reflex, which destroys the gate. In a
-# privilege list TRUNCATE always follows a comma or another privilege, never a
-# statement boundary, so the anchor separates the two with no exemption list.
-# The same trap does not exist for DELETE: `DELETE,TRIGGER` in a grant has no
-# `from` after it, so the two-word rule already excludes it.
-PATTERNS=(
-  '\bdrop[[:space:]]+table\b'    # with or without `if exists`: destructive either way
-  '\bdrop[[:space:]]+column\b'   # catches `alter table ... drop column`
-  '\bdrop[[:space:]]+schema\b'
-  '(^|;)[[:space:]]*truncate\b'  # the STATEMENT, not the GRANT privilege of the same name
-  '\brename[[:space:]]+to\b'     # `alter table ... rename to`
-  '\brename[[:space:]]+column\b'
-  '\bdelete[[:space:]]+from\b'   # only ever seen bare — function bodies are stripped first
-)
-
-GREP_ARGS=()
-for pattern in "${PATTERNS[@]}"; do
-  GREP_ARGS+=(-e "$pattern")
-done
-
-# PREPROCESS, in order, one output line per input line so that line numbers
-# still point at the real file:
-#
-#   1. strip carriage returns;
-#   2. strip `--` comments to end of line — so a line that merely TALKS about
-#      dropping a table cannot fire the gate;
-#   3. strip every dollar-quoted body. Each occurrence of a dollar-quote
-#      delimiter ($$ or $tag$, pattern \$[A-Za-z_]*\$) toggles between keep and
-#      discard, which also handles a body that opens and closes on one line.
-#      Function bodies are runtime behaviour, not schema shape: `delete from`
-#      and `truncate` inside them are this repository's ordinary idiom and must
-#      never fire the gate.
-#
-# STATED LIMITS, so nobody mistakes this for more than it is:
-#   * /* */ block comments are NOT stripped. None exist in this repository's
-#     migrations today; one containing `drop table` would be a false positive,
-#     which fails safe (it stops, it does not wave something through).
-#   * A statement split across lines (`drop\n  table`) is not matched, because
-#     the match is line-based. Fails open — noted, not defended.
-#   * A dollar-quote tag containing a digit ($tag1$) is not recognised as a
-#     delimiter. An unbalanced delimiter count discards the rest of the file.
-#     Both fail open in the same direction as the line above.
-#   * A `--` inside a string literal truncates that line early. Removing text
-#     can only lose a match, never invent one.
-#   * A TRUNCATE statement that begins somewhere other than the start of a line
-#     or just after a `;` is not matched, per the anchor explained above. At the
-#     top level of a migration there is nowhere else for a statement to begin;
-#     inside a function body there is, and function bodies are stripped anyway.
-#   * `date_trunc(` cannot match any rule: it contains `trunc`, never `truncate`.
-preprocess() {
-  awk '
-    BEGIN { inbody = 0 }
-    {
-      line = $0
-      gsub(/\r/, "", line)
-      sub(/--.*$/, "", line)
-
-      out = ""
-      rest = line
-      while (match(rest, /\$[A-Za-z_]*\$/)) {
-        if (inbody == 0) {
-          out = out substr(rest, 1, RSTART - 1)
-          inbody = 1
-        } else {
-          inbody = 0
-        }
-        rest = substr(rest, RSTART + RLENGTH)
-      }
-      if (inbody == 0) { out = out rest }
-
-      print out
-    }
-  ' "$1"
-}
+# THE READING ITSELF is scripts/migration-scan.mjs: it splits the file into SQL
+# statements (quotes, comments and $tag$ bodies understood) and prints one
+# "<line><TAB><reason>" per flagged statement; exit 0 nothing flagged, 1
+# flagged. Any other exit is a broken scan, never a pass.
+SCANNER="$(dirname "$0")/migration-scan.mjs"
 
 status=0
 
@@ -355,33 +261,33 @@ for file in "$@"; do
     exit 2
   fi
 
-  # Assigned in two steps on purpose: a failure inside preprocess() must kill
-  # the script, and it would be swallowed by the `|| true` that grep's
-  # no-match exit status requires.
-  preprocessed="$(preprocess "$file")"
-  hits="$(printf '%s\n' "$preprocessed" | grep -n -i -E "${GREP_ARGS[@]}" || true)"
+  scan_status=0
+  hits="$(node "$SCANNER" "$file")" || scan_status=$?
 
-  if [ -z "$hits" ]; then
+  if [ "$scan_status" -eq 0 ]; then
     echo "  ok   ${file}"
     continue
+  fi
+  if [ "$scan_status" -ne 1 ]; then
+    echo "staging-scan.sh: the scan could not read ${file} (exit ${scan_status})" >&2
+    exit 2
   fi
 
   status=1
   echo ""
   echo "  FLAG ${file}"
-  printf '%s\n' "$hits" | while IFS= read -r hit; do
-    [ -n "$hit" ] || continue
-    lineno="${hit%%:*}"
-    # Report the ORIGINAL line, not the preprocessed one: the operator is going
-    # to open this file at this line number and expect to see what is printed.
+  printf '%s\n' "$hits" | while IFS=$'\t' read -r lineno reason; do
+    [ -n "$lineno" ] || continue
+    # Report the ORIGINAL line: the operator is going to open this file at this
+    # line number and expect to see what is printed.
     original="$(sed -n "${lineno}p" "$file" | tr -d '\r')"
-    echo "       line ${lineno}: ${original}"
+    echo "       line ${lineno}: ${original} (review required: ${reason})"
   done
 done
 
 if [ "$status" -eq 0 ]; then
   echo ""
-  echo "staging-scan.sh: scanned $# pending migration file(s); no destructive shape found."
+  echo "staging-scan.sh: scanned $# pending migration file(s); the scan flags none. It detects risky shapes; it is no proof that nothing breaks."
   exit 0
 fi
 
@@ -390,7 +296,7 @@ echo ""
 if [ "$allow_destructive" = "true" ]; then
   echo "OVERRIDE IN EFFECT — allow_destructive was checked."
   echo ""
-  echo "The shapes above were found and are being applied anyway, because a human"
+  echo "The flagged statements above are being applied anyway, because a human"
   echo "asked for that from the Actions tab. They are printed above so the override"
   echo "is on the record."
   exit 0
@@ -398,9 +304,10 @@ fi
 
 echo "STOPPING. NOTHING HAS BEEN APPLIED."
 echo ""
-echo "This migration removes or renames something an installed build may still read."
+echo "Review required: a statement above may remove, rename or change something an"
+echo "installed build still uses, or it runs code the moment it is applied."
 echo "Installed builds read this database (TestFlight builds read staging; store"
-echo "builds read production), so applying it would break them the moment it lands."
+echo "builds read production), so a person reads those lines before it lands."
 echo ""
 echo "Two ways forward:"
 echo "  1. Change the migration so it only adds, and push again; or"

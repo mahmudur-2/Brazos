@@ -348,12 +348,12 @@ export function planCode({ sha, files, flagged, applied }) {
  * applied, a flagged file stops the run unless allow_destructive is checked, as on staging.
  */
 export function destructiveVerdict({ applied, flagged, allowDestructive }) {
-  if (flagged.length === 0) return { ok: true, note: 'no file to apply removes or renames anything' };
+  if (flagged.length === 0) return { ok: true, note: 'the scan flags no file to apply' };
   if (applied === 0) return { ok: true, note: 'the database is empty, so nothing can break: the flagged files are listed and will be applied' };
   if (allowDestructive) return { ok: true, note: 'allow_destructive is checked: the flagged files will be applied' };
   return {
     ok: false,
-    note: 'A migration to apply removes or renames something (the FLAG lines above). Nothing was applied. Read those lines, then press the button again with allow_destructive checked.',
+    note: 'A migration to apply has a statement that needs review (the FLAG lines above): it may remove, rename or change something an installed app uses, or run code at once. Nothing was applied. Read those lines, then press the button again with allow_destructive checked.',
   };
 }
 
@@ -374,7 +374,7 @@ function planMarkdown(p, verdict) {
     `| Commit | \`${p.sha.slice(0, 7)}\` |`,
     `| Database before | ${p.applied === 0 ? 'empty (first run)' : `${p.applied} migrations applied`} |`,
     `| Migrations to apply | ${p.files.length} |`,
-    `| Flagged (remove or rename something) | ${p.flagged.length} |`,
+    `| Flagged (review required) | ${p.flagged.length} |`,
     `| Decision | ${verdict.ok ? verdict.note : 'STOP: nothing will be applied'} |`,
     '',
     p.files.length === 0

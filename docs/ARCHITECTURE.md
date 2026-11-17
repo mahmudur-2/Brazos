@@ -625,13 +625,21 @@ fingerprint), so the Production button's schema check runs on staging first. The
 (`supabase@2.116.0`); no third-party action holds the credentials.
 
 The safety gate is `scripts/staging-scan.sh` over the files staging reports pending (from the
-database, never the git diff). With `allow_destructive` false, a pending file containing
-`drop table`, `drop column`, `drop schema`, `truncate` (at statement position), `rename to`,
-`rename column` or `delete from` stops the job before a statement runs, and that push's function
-deploy stops with it; the operator applies the file by hand or re-runs with the override. The scan
-is a tripwire, not a proof. Staging is what installed TestFlight builds read, so removing what a
-build still reads breaks it the moment it lands; additive SQL cannot. A migration that adds an
-enum value is its own file. No job here targets production. `ci.yml` runs
+database, never the git diff). It gives each file to `scripts/migration-scan.mjs`, a risk detector
+that reads the file as SQL statements: a keyword inside a string, a comment or a `$tag$` body never
+counts, and a statement split over lines counts as one. Definitions and additions pass (the list
+is in that file's header). Everything else is flagged with its line and a reason: a removal or a
+rename, a change or removal of rows, a right taken away from something the file does not make, code
+that runs at once (a `do` block, `call`, `execute`, or a `select` of a function, `cron.schedule`
+too), a kind of statement the scan does not know, and text it cannot read to its end. With
+`allow_destructive` false, a flagged pending file stops the job before a statement runs, and that
+push's function deploy stops with it; a person reads the file and re-runs with the override. The
+words are `review required`: nothing the scan says means "safe", and a file it does not flag can
+still break an installed app. A scan that itself fails exits 2 and stops the job; the override
+cannot pass that. Staging is what installed TestFlight builds read, so removing what a build still
+reads breaks it the moment it lands; additive SQL cannot. A migration that adds an enum value is
+its own file (the scan does not know that statement, so it asks for a review too). No job here
+targets production. `ci.yml` runs
 `npm run verify` with no secrets; `pgtap.yml` runs `db:reset` then `db:test` on a local stack.
 
 ## Production button

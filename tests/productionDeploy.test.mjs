@@ -531,7 +531,11 @@ test('plan stops on a flagged file once anything is applied, unless allow_destru
   const list = listFile(dir, ONE_APPLIED);
   const stopped = await cmd(world(), ['plan', list], {}, dir);
   assert.equal(stopped.code, 1);
-  assert.match(stopped.outputs().reason, /removes or renames something/);
+  assert.equal(
+    stopped.outputs().reason,
+    'A migration to apply has a statement that needs review (the FLAG lines above): it may remove, rename or change something an installed app uses, or run code at once. Nothing was applied. Read those lines, then press the button again with allow_destructive checked.'
+  );
+  assert.ok(stopped.log.some((l) => /^ {7}line 1: .* \(review required: removes table /.test(l)), stopped.log.join('\n'));
   const allowed = await cmd(world(), ['plan', list], { ALLOW_DESTRUCTIVE: 'true' }, dir);
   assert.equal(allowed.code, 0);
   const wrong = await cmd(world(), ['plan', list], { ALLOW_DESTRUCTIVE: 'yes' }, dir);
