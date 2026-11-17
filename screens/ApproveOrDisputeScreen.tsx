@@ -467,7 +467,7 @@ export function ApproveOrDispute({
               </Text>
             )}
             {!reporting && held && !dispute ? (
-              <Button title="Report an Issue" variant="quiet" size="sm" onPress={() => setReporting(true)} />
+              <Button title="Report an Issue" variant="quiet" size="sm" onPress={() => setReporting(true)} testID="approve-sheet-report" />
             ) : null}
           </Card>
         ) : canFundNow ? (
@@ -568,6 +568,7 @@ export function ApproveOrDispute({
                     onPress={() => setViewerUri(url)}
                     accessibilityRole="button"
                     accessibilityLabel="Open finished work photo"
+                    testID="approve-sheet-photo"
                   >
                     <RemoteImage uri={url} style={styles.mediaPhoto} />
                   </Pressable>

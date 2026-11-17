@@ -196,3 +196,126 @@ test('B12 · flow 01 walks the live-phone build: no email sign-up is offered, an
   assert.ok(at('- assertNotVisible: "Use Email Instead"') < at('- assertVisible: "Enter your full name."'));
   assert.ok(at('- assertVisible: "Enter your full name."') < at('- assertVisible: "Enter your phone number."'));
 });
+
+// FLOW-R (phone run 4): the repairs below are pinned as text.
+const PITCH = 'I have a dolly and can do it tomorrow morning.';
+const BID_WAIT = `- extendedWaitUntil:\n    visible: 'Bid sent|Get notified\\?|Could not send bid'\n    timeout: 60000\n- assertNotVisible: "Could not send bid"\n`;
+
+/** The text from the end of line `i` to the next top-level command. */
+function nextTopLevel(lines, i) {
+  let j = i + 1;
+  while (j < lines.length && !lines[j].startsWith('- ')) j += 1;
+  return lines.slice(j).join('\n');
+}
+
+test('FLOW-R · flow 03: each Send Bid after a typed pitch goes through home-tap with both alert titles, and nothing re-types after an alert', () => {
+  const flow = read('.maestro/03-worker-discover-bid.yml');
+  // The pitch-less send still proves the pitch rule.
+  assert.match(flow, /^- tapOn: "Send Bid"\n- extendedWaitUntil:\n {4}visible: "Add a pitch"\n/m);
+  const afterPitch = flow.slice(flow.indexOf(`inputText: "${PITCH}"`));
+  assert.doesNotMatch(afterPitch, /tapOn: "Send Bid"/, 'a Send Bid after a typed pitch is a plain tap');
+  const sends = afterPitch.match(
+    /- runFlow:\n {4}file: subflows\/home-tap\.yml\n {4}env:\n {6}TAP: "Send Bid"\n {6}NEXT: 'Bid sent\|Get notified\\\?\|Could not send bid\|Add a pitch\|Check the amount'\n/g
+  );
+  assert.equal(sends?.length, 2, 'both written sends go through home-tap.yml with both alert titles in NEXT');
+  assert.doesNotMatch(afterPitch, /tapOn: "OK"/, 'no block closes an alert after a typed pitch');
+  assert.doesNotMatch(afterPitch, /visible: "Add a pitch"\n\s+commands:\n\s+- (tapOn|inputText)/, 'no recovery block on "Add a pitch"');
+});
+
+test("FLOW-R · flow 05: the worker's sent counter is found by scrolling up to its card", () => {
+  const flow = read('.maestro/05-worker-start-complete.yml');
+  const rest = flow.slice(flow.indexOf('text: "Send Counter-Offer"'));
+  const at = (s) => rest.indexOf(s);
+  assert.ok(at('notVisible: "Send Counter-Offer"') > 0, 'waits for the form to close');
+  assert.ok(at('notVisible: "Send Counter-Offer"') < at("- assertNotVisible: 'No counter-offers left|Could not send.*'"));
+  assert.match(rest, /- assertNotVisible: 'No counter-offers left\|Could not send\.\*'\n- scrollUntilVisible:\n {4}element:\n {6}text: "Your Counter-Offer"\n {4}direction: UP\n/);
+  assert.ok(!flow.includes("visible: 'Your counter-offer|"), 'the old wait on the card is gone');
+});
+
+test('FLOW-R · T1 · flow 08 scrolls UP to "Switch to Worker" before it leaves Profile for Home', () => {
+  const flow = read('.maestro/08-notifications-settings.yml');
+  const last = flow.lastIndexOf('- tapOn: "Account & Safety"');
+  const home = flow.indexOf('- tapOn: "Home"', last);
+  assert.ok(last > 0 && home > last);
+  assert.match(
+    flow.slice(last, home),
+    /- scrollUntilVisible:\n {4}element:\n {6}text: "Switch to Worker"\n {4}direction: UP\n/
+  );
+});
+
+test('FLOW-R · T2 · flow 06 picks no sheet control the page behind shares, and every id is a testID in the app', () => {
+  const flow = read('.maestro/06-customer-approve-review.yml');
+  const lines = flow.slice(flow.indexOf('- tapOn: "Review & approve.*"'), flow.indexOf('visible: "Review & Tip"')).split('\n').slice(1);
+  const sheet = read('screens/ApproveOrDisputeScreen.tsx');
+  const page = read('screens/ClientJobDetailScreen.tsx');
+  let taps = 0;
+  lines.forEach((line, i) => {
+    let label = line.match(/^- tapOn: ["'](.+)["']$/)?.[1];
+    if (line === '- tapOn:') {
+      const keys = [];
+      for (let j = i + 1; j < lines.length && lines[j].startsWith('    '); j += 1) keys.push(lines[j].trim());
+      if (keys.some((k) => /^(rightOf|below):/.test(k))) return;
+      label = keys.find((k) => k.startsWith('text:'))?.match(/^text: ["'](.+)["']$/)?.[1];
+    }
+    if (label === undefined) return;
+    taps += 1;
+    assert.notEqual(label, 'Close', 'a plain "Close" can hit the sheet\'s backdrop');
+    assert.ok(!(sheet.includes(label) && page.includes(label)), `"${label}" is on the sheet and on the page behind it`);
+  });
+  assert.ok(taps >= 3, `only ${taps} plain taps read — check the parse`);
+
+  const sources = [];
+  const walk = (dir) => {
+    if (!existsSync(join(root, dir))) return;
+    for (const e of readdirSync(join(root, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) walk(rel);
+      else if (/\.tsx?$/.test(e.name)) sources.push(read(rel));
+    }
+  };
+  ['screens', 'components', 'ui', 'navigation'].forEach(walk);
+  const exact = new Set();
+  const prefixes = [];
+  for (const m of sources.join('\n').matchAll(/testID=(?:"([^"]+)"|\{`([^`$]*)(\$\{)?)/g)) {
+    if (m[1]) exact.add(m[1]);
+    else if (m[3]) prefixes.push(m[2]);
+    else exact.add(m[2]);
+  }
+  const ids = allFlows().flatMap((f) => [...f.text.matchAll(/^\s+id: "([^"]+)"$/gm)].map((m) => m[1]));
+  assert.ok(ids.length >= 3, 'the flows pick by id');
+  for (const id of ids) {
+    assert.ok(exact.has(id) || prefixes.some((p) => p && id.startsWith(p)), `id "${id}" is no testID in the app`);
+  }
+});
+
+test('FLOW-R · probes: each PROBE assert runs only on a failure path, the proofs follow it unchanged, and its words are plain', () => {
+  const probes = [];
+  for (const rel of ['.maestro/02-customer-post-job.yml', '.maestro/03-worker-discover-bid.yml']) {
+    const lines = read(rel).split('\n');
+    lines.forEach((line, i) => {
+      if (!/^\s+- assertVisible: "PROBE /.test(line)) return;
+      const indent = line.indexOf('-');
+      let c = i - 1;
+      while (c >= 0 && (lines[c].trim() === '' || lines[c].search(/\S/) >= indent)) c -= 1;
+      assert.equal(lines[c], `${' '.repeat(indent - 2)}commands:`, `${rel}:${i + 1} sits in a commands list`);
+      assert.match(lines[c - 1], /^\s+notVisible: /, `${rel}:${i + 1} runs only when a text is not visible`);
+      assert.match(lines[c - 2], /^\s+when:$/, `${rel}:${i + 1} sits in a when block`);
+      probes.push({ rel, text: line.match(/"(.*)"/)[1], after: nextTopLevel(lines, i) });
+    });
+  }
+  assert.deepEqual(probes.map((p) => p.rel), [
+    '.maestro/02-customer-post-job.yml',
+    '.maestro/03-worker-discover-bid.yml',
+    '.maestro/03-worker-discover-bid.yml',
+  ]);
+  assert.ok(
+    probes[0].after.startsWith(
+      `- tapOn: "Save Changes"\n- extendedWaitUntil:\n    visible: 'Your job is updated\\.|Could not save changes'\n    timeout: 60000\n- assertVisible: 'Your job is updated\\.'\n`
+    ),
+    'flow 02: the tap, the wait and the proof follow the probe unchanged'
+  );
+  for (const p of probes.slice(1)) assert.ok(p.after.startsWith(BID_WAIT), 'flow 03: the wait (not optional) and the refusal check follow');
+  for (const p of probes) {
+    assert.match(p.text.replace(/\$\{output\.probe0[23]\}$/, ''), /^[A-Za-z0-9 :-]+$/, `"${p.text}" has a regex-special character`);
+  }
+});

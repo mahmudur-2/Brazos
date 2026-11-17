@@ -57,17 +57,22 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "Approve & Release Payment"
     timeout: 30000
-# The worker's photo opens full screen.
+# The worker's photo opens full screen. Run 4: the page behind the sheet has the same photo label and the same
+# "Report an Issue" button, and the sheet's backdrop is labelled "Close", so the sheet's own controls are picked
+# by testID, and the viewer's Close by its place beside "Share photo" (only an open viewer has it).
 - tapOn:
-    text: "Open finished work photo"
+    id: "approve-sheet-photo"
     index: 0
 - extendedWaitUntil:
-    visible: "Close"
+    visible: "Share photo"
     timeout: 15000
 - takeScreenshot: 06-finished-photo
-- tapOn: "Close"
+- tapOn:
+    text: "Close"
+    rightOf: "Share photo"
 # Report an issue (holds the payment), then withdraw it.
-- tapOn: "Report an Issue"
+- tapOn:
+    id: "approve-sheet-report"
 - extendedWaitUntil:
     visible: "Something else"
     timeout: 15000
@@ -140,6 +145,11 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: 'Thanks — .* has been rated\.|Thanks for rating .*'
     timeout: 60000
+- scrollUntilVisible:
+    element:
+      text: 'Add a tip\?'
+    direction: DOWN
+    timeout: 30000
 - assertVisible: 'Add a tip\?'
 - takeScreenshot: 06-reviewed
 - scrollUntilVisible:

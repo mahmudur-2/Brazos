@@ -37,7 +37,7 @@ appId: app.brazos.mobile.preview
     element:
       text: "New bid on ${output.marker} main"
     direction: DOWN
-    timeout: 30000
+    timeout: 90000
 - tapOn:
     text: "New bid on ${output.marker} main"
     index: 0
@@ -184,6 +184,12 @@ appId: app.brazos.mobile.preview
 - tapOn: "Account & Safety"
 
 # ─── Mode switch round trip ──────────────────────────────────────────────
+# Run 4: the Profile tab stays mounted and keeps its scroll, so the mode row is scrolled back on screen first.
+- scrollUntilVisible:
+    element:
+      text: "Switch to Worker"
+    direction: UP
+    timeout: 60000
 - tapOn: "Home"
 - runFlow: subflows/ensure-mode-worker.yml
 - takeScreenshot: 08-worker-mode

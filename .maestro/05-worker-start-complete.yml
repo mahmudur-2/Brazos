@@ -106,8 +106,16 @@ appId: app.brazos.mobile.preview
 - tapOn:
     text: "Send Counter-Offer"
     below: '.*counter-offers left; each expires after 7 days\.|Your last counter — after it, accept or decline\.'
+# The sent counter closes the inline form; the page grows shorter under a scroll that held the form,
+# so the card's heading can sit above the screen: wait for the form to close, refuse a failure, scroll up.
 - extendedWaitUntil:
-    visible: 'Your counter-offer|No counter-offers left|Could not send.*'
+    notVisible: "Send Counter-Offer"
+    timeout: 60000
+- assertNotVisible: 'No counter-offers left|Could not send.*'
+- scrollUntilVisible:
+    element:
+      text: "Your Counter-Offer"
+    direction: UP
     timeout: 60000
 - assertVisible: "Your Counter-Offer"
 - takeScreenshot: 05-worker-counter

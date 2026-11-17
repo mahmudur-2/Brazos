@@ -301,6 +301,119 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "STEP 4 OF 4"
     timeout: 30000
+# Run 4: "Save Changes" was not found here (cause unknown; a browser render draws it). The wait gives it time; the
+# probe runs only where the tap below would fail, names what the screen holds, and always fails the flow.
+- extendedWaitUntil:
+    visible: "Save Changes"
+    timeout: 30000
+    optional: true
+- runFlow:
+    when:
+      notVisible: "Save Changes"
+    commands:
+      - evalScript: "${output.probe02 = ''}"
+      - runFlow:
+          when:
+            visible: "STEP 4 OF 4"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' step4'}"
+      - runFlow:
+          when:
+            visible: "Review your changes"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' reviewHead'}"
+      - runFlow:
+          when:
+            visible: "JOB SUMMARY"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' summary'}"
+      - runFlow:
+          when:
+            visible: 'Saving updates this existing job for workers nearby.'
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' noteSeen'}"
+      - runFlow:
+          when:
+            visible: "Edit Job"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' editJobText'}"
+      - runFlow:
+          when:
+            visible: "Job Details"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' jobPage'}"
+      - runFlow:
+          when:
+            visible: "Publish"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' labelPublish'}"
+      - runFlow:
+          when:
+            visible: "Save draft and go Home"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' draftButton'}"
+      - runFlow:
+          when:
+            visible: "Send Request"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' labelSendRequest'}"
+      - runFlow:
+          when:
+            visible: 'Uploading.*'
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' labelUploading'}"
+      - runFlow:
+          when:
+            visible: "OK"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' dialogOK'}"
+      - runFlow:
+          when:
+            visible: "My Jobs"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' tabMyJobs'}"
+      - runFlow:
+          when:
+            visible: "Messages"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' tabMessages'}"
+      - runFlow:
+          when:
+            visible: 'Your job is updated\.'
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' alreadySaved'}"
+      - tapOn:
+          text: "STEP 4 OF 4"
+          optional: true
+      - runFlow: subflows/keyboard-settle.yml
+      - runFlow:
+          when:
+            visible: "Save Changes"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' afterKeyboardTap'}"
+      # iPhone 16 (393 x 852 pt, bottom inset 34): the bar's foot is max(34 - 10, 12) = 24, the button 52 tall, so
+      # its middle is 852 - 24 - 26 = 802 pt = 94 % down; with no secondary button it spans the width (50 %).
+      - runFlow:
+          when:
+            notVisible: "Save Changes"
+          commands:
+            - tapOn:
+                point: "50%,94%"
+            - extendedWaitUntil:
+                visible: 'Your job is updated\.|Could not save changes'
+                timeout: 30000
+                optional: true
+            - runFlow:
+                when:
+                  visible: 'Your job is updated\.'
+                commands:
+                  - evalScript: "${output.probe02 = output.probe02 + ' pointTapSaved'}"
+            - runFlow:
+                when:
+                  visible: "Could not save changes"
+                commands:
+                  - evalScript: "${output.probe02 = output.probe02 + ' pointTapError'}"
+      - assertVisible: "PROBE 02 Save Changes not found by text - facts:${output.probe02}"
 - tapOn: "Save Changes"
 - extendedWaitUntil:
     visible: 'Your job is updated\.|Could not save changes'

@@ -18,6 +18,7 @@ appId: app.brazos.mobile.preview
       LANDING: "Find work"
 - runFlow: subflows/ensure-mode-worker.yml
 - evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
+- evalScript: "${output.probe03 = ''}"
 
 # ─── Map tab ─────────────────────────────────────────────────────────────
 - runFlow:
@@ -212,6 +213,26 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 - tapOn: 'Why should the customer pick you\?'
 - inputText: "I have a dolly and can do it tomorrow morning."
+# Run 41's lost finger-lift (subflows/home-tap.yml) can leave the field unfocused, so the text goes nowhere. Typed
+# once more only when both signals say the field is empty: its placeholder shows and the pitch does not.
+- runFlow:
+    when:
+      visible: 'Why should the customer pick you\?'
+    commands:
+      - runFlow:
+          when:
+            notVisible: "I have a dolly and can do it tomorrow morning."
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' pitchEmpty1'}"
+            - tapOn:
+                text: 'Why should the customer pick you\?'
+                optional: true
+            - inputText: "I have a dolly and can do it tomorrow morning."
+            - runFlow:
+                when:
+                  visible: 'Why should the customer pick you\?'
+                commands:
+                  - evalScript: "${output.probe03 = output.probe03 + ' pitchStillEmpty1'}"
 - scrollUntilVisible:
     element:
       text: "YOU.RE BIDDING ON"
@@ -231,7 +252,73 @@ appId: app.brazos.mobile.preview
       text: "Send Bid"
     direction: DOWN
     timeout: 30000
-- tapOn: "Send Bid"
+# Run 4: no bid was stored and no wait text showed (cause unknown). The two alert titles in NEXT only stop the
+# retries while an alert is up; the probe runs only where the wait below would fail, and always fails the flow.
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Send Bid"
+      NEXT: 'Bid sent|Get notified\?|Could not send bid|Add a pitch|Check the amount'
+- runFlow:
+    when:
+      notVisible: 'Bid sent|Get notified\?|Could not send bid'
+    commands:
+      - runFlow:
+          when:
+            visible: "YOU.RE BIDDING ON"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' sheetOpen'}"
+      - runFlow:
+          when:
+            visible: "Add a pitch"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' alertAddPitch'}"
+      - runFlow:
+          when:
+            visible: "Check the amount"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' alertAmount'}"
+      - runFlow:
+          when:
+            visible: "OK"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' dialogOK'}"
+      - runFlow:
+          when:
+            visible: "Send Bid"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' sendBidSeen'}"
+      - runFlow:
+          when:
+            visible: "Your Bid"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' yourBidCard'}"
+      - runFlow:
+          when:
+            visible: "Withdraw Bid"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' withdrawSeen'}"
+      - runFlow:
+          when:
+            visible: "Write a Bid"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' writeABid'}"
+      - runFlow:
+          when:
+            visible: "I have a dolly and can do it tomorrow morning."
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' pitchInField'}"
+      - runFlow:
+          when:
+            visible: 'Could not.*'
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' couldNotText'}"
+      - runFlow:
+          when:
+            visible: "Job Details"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' jobPage'}"
+      - assertVisible: "PROBE 03 first send - no Bid sent - facts:${output.probe03}"
 - extendedWaitUntil:
     visible: 'Bid sent|Get notified\?|Could not send bid'
     timeout: 60000
@@ -271,6 +358,25 @@ appId: app.brazos.mobile.preview
 - runFlow: subflows/keyboard-settle.yml
 - tapOn: 'Why should the customer pick you\?'
 - inputText: "I have a dolly and can do it tomorrow morning."
+# Typed once more only when the field is empty, as for the first written bid.
+- runFlow:
+    when:
+      visible: 'Why should the customer pick you\?'
+    commands:
+      - runFlow:
+          when:
+            notVisible: "I have a dolly and can do it tomorrow morning."
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' pitchEmpty2'}"
+            - tapOn:
+                text: 'Why should the customer pick you\?'
+                optional: true
+            - inputText: "I have a dolly and can do it tomorrow morning."
+            - runFlow:
+                when:
+                  visible: 'Why should the customer pick you\?'
+                commands:
+                  - evalScript: "${output.probe03 = output.probe03 + ' pitchStillEmpty2'}"
 - scrollUntilVisible:
     element:
       text: "YOU.RE BIDDING ON"
@@ -283,7 +389,72 @@ appId: app.brazos.mobile.preview
       text: "Send Bid"
     direction: DOWN
     timeout: 30000
-- tapOn: "Send Bid"
+# As for the first written bid: home-tap, then a probe only where the wait below would fail.
+- runFlow:
+    file: subflows/home-tap.yml
+    env:
+      TAP: "Send Bid"
+      NEXT: 'Bid sent|Get notified\?|Could not send bid|Add a pitch|Check the amount'
+- runFlow:
+    when:
+      notVisible: 'Bid sent|Get notified\?|Could not send bid'
+    commands:
+      - runFlow:
+          when:
+            visible: "YOU.RE BIDDING ON"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' sheetOpen'}"
+      - runFlow:
+          when:
+            visible: "Add a pitch"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' alertAddPitch'}"
+      - runFlow:
+          when:
+            visible: "Check the amount"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' alertAmount'}"
+      - runFlow:
+          when:
+            visible: "OK"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' dialogOK'}"
+      - runFlow:
+          when:
+            visible: "Send Bid"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' sendBidSeen'}"
+      - runFlow:
+          when:
+            visible: "Your Bid"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' yourBidCard'}"
+      - runFlow:
+          when:
+            visible: "Withdraw Bid"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' withdrawSeen'}"
+      - runFlow:
+          when:
+            visible: "Write a Bid"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' writeABid'}"
+      - runFlow:
+          when:
+            visible: "I have a dolly and can do it tomorrow morning."
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' pitchInField'}"
+      - runFlow:
+          when:
+            visible: 'Could not.*'
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' couldNotText'}"
+      - runFlow:
+          when:
+            visible: "Job Details"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' jobPage'}"
+      - assertVisible: "PROBE 03 rebid - no Bid sent - facts:${output.probe03}"
 - extendedWaitUntil:
     visible: 'Bid sent|Get notified\?|Could not send bid'
     timeout: 60000
@@ -304,4 +475,11 @@ appId: app.brazos.mobile.preview
     direction: DOWN
     timeout: 30000
 - takeScreenshot: 03-pending-bids
+# A green result line cannot show that a typing retry ran. Where one ran, the flow fails here, after every proof
+# step, and names it; the next flow starts from a clean state, so its data and its start are not affected.
+- runFlow:
+    when:
+      true: ${output.probe03 !== ''}
+    commands:
+      - assertVisible: "NOTE 03 every proof step passed - a typing retry ran - facts:${output.probe03}"
 - runFlow: subflows/sign-out.yml
