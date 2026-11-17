@@ -142,3 +142,23 @@ test('e2e iOS runs every flow and always keeps the results', () => {
   assert.doesNotMatch(code, /maestro test[^\n]*\|\|\s*true/, 'a failing flow must fail the job');
   assert.match(code, /- name: Upload results\n\s+if: always\(\)\n\s+uses: actions\/upload-artifact@/);
 });
+
+test('FLOW-R3b · e2e iOS uploads in plain only the probe pictures, for one day; every other upload is the encrypted bundle', () => {
+  const uploads = [...code.matchAll(/uses: actions\/upload-artifact@\S+\n {8}with:\n((?: {10}.*\n)+)/g)].map((m) => m[1]);
+  assert.deepEqual(uploads.map((w) => w.match(/^ {10}path: (.+)$/m)?.[1]), ['e2e-results.tar.gpg', '|']);
+  const plain = uploads[1];
+  // Each plain path ends in the pictures' own name, so no other file can match. Four places, because the folder of a
+  // takeScreenshot file depends on Maestro's version: the run folder, the flows folder, the debug tree, ~/.maestro/tests.
+  assert.deepEqual(
+    plain.split('\n').filter((line) => /^ {12}\S/.test(line)).map((line) => line.trim()),
+    ['probe-plain-*.png', '.maestro/**/probe-plain-*.png', 'e2e-debug/**/probe-plain-*.png', '~/.maestro/tests/**/probe-plain-*.png']
+  );
+  // Two of the four places lie under a dot folder, which the upload action skips unless it is told not to.
+  assert.match(plain, /^ {10}include-hidden-files: true$/m);
+  assert.match(plain, /^ {10}name: e2e-probe-plain$/m);
+  assert.match(plain, /^ {10}if-no-files-found: ignore$/m);
+  assert.match(plain, /^ {10}retention-days: 1$/m);
+  // Directly after the encrypted upload, with the same pinned action, and it can never fail the job.
+  const after = code.slice(code.indexOf('- name: Upload results') + 1);
+  assert.match(after.slice(after.indexOf('- name: ')), /^- name: Upload the plain probe pictures\n {8}if: always\(\)\n {8}continue-on-error: true\n {8}uses: actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\n/);
+});

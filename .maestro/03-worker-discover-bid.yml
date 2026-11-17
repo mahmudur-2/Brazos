@@ -19,6 +19,8 @@ appId: app.brazos.mobile.preview
 - runFlow: subflows/ensure-mode-worker.yml
 - evalScript: "${output.marker = 'E2E ' + (typeof MAESTRO_RUN_ID === 'undefined' || !MAESTRO_RUN_ID ? 'lean' : MAESTRO_RUN_ID)}"
 - evalScript: "${output.probe03 = ''}"
+# FLOW-R3: keyboard facts for a failed written send; kept apart from probe03, which the NOTE at the end reads.
+- evalScript: "${output.kb03 = ''}"
 
 # ─── Map tab ─────────────────────────────────────────────────────────────
 - runFlow:
@@ -213,6 +215,13 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 - tapOn: 'Why should the customer pick you\?'
 - inputText: "I have a dolly and can do it tomorrow morning."
+# FLOW-R3: an iOS text keyboard's keys, right after typing, calibrate the check before the send (it is not proved
+# that Maestro lists the keyboard's keys; a later "no key" counts only where this one saw one).
+- runFlow:
+    when:
+      visible: "space|return|shift"
+    commands:
+      - evalScript: "${output.kb03 = output.kb03 + ' kbSeenAfterTyping'}"
 # Run 41's lost finger-lift (subflows/home-tap.yml) can leave the field unfocused, so the text goes nowhere. Typed
 # once more only when both signals say the field is empty: its placeholder shows and the pitch does not.
 - runFlow:
@@ -233,13 +242,22 @@ appId: app.brazos.mobile.preview
                   visible: 'Why should the customer pick you\?'
                 commands:
                   - evalScript: "${output.probe03 = output.probe03 + ' pitchStillEmpty1'}"
+# FLOW-R3 (runs 4 and 5): the eyebrow tap left this multiline field's keyboard up, as in flow 06's run 18, and each
+# Send Bid tap landed on a key. A drag on the sheet's scroller closes it (Sheet.tsx on-drag); the eyebrow tap is
+# dropped, since it has no work left and was shown not to close this keyboard. FLOW-R3b: not Maestro's UP swipe, which
+# starts at 90 % of the screen, on the keyboard; the screen's centre lies on the sheet's scroller with the keyboard up
+# or down. The scroll back to the eyebrow puts the form at its top, so "Tomorrow" and then "Send Bid" are both below
+# and both reached by scrolling DOWN.
+- swipe:
+    start: 50%, 50%
+    end: 50%, 30%
+    duration: 250
+- runFlow: subflows/keyboard-settle.yml
 - scrollUntilVisible:
     element:
       text: "YOU.RE BIDDING ON"
     direction: UP
     timeout: 30000
-- tapOn: "YOU.RE BIDDING ON"
-- runFlow: subflows/keyboard-settle.yml
 - scrollUntilVisible:
     element:
       text: "Tomorrow"
@@ -252,13 +270,21 @@ appId: app.brazos.mobile.preview
       text: "Send Bid"
     direction: DOWN
     timeout: 30000
-# Run 4: no bid was stored and no wait text showed (cause unknown). The two alert titles in NEXT only stop the
-# retries while an alert is up; the probe runs only where the wait below would fail, and always fails the flow.
 - runFlow:
-    file: subflows/home-tap.yml
-    env:
-      TAP: "Send Bid"
-      NEXT: 'Bid sent|Get notified\?|Could not send bid|Add a pitch|Check the amount'
+    when:
+      visible: "space|return|shift"
+    commands:
+      - evalScript: "${output.kb03 = output.kb03 + ' kbUpBeforeSend'}"
+# ONE plain tap (run 5: not a lost tap; a repeated tap can type into the pitch). The optional wait stops at an answer
+# or an alert; the probe runs only where the wait below would fail, and always fails the flow.
+- extendedWaitUntil:
+    visible: "Send Bid"
+    timeout: 30000
+- tapOn: "Send Bid"
+- extendedWaitUntil:
+    visible: 'Bid sent|Get notified\?|Could not send bid|Add a pitch|Check the amount'
+    timeout: 60000
+    optional: true
 - runFlow:
     when:
       notVisible: 'Bid sent|Get notified\?|Could not send bid'
@@ -318,7 +344,27 @@ appId: app.brazos.mobile.preview
             visible: "Job Details"
           commands:
             - evalScript: "${output.probe03 = output.probe03 + ' jobPage'}"
-      - assertVisible: "PROBE 03 first send - no Bid sent - facts:${output.probe03}"
+      # FLOW-R3: more characters after the pitch = a tap landed on a key.
+      - runFlow:
+          when:
+            visible: 'I have a dolly and can do it tomorrow morning\..+'
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' pitchGrew'}"
+      # FLOW-R3: the sheet closed, the page shows a stored bid without "Bid sent": the request went through and the
+      # screen did not say so. No such card is no proof of no bid (the page may not have read the offer again).
+      - tapOn:
+          text: "Cancel"
+          optional: true
+      - extendedWaitUntil:
+          visible: "Your Bid"
+          timeout: 15000
+          optional: true
+      - runFlow:
+          when:
+            visible: "Your Bid"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' bidStored'}"
+      - assertVisible: "PROBE 03 first send - no Bid sent - facts:${output.probe03}${output.kb03}"
 - extendedWaitUntil:
     visible: 'Bid sent|Get notified\?|Could not send bid'
     timeout: 60000
@@ -358,6 +404,11 @@ appId: app.brazos.mobile.preview
 - runFlow: subflows/keyboard-settle.yml
 - tapOn: 'Why should the customer pick you\?'
 - inputText: "I have a dolly and can do it tomorrow morning."
+- runFlow:
+    when:
+      visible: "space|return|shift"
+    commands:
+      - evalScript: "${output.kb03 = output.kb03 + ' kbSeenAfterTyping2'}"
 # Typed once more only when the field is empty, as for the first written bid.
 - runFlow:
     when:
@@ -377,24 +428,37 @@ appId: app.brazos.mobile.preview
                   visible: 'Why should the customer pick you\?'
                 commands:
                   - evalScript: "${output.probe03 = output.probe03 + ' pitchStillEmpty2'}"
+# As for the first written bid: a drag from the screen's centre (on the sheet's scroller, not on the keyboard where
+# Maestro's UP swipe starts) closes the keyboard, the form goes back to its top, Send Bid is below.
+- swipe:
+    start: 50%, 50%
+    end: 50%, 30%
+    duration: 250
+- runFlow: subflows/keyboard-settle.yml
 - scrollUntilVisible:
     element:
       text: "YOU.RE BIDDING ON"
     direction: UP
     timeout: 30000
-- tapOn: "YOU.RE BIDDING ON"
-- runFlow: subflows/keyboard-settle.yml
 - scrollUntilVisible:
     element:
       text: "Send Bid"
     direction: DOWN
     timeout: 30000
-# As for the first written bid: home-tap, then a probe only where the wait below would fail.
 - runFlow:
-    file: subflows/home-tap.yml
-    env:
-      TAP: "Send Bid"
-      NEXT: 'Bid sent|Get notified\?|Could not send bid|Add a pitch|Check the amount'
+    when:
+      visible: "space|return|shift"
+    commands:
+      - evalScript: "${output.kb03 = output.kb03 + ' kbUpBeforeSend2'}"
+# As for the first written bid: ONE plain tap, then a probe only where the wait below would fail.
+- extendedWaitUntil:
+    visible: "Send Bid"
+    timeout: 30000
+- tapOn: "Send Bid"
+- extendedWaitUntil:
+    visible: 'Bid sent|Get notified\?|Could not send bid|Add a pitch|Check the amount'
+    timeout: 60000
+    optional: true
 - runFlow:
     when:
       notVisible: 'Bid sent|Get notified\?|Could not send bid'
@@ -454,7 +518,24 @@ appId: app.brazos.mobile.preview
             visible: "Job Details"
           commands:
             - evalScript: "${output.probe03 = output.probe03 + ' jobPage'}"
-      - assertVisible: "PROBE 03 rebid - no Bid sent - facts:${output.probe03}"
+      - runFlow:
+          when:
+            visible: 'I have a dolly and can do it tomorrow morning\..+'
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' pitchGrew'}"
+      - tapOn:
+          text: "Cancel"
+          optional: true
+      - extendedWaitUntil:
+          visible: "Your Bid"
+          timeout: 15000
+          optional: true
+      - runFlow:
+          when:
+            visible: "Your Bid"
+          commands:
+            - evalScript: "${output.probe03 = output.probe03 + ' bidStored'}"
+      - assertVisible: "PROBE 03 rebid - no Bid sent - facts:${output.probe03}${output.kb03}"
 - extendedWaitUntil:
     visible: 'Bid sent|Get notified\?|Could not send bid'
     timeout: 60000

@@ -228,7 +228,8 @@ jobs:
           exit "$status"
 
       # The repo is public: anyone signed in to GitHub can download artifacts, and the video shows the
-      # test phone numbers and codes being typed. Only an encrypted bundle leaves the Mac.
+      # test phone numbers and codes being typed. Only an encrypted bundle leaves the Mac; the one exception is the
+      # step "Upload the plain probe pictures" below (two pictures of one screen, named probe-plain-*).
       - name: Encrypt results
         if: always()
         env:
@@ -249,6 +250,26 @@ jobs:
           path: e2e-results.tar.gpg
           if-no-files-found: warn
           retention-days: 14
+
+      # FLOW-R3b: flow 02's two probe pictures of the edit form's step 4 (no phone number, code, name or email on that
+      # screen), in plain for one day. Each path ends in the pictures' own name, so no other file can match. The folder
+      # of a takeScreenshot file depends on Maestro's version: the run folder (the encrypted step's ./*.png), the flows
+      # folder, the debug tree, or ~/.maestro/tests/<session>/<flow>/takeScreenshot. Two of these lie under a dot
+      # folder, which the upload action skips unless include-hidden-files is set. Never fails the job.
+      - name: Upload the plain probe pictures
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e2e-probe-plain
+          path: |
+            probe-plain-*.png
+            .maestro/**/probe-plain-*.png
+            e2e-debug/**/probe-plain-*.png
+            ~/.maestro/tests/**/probe-plain-*.png
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 1
 
       - name: Shut the simulator down
         if: always()

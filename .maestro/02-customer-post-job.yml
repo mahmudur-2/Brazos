@@ -301,17 +301,54 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "STEP 4 OF 4"
     timeout: 30000
-# Run 4: "Save Changes" was not found here (cause unknown; a browser render draws it). The wait gives it time; the
-# probe runs only where the tap below would fail, names what the screen holds, and always fails the flow.
+# Runs 4 and 5: "Save Changes" was not found by its text here (cause open; a browser render draws it). The wait gives
+# it time. FLOW-R3: when the text is not read, the button is tapped by its id (components/PostJobBar.tsx
+# testID "post-job-primary"); every later step stays, and the flow then fails at its end with a NOTE that names it.
 - extendedWaitUntil:
     visible: "Save Changes"
     timeout: 30000
     optional: true
+# FLOW-R3b: the id path needs a positive read: 'yes' until the text is seen (one lost notVisible read no longer picks it).
+- evalScript: "${output.byId02 = 'yes'}"
 - runFlow:
     when:
-      notVisible: "Save Changes"
+      visible: "Save Changes"
+    commands:
+      - evalScript: "${output.byId02 = 'no'}"
+- runFlow:
+    when:
+      true: ${output.byId02 !== 'yes'}
+    commands:
+      - tapOn: "Save Changes"
+# FLOW-R3b: a plain picture of step 4 before the id tap (the run's other pictures stay encrypted); it holds no name,
+# phone number, email or code (screens/PostJobScreen.tsx step 4 in edit mode, components/JobSummaryCard.tsx).
+- runFlow:
+    when:
+      true: ${output.byId02 === 'yes'}
+    commands:
+      - runFlow:
+          when:
+            visible: "STEP 4 OF 4"
+          commands:
+            - takeScreenshot: probe-plain-02a
+      - tapOn:
+          id: "post-job-primary"
+          optional: true
+- extendedWaitUntil:
+    visible: 'Your job is updated\.|Could not save changes'
+    timeout: 60000
+    optional: true
+# The probe runs only where the wait below would fail (neither the text nor the id saved), and always fails the flow.
+- runFlow:
+    when:
+      notVisible: 'Your job is updated\.|Could not save changes'
     commands:
       - evalScript: "${output.probe02 = ''}"
+      - runFlow:
+          when:
+            true: ${output.byId02 === 'yes'}
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' idTapTried'}"
       - runFlow:
           when:
             visible: "STEP 4 OF 4"
@@ -354,6 +391,11 @@ appId: app.brazos.mobile.preview
             - evalScript: "${output.probe02 = output.probe02 + ' draftButton'}"
       - runFlow:
           when:
+            visible: "Save Draft"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' draftLabel'}"
+      - runFlow:
+          when:
             visible: "Send Request"
           commands:
             - evalScript: "${output.probe02 = output.probe02 + ' labelSendRequest'}"
@@ -362,6 +404,16 @@ appId: app.brazos.mobile.preview
             visible: 'Uploading.*'
           commands:
             - evalScript: "${output.probe02 = output.probe02 + ' labelUploading'}"
+      - runFlow:
+          when:
+            visible: '.*Save Changes.*'
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' saveChangesAnywhere'}"
+      - runFlow:
+          when:
+            visible: 'Your job is live\.|Back to Home'
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' livePage'}"
       - runFlow:
           when:
             visible: "OK"
@@ -377,11 +429,6 @@ appId: app.brazos.mobile.preview
             visible: "Messages"
           commands:
             - evalScript: "${output.probe02 = output.probe02 + ' tabMessages'}"
-      - runFlow:
-          when:
-            visible: 'Your job is updated\.'
-          commands:
-            - evalScript: "${output.probe02 = output.probe02 + ' alreadySaved'}"
       - tapOn:
           text: "STEP 4 OF 4"
           optional: true
@@ -391,30 +438,100 @@ appId: app.brazos.mobile.preview
             visible: "Save Changes"
           commands:
             - evalScript: "${output.probe02 = output.probe02 + ' afterKeyboardTap'}"
-      # iPhone 16 (393 x 852 pt, bottom inset 34): the bar's foot is max(34 - 10, 12) = 24, the button 52 tall, so
-      # its middle is 852 - 24 - 26 = 802 pt = 94 % down; with no secondary button it spans the width (50 %).
+      # The scroller's end: its note shows at the foot with or without the bar under it.
+      - swipe:
+          direction: UP
+      # FLOW-R3b: the plain picture of the scroller's end. The swipe can move "STEP 4 OF 4" off the top, so the edit
+      # form's own foot note (only on step 4 of an edit) proves the screen as well.
       - runFlow:
           when:
-            notVisible: "Save Changes"
+            visible: 'STEP 4 OF 4|Saving updates this existing job for workers nearby\.'
+          commands:
+            - takeScreenshot: probe-plain-02b
+      - runFlow:
+          when:
+            visible: 'Saving updates this existing job for workers nearby.'
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' noteAfterSwipe'}"
+      - runFlow:
+          when:
+            visible: "Save Changes"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' afterSwipe'}"
+      # iPhone 16 (393 x 852 pt, bottom inset 34): the bar's button middle is about 94 % down. Three heights; a tap
+      # that saves ends the tapping. After each: saved, the save's error, or an alert of the save's guards.
+      - tapOn:
+          point: "50%,90%"
+      - extendedWaitUntil:
+          visible: 'Your job is updated\.|Could not save changes|OK|Missing details|Set your price|Invalid budget'
+          timeout: 15000
+          optional: true
+      - runFlow:
+          when:
+            visible: 'Your job is updated\.'
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' tap90saved'}"
+      - runFlow:
+          when:
+            visible: "Could not save changes"
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' tap90error'}"
+      - runFlow:
+          when:
+            visible: 'OK|Missing details|Set your price|Invalid budget'
+          commands:
+            - evalScript: "${output.probe02 = output.probe02 + ' tap90alert'}"
+      - runFlow:
+          when:
+            notVisible: 'Your job is updated\.'
           commands:
             - tapOn:
                 point: "50%,94%"
             - extendedWaitUntil:
-                visible: 'Your job is updated\.|Could not save changes'
-                timeout: 30000
+                visible: 'Your job is updated\.|Could not save changes|OK|Missing details|Set your price|Invalid budget'
+                timeout: 15000
                 optional: true
             - runFlow:
                 when:
                   visible: 'Your job is updated\.'
                 commands:
-                  - evalScript: "${output.probe02 = output.probe02 + ' pointTapSaved'}"
+                  - evalScript: "${output.probe02 = output.probe02 + ' tap94saved'}"
             - runFlow:
                 when:
                   visible: "Could not save changes"
                 commands:
-                  - evalScript: "${output.probe02 = output.probe02 + ' pointTapError'}"
-      - assertVisible: "PROBE 02 Save Changes not found by text - facts:${output.probe02}"
-- tapOn: "Save Changes"
+                  - evalScript: "${output.probe02 = output.probe02 + ' tap94error'}"
+            - runFlow:
+                when:
+                  visible: 'OK|Missing details|Set your price|Invalid budget'
+                commands:
+                  - evalScript: "${output.probe02 = output.probe02 + ' tap94alert'}"
+      - runFlow:
+          when:
+            notVisible: 'Your job is updated\.'
+          commands:
+            - tapOn:
+                point: "50%,97%"
+            - extendedWaitUntil:
+                visible: 'Your job is updated\.|Could not save changes|OK|Missing details|Set your price|Invalid budget'
+                timeout: 15000
+                optional: true
+            - runFlow:
+                when:
+                  visible: 'Your job is updated\.'
+                commands:
+                  - evalScript: "${output.probe02 = output.probe02 + ' tap97saved'}"
+            - runFlow:
+                when:
+                  visible: "Could not save changes"
+                commands:
+                  - evalScript: "${output.probe02 = output.probe02 + ' tap97error'}"
+            - runFlow:
+                when:
+                  visible: 'OK|Missing details|Set your price|Invalid budget'
+                commands:
+                  - evalScript: "${output.probe02 = output.probe02 + ' tap97alert'}"
+      - assertVisible: "PROBE 02 Save Changes not found by text or id - facts:${output.probe02}"
 - extendedWaitUntil:
     visible: 'Your job is updated\.|Could not save changes'
     timeout: 60000
@@ -454,4 +571,11 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: 'What do you need done\?'
     timeout: 30000
+# FLOW-R3: a green result line cannot show that the save went through the id path; where it did, the flow fails
+# here, after every proof step, and names it (as flow 03 names a typing retry).
+- runFlow:
+    when:
+      true: ${output.byId02 === 'yes'}
+    commands:
+      - assertVisible: "NOTE 02 every proof step passed - Save Changes was found by id and not by text"
 - runFlow: subflows/sign-out.yml

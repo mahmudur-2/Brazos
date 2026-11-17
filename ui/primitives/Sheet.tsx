@@ -199,6 +199,7 @@ export function Sheet({
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
           >
             {children}
           </ScrollView>

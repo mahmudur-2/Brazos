@@ -208,18 +208,53 @@ function nextTopLevel(lines, i) {
   return lines.slice(j).join('\n');
 }
 
-test('FLOW-R · flow 03: each Send Bid after a typed pitch goes through home-tap with both alert titles, and nothing re-types after an alert', () => {
+// FLOW-R3b: Maestro's iOS UP swipe starts at 90 % of the screen, on a keyboard that is up; this drag starts at the
+// screen's centre, on the sheet's scroller with the keyboard up or down.
+const SWIPE_CLOSE = '- swipe:\n    start: 50%, 50%\n    end: 50%, 30%\n    duration: 250\n- runFlow: subflows/keyboard-settle.yml\n';
+
+test('FLOW-R3 · flow 03: every written Send Bid follows a centre drag that closes the keyboard, and each is ONE plain tap after a wait', () => {
   const flow = read('.maestro/03-worker-discover-bid.yml');
   // The pitch-less send still proves the pitch rule.
   assert.match(flow, /^- tapOn: "Send Bid"\n- extendedWaitUntil:\n {4}visible: "Add a pitch"\n/m);
-  const afterPitch = flow.slice(flow.indexOf(`inputText: "${PITCH}"`));
-  assert.doesNotMatch(afterPitch, /tapOn: "Send Bid"/, 'a Send Bid after a typed pitch is a plain tap');
-  const sends = afterPitch.match(
-    /- runFlow:\n {4}file: subflows\/home-tap\.yml\n {4}env:\n {6}TAP: "Send Bid"\n {6}NEXT: 'Bid sent\|Get notified\\\?\|Could not send bid\|Add a pitch\|Check the amount'\n/g
+  assert.doesNotMatch(flow, /TAP: "Send Bid"/, 'no Send Bid goes through home-tap.yml (a repeated tap can type into the pitch)');
+  // The main job's one-tap bid confirms in a dialog (no typing); the sheet's sends follow "Write a Bid".
+  const sheet = flow.indexOf('- tapOn: "Write a Bid"');
+  const taps = [...flow.matchAll(/^- tapOn: "Send Bid"$/gm)].map((m) => m.index).filter((at) => at > sheet);
+  assert.equal(taps.length, 3, 'the pitch-less send and the two written sends');
+  // FLOW-R3b: the pitch-less send reads as before FLOW-R3 (run 5 passed it with the eyebrow tap alone).
+  assert.ok(
+    flow.includes('- inputText: "40"\n- tapOn: "YOU.RE BIDDING ON"\n- runFlow: subflows/keyboard-settle.yml\n# A bid needs a pitch (components/OfferComposer.tsx).\n- scrollUntilVisible:\n'),
+    'the amount block is the one of 62b4efe'
   );
-  assert.equal(sends?.length, 2, 'both written sends go through home-tap.yml with both alert titles in NEXT');
+  assert.doesNotMatch(flow.slice(flow.indexOf('- inputText:')), /- swipe:\n\s+direction: UP/, 'no UP swipe after a typed field');
+  for (const at of taps.slice(1)) {
+    const typed = flow.lastIndexOf('- inputText:', at);
+    assert.ok(flow.indexOf(SWIPE_CLOSE, typed) > typed && flow.indexOf(SWIPE_CLOSE, typed) < at, 'a swipe closes the keyboard between the typing and the tap');
+  }
+  const afterPitch = flow.slice(flow.indexOf(`inputText: "${PITCH}"`));
+  const sends = afterPitch.match(
+    /- extendedWaitUntil:\n {4}visible: "Send Bid"\n {4}timeout: 30000\n- tapOn: "Send Bid"\n- extendedWaitUntil:\n {4}visible: 'Bid sent\|Get notified\\\?\|Could not send bid\|Add a pitch\|Check the amount'\n {4}timeout: 60000\n {4}optional: true\n/g
+  );
+  assert.equal(sends?.length, 2, 'both written sends: a wait for the button, one tap, an optional wait for the answer');
   assert.doesNotMatch(afterPitch, /tapOn: "OK"/, 'no block closes an alert after a typed pitch');
   assert.doesNotMatch(afterPitch, /visible: "Add a pitch"\n\s+commands:\n\s+- (tapOn|inputText)/, 'no recovery block on "Add a pitch"');
+  // The keyboard facts live outside probe03, which the NOTE at the end reads.
+  assert.match(flow, /^- evalScript: "\$\{output\.kb03 = ''\}"$/m);
+  assert.doesNotMatch(flow, /probe03 \+ ' kb/);
+  for (const fact of ['kbSeenAfterTyping', 'kbUpBeforeSend', 'pitchGrew', 'bidStored']) assert.ok(flow.includes(` ${fact}`), fact);
+});
+
+test('FLOW-R3 · flow 02: Save Changes by text, else by id with a NOTE at the end; the save proof stays mandatory', () => {
+  const flow = read('.maestro/02-customer-post-job.yml');
+  assert.match(flow, /- runFlow:\n {4}when:\n {6}true: \$\{output\.byId02 !== 'yes'\}\n {4}commands:\n {6}- tapOn: "Save Changes"\n/);
+  assert.match(flow, /- runFlow:\n {4}when:\n {6}true: \$\{output\.byId02 === 'yes'\}\n {4}commands:\n {6}- runFlow:\n {10}when:\n {12}visible: "STEP 4 OF 4"\n {10}commands:\n {12}- takeScreenshot: probe-plain-02a\n {6}- tapOn:\n {10}id: "post-job-primary"\n/);
+  // FLOW-R3b (T3): the id path needs a positive read: 'yes' until "Save Changes" is seen once.
+  assert.match(flow, /- evalScript: "\$\{output\.byId02 = 'yes'\}"\n- runFlow:\n {4}when:\n {6}visible: "Save Changes"\n {4}commands:\n {6}- evalScript: "\$\{output\.byId02 = 'no'\}"\n/);
+  assert.doesNotMatch(flow, /notVisible: "Save Changes"/);
+  const note = flow.indexOf('NOTE 02 every proof step passed - Save Changes was found by id and not by text');
+  assert.ok(note > flow.indexOf("- assertVisible: 'Your job is updated\\.'"), 'the NOTE comes after the save proof');
+  assert.ok(flow.indexOf('- runFlow: subflows/sign-out.yml') > note);
+  for (const fact of ['saveChangesAnywhere', 'livePage', 'draftLabel', 'noteAfterSwipe', 'tap90saved', 'tap94saved', 'tap97saved']) assert.ok(flow.includes(` ${fact}`), fact);
 });
 
 test("FLOW-R · flow 05: the worker's sent counter is found by scrolling up to its card", () => {
@@ -310,12 +345,45 @@ test('FLOW-R · probes: each PROBE assert runs only on a failure path, the proof
   ]);
   assert.ok(
     probes[0].after.startsWith(
-      `- tapOn: "Save Changes"\n- extendedWaitUntil:\n    visible: 'Your job is updated\\.|Could not save changes'\n    timeout: 60000\n- assertVisible: 'Your job is updated\\.'\n`
+      `- extendedWaitUntil:\n    visible: 'Your job is updated\\.|Could not save changes'\n    timeout: 60000\n- assertVisible: 'Your job is updated\\.'\n`
     ),
-    'flow 02: the tap, the wait and the proof follow the probe unchanged'
+    'flow 02: the wait and the proof follow the probe unchanged'
   );
   for (const p of probes.slice(1)) assert.ok(p.after.startsWith(BID_WAIT), 'flow 03: the wait (not optional) and the refusal check follow');
   for (const p of probes) {
-    assert.match(p.text.replace(/\$\{output\.probe0[23]\}$/, ''), /^[A-Za-z0-9 :-]+$/, `"${p.text}" has a regex-special character`);
+    assert.match(p.text.replace(/(\$\{output\.\w+\})+$/, ''), /^[A-Za-z0-9 :-]+$/, `"${p.text}" has a regex-special character`);
   }
+});
+
+test('FLOW-R3b · flow 04: the eyebrow tap closes the counter keypad (a tap no child handles, in the Sheet scroller), no swipe', () => {
+  const flow = read('.maestro/04-customer-accept-pay.yml');
+  const typed = flow.indexOf('- inputText: "45"');
+  const send = flow.indexOf('- tapOn: "Send Counter-Offer"');
+  assert.ok(typed > 0 && send > typed);
+  assert.ok(!flow.slice(typed, send).includes('- swipe:'), 'no swipe between the typing and the tap');
+  assert.match(flow.slice(typed, send), /- tapOn: "COUNTERING"\n(#.*\n)*- runFlow: subflows\/keyboard-settle\.yml\n$/);
+});
+
+test('FLOW-R3b · plain pictures: only flow 02 takes them, twice, each alone under a guard that proves the edit form step 4', () => {
+  const others = allFlows().filter((f) => f.rel !== '.maestro/02-customer-post-job.yml' && f.text.includes('takeScreenshot: probe-plain-'));
+  assert.deepEqual(others.map((f) => f.rel), []);
+  const flow = read('.maestro/02-customer-post-job.yml');
+  const lines = flow.split('\n');
+  const shots = [];
+  lines.forEach((line, i) => {
+    const m = line.match(/^( +)- takeScreenshot: (probe-plain-\S+)$/);
+    if (!line.includes('probe-plain-')) return;
+    assert.ok(m, `02:${i + 1} a plain picture is a nested takeScreenshot`);
+    const indent = m[1].length;
+    assert.equal(lines[i - 1], `${' '.repeat(indent - 2)}commands:`, `02:${i + 1} is the first command of its block`);
+    assert.match(lines[i - 2], /^ +visible: ("STEP 4 OF 4"|'STEP 4 OF 4\|Saving updates this existing job for workers nearby\\\.')$/, `02:${i + 1} guard`);
+    assert.match(lines[i - 3], /^ +when:$/);
+    assert.ok(lines[i + 1].search(/\S/) < indent, `02:${i + 1} stands alone in its guard`);
+    shots.push({ name: m[2], at: lines.slice(0, i).join('\n').length });
+  });
+  assert.deepEqual(shots.map((s) => s.name), ['probe-plain-02a', 'probe-plain-02b']);
+  // a: on the id path, before the id tap; b: in the probe, after its swipe, before the point taps.
+  assert.ok(shots[0].at > flow.indexOf("true: ${output.byId02 === 'yes'}") && shots[0].at < flow.indexOf('id: "post-job-primary"'));
+  const probeSwipe = flow.indexOf('      - swipe:\n          direction: UP\n');
+  assert.ok(probeSwipe > 0 && shots[1].at > probeSwipe && shots[1].at < flow.indexOf('point: "50%,90%"'));
 });

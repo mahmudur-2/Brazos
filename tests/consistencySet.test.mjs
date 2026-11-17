@@ -151,3 +151,16 @@ test('[static] M-37 — before the hire, the pitch is where a question goes', ()
   const detail = stripComments(read('screens/JobDetailScreen.tsx'));
   assert.match(detail, /Questions go in your bid; chat opens once hired\./);
 });
+
+// FLOW-R3 (phone runs 4 and 5): the bid form moved from its own screen into a Sheet, whose scroller kept the
+// keyboard up through a drag; the old screen closed it on a drag (components/OfferComposer.tsx 'screen').
+test('[static] FLOW-R3 — a drag inside a sheet closes the keyboard, as the old bid screen did', () => {
+  const sheet = stripComments(read('ui/primitives/Sheet.tsx'));
+  assert.match(sheet, /<ScrollView\s+style=\{styles\.scroll\}\s+contentContainerStyle=\{styles\.scrollContent\}\s+keyboardShouldPersistTaps="handled"\s+keyboardDismissMode="on-drag"\s*>/);
+});
+
+// FLOW-R3: the posting bar's main button carries an id, so a robot can find it when its text is not read.
+test('[static] FLOW-R3 — the posting bar\'s main button carries a test id', () => {
+  const bar = stripComments(read('components/PostJobBar.tsx'));
+  assert.match(bar, /<Button\s+title=\{primary\.label\}\s+onPress=\{primary\.onPress\}\s+testID="post-job-primary"/);
+});

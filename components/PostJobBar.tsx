@@ -88,6 +88,7 @@ export function PostJobBar({
         <Button
           title={primary.label}
           onPress={primary.onPress}
+          testID="post-job-primary"
           icon={primaryIcon ?? primaryTrailingIcon}
           iconPosition={primaryIcon ? 'leading' : 'trailing'}
           disabled={primaryDisabled || hidePrimary}
