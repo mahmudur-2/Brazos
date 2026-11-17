@@ -85,3 +85,6 @@ and `tests/` are their record. Full history of every ruling up to 2026-11-07 is 
 | D-20260930-7 | 2026-09-30 | The receipt email goes through Resend's HTTP API, card payments only; "skipped" until `RESEND_API_KEY` and `RECEIPT_FROM` are set. |
 | D-20260930-8 | 2026-09-30 | Repeat-job refusals and posts go out 9 am to 9 pm New York only; too-close visits skip; moving or cancelling the first visit moves or ends the series. |
 | D-20261003-2 | 2026-10-03 | A legal-gate failure admits only on-device proof that the server confirmed this account accepted the current Terms and Privacy; otherwise it fails closed; sign-out always works locally. |
+| D-20261117-1 | 2026-11-17 | A job cancelled while its payment was still held: an admin can only refund the customer in the app (the owner picked "Refund only"); paying the worker of such a job is a developer step. The worker's cancellation fee after a customer no-show is unchanged. |
+| D-20261117-2 | 2026-11-17 | An admin decision can pay a worker whose account is suspended (the owner picked "Allow, as built"). |
+| D-20261117-3 | 2026-11-17 | An admin's decision line shows both people's sign-in phone and email (the owner: no change). |

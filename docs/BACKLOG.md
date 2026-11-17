@@ -143,6 +143,36 @@ From the lean security verdict (archived 2026-11-08, `_archive/2026-11-lean/SECU
   server refunds the first charge later (`funded_after_void`).
 - Test `504_admin_attention_notice.sql` part 0c proves its point through the helper `tests.o1n_run`,
   not by a direct call of `notify_attention_admins()`.
+- Money, the first item after launch: cancel the superseded payment intent at Stripe before a new
+  one is made, and answer `confirmed` when Stripe refuses because it is settled. Today two phones of
+  one person on the same tip can both pay (the second request voids the first row), and a 200 answer
+  from Stripe with a cut body reads as "not settled"; the repair job refunds the first charge later.
+- `create-payment`: make the saved-card ownership check before the early `confirmed` answer (today
+  that answer is about the caller's own row, and no money moves).
+- Tip page: when the app cannot read the tip row after a `confirmed` answer, the notice "Earlier Tip
+  in Progress" is not shown (the page still shows the true amount when the tip confirms).
+- Tests to add at the payment seams: the app's tip `confirmed` path as a behaviour; a 5xx answer
+  with `ambiguous: false` shows the alert at once; a 5xx answer whose body is not an object; a
+  release refused for an unfunded and for a refunded payment; after a refused completion the job is
+  still `in_progress` and no completion row exists.
+- One `bidsClosed(job)` rule in the app that also reads status and visibility, as the server's bid
+  rule does, and one rule for Decline after the booked time (the job page hides Decline, the offer
+  page keeps it; the server takes a decline either way; harmless today).
+- Account deletion, from the outside audit of the 2026-11-16 run: a card dispute opened after the
+  worker was paid does not block a deletion; a partly refunded payment with no refund id, whose
+  failed refund was settled outside Stripe, blocks a deletion until a developer corrects the row; a
+  sign-in row removed by hand is admitted until its token ends. Fourteen lower claims were not
+  judged (A-02 to A-04, B-01, B-03, B-04, C1-03 to C1-05, C2-01 to C2-04, E-03; run ledger D94).
+- Admin card: a no-show report's details show the server's raw UTC time text; an issue with no
+  payment row offers both sides and its confirmation names a payment (no money moves); a tap on the
+  "Brazos needs you" notice opens the list at its top, not at the line.
+- Migration scan (`scripts/migration-scan.mjs`): exit 2 when the main-script guard does not match (a
+  call through a symlinked path does nothing and exits 0 today; `scripts/production-deploy.mjs` has
+  the same guard); flag `alter policy … rename`; do not pass a revoke after `create table if not
+  exists` or `create or replace view`; read the arguments of `set_config`; non-ASCII characters
+  before a string prefix and in a dollar tag; tests for a byte order mark, an unterminated comment
+  and an unterminated dollar tag; the word "safe" in two test titles and the step name "destructive
+  shapes" in `staging.yml`. To judge: let `alter type … add value` pass without a review.
 
 ## Parked operator decisions
 
@@ -163,3 +193,14 @@ Not authorised for any run until the owner says so.
   project burned with no users (an old build or crawlers on public bucket URLs).
 - A read-only staging Postgres role for runs: the connection string would live outside the
   repository; needs a dated `docs/DECISIONS.md` row before any run uses it.
+- A reported person can delete the account before the review and sign up again with the same phone
+  (a suspended account cannot). Keeping the sign-in phone for a fixed time changes what a deletion
+  keeps: the owner's decision, and a question for the lawyer's text.
+- Never change the Stripe account or key under a database that has people without a developer step:
+  each stored customer id must be cleared first, or the saved-card list fails and those people
+  cannot delete their account.
+- `.claude/rules/supabase.md` still names the old seven scan patterns; the scan now reads statements
+  and asks for a review (`docs/ARCHITECTURE.md`). A run may not edit that folder.
+- One new TestFlight build before the public date: the privacy manifest (`ios.privacyManifests` in
+  `app.config.ts`) and the build-time check of the Supabase key's kind reach phones only with a
+  build, not with an over-the-air update.
