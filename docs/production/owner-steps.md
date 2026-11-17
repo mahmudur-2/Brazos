@@ -63,12 +63,14 @@ Production takes test money only (D-20261111-3).
 
 ## F. Press the button
 
-16. Click Actions, then Production in the left list, then Run workflow. Keep the branch `mainexpo`. Keep `allow_destructive` empty. Click Run workflow.
+The production database holds migrations since the first PASS (2026-11-13, run 43435759116). So each press from now on is a later press: read part H before step 16.
+
+16. Click Actions, then Production in the left list, then Run workflow. Keep the branch `mainexpo`. On the first press, keep `allow_destructive` empty. On a later press, check it only when you know which files the scan flags and you agree with them (part H). Click Run workflow.
     - You see: "lint + tests" and "build the database locally (no secrets)" run. Then "plan (changes nothing)" shows Waiting.
     - If a job is red: open it. Its last lines say why. Fix that, then press again.
 17. Click Review deployments, select `production`, click Approve and deploy.
 18. When the plan job ends, open the run's Summary. Read the PRODUCTION PLAN table.
-    - You see: the files the button will apply, and the last line "PRODUCTION PLAN: PASS". On the first press, every file is new. Files the scan flags are listed and allowed, because the database is empty.
+    - You see: the files the button will apply, and the last line "PRODUCTION PLAN: PASS". On the first press, every file is new. Files the scan flags are listed and allowed, because the database is empty. On a later press, the table says how many files it will apply and how many of them the scan flags (FLAGGED). With flagged files and the box empty, the plan stops and nothing is applied (part H).
     - If you see FAIL: the sentence in that row says what to do. Do the step, then press again.
 19. Then "apply (second approval)" shows Waiting. Approve it only if the plan is what you expect. If not, click Reject. Nothing changed. Approve it within one day of pressing the button, because the local fingerprint the apply job needs is kept for one day; after that, press the button again.
 20. When the apply job ends, read the PRODUCTION table in the Summary.
@@ -93,7 +95,7 @@ What the table means: each row is one check that ran. PASS means the button saw 
 
 - If you change or delete a Supabase key, press the button again.
 - On the free plan, Supabase pauses a project after a week with no use. If the table says "The production project is not running", restore it in the dashboard, then press again.
-- A migration the scan flags on a database that is not empty stops the plan. Read the file. If you agree with it, press again with `allow_destructive` checked.
+- A migration the scan flags on a database that is not empty stops the plan, and nothing is applied. The run's log lists each flagged line. Read them, or let your chat read them and say in plain words what each one does. If you agree, press again with `allow_destructive` checked. Before the second approval, compare the plan's two numbers (files to apply, files flagged) with the numbers you were given. If they differ, click Reject.
 
 ## I. Optional steps
 

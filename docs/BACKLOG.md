@@ -187,6 +187,9 @@ Not authorised for any run until the owner says so.
   real-money switch needs its own dated decision (D-20261111-3).
 - Resend (`RESEND_API_KEY`, `RECEIPT_FROM`) on staging, and a domain with a support inbox, before real
   customers.
+- Receipts reach nobody today: an account made by phone has no email address, and `send-receipts`
+  marks such a receipt skipped. Before real customers: let a person add an email for receipts (it
+  comes before the Resend item above).
 - Stripe housekeeping: rename the test account "Brazos sandbox" before launch; roll the publishable
   test key that once appeared in terminal output.
 - Supabase Pro at the launch gate; diagnose the roughly 2 GB of cached egress the retired production
