@@ -69,14 +69,14 @@ const CENSUS = [
     re: /: releaseRequested && !isPayoutOnItsWay\(payment\) \? payment\.release_reason === 'auto_approved' \? 'Approved automatically\.' : 'You approved the work\.' : releaseRequested \? payment\.release_reason === 'auto_approved' \? 'Approved automatically with no issue reported\. The payment is on its way to the worker and shows as released when the transfer lands\.' : 'You approved the work\. The payment is on its way to the worker and shows as released when the transfer lands\.'/ },
   // Codex R12-A1: from the note's guard, so the entry asks (the two sentences above are inside it).
   { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 3, why: 'the approve action itself, before any approval, unless a refund failure is recorded (R11-A2; a refund queued: R7-A3b, the owner decides)',
-    re: /\{!released && !releaseRequested && releaseAllowed && isRefundFailureRecorded\(payment\) \? null : \( <Text style=\{styles\.paymentNote\}> \{released \? payment\.release_reason === 'auto_approved' \? 'Released automatically with no issue reported\.' : 'You approved the work and the payment was released to the worker\.' : releaseRequested && !isPayoutOnItsWay\(payment\) \? payment\.release_reason === 'auto_approved' \? 'Approved automatically\.' : 'You approved the work\.' : releaseRequested \? payment\.release_reason === 'auto_approved' \? 'Approved automatically with no issue reported\. The payment is on its way to the worker and shows as released when the transfer lands\.' : 'You approved the work\. The payment is on its way to the worker and shows as released when the transfer lands\.' : releaseAllowed \? 'Approving sends this payment on its way to the worker\. If something isn’t right, report the issue instead — release waits while a report is open\.'/ },
+    re: /\{!released && !releaseRequested && \(!\(held && !dispute\) \|\| \(releaseAllowed && isRefundFailureRecorded\(payment\)\)\) \? null : \( <Text style=\{styles\.paymentNote\}> \{released \? payment\.release_reason === 'auto_approved' \? 'Released automatically with no issue reported\.' : 'You approved the work and the payment was released to the worker\.' : releaseRequested && !isPayoutOnItsWay\(payment\) \? payment\.release_reason === 'auto_approved' \? 'Approved automatically\.' : 'You approved the work\.' : releaseRequested \? payment\.release_reason === 'auto_approved' \? 'Approved automatically with no issue reported\. The payment is on its way to the worker and shows as released when the transfer lands\.' : 'You approved the work\. The payment is on its way to the worker and shows as released when the transfer lands\.' : releaseAllowed \? 'Approving sends this payment on its way to the worker\. If something isn’t right, report the issue instead — release waits while a report is open\.'/ },
   { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 1, why: 'the approve dialog, before any approval: what approving does, with no timing (R8-A1 vocabulary), unless a refund failure is recorded (R11-A2)',
     re: /\(isRefundFailureRecorded\(payment\) \? '' : '\\n\\n' \+ 'This approves the finished work and releases the payment to the worker\. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands\.'\)/ },
   // Codex R12-A1: the release vocabulary's sentences on this page, each under the predicate. The three
   // labels are the owner's (Phase 15): the shorter words where a refund failure is recorded.
   // A4 wiring (P1): releaseAt asks the predicate (never().releaseAt); a time is shown only while it is ahead.
   { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 0, why: 'the timer, unless a refund failure is recorded (R11-A2) or the time is not ahead (P1)',
-    re: /\{held && releaseAt != null && releaseAt > serverNowMs\(\) \? \( <Text style=\{styles\.paymentNote\}> Releases automatically \{releaseAtLabel\(releaseAt, serverNowMs\(\)\)\} if you do nothing\. <\/Text> \) : null\}/ },
+    re: /\{held && !dispute && releaseAt != null && releaseAt > serverNowMs\(\) \? \( <Text style=\{styles\.paymentNote\}> Releases automatically \{releaseAtLabel\(releaseAt, serverNowMs\(\)\)\} if you do nothing\. <\/Text> \) : null\}/ },
   { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 0, why: 'the approve button',
     re: /\? releaseAllowed \? isRefundFailureRecorded\(payment\) \? 'Approve the Work' : `Approve & Release Payment` : undefined/ },
   { file: 'screens/ApproveOrDisputeScreen.tsx', hits: 0, why: 'the approve dialog’s title',
@@ -669,12 +669,12 @@ const never = () => ({
   // A4 wiring (P1): the page's time is releaseAt, the predicate's answer; the guard shows it only while ahead.
   releaseAt: run(['isRefundFailureRecorded', 'releaseDeadlineMs', 'payment', 'job'], ONCE('screens/ApproveOrDisputeScreen.tsx',
     /const releaseAt = (isRefundFailureRecorded\(payment\) \? null : releaseDeadlineMs\(job\));/)),
-  timer: run(['held', 'releaseAt', 'serverNowMs'], ONCE('screens/ApproveOrDisputeScreen.tsx',
-    /\{(held && releaseAt != null && releaseAt > serverNowMs\(\)) \? \( <Text style=\{styles\.paymentNote\}> Releases automatically/)),
+  timer: run(['held', 'dispute', 'releaseAt', 'serverNowMs'], ONCE('screens/ApproveOrDisputeScreen.tsx',
+    /\{(held && !dispute && releaseAt != null && releaseAt > serverNowMs\(\)) \? \( <Text style=\{styles\.paymentNote\}> Releases automatically/)),
   detailTime: run(['approvalDeadline', 'releaseAtLabel', 'serverNowMs'], ONCE('screens/ClientJobDetailScreen.tsx',
     /then approve to release the held funds or report an issue\. \{(approvalDeadline != null && approvalDeadline > serverNowMs\(\) \? ` With no response, the funds release automatically \$\{releaseAtLabel\(approvalDeadline, serverNowMs\(\)\)\}\.` : null)\} <\/Text>/)),
-  noteHidden: run(['released', 'releaseRequested', 'releaseAllowed', 'isRefundFailureRecorded', 'payment'], ONCE('screens/ApproveOrDisputeScreen.tsx',
-    /\{(!released && !releaseRequested && releaseAllowed && isRefundFailureRecorded\(payment\)) \? null : \( <Text style=\{styles\.paymentNote\}> \{released/)),
+  noteHidden: run(['released', 'releaseRequested', 'held', 'dispute', 'releaseAllowed', 'isRefundFailureRecorded', 'payment'], ONCE('screens/ApproveOrDisputeScreen.tsx',
+    /\{(!released && !releaseRequested && \(!\(held && !dispute\) \|\| \(releaseAllowed && isRefundFailureRecorded\(payment\)\)\)) \? null : \( <Text style=\{styles\.paymentNote\}> \{released/)),
   approveNote: run(['releaseAllowed'], ONCE('screens/ApproveOrDisputeScreen.tsx', /: (releaseAllowed \? '[^']*' : '[^']*')\}/)),
   dialog: run(['isRefundFailureRecorded', 'payment'], ONCE('screens/ApproveOrDisputeScreen.tsx',
     /nothing more is charged\.` \+ \((isRefundFailureRecorded\(payment\) \? '' : '\\n\\n' \+ '[^']*')\)/)),
@@ -721,9 +721,9 @@ test('R11-A2 · never approved: no release or timer sentence beside a recorded r
     assert.equal(isReleaseRequested(row), false, `${name}: never approved`);
     const p = { [job.id]: row };
     const said = {
-      timer: NEVER.timer(true, NEVER.releaseAt(isRefundFailureRecorded, releaseDeadlineMs, row, job), CLOCK),
-      approveNote: NEVER.noteHidden(false, false, true, isRefundFailureRecorded, row) ? null : NEVER.approveNote(true),
-      paused: NEVER.noteHidden(false, false, false, isRefundFailureRecorded, row) ? null : NEVER.approveNote(false),
+      timer: NEVER.timer(true, null, NEVER.releaseAt(isRefundFailureRecorded, releaseDeadlineMs, row, job), CLOCK),
+      approveNote: NEVER.noteHidden(false, false, true, null, true, isRefundFailureRecorded, row) ? null : NEVER.approveNote(true),
+      paused: NEVER.noteHidden(false, false, true, null, false, isRefundFailureRecorded, row) ? null : NEVER.approveNote(false),
       dialog: NEVER.dialog(isRefundFailureRecorded, row),
       withdraw: NEVER.withdraw(isRefundFailureRecorded, row),
       button: NEVER.button(isRefundFailureRecorded, row),
@@ -841,7 +841,7 @@ test('P1 · the server’s release time is named only while it is ahead: a passe
     const deadline = NEVER.detailDeadline(isRefundFailureRecorded, releaseDeadlineMs, row, job);
     const hub = NEVER.homeLine(isRefundFailureRecorded, releaseDeadlineMs, { payments: { [job.id]: row } }, job);
     return {
-      approvePage: NEVER.timer(true, NEVER.releaseAt(isRefundFailureRecorded, releaseDeadlineMs, row, job), CLOCK),
+      approvePage: NEVER.timer(true, null, NEVER.releaseAt(isRefundFailureRecorded, releaseDeadlineMs, row, job), CLOCK),
       detailNote: NEVER.detailTime(deadline, releaseAtLabel, CLOCK),
       workerNote: workerMessage()(deriveJobLifecycle, isCancellationFeeKept, isPayoutOnItsWay, isRefundQueued, isReleased, isReleaseRequested,
         isRefundFailureRecorded, isHeld, PAYOUT_SETUP_NOTICE, false, job, row, false, 'Sam', releaseDeadlineMs, releaseAtLabel, CLOCK),
@@ -960,4 +960,50 @@ test('R11-A2 · the hub read carries both refund facts, so the hub and Home can 
   } finally {
     stub.from = () => { throw new Error('no read'); };
   }
+});
+
+// ---------------------------------------------------------------------------
+// TRUTH-R (R2): before approval, the release time and the approve sentences show only while the row is
+// held and no report is open (the "Report an Issue" rule, held && !dispute). The guards are read in a
+// general form, so the guards before this repair run here as well.
+// ---------------------------------------------------------------------------
+test('TRUTH-R R2 · no release time or approve sentence beside an open report or on a row that is not held', () => {
+  const src = code('screens/ApproveOrDisputeScreen.tsx');
+  const NAMES = ['held', 'dispute', 'releaseAt', 'serverNowMs', 'released', 'releaseRequested', 'releaseAllowed', 'isRefundFailureRecorded', 'payment'];
+  const timerGuard = src.match(/\{([^{}]*?) \? \( <Text style=\{styles\.paymentNote\}> Releases automatically/);
+  const noteGuard = src.match(/\{(!released && !releaseRequested[^{}]*?) \? null : \( <Text style=\{styles\.paymentNote\}> \{released/);
+  assert.ok(timerGuard && noteGuard, 'both guards');
+  const timer = new Function(...NAMES, `return Boolean(${timerGuard[1]});`);
+  const noteHidden = new Function(...NAMES, `return Boolean(${noteGuard[1]});`);
+  const NOW = Date.parse('2026-11-17T12:00:00Z');
+  const said = (held, dispute, status) => {
+    const args = [held, dispute, NOW + 3_600_000, () => NOW, false, false, true, () => false, { status }];
+    return { timer: timer(...args), note: !noteHidden(...args) };
+  };
+  assert.deepEqual(said(true, { id: 'd1', status: 'open' }, 'held'), { timer: false, note: false }, 'held, report open');
+  assert.deepEqual(said(false, null, 'refunded'), { timer: false, note: false }, 'not held, not released');
+  assert.deepEqual(said(true, null, 'held'), { timer: true, note: true }, 'the control: held, no report');
+});
+
+// TRUTH-R (R2c): a failed read of the open report takes the failed payment read's path (the error view
+// with Retry); it is never read as "no report".
+test('TRUTH-R R2c · a failed read of the open report is the error view, never "no report"', async () => {
+  const body = code('screens/ApproveOrDisputeScreen.tsx').match(/const load = useCallback\((async \(\) => \{.*?\}), \[job\.id\]\);/);
+  assert.ok(body, 'load');
+  const NAMES = ['fetchJobPaymentState', 'fetchOpenJobDispute', 'job', 'userMessage', 'setLoadError', 'setPayment', 'setDispute', 'setLoaded'];
+  const runLoad = async (paymentRes, disputeRes) => {
+    const s = { loadError: 'before', payment: null, dispute: null, loaded: false };
+    const load = new Function(...NAMES, `return ${body[1]};`)(
+      async () => paymentRes, async () => disputeRes, { id: 'j1' }, (e) => e.message,
+      (v) => { s.loadError = typeof v === 'function' ? v(s.loadError) : v; },
+      (v) => { s.payment = v; }, (v) => { s.dispute = v; }, (v) => { s.loaded = v; });
+    await load();
+    return s;
+  };
+  const HELD = { data: { status: 'held' }, error: null };
+  const DOWN = { data: null, error: { message: 'Can’t reach Brazos right now.' } };
+  assert.equal((await runLoad(HELD, DOWN)).loadError, 'Can’t reach Brazos right now.', 'the report read failed: the error view');
+  assert.equal((await runLoad({ data: null, error: { message: 'payment down' } }, DOWN)).loadError, 'payment down', 'the payment read speaks first');
+  const page = await runLoad(HELD, { data: null, error: null });
+  assert.deepEqual([page.loadError, page.dispute, page.loaded], [null, null, true], 'no report: the page');
 });

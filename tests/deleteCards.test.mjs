@@ -146,7 +146,7 @@ const NAMES = ['confirmAsync', 'deletingRef', 'setDeleting', 'fetchAccountDeleti
   'cardSweepMessage', 'deleteMyAccount', 'setConfirmText', 'loadBlockers', 'signOutLocally', 'navigation', 'SIGN_OUT_UNFINISHED_MESSAGE'];
 const build = new Function(...NAMES, `${source}\nreturn handleDelete;`);
 
-function run({ mode = 'stripe', gates = [], sweeps = [], confirms = [], realCards = false, deletes = [] } = {}) {
+function run({ mode = 'stripe', gates = [], sweeps = [], confirms = [], realCards = false, deletes = [], reload = true } = {}) {
   const log = [];
   const alerts = [];
   const deps = {
@@ -174,7 +174,8 @@ function run({ mode = 'stripe', gates = [], sweeps = [], confirms = [], realCard
       return deletes.shift() ?? { blocked: false, error: null };
     },
     setConfirmText: () => {},
-    loadBlockers: async () => log.push('reload list'),
+    // TRUTH-R (R4): loadBlockers answers whether the list was read again.
+    loadBlockers: async () => (log.push('reload list'), reload),
     signOutLocally: async () => (log.push('sign out'), true),
     navigation: { popToTop: () => log.push('popToTop') },
     SIGN_OUT_UNFINISHED_MESSAGE: '(sign-out unfinished)',
@@ -199,6 +200,16 @@ test('the account is deleted only after the card step proved every card gone; pa
   r = run({ confirms: [true], gates: [[{ kind: 'open_job' }]] });
   await r.handleDelete();
   assert.deepEqual(r.log, ['confirm Delete this account? / Delete Account', 'deleting true', 'gate', 'deleting false', 'reload list', 'alert Not ready yet']);
+});
+
+test('TRUTH-R R4: "The list below is up to date." only after a good reload of the list', async () => {
+  let r = run({ confirms: [true], gates: [[{ kind: 'open_job' }]], reload: false });
+  await r.handleDelete();
+  assert.deepEqual(r.log.slice(-2), ['reload list', 'alert Not ready yet']);
+  assert.deepEqual(r.alerts, ['Something on this account still has to be settled first.'], 'a failed reload: no claim about the list');
+  r = run({ confirms: [true], gates: [[{ kind: 'open_job' }]] });
+  await r.handleDelete();
+  assert.deepEqual(r.alerts, ['Something on this account still has to be settled first. The list below is up to date.'], 'a good reload');
 });
 
 test('a failed card step keeps the account; Try Again runs again from the gate with no second confirm; Cancel leaves it', async () => {

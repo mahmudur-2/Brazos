@@ -130,14 +130,15 @@ export function CheckoutScreen() {
     };
   }, []);
 
-  const loadPayment = useCallback(async (): Promise<Payment | null> => {
+  // null = no row; undefined = the read failed.
+  const loadPayment = useCallback(async (): Promise<Payment | null | undefined> => {
     setPaymentError(null);
     const { data, error } = await fetchJobPayment(job.id);
     setNowMs(serverNowMs());
     if (error) {
       setPaymentError(userMessage(error));
       setPaymentLoaded(true);
-      return null;
+      return undefined;
     }
     setPayment(data);
     setPaymentLoaded(true);
@@ -492,7 +493,7 @@ export function CheckoutScreen() {
       navigation.replace('JobConfirmed', { job });
       return;
     }
-    if (phase === 'timeout' && row == null) setPhase('gone');
+    if (phase === 'timeout' && row === null) setPhase('gone');
     // PAY-R (PC-03): a row that may still be funded brings the pay button back.
     if (phase === 'timeout' && row && canOfferJobFunding({ viewerId: user?.id, job, payment: row, nowMs: serverNowMs() })) {
       setPhase('idle');
@@ -554,7 +555,7 @@ export function CheckoutScreen() {
                 },
               ]
             : []),
-          ...(phase === 'gone'
+          ...(phase === 'gone' && !held
             ? [
                 {
                   title: 'The Payment Did Not Go Through',

@@ -297,9 +297,9 @@ test('R6-A3, R7-A3 · the tip card’s payout sentence only under the one payout
   const PAYOUT = 'Yours is approved and on its way — if they haven’t set up payouts yet, it lands the moment they do.';
   const review = code('screens/ReviewAndTipScreen.tsx');
   const branch = review.match(
-    /\) : !released \? \( <Text style=\{styles\.cardNote\}> A tip can be added once the job payment reaches \{workerName \?\? 'the worker'\}\. \{([^?{}]+) \? ' ([^']*)' : null\} <\/Text> \) : !stripeReady\(\) \? \(/
+    /\) : tipView === 'notReleased' && payment \? \( <Text style=\{styles\.cardNote\}> A tip can be added once the job payment reaches \{workerName \?\? 'the worker'\}\. \{([^?{}]+) \? ' ([^']*)' : null\} <\/Text> \) : tipView === 'unavailable' \? \(/
   );
-  assert.ok(branch, 'the !released branch: the first sentence always, then the payout sentence behind a guard');
+  assert.ok(branch, 'the notReleased branch: the first sentence always, then the payout sentence behind a guard');
   assert.equal(branch[1].trim(), 'isPayoutOnItsWay(payment)', 'the one payout rule (R7-A3)');
   assert.equal(branch[2], PAYOUT, 'the owner’s words (A10a), unchanged');
   assert.equal((review.match(/Yours is approved and on its way/g) ?? []).length, 1, 'said in this branch only');

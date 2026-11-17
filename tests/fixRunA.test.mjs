@@ -22,7 +22,7 @@ test('A10 · "payout on its way" says what it waits for; the tip opens once the 
   const review = code('screens/ReviewAndTipScreen.tsx');
   assert.match(
     review,
-    /: !released \? \( <Text style=\{styles\.cardNote\}> A tip can be added once the job payment reaches \{workerName \?\? 'the worker'\}\. \{isPayoutOnItsWay\(payment\) \? ' Yours is approved and on its way — if they haven’t set up payouts yet, it lands the moment they do\.' : null\} <\/Text> \)/
+    /: tipView === 'notReleased' && payment \? \( <Text style=\{styles\.cardNote\}> A tip can be added once the job payment reaches \{workerName \?\? 'the worker'\}\. \{isPayoutOnItsWay\(payment\) \? ' Yours is approved and on its way — if they haven’t set up payouts yet, it lands the moment they do\.' : null\} <\/Text> \)/
   );
   assert.doesNotMatch(review, /The job payment releases first/);
 

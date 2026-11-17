@@ -85,7 +85,8 @@ test('in disabled mode the money screens show the unavailable state and offer no
   assert.match(checkout, /\) : !paymentsEnabled \? undefined : !stripe \? undefined : /);
 
   const review = stripComments(read('screens/ReviewAndTipScreen.tsx'));
-  assert.match(review, /paymentsMode === 'disabled' \? \(\s*<Text style=\{styles\.cardNote\}>\s*Payments aren’t available right now, so tipping is unavailable\./);
+  assert.match(review, /: paymentsMode === 'disabled' \? 'disabled'/);
+  assert.match(review, /tipView === 'disabled' \? \(\s*<Text style=\{styles\.cardNote\}>\s*Payments aren’t available right now, so tipping is unavailable\./);
 
   const payouts = stripComments(read('screens/PayoutsScreen.tsx'));
   assert.match(payouts, /: !stripe\s*\?\s*\{\s*kind: 'permissionDenied',[\s\S]{0,120}body: PAYOUTS_DISABLED_BODY,/);

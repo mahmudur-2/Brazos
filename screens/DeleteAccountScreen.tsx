@@ -67,19 +67,20 @@ export function DeleteAccountScreen() {
   const [deleting, setDeleting] = useState(false);
   const deletingRef = useRef(false);
 
-  const loadBlockers = useCallback(async () => {
+  const loadBlockers = useCallback(async (): Promise<boolean> => {
     setLoading(true);
     setLoadError(null);
     const { data, error } = await fetchAccountDeletionBlockers();
     if (error) {
       setLoadError(userMessage(error));
       setLoading(false);
-      return;
+      return false;
     }
     const list = formatBlockerList(data, { routable: !inGate });
     setBlockers(list.rows);
     setHeadline(list.headline);
     setLoading(false);
+    return true;
   }, [inGate]);
 
   useEffect(() => {
@@ -183,10 +184,10 @@ export function DeleteAccountScreen() {
       // actually blocks now instead of a raw database error.
       setDeleting(false);
       setConfirmText('');
-      await loadBlockers();
+      const listFresh = await loadBlockers();
       await alertAsync(
         'Not ready yet',
-        `Something on this account still has to be settled first. The list below is up to date.${cardsNote}`
+        `Something on this account still has to be settled first.${listFresh ? ' The list below is up to date.' : ''}${cardsNote}`
       );
       return false;
     }

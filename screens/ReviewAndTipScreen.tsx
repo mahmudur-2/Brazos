@@ -230,6 +230,18 @@ export function ReviewAndTipScreen() {
   // which.
   const tipPending = !!tip && tip.status === 'unfunded';
   const tipDone = !!tip && !tipPending;
+  // TRUTH-R: which body the tip card shows, decided once; 'controls' = a tip can still be sent.
+  const tipView =
+    tipDone && tip ? 'done'
+    : paymentsMode === 'disabled' ? 'disabled'
+    : !stripe ? 'none'
+    : !paymentsEnabled ? 'paused'
+    : !payment ? 'noPayment'
+    : !released ? 'notReleased'
+    : !stripeReady() ? 'unavailable'
+    : tipPhase === 'confirming' ? 'confirming'
+    : tipPhase === 'timeout' ? 'timeout'
+    : 'controls';
 
   /**
    * R6c (D3) step one: mint the tip row and its intent (create-payment →
@@ -267,9 +279,19 @@ export function ReviewAndTipScreen() {
         return;
       }
       tipSessionRef.current = session.data;
-      const { data: row } = await fetchJobTip(job.id);
+      const { data: row, error: rowError } = await fetchJobTip(job.id);
       if (!activeRef.current) return;
-      if (row) setTip(row);
+      // TRUTH-R: the dialog names the row's own charge, so with no fresh row it does not open.
+      if (!row) {
+        tipSessionRef.current = null;
+        await alertAsync(
+          'Could not start the tip',
+          `${userMessage(rowError, 'Check your connection and try again.')}`
+        );
+        await load();
+        return;
+      }
+      setTip(row);
       setTipPhase('idle');
       setConfirmTip(true);
     } finally {
@@ -519,7 +541,7 @@ export function ReviewAndTipScreen() {
                     <Text style={styles.thanksTitle}>
                       Thanks — {workerName ?? 'the worker'} has been rated.
                     </Text>
-                    <Text style={styles.cardNote}>That closes the job. A tip is still open below.</Text>
+                    <Text style={styles.cardNote}>That closes the job.{tipView === 'controls' ? ' A tip is still open below.' : null}</Text>
                   </View>
                 </View>
                 {/* G1b RESTRUCTURE: the second way out sits with the thanks; Done floats as the one main action. */}
@@ -606,7 +628,7 @@ export function ReviewAndTipScreen() {
                   counterpartFirstName={firstNameOf(workerName)}
                 />
               ) : null}
-              {tipDone && tip ? (
+              {tipView === 'done' && tip ? (
                 <>
                   <MoneyText
                     cents={tip.amount_cents}
@@ -620,25 +642,25 @@ export function ReviewAndTipScreen() {
                   />
                   {tipDoneNote ? <Text style={styles.cardNote}>{tipDoneNote}</Text> : null}
                 </>
-              ) : paymentsMode === 'disabled' ? (
+              ) : tipView === 'disabled' ? (
                 <Text style={styles.cardNote}>
                   Payments aren’t available right now, so tipping is unavailable.
                 </Text>
-              ) : stripe ? (
+              ) : tipView !== 'none' ? (
                 // R6c (D3): the card tip — the amount controls, then
                 // create-payment → the sheet → the poll.
                 // Each gate below is a refusal begin_tip_payment would give,
                 // said before the tap where the screen already knows it.
-                !paymentsEnabled ? (
+                tipView === 'paused' ? (
                   <Text style={styles.cardNote}>
                     Payments are paused right now, so tipping is unavailable for the moment.
                   </Text>
-                ) : !payment ? (
+                ) : tipView === 'noPayment' ? (
                   <Text style={styles.cardNote}>
                     This job finished without a protected payment, so there is no
                     payment to add a tip onto.
                   </Text>
-                ) : !released ? (
+                ) : tipView === 'notReleased' && payment ? (
                   // D23: approved, payout pending — begin_tip_payment refuses
                   // until the transfer lands. A10a (2026-10-03): the tip opens
                   // once the payment reaches the worker, and the screen says
@@ -650,14 +672,14 @@ export function ReviewAndTipScreen() {
                       ? ' Yours is approved and on its way — if they haven’t set up payouts yet, it lands the moment they do.'
                       : null}
                   </Text>
-                ) : !stripeReady() ? (
+                ) : tipView === 'unavailable' ? (
                   <Text style={styles.cardNote}>{STRIPE_UNAVAILABLE_MESSAGE}</Text>
-                ) : tipPhase === 'confirming' ? (
+                ) : tipView === 'confirming' ? (
                   <View style={styles.confirmingRow}>
                     <ActivityIndicator size="small" color={colors.emerald} />
                     <Text style={styles.cardNote}>Confirming your tip…</Text>
                   </View>
-                ) : tipPhase === 'timeout' ? (
+                ) : tipView === 'timeout' ? (
                   <>
                     <Text style={styles.cardNote}>
                       The card was charged, but the app hasn’t seen the tip confirm

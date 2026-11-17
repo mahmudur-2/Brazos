@@ -510,7 +510,8 @@ test('[static] a held row with release_requested_at cannot bounce between Review
   assert.match(approve, /held\s*\?\s*releaseAllowed\s*\?\s*isRefundFailureRecorded\(payment\) \? 'Approve the Work' : `Approve & Release/);
   // D3 (R6c): stripe mode shows the CARD tip controls behind the kill switch
   // and the release gate, and keeps the review section.
-  assert.match(review, /\) : stripe \? \([\s\S]{0,400}!paymentsEnabled \?/);
+  assert.match(review, /: !stripe \? 'none'\s*: !paymentsEnabled \? 'paused'/);
+  assert.match(review, /\) : tipView !== 'none' \? \([\s\S]{0,400}tipView === 'paused' \?/);
   assert.match(review, /Tip by Card/);
   assert.match(review, /<ReviewSection/);
   assert.doesNotMatch(review, /paymentsMode !== 'sandbox'/);
@@ -722,6 +723,18 @@ test('PAY-R T3 (PC-03): "Check Again" on an unfunded row inside its window bring
   assert.deepEqual(await run(unfunded('2026-11-17T11:00:00Z')), [], 'a lapsed row keeps Check Again');
   assert.deepEqual(await run({ status: 'held' }), ['idle', 'confirmed']);
   assert.deepEqual(await run(null), ['gone']);
+  // TRUTH-R (R1): a read that FAILED (loadPayment's undefined) is not "no row": Check Again stays.
+  assert.deepEqual(await run(undefined), [], 'a failed read keeps Check Again');
+});
+
+test('TRUTH-R R1: the "did not go through" card never shows beside a held row', () => {
+  const src = read('screens/CheckoutScreen.tsx').replace(/\s+/g, ' ');
+  const guard = src.match(/\.\.\.\((phase === 'gone'[^?]*?) \? \[ \{ title: 'The Payment Did Not Go Through'/);
+  assert.ok(guard, 'the gone card');
+  const shows = new Function('phase', 'held', `return Boolean(${guard[1]});`);
+  assert.equal(shows('gone', true), false, 'held: no "Nothing is held" card');
+  assert.equal(shows('gone', false), true, 'nothing held: the card');
+  assert.equal(shows('timeout', false), false);
 });
 
 test('PAY-R T4 (PC-05): the tip screen makes no claim about a charge it cannot know', async () => {
@@ -755,4 +768,68 @@ test('PAY-R T4 (PC-05): the tip screen makes no claim about a charge it cannot k
     { current: true }, async () => alerts.push('reload'), alertAsync, userMessage, async () => alerts.push('poll'));
   await chargeTip();
   assert.deepEqual(alerts.splice(0), ['The payment did not finish', 'Your card was declined.\n\nYou can try again.', 'reload']);
+});
+
+test('TRUTH-R R3a: with no fresh tip row after the start, no dialog opens and the start-failure alert shows', async () => {
+  const src = read('screens/ReviewAndTipScreen.tsx').replace(/\r\n/g, '\n');
+  const start = src.indexOf('  async function startCardTip() {');
+  const end = src.indexOf('\n  /** Step two', start);
+  assert.ok(start > 0 && end > start, 'startCardTip');
+  const NAMES = ['tipValid', 'tipCents', 'sendingTipRef', 'setSendingTip', 'paymentProvider', 'job', 'alertAsync', 'userMessage',
+    'load', 'fetchJobTip', 'activeRef', 'setTip', 'earlierTipNotice', 'formatBudget', 'confirmCardTip', 'tipSessionRef',
+    'setTipPhase', 'setConfirmTip'];
+  const build = new Function(...NAMES, `${src.slice(start, end)}\nreturn startCardTip;`);
+  const run = async (tipRead) => {
+    const log = [];
+    const tipSessionRef = { current: null };
+    const busy = { current: false };
+    const startCardTip = build(true, 1000, busy, (v) => log.push(`busy ${v}`),
+      { beginTipCheckout: async () => ({ data: { paymentId: 't1', clientSecret: 's', customerId: 'c', ephemeralKeySecret: 'e' }, error: null }) },
+      { id: 'j1' }, async (title, body) => log.push(title, body), (e, fallback) => e?.message ?? fallback,
+      async () => log.push('reload'), async () => tipRead, { current: true }, () => log.push('set tip'), () => null,
+      (c) => `$${c / 100}`, async () => log.push('poll'), tipSessionRef, (p) => log.push(`phase ${p}`), (v) => log.push(`dialog ${v}`));
+    await startCardTip();
+    return { log, session: tipSessionRef.current, busy: busy.current };
+  };
+  const failed = await run({ data: null, error: { message: 'Can’t reach Brazos right now.' } });
+  assert.deepEqual(failed, { log: ['busy true', 'Could not start the tip', 'Can’t reach Brazos right now.', 'reload', 'busy false'], session: null, busy: false },
+    'a failed read: the alert, a reload, no dialog, no session kept');
+  const none = await run({ data: null, error: null });
+  assert.deepEqual(none.log, ['busy true', 'Could not start the tip', 'Check your connection and try again.', 'reload', 'busy false']);
+  const fresh = await run({ data: { id: 't1', status: 'unfunded', amount_cents: 1000, charge_amount_cents: 1060 }, error: null });
+  assert.deepEqual(fresh.log, ['busy true', 'set tip', 'phase idle', 'dialog true', 'busy false'], 'the control: the fresh row, then the dialog');
+  assert.equal(fresh.session.paymentId, 't1');
+});
+
+test('TRUTH-R R3b: one tipView decides the tip card, in the chain’s order; "A tip is still open below." only beside the controls', () => {
+  const src = read('screens/ReviewAndTipScreen.tsx').replace(/\s+/g, ' ');
+  const derive = src.match(/const tipView = ([^;]*);/);
+  assert.ok(derive, 'the one tipView');
+  const tipViewOf = new Function('tipDone', 'tip', 'paymentsMode', 'stripe', 'paymentsEnabled', 'payment', 'released', 'stripeReady', 'tipPhase',
+    `return ${derive[1]};`);
+  // Each row lifts ONE more gate; every later gate stays shut, so two conditions in the wrong order turn a row red.
+  const no = () => false;
+  const yes = () => true;
+  const TABLE = [
+    [[true, {}, 'disabled', false, false, null, false, no, 'timeout'], 'done'],
+    [[false, null, 'disabled', false, false, null, false, no, 'timeout'], 'disabled'],
+    [[false, null, 'stripe', false, false, null, false, no, 'timeout'], 'none'],
+    [[false, null, 'stripe', true, false, null, false, no, 'timeout'], 'paused'],
+    [[false, null, 'stripe', true, true, null, false, no, 'timeout'], 'noPayment'],
+    [[false, null, 'stripe', true, true, {}, false, no, 'timeout'], 'notReleased'],
+    [[false, null, 'stripe', true, true, {}, true, no, 'timeout'], 'unavailable'],
+    [[false, null, 'stripe', true, true, {}, true, yes, 'confirming'], 'confirming'],
+    [[false, null, 'stripe', true, true, {}, true, yes, 'timeout'], 'timeout'],
+    [[false, null, 'stripe', true, true, {}, true, yes, 'idle'], 'controls'],
+    [[false, null, 'stripe', true, true, {}, true, yes, 'gone'], 'controls'],
+  ];
+  for (const [args, view] of TABLE) assert.equal(tipViewOf(...args), view, view);
+  const tail = src.match(/That closes the job\.(.*?)<\/Text>/);
+  assert.ok(tail, 'the thanks note');
+  const second = tail[1].match(/^\{(.*)\}$/);
+  assert.ok(second, 'the second sentence is conditional');
+  const note = (view) => `That closes the job.${new Function('tipView', `return ${second[1]};`)(view) ?? ''}`;
+  for (const [, view] of TABLE) {
+    assert.equal(note(view), view === 'controls' ? 'That closes the job. A tip is still open below.' : 'That closes the job.', view);
+  }
 });

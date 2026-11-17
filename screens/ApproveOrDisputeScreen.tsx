@@ -179,7 +179,9 @@ export function ApproveOrDispute({
     ]);
     if (paymentRes.error) setLoadError(userMessage(paymentRes.error));
     else setPayment(paymentRes.data);
-    if (!disputeRes.error) setDispute(disputeRes.data);
+    // TRUTH-R: a failed read of the open report is never "no report": the payment read's error view.
+    if (disputeRes.error) setLoadError((prev) => prev ?? userMessage(disputeRes.error));
+    else setDispute(disputeRes.data);
     setLoaded(true);
   }, [job.id]);
 
@@ -432,14 +434,15 @@ export function ApproveOrDispute({
               refundArranged={isRefundArranged(payment)}
               payoutOnItsWay={isPayoutOnItsWay(payment)}
             />
-            {held && releaseAt != null && releaseAt > serverNowMs() ? (
+            {held && !dispute && releaseAt != null && releaseAt > serverNowMs() ? (
               <Text style={styles.paymentNote}>
                 Releases automatically {releaseAtLabel(releaseAt, serverNowMs())} if you do
                 nothing.
               </Text>
             ) : null}
             {/* Codex R11-A2: before approval, a refund of it failed: approving sends nothing; no note. */}
-            {!released && !releaseRequested && releaseAllowed && isRefundFailureRecorded(payment) ? null : (
+            {/* TRUTH-R: before approval, a note only while the row is held with no report open. */}
+            {!released && !releaseRequested && (!(held && !dispute) || (releaseAllowed && isRefundFailureRecorded(payment))) ? null : (
               <Text style={styles.paymentNote}>
                 {released
                   ? payment.release_reason === 'auto_approved'
