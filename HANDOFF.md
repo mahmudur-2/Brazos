@@ -72,14 +72,17 @@ run: no update before a green phone run on the same commit.
 
 ## Blocked
 
-1. **The Production press: done** (2026-11-18, run 44228429661, PRODUCTION: PASS). The owner pressed
-   after the Gemini read (in packets, with gaps); the full Codex audit of `git diff 77f63b4..HEAD`
-   stays a condition before real money (item 5).
-2. **The admin on production: done** (2026-11-18, run 44251665034; secret `PRODUCTION_ADMIN_USER_ID`).
-3. **A look on a real iPhone.** No person and no machine saw this version on one: the dark customer
-   home, the nav bar, the 120 Hz feel, the keyboard, the safe areas, light and dark.
-4. **Before the public date (2027-01-01):** one new store build by the owner (the privacy manifest).
-5. **Before real money** (it needs the owner's LLC and live Stripe keys): the Codex audit of item 1;
+2026-11-18 story (private): `%USERPROFILE%\runs\BRAZOS-NEXT-SESSION-START-HERE.md`.
+
+1. **Production `process-settlements` reports failed** since 03:31 UTC: "1 event is in another Stripe
+   API version than the webhook's". The sandbox's default API version is 2026-07-29.dahlia; the code
+   reads 2026-08-26.dahlia; a press's probe event uses the default. Staging is clean. Fix
+   (owner's yes first): default 2026-08-26.dahlia in Stripe, or a code change. Money unaffected.
+2. **The look:** the owner saw build 10 and is not satisfied. Next look work: pictures first.
+3. **Build 11:** the old look, no Needs Attention screen (its pushes arrive).
+4. **Before the public date (2027-01-01, owner kept it):** one store build by the owner, after item 2.
+5. **Before real money** (it needs the owner's LLC and live Stripe keys): the Codex audit of
+   `git diff 77f63b4..HEAD`;
    clear the stored Stripe test ids; the first money items of `docs/BACKLOG.md` (a tip that one person
    starts on two phones; a first payment that settles late).
 6. **Receipts:** a phone user gets no email. It needs a small feature (a person adds an email), a
