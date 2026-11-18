@@ -46,11 +46,12 @@ iPhone, real money, a person on production.
 44228429661, Production #6, at `e91fbf2`, `allow_destructive` checked): plan `bfea8f0a` "32 to apply,
 12 flagged, 70 applied before", then all 25 rows of the PRODUCTION table PASS (the database matches the
 local build; functions deployed; the Stripe test webhook updated in place and a signed test event
-reached it; the timers answered with HTTP 200; "Admin account: PRODUCTION_ADMIN_USER_ID not set"). So
+reached it; the timers answered with HTTP 200). Run 44251665034 (0 to apply) made the owner's account
+the admin: "Admin account: done", PRODUCTION: PASS. So
 production has all 102 migration files, pack 1 and this run, and the new button workflow has run for
 real. The sign-in row says one test sign-in number works until 2026-11-25. Test money: Stripe sandbox "Brazos production" (`acct_1UbCNU3EJxHAJMVZ`). Phone sign-in
 through Twilio Verify; email sign-in off. GitHub environment "Production": the reviewer is the owner's
-account, branch `mainexpo`, 8 secrets; the optional secret `PRODUCTION_ADMIN_USER_ID` is not set.
+account, branch `mainexpo`, 8 secrets plus `PRODUCTION_ADMIN_USER_ID` (set 2026-11-18).
 
 **Phones:** TestFlight build 11 (1.0.0) = production (channel `production`; made with `npm run
 release:production` by the owner). Builds 9 and 10 = staging (`testflight` profile, channel
@@ -74,9 +75,7 @@ run: no update before a green phone run on the same commit.
 1. **The Production press: done** (2026-11-18, run 44228429661, PRODUCTION: PASS). The owner pressed
    after the Gemini read (in packets, with gaps); the full Codex audit of `git diff 77f63b4..HEAD`
    stays a condition before real money (item 5).
-2. **The admin on production:** after the press, the owner's own account on production, then the
-   secret `PRODUCTION_ADMIN_USER_ID` (his User UID) and one more press. Without it the admin's
-   attention list on production has no admin.
+2. **The admin on production: done** (2026-11-18, run 44251665034; secret `PRODUCTION_ADMIN_USER_ID`).
 3. **A look on a real iPhone.** No person and no machine saw this version on one: the dark customer
    home, the nav bar, the 120 Hz feel, the keyboard, the safe areas, light and dark.
 4. **Before the public date (2027-01-01):** one new store build by the owner (the privacy manifest).
