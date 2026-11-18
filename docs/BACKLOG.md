@@ -173,6 +173,27 @@ From the lean security verdict (archived 2026-11-08, `_archive/2026-11-lean/SECU
   before a string prefix and in a dollar tag; tests for a byte order mark, an unterminated comment
   and an unterminated dollar tag; the word "safe" in two test titles and the step name "destructive
   shapes" in `staging.yml`. To judge: let `alter type … add value` pass without a review.
+- Suspension gate in the app (outside read of 2026-11-17; no money or data risk: the server refuses
+  each guarded action): a suspended person whose first check fails (no network) sees the app for 5
+  to 60 seconds until the retry; the start hooks (push, legal check, the opening link) run before
+  the suspension answer is there; the check has no error view with Retry (a failed read counts as
+  "not suspended"; a request that hangs was not checked).
+- Small screen points from the same read: the report sheet keeps its form open after a close and a
+  reopen until the reload ends (workaround: Cancel); the admin alert "Brazos did not answer..." also
+  shows on a server error 500; a double tap in one frame on Sign Out can call the sign-out twice;
+  on the delete-account screen, a spinner state after a failed local sign-out, and the note "Finish
+  or cancel each of these" also for rows with no link.
+- Screen reader: on the customer's job page the header row of a bid card has one label, "<name>,
+  $40" (`OfferCard.tsx`). A VoiceOver user does not hear the rating, the review count, the trust
+  line or the all-in price on that row.
+- Posting bar (`components/PostJobBar.tsx`, repaired 2026-11-17 in `79b1dc1`): by the layout
+  engine's source the two-button bars had the same too-low geometry as the one-button bar, but the
+  robot phone test tapped them in every run. Not explained. Only a simulator or phone run proves a
+  layout on the iPhone: react-native-web gives a box of automatic height its content's height, the
+  iPhone's engine measures it 0 tall around a `flex: 1` child.
+- Security alert (GitHub Dependabot 112, 2026-11-17): `picomatch` <= 4.0.7, high, no patched
+  version yet. It comes only through the build and test tools of `expo` and `react-native`, not the
+  app on the phone. Update when a patched version exists.
 
 ## Parked operator decisions
 

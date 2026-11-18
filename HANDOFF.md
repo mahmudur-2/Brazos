@@ -1,95 +1,115 @@
 # HANDOFF
 
-Resume: read this file, then `git log -25 --oneline` and `git status`. Git owns branch, HEAD and tree;
-older versions of this file are in git history. Rewritten 2026-11-16 UTC by the directing chat of the run
-"PRODUCTION RDY - BRAZOS" (Opus 5.5). The run's full handoff lives outside the repo, on the owner's PC:
-`C:\Users\mdmah\runs\production-rdy-brazos-START-HERE.md` (state, rules, method, the next pack, the rest
-of the run); its chronological log is `C:\Users\mdmah\runs\production-rdy-brazos-handoff.md`. The
-owner's directing prompt and the Karpathy Guide, word for word: project memory
-`brazos-directing-prompt-and-guide`. To the owner: Simplified English, his steps in the chat, never
-"read this document".
+Resume: read this file, then `git log -30 --oneline` and `git status`. Git owns branch, HEAD and tree;
+older versions of this file are in git history. Rewritten 2026-11-18 UTC by the directing chat (Fable)
+at the end of the owner's 48-hour production run. The run's full records are on the owner's PC and not
+in git (this repository is public): `docs/RELEASE_DOSSIER.md` (the report to the owner: what changed,
+each proof, the limits, his steps), `docs/PRODUCTION_LEDGER.md` (decisions D1 to D110 and the work log)
+and `%USERPROFILE%\runs\production-36h\STATE-NOW.md`. The owner's directing prompt and the Karpathy
+Guide, word for word: project memory `brazos-directing-prompt-and-guide`. To the owner: Simplified
+English, his steps in the chat, never "read this document".
 
 ## Now
 
-**The run (owner, 2026-11-14):** "consolidate the entire brazos project and make it almost publish
-ready" (no LLC), "least buggy as possible for the future", "I want staging gone", nothing unnecessary,
-no feature removed. End goal: "Apple accepts Brazos, and it is safe for real people." Public release
-planned for 2027-01-01; iOS only; test money for the whole run; no human testers (robot tests and
-Apple's checks only).
+**The run (2026-11-16 06:35 UTC to 2026-11-18).** The owner's goal: "make BRAZOS 100% production-ready
+... in one continuous autonomous operation without compromising quality". Test money for the whole run;
+nothing went to production, Apple or real money. 22 commits `b8c420b..79b1dc1` (list: `git log
+--oneline 9d1c56d..`), 433 files, and then this documents commit:
+- Production button (`b8c420b`, `798c141`, `beae402`, `79f161e`): approval only after the database
+  tests pass; the Expo tool and the Supabase tool run only from pinned and checked bytes; a service key
+  can never ship in an app build; the button never deletes a Stripe webhook or a saved secret; a
+  signed, never-charged test event proves the webhook; the migration scan reads SQL statements.
+- Access, bans, deletion (`3934244`, `33020d4`, `4e4a4de`): a suspended account is stopped at the
+  server; a deleted account is cleaned up; two lookups closed; unused table rights removed.
+- Money and lifecycle (`448551e`, `482f17a`, `77f63b4`, `ab73c81`, `ea1b1fe`, `41eabd9`): the owner's
+  payment list in plain words; each timer reports its runs; automatic approval 72 hours after "work is
+  done" (7 days at the latest); the admin's attention list with decisions; the record of a work start;
+  payment repairs; no money or account screen says a thing that the app does not know.
+- App (`b2b470e`, `79b1dc1`): the new look and the in-place structure, light and dark (305 files); the
+  posting bar's main button is fully on the screen on the iPhone.
+- The robot phone flows for the new look (`a45554a`, `35ecc5b`, `c7c38cb`, `90c7f11`); postcss updated
+  by one `overrides` line (`105b7c4`, four security alerts closed).
 
-**Pack 1, money: done** (14 commits `4d2eb32..74d9b04`, pushed 2026-11-16). A Codex audit (round 1: 53
-findings in money, security and database), 13 more Codex rounds and one Gemini read on the money path.
-Proof: db:test 60 files, 2554 tests, PASS; verify 1464 of 1464; CI, pgTAP, Staging pipeline and
-TestSprite (9/9) green on `74d9b04`. Worker fee 7.5% with no minimum (`20261115000800`, D-v3-3). Known
-limits, kept under the owner's rule "no part-refunds by hand in Stripe": `docs/BACKLOG.md`, v1 bugs.
+**Proof on `79b1dc1`:** `npm run verify` 1888 of 1888 (this PC and CI run 44186984456). Robot phone
+test 10 of 10 flows (run 44187304448: a simulated iPhone against staging, from sign-in to account
+deletion; no flow covers the admin list). Database tests 3656 in 96 files (pgTAP run 44046342174; no
+database file changed after it). Staging pipeline green on `41eabd9` (no server file changed after
+it). TestSprite green on staging (run 44089530106). Five rules broken on purpose on a throwaway copy
+(a ban, a deleted account, the completion photos, a change of money state, an admin-only path): 5 of 5
+turned a test red. Readers of the raw diffs: an independent Opus reader for each landing in money,
+access, deletion, bans and the button; the Gemini CLI in packets (it has gaps). **Not proved:** a real
+iPhone, real money, the production database.
 
-**Staging** has pack 1 (the pipeline applied the nine `20261115*` migrations: never edit them). Full
-backup of 2026-11-15 (database and Storage files, before pack 1) in the owner's Google Drive.
+**Staging** has all of it. Every migration up to `20261116420000` is applied there: never edit one.
 
-**Production** (`brazos-production`, ref `agjwgvclzvjmpqhjutpd`, us-east-1) was last pressed on
-2026-11-13 (run 43504460817 at `b850a4b`). It does NOT have pack 1 (nine migrations; create-payment,
-process-settlements, send-receipts, stripe-webhook). Test money: Stripe sandbox "Brazos production"
-(`acct_1UbCNU3EJxHAJMVZ`, liability acknowledgement completed 2026-11-11). Phone sign-in through Twilio
-Verify (service "Brazos", account `AC…9497`); email sign-in off. GitHub environment "Production":
-reviewer `mahmudur-2`, branch `mainexpo`, 7 secrets. Proven 2026-11-13 on build 11: sign-in, payout
-set-up, a $53.75 test payment, webhook HTTP 200. Not tested then: start, complete, release (ask the
-owner). Each press so far printed "Stripe test webhook: made anew": pack 2 fixes that step.
+**Production** (`brazos-production`, us-east-1) was last pressed on 2026-11-13 (run 43504460817 at
+`b850a4b`). It lacks pack 1 and this run: by its last PASS it holds 70 of the 102 migration files, so
+32 are new, and the scan flags 12 of them. The button's workflow changed in this run and has not run
+for real since. Test money: Stripe sandbox "Brazos production" (`acct_1UbCNU3EJxHAJMVZ`). Phone sign-in
+through Twilio Verify; email sign-in off. GitHub environment "Production": the reviewer is the owner's
+account, branch `mainexpo`, 8 secrets; the optional secret `PRODUCTION_ADMIN_USER_ID` is not set.
 
-**Phones:** build 11 (1.0.0) in TestFlight = production (`npm run release:production`, by the owner);
-build 10 = staging (`testflight` profile). Both profiles build bundle `app.brazos.mobile`, App Store
-Connect app `6832193439`. Pack 1's screen and text changes reach a phone only by an over-the-air update
-or a new build (the owner's yes each time). The optional secret `PRODUCTION_TEST_OTP` gives one test
-sign-in number; each press sets it for 7 more days.
+**Phones:** TestFlight build 11 (1.0.0) = production (channel `production`; made with `npm run
+release:production` by the owner). Builds 9 and 10 = staging (`testflight` profile, channel
+`testflight`). **Over-the-air update of 2026-11-18 00:49 UTC:** group
+`cd09d3cc-cfb0-449b-9a99-27ee1b82c152`, channel `testflight`, runtime 1.0.0, iOS. It carries all app
+code from build 10 (2026-11-08) to `79b1dc1`, exported in the `preview` environment (checked in the
+bundle: staging values, the Stripe test key, no production ref). Build 11 does not get it. The update
+before it: group `67c92705-9241-429d-a7aa-569e60b8a38b` (`fb4700b`). Since build 10 no dependency,
+plugin or native folder changed (`package.json`: one `overrides` line and a pinned Expo tool in three
+scripts; `app.config.ts`: a check of the key's kind and the privacy manifest). The privacy manifest
+reaches a phone only with a new store build.
 
-**Next pack (2): deletion, bans, access, the Production button, the phone.** Planned from the real
-database (a catalog dump of the local stack), three read-only reader reports and a Codex (Astra) read.
-Biggest finding: account deletion keeps what the person shared (reviews, photos, job text, addresses),
-all Storage files and the Stripe customer, against Apple's rule 5.1.1(v). Other findings: a ban does
-not end sessions; a worker whose offer was not taken can read completion photos; image fields accept
-outside URLs; the button's webhook step deletes before it makes; secret jobs install CLI code at run
-time; the button does not run db:test. Nothing of pack 2 is built yet.
-
-**Over-the-air update** (owner's yes each time): channel `testflight`, runtime 1.0.0 = build 10, group
-`67c92705-9241-429d-a7aa-569e60b8a38b`. How: the four `env` values of eas.json's `testflight` profile in
-the shell; `eas env:exec preview "npx expo export --platform ios --clear --output-dir <dir>"`; check the
-bundle; `eas update --channel testflight --environment preview --platform ios --skip-bundler
---input-dir <dir>`. Undo: `eas update:roll-back-to-embedded`.
+How to send an update (the owner's yes each time): the four `env` values of eas.json's `testflight`
+profile in the shell; `eas env:exec preview "npx expo export --platform ios --clear --output-dir
+<dir>"`; check the bundle; `eas update --channel testflight --environment preview --platform ios
+--skip-bundler --input-dir <dir>`. An update carries ALL app code since the build. The rule of this
+run: no update before a green phone run on the same commit.
 
 ## Blocked
 
-1. **The owner's four pack 2 answers:** what a deleted account keeps; that a ban hides the person's
-   profile and written reviews; the words of the admin's push for a new report; the running-late limit
-   ("make it a limit of 6": per job in total is the recommended reading).
-2. **The Production press is the owner's.** Recommended: once, after pack 2 (pack 2 changes the button;
-   its drop of the rating columns needs his `allow_destructive` click on staging and on production).
-3. **Owner, after his tests:** release the rented Twilio number (about $1.15 a month); delete the GitHub
-   secret `PRODUCTION_TEST_OTP` when no test sign-in number is wanted.
-4. **Receipts:** a phone user gets no email (`supabase/functions/send-receipts/index.ts:109`: sign-in
-   email only). The run's receipts step adds one optional Email field; it needs a domain (the owner has
-   none yet) and his `RESEND_API_KEY` and `RECEIPT_FROM`.
-5. **Steps only the owner does** (a chat refuses them): identity or bank values on Stripe's page;
+1. **The Production press is the owner's:** one press with `allow_destructive` checked (the plan table
+   must say 32 to apply, 12 flagged). Guide: `docs/production/owner-steps.md`, parts F and H. On
+   2026-11-17 the owner first made a Codex audit of `git diff 77f63b4..HEAD` a condition before a
+   press, and then answered "Use Gemini CLI Hydrogen High instead". That Gemini read is done, in
+   packets, with gaps. The dossier recommends the press now and the full Codex audit before real
+   money. The choice is his.
+2. **The admin on production:** after the press, the owner's own account on production, then the
+   secret `PRODUCTION_ADMIN_USER_ID` (his User UID) and one more press. Without it the admin's
+   attention list on production has no admin.
+3. **A look on a real iPhone.** No person and no machine saw this version on one: the dark customer
+   home, the nav bar, the 120 Hz feel, the keyboard, the safe areas, light and dark.
+4. **Before the public date (2027-01-01):** one new store build by the owner (the privacy manifest).
+5. **Before real money** (it needs the owner's LLC and live Stripe keys): the Codex audit of item 1;
+   clear the stored Stripe test ids; the first money items of `docs/BACKLOG.md` (a tip that one person
+   starts on two phones; a first payment that settles late).
+6. **Receipts:** a phone user gets no email. It needs a small feature (a person adds an email), a
+   domain (the owner has none yet) and his `RESEND_API_KEY` and `RECEIPT_FROM`.
+7. **Steps only the owner does** (a chat refuses them): identity or bank values on Stripe's page;
    passwords, keys and tokens; legal acknowledgements; the Production button; anything sent to Apple.
-6. **Owner items O1-O8** are in `docs/lean/AUDIT-LEDGER.md`. O1 is closed: the owner's lawyer approved
-   the Terms and Privacy (owner, 2026-11-14).
+8. **From the earlier handoff, not checked in this run:** release the rented Twilio number; delete the
+   secret `PRODUCTION_TEST_OTP` when no test sign-in number is wanted; the owner items O2 to O8 in
+   `docs/lean/AUDIT-LEDGER.md`.
 
 ## Next
 
-1. Pack 2, then the run's packs 3 (app data), 4 (proof) and 5 (clean-up); then staging removal (after
-   the robot tests have a new place; `scripts/staging-scan.sh` stays), receipts, Sentry, the Apple pack
-   (review notes, a demo sign-in, privacy answers, a privacy manifest) and the production phone test
-   (start, complete, release; then remove "TEST job delete later" by an allowed path). Order and
-   details: the START-HERE file.
-2. Before launch, tell the owner the items of the 2026-11-13 handoff's "Next 3" (`git show
-   74d9b04:HANDOFF.md`).
-3. Read results: `gh run view <id> -R mahmudur-2/Brazos --json status,conclusion,jobs` (`--log-failed`
-   after the end). No push to `mainexpo` while a Production run is active.
-4. A phone run, if needed (one at a time, about 2 hours, no database or function push meanwhile):
-   `gh workflow run e2e-ios.yml -R mahmudur-2/Brazos --ref mainexpo -f build_id=e93b75b2-a5fc-4147-aac9-1391ebc8de54`
-   (that simulator build holds the app code of `1633f10`). Result: `gh run view <id> -R
-   mahmudur-2/Brazos --log | grep -oE "\[(Passed|Failed)\] .*"`. Artifacts: `gh run download <id>`, then
-   decrypt (GPG; key file `C:\Users\mdmah\.brazos-artifact-key`, never print it).
-5. `npm run db:test` needs Docker Desktop and `npx supabase start` (project `BRAZOS`, ports 543xx; never
-   touch another chat's `brazos-ui-audit` stack, ports 553xx).
+1. After the press: the production phone test of the earlier plan (start, complete and release on
+   production with test money; then remove "TEST job delete later" by an allowed path).
+2. `docs/BACKLOG.md`. First: the two rare double-charge cases (today the server refunds the extra
+   charge by itself), the suspension gate in the app, the gaps of the migration scan.
+3. Open from the earlier plan and not done in this run: staging removal (after the robot tests have a
+   new place), email receipts, the Apple pack (review notes, a demo sign-in, privacy answers).
+4. Read results: `gh run view <id> --json status,conclusion,jobs` (`--log-failed` after the end). No
+   push to `mainexpo` while a Production run is active.
+5. A phone run (one at a time, about 2.5 hours; a second start cancels a running one): `gh workflow run
+   e2e-ios.yml --ref mainexpo -f build_this_commit=true` makes one paid Expo build of the commit (the
+   owner allowed 7 for this run and 4 are used: ask him before the next). With no input the workflow
+   tests the latest finished `e2e-test` build. Result: `gh run view <id> --log`, then search for
+   `[Passed]` and `[Failed]`. Only a simulator or phone run proves a layout on the iPhone: the web
+   measures some boxes differently (`79b1dc1`). In this run no chat opened the encrypted results or
+   used the owner's key file; a failure was read from the public log lines.
+6. `npm run db:test` needs Docker Desktop and `npx supabase start` (never touch another chat's
+   `brazos-ui-audit` stack, ports 553xx).
 
 ## Rules in force
 
@@ -102,23 +122,27 @@ bundle; `eas update --channel testflight --environment preview --platform ios --
 - Git: stay on `mainexpo`; stage by exact path; push only `git push origin mainexpo` after
   `npm run verify` exits 0 in the same run; never reset --hard, clean, stash, amend or `--no-verify`.
 - Never edit `.claude/`. A migration is a new file dated after every other; never edit an applied one.
-- No part-refunds by hand in the Stripe dashboard until a later pack fixes the known limit (owner,
-  2026-11-15).
+- No part-refunds by hand in the Stripe dashboard (owner, 2026-11-15).
+- The lawyer-approved Terms and Privacy (`lib/legal/`) never change without the owner, and they win
+  over a built behaviour.
 - Helpers (owner's rules; project memory `brazos-helper-spawn-rules`): Opus builders, Sonnet readers, a
   named model and effort, the full Karpathy Guide in each brief, plan first for architecture, money and
-  security. Critics (owner, 2026-11-16): Codex `gpt-6-astra` at xhigh for money, access, deletion, keys
-  and the Production button; `gpt-6.1-sol` at xhigh for the rest.
+  security. Critics: Codex `gpt-6-astra` at xhigh for money, access, deletion, keys and the Production
+  button and `gpt-6.1-sol` for the rest (owner, 2026-11-16). In the run that ended 2026-11-18 Codex had
+  no usage, so the critics were the Gemini CLI and an independent Opus reader that gets the raw diff.
 
 ## Revert
 
 - One change: `git revert <hash>` (list: `git log --oneline 4d2eb32..`). An applied migration is undone
-  only by a NEW migration, never by `git revert` (staging has pack 1's).
+  only by a NEW migration, never by `git revert` (staging has every migration up to `20261116420000`).
+- The app update of 2026-11-18, with the owner's yes: `eas update:republish --group
+  67c92705-9241-429d-a7aa-569e60b8a38b` (back to the update before it) or `eas
+  update:roll-back-to-embedded --channel testflight` (back to the build's own code).
 - Production: the database and functions are applied (runs 43369079390, 43435759116, 43498591852,
   43504460817). The simplest full undo while the project has no users: the owner deletes
   `brazos-production` and makes a new one (new ref in `scripts/supabase-ref.mjs`).
 - `b850a4b` (connect-return 302): `git revert b850a4b`, push, one Production press.
-- `fb4700b` (Email field + `connect-onboarding`): `git revert fb4700b`, push, then
-  `eas update:roll-back-to-embedded` with the owner's yes.
+- `fb4700b` (Email field + `connect-onboarding`): `git revert fb4700b`, push, then a new update.
 - `064c003` (one privacy sentence): a revert must keep `PRIVACY_VERSION` in step with the text.
 - `60d77fe` took `bids`, `direct_threads` and `message_reads` out of staging's realtime list (undo = a
   new migration). B1 (tips, `c8be212`): undo only by a new migration.
