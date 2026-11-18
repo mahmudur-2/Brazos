@@ -38,14 +38,17 @@ it). TestSprite green on staging (run 44089530106). Five rules broken on purpose
 (a ban, a deleted account, the completion photos, a change of money state, an admin-only path): 5 of 5
 turned a test red. Readers of the raw diffs: an independent Opus reader for each landing in money,
 access, deletion, bans and the button; the Gemini CLI in packets (it has gaps). **Not proved:** a real
-iPhone, real money, the production database.
+iPhone, real money, a person on production.
 
 **Staging** has all of it. Every migration up to `20261116420000` is applied there: never edit one.
 
-**Production** (`brazos-production`, us-east-1) was last pressed on 2026-11-13 (run 43504460817 at
-`b850a4b`). It lacks pack 1 and this run: by its last PASS it holds 70 of the 102 migration files, so
-32 are new, and the scan flags 12 of them. The button's workflow changed in this run and has not run
-for real since. Test money: Stripe sandbox "Brazos production" (`acct_1UbCNU3EJxHAJMVZ`). Phone sign-in
+**Production** (`brazos-production`, us-east-1) was pressed by the owner on 2026-11-18 03:28 UTC (run
+44228429661, Production #6, at `e91fbf2`, `allow_destructive` checked): plan `bfea8f0a` "32 to apply,
+12 flagged, 70 applied before", then all 25 rows of the PRODUCTION table PASS (the database matches the
+local build; functions deployed; the Stripe test webhook updated in place and a signed test event
+reached it; the timers answered with HTTP 200; "Admin account: PRODUCTION_ADMIN_USER_ID not set"). So
+production has all 102 migration files, pack 1 and this run, and the new button workflow has run for
+real. The sign-in row says one test sign-in number works until 2026-11-25. Test money: Stripe sandbox "Brazos production" (`acct_1UbCNU3EJxHAJMVZ`). Phone sign-in
 through Twilio Verify; email sign-in off. GitHub environment "Production": the reviewer is the owner's
 account, branch `mainexpo`, 8 secrets; the optional secret `PRODUCTION_ADMIN_USER_ID` is not set.
 
@@ -68,12 +71,9 @@ run: no update before a green phone run on the same commit.
 
 ## Blocked
 
-1. **The Production press is the owner's:** one press with `allow_destructive` checked (the plan table
-   must say 32 to apply, 12 flagged). Guide: `docs/production/owner-steps.md`, parts F and H. On
-   2026-11-17 the owner first made a Codex audit of `git diff 77f63b4..HEAD` a condition before a
-   press, and then answered "Use Gemini CLI Hydrogen High instead". That Gemini read is done, in
-   packets, with gaps. The dossier recommends the press now and the full Codex audit before real
-   money. The choice is his.
+1. **The Production press: done** (2026-11-18, run 44228429661, PRODUCTION: PASS). The owner pressed
+   after the Gemini read (in packets, with gaps); the full Codex audit of `git diff 77f63b4..HEAD`
+   stays a condition before real money (item 5).
 2. **The admin on production:** after the press, the owner's own account on production, then the
    secret `PRODUCTION_ADMIN_USER_ID` (his User UID) and one more press. Without it the admin's
    attention list on production has no admin.
@@ -139,7 +139,7 @@ run: no update before a green phone run on the same commit.
   67c92705-9241-429d-a7aa-569e60b8a38b` (back to the update before it) or `eas
   update:roll-back-to-embedded --channel testflight` (back to the build's own code).
 - Production: the database and functions are applied (runs 43369079390, 43435759116, 43498591852,
-  43504460817). The simplest full undo while the project has no users: the owner deletes
+  43504460817, 44228429661). The simplest full undo while the project has no users: the owner deletes
   `brazos-production` and makes a new one (new ref in `scripts/supabase-ref.mjs`).
 - `b850a4b` (connect-return 302): `git revert b850a4b`, push, one Production press.
 - `fb4700b` (Email field + `connect-onboarding`): `git revert fb4700b`, push, then a new update.
